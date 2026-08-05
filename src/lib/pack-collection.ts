@@ -87,9 +87,35 @@ const TIER_SHARD_VALUES: Record<ManiaCardTier, number> = {
   ascendant: 28,
   worldClass: 40,
   // A GOAT card is one of ten in the game; recycling one should be a real
-  // decision, not a rounding error next to World Class's 40.
-  goat: 1000,
+  // decision, not a rounding error next to World Class's 40. It used to be
+  // 1000, which was four Legend packs for a card the pack hands you for free
+  // once you hold the roster - see DUPLICATE_RECYCLE_RATE for why that
+  // mattered.
+  goat: 400,
 };
+
+/* What a second copy is worth next to the first. A card you do not own yet is
+   worth its tier value; a copy of one you already hold is worth half, rounded
+   down and floored at one shard.
+
+   This is what keeps the shard economy from running backwards. A pack is only
+   ever bought with shards, and once a collection is complete every card it
+   deals is a duplicate - so if duplicates recycled at full tier value, the
+   expected recycle return on a pack would have to beat its price for the pack
+   to be worth opening, and beating its price is exactly what made opening one
+   an income source rather than a purchase. Halving the duplicate closes that
+   loop: every pack type now returns meaningfully less in shards than it costs
+   (roughly 60% for Wild, 78% for Elite, 41% for Legend against the current
+   pool), so shards flow in from charges and the arcade and drain out through
+   packs, which is the direction the economy is supposed to run. */
+export const DUPLICATE_RECYCLE_RATE = 0.5;
+
+const TIER_DUPLICATE_SHARD_VALUES: Record<ManiaCardTier, number> = Object.fromEntries(
+  Object.entries(TIER_SHARD_VALUES).map(([tier, value]) => [
+    tier,
+    Math.max(1, Math.floor(value * DUPLICATE_RECYCLE_RATE)),
+  ]),
+) as Record<ManiaCardTier, number>;
 
 export function tierRank(tier: ManiaCardTier | null): number {
   return tier ? TIER_ORDER.indexOf(tier) : -1;
@@ -97,6 +123,11 @@ export function tierRank(tier: ManiaCardTier | null): number {
 
 export function shardValueForTier(tier: ManiaCardTier | null): number {
   return tier ? TIER_SHARD_VALUES[tier] : 1;
+}
+
+/* What one duplicate copy of this tier recycles for. */
+export function duplicateShardValueForTier(tier: ManiaCardTier | null): number {
+  return tier ? TIER_DUPLICATE_SHARD_VALUES[tier] : 1;
 }
 
 /* The tier a collected card shows, which is the tier it was minted at rather
@@ -278,7 +309,17 @@ export function applyCardMint(
 }
 
 export function duplicateShardValue(card: CollectedCard): number {
-  return Math.max(0, card.copies - 1) * shardValueForTier(card.tier);
+  return Math.max(0, card.copies - 1) * duplicateShardValueForTier(card.tier);
+}
+
+/* What letting the whole card go pays: the copy you were keeping at full tier
+   value, plus every copy beyond it at the duplicate rate. Recycling everything
+   has to price the duplicates the same way recycling only the duplicates does,
+   or "recycle all" would be a strictly better way to cash in duplicates than
+   the button that exists for it. */
+export function wholeCardShardValue(card: CollectedCard): number {
+  if (card.copies <= 0) return 0;
+  return shardValueForTier(card.tier) + duplicateShardValue(card);
 }
 
 export function duplicateShardTotal(wallet: PackWallet): number {
@@ -314,7 +355,7 @@ export function recycleAllCopies(
 ): { wallet: PackWallet; gained: number } {
   const card = wallet.cards[key];
   if (!card || card.copies <= 0) return { wallet, gained: 0 };
-  const gained = card.copies * shardValueForTier(card.tier);
+  const gained = wholeCardShardValue(card);
   return {
     wallet: {
       ...wallet,

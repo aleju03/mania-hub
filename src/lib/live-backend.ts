@@ -31,6 +31,7 @@ export type LiveEventName =
   | "maps_farmed_update"
   | "snipe"
   | "goal_completed"
+  | "pack_pull"
   | "job_status";
 
 export type LiveCountryFeatureTier = "indexed" | "maps_warm" | "live" | "snipes";

@@ -31,7 +31,7 @@ import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
 import { applyPackCollectionCardMint, getPackWallet, HONORARY_USER_IDS, listPackCollectionCards, listPackCollectionOwnedCardKeys,
   normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
-import { getHonoraryPullsReport, getPackCardCollectors, getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
+import { getHonoraryPullsReport, getPackCardCollectors, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
 import { createPackDuel, getPackDuel, joinPackDuel, pickPackDuelStat, redactDuelFor } from "../features/pack-duels.js";
 import {
   getPackGameAllowance,
@@ -430,7 +430,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, await getPlayerAbout(ctx.serveWriteDb ?? ctx.db, ctx.osu, userId));
     return true;
   }
-  // In-house analytics capture: the Vercel /api/sync proxy posts every tracked
+  // In-house analytics capture: the frontend /api/sync proxy posts every tracked
   // event here (server-to-server, bearer-token gated — the browser never talks
   // to this endpoint directly).
   if (url.pathname === "/api/analytics/capture") {
@@ -1497,13 +1497,23 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "invalid_pull_owner" });
       return true;
     }
-    sendJson(
-      req,
-      res,
-      ctx,
-      202,
-      await recordPackPullEvents(ctx.serveWriteDb ?? ctx.db, ownerUserId, ownerUsername, body.packType, body.cards),
-    );
+    const pullResult = await recordPackPullEvents(ctx.serveWriteDb ?? ctx.db, ownerUserId, ownerUsername, body.packType, body.cards);
+    // Fan the new pulls out on the live stream: a null country reaches every
+    // /api/live client, which is what makes the packs rail tick in real time
+    // instead of on its next poll. Same feed-entry shape as recent-pulls, so
+    // the client treats both sources identically. Best-effort: the pull log
+    // is already durable, and a failed publish only costs immediacy (the
+    // rail's poll backstop still picks the pull up).
+    if (pullResult.eventIds.length > 0) {
+      try {
+        for (const entry of await listPackPullsByIds(ctx.db, pullResult.eventIds)) {
+          await ctx.events.append("pack_pull", null, entry, `pack_pull:${entry.id}`, ctx.serveWriteDb);
+        }
+      } catch {
+        // Covered by the poll backstop.
+      }
+    }
+    sendJson(req, res, ctx, 202, { recorded: pullResult.recorded, mints: pullResult.mints });
     return true;
   }
   if (url.pathname === "/api/packs/card-stats") {
@@ -2018,6 +2028,9 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       // cannot ask for someone else's private shelf by guessing an id.
       privateOwnerUserId: scope.viewerUserId,
       onlyPrivate: url.searchParams.get("visibility") === "private",
+      // The moderation shelf: every uploader's private skins, and only for a
+      // request that proved it is a true admin.
+      adminAllPrivate: scope.asAdmin && url.searchParams.get("allPrivate") === "1",
     });
     sendJson(req, res, ctx, 200, list);
     return true;
@@ -2342,7 +2355,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   }
   if (url.pathname === "/api/skins/upload" || url.pathname === "/api/skins/finish" || url.pathname === "/api/skins/edit-finish") {
     // Ticket-authenticated: the token minted by /api/skins/start is the credential, so the
-    // browser can POST the 65MB .osk directly here without the Vercel body-size ceiling.
+    // browser can POST the 65MB .osk directly here instead of transiting the frontend server.
     // /api/skins/edit-start mints the same kind of ticket against a published skin, which
     // only unlocks preview re-uploads (see the part guard below).
     if (req.method !== "POST") {
@@ -2556,7 +2569,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/rename" || url.pathname === "/api/skins/visibility" || url.pathname === "/api/skins/special-keymodes") {
     // Admin-token gated like /api/skins/delete: the frontend server fn forwards the
     // osu!-verified viewer id, and the ownership check below keeps a user off anyone
-    // else's skin. asAdmin is set only by the server fn that verified a true admin.
+    // else's skin. asAdmin is set only by the server fn that verified a true admin;
+    // asKeymodeModerator only by the special-keymodes server fn after matching the
+    // viewer against its hardcoded trusted-corrector list, and no other action
+    // honours it.
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
@@ -2569,7 +2585,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; name?: unknown; asAdmin?: unknown; scope?: unknown; visibility?: unknown; specialKeymodes?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; name?: unknown; asAdmin?: unknown; asKeymodeModerator?: unknown; scope?: unknown; visibility?: unknown; specialKeymodes?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     const id = typeof body.id === "string" ? body.id : "";
     if (!Number.isInteger(userId) || userId <= 0 || !id) {
@@ -2615,13 +2631,20 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         sendJson(req, res, ctx, 400, { error: "invalid_request" });
         return true;
       }
-      const result = await setSkinSpecialKeymodes(ctx.serveWriteDb ?? ctx.db, id, specialKeymodes, ownerUserId);
+      const keymodeModerator = ownerUserId != null && body.asKeymodeModerator === true;
+      const result = await setSkinSpecialKeymodes(
+        ctx.serveWriteDb ?? ctx.db,
+        id,
+        specialKeymodes,
+        keymodeModerator ? null : ownerUserId,
+        { keymodeModerator },
+      );
       if (!result.ok) {
         const status = result.error === "forbidden" ? 403 : result.error === "invalid_keymodes" ? 400 : 404;
         sendJson(req, res, ctx, status, { ok: false, error: result.error });
         return true;
       }
-      logInfo("skin_special_keymodes_changed", { id, specialKeymodes, by: ownerUserId == null ? "admin" : "owner" });
+      logInfo("skin_special_keymodes_changed", { id, specialKeymodes, by: ownerUserId == null ? "admin" : keymodeModerator ? "keymode_moderator" : "owner" });
       sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
       return true;
     }

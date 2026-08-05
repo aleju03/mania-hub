@@ -14,7 +14,7 @@ import { useAuth } from "../lib/auth-context";
 import { isAdmin } from "../lib/auth-shared";
 import { isLiveBackendConfigured } from "../lib/live-backend";
 import {
-  fetchMyPrivateSkins,
+  fetchPrivateSkinsShelf,
   fetchSkinsListDirect,
   readCachedSkinsList,
   skinsListCacheKey,
@@ -142,8 +142,10 @@ function SkinsPage() {
   const [showBulkUploader, setShowBulkUploader] = useState(false);
   // Private skins are absent from the list everyone else reads, so their
   // uploader gets them on a shelf of their own above the grid; without it
-  // there would be no way back to their pages.
+  // there would be no way back to their pages. An admin's shelf is every
+  // uploader's private skins, for moderation.
   const [privateSkins, setPrivateSkins] = useState<SkinSummary[]>([]);
+  const [privateTotal, setPrivateTotal] = useState(0);
   const [searchInput, setSearchInput] = useState(q);
   const [reloadTick, setReloadTick] = useState(0);
 
@@ -203,12 +205,15 @@ function SkinsPage() {
   useEffect(() => {
     if (!viewerId || !isLiveBackendConfigured()) {
       setPrivateSkins([]);
+      setPrivateTotal(0);
       return;
     }
     let cancelled = false;
-    void fetchMyPrivateSkins()
-      .then((mine) => {
-        if (!cancelled) setPrivateSkins(mine);
+    void fetchPrivateSkinsShelf()
+      .then((shelf) => {
+        if (cancelled) return;
+        setPrivateSkins(shelf.skins);
+        setPrivateTotal(shelf.total);
       })
       .catch(() => {});
     return () => {
@@ -221,6 +226,7 @@ function SkinsPage() {
       // It will never show up in the grid below, so the shelf is where the
       // uploader sees that it landed.
       setPrivateSkins((previous) => [skin, ...previous.filter((entry) => entry.id !== skin.id)]);
+      setPrivateTotal((previous) => previous + 1);
       return;
     }
     // Land the fresh skin at the top of an unfiltered first page.
@@ -353,8 +359,16 @@ function SkinsPage() {
               <div className="mb-6">
                 <div className="mb-2 flex items-baseline gap-2">
                   <Lock className="h-3.5 w-3.5 shrink-0 self-center text-osu-f1/55" aria-hidden="true" />
-                  <h2 className="text-[13px] font-bold text-white">Your private skins</h2>
-                  <span className="text-[11px] text-osu-f1">only you can open these</span>
+                  {/* An admin's shelf carries every uploader's private skins,
+                      so it says so rather than claiming they are theirs. */}
+                  <h2 className="text-[13px] font-bold text-white">{admin ? "Private skins" : "Your private skins"}</h2>
+                  <span className="text-[11px] text-osu-f1 tabular-nums">
+                    {admin
+                      ? privateTotal > privateSkins.length
+                        ? `${privateSkins.length} of ${privateTotal.toLocaleString()}, every uploader`
+                        : `${privateTotal.toLocaleString()} across every uploader`
+                      : "only you can open these"}
+                  </span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {privateSkins.map((skin) => (

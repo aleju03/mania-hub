@@ -39,16 +39,16 @@ async function walletShards(userId: number): Promise<number> {
 }
 
 describe("what a streak is worth", () => {
-  it("pays five shards a guess, plus a growing bonus every five in a row", () => {
+  it("pays eight shards a guess, plus a growing bonus every five in a row", () => {
     expect(streakShardReward(0)).toBe(0);
-    expect(streakShardReward(1)).toBe(5);
-    expect(streakShardReward(4)).toBe(20);
-    // Fifth in a row: 25 for the guesses plus the first milestone.
-    expect(streakShardReward(5)).toBe(30);
-    expect(streakShardReward(9)).toBe(50);
-    // Tenth: 50 for the guesses plus milestones of 5 and 10.
-    expect(streakShardReward(10)).toBe(65);
-    expect(streakShardReward(20)).toBe(150);
+    expect(streakShardReward(1)).toBe(8);
+    expect(streakShardReward(4)).toBe(32);
+    // Fifth in a row: 40 for the guesses plus the first milestone.
+    expect(streakShardReward(5)).toBe(50);
+    expect(streakShardReward(9)).toBe(82);
+    // Tenth: 80 for the guesses plus milestones of 10 and 20.
+    expect(streakShardReward(10)).toBe(110);
+    expect(streakShardReward(20)).toBe(260);
   });
 
   it("is worth going deep rather than restarting", () => {
@@ -60,10 +60,10 @@ describe("what a streak is worth", () => {
   });
 
   it("says what the next milestone is worth", () => {
-    expect(nextStreakMilestone(0)).toEqual({ at: 5, bonus: 5 });
-    expect(nextStreakMilestone(4)).toEqual({ at: 5, bonus: 5 });
-    expect(nextStreakMilestone(5)).toEqual({ at: 10, bonus: 10 });
-    expect(nextStreakMilestone(12)).toEqual({ at: 15, bonus: 15 });
+    expect(nextStreakMilestone(0)).toEqual({ at: 5, bonus: 10 });
+    expect(nextStreakMilestone(4)).toEqual({ at: 5, bonus: 10 });
+    expect(nextStreakMilestone(5)).toEqual({ at: 10, bonus: 20 });
+    expect(nextStreakMilestone(12)).toEqual({ at: 15, bonus: 30 });
   });
 
   it("clamps a claimed streak before it ever reaches the allowance", () => {

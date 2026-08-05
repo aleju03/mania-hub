@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { exec, execBatch, json, parseJson, type Db, type DbStatement } from "../db.js";
 import { logInfo, logWarn, errorContext } from "../logger.js";
 
-// In-house web analytics, the site's only analytics sink. The Vercel capture
+// In-house web analytics, the site's only analytics sink. The frontend capture
 // proxy (/api/sync) forwards every tracked event here; rows land in a SEPARATE
 // SQLite file (its own WAL) so analytics volume can never bloat the main
 // serving DB, and every admin dashboard query is a local read against it.

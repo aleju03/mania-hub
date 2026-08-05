@@ -687,7 +687,7 @@ export async function getCachedReplayEndpointKind(scoreId: number): Promise<Repl
 
 // ----- Rendered OG image cache -----------------------------------------------
 // OG cards (`/api/og`) are produced by Satori + resvg rasterization, the most
-// CPU-heavy work on the Vercel side (multiple seconds per image). The CDN caches
+// CPU-heavy work on the frontend server (multiple seconds per image). The CDN caches
 // each URL for a day, but every miss/revalidation re-rasterizes from scratch. We
 // persist the rendered PNG in R2 keyed by the card identity plus the server's OG
 // version so a miss becomes a cheap object read instead of a full re-render.

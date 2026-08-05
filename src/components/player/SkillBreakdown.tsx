@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../lib/my-data";
 import { useAuth } from "../../lib/auth-context";
@@ -176,10 +177,44 @@ function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, whose: st
   return parts.join(" · ");
 }
 
+// Cross-keymode scale warning. 4K is rated by MinaCalc, other keymodes by a
+// different engine, so the numbers live on unrelated scales; without this,
+// players read a lower 7K overall as "the site thinks I'm worse at 7K".
+export function KeymodeScaleNote({ className = "" }: { className?: string }) {
+  return (
+    <div className={`text-[11px] text-osu-l2 ${className}`}>
+      Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it.
+    </div>
+  );
+}
+
+const SCALE_HINT_SEEN_KEY = "mania-hub-keymode-scale-hint-seen";
+
 // --- Compact card body (My Data) ---
 
 export function SkillBreakdownBody({ skills, mode, own = false }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null; own?: boolean }) {
   const whose = own ? "your" : "the";
+  // Surface the scale warning at the moment it matters: right after the
+  // viewer flips to another keymode tab and is about to compare numbers.
+  // It fades back out, and once someone has seen it we assume the point
+  // landed - a localStorage flag keeps it from nagging on every tab flip.
+  const modeKey = mode?.keyCount ?? null;
+  const prevModeKey = useRef<number | null>(null);
+  const [showScaleHint, setShowScaleHint] = useState(false);
+  useEffect(() => {
+    const prev = prevModeKey.current;
+    prevModeKey.current = modeKey;
+    if (prev == null || modeKey == null || modeKey === prev) return;
+    try {
+      if (localStorage.getItem(SCALE_HINT_SEEN_KEY)) return;
+      localStorage.setItem(SCALE_HINT_SEEN_KEY, "1");
+    } catch {
+      // Storage unavailable (private mode quirks): fall back to showing it.
+    }
+    setShowScaleHint(true);
+    const timer = setTimeout(() => setShowScaleHint(false), 8000);
+    return () => clearTimeout(timer);
+  }, [modeKey]);
   const empty = skillEmptyState(skills, mode, own);
   if (empty) return empty;
   const entries = skillModeEntries(mode!);
@@ -207,6 +242,21 @@ export function SkillBreakdownBody({ skills, mode, own = false }: { skills: MyDa
       ) : (
         <div className="mb-2.5" />
       )}
+      <AnimatePresence initial={false}>
+        {showScaleHint ? (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="pb-2.5 text-[11px] text-osu-l2">
+              <span className="font-semibold text-white">{mode!.keyCount}K has its own rating scale.</span>{" "}
+              A lower number than another keymode doesn't mean you're worse at it.
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
       <div className="mb-3">
         <DanChips mode={mode!} />
       </div>

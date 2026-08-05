@@ -5,7 +5,7 @@ import { getLiveBackendUrl, getServerLiveBackendUrl } from "./live-backend";
 // per-user actions go through server fns that resolve the osu!-verified viewer
 // from the auth cookie and forward it with the admin token (the goals bridge).
 // The 50MB .osk upload itself is browser -> live backend with a short-lived
-// ticket minted by startSkinUpload, so it never touches the Vercel body limit.
+// ticket minted by startSkinUpload, so the archive never transits the frontend server.
 
 export interface SkinScreenshot {
   url: string;
@@ -79,6 +79,20 @@ export const SKIN_MAX_SCREENSHOTS = 4;
 // Mirrors the backend's per-user cap; used as the page size for the private
 // shelf, which is never paginated.
 export const SKIN_MAX_PER_USER = 30;
+// The backend's list cap, and the page size of the admin private shelf (every
+// uploader's private skins, so the per-user cap is not the bound there).
+export const SKIN_LIST_MAX_PAGE_SIZE = 50;
+
+// osu! user ids trusted to fix keymode labels on anyone's public skin, e.g. a
+// skin published as 8K that really plays 7K+1. This is the whole grant: no
+// other skin control, and nothing else on the site, keys off this list. The
+// server fn re-derives membership from the verified viewer id, so the client
+// side of this is display only.
+const SKIN_KEYMODE_MODERATOR_USER_IDS = [12490530];
+
+export function canModerateSkinKeymodes(userId: number | null | undefined): boolean {
+  return userId != null && SKIN_KEYMODE_MODERATOR_USER_IDS.includes(userId);
+}
 
 export type SkinsSort = "newest" | "downloads";
 
@@ -448,6 +462,7 @@ export const setSkinCoverKeymode = createServerFn({ method: "POST" })
 // Corrects which of a skin's keymodes are really (N-1)+1 layouts. Detection
 // reads skin.ini's separator lines, which plenty of 7K+1 skins never set, so
 // the uploader gets the last word; once set, re-uploads keep the manual list.
+// Admins and the keymode moderators can also correct anyone's public skin.
 export const setSkinSpecialKeymodes = createServerFn({ method: "POST" })
   .validator((data: { id?: unknown; specialKeymodes?: unknown }) => {
     const id = typeof data.id === "string" ? data.id.trim() : "";
@@ -469,7 +484,13 @@ export const setSkinSpecialKeymodes = createServerFn({ method: "POST" })
       const response = await fetch(`${cfg.base}/api/skins/special-keymodes`, {
         method: "POST",
         headers: cfg.headers,
-        body: JSON.stringify({ userId: cfg.userId, id: data.id, specialKeymodes: data.specialKeymodes, asAdmin: cfg.isAdmin }),
+        body: JSON.stringify({
+          userId: cfg.userId,
+          id: data.id,
+          specialKeymodes: data.specialKeymodes,
+          asAdmin: cfg.isAdmin,
+          asKeymodeModerator: !cfg.isAdmin && canModerateSkinKeymodes(cfg.userId),
+        }),
       });
       const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary } | null;
       if (!response.ok || !body?.ok || !body.skin) return { ok: false };
@@ -537,28 +558,41 @@ export const setMySkinVisibility = createServerFn({ method: "POST" })
     }
   });
 
-// The signed-in viewer's private skins. They are absent from the browse grid
-// by design, so this is the only way back to their pages; it goes through a
-// server fn because the list endpoint only trusts an owner id that arrives
-// with the admin token.
-export const fetchMyPrivateSkins = createServerFn({ method: "GET" })
-  .handler(async (): Promise<SkinSummary[]> => {
+// The private-skins shelf. For a normal viewer that is their own private skins:
+// absent from the browse grid by design, so this is the only way back to their
+// pages. For a true admin it is every uploader's private skins, the same
+// moderation read /api/skins/get already grants on a single one. It goes
+// through a server fn because the list endpoint only trusts an owner id (and an
+// admin claim) that arrives with the admin token.
+export interface PrivateSkinsShelf {
+  skins: SkinSummary[];
+  // Rows matching the shelf query, which can exceed the page fetched above.
+  total: number;
+}
+
+export const fetchPrivateSkinsShelf = createServerFn({ method: "GET" })
+  .handler(async (): Promise<PrivateSkinsShelf> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const cfg = await resolveSkinsBackend();
-    if (!cfg) return [];
+    if (!cfg) return { skins: [], total: 0 };
     const query = new URLSearchParams({
       visibility: "private",
       viewerUserId: String(cfg.userId),
-      pageSize: String(SKIN_MAX_PER_USER),
+      pageSize: String(cfg.isAdmin ? SKIN_LIST_MAX_PAGE_SIZE : SKIN_MAX_PER_USER),
     });
+    if (cfg.isAdmin) {
+      query.set("asAdmin", "1");
+      query.set("allPrivate", "1");
+    }
     try {
       const response = await fetch(`${cfg.base}/api/skins/list?${query.toString()}`, { headers: cfg.headers });
-      if (!response.ok) return [];
+      if (!response.ok) return { skins: [], total: 0 };
       const body = (await response.json()) as SkinsListResult;
-      return Array.isArray(body.skins) ? body.skins : [];
+      const skins = Array.isArray(body.skins) ? body.skins : [];
+      return { skins, total: Number(body.total) || skins.length };
     } catch {
-      return [];
+      return { skins: [], total: 0 };
     }
   });
 

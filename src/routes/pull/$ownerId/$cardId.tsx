@@ -60,13 +60,17 @@ function sharedCardTier(shared: LiveSharedPackCard): ManiaCardTier {
 
 /* What a GOAT pull actually cost in luck. The honorary slot rolls the pack's
    own chance and then picks uniformly from the dealable roster, so the odds of
-   any one of them is the product. Figures are today's: the roster grows, and
-   the pull log records the pack rather than the odds that applied then. */
+   any one of them is the product. A pack that can cascade gets slightly more
+   than one shot at it (a hit re-rolls for another honorary, and again after
+   that), which is worth 1 / (1 - cascade) slots on average. Figures are
+   today's: the roster grows, and the pull log records the pack rather than the
+   odds that applied then. */
 function goatPullOdds(packType: string): { pack: string; slotChance: number; percent: string } | null {
   const definition = PACK_TYPES.find((type) => type.id === packType);
   const poolSize = HONORARY_PACK_POOL.length;
   if (!definition || poolSize === 0) return null;
-  const chance = definition.honoraryChance / poolSize;
+  const slotsPerHit = 1 / (1 - Math.min(0.99, Math.max(0, definition.honoraryCascadeChance)));
+  const chance = (definition.honoraryChance * slotsPerHit) / poolSize;
   if (!(chance > 0)) return null;
   // Two significant figures: these run from 0.015% to 0.18%, so a fixed number
   // of decimals either rounds the small ones to zero or pads the large ones.

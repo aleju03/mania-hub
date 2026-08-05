@@ -8,8 +8,8 @@ const ARROW_SIZE = Math.round(ICON_SIZE * 0.62);
 const ARROW_PAD = Math.round((ICON_SIZE - ARROW_SIZE) / 2);
 const FLAG_FETCH_TIMEOUT_MS = 10_000;
 
-// Inlined from public/images/notes/arrow-left-pink.png. Vercel doesn't bundle
-// public/ into the serverless function (it's served by the CDN instead), so
+// Inlined from public/images/notes/arrow-left-pink.png. The old Vercel host
+// didn't bundle public/ into the serverless function (CDN served it), so
 // fs.readFile against process.cwd()+"/public" worked locally but threw ENOENT
 // on prod, leaving the favicon endpoint returning a 500 and the tab icon
 // missing. The asset is 1.8KB; embedding it as base64 keeps the function

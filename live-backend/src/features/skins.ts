@@ -372,16 +372,21 @@ export type SetSkinSpecialKeymodesResult =
 // catalog mislabels the skin as plain NK (and vice versa). The list replaces
 // the detected one outright and flips the manual flag, which tells .osk
 // replacements and backfill re-scans to leave it alone from here on.
-// ownerUserId null is the admin path, which skips the ownership check.
+// ownerUserId null is the admin path, which skips the ownership check. The
+// keymodeModerator option is the trusted-corrector path (also ownerUserId
+// null): same skip, but only over public skins, since a private skin is a 404
+// for anyone but its uploader, and its summary never carries owner-only URLs.
 export async function setSkinSpecialKeymodes(
   db: Db,
   id: string,
   rawSpecialKeymodes: number[],
   ownerUserId: number | null,
+  options?: { keymodeModerator?: boolean },
 ): Promise<SetSkinSpecialKeymodesResult> {
   const row = await getSkin(db, id);
   if (!row || row.status === "pending") return { ok: false, error: "not_found" };
   if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
+  if (options?.keymodeModerator && row.visibility !== "public") return { ok: false, error: "not_found" };
   const specialKeymodes = normalizeKeymodes(rawSpecialKeymodes);
   // Special means (N-1)+1, so 1K cannot be one, and a keymode the skin does
   // not ship cannot be labelled at all.
@@ -394,7 +399,9 @@ export async function setSkinSpecialKeymodes(
     [JSON.stringify(specialKeymodes), nowIso(), id],
   );
   const updated = await getSkin(db, id);
-  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }) } : { ok: false, error: "not_found" };
+  return updated
+    ? { ok: true, skin: toSkinSummary(updated, { asOwner: !options?.keymodeModerator }) }
+    : { ok: false, error: "not_found" };
 }
 
 export type RenameSkinResult =
@@ -615,6 +622,10 @@ export interface SkinsListQuery {
   privateOwnerUserId?: number | null;
   // Restricts the list to that owner's private skins (the shelf itself).
   onlyPrivate?: boolean;
+  // Widens the shelf to every uploader's private skins: the moderation view a
+  // true admin gets, the same read /api/skins/get already grants them on a
+  // single private skin. Only meaningful together with onlyPrivate.
+  adminAllPrivate?: boolean;
 }
 
 export interface SkinsListResult {
@@ -635,10 +646,18 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
   const privateOwner = Number.isInteger(query.privateOwnerUserId) && Number(query.privateOwnerUserId) > 0
     ? Number(query.privateOwnerUserId)
     : null;
+  // An admin shelf reads every uploader's private skins; the flag is only ever
+  // set by an admin-token request that said so explicitly.
+  const adminAllPrivate = query.onlyPrivate === true && query.adminAllPrivate === true;
   if (query.onlyPrivate) {
-    if (privateOwner == null) return { skins: [], total: 0, page, pageSize };
-    where.push("visibility = 'private' and owner_user_id = ?");
-    args.push(privateOwner);
+    if (adminAllPrivate) {
+      where.push("visibility = 'private'");
+    } else if (privateOwner == null) {
+      return { skins: [], total: 0, page, pageSize };
+    } else {
+      where.push("visibility = 'private' and owner_user_id = ?");
+      args.push(privateOwner);
+    }
   } else if (privateOwner != null) {
     where.push("(visibility = 'public' or owner_user_id = ?)");
     args.push(privateOwner);
@@ -679,12 +698,13 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
 
   return {
     // A private row is only ever in here because it belongs to the viewer the
-    // caller vouched for, so it serializes with its capability URLs attached -
-    // stated as an ownership check rather than inherited from the query, so a
-    // future filter cannot quietly widen who gets the whole skin.
+    // caller vouched for, or because a true admin asked for the moderation
+    // shelf, so it serializes with its capability URLs attached - stated as an
+    // ownership check rather than inherited from the query, so a future filter
+    // cannot quietly widen who gets the whole skin.
     skins: rows.map((row) => {
       const skin = rowToSkin(row as Record<string, unknown>);
-      return toSkinSummary(skin, { asOwner: privateOwner != null && skin.ownerUserId === privateOwner });
+      return toSkinSummary(skin, { asOwner: adminAllPrivate || (privateOwner != null && skin.ownerUserId === privateOwner) });
     }),
     total: Number(totalRow?.total) || 0,
     page,

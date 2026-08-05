@@ -466,6 +466,7 @@ function PacksPage() {
           topFraction: type.topFraction,
           count: type.cardCount,
           honoraryChance: devForceGoatPull() ? 1 : type.honoraryChance,
+          honoraryCascadeChance: type.honoraryCascadeChance,
           ownedUserIds: owned?.ownedUserIds,
           ownedGoatUserIds: owned?.ownedGoatUserIds,
         });

@@ -43,6 +43,10 @@ export function SkinSettingsModal({
 }) {
   const auth = useAuth();
   const isOwner = auth.viewer?.id === skin.ownerUserId;
+  // A keymode moderator (neither owner nor admin) reaches this modal only to
+  // fix mislabelled keymodes, so every other row stays off their screen. The
+  // server fns enforce the same boundary; this is just the honest UI for it.
+  const keymodesOnly = !isOwner && !auth.isAdmin;
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -194,7 +198,7 @@ export function SkinSettingsModal({
           >
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-osu-b3/30 px-4 py-3 sm:px-5">
               <span className="min-w-0 truncate text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">
-                {auth.isAdmin && !isOwner ? "moderation" : "skin settings"}
+                {keymodesOnly ? "keymode moderation" : auth.isAdmin && !isOwner ? "moderation" : "skin settings"}
               </span>
               <button
                 type="button"
@@ -207,35 +211,37 @@ export function SkinSettingsModal({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-5">
-              <SettingsRow label="Name">
-                <form
-                  className="flex items-center gap-2"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    submitRename();
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={nameDraft}
-                    maxLength={SKIN_NAME_MAX_LENGTH}
-                    disabled={busy}
-                    onChange={(event) => setNameDraft(event.target.value)}
-                    aria-label="Skin name"
-                    className="min-w-0 flex-1 rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] text-osu-l1 transition-colors focus:border-osu-pink/50 focus:outline-none"
-                  />
-                  {nameDirty && (
-                    <button
-                      type="submit"
+              {!keymodesOnly && (
+                <SettingsRow label="Name">
+                  <form
+                    className="flex items-center gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      submitRename();
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={nameDraft}
+                      maxLength={SKIN_NAME_MAX_LENGTH}
                       disabled={busy}
-                      className="rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:opacity-50"
-                    >
-                      Save
-                    </button>
-                  )}
-                </form>
-                <p className="mt-1.5 text-[11px] text-osu-f1/70">The link and the .osk filename stay as published.</p>
-              </SettingsRow>
+                      onChange={(event) => setNameDraft(event.target.value)}
+                      aria-label="Skin name"
+                      className="min-w-0 flex-1 rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] text-osu-l1 transition-colors focus:border-osu-pink/50 focus:outline-none"
+                    />
+                    {nameDirty && (
+                      <button
+                        type="submit"
+                        disabled={busy}
+                        className="rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                    )}
+                  </form>
+                  <p className="mt-1.5 text-[11px] text-osu-f1/70">The link and the .osk filename stay as published.</p>
+                </SettingsRow>
+              )}
 
               {relabelable.length > 0 && (
                 <SettingsRow label="Keymodes">
@@ -262,95 +268,99 @@ export function SkinSettingsModal({
                     })}
                   </div>
                   <p className="mt-1.5 text-[11px] text-osu-f1/70">
-                    Tap a keymode that really plays as one lane fewer plus a special lane, like 7K+1 shown as 8K.
+                    Tap a keymode to toggle its label.
                   </p>
                 </SettingsRow>
               )}
 
-              <SettingsRow label="Visibility">
-                <div className="inline-flex items-center gap-1 rounded-lg bg-osu-b4/70 p-1">
-                  {(["public", "private"] as const).map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setVisibility(option)}
-                      disabled={busy}
-                      aria-pressed={skin.visibility === option}
-                      title={option === "public"
-                        ? "On /skins for anyone to download"
-                        : "Off /skins; only you see this page. Your replays keep playing in it"}
-                      className={`rounded-md px-4 py-1.5 text-[12px] font-bold transition-colors cursor-pointer disabled:opacity-50 ${
-                        skin.visibility === option ? "bg-osu-pink/25 text-osu-pink-light" : "text-osu-f1 hover:text-osu-l2"
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              </SettingsRow>
+              {!keymodesOnly && (
+                <>
+                  <SettingsRow label="Visibility">
+                    <div className="inline-flex items-center gap-1 rounded-lg bg-osu-b4/70 p-1">
+                      {(["public", "private"] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setVisibility(option)}
+                          disabled={busy}
+                          aria-pressed={skin.visibility === option}
+                          title={option === "public"
+                            ? "On /skins for anyone to download"
+                            : "Off /skins; only you see this page. Your replays keep playing in it"}
+                          className={`rounded-md px-4 py-1.5 text-[12px] font-bold transition-colors cursor-pointer disabled:opacity-50 ${
+                            skin.visibility === option ? "bg-osu-pink/25 text-osu-pink-light" : "text-osu-f1 hover:text-osu-l2"
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  </SettingsRow>
 
-              <SettingsRow label="File and previews">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={onUpdateFile}
-                    disabled={busy}
-                    title="Replace the .osk with a newer build of this skin"
-                    className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                    Update file
-                    {skin.oskSizeBytes ? (
-                      <span className="font-medium text-osu-f1 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span>
-                    ) : null}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onEditPreviews}
-                    disabled={busy}
-                    title="Re-render the playfield previews or change the card cover"
-                    className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
-                  >
-                    <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                    Edit previews
-                  </button>
-                </div>
-              </SettingsRow>
+                  <SettingsRow label="File and previews">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={onUpdateFile}
+                        disabled={busy}
+                        title="Replace the .osk with a newer build of this skin"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                        Update file
+                        {skin.oskSizeBytes ? (
+                          <span className="font-medium text-osu-f1 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span>
+                        ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onEditPreviews}
+                        disabled={busy}
+                        title="Re-render the playfield previews or change the card cover"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
+                      >
+                        <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                        Edit previews
+                      </button>
+                    </div>
+                  </SettingsRow>
 
-              <SettingsRow label="Danger">
-                {confirmingDelete ? (
-                  <span className="flex flex-wrap items-center gap-2 text-[12px]">
-                    <span className="text-osu-f1">Delete for good?</span>
-                    <button
-                      type="button"
-                      onClick={() => void removeSkin()}
-                      disabled={busy}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-osu-red/25 px-3 py-1.5 font-bold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/40 disabled:opacity-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      Delete
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmingDelete(false)}
-                      disabled={busy}
-                      className="font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
-                    >
-                      Keep it
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmingDelete(true)}
-                    disabled={busy}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-osu-red/35 px-3 py-1.5 text-[12px] font-semibold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/20 disabled:opacity-50"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    Delete skin
-                  </button>
-                )}
-              </SettingsRow>
+                  <SettingsRow label="Danger">
+                    {confirmingDelete ? (
+                      <span className="flex flex-wrap items-center gap-2 text-[12px]">
+                        <span className="text-osu-f1">Delete for good?</span>
+                        <button
+                          type="button"
+                          onClick={() => void removeSkin()}
+                          disabled={busy}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-osu-red/25 px-3 py-1.5 font-bold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/40 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingDelete(false)}
+                          disabled={busy}
+                          className="font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
+                        >
+                          Keep it
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingDelete(true)}
+                        disabled={busy}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-osu-red/35 px-3 py-1.5 text-[12px] font-semibold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/20 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        Delete skin
+                      </button>
+                    )}
+                  </SettingsRow>
+                </>
+              )}
 
               {error && <p className="pb-3 text-[12px] font-semibold text-osu-red-light">{error}</p>}
             </div>

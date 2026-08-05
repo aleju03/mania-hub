@@ -789,6 +789,25 @@ describe("setSkinSpecialKeymodes", () => {
     expect((await getSkin(db, id))?.specialKeymodesManual).toBe(true);
   });
 
+  it("lets a keymode moderator correct anyone's public skin, but never a private one", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 101, ownerUsername: "delta", name: "Mislabelled Eight", keymodes: [4, 8] });
+    const set = await setSkinSpecialKeymodes(db, id, [8], null, { keymodeModerator: true });
+    expect(set.ok).toBe(true);
+    if (set.ok) expect(set.skin.specialKeymodes).toEqual([8]);
+    expect((await getSkin(db, id))?.specialKeymodesManual).toBe(true);
+
+    // A private skin is a 404 for anyone but its uploader, moderator included.
+    const hidden = await createPublishedSkin({
+      ownerUserId: 101, ownerUsername: "delta", name: "Hidden Eight",
+      keymodes: [8], visibility: "private", sha256: "cd".repeat(32),
+    });
+    expect(await setSkinSpecialKeymodes(db, hidden, [8], null, { keymodeModerator: true }))
+      .toEqual({ ok: false, error: "not_found" });
+    // The uploader themself still can.
+    const byOwner = await setSkinSpecialKeymodes(db, hidden, [8], 101);
+    expect(byOwner.ok).toBe(true);
+  });
+
   it("rejects keymodes the skin does not ship", async () => {
     const id = await createPublishedSkin({ ownerUserId: 101, ownerUsername: "delta", name: "Four Only", keymodes: [4] });
     expect(await setSkinSpecialKeymodes(db, id, [8], 101)).toEqual({ ok: false, error: "invalid_keymodes" });
@@ -1171,6 +1190,27 @@ describe("private skins", () => {
 
     // And it has no counted download.
     expect(await recordSkinDownload(db, secret)).toBeNull();
+  });
+
+  it("hands a true admin every uploader's private skins, whole", async () => {
+    const mine = await createPublishedSkin({ ...OWNER, name: "Mine Only", visibility: "private" });
+    const theirs = await createPublishedSkin({ ownerUserId: 202, ownerUsername: "echo", name: "Theirs Only", visibility: "private" });
+    await createPublishedSkin({ ownerUserId: 303, ownerUsername: "foxtrot", name: "Open Mix" });
+
+    const shelf = await listSkins(db, { onlyPrivate: true, privateOwnerUserId: 101, adminAllPrivate: true });
+    expect(shelf.total).toBe(2);
+    expect([...shelf.skins.map((skin) => skin.id)].sort()).toEqual([mine, theirs].sort());
+    // Whole, so the shelf renders someone else's preview and its card opens
+    // that skin's page (which grants an admin the same read).
+    const other = shelf.skins.find((skin) => skin.id === theirs)!;
+    expect(other.slug).toBe("theirs-only");
+    expect(other.previewUrl).not.toBeNull();
+    expect(other.oskUrl).not.toBeNull();
+
+    // The flag only widens the shelf: the browse grid stays public-only, and
+    // an owner-scoped shelf without it still sees just its own.
+    expect((await listSkins(db, { adminAllPrivate: true })).skins.map((skin) => skin.name)).toEqual(["Open Mix"]);
+    expect((await listSkins(db, { onlyPrivate: true, privateOwnerUserId: 101 })).skins.map((skin) => skin.id)).toEqual([mine]);
   });
 
   it("rotates the secret every time a skin turns private", async () => {

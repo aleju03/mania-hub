@@ -44,9 +44,9 @@ export function SkinCard({ skin, previewKeys, onClick }: { skin: SkinSummary; pr
   const preview = keymodePreview
     ? { url: keymodePreview.url, width: keymodePreview.width, height: keymodePreview.height }
     : { url: skin.previewUrl, width: skin.previewWidth, height: skin.previewHeight };
-  // A private skin has no counted download, and only its owner is ever handed
-  // a card for one: the corner button links straight at the capability URL on
-  // their own copy of the summary.
+  // A private skin has no counted download, and a card for one only reaches its
+  // owner or a moderating admin: the corner button links straight at the
+  // capability URL on that copy of the summary.
   const downloadUrl = !skin.oskUrl ? null : isPrivate ? skin.oskUrl : skinDownloadUrl(skin.id) ?? skin.oskUrl;
   return (
     // The download sits outside the card link (an anchor cannot nest in

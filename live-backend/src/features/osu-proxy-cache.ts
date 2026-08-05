@@ -5,9 +5,9 @@ import type { OsuApiClient } from "../osu/client.js";
 import { errorContext, logWarn } from "../logger.js";
 
 // Response cache for the /api/osu/v2 GET-JSON proxy. The osu! API budget (~45/min token bucket) is
-// the scarce shared resource, and the Vercel frontend runs N short-lived instances that would each
-// re-fetch the same user/rankings data - so the cross-instance cache lives here, next to the token
-// bucket, instead of in a frontend-owned store. Callers opt in per request with cacheTtlMs (and
+// the scarce shared resource, and frontend instances come and go across deploys/restarts and would
+// each re-fetch the same user/rankings data - so the cross-instance cache lives here, next to the
+// token bucket, instead of in a frontend-owned store. Callers opt in per request with cacheTtlMs (and
 // optionally staleMs: how long past expiry a row may still be served when the upstream call fails,
 // which is how "serve a stale profile while osu! is erroring" works now).
 //

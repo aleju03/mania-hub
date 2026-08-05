@@ -78,17 +78,23 @@ export class LiveEventLog {
     };
   }
 
-  async append(type: string, country: string | null, payload: unknown, eventId?: string): Promise<LiveEvent> {
+  // `via` lets a serving-process caller write through its dedicated write
+  // connection (HttpContext.serveWriteDb) instead of the read-serving one, per
+  // the never-write-on-the-serving-connection rule. Delivery is unaffected:
+  // the row lands in the same database, so the tail poller (server role) or
+  // the direct dispatch below (all role) picks it up either way.
+  async append(type: string, country: string | null, payload: unknown, eventId?: string, via?: Db): Promise<LiveEvent> {
+    const db = via ?? this.db;
     const createdAt = nowIso();
     const stableId = eventId ?? `${type}:${country ?? "global"}:${createdAt}:${Math.random().toString(36).slice(2)}`;
     const storedPayload = compactLiveEventPayload(type, country, payload);
     const result = await exec(
-      this.db,
+      db,
       `insert or ignore into live_event_log (event_id, type, country, payload_json, created_at)
        values (?, ?, ?, ?, ?)`,
       [stableId, type, country, json(storedPayload), createdAt],
     );
-    const row = (await exec(this.db, "select * from live_event_log where event_id = ?", [stableId])).rows[0];
+    const row = (await exec(db, "select * from live_event_log where event_id = ?", [stableId])).rows[0];
     const event = Number(result.rowsAffected ?? 0) > 0
       ? rowToLiveEventWithPayload(row, payload)
       : await this.rowToLiveEvent(row);

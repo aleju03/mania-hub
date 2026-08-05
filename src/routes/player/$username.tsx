@@ -62,7 +62,7 @@ import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton"
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
 import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../lib/maniacard";
-import { SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent } from "../../components/player/SkillBreakdown";
+import { KeymodeScaleNote, SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent } from "../../components/player/SkillBreakdown";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
 import {
@@ -3091,16 +3091,19 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
     );
   }
   return (
-    <div
-      className={`grid grid-cols-1 gap-3 ${
-        modes.length > 1
-          ? "xl:grid-cols-2 xl:[&>*:last-child:nth-child(odd)]:col-span-2"
-          : "md:max-w-[640px]"
-      }`}
-    >
-      {modes.map((mode) => (
-        <SkillModePanel key={mode.keyCount} skills={skills} mode={mode} />
-      ))}
+    <div>
+      {modes.length > 1 ? <KeymodeScaleNote className="mb-2" /> : null}
+      <div
+        className={`grid grid-cols-1 gap-3 ${
+          modes.length > 1
+            ? "xl:grid-cols-2 xl:[&>*:last-child:nth-child(odd)]:col-span-2"
+            : "md:max-w-[640px]"
+        }`}
+      >
+        {modes.map((mode) => (
+          <SkillModePanel key={mode.keyCount} skills={skills} mode={mode} />
+        ))}
+      </div>
     </div>
   );
 }

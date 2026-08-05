@@ -156,7 +156,8 @@ describe("pack wallets", () => {
     );
 
     const result = await recyclePackCollectionCards(db, USER_ID, { mode: "whole_matching", query: "renamed" }, 3000);
-    expect(result.gained).toBe(4);
+    // Two rare copies: the kept one at full value, the duplicate at half.
+    expect(result.gained).toBe(2 + 1);
     expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).total).toBe(0);
   });
 
@@ -218,14 +219,14 @@ describe("GOAT cards alongside their player's ordinary card", () => {
     await savePackWallet(db, USER_ID, bothCardsPayload(), 0, 1000);
 
     const ordinary = await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: String(BOJII) });
-    expect(ordinary.gained).toBe(2 * 40);
+    expect(ordinary.gained).toBe(40 + 20);
 
     const remaining = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
     expect(remaining.total).toBe(1);
     expect(remaining.cards[0].tier).toBe("goat");
 
     const goat = await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: `${BOJII}:goat` });
-    expect(goat.gained).toBe(1000);
+    expect(goat.gained).toBe(400);
     expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).total).toBe(0);
   });
 });

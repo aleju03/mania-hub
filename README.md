@@ -48,7 +48,7 @@ Pick a country (or the global scope) and see what's going on in its osu!mania sc
 
 Two cooperating parts:
 
-- **Frontend** (`src/`): TanStack Start + React 19, SSR via Nitro, deployed on Vercel. File-based routes, one Zustand store persisted to localStorage, Tailwind CSS v4.
+- **Frontend** (`src/`): TanStack Start + React 19, SSR via Nitro (node-server), self-hosted on the VPS behind Cloudflare. File-based routes, one Zustand store persisted to localStorage, Tailwind CSS v4.
 - **Live backend** (`live-backend/`): always-on Node service that ingests osu! scores from [Kayla's oSC feed](https://osc.kaysting.dev) (with JSON backfill and an osu! API fallback poller), keeps durable SQLite projections, runs a DB-backed job queue (enrichment, rosters, snipe boards, chart analysis, dan estimates, skill ratings, activity analysis, replay video rendering), and pushes deltas to browsers over SSE.
 
 Browsers fetch a snapshot on page entry and subscribe to `/api/live` for updates; reconnects replay missed events via `Last-Event-ID`. All authenticated osu! API calls stay server-side behind a token-bucket rate limiter, and heavy computed artifacts are cached in R2.

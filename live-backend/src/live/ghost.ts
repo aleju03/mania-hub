@@ -679,7 +679,7 @@ export async function handleGhost(req: IncomingMessage, res: ServerResponse, ctx
 
   // Minting a control ticket is the one step that needs the real token: the
   // admin page trades its server-side session for one so the browser can drive
-  // the ghost directly, without the token and without a hop through Vercel.
+  // the ghost directly, without the token and without a hop through the frontend.
   if (url.pathname === TICKET_PATH) {
     if (!isGhostAdmin(req, ctx)) {
       sendGhostJson(res, 401, { error: "unauthorized" });

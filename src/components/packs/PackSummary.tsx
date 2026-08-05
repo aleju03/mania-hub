@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Swords } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { formatOrdinal } from "#/lib/format";
-import { packCardKey, shardValueForTier, type CollectedCard } from "#/lib/pack-collection";
+import { duplicateShardValueForTier, packCardKey, type CollectedCard } from "#/lib/pack-collection";
 import { CountryFlag } from "../ui/CountryFlag";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import type { FlightRect, RevealedCard } from "./RevealStage";
@@ -81,9 +81,12 @@ export function PackSummary({
   const bestRank = Math.min(...cards.map((card) => card.player.globalRank));
   const newCount = cards.filter((card) => card.isNew).length;
   // What this pack's duplicates recycle into - the loop back to shard packs.
+  // A card you already hold recycles at the duplicate rate, not its full tier
+  // value, so this has to be the duplicate table or the summary promises more
+  // than the collection pays.
   const dupeShards = cards
     .filter((card) => !card.isNew)
-    .reduce((sum, card) => sum + shardValueForTier(card.tier), 0);
+    .reduce((sum, card) => sum + duplicateShardValueForTier(card.tier), 0);
 
   // Clicking a card lifts it into the same spotlight the collection uses;
   // the profile lives behind the player's name and the spotlight's button.

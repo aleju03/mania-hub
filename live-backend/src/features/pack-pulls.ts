@@ -214,14 +214,14 @@ export async function recordPackPullEvents(
   packType: unknown,
   cards: unknown,
   now = Date.now(),
-): Promise<{ recorded: number; mints: PackPullMint[] }> {
+): Promise<{ recorded: number; mints: PackPullMint[]; eventIds: number[] }> {
   const type = normalizePackType(packType);
-  if (!type || !Number.isInteger(ownerUserId) || ownerUserId <= 0) return { recorded: 0, mints: [] };
+  if (!type || !Number.isInteger(ownerUserId) || ownerUserId <= 0) return { recorded: 0, mints: [], eventIds: [] };
   const normalized = (Array.isArray(cards) ? cards : [])
     .map(normalizePullCard)
     .filter((card): card is PackPullCardInput => Boolean(card))
     .slice(0, PACK_PULL_MAX_CARDS_PER_EVENT);
-  if (normalized.length === 0) return { recorded: 0, mints: [] };
+  if (normalized.length === 0) return { recorded: 0, mints: [], eventIds: [] };
 
   const hourAgo = now - 60 * 60 * 1000;
   const recent = (await exec(
@@ -230,11 +230,12 @@ export async function recordPackPullEvents(
     [ownerUserId, hourAgo],
   )).rows[0];
   if ((Number(recent?.n) || 0) + normalized.length > PACK_PULL_OWNER_HOURLY_CAP) {
-    return { recorded: 0, mints: [] };
+    return { recorded: 0, mints: [], eventIds: [] };
   }
 
   let recorded = 0;
   const mints: PackPullMint[] = [];
+  const eventIds: number[] = [];
   for (const card of normalized) {
     // First-global means nobody, anywhere, holds or ever pulled this card:
     // no prior event and no other owner's collection row (the caller's own
@@ -253,7 +254,7 @@ export async function recordPackPullEvents(
         )).rows[0];
     const isFirstGlobal = !priorEvent && !otherOwner;
     const notable = isFirstGlobal || (card.tier !== null && NOTABLE_TIERS.has(card.tier));
-    await exec(
+    const inserted = await exec(
       db,
       `insert into pack_pull_events (
          owner_user_id, owner_username, card_user_id, card_username, card_country_code,
@@ -274,6 +275,8 @@ export async function recordPackPullEvents(
       ],
     );
     recorded += 1;
+    const insertedId = Number(inserted.lastInsertRowid ?? 0);
+    if (insertedId > 0) eventIds.push(insertedId);
     // Serials are only handed out here, so they exist for signed-in collectors
     // (the only ones whose pulls are logged). An anonymous wallet's cards are
     // unserialled until that browser logs in and pulls them again.
@@ -281,7 +284,7 @@ export async function recordPackPullEvents(
     const mint = await assignPackCardSerial(db, cardKey, card.userId, ownerUserId, now);
     mints.push({ userId: card.userId, cardKey, isFirstGlobal, ...mint });
   }
-  return { recorded, mints };
+  return { recorded, mints, eventIds };
 }
 
 /* Community ownership counts for a hand of cards ("owned by N collectors").
@@ -592,26 +595,15 @@ export async function getSharedPackCard(
   };
 }
 
-/* The pull feed. notableOnly keeps it to high mints and first-ever pulls
-   (the shareable moments); the packs page's ambient live ticker asks for
-   everything, since the point there is the constant pulse of packs being
-   ripped open. */
-export async function listRecentPackPulls(db: Db, limit: number, notableOnly = true): Promise<PackPullFeedEntry[]> {
-  const cappedLimit = Math.min(PACK_PULL_FEED_MAX_LIMIT, Math.max(1, Math.floor(limit) || 1));
-  const rows = (await exec(
-    db,
-    `select id, owner_user_id, owner_username, card_user_id, card_username, card_country_code,
-       tier, pack_type, is_new, is_first_global, pulled_at,
-       ${liveUserFieldSql("owner_user_id", "username")} as live_owner_username,
-       ${liveUserFieldSql("card_user_id", "username")} as live_card_username,
-       ${liveUserFieldSql("card_user_id", "avatar_url")} as card_avatar_url
-     from pack_pull_events
-     ${notableOnly ? "where notable = 1" : ""}
-     order by pulled_at desc, id desc
-     limit ?`,
-    [cappedLimit],
-  )).rows;
-  return rows.map((row) => ({
+const FEED_ENTRY_SELECT_SQL = `select id, owner_user_id, owner_username, card_user_id, card_username, card_country_code,
+    tier, pack_type, is_new, is_first_global, pulled_at,
+    ${liveUserFieldSql("owner_user_id", "username")} as live_owner_username,
+    ${liveUserFieldSql("card_user_id", "username")} as live_card_username,
+    ${liveUserFieldSql("card_user_id", "avatar_url")} as card_avatar_url
+  from pack_pull_events`;
+
+function rowToFeedEntry(row: Record<string, unknown>): PackPullFeedEntry {
+  return {
     id: Number(row.id),
     ownerUserId: Number(row.owner_user_id),
     ownerUsername: nonEmptyString(row.live_owner_username) ?? String(row.owner_username ?? ""),
@@ -624,7 +616,41 @@ export async function listRecentPackPulls(db: Db, limit: number, notableOnly = t
     isNew: Number(row.is_new) === 1,
     isFirstGlobal: Number(row.is_first_global) === 1,
     pulledAt: Number(row.pulled_at) || 0,
-  }));
+  };
+}
+
+/* The pull feed. notableOnly keeps it to high mints and first-ever pulls
+   (the shareable moments); the packs page's ambient live ticker asks for
+   everything, since the point there is the constant pulse of packs being
+   ripped open. */
+export async function listRecentPackPulls(db: Db, limit: number, notableOnly = true): Promise<PackPullFeedEntry[]> {
+  const cappedLimit = Math.min(PACK_PULL_FEED_MAX_LIMIT, Math.max(1, Math.floor(limit) || 1));
+  const rows = (await exec(
+    db,
+    `${FEED_ENTRY_SELECT_SQL}
+     ${notableOnly ? "where notable = 1" : ""}
+     order by pulled_at desc, id desc
+     limit ?`,
+    [cappedLimit],
+  )).rows;
+  return rows.map(rowToFeedEntry);
+}
+
+/* Just-recorded rows as feed entries (live identity overlay applied), for
+   publishing onto the live event stream right after recordPackPullEvents.
+   Ascending id, so a batch is emitted oldest-first, the order the rail's
+   drip queue expects. */
+export async function listPackPullsByIds(db: Db, ids: number[]): Promise<PackPullFeedEntry[]> {
+  const valid = [...new Set(ids.map((id) => Math.floor(Number(id) || 0)).filter((id) => id > 0))]
+    .slice(0, PACK_PULL_MAX_CARDS_PER_EVENT);
+  if (valid.length === 0) return [];
+  const placeholders = valid.map(() => "?").join(", ");
+  const rows = (await exec(
+    db,
+    `${FEED_ENTRY_SELECT_SQL} where id in (${placeholders}) order by id asc`,
+    valid as InValue[],
+  )).rows;
+  return rows.map(rowToFeedEntry);
 }
 
 export interface HonoraryCardOwner {

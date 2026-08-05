@@ -16,6 +16,7 @@ import {
   getPackCardStats,
   getPackPulledStats,
   getSharedPackCard,
+  listPackPullsByIds,
   listRecentPackPulls,
   PACK_CARD_COLLECTORS_LISTED,
   PACK_PULL_OWNER_HOURLY_CAP,
@@ -103,6 +104,28 @@ describe("recordPackPullEvents", () => {
     expect(rows[1].tier).toBe("mythic");
     expect(rows[0].owner_username).toBe("opener");
     expect(Number(rows[0].pulled_at)).toBe(10_000);
+  });
+
+  it("returns the inserted event ids, readable back as feed entries", async () => {
+    const result = await recordPackPullEvents(db, OWNER_ID, "opener", "standard", [
+      pullCard(CARD_A, "common"),
+      pullCard(CARD_B, "mythic"),
+    ], 10_000);
+    expect(result.eventIds).toHaveLength(2);
+
+    const entries = await listPackPullsByIds(db, result.eventIds);
+    expect(entries.map((entry) => entry.id)).toEqual([...result.eventIds].sort((a, b) => a - b));
+    expect(entries[0]).toMatchObject({
+      ownerUserId: OWNER_ID,
+      ownerUsername: "opener",
+      cardUserId: CARD_A,
+      tier: "common",
+      packType: "standard",
+      isFirstGlobal: true,
+      pulledAt: 10_000,
+    });
+    // Unknown ids are simply absent, and garbage is ignored.
+    expect(await listPackPullsByIds(db, [999_999, 0, -1, NaN])).toEqual([]);
   });
 
   it("only the first pull of a card is first-global; later commons are not notable", async () => {
@@ -449,6 +472,39 @@ describe("pack pull endpoints", () => {
     const pulled = await call(mockReq("GET", `/api/packs/pulled-stats/${CARD_A}`));
     expect(pulled.status).toBe(200);
     expect(pulled.body.pullEvents7d).toBe(1);
+  });
+
+  it("POST /api/packs/pulls publishes each pull on the live event stream", async () => {
+    const received: Array<{ type: string; country: string | null; payload: unknown }> = [];
+    events.subscribe((event) => received.push({ type: event.type, country: event.country, payload: event.payload }));
+    await call(bodyReq("POST", "/api/packs/pulls", {
+      userId: OWNER_ID,
+      username: "opener",
+      packType: "standard",
+      cards: [pullCard(CARD_A, "common"), pullCard(CARD_B, "goat")],
+    }, ADMIN));
+
+    // Global events (null country) so every /api/live subscriber gets them,
+    // carrying the same feed-entry shape the recent-pulls endpoint serves.
+    expect(received).toHaveLength(2);
+    expect(received[0].type).toBe("pack_pull");
+    expect(received[0].country).toBeNull();
+    expect(received[0].payload).toMatchObject({ cardUserId: CARD_A, tier: "common", ownerUsername: "opener" });
+    expect(received[1].payload).toMatchObject({ cardUserId: CARD_B, tier: "goat" });
+
+    // And the rows are durable, so reconnect replay can serve them.
+    const logged = (await exec(db, "select type, country from live_event_log where type = 'pack_pull'")).rows;
+    expect(logged).toHaveLength(2);
+
+    // A rejected batch (bad pack type) publishes nothing.
+    received.length = 0;
+    await call(bodyReq("POST", "/api/packs/pulls", {
+      userId: OWNER_ID,
+      username: "opener",
+      packType: "DROP TABLE",
+      cards: [pullCard(CARD_A, "common")],
+    }, ADMIN));
+    expect(received).toHaveLength(0);
   });
 
   it("POST /api/packs/pulls rejects a missing owner", async () => {

@@ -515,6 +515,7 @@ function LiveBackendPage() {
       ["score_gain", addEvent("score_gain")],
       ["top_play", addEvent("top_play")],
       ["snipe", addEvent("snipe")],
+      ["pack_pull", addEvent("pack_pull")],
       ["job_status", addEvent("job_status")],
     ];
     source.onopen = () => setConnectionState("open");

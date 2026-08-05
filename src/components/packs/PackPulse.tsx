@@ -6,9 +6,12 @@ import {
   fetchLivePackPulledStats,
   fetchLivePackRecentPulls,
   isLiveBackendConfigured,
+  openLiveEventSource,
   type LivePackPulledStats,
   type LivePackPullFeedEntry,
 } from "#/lib/live-backend";
+import { DEFAULT_COUNTRY_CODE } from "#/lib/country";
+import { useDocumentVisible } from "#/lib/window-activity";
 import { formatPreciseTimeAgo } from "#/lib/format";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -23,7 +26,10 @@ import { CardCollectorsButton } from "./CardCollectors";
    is a fun fact, so it sits quietly on the opposite side. Both rails only
    exist on viewports wide enough to have true margins. */
 
-const FEED_POLL_MS = 15_000;
+// Pulls arrive live over the shared /api/live stream the moment the backend
+// logs them; the poll is only the first-load seed and the catch-up backstop
+// for whatever a dropped or hidden-tab stream missed.
+const FEED_POLL_MS = 60_000;
 const FEED_LIMIT = 20;
 // How long one entry stays on screen once it has entered. Live entries enter
 // one at a time from a drip queue, so their exits stagger on their own; a busy
@@ -80,10 +86,11 @@ let savedRailEntries: RailEntry[] = [];
 const FEED_STATE_KEY = "mania-hub-pack-pulse-v1";
 let feedStateRestored = false;
 
-/* Your own pack is in the log the moment the reveal ends, but the rail would
-   not notice until the next poll lands, so your cards trickled in up to
-   FEED_POLL_MS after you had already moved on. The packs route pings this
-   right after recording, and the pulls enter through the normal drip. */
+/* Your own pack normally reaches the rail through the live stream like
+   everyone else's, but the packs route still pings this right after
+   recording: it is instant even when the stream is down or reconnecting,
+   and the dedupe makes the overlap free. Pulls enter through the normal
+   drip either way. */
 let pollFeedNow: (() => void) | null = null;
 export function refreshPackPulseFeed(): void {
   pollFeedNow?.();
@@ -192,8 +199,13 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
     return () => window.removeEventListener("pagehide", onPageHide);
   }, []);
 
+  // Hidden tabs release everything, stream included, and get a fresh
+  // catch-up poll the moment they come back; a reopened stream starts at the
+  // live head, so that poll is what fills the gap.
+  const documentVisible = useDocumentVisible();
+
   useEffect(() => {
-    if (!isLiveBackendConfigured()) return;
+    if (!isLiveBackendConfigured() || !documentVisible) return;
     let cancelled = false;
     const setEntries = (updater: (current: RailEntry[]) => RailEntry[]) => {
       setEntriesState((current) => {
@@ -237,6 +249,23 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
     load();
     pollFeedNow = load;
     const pollInterval = window.setInterval(load, FEED_POLL_MS);
+    // The live path: every pull lands on the shared /api/live stream as a
+    // global (country-less) event the moment the backend logs it, and enters
+    // the rail through the same drip queue as polled pulls. The country here
+    // is only the connection anchor the endpoint requires; observe keeps a
+    // packs visit from touching the country registry.
+    const source = openLiveEventSource(DEFAULT_COUNTRY_CODE, { observe: true });
+    const onPackPull = (event: MessageEvent) => {
+      try {
+        const pull = JSON.parse(event.data) as LivePackPullFeedEntry;
+        if (!Number.isFinite(pull?.id) || seenPullIds.has(pull.id)) return;
+        seenPullIds.add(pull.id);
+        pullQueue.push(pull);
+      } catch {
+        // Malformed frame: the poll backstop will carry this pull instead.
+      }
+    };
+    source?.addEventListener("pack_pull", onPackPull);
     const dripInterval = window.setInterval(() => {
       if (pullQueue.length === 0) return;
       const now = Date.now();
@@ -260,8 +289,9 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
       window.clearInterval(pollInterval);
       window.clearInterval(dripInterval);
       window.clearInterval(sweepInterval);
+      source?.close();
     };
-  }, []);
+  }, [documentVisible]);
 
   useEffect(() => {
     if (!viewerId || !isLiveBackendConfigured()) {

@@ -21,22 +21,28 @@ import { addWalletShards } from "./pack-wallets.js";
 // recycled, and nothing caps that: an account left open all day earns several
 // thousand for doing nothing. The arcade is capped, so the cap has to be worth
 // sitting down for. A day's allowance is about five hours of idling, which a
-// player reaches in one long streak run (eighty-five correct caps it) or a
+// player reaches in one long streak run (sixty correct caps it) or a
 // couple of dozen duels, and is still a fraction of what the idle loop next
 // to it pays over the same day. Farming it is possible and pointless.
 
 export const GAME_SHARD_DAILY_CAP = 1200;
 
-/* Five shards per correct guess, plus a bonus at every fifth in a row that
-   grows each time it is hit: 5 at the first milestone, 10 at the second, 15
+/* Eight shards per correct guess, plus a bonus at every fifth in a row that
+   grows each time it is hit: 10 at the first milestone, 20 at the second, 30
    at the third. Growing is the point. A flat bonus would pay two runs of five
    exactly what it pays one run of ten, which makes restarting the optimal
-   play in a game whose whole appeal is not wanting to stop. Per-guess is
-   where the buff lives: one right answer paying a single shard read as an
-   insult next to a pack open paying 2 for a click. */
-export const STREAK_SHARDS_PER_CORRECT = 5;
+   play in a game whose whole appeal is not wanting to stop.
+
+   These went up from 5 and 5 when duplicates stopped recycling at full tier
+   value (see DUPLICATE_RECYCLE_RATE in pack-wallets). Recycling used to be the
+   economy's largest faucet by a wide margin, which left the arcade paying for
+   real attention what a pack paid for a click; now that a finished collection
+   no longer prints shards, playing for them has to be worth the sitting down.
+   The daily cap is deliberately unchanged - the buff is meant to pay ordinary
+   runs properly, not to raise what a day is worth. */
+export const STREAK_SHARDS_PER_CORRECT = 8;
 export const STREAK_MILESTONE = 5;
-export const STREAK_MILESTONE_BONUS = 5;
+export const STREAK_MILESTONE_BONUS = 10;
 
 /* A duel is worth a good streak run: it costs a hand of mints to answer, four
    rounds of decisions to play, and a second human to exist. The loser is paid

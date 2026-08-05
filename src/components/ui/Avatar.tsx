@@ -20,7 +20,7 @@ function parseAvatarUrl(url: string | undefined): ParsedAvatarUrl | null {
 }
 
 // Default goes direct to a.ppy.sh so rankings/feeds don't burst N same-origin
-// requests (which trips Vercel's DDoS heuristics). The osu CDN doesn't set
+// proxy requests through our own server. The osu CDN doesn't set
 // CORS headers, so canvas/Three.js callers must opt in to the proxy.
 export function avatarImageSrc(
   url: string | undefined,

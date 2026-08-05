@@ -386,6 +386,75 @@ interface LnBodyTile {
   flipY: boolean;
 }
 
+// Trims a cascade tile to a visible span without moving where its source is
+// anchored, which is what lets the body stop at the tail cap's art while the
+// cascade still counts from the box edge. Null when nothing of it survives.
+function clipLnBodyTile(tile: LnBodyTile, clipTop: number, clipBottom: number): LnBodyTile | null {
+  const top = Math.max(tile.top, clipTop);
+  const bottom = Math.min(tile.bottom, clipBottom);
+  if (!(bottom > top)) return null;
+  if (top <= tile.top && bottom >= tile.bottom) return tile;
+  const span = tile.bottom - tile.top;
+  if (!(span > 0)) return null;
+  const fracSpan = tile.fracBottom - tile.fracTop;
+  // A tail-anchored tile runs its source the other way, so a trim at the top
+  // of the span is a trim at the end of the source slice.
+  const nearTrim = tile.flipY ? tile.bottom - bottom : top - tile.top;
+  const farTrim = tile.flipY ? tile.bottom - top : bottom - tile.top;
+  return {
+    top,
+    bottom,
+    fracTop: tile.fracTop + fracSpan * (nearTrim / span),
+    fracBottom: tile.fracTop + fracSpan * (farTrim / span),
+    flipY: tile.flipY,
+  };
+}
+
+// Fraction of a texture's height at which its visible pixels begin, measured
+// from the top edge. Read once per source off a scratch canvas and cached.
+// "pending" while the read is in flight (or if it failed - tainted canvas,
+// zero-size image), which the caller treats as "stop at the cap's centre";
+// null once a completed scan found no visible pixels at all, which means the
+// cap covers nothing and the body should not be clipped for it. The tail cap
+// is the only thing that needs this.
+const LN_TAIL_ART_THRESHOLD = 25;
+const lnTailArtTopCache = new Map<string, number | null | "pending">();
+
+function readLnTailArtTop(src: string): void {
+  if (lnTailArtTopCache.has(src)) return;
+  lnTailArtTopCache.set(src, "pending");
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  image.onload = () => {
+    try {
+      const width = image.naturalWidth || 0;
+      const height = image.naturalHeight || 0;
+      if (!(width > 0) || !(height > 0)) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.drawImage(image, 0, 0);
+      const alpha = ctx.getImageData(0, 0, width, height).data;
+      for (let row = 0; row < height; row += 1) {
+        const start = row * width * 4;
+        for (let index = start + 3; index < start + width * 4; index += 4) {
+          if (alpha[index] >= LN_TAIL_ART_THRESHOLD) {
+            lnTailArtTopCache.set(src, row / height);
+            return;
+          }
+        }
+      }
+      // Scanned clean: the cap is fully transparent.
+      lnTailArtTopCache.set(src, null);
+    } catch {
+      // Tainted or unreadable: stays "pending", the centre stop applies.
+    }
+  };
+  image.src = src;
+}
+
 type Hand = "left" | "right" | "center";
 type ReplayComboEvent = { kind: "break" | "hit"; time: number };
 type ReplayOverlayHitbox = { id: ReplayOverlayId; x: number; y: number; width: number; height: number };
@@ -1380,6 +1449,12 @@ export class ManiaReplayRenderer {
       { length: this.keyCount },
       (_, col) => this.skinProfile.lnHeadColors[col] || this.skinProfile.lnHeadColor,
     );
+    // Start the tail caps' alpha reads now rather than on the first frame that
+    // draws a hold: whether a cap has any art at all decides the hold's whole
+    // length, and a read landing mid-playback would visibly resize LNs.
+    for (const column of this.skinProfile.assets.columns) {
+      if (column?.lnTail) readLnTailArtTop(column.lnTail.src);
+    }
   }
 
   private getHandForColumn(column: number): Hand {
@@ -3285,7 +3360,7 @@ export class ManiaReplayRenderer {
         const tailTrimDelta = this.skinSettings.percy
           ? Math.min(20, Math.max(noteHeight * 0.9, headTrimDelta * 1.1))
           : 0;
-        if (this.renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, tailTrimDelta, bodyAlpha, headAlpha, noteFadeHeight, layout)) {
+        if (this.renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, bodyAlpha, headAlpha, noteFadeHeight, layout)) {
           continue;
         }
 
@@ -3590,7 +3665,7 @@ export class ManiaReplayRenderer {
         ? Math.min(20, Math.max(noteHeight * 0.9, headTrimDelta * 1.1))
         : 0;
 
-      if (this.renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, tailTrimDelta, 0.92, 0.96, noteFadeHeight)) {
+      if (this.renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, 0.92, 0.96, noteFadeHeight)) {
         return;
       }
 
@@ -5329,7 +5404,6 @@ export class ManiaReplayRenderer {
     bottom: number,
     headEndY: number,
     tailEndY: number,
-    tailTrimDelta: number,
     bodyAlpha: number,
     headAlpha: number,
     fadeHeight: number,
@@ -5341,20 +5415,57 @@ export class ManiaReplayRenderer {
     const headAsset = assets.lnHead ?? assets.tap;
     const tailAsset = assets.lnTail;
     const headHeight = headAsset ? this.getNoteAssetHeight(headAsset, colWidth, layout, layout.noteHeight) : layout.noteHeight;
-    const tailHeight = tailAsset ? this.getNoteAssetHeight(tailAsset, colWidth, layout, layout.noteHeight) : layout.noteHeight;
-    const tailDelta = this.skinSettings.upscroll ? -tailTrimDelta : tailTrimDelta;
+    // A cap that draws nothing occupies no box. Skins routinely point the tail
+    // at a blank placeholder (a 1x1 or 5x4 transparent png, or the default
+    // mania-note#T they never authored) because the body image already ends in
+    // its own rounded cap. Sizing a box off that placeholder's aspect invents a
+    // lane-width-tall cap out of one transparent pixel, and since the body's
+    // cascade starts at the box's far edge, the hold grows by that much and
+    // eats the gap to the next note. Zero here, and likewise with no tail asset
+    // at all: the body then runs to the end line exactly, as in game.
+    const tailArtTop = tailAsset ? this.lnTailArtTop(tailAsset) : null;
+    const tailHeight = tailAsset && tailArtTop !== null
+      ? this.getNoteAssetHeight(tailAsset, colWidth, layout, layout.noteHeight)
+      : 0;
     // Stable runs the body to the MIDDLE of the head cap, not to its far
     // edge (the shared rule in longNoteGeometry). Cap art is widest at its
     // centre, so a body carried past that pokes out around a round note as a
-    // nub of body colour below it.
+    // nub of body colour below it. The tail end is the opposite: the cascade
+    // counts from the box's far edge, because that is the origin a Percy body
+    // authors its transparent lead-in against. No tail trim on this path - the
+    // "cut LN tail" delta would slide that lead-in down the hold and open a
+    // band of backdrop under the cap, so it stays with the built-in styles.
+    const tailBoxTop = this.skinSettings.upscroll ? tailEndY : tailEndY - tailHeight;
     const bodyHeadY = this.skinSettings.upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;
-    const bodyTailY = tailEndY + tailDelta;
+    const bodyTailY = this.skinSettings.upscroll ? tailBoxTop + tailHeight : tailBoxTop;
     const bodyTop = Math.min(bodyHeadY, bodyTailY);
     const bodyBottom = Math.max(bodyHeadY, bodyTailY);
+    // Where the body stops being DRAWN is a separate question from where its
+    // cascade starts: it stops at the cap's centre, stable's rule, so the join
+    // hides under the widest part of the art and a hollow cap (ArrowMania's
+    // roof is two thin strokes) has nothing showing through its middle. Art
+    // that sits shy of the centre gets a pixel more so it cannot leave a seam.
+    // A blank cap has no box (tailHeight 0) and so nothing to clip against.
+    let clipTop = bodyTop;
+    let clipBottom = bodyBottom;
+    if (tailHeight > 0) {
+      const centreY = tailBoxTop + tailHeight / 2;
+      let capEdgeY = centreY;
+      // Downscroll draws the cap flipped, so the texture's top edge is the one
+      // facing the body in both directions.
+      if (typeof tailArtTop === "number") {
+        const artEdgeY = tailBoxTop + (this.skinSettings.upscroll ? tailArtTop : 1 - tailArtTop) * tailHeight;
+        capEdgeY = this.skinSettings.upscroll ? Math.max(centreY, artEdgeY + 1) : Math.min(centreY, artEdgeY - 1);
+      }
+      if (this.skinSettings.upscroll) clipBottom = Math.min(clipBottom, capEdgeY);
+      else clipTop = Math.max(clipTop, capEdgeY);
+    }
 
-    if (bodyAsset && bodyBottom > bodyTop) {
+    if (bodyAsset && clipBottom > clipTop) {
       const baseAlpha = bodyAlpha * this.topFadeAlpha(Math.max(0, Math.min(bodyBottom, fadeHeight)), fadeHeight, 0.55);
-      for (const tile of this.lnBodyTiles(bodyAsset, colWidth, bodyTop, bodyBottom)) {
+      for (const full of this.lnBodyTiles(bodyAsset, colWidth, bodyTop, bodyBottom)) {
+        const tile = clipLnBodyTile(full, clipTop, clipBottom);
+        if (!tile) continue;
         const tileHeight = tile.bottom - tile.top;
         if (tileHeight <= 0) continue;
         const fracSpan = tile.fracBottom - tile.fracTop;
@@ -5377,11 +5488,11 @@ export class ManiaReplayRenderer {
         });
       }
     } else {
-      this.barLnBodyWithTopFade(colX + 3, bodyTop, colWidth - 6, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, fadeHeight, 0.55, visibilityLayout);
+      this.barLnBodyWithTopFade(colX + 3, clipTop, colWidth - 6, clipBottom - clipTop, this.skinSettings.lnBodyColor, bodyAlpha, fadeHeight, 0.55, visibilityLayout);
     }
 
-    if (tailAsset) {
-      const tailTop = this.skinSettings.upscroll ? tailEndY - tailHeight : tailEndY;
+    if (tailAsset && tailHeight > 0) {
+      const tailTop = tailBoxTop;
       const alpha = bodyAlpha
         * this.topFadeAlpha(Math.max(0, Math.min(tailTop + tailHeight, fadeHeight)), fadeHeight, 0.55)
         * this.getHiddenAlphaForVerticalSpan(tailTop, tailTop + tailHeight, visibilityLayout);
@@ -5401,6 +5512,17 @@ export class ManiaReplayRenderer {
 
     if (!bodyAsset && !headAsset && !tailAsset && bottom > top) return false;
     return true;
+  }
+
+  // The tail cap's art top as a fraction of its texture height, starting the
+  // read on first use. "pending" until it lands, so the opening frames stop
+  // the body at the cap's centre rather than stalling the loop on a decode;
+  // null once a finished scan proved the cap fully transparent.
+  private lnTailArtTop(asset: ReplaySkinImageAsset): number | null | "pending" {
+    readLnTailArtTop(asset.src);
+    const value = lnTailArtTopCache.get(asset.src);
+    // Not ?? - a cached null means "scanned, blank" and must pass through.
+    return value === undefined ? "pending" : value;
   }
 
   // Stable cascades the LN body instead of stretching it (its default

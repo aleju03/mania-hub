@@ -11,6 +11,7 @@ import {
   packCardKeyOf,
   shardValueForTier,
   tierRank,
+  wholeCardShardValue,
   type CollectedCard,
   type PackWallet,
 } from "#/lib/pack-collection";
@@ -781,10 +782,10 @@ export function CollectionPanel({
   const recyclable = useServerCollection ? serverMetaPage?.duplicateShardTotal ?? 0 : wallet ? duplicateShardTotal(wallet) : 0;
   const selectedShardTotal = cards
     .filter((card) => selected.has(packCardKeyOf(card)))
-    .reduce((sum, card) => sum + duplicateShardValue(card) + shardValueForTier(card.tier), 0);
+    .reduce((sum, card) => sum + wholeCardShardValue(card), 0);
   const filteredShardTotal = useServerCollection
     ? serverMetaPage?.filteredShardTotal ?? 0
-    : visibleCards.reduce((sum, card) => sum + card.copies * shardValueForTier(card.tier), 0);
+    : visibleCards.reduce((sum, card) => sum + wholeCardShardValue(card), 0);
   const selectedCount = selectionScope === "all" ? filteredTotal : selected.size;
   const bulkShardTotal = selectionScope === "all" ? filteredShardTotal : selectedShardTotal;
 
@@ -1431,7 +1432,7 @@ export function CollectionPanel({
               {menuConfirm
                 ? "Sure? The card leaves the collection"
                 : `${menu.card.copies > 1 ? "Recycle all copies" : "Recycle card"} +${
-                    duplicateShardValue(menu.card) + shardValueForTier(menu.card.tier)
+                    wholeCardShardValue(menu.card)
                   }`}
             </button>
           </div>

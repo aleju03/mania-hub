@@ -87,8 +87,17 @@ describe("honorary pack odds", () => {
     expect(packTypeById("legend").honoraryChance).toBe(0.03);
   });
 
-  it("prices the wild pack at 30 shards", () => {
-    expect(packTypeById("wild").cost).toEqual({ kind: "shards", amount: 30 });
+  /* The shard ladder is pinned because it is what keeps a finished collection
+     from printing shards: a pack that costs less than its cards recycle for
+     is an income source, not a purchase. Wild went 30 -> 45 for exactly that
+     reason - ten whole-pool cards recycle for more than 30 once every card it
+     deals is a duplicate. Repricing a pack is a deliberate economy change, so
+     it should have to come through here. */
+  it("prices the shard packs above what their cards recycle for", () => {
+    expect(packTypeById("standard").cost).toEqual({ kind: "charge" });
+    expect(packTypeById("wild").cost).toEqual({ kind: "shards", amount: 45 });
+    expect(packTypeById("elite").cost).toEqual({ kind: "shards", amount: 100 });
+    expect(packTypeById("legend").cost).toEqual({ kind: "shards", amount: 250 });
   });
 
   it("defines a chance for every pack type", () => {

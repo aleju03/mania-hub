@@ -148,15 +148,15 @@ describe("buildSkinPreviewPattern", () => {
 });
 
 describe("longNoteGeometry", () => {
-  // Stable's hold-note layout: the body lies half-way under the head and the
-  // tail (lazer's DrawableHoldNote), and the tail is a note at the end
-  // position whose box grows away from the receptor. ArrowMania-ish numbers:
+  // Stable's hold-note layout: both caps are notes at their position lines
+  // with their boxes growing away from the receptor, the body stops at the
+  // head's centre and runs the tail box's full depth. ArrowMania-ish numbers:
   // 96px square caps, head line at 600, tail line at 300, downscroll.
   const downscroll = { upscroll: false, headEndY: 600, tailEndY: 300, headHeight: 96, tailHeight: 96 };
 
-  it("runs the body from the tail's centre to the head's centre", () => {
+  it("runs the body from the tail box's far edge to the head's centre", () => {
     const geometry = longNoteGeometry(downscroll);
-    expect(geometry.bodyTop).toBe(300 - 48);
+    expect(geometry.bodyTop).toBe(300 - 96);
     expect(geometry.bodyBottom).toBe(600 - 48);
   });
 
@@ -164,10 +164,10 @@ describe("longNoteGeometry", () => {
     const geometry = longNoteGeometry(downscroll);
     expect(geometry.headBoxTop).toBe(600 - 96);
     expect(geometry.tailBoxTop).toBe(300 - 96);
-    // The body overlaps into each cap's box (the cap art covers the join)...
+    // The body overlaps into each cap's box, so the cap art covers the join...
     expect(geometry.bodyBottom).toBeGreaterThan(geometry.headBoxTop);
-    expect(geometry.bodyTop).toBeGreaterThan(geometry.tailBoxTop);
-    // ...but never past either box's far edge.
+    expect(geometry.bodyTop).toBeLessThan(300);
+    // ...and never past either box's far edge.
     expect(geometry.bodyTop).toBeGreaterThanOrEqual(geometry.tailBoxTop);
     expect(geometry.bodyBottom).toBeLessThanOrEqual(600);
   });
@@ -175,32 +175,46 @@ describe("longNoteGeometry", () => {
   it("mirrors for upscroll", () => {
     const geometry = longNoteGeometry({ upscroll: true, headEndY: 120, tailEndY: 420, headHeight: 96, tailHeight: 96 });
     expect(geometry.bodyTop).toBe(120 + 48);
-    expect(geometry.bodyBottom).toBe(420 + 48);
+    expect(geometry.bodyBottom).toBe(420 + 96);
     expect(geometry.headBoxTop).toBe(120);
     expect(geometry.tailBoxTop).toBe(420);
   });
 
-  it("keeps the body flush under the tail cap (no Percy-style trim)", () => {
-    // ArrowMania's flipped tail art reaches 51px into its 96px box, so the
-    // body meeting the box centre (48) overlaps it by 3px; any trim at the
-    // tail side would open a visible gap below the cap.
+  it("anchors a Percy body's transparent lead-in at the tail box's far edge", () => {
+    // The mokou skin's 128x20000 body is blank for its first 54 rows and its
+    // 128x65 tail is art for 53, authored to interlock only when the cascade
+    // counts from the box's far edge. A centre stop pushed that blank lead-in
+    // half a cap down the hold and opened it as a gap under the tail.
     const geometry = longNoteGeometry(downscroll);
-    const flippedArtBottom = geometry.tailBoxTop + (96 * (128 - 59 - 1)) / 128;
-    expect(geometry.bodyTop).toBeLessThan(flippedArtBottom);
+    expect(geometry.bodyTop).toBe(geometry.tailBoxTop);
   });
 
   it("runs the body to the position line when the skin ships no tail art", () => {
+    // A blank cap is measured as a zero-height box by the callers, so the hold
+    // ends exactly at its position line. Skins that end the body art in its own
+    // rounded cap and point the tail at a 1x1 transparent placeholder depend on
+    // this: a box sized off that placeholder's aspect would be a lane width
+    // tall, and the cascade starting at its far edge would stretch every hold
+    // by that much and eat the gap to the next note.
     const geometry = longNoteGeometry({ ...downscroll, tailHeight: 0 });
     expect(geometry.bodyTop).toBe(300);
+    expect(geometry.tailBoxTop).toBe(300);
+    expect(geometry.bodyBottom).toBe(600 - 48);
+  });
+
+  it("mirrors the blank-cap case for upscroll", () => {
+    const geometry = longNoteGeometry({ upscroll: true, headEndY: 120, tailEndY: 420, headHeight: 96, tailHeight: 0 });
+    expect(geometry.bodyBottom).toBe(420);
+    expect(geometry.tailBoxTop).toBe(420);
   });
 });
 
 describe("lnTailArtEdgeFraction", () => {
   // StepMania Reborn's roof cap: art begins 63 rows into its 122-row texture,
   // so the flipped downscroll cap's base lands at 48.4% of the box - just shy
-  // of the centre the body runs to, which is the seam the body extension
-  // closes. The texture's top edge faces the body in both scroll directions
-  // (downscroll flips the cap, upscroll leaves it upright below the body).
+  // of the centre the body stops at, which is the seam this closes. The
+  // texture's top edge faces the body in both scroll directions (downscroll
+  // flips the cap, upscroll leaves it upright below the body).
   it("flips the art's top edge to face the body on downscroll", () => {
     expect(lnTailArtEdgeFraction(63 / 122, false)).toBeCloseTo(1 - 63 / 122);
   });
@@ -209,11 +223,11 @@ describe("lnTailArtEdgeFraction", () => {
     expect(lnTailArtEdgeFraction(63 / 122, true)).toBeCloseTo(63 / 122);
   });
 
-  it("puts full-box art at the far edge, where the centre rule already covers it", () => {
-    // Art starting at the very top of the texture reaches the receptor-side
-    // edge of the box once flipped; the body's centre stop overlaps it, so
-    // the min/max in the renderer leaves stable's layout untouched.
-    expect(lnTailArtEdgeFraction(0, false)).toBe(1);
+  it("leaves stable's centre stop alone for art that fills its box", () => {
+    // ArrowMania's hollow roof reaches 54% down the flipped box, past the
+    // centre, so the min in the renderer keeps the body stopping at 50% and
+    // nothing shows through the chevron.
+    expect(lnTailArtEdgeFraction(59 / 128, false)).toBeGreaterThan(0.5);
   });
 });
 

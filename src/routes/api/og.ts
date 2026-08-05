@@ -67,7 +67,7 @@ function getFont(request: Request, fileName: string): Promise<ArrayBuffer> {
 const OG_CACHE_HEADER = "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800";
 
 // Rasterizing an OG card (Satori + resvg) is the most CPU-heavy work on the
-// Vercel side, multiple seconds per image. The CDN caches each URL for a day,
+// frontend server, multiple seconds per image. The CDN caches each URL for a day,
 // but every miss/revalidation re-renders from scratch. We back that with an R2
 // cache keyed by the card identity and server-owned OG version so a miss becomes
 // a fast object read. Request query params must not expand R2 key cardinality.

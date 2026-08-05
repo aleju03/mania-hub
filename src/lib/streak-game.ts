@@ -48,8 +48,8 @@ function bestStreakKey(pool: StreakPool): string {
    actually pays is decided server-side and comes back with the claim; this is
    only ever the sign on the wall. */
 export const STREAK_MILESTONE = 5;
-export const STREAK_MILESTONE_BONUS = 5;
-export const STREAK_SHARDS_PER_CORRECT = 5;
+export const STREAK_MILESTONE_BONUS = 10;
+export const STREAK_SHARDS_PER_CORRECT = 8;
 
 export function nextStreakMilestone(streak: number): { at: number; bonus: number } {
   const passed = Math.floor(Math.max(0, streak) / STREAK_MILESTONE);

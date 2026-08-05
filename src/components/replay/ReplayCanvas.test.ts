@@ -509,6 +509,48 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain("const tailTrimDelta = this.skinSettings.percy");
   });
 
+  it("lays out an image skin's hold the way longNoteGeometry does", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const cardSource = fs.readFileSync(path.resolve(__dirname, "../../lib/skin-preview-render.ts"), "utf8");
+
+    // Both caps' boxes grow away from the receptor. Drawing the tail from the
+    // end line into the hold instead put the cap a full box lower than the
+    // game does, and dragged the whole LN down with it.
+    expect(source).toContain("const tailBoxTop = this.skinSettings.upscroll ? tailEndY : tailEndY - tailHeight;");
+    expect(cardSource).toContain("const tailBoxTop = upscroll ? tailEndY : tailEndY - tailHeight;");
+    // The cascade counts from the tail box's far edge, which is the origin a
+    // Percy body's transparent lead-in is authored against. A centre stop, or
+    // the "cut LN tail" trim, slides that lead-in down and opens a gap.
+    expect(source).toContain("const bodyTailY = this.skinSettings.upscroll ? tailBoxTop + tailHeight : tailBoxTop;");
+    expect(source).not.toContain("renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, tailTrimDelta");
+    // The built-in bar/circle/arrow styles keep the trim: there it is a look,
+    // not a compensation for where a skin's own art sits.
+    expect(source).toContain("const bodyTailY = tailEndY + tailDelta;");
+    // Art that stops short of that edge clips the drawing, not the cascade.
+    expect(source).toContain("const tile = clipLnBodyTile(full, clipTop, clipBottom);");
+    expect(cardSource).toContain("ctx.rect(laneX, visibleTop, laneWidth, visibleBottom - visibleTop);");
+    // A cap that draws nothing occupies no box. Skins point the tail at a
+    // blank placeholder (1x1 transparent, or an unauthored mania-note#T)
+    // because the body art ends in its own rounded cap; sizing a box off that
+    // placeholder's aspect invented a lane-width-tall cap, which the cascade
+    // then added to the hold's length while the centre stop sliced the body's
+    // own rounded end flat.
+    expect(source).toContain("const tailArtTop = tailAsset ? this.lnTailArtTop(tailAsset) : null;");
+    expect(source).toContain("const tailHeight = tailAsset && tailArtTop !== null");
+    expect(source).toContain("if (tailAsset && tailHeight > 0) {");
+    expect(cardSource).toContain("const tailBounds = tailImage ? imageAlphaBounds(tailImage) : null;");
+    expect(cardSource).toContain("const tailHeight = tailImage && tailBounds ? noteAssetHeight(tailImage) : 0;");
+    expect(cardSource).toContain("if (tailImage && tailHeight > 0) {");
+    // In the viewer the alpha read is async, so the reads are primed when the
+    // skin profile is built: one landing mid-playback would resize every LN.
+    expect(source).toContain("if (column?.lnTail) readLnTailArtTop(column.lnTail.src);");
+    expect(source).toContain('const lnTailArtTopCache = new Map<string, number | null | "pending">();');
+    // ?? would collapse the cached null ("scanned, blank") back into
+    // "pending", and the phantom box would never go away.
+    expect(source).toContain('return value === undefined ? "pending" : value;');
+    expect(source).not.toContain("lnTailArtTopCache.get(asset.src) ?? ");
+  });
+
   it("applies the configured keymode column width to layout", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 

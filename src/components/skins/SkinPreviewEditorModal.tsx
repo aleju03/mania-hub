@@ -232,6 +232,17 @@ export function SkinPreviewEditorModal({
     });
   }, [scope, keymodes, selectedKeymode]);
 
+  // One click for "draw this skin again with the renderer as it is now",
+  // which is what a fix to the playfield renderer needs. Nothing records which
+  // backdrop a published preview used, so this takes the first cover on offer
+  // and the card's art changes with it; shuffle first to steer that.
+  const rerenderAll = useCallback(() => {
+    const choice: PreviewBackdrop = pool.candidates[0]?.setId ?? "flat";
+    setScope("all");
+    setNeedsSkinFile(true);
+    setPending(new Map(keymodes.map((keys) => [keys, choice] as const)));
+  }, [pool.candidates, keymodes]);
+
   const revertPreviews = useCallback(() => {
     setPending(new Map());
     releaseRenders();
@@ -562,6 +573,14 @@ export function SkinPreviewEditorModal({
                         className="rounded-full bg-osu-pink px-6 py-2 text-[13px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-50"
                       >
                         Save changes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={rerenderAll}
+                        disabled={busy || loading != null}
+                        className="text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default disabled:opacity-50"
+                      >
+                        Re-render every keymode
                       </button>
                       {renders.size > 0 && (
                         <button

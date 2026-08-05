@@ -21,7 +21,7 @@ import {
   writeMyReplaySkinMemory,
 } from "../lib/replay-owner-skin";
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
-import { fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, readSkinsBrowseEntry, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
+import { canModerateSkinKeymodes, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, readSkinsBrowseEntry, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -195,6 +195,12 @@ function SkinDetailPage() {
 
   const isOwner = skin != null && auth.viewer?.id === skin.ownerUserId;
   const isPrivate = skin?.visibility === "private";
+  // The keymode-moderator grant: the settings entry point opens for them on
+  // anyone's public skin, and the modal shows only the keymode labels.
+  const isKeymodeModerator = skin != null && !isOwner && !auth.isAdmin
+    && canModerateSkinKeymodes(auth.viewer?.id)
+    && skin.visibility === "public"
+    && skin.keymodes.some((keys) => keys >= 2);
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -437,18 +443,20 @@ function SkinDetailPage() {
                     )}
                   </dl>
 
-                  {(isOwner || auth.isAdmin) && (
+                  {(isOwner || auth.isAdmin || isKeymodeModerator) && (
                     <>
                       {/* One entry point for everything owner-side; the modal
                           holds name, keymodes, visibility, file, previews and
-                          delete, so the sidebar stays one button. */}
+                          delete, so the sidebar stays one button. A keymode
+                          moderator gets the same button, but their modal is
+                          just the keymode labels. */}
                       <button
                         type="button"
                         onClick={() => setSettingsOpen(true)}
                         className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-osu-b3/50 px-5 py-2 text-[13px] font-bold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white"
                       >
                         <Settings className="h-4 w-4" aria-hidden="true" />
-                        {auth.isAdmin && !isOwner ? "Moderate skin" : "Skin settings"}
+                        {isOwner ? "Skin settings" : auth.isAdmin ? "Moderate skin" : "Fix keymodes"}
                       </button>
                       <SkinSettingsModal
                         skin={skin}

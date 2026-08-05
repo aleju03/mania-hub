@@ -14,11 +14,11 @@ import {
 // like in game (not centred), note heights come from noteHeightScale, LN
 // bodies cascade at natural aspect from the tail end (stable's default
 // NoteBodyStyle, which is what makes Percy-style 40000px body images show
-// their baked-in rounded cap instead of squashing it flat), the body lies
-// half-way under the head and tail caps, and key images stretch from the hit
-// line to the bottom edge. The note pattern is seeded by the key count only,
-// so every skin renders the same "chart" and previews stay comparable side by
-// side. The image doubles as the OG card.
+// their baked-in rounded cap instead of squashing it flat), the body runs
+// half-way under the head cap and the full depth of the tail cap, and key
+// images stretch from the hit line to the bottom edge. The note pattern is
+// seeded by the key count only, so every skin renders the same "chart" and
+// previews stay comparable side by side. The image doubles as the OG card.
 
 export const SKIN_PREVIEW_WIDTH = 1280;
 export const SKIN_PREVIEW_HEIGHT = 720;
@@ -756,20 +756,20 @@ export interface SkinPreviewLongNoteGeometry {
   tailBoxTop: number;
 }
 
-// Stable's hold-note layout, which lazer's DrawableHoldNote spells out: the
-// body is positioned "to lie half-way under the head and the tail notes",
-// and the tail is a note at the end position - its box grows away from the
-// receptor like every other note, with the texture drawn flipped relative to
-// the notes (lazer's LegacyHoldNoteTailPiece inverts the scroll direction for
-// exactly this). Running the body to each cap's CENTRE, under the cap art,
-// is what lets arrow-style caps cover the join with their own shape - and
-// since the body never passes a cap's centre, nothing pokes out past art
-// that fills only the far half of its box. Head/tail end Ys are the position
-// lines (where each cap's receptor-side edge sits). No Percy-style trim
-// here: stable has none, and shaving the tail end back out from under the
-// cap is exactly what opens a gap below it. Percy bodies read shorter
-// through their own transparent lead-in, which the cascade already places
-// at the tail end.
+// Stable's hold-note layout. Both caps are notes at their position lines and
+// both boxes grow away from the receptor, the tail's texture drawn flipped
+// (lazer's LegacyHoldNoteTailPiece inverts the scroll direction for exactly
+// this). At the head the body stops at the cap's CENTRE, where a round cap is
+// widest, so no nub of body pokes out around it.
+//
+// The span this returns is the CASCADE's, not the drawn one. At the tail it
+// runs the full depth of the box, right to the far edge, because that edge is
+// the origin the cascade counts from: a Percy body authors a transparent
+// lead-in exactly as tall as the tail art, so the cap lands in it and the two
+// interlock. Start the cascade half a cap late, as a centre stop would, and
+// the lead-in slides down with it and opens a band of backdrop between cap
+// and body. Where the body actually stops being drawn is drawLongNote's
+// business, and it is the cap's centre there too.
 export function longNoteGeometry(input: {
   upscroll: boolean;
   headEndY: number;
@@ -781,7 +781,7 @@ export function longNoteGeometry(input: {
   const headBoxTop = upscroll ? headEndY : headEndY - headHeight;
   const tailBoxTop = upscroll ? tailEndY : tailEndY - tailHeight;
   const headSideY = upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;
-  const tailSideY = upscroll ? tailEndY + tailHeight / 2 : tailEndY - tailHeight / 2;
+  const tailSideY = upscroll ? tailBoxTop + tailHeight : tailBoxTop;
   return {
     bodyTop: Math.min(headSideY, tailSideY),
     bodyBottom: Math.max(headSideY, tailSideY),
@@ -810,7 +810,16 @@ function drawLongNote(
   const headEndY = mapY(ln.headY);
   const tailEndY = mapY(ln.tailY);
   const headHeight = headImage ? noteAssetHeight(headImage) : Math.max(10, laneWidth * 0.3);
-  const tailHeight = tailImage ? noteAssetHeight(tailImage) : 0;
+  // A cap that draws nothing occupies no box. Skins routinely point the tail
+  // at a blank placeholder (a 1x1 or 5x4 transparent png, or the default
+  // mania-note#T they never authored) because the body image already ends in
+  // its own rounded cap. Sizing a box off that placeholder's aspect invents a
+  // lane-width-tall cap out of one transparent pixel, and since the body's
+  // cascade starts at the box's far edge, the hold grows by that much and eats
+  // the gap to the next note. Zero here, and likewise with no tail image at
+  // all: the body then runs to the end line exactly, as in game.
+  const tailBounds = tailImage ? imageAlphaBounds(tailImage) : null;
+  const tailHeight = tailImage && tailBounds ? noteAssetHeight(tailImage) : 0;
 
   const geometry = longNoteGeometry({
     upscroll,
@@ -819,25 +828,28 @@ function drawLongNote(
     headHeight,
     tailHeight,
   });
-  const { headBoxTop, tailBoxTop } = geometry;
-  let { bodyTop, bodyBottom } = geometry;
+  const { headBoxTop, tailBoxTop, bodyTop, bodyBottom } = geometry;
 
-  if (tailImage && tailHeight > 0) {
-    // Stable's run-the-body-to-the-cap-centre rule assumes the cap art fills
-    // the near half of its box. StepMania-style roof caps sit shy of the
-    // centre (the Reborn cap's base is at 48% of its box), which showed as a
-    // seam of backdrop between body and cap. Run the body a pixel under the
-    // art's actual edge instead of stopping blind at the middle; caps whose
-    // art already crosses the centre are left exactly as stable lays them out.
-    const bounds = imageAlphaBounds(tailImage);
-    if (bounds) {
-      const artEdgeY = tailBoxTop + lnTailArtEdgeFraction(bounds.top, upscroll) * tailHeight;
-      if (upscroll) bodyBottom = Math.max(bodyBottom, artEdgeY + 1);
-      else bodyTop = Math.min(bodyTop, artEdgeY - 1);
-    }
+  // Where the body stops is a separate question from where its cascade starts.
+  // It stops at the cap's CENTRE, stable's rule: cap art is widest there, so
+  // the join hides under it and a hollow cap (ArrowMania's roof is two thin
+  // strokes) has nothing showing through its middle. Caps whose art sits shy
+  // of the centre - StepMania roofs, whose base is at 48% of the box - would
+  // leave a seam of backdrop, so for those the body runs a pixel further, to
+  // just under the art's own edge. A blank cap has no box (tailHeight 0) and
+  // so nothing to clip against. The cascade meanwhile still counts from the
+  // box's far edge, which is what puts a Percy lead-in under the cap.
+  let visibleTop = bodyTop;
+  let visibleBottom = bodyBottom;
+  if (tailHeight > 0 && tailBounds) {
+    const centreY = tailBoxTop + tailHeight / 2;
+    const artEdgeY = tailBoxTop + lnTailArtEdgeFraction(tailBounds.top, upscroll) * tailHeight;
+    const capEdgeY = upscroll ? Math.max(centreY, artEdgeY + 1) : Math.min(centreY, artEdgeY - 1);
+    if (upscroll) visibleBottom = Math.min(visibleBottom, capEdgeY);
+    else visibleTop = Math.max(visibleTop, capEdgeY);
   }
 
-  if (bodyImage && bodyBottom > bodyTop) {
+  if (bodyImage && visibleBottom > visibleTop) {
     // Cascade, not stretch (stable's default NoteBodyStyle): the image runs at
     // natural aspect from the tail end toward the head, tiling if it is
     // shorter than the span. Percy bodies are one huge tile whose rounded cap
@@ -848,6 +860,10 @@ function drawLongNote(
     const sourceWidth = bodyImage.naturalWidth || 1;
     const sourceHeight = bodyImage.naturalHeight || 1;
     ctx.save();
+    // Clipped before the flip so the rect stays in canvas space either way.
+    ctx.beginPath();
+    ctx.rect(laneX, visibleTop, laneWidth, visibleBottom - visibleTop);
+    ctx.clip();
     if (upscroll) {
       // Tail end is at the bottom: flip the span so the cap edge lands there.
       ctx.translate(0, bodyTop + bodyBottom);
@@ -857,19 +873,19 @@ function drawLongNote(
       ctx.drawImage(bodyImage, 0, 0, sourceWidth, tile.sourceRows, laneX, tile.top, laneWidth, tile.height);
     }
     ctx.restore();
-  } else if (bodyBottom > bodyTop) {
+  } else if (visibleBottom > visibleTop) {
     ctx.fillStyle = settings.lnBodyColor || "#8b8b93";
     ctx.globalAlpha = 0.9;
-    ctx.fillRect(laneX + laneWidth * 0.16, bodyTop, laneWidth * 0.68, bodyBottom - bodyTop);
+    ctx.fillRect(laneX + laneWidth * 0.16, visibleTop, laneWidth * 0.68, visibleBottom - visibleTop);
     ctx.globalAlpha = 1;
   }
 
-  // The tail is a note at the end position: its box grows away from the
-  // receptor like every other note's, and the texture is drawn flipped
-  // relative to the notes - flipped on downscroll, upright on upscroll
-  // (lazer's LegacyHoldNoteTailPiece inverts the scroll direction for
-  // exactly this). Drawn over the body, which runs to its centre.
-  if (tailImage) {
+  // Both caps' boxes grow away from the receptor; the tail's texture is drawn
+  // flipped relative to the notes - flipped on downscroll, upright on upscroll
+  // (lazer's LegacyHoldNoteTailPiece inverts the scroll direction for exactly
+  // this). Drawn over the body, which runs the full depth of the box beneath
+  // it, so no cap can leave a seam.
+  if (tailImage && tailHeight > 0) {
     if (upscroll) ctx.drawImage(tailImage, laneX, tailBoxTop, laneWidth, tailHeight);
     else drawImageFlippedY(ctx, tailImage, laneX, tailBoxTop, laneWidth, tailHeight);
   }

@@ -27,6 +27,8 @@ import {
   rankToPage,
   RANKINGS_PAGE_SIZE,
   rollPackRanks,
+  applyHonoraryHit,
+  HONORARY_CASCADE_CHANCE,
   rollUniformPositions,
   sortIntoRevealOrder,
   startBoundedPrefetches,
@@ -41,6 +43,7 @@ import {
   LiveBackendRequestError,
 } from "./live-backend";
 import { getRankings, getUserScoresBestWindow } from "./osu";
+import { HONORARY_PACK_POOL } from "./honorary-players";
 
 vi.mock("./live-backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./live-backend")>()),
@@ -460,6 +463,80 @@ describe("pack type lineup", () => {
     // Every shard pack protects against duplicates; Standard stays random.
     for (const type of shardPacks) expect(type.guaranteesNew).toBe(true);
     expect(packTypeById("standard").guaranteesNew).toBeUndefined();
+  });
+});
+
+describe("the honorary slot", () => {
+  const pack = (size: number) => Array.from({ length: size }, (_, index) => makeEntry(9000 - index * 100)).map(toPackPlayer);
+  const goatIds = new Set(HONORARY_PACK_POOL.map((player) => player.id));
+  const goatCount = (players: ReturnType<typeof pack>) => players.filter((player) => goatIds.has(player.user.id)).length;
+
+  /* A scripted rng, so a test says which rolls hit rather than fishing for a
+     seed that happens to. Each call takes the next number in the list. */
+  const rolls = (...values: number[]) => {
+    let index = 0;
+    return () => values[Math.min(index++, values.length - 1)];
+  };
+
+  it("leaves the pack alone when the first roll misses, cascade or not", () => {
+    const players = pack(5);
+    // A miss is a miss: the cascade only ever asks what happens after a hit,
+    // so it must not change how often a pack contains a GOAT at all.
+    expect(applyHonoraryHit(players, rolls(0.9), 0.5, undefined, HONORARY_CASCADE_CHANCE)).toBe(players);
+    expect(applyHonoraryHit(players, rolls(0.9), 0.5, undefined, 0)).toBe(players);
+  });
+
+  it("deals exactly one when the pack cannot cascade", () => {
+    // hit, pick, and then nothing: a zero cascade must not even spend a roll.
+    const result = applyHonoraryHit(pack(5), rolls(0, 0, 0), 1, undefined, 0);
+    expect(goatCount(result)).toBe(1);
+    // The climax slot, so the reveal still builds to it.
+    expect(goatIds.has(result[result.length - 1].user.id)).toBe(true);
+  });
+
+  it("fills backwards from the climax when the cascade keeps hitting", () => {
+    // hit, pick, cascade hit, pick, cascade hit, pick, cascade miss.
+    const result = applyHonoraryHit(pack(5), rolls(0, 0, 0, 0, 0, 0, 0.99), 1, undefined, 0.5);
+    expect(goatCount(result)).toBe(3);
+    // Consecutive at the end rather than scattered through the reveal.
+    expect(result.slice(2).every((player) => goatIds.has(player.user.id))).toBe(true);
+    expect(result.slice(0, 2).every((player) => !goatIds.has(player.user.id))).toBe(true);
+  });
+
+  it("never deals the same honorary twice in one pack", () => {
+    // Always-hit, always-pick-the-first-candidate: without the dealt guard
+    // this would fill every slot with the same player.
+    const result = applyHonoraryHit(pack(5), () => 0, 1, undefined, 1);
+    expect(goatCount(result)).toBe(5);
+    expect(new Set(result.map((player) => player.user.id)).size).toBe(5);
+  });
+
+  it("stops at the pack it was given rather than running off the end", () => {
+    const result = applyHonoraryHit(pack(2), () => 0, 1, undefined, 1);
+    expect(result).toHaveLength(2);
+    expect(goatCount(result)).toBe(2);
+  });
+
+  it("prefers honoraries the opener does not hold yet", () => {
+    const owned = new Set(HONORARY_PACK_POOL.slice(0, HONORARY_PACK_POOL.length - 1).map((player) => player.id));
+    const result = applyHonoraryHit(pack(5), () => 0, 1, owned, 0);
+    expect(result[result.length - 1].user.id).toBe(HONORARY_PACK_POOL[HONORARY_PACK_POOL.length - 1].id);
+  });
+
+  it("lets every pack but Legend double", () => {
+    /* Legend is the deliberate exception: at 3% its honorary slot already hits
+       twelve times as often as Standard's, and that rate is the reason to buy
+       it. The others cascade off a shared constant. */
+    expect(packTypeById("legend").honoraryCascadeChance).toBe(0);
+    for (const id of ["standard", "wild", "elite"] as const) {
+      expect(packTypeById(id).honoraryCascadeChance).toBe(HONORARY_CASCADE_CHANCE);
+    }
+    for (const type of PACK_TYPES) {
+      expect(type.honoraryCascadeChance).toBeGreaterThanOrEqual(0);
+      // Never 1: a certain cascade turns every hit into a pack of nothing but
+      // GOATs, which is the one outcome that stops being funny.
+      expect(type.honoraryCascadeChance).toBeLessThan(1);
+    }
   });
 });
 

@@ -176,9 +176,25 @@ export interface PackTypeDef {
      honorary player. They are absent from the ranked pool by design (see
      honorary-players.ts), so this is the only way to pull them. */
   honoraryChance: number;
+  /* Probability (0-1) that a pack which already hit rolls *another* honorary
+     into the slot before it, re-rolled after each one, so a hot pack can keep
+     going until it runs out of slots or roster.
+
+     This deliberately does not touch how often a pack contains a GOAT at all:
+     the first hit is still honoraryChance and nothing else, and this only ever
+     asks what happens after one has already landed. A double is therefore
+     honoraryChance * this, which on a Standard pack is about one in four
+     thousand - rare enough to stay a story, common enough that the story
+     eventually happens to someone. Zero disables it entirely. */
+  honoraryCascadeChance: number;
   blurb: string;
   accent: { r: number; g: number; b: number };
 }
+
+/* How likely a pack that already dealt an honorary deals another one. Shared
+   by every pack that can cascade, so "can this double" is a per-pack decision
+   and "how hot does a hot pack run" is one number for the whole game. */
+export const HONORARY_CASCADE_CHANCE = 0.1;
 
 export const PACK_TYPES: PackTypeDef[] = [
   {
@@ -189,6 +205,7 @@ export const PACK_TYPES: PackTypeDef[] = [
     topFraction: 1,
     cardCount: PACK_SIZE,
     honoraryChance: 0.0025,
+    honoraryCascadeChance: HONORARY_CASCADE_CHANCE,
     blurb: "Every tracked player, same odds",
     accent: { r: 167, g: 139, b: 250 },
   },
@@ -197,12 +214,16 @@ export const PACK_TYPES: PackTypeDef[] = [
     name: "Wild",
     artSubtitle: "WILD PACK",
     // The volume pack: double the cards, priced so bulk is a convenience
-    // rather than the cheapest route to a full collection.
-    cost: { kind: "shards", amount: 30 },
+    // rather than the cheapest route to a full collection. 30 was below the
+    // pool's own average card value, which made it the cheapest route to
+    // shards as well: ten whole-pool cards recycle for more than that once a
+    // collection is finished and every card it deals is a duplicate.
+    cost: { kind: "shards", amount: 45 },
     topFraction: 1,
     cardCount: 10,
     guaranteesNew: true,
     honoraryChance: 0.0075,
+    honoraryCascadeChance: HONORARY_CASCADE_CHANCE,
     blurb: "Whole pool, new cards first",
     accent: { r: 52, g: 211, b: 153 },
   },
@@ -218,6 +239,7 @@ export const PACK_TYPES: PackTypeDef[] = [
     cardCount: 7,
     guaranteesNew: true,
     honoraryChance: 0.01,
+    honoraryCascadeChance: HONORARY_CASCADE_CHANCE,
     blurb: "Top 10%, new cards first",
     accent: { r: 251, g: 191, b: 36 },
   },
@@ -230,6 +252,11 @@ export const PACK_TYPES: PackTypeDef[] = [
     cardCount: PACK_SIZE,
     guaranteesNew: true,
     honoraryChance: 0.03,
+    // The one pack that cannot double. At 3% its honorary slot already hits
+    // twelve times as often as Standard's, and that rate is the whole reason
+    // to buy it; stacking a cascade on top would make the pack that is already
+    // the fastest route to the roster the only way anyone finishes it.
+    honoraryCascadeChance: 0,
     blurb: "Top 2%, new cards first",
     accent: { r: 244, g: 114, b: 182 },
   },
@@ -413,6 +440,9 @@ export interface PackDrawOptions {
   count?: number;
   /* Chance (0-1) that one slot becomes a random honorary player. */
   honoraryChance?: number;
+  /* Chance (0-1) that a pack which already hit rolls another honorary into the
+     slot before it, re-rolled after each one. Omitted or 0 means one at most. */
+  honoraryCascadeChance?: number;
   /* Collected card ids. When set, every owned slot is replaced with an
      unowned player from the same draw slice when one exists. Near-complete
      collections keep only the repeats that have no unowned replacement. */
@@ -561,27 +591,46 @@ export function honoraryToPackPlayer(player: HonoraryPlayer): PackPlayer {
 /* Rolls the pack's honorary chance and, on a hit, replaces the final slot (the
    pack's reveal climax) with a random honorary player. Skips players the opener
    already owns when the pack guarantees new cards, and never duplicates a
-   player already dealt in this pack. */
+   player already dealt in this pack.
+
+   A pack that hits then re-rolls cascadeChance for another honorary in the slot
+   before it, and keeps re-rolling after each one until it misses, runs out of
+   slots, or runs out of roster. They fill backwards from the end so a double
+   lands as two GOATs in a row at the climax rather than one buried mid-reveal.
+
+   The cascade is strictly a bonus on top of a hit that already happened: the
+   first roll is untouched, so how often a pack contains a GOAT at all is still
+   honoraryChance and nothing else. Passing 0 (which Legend does) is exactly the
+   single-slot behaviour, right down to the number of rng draws it spends. */
 export function applyHonoraryHit(
   players: PackPlayer[],
   rng: () => number,
   chance: number,
   ownedGoatUserIds?: ReadonlySet<number>,
+  cascadeChance = 0,
 ): PackPlayer[] {
   if (!(chance > 0) || players.length === 0) return players;
   if (rng() >= chance) return players;
 
   const dealt = new Set(players.map((player) => player.user.id));
-  const candidates = HONORARY_PACK_POOL.filter((player) => !dealt.has(player.id));
-  const unowned = ownedGoatUserIds ? candidates.filter((player) => !ownedGoatUserIds.has(player.id)) : [];
-  // Prefer one they don't have; fall back to the whole roster rather than
-  // silently dropping the hit once the set is complete.
-  const pool = unowned.length > 0 ? unowned : candidates;
-  if (pool.length === 0) return players;
-
-  const chosen = pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
   const next = [...players];
-  next[next.length - 1] = honoraryToPackPlayer(chosen);
+
+  for (let slot = next.length - 1; slot >= 0; slot -= 1) {
+    const candidates = HONORARY_PACK_POOL.filter((player) => !dealt.has(player.id));
+    const unowned = ownedGoatUserIds ? candidates.filter((player) => !ownedGoatUserIds.has(player.id)) : [];
+    // Prefer one they don't have; fall back to the whole roster rather than
+    // silently dropping the hit once the set is complete.
+    const pool = unowned.length > 0 ? unowned : candidates;
+    if (pool.length === 0) break;
+
+    const chosen = pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
+    next[slot] = honoraryToPackPlayer(chosen);
+    // Kept out of `candidates` for the next turn of the cascade, so a pack
+    // cannot deal the same honorary twice.
+    dealt.add(chosen.id);
+
+    if (!(cascadeChance > 0) || rng() >= cascadeChance) break;
+  }
   return next;
 }
 
@@ -613,7 +662,13 @@ export async function drawPackPlayersFromPool(
 
   const players = sortIntoRevealOrder(entries.map(liveEntryToPackPlayer));
   return {
-    players: applyHonoraryHit(players, rng, options.honoraryChance ?? 0, options.ownedGoatUserIds),
+    players: applyHonoraryHit(
+      players,
+      rng,
+      options.honoraryChance ?? 0,
+      options.ownedGoatUserIds,
+      options.honoraryCascadeChance ?? 0,
+    ),
     poolTotal: total,
   };
 }
@@ -636,7 +691,13 @@ export async function drawPackPlayers(
   if (options.poolOnly) throw new Error("This draw requires the tracked player pool.");
   const players = await drawPackPlayersFromOsuApi(rng, options.count ?? PACK_SIZE);
   return {
-    players: applyHonoraryHit(players, rng, options.honoraryChance ?? 0, options.ownedGoatUserIds),
+    players: applyHonoraryHit(
+      players,
+      rng,
+      options.honoraryChance ?? 0,
+      options.ownedGoatUserIds,
+      options.honoraryCascadeChance ?? 0,
+    ),
     poolTotal: null,
   };
 }

@@ -20,6 +20,8 @@ import {
   sanitizeWallet,
   settleCharges,
   shardValueForTier,
+  duplicateShardValueForTier,
+  wholeCardShardValue,
   spendCharge,
   spendShards,
   tierRank,
@@ -106,10 +108,10 @@ describe("pulls and recycling", () => {
   it("recycles duplicate copies into shards, keeping one copy", () => {
     let wallet = createEmptyWallet(T0);
     for (let i = 0; i < 4; i += 1) wallet = recordPull(wallet, pull(7, "elite"), T0 + i).wallet;
-    expect(duplicateShardTotal(wallet)).toBe(3 * shardValueForTier("elite"));
+    expect(duplicateShardTotal(wallet)).toBe(3 * duplicateShardValueForTier("elite"));
 
     const result = recycleDuplicates(wallet, "7");
-    expect(result.gained).toBe(3 * shardValueForTier("elite"));
+    expect(result.gained).toBe(3 * duplicateShardValueForTier("elite"));
     expect(result.wallet.cards["7"].copies).toBe(1);
     expect(result.wallet.shards).toBe(result.gained);
     expect(recycleDuplicates(result.wallet, "7").gained).toBe(0);
@@ -123,7 +125,7 @@ describe("pulls and recycling", () => {
     wallet = recordPull(wallet, pull(2, "rare"), T0).wallet;
     wallet = recordPull(wallet, pull(2, "rare"), T0).wallet;
     const result = recycleAllDuplicates(wallet);
-    expect(result.gained).toBe(shardValueForTier("common") + 2 * shardValueForTier("rare"));
+    expect(result.gained).toBe(duplicateShardValueForTier("common") + 2 * duplicateShardValueForTier("rare"));
     expect(Object.values(result.wallet.cards).every((card) => card.copies === 1)).toBe(true);
   });
 
@@ -153,6 +155,34 @@ describe("pulls and recycling", () => {
     const repull = recordPull(result.wallet, pull(7, "rare"), T0 + 1000);
     expect(repull.isNew).toBe(true);
     expect(repull.wallet.cards["7"].copies).toBe(1);
+  });
+
+  it("prices a duplicate below the copy you keep", () => {
+    // The whole reason the pack economy runs the right way round: a pack is
+    // bought with shards, and a finished collection deals nothing but
+    // duplicates, so duplicates recycling at full tier value would make
+    // opening one an income source rather than a purchase.
+    for (const tier of ["rare", "elite", "worldClass", "goat"] as const) {
+      expect(duplicateShardValueForTier(tier)).toBeLessThan(shardValueForTier(tier));
+    }
+    // Nothing recycles for nothing, however cheap the tier.
+    expect(duplicateShardValueForTier("common")).toBeGreaterThan(0);
+  });
+
+  it("pays the same for a card whichever way it is recycled", () => {
+    // Recycling everything has to price the duplicates the same way the
+    // duplicates-only button does, or "recycle all" would be a strictly better
+    // way to cash duplicates in than the button that exists for it.
+    let wallet = createEmptyWallet(T0);
+    for (let i = 0; i < 4; i += 1) wallet = recordPull(wallet, pull(7, "elite"), T0 + i).wallet;
+
+    const wholeGo = recycleAllCopies(wallet, "7");
+    expect(wholeGo.gained).toBe(shardValueForTier("elite") + 3 * duplicateShardValueForTier("elite"));
+    expect(wholeGo.gained).toBe(wholeCardShardValue(wallet.cards["7"]));
+
+    const dupesFirst = recycleDuplicates(wallet, "7");
+    const thenTheRest = recycleAllCopies(dupesFirst.wallet, "7");
+    expect(dupesFirst.gained + thenTheRest.gained).toBe(wholeGo.gained);
   });
 
   it("keeps fully recycled cards gone after reconciling with a stale device", () => {
@@ -234,7 +264,7 @@ describe("cross-device reconcile", () => {
     const merged = reconcileWallets(deviceA, base, T0 + 5000);
     expect(merged.cards["7"].copies).toBe(1);
     expect(merged.cards["7"].recycledCopies).toBe(2);
-    expect(merged.shards).toBe(2 * shardValueForTier("elite"));
+    expect(merged.shards).toBe(2 * duplicateShardValueForTier("elite"));
   });
 
   it("never refunds spent shards from a stale device", () => {

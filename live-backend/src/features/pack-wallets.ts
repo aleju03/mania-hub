@@ -90,9 +90,26 @@ const TIER_SHARD_VALUES: Record<string, number> = {
   mythic: 20,
   ascendant: 28,
   worldClass: 40,
-  goat: 1000,
+  // Mirrors the frontend's table in src/lib/pack-collection.ts. GOAT came down
+  // from 1000, which was four Legend packs for a card the honorary slot hands
+  // out for free once the roster is complete.
+  goat: 400,
   unrated: 1,
 };
+
+/* What a duplicate copy recycles for: half the tier value, floored at one
+   shard. See DUPLICATE_RECYCLE_RATE in src/lib/pack-collection.ts for why the
+   second copy is worth less than the first - in short, duplicates at full
+   value made a finished collection an infinite shard loop, because every pack
+   bought with shards paid back more shards than it cost. */
+export const DUPLICATE_RECYCLE_RATE = 0.5;
+
+const TIER_DUPLICATE_SHARD_VALUES: Record<string, number> = Object.fromEntries(
+  Object.entries(TIER_SHARD_VALUES).map(([tier, value]) => [
+    tier,
+    Math.max(1, Math.floor(value * DUPLICATE_RECYCLE_RATE)),
+  ]),
+);
 
 /* Tier strength, mirroring tierRank in the frontend's pack-collection.
    Anything unknown (including a tierless legacy card) ranks below every real
@@ -131,19 +148,31 @@ export function tierRankSql(alias = "tier") {
   return `case ${alias}\n${cases.join("\n")}\n    else -1\n  end`;
 }
 
+// Both value expressions are generated from the tables above for the same
+// reason tierRankSql is generated from TIER_RANKS: a hand-written copy of a
+// shard table is a copy that silently disagrees with the JS one the next time
+// a tier is repriced. The tier names are module constants, never caller input.
+function valueCaseSql(values: Record<string, number>, alias: string) {
+  const cases = Object.entries(values).map(([tier, value]) => `    when '${tier}' then ${value}`);
+  return `case ${alias}\n${cases.join("\n")}\n    else 1\n  end`;
+}
+
 function shardValueSql(alias = "tier") {
-  return `case ${alias}
-    when 'goat' then 1000
-    when 'worldClass' then 40
-    when 'ascendant' then 28
-    when 'mythic' then 20
-    when 'legendary' then 14
-    when 'ultraRare' then 9
-    when 'superRare' then 6
-    when 'elite' then 4
-    when 'rare' then 2
-    when 'common' then 1
-    else 1
+  return valueCaseSql(TIER_SHARD_VALUES, alias);
+}
+
+function duplicateShardValueSql(alias = "tier") {
+  return valueCaseSql(TIER_DUPLICATE_SHARD_VALUES, alias);
+}
+
+/* Letting a whole card go: the kept copy at full tier value plus the rest at
+   the duplicate rate, mirroring wholeCardShardValue on the frontend. Every
+   caller already filters to copies > 0, but a held card is the only thing this
+   is meaningful for, so the guard is written down rather than assumed. */
+function wholeCardShardValueSql(alias = "tier", copiesAlias = "copies") {
+  return `case when ${copiesAlias} > 0
+    then (${shardValueSql(alias)}) + (${copiesAlias} - 1) * (${duplicateShardValueSql(alias)})
+    else 0
   end`;
 }
 
@@ -502,14 +531,14 @@ export async function listPackCollectionCards(
   )).rows;
   const duplicateRow = (await exec(
     db,
-    `select coalesce(sum(max(copies - 1, 0) * ${shardValueSql("tier")}), 0) as total
+    `select coalesce(sum(max(copies - 1, 0) * ${duplicateShardValueSql("tier")}), 0) as total
      from pack_collection_cards
      where owner_user_id = ? and copies > 0`,
     [userId],
   )).rows[0];
   const filteredShardRow = (await exec(
     db,
-    `select coalesce(sum(copies * ${shardValueSql("tier")}), 0) as total
+    `select coalesce(sum(${wholeCardShardValueSql("tier")}), 0) as total
      from pack_collection_cards
      where ${whereSql}`,
     args,
@@ -824,6 +853,16 @@ export function shardValueForStoredTier(tier: string | null): number {
   return Object.prototype.hasOwnProperty.call(TIER_SHARD_VALUES, key) ? TIER_SHARD_VALUES[key] : 1;
 }
 
+/* What one duplicate copy of a stored tier recycles for. Own-property checked
+   for the same reason as above: an inherited key would make the shard total
+   NaN rather than throw. */
+export function duplicateShardValueForStoredTier(tier: string | null): number {
+  const key = tier ?? "unrated";
+  return Object.prototype.hasOwnProperty.call(TIER_DUPLICATE_SHARD_VALUES, key)
+    ? TIER_DUPLICATE_SHARD_VALUES[key]
+    : 1;
+}
+
 export async function recyclePackCollectionCards(
   db: Db,
   userId: number,
@@ -853,7 +892,7 @@ export async function recyclePackCollectionCards(
     const whereSql = where.join(" and ");
     const row = (await exec(
       db,
-      `select coalesce(sum(copies * ${shardValueSql("tier")}), 0) as gained
+      `select coalesce(sum(${wholeCardShardValueSql("tier")}), 0) as gained
        from pack_collection_cards
        where ${whereSql}`,
       args,
@@ -879,7 +918,7 @@ export async function recyclePackCollectionCards(
     const placeholders = keys.map(() => "?").join(", ");
     const row = (await exec(
       db,
-      `select coalesce(sum(copies * ${shardValueSql("tier")}), 0) as gained
+      `select coalesce(sum(${wholeCardShardValueSql("tier")}), 0) as gained
        from pack_collection_cards
        where owner_user_id = ? and card_key in (${placeholders}) and copies > 0`,
       [userId, ...keys],
@@ -902,7 +941,7 @@ export async function recyclePackCollectionCards(
   if (options.mode === "all_duplicates") {
     const row = (await exec(
       db,
-      `select coalesce(sum(max(copies - 1, 0) * ${shardValueSql("tier")}), 0) as gained
+      `select coalesce(sum(max(copies - 1, 0) * ${duplicateShardValueSql("tier")}), 0) as gained
        from pack_collection_cards
        where owner_user_id = ? and copies > 1`,
       [userId],
@@ -932,10 +971,12 @@ export async function recyclePackCollectionCards(
   if (!card) return { gained: 0, wallet: await getOrCreatePackWallet(db, userId, now) };
 
   const copies = Math.max(0, Math.floor(Number(card.copies) || 0));
-  const shardValue = shardValueForStoredTier(typeof card.tier === "string" ? card.tier : null);
+  const tier = typeof card.tier === "string" ? card.tier : null;
+  const shardValue = shardValueForStoredTier(tier);
+  const duplicateValue = duplicateShardValueForStoredTier(tier);
   if (options.mode === "duplicates") {
     const recycled = Math.max(0, copies - 1);
-    gained = recycled * shardValue;
+    gained = recycled * duplicateValue;
     if (recycled > 0) {
       await exec(
         db,
@@ -948,7 +989,8 @@ export async function recyclePackCollectionCards(
       );
     }
   } else {
-    gained = copies * shardValue;
+    // The kept copy at full value, every extra one at the duplicate rate.
+    gained = copies > 0 ? shardValue + (copies - 1) * duplicateValue : 0;
     await exec(
       db,
       `update pack_collection_cards

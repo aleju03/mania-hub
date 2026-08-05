@@ -221,10 +221,10 @@ describe("what the cash-out button promises", () => {
     // stopping is worth, which is the one number a press-your-luck decision
     // rests on.
     expect(streakShardValue(0)).toBe(0);
-    expect(streakShardValue(4)).toBe(20);
-    expect(streakShardValue(5)).toBe(30);
-    expect(streakShardValue(10)).toBe(65);
-    expect(streakShardValue(20)).toBe(150);
+    expect(streakShardValue(4)).toBe(32);
+    expect(streakShardValue(5)).toBe(50);
+    expect(streakShardValue(10)).toBe(110);
+    expect(streakShardValue(20)).toBe(260);
   });
 });
 
