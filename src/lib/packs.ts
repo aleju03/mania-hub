@@ -163,8 +163,6 @@ export type PackCost = { kind: "charge" } | { kind: "shards"; amount: number };
 export interface PackTypeDef {
   id: PackTypeId;
   name: string;
-  /* Subtitle line on the foil art, e.g. "ELITE PACK". */
-  artSubtitle: string;
   cost: PackCost;
   /* Slice of the pool this pack draws from (1 = the whole pool). */
   topFraction: number;
@@ -200,7 +198,6 @@ export const PACK_TYPES: PackTypeDef[] = [
   {
     id: "standard",
     name: "Standard",
-    artSubtitle: "BOOSTER PACK",
     cost: { kind: "charge" },
     topFraction: 1,
     cardCount: PACK_SIZE,
@@ -212,7 +209,6 @@ export const PACK_TYPES: PackTypeDef[] = [
   {
     id: "wild",
     name: "Wild",
-    artSubtitle: "WILD PACK",
     // The volume pack: double the cards, priced so bulk is a convenience
     // rather than the cheapest route to a full collection. 30 was below the
     // pool's own average card value, which made it the cheapest route to
@@ -230,7 +226,6 @@ export const PACK_TYPES: PackTypeDef[] = [
   {
     id: "elite",
     name: "Elite",
-    artSubtitle: "ELITE PACK",
     // Premium tiers are deliberately steep: shards flow constantly from
     // opened packs and recycling, so cheap top-slice packs made the whole
     // ladder trivial to skip.
@@ -246,7 +241,6 @@ export const PACK_TYPES: PackTypeDef[] = [
   {
     id: "legend",
     name: "Legend",
-    artSubtitle: "LEGEND PACK",
     cost: { kind: "shards", amount: 250 },
     topFraction: 0.02,
     cardCount: PACK_SIZE,
@@ -514,6 +508,22 @@ function rankOfLiveEntry(entry: LiveGlobalRankingEntry): number {
   return entry.global_rank ?? entry.rank;
 }
 
+/* How far a duplicate-protected draw will hunt for unowned players beyond the
+   pages it already loaded, and how many of those pages it reads at once.
+
+   Uncapped, this walked every page in the slice. A finished collection can
+   never find a replacement, so the loop never broke early: a Wild pack (the
+   whole pool, ~180 pages at this pool size) fired ~179 sequential reads per
+   open straight from the browser, blew through the backend's per-IP minute
+   limit, and the 429'd page turned the whole draw into "couldn't deal a pack".
+
+   `guaranteesNew` promises new cards where possible, so a bounded search is
+   the honest reading: with 1% of the pool unowned, sixteen 50-player pages
+   still turn up a new card better than 99 times in 100, and a collector who
+   owns everything simply gets duplicates instead of an error. */
+const POOL_REPLACEMENT_MAX_EXTRA_PAGES = 16;
+const POOL_REPLACEMENT_PAGE_BATCH = 4;
+
 async function replaceOwnedPoolEntries(
   entries: LiveGlobalRankingEntry[],
   pagesByNumber: Map<number, LiveGlobalRankingEntry[]>,
@@ -545,21 +555,38 @@ async function replaceOwnedPoolEntries(
   const missingPages = shuffleInPlace(
     Array.from({ length: maxPage }, (_, index) => index + 1).filter((page) => !pagesByNumber.has(page)),
     rng,
-  );
-  for (const page of missingPages) {
+  ).slice(0, POOL_REPLACEMENT_MAX_EXTRA_PAGES);
+
+  for (let start = 0; start < missingPages.length; start += POOL_REPLACEMENT_PAGE_BATCH) {
     if (replacements.length >= ownedIndexes.length) break;
-    const response = page === 1 ? head : await fetchPage(page);
-    pagesByNumber.set(page, response.ranking);
-    replacements.push(
-      ...pickUnownedPoolEntries(
-        [response.ranking],
-        drawTotal,
-        ownedUserIds,
-        used,
-        ownedIndexes.length - replacements.length,
-        rng,
-      ),
+    const batch = missingPages.slice(start, start + POOL_REPLACEMENT_PAGE_BATCH);
+    const responses = await Promise.all(
+      batch.map(async (page) => {
+        try {
+          return { page, response: page === 1 ? head : await fetchPage(page) };
+        } catch {
+          // A page that will not load costs this draw one replacement, not the
+          // whole pack. The entry it would have replaced stays put and deals as
+          // a duplicate, which is what an exhausted search does anyway.
+          return null;
+        }
+      }),
     );
+    for (const loaded of responses) {
+      if (!loaded) continue;
+      pagesByNumber.set(loaded.page, loaded.response.ranking);
+      if (replacements.length >= ownedIndexes.length) continue;
+      replacements.push(
+        ...pickUnownedPoolEntries(
+          [loaded.response.ranking],
+          drawTotal,
+          ownedUserIds,
+          used,
+          ownedIndexes.length - replacements.length,
+          rng,
+        ),
+      );
+    }
   }
 
   for (let replacementIndex = 0; replacementIndex < replacements.length; replacementIndex += 1) {

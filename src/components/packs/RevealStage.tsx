@@ -835,9 +835,12 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
 
   return (
     <div className="flex flex-col items-center">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1 tabular-nums">
+      <div className="flex items-baseline gap-1.5 tabular-nums">
         {/* During the cascade the counter runs with the flips as they land. */}
-        card {skipping ? Math.max(1, revealedCount) : Math.min(index + 1, cards.length)} / {cards.length}
+        <span className="text-lg font-black leading-none text-white">
+          {skipping ? Math.max(1, revealedCount) : Math.min(index + 1, cards.length)}
+        </span>
+        <span className="text-[12px] text-osu-f1">/ {cards.length}</span>
       </div>
 
       {/* The stage holds the stack's 5/7 footprint while revealing one by
@@ -1064,20 +1067,22 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
                 <img
                   src={current.player.user.avatar_url}
                   alt=""
-                  className="h-6 w-6 rounded-full object-cover"
+                  className="h-7 w-7 rounded-full object-cover"
                   draggable={false}
                 />
-                <span className="text-base font-bold text-white">{current.player.user.username}</span>
+                <span className="text-lg font-bold text-white">{current.player.user.username}</span>
                 <CountryFlag code={current.player.user.country_code} size="sm" decorative />
               </Link>
-              <div className="mt-1 flex items-center justify-center gap-2 text-[12px]">
+              <div className="mt-1 flex items-center justify-center gap-2.5 text-[12px]">
+                {/* Solid, not a tinted whisper: a card the collection has
+                    never held is the thing worth noticing in this row. */}
                 {current.isNew && (
-                  <span className="rounded bg-osu-pink/15 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-osu-pink-light">
+                  <span className="rounded bg-osu-pink px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-white">
                     new
                   </span>
                 )}
                 {current.tierLabel && (
-                  <span className="font-bold uppercase tracking-wide" style={{ color: tierColor }}>
+                  <span className="text-[13px] font-black uppercase tracking-wide" style={{ color: tierColor }}>
                     {current.tierLabel}
                   </span>
                 )}

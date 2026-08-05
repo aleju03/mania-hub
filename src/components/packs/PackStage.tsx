@@ -6,6 +6,8 @@ import {
   createPackBackCanvas,
   DEFAULT_PACK_ART_STYLE,
   getCachedPackFrontCanvas,
+  packArtStyleFor,
+  paintPackBackCanvas,
   PACK_ART_HEIGHT,
   PACK_ART_WIDTH,
   PACK_ASPECT,
@@ -364,9 +366,7 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   }, [reducedMotion, sceneReady]);
 
   useEffect(() => {
-    const nextStyle = packType
-      ? { accent: packType.accent, subtitle: packType.artSubtitle, cardCount: packType.cardCount }
-      : DEFAULT_PACK_ART_STYLE;
+    const nextStyle = packType ? packArtStyleFor(packType) : DEFAULT_PACK_ART_STYLE;
     const next = getCachedPackFrontCanvas(nextStyle);
     setArtReady(true);
     // A per-frame blend redraws and uploads a 600x1000 texture for the whole
@@ -374,7 +374,14 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
     // responsive and avoids a competing animation while the pack floats.
     artCanvasRef.current = next;
     drawFrame();
-  }, [packType]);
+    // The back foil is stock too, so it takes the same tint; repainting in
+    // place keeps the scene's existing back texture valid.
+    const back = backCanvasRef.current;
+    if (back) {
+      paintPackBackCanvas(back, nextStyle.accent);
+      sceneRef.current?.markBackArtDirty();
+    }
+  }, [packType, sceneReady]);
 
   // Blade trail: while the pointer is held down anywhere on the stage, a
   // fading streak chases the cursor (on and off the pack), so the slash
@@ -783,12 +790,11 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
         transition={{ duration: 0.5 }}
       />
 
-      <div className="mt-5 text-center" aria-live="polite">
+      {/* One line: the old second line only restated the first one in other
+          words, and the gesture is the whole instruction. */}
+      <div className="mt-5 h-5 text-center" aria-live="polite">
         <div className="text-sm font-semibold text-white">
-          {ripping ? "Opening..." : "Slash across the dotted line to open"}
-        </div>
-        <div className="mt-1 text-[12px] text-osu-f1">
-          {ripping ? " " : "Hold and drag from one edge to the other"}
+          {ripping ? "Opening..." : "Hold and drag across the dotted line"}
         </div>
       </div>
     </div>

@@ -29,8 +29,9 @@ import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalR
 import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
-import { applyPackCollectionCardMint, getPackCollectionPoolProgress, getPackWallet, HONORARY_USER_IDS, listPackCollectionCards,
-  listPackCollectionOwnedCardKeys, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
+import { applyPackCollectionCardMint, getPackCollectionPoolProgress, getPackShowcase, getPackWallet, HONORARY_USER_IDS,
+  listPackCollectionCards, listPackCollectionOwnedCardKeys, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE,
+  recyclePackCollectionCards, savePackWallet, setPackShowcase } from "../features/pack-wallets.js";
 import { getHonoraryPullsReport, getPackCardCollectors, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
 import { createPackDuel, getPackDuel, joinPackDuel, pickPackDuelStat, redactDuelFor } from "../features/pack-duels.js";
 import {
@@ -1627,6 +1628,23 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, shared);
     return true;
   }
+  const packShowcaseMatch = url.pathname.match(/^\/api\/packs\/showcase\/(\d+)$/);
+  if (packShowcaseMatch) {
+    // A collector's pinned shelf. Meant to be public (it exists to be seen),
+    // but admin-gated while the showcase design is still being judged: the
+    // frontend only renders the shelf for admins, and this keeps the shelves
+    // of everyone else unreadable in the meantime.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { cards: await getPackShowcase(ctx.db, Number(packShowcaseMatch[1])) });
+    return true;
+  }
   if (url.pathname === "/api/packs/recent-pulls") {
     // The public pull feed: notable-only by default (high mints and
     // first-ever pulls); ?all=1 includes every pull for the live ticker.
@@ -1803,6 +1821,38 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         return true;
       }
       sendJson(req, res, ctx, 200, { rev: result.rev });
+      return true;
+    }
+    sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+    return true;
+  }
+  const packShowcaseWriteMatch = url.pathname.match(/^\/api\/pack-collection\/(\d+)\/showcase$/);
+  if (packShowcaseWriteMatch) {
+    // Server-to-server like the wallet: the frontend authenticates the osu!
+    // login cookie and forwards the viewer's own id, so a user only ever
+    // edits their own shelf. Reads of *other* people's shelves go through the
+    // public /api/packs/showcase endpoint instead.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const ownerUserId = Number(packShowcaseWriteMatch[1]);
+    if (!Number.isFinite(ownerUserId) || ownerUserId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    if (req.method === "GET") {
+      const cards = await getPackShowcase(ctx.db, ownerUserId);
+      sendJson(req, res, ctx, 200, { cardKeys: cards.map((card) => card.cardKey) });
+      return true;
+    }
+    if (req.method === "POST") {
+      const body = parseJson<Record<string, unknown>>(
+        (await readBodyBuffer(req, DEFAULT_BODY_LIMIT_BYTES)).toString("utf8") || "{}",
+        {},
+      );
+      const cardKeys = await setPackShowcase(ctx.serveWriteDb ?? ctx.db, ownerUserId, body.cardKeys);
+      sendJson(req, res, ctx, 200, { cardKeys });
       return true;
     }
     sendJson(req, res, ctx, 405, { error: "method_not_allowed" });

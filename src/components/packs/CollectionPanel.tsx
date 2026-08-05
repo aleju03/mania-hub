@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search, Star } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "#/lib/auth-context";
 import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import {
   collectedCardTier,
@@ -16,7 +17,13 @@ import {
   type PackWallet,
 } from "#/lib/pack-collection";
 import { HONORARY_PLAYERS } from "#/lib/honorary-players";
-import { fetchServerPackCollectionPage, type ServerPackCollectionPage } from "#/lib/pack-wallet-sync";
+import {
+  fetchOwnPackShowcase,
+  fetchServerPackCollectionPage,
+  PACK_SHOWCASE_MAX_CARDS,
+  saveOwnPackShowcase,
+  type ServerPackCollectionPage,
+} from "#/lib/pack-wallet-sync";
 import { fetchPackPlayerScores } from "#/lib/packs";
 import {
   buildManiaCardRenderData,
@@ -742,6 +749,36 @@ export function CollectionPanel({
       setTierFilter("all");
     }
   }, [tierFilter, useServerCollection, serverPoolProgress]);
+  // The profile showcase: which card keys this collector has pinned. Null
+  // until loaded; the pin menu item stays hidden until then. Synced wallets
+  // only, since the server validates pins against the server-side collection.
+  // Admin-gated for now, while the shelf design is still being judged.
+  const canUseShowcase = useAuth().canUseAdminFeatures;
+  const [showcaseKeys, setShowcaseKeys] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!useServerCollection || !canUseShowcase) {
+      setShowcaseKeys(null);
+      return;
+    }
+    let cancelled = false;
+    fetchOwnPackShowcase()
+      .then((keys) => {
+        if (!cancelled && keys) setShowcaseKeys(keys);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [useServerCollection, canUseShowcase]);
+  const toggleShowcasePin = (cardKey: string) => {
+    const current = showcaseKeys ?? [];
+    const next = current.includes(cardKey) ? current.filter((key) => key !== cardKey) : [...current, cardKey];
+    void saveOwnPackShowcase({ data: { cardKeys: next } })
+      .then((saved) => {
+        if (saved) setShowcaseKeys(saved);
+      })
+      .catch(() => {});
+  };
   const serverCollectionTotal = Object.values(serverTierCounts).reduce((sum, count) => sum + count, 0);
   const ownedTiers: Array<ManiaCardTier | null> = useServerCollection
     ? Object.keys(serverTierCounts)
@@ -1451,6 +1488,30 @@ export function CollectionPanel({
               <Check className="h-3 w-3" />
               Select cards...
             </button>
+            {showcaseKeys !== null && (() => {
+              const cardKey = packCardKeyOf(menu.card);
+              const pinned = showcaseKeys.includes(cardKey);
+              const full = !pinned && showcaseKeys.length >= PACK_SHOWCASE_MAX_CARDS;
+              return (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={full}
+                  onClick={() => {
+                    toggleShowcasePin(cardKey);
+                    setMenu(null);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer disabled:cursor-default disabled:opacity-40"
+                >
+                  <Star className={`h-3 w-3 ${pinned ? "fill-current" : ""}`} />
+                  {pinned
+                    ? "Unpin from profile showcase"
+                    : full
+                      ? `Showcase is full (${PACK_SHOWCASE_MAX_CARDS})`
+                      : "Pin to profile showcase"}
+                </button>
+              );
+            })()}
             {menu.card.copies > 1 && (
               <button
                 type="button"

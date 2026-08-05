@@ -10,6 +10,7 @@ import { GoatHoldersButton } from "../components/packs/GoatHoldersButton";
 import {
   getCachedCardBackDataUrl,
   getCachedPackFrontCanvas,
+  packArtStyleFor,
   PACK_ASPECT,
 } from "../components/packs/packArt";
 import { PackStage } from "../components/packs/PackStage";
@@ -232,14 +233,10 @@ function usePackArtThumbs(): Partial<Record<PackTypeId, string>> {
       if (cancelled) return;
       const type = pending.shift();
       if (!type) return;
-      const full = getCachedPackFrontCanvas({
-        accent: type.accent,
-        subtitle: type.artSubtitle,
-        cardCount: type.cardCount,
-      });
+      const full = getCachedPackFrontCanvas(packArtStyleFor(type));
       const small = document.createElement("canvas");
-      small.width = 160;
-      small.height = Math.round(160 / PACK_ASPECT);
+      small.width = 256;
+      small.height = Math.round(256 / PACK_ASPECT);
       const context = small.getContext("2d");
       if (context) {
         context.drawImage(full, 0, 0, small.width, small.height);
@@ -259,6 +256,9 @@ function usePackArtThumbs(): Partial<Record<PackTypeId, string>> {
   return thumbs;
 }
 
+/* The foil now prints its own name, card count and pool slice, so the shelf
+   below it only has to answer "can I afford this one". Everything the old
+   three-line caption stack under each thumbnail said is on the pack itself. */
 function PackTypeSelector({
   wallet,
   selectedId,
@@ -270,7 +270,6 @@ function PackTypeSelector({
   thumbs: Partial<Record<PackTypeId, string>>;
   onSelect: (id: PackTypeId) => void;
 }) {
-  const selectedType = packTypeById(selectedId);
   return (
     <div>
       <div className="flex items-start justify-center gap-3 sm:gap-5">
@@ -287,53 +286,64 @@ function PackTypeSelector({
                 if (affordable && !selected) onSelect(type.id);
               }}
               disabled={!affordable && !selected}
-              className={`flex w-[76px] flex-col items-center sm:w-[96px] ${
+              className={`flex w-[78px] flex-col items-center sm:w-[116px] ${
                 affordable && !selected ? "cursor-pointer" : ""
               }`}
               aria-pressed={selected}
+              aria-label={`${type.name} pack, ${type.blurb}`}
               title={type.blurb}
             >
               <div
                 className={`w-full transition-transform duration-150 ${
-                  selected ? "-translate-y-1" : affordable ? "hover:-translate-y-1" : ""
+                  selected ? "-translate-y-1.5" : affordable ? "hover:-translate-y-1" : ""
                 }`}
                 style={{
                   aspectRatio: `${PACK_ASPECT}`,
-                  filter: affordable || selected ? undefined : "grayscale(0.85) brightness(0.55)",
+                  /* Desaturate and fade, but do not darken: the foil is
+                     already near-black, and dimming it on top of that left
+                     the packs you cannot afford as unreadable rectangles. */
+                  ...(affordable || selected ? {} : { filter: "grayscale(0.8)", opacity: 0.5 }),
                 }}
               >
                 {thumb ? (
                   <img
                     src={thumb}
                     alt={`${type.name} pack`}
-                    className="h-full w-full rounded-[7px]"
+                    className="h-full w-full rounded-[8px]"
                     draggable={false}
                     style={{
                       boxShadow: selected
-                        ? `0 0 0 2px ${accent}, 0 10px 28px rgba(0,0,0,0.5)`
+                        ? `0 0 0 2px ${accent}, 0 14px 34px rgba(0,0,0,0.55)`
                         : "0 6px 18px rgba(0,0,0,0.4)",
                     }}
                   />
                 ) : (
-                  <div className="h-full w-full rounded-[7px] bg-osu-b4/60" />
+                  <div className="h-full w-full rounded-[8px] bg-osu-b4/60" />
                 )}
               </div>
-              <div
-                className="mt-2 text-[11px] font-bold"
-                style={{ color: affordable || selected ? accent : "rgba(148,163,184,0.6)" }}
-              >
-                {type.name}
-              </div>
-              <div className="text-[10px] text-osu-f1 tabular-nums">
-                {type.cost.kind === "charge" ? "free" : `${type.cost.amount} shards`}
-              </div>
-              <div className="text-[10px] text-osu-f1/70 tabular-nums">{type.cardCount} cards</div>
+              {type.cost.kind === "charge" ? (
+                <div
+                  className="mt-2.5 text-[13px] font-bold"
+                  style={{ color: affordable || selected ? accent : "rgba(148,163,184,0.5)" }}
+                >
+                  free
+                </div>
+              ) : (
+                <div
+                  className={`mt-2.5 flex items-center gap-1 text-[13px] font-bold tabular-nums ${
+                    affordable || selected ? "text-white" : "text-osu-f1/50"
+                  }`}
+                >
+                  <Recycle className="h-3 w-3 opacity-70" />
+                  {type.cost.amount}
+                </div>
+              )}
             </button>
           );
         })}
       </div>
-      <div className="mt-4 text-center text-[11px] text-osu-f1">
-        {selectedType.blurb}. +{PACK_OPEN_SHARD_REWARD} shards per pack; recycle duplicates for more.
+      <div className="mt-5 text-center text-[11px] text-osu-f1">
+        Every pack pays {PACK_OPEN_SHARD_REWARD} shards. Recycle duplicates for more.
       </div>
     </div>
   );
@@ -657,26 +667,33 @@ function PacksPage() {
 
           <div className="mx-auto w-full max-w-[960px] flex-1 px-4 py-8 sm:px-5 sm:py-12">
             {wallet && phase !== "reveal" && (
-              <div className="mb-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[12px]">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1" aria-hidden="true">
+              // The two numbers that decide what you can open are the point of
+              // this strip, so they carry the weight and everything else sits
+              // at caption size around them.
+              <div className="mb-9 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-[12px]">
+                <div className="flex items-baseline gap-2">
+                  <div className="flex translate-y-[-2px] items-center gap-1" aria-hidden="true">
                     {Array.from({ length: MAX_PACK_CHARGES }, (_, position) => (
                       <span
                         key={position}
-                        className={`h-2 w-2 rounded-full ${position < charges ? "bg-osu-pink" : "bg-osu-b3"}`}
+                        className={`h-2.5 w-2.5 rounded-full ${position < charges ? "bg-osu-pink" : "bg-osu-b3"}`}
                       />
                     ))}
                   </div>
-                  <span className="text-osu-f1 tabular-nums">
-                    {charges}/{MAX_PACK_CHARGES} packs
+                  <span className="text-xl font-black leading-none text-white tabular-nums">
+                    {charges}
+                    <span className="text-osu-f1">/{MAX_PACK_CHARGES}</span>
                   </span>
+                  <span className="text-osu-f1">packs</span>
                   {nextChargeMs !== null && (
                     <span className="text-osu-f1 tabular-nums">+1 in {Math.ceil(nextChargeMs / 1000)}s</span>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 text-osu-f1">
-                  <Recycle className="h-3.5 w-3.5" />
-                  <span className="font-semibold text-white tabular-nums">{shards.toLocaleString()}</span>
+                <div className="flex items-baseline gap-2 text-osu-f1">
+                  <Recycle className="h-4 w-4 translate-y-[3px]" />
+                  <span className="text-xl font-black leading-none text-white tabular-nums">
+                    {shards.toLocaleString()}
+                  </span>
                   <span>shards</span>
                 </div>
                 <GoatHoldersButton />
@@ -749,15 +766,15 @@ function PacksPage() {
                     {!wallet ? (
                       <div className="py-16 text-center text-[12px] text-osu-f1">Loading your collection...</div>
                     ) : !canOpen ? (
-                      <div className="mx-auto max-w-[420px] py-12 text-center">
-                        <div className="text-sm font-bold text-white">Out of free packs</div>
-                        <div className="mt-2 text-[12px] text-osu-f1 tabular-nums">
-                          {nextChargeMs !== null
-                            ? `Next free pack in ${Math.ceil(nextChargeMs / 1000)}s`
-                            : "A free pack is ready."}
+                      /* The wait is the only thing worth saying here: the
+                         shelf below already greys out what the wallet cannot
+                         pay for, so it needs no sentence explaining it. */
+                      <div className="mx-auto max-w-[420px] py-16 text-center">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
+                          next free pack
                         </div>
-                        <div className="mt-2 text-[12px] text-osu-f1">
-                          Shard packs below stay open if you have the shards.
+                        <div className="mt-1.5 text-4xl font-black text-white tabular-nums">
+                          {nextChargeMs !== null ? `${Math.ceil(nextChargeMs / 1000)}s` : "ready"}
                         </div>
                       </div>
                     ) : (

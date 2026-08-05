@@ -61,6 +61,7 @@ import { DanBadge } from "../../components/ui/DanBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
+import { ShowcaseShelf } from "../../components/packs/ShowcaseShelf";
 import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../lib/maniacard";
 import { KeymodeScaleNote, SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent } from "../../components/player/SkillBreakdown";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
@@ -2578,6 +2579,8 @@ export function PlayerProfilePage({
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.14 }}
               >
+                {/* Admin-gated while the showcase design is still being judged. */}
+                {user && auth.canUseAdminFeatures && <ShowcaseShelf userId={user.id} />}
                 <ManiaCardPanel
                   user={user}
                   scores={best}

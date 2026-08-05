@@ -647,6 +647,18 @@ create index if not exists idx_pack_collection_owner_username
 create index if not exists idx_pack_collection_card_pulled
   on pack_collection_cards(card_user_id, first_pulled_at);
 
+-- The showcase shelf: up to five cards a collector pins to their public
+-- profile. Keys reference pack_collection_cards by (owner, card_key). A pin
+-- whose card was fully recycled simply stops rendering (the read joins on
+-- copies > 0), so no cleanup pass is needed.
+create table if not exists pack_showcase_cards (
+  owner_user_id integer not null,
+  position integer not null,
+  card_key text not null,
+  updated_at integer not null,
+  primary key(owner_user_id, position)
+);
+
 -- Append-only pack pull log: the community layer (live feed, per-card
 -- ownership counts, "your card got pulled" stats). Self-reported by clients,
 -- so it never feeds the economy. Usernames are frozen at pull time and

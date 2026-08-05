@@ -426,6 +426,46 @@ describe("shard pack duplicate protection", () => {
     expect(players.filter((player) => owned.has(player.user.id))).toHaveLength(PACK_SIZE - missing.size);
   });
 
+  /* A collector who owns the whole pool used to walk every page of it looking
+     for a replacement that cannot exist, one request at a time. On a full-pool
+     Wild pack that was ~180 reads per open, which tripped the backend's per-IP
+     minute limit and turned the rejected page into "couldn't deal a pack". */
+  it("deals duplicates instead of walking the whole pool when everything is owned", async () => {
+    const total = 4000;
+    const owned = new Set(Array.from({ length: total }, (_, index) => poolIdFor(index + 1)));
+    const { fetchPage, calls } = makePoolFetcher(total);
+    const { players } = await drawPackPlayersFromPool(mulberry32(5), fetchPage, {
+      ownedUserIds: owned,
+      count: 10,
+    });
+    expect(players).toHaveLength(10);
+    expect(players.every((player) => owned.has(player.user.id))).toBe(true);
+    // The head page, the pages the positions landed on, and a bounded sweep.
+    expect(calls.length).toBeLessThanOrEqual(1 + 10 + 16);
+    expect(calls.length).toBeLessThan(total / RANKINGS_PAGE_SIZE);
+  });
+
+  it("still deals when a page of the replacement sweep fails to load", async () => {
+    const total = 4000;
+    const owned = new Set(Array.from({ length: total }, (_, index) => poolIdFor(index + 1)));
+    const { fetchPage } = makePoolFetcher(total);
+    let served = 0;
+    // The draw itself reads at most 11 pages for a ten-card hand (the head,
+    // plus one per position). Those have to work: a hand that cannot be built
+    // is a real error. Everything after them is the replacement sweep, and a
+    // sweep that 429s should cost a slot, not the pack.
+    const flakyFetch = async (page: number) => {
+      served += 1;
+      if (served > 11) throw new Error("rate limited");
+      return fetchPage(page);
+    };
+    const { players } = await drawPackPlayersFromPool(mulberry32(5), flakyFetch, {
+      ownedUserIds: owned,
+      count: 10,
+    });
+    expect(players).toHaveLength(10);
+  });
+
   it("leaves a draw untouched when the collection is empty", async () => {
     const total = 300;
     const owned = new Set<number>();

@@ -14,6 +14,9 @@ export interface ServerPackWallet {
 
 export interface ServerPackCollectionCard {
   userId: number;
+  /* Wallet key ("<id>" or "<id>:goat"), so a player's GOAT and their ordinary
+     card stay distinct. Server rows always carry it. */
+  cardKey?: string;
   username: string;
   avatarUrl: string;
   countryCode: string;
@@ -200,6 +203,77 @@ export const fetchServerPackCollectionOwnedKeys = createServerFn({ method: "GET"
       : [];
   },
 );
+
+/* The signed-in viewer's showcase shelf: the card keys they've pinned to
+   their profile, in shelf order. Owner-scoped like the wallet; reading
+   *someone else's* shelf goes through fetchPackShowcaseCards below. */
+export const PACK_SHOWCASE_MAX_CARDS = 5;
+
+/* Any player's shelf, for rendering on their profile. Admin-gated on both
+   sides while the showcase design is still being judged, so this runs
+   server-side (the backend route needs the admin token) and answers empty for
+   everyone else rather than erroring. */
+export const fetchPackShowcaseCards = createServerFn({ method: "GET" })
+  .validator((input: { userId?: unknown }) => ({ userId: Math.max(0, Math.floor(Number(input?.userId) || 0)) }))
+  .handler(async ({ data }): Promise<ServerPackCollectionCard[]> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    if (data.userId <= 0) return [];
+    const { readCurrentAuth } = await import("./auth-server");
+    const auth = await readCurrentAuth();
+    if (!auth.canUseAdminFeatures) return [];
+    const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
+    if (!base) return [];
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    const response = await fetch(`${base}/api/packs/showcase/${data.userId}`, { headers });
+    if (!response.ok) throw new Error(`Pack showcase fetch failed (${response.status}).`);
+    const body = (await response.json()) as { cards?: unknown };
+    return Array.isArray(body.cards) ? (body.cards as ServerPackCollectionCard[]) : [];
+  });
+
+export const fetchOwnPackShowcase = createServerFn({ method: "GET" }).handler(
+  async (): Promise<string[] | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const target = await getSyncTarget();
+    if (!target) return null;
+    const url = target.url.replace(/\/api\/pack-wallet\/(\d+)$/, "/api/pack-collection/$1/showcase");
+    const response = await fetch(url, { headers: target.headers });
+    if (!response.ok) throw new Error(`Pack showcase fetch failed (${response.status}).`);
+    const body = (await response.json()) as { cardKeys?: unknown };
+    return Array.isArray(body.cardKeys)
+      ? body.cardKeys.map((key) => (typeof key === "string" ? sanitizeCardKey(key) : null)).filter((key): key is string => key !== null)
+      : [];
+  },
+);
+
+export const saveOwnPackShowcase = createServerFn({ method: "POST" })
+  .validator((input: { cardKeys?: unknown }) => ({
+    cardKeys: Array.isArray(input?.cardKeys)
+      ? input.cardKeys
+          .slice(0, PACK_SHOWCASE_MAX_CARDS * 10)
+          .map((key) => (typeof key === "string" ? sanitizeCardKey(key) : null))
+          .filter((key): key is string => key !== null)
+      : [],
+  }))
+  .handler(async ({ data }): Promise<string[] | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const target = await getSyncTarget();
+    if (!target) return null;
+    const url = target.url.replace(/\/api\/pack-wallet\/(\d+)$/, "/api/pack-collection/$1/showcase");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: target.headers,
+      body: JSON.stringify({ cardKeys: data.cardKeys }),
+    });
+    if (!response.ok) throw new Error(`Pack showcase save failed (${response.status}).`);
+    const body = (await response.json()) as { cardKeys?: unknown };
+    return Array.isArray(body.cardKeys)
+      ? body.cardKeys.map((key) => (typeof key === "string" ? sanitizeCardKey(key) : null)).filter((key): key is string => key !== null)
+      : [];
+  });
 
 /* Normalizes a wallet card key, rejecting anything that is not a player id
    with an optional ":goat" suffix. */

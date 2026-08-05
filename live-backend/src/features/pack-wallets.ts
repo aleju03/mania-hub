@@ -608,6 +608,73 @@ export async function listPackCollectionCards(
   };
 }
 
+/* The showcase shelf: up to five cards a collector pins to their public
+   profile page. Reads join the collection on (owner, card_key, copies > 0),
+   so a pinned card that gets fully recycled falls off the shelf on its own
+   and a pin can never show a card the owner does not hold. */
+export const PACK_SHOWCASE_MAX_CARDS = 5;
+
+export async function getPackShowcase(db: Db, ownerUserId: number): Promise<StoredPackCard[]> {
+  if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) return [];
+  const rows = (await exec(
+    db,
+    `select pack_collection_cards.*,
+       ${liveUserFieldSql("username")} as live_username,
+       ${liveUserFieldSql("avatar_url")} as live_avatar_url,
+       ${liveUserFieldSql("country_code")} as live_country_code,
+       serials.serial as serial,
+       (select max(other.serial) from pack_card_serials other
+         where other.card_key = pack_collection_cards.card_key) as minted_total
+     from pack_showcase_cards
+     join pack_collection_cards
+       on pack_collection_cards.owner_user_id = pack_showcase_cards.owner_user_id
+       and pack_collection_cards.card_key = pack_showcase_cards.card_key
+       and pack_collection_cards.copies > 0
+     left join pack_card_serials serials
+       on serials.card_key = pack_collection_cards.card_key
+       and serials.owner_user_id = pack_collection_cards.owner_user_id
+     where pack_showcase_cards.owner_user_id = ?
+     order by pack_showcase_cards.position asc
+     limit ${PACK_SHOWCASE_MAX_CARDS}`,
+    [ownerUserId],
+  )).rows;
+  return rows.map((row) => cardFromRow(row as Record<string, unknown>));
+}
+
+/* Replaces the shelf with the given keys, in order. Unknown, malformed, and
+   unowned keys are dropped rather than rejected, so a stale client (say, one
+   holding a card that was recycled in another tab) converges instead of
+   erroring. Returns the keys that actually landed. */
+export async function setPackShowcase(db: Db, ownerUserId: number, cardKeys: unknown): Promise<string[]> {
+  if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) return [];
+  // Unowned keys drop before the cap so a stale pin can't evict a valid one;
+  // the pre-cap bound just keeps the ownership lookup small.
+  const requested = Array.isArray(cardKeys)
+    ? [...new Set(cardKeys.map(normalizePackCardKey).filter((key): key is string => key !== null))].slice(0, PACK_SHOWCASE_MAX_CARDS * 10)
+    : [];
+  let kept: string[] = [];
+  if (requested.length > 0) {
+    const placeholders = requested.map(() => "?").join(", ");
+    const ownedRows = (await exec(
+      db,
+      `select card_key from pack_collection_cards
+       where owner_user_id = ? and copies > 0 and card_key in (${placeholders})`,
+      [ownerUserId, ...requested],
+    )).rows;
+    const owned = new Set(ownedRows.map((row) => String(row.card_key)));
+    kept = requested.filter((key) => owned.has(key)).slice(0, PACK_SHOWCASE_MAX_CARDS);
+  }
+  const now = Date.now();
+  await execBatch(db, [
+    { sql: "delete from pack_showcase_cards where owner_user_id = ?", args: [ownerUserId] },
+    ...kept.map((key, position) => ({
+      sql: "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, ?, ?, ?)",
+      args: [ownerUserId, position, key, now] as InValue[],
+    })),
+  ]);
+  return kept;
+}
+
 /**
  * Persists a re-mint of one collected card: the skills snapshot (and the tier
  * it implies) for a card collected before snapshots existed, or one whose mint

@@ -447,6 +447,14 @@ export class PackScene {
     this.start();
   }
 
+  /* The back foil is tinted per pack type too, so switching type repaints the
+     same canvas in place and only needs the texture re-uploaded. */
+  markBackArtDirty() {
+    if (this.disposed) return;
+    this.backTexture.needsUpdate = true;
+    this.start();
+  }
+
   setTiltTarget(xDeg: number, yDeg: number) {
     this.tiltTarget = { x: xDeg, y: yDeg };
     this.start();

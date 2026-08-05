@@ -7,11 +7,13 @@ import {
   applyPackCollectionCardMint,
   ensurePackCollectionCardKeys,
   getPackCollectionPoolProgress,
+  getPackShowcase,
   getPackWallet,
   listPackCollectionCards,
   listPackCollectionOwnedCardKeys,
   recyclePackCollectionCards,
   savePackWallet,
+  setPackShowcase,
 } from "../src/features/pack-wallets.js";
 
 let dir = "";
@@ -330,6 +332,73 @@ describe("pack collection pool progress", () => {
       total: 1,
     });
     expect(progress).toEqual({ poolTotal: 1, poolOwnedCount: 1, retiredOwnedCount: 0, offPoolUserIds: [] });
+  });
+});
+
+/* The profile showcase shelf: pins reference collection rows, so the server
+   only ever accepts and serves cards the owner actually holds. */
+describe("pack showcase", () => {
+  function showcaseCard(userId: number, tier: string) {
+    return {
+      userId,
+      username: `player${userId}`,
+      avatarUrl: `https://a.ppy.sh/${userId}`,
+      countryCode: "CR",
+      tier,
+      tierLabel: tier,
+      skills: null,
+      pp: 1000 + userId,
+      globalRank: 10,
+      copies: 1,
+      recycledCopies: 0,
+      firstPulledAt: 100,
+      lastPulledAt: 200,
+    };
+  }
+
+  async function seedCollection(userIds: number[]): Promise<void> {
+    const payload = JSON.stringify({
+      cards: Object.fromEntries(userIds.map((id) => [String(id), showcaseCard(id, "rare")])),
+      shards: 0,
+      shardsSpent: 0,
+      charges: 5,
+      lastRefillAt: 0,
+      openedPacks: 0,
+      poolTotal: null,
+    });
+    await savePackWallet(db, USER_ID, payload, 0, 1000);
+  }
+
+  it("stores pinned keys in order and serves the matching cards", async () => {
+    await seedCollection([41, 42, 43]);
+    const kept = await setPackShowcase(db, USER_ID, ["43", "41"]);
+    expect(kept).toEqual(["43", "41"]);
+    const shelf = await getPackShowcase(db, USER_ID);
+    expect(shelf.map((card) => card.userId)).toEqual([43, 41]);
+    expect(shelf.map((card) => card.cardKey)).toEqual(["43", "41"]);
+  });
+
+  it("drops unowned and malformed keys and caps the shelf at five", async () => {
+    await seedCollection([1, 2, 3, 4, 5, 6, 7]);
+    const kept = await setPackShowcase(db, USER_ID, ["1", "999", "nonsense", "2", "3", "4", "5", "6"]);
+    expect(kept).toEqual(["1", "2", "3", "4", "5"]);
+  });
+
+  it("replaces the shelf wholesale and lets a recycled card fall off", async () => {
+    await seedCollection([41, 42]);
+    await setPackShowcase(db, USER_ID, ["41", "42"]);
+    expect(await setPackShowcase(db, USER_ID, ["42"])).toEqual(["42"]);
+    expect((await getPackShowcase(db, USER_ID)).map((card) => card.userId)).toEqual([42]);
+
+    await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: "42" });
+    expect(await getPackShowcase(db, USER_ID)).toEqual([]);
+  });
+
+  it("keeps shelves per owner", async () => {
+    await seedCollection([41]);
+    await setPackShowcase(db, USER_ID, ["41"]);
+    expect(await getPackShowcase(db, 777)).toEqual([]);
+    expect(await setPackShowcase(db, 777, ["41"])).toEqual([]);
   });
 });
 

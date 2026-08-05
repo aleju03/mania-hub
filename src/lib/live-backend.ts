@@ -2474,3 +2474,4 @@ export async function fetchDiscordShowcase(
   if (options?.fresh) query.set("fresh", "1");
   return fetchLiveJson<DiscordShowcase>(`/api/discord/showcase?${query.toString()}`);
 }
+

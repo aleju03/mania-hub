@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Swords } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { formatOrdinal } from "#/lib/format";
-import { duplicateShardValueForTier, packCardKey, type CollectedCard } from "#/lib/pack-collection";
+import { duplicateShardValueForTier, packCardKey, tierRank, type CollectedCard } from "#/lib/pack-collection";
 import { CountryFlag } from "../ui/CountryFlag";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import type { FlightRect, RevealedCard } from "./RevealStage";
@@ -78,8 +78,18 @@ export function PackSummary({
   flyFrom = null,
 }: PackSummaryProps) {
   const instant = flyFrom !== null;
-  const bestRank = Math.min(...cards.map((card) => card.player.globalRank));
+  /* The ring marks the best card in the hand, which is a tier question before
+     it is a rank one: an honorary card carries no meaningful global rank, so
+     picking by rank alone quietly ringed an ordinary card instead of the GOAT
+     sitting next to it. Rank only breaks ties inside the same tier. */
+  const bestPosition = cards.reduce((best, card, position) => {
+    const candidate = cards[best];
+    const byTier = tierRank(card.tier) - tierRank(candidate.tier);
+    if (byTier !== 0) return byTier > 0 ? position : best;
+    return card.player.globalRank < candidate.player.globalRank ? position : best;
+  }, 0);
   const newCount = cards.filter((card) => card.isNew).length;
+  const dupeCount = cards.length - newCount;
   // What this pack's duplicates recycle into - the loop back to shard packs.
   // A card you already hold recycles at the duplicate rate, not its full tier
   // value, so this has to be the duplicate table or the summary promises more
@@ -164,11 +174,26 @@ export function PackSummary({
 
   return (
     <div className="flex flex-col items-center">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">your pulls</div>
+      {/* What the pack was worth, in figures rather than in a sentence under
+          the grid where it used to sit. */}
+      <div className="flex items-baseline justify-center gap-7 sm:gap-10">
+        <div className="flex items-baseline gap-2">
+          <span className="text-3xl font-black leading-none text-white tabular-nums">{newCount}</span>
+          <span className="text-[12px] text-osu-f1">new</span>
+        </div>
+        {dupeCount > 0 && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black leading-none text-osu-f1 tabular-nums">{dupeCount}</span>
+            <span className="text-[12px] text-osu-f1">
+              duplicate{dupeCount === 1 ? "" : "s"}
+            </span>
+          </div>
+        )}
+      </div>
 
-      <div ref={gridRef} className="mt-5 flex flex-wrap items-start justify-center gap-4 sm:gap-5">
+      <div ref={gridRef} className="mt-7 flex flex-wrap items-start justify-center gap-4 sm:gap-5">
         {cards.map((card, position) => {
-          const isBest = card.player.globalRank === bestRank;
+          const isBest = position === bestPosition;
           const glow = card.glowColor
             ? `rgba(${card.glowColor.r}, ${card.glowColor.g}, ${card.glowColor.b}, 0.55)`
             : "rgba(148, 163, 184, 0.35)";
@@ -317,12 +342,11 @@ export function PackSummary({
             : "Duelling stakes these cards: the winner keeps the loser's."}
         </div>
       )}
-      <div className="mt-3 text-[11px] text-osu-f1">
-        {newCount > 0
-          ? `${newCount} new card${newCount === 1 ? "" : "s"} added to your collection.`
-          : "All duplicates."}
-        {dupeShards > 0 && ` Duplicates worth ${dupeShards} shard${dupeShards === 1 ? "" : "s"} if recycled.`}
-      </div>
+      {dupeShards > 0 && (
+        <div className="mt-3 text-[11px] text-osu-f1 tabular-nums">
+          Those duplicates recycle for {dupeShards} shard{dupeShards === 1 ? "" : "s"}.
+        </div>
+      )}
 
       <CardSpotlight
         target={spotlight}
