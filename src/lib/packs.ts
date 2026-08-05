@@ -156,7 +156,7 @@ export function rollPackRanks(rng: () => number = Math.random, count: number = P
 // progressively tighter top slices of the tracked pool. Within a pack's
 // slice every player has identical odds - rarity always comes from the
 // player's real scores, never from the draw.
-export type PackTypeId = "standard" | "wild" | "elite" | "legend";
+export type PackTypeId = "standard" | "wild" | "4k" | "7k" | "elite" | "legend";
 
 export type PackCost = { kind: "charge" } | { kind: "shards"; amount: number };
 
@@ -166,6 +166,10 @@ export interface PackTypeDef {
   cost: PackCost;
   /* Slice of the pool this pack draws from (1 = the whole pool). */
   topFraction: number;
+  /* Narrows the draw to players whose main keymode this is. The filter lives
+     on the server (the packs pool with ?keys=), so these packs never degrade
+     to the direct osu! rankings draw, which cannot tell mains apart. */
+  keys?: 4 | 7;
   /* Cards dealt per pack. */
   cardCount: number;
   /* Replaces owned pulls with unowned cards from the same slice when possible. */
@@ -222,6 +226,36 @@ export const PACK_TYPES: PackTypeDef[] = [
     honoraryCascadeChance: HONORARY_CASCADE_CHANCE,
     blurb: "Whole pool, new cards first",
     accent: { r: 52, g: 211, b: 153 },
+  },
+  // The keymode pair: the whole pool cut to one main keymode rather than a
+  // top slice, priced between Wild and Elite because what they sell is
+  // targeting, not card quality - within their pool every player still has
+  // identical odds and rarity still comes from real scores.
+  {
+    id: "4k",
+    name: "4K",
+    cost: { kind: "shards", amount: 60 },
+    topFraction: 1,
+    keys: 4,
+    cardCount: PACK_SIZE,
+    guaranteesNew: true,
+    honoraryChance: 0.005,
+    honoraryCascadeChance: HONORARY_CASCADE_CHANCE,
+    blurb: "Main 4K players only",
+    accent: { r: 56, g: 189, b: 248 },
+  },
+  {
+    id: "7k",
+    name: "7K",
+    cost: { kind: "shards", amount: 60 },
+    topFraction: 1,
+    keys: 7,
+    cardCount: PACK_SIZE,
+    guaranteesNew: true,
+    honoraryChance: 0.005,
+    honoraryCascadeChance: HONORARY_CASCADE_CHANCE,
+    blurb: "Main 7K players only",
+    accent: { r: 248, g: 113, b: 113 },
   },
   {
     id: "elite",
@@ -416,20 +450,29 @@ export function liveEntryToPackPlayer(entry: LiveGlobalRankingEntry): PackPlayer
 
 export type PoolPageFetcher = (page: number) => Promise<{ ranking: LiveGlobalRankingEntry[]; total: number }>;
 
-const defaultPoolPageFetcher: PoolPageFetcher = async (page) => {
-  const snapshot = await fetchLiveGlobalRankings({
-    page,
-    pageSize: RANKINGS_PAGE_SIZE,
-    sort: "rank",
-    dir: "desc",
-    pool: "packs",
-  });
-  return { ranking: snapshot.ranking, total: snapshot.total };
-};
+/* Pages of the server's pack pool, optionally narrowed to one main keymode.
+   Every page of a draw must come from the same pool, so the keymode is bound
+   here once rather than threaded through each fetch. */
+function poolPageFetcherFor(keys?: 4 | 7): PoolPageFetcher {
+  return async (page) => {
+    const snapshot = await fetchLiveGlobalRankings({
+      page,
+      pageSize: RANKINGS_PAGE_SIZE,
+      sort: "rank",
+      dir: "desc",
+      pool: "packs",
+      ...(keys ? { keys } : {}),
+    });
+    return { ranking: snapshot.ranking, total: snapshot.total };
+  };
+}
 
 export interface PackDrawOptions {
   /* Draw from the pool's top slice instead of the whole pool (1 = all). */
   topFraction?: number;
+  /* Draw only players whose main keymode this is (server-filtered pool).
+     Implies poolOnly: the direct osu! rankings fallback cannot honour it. */
+  keys?: 4 | 7;
   /* Cards to draw (defaults to PACK_SIZE). */
   count?: number;
   /* Chance (0-1) that one slot becomes a random honorary player. */
@@ -667,24 +710,25 @@ export function applyHonoraryHit(
    shard-bought pack types. */
 export async function drawPackPlayersFromPool(
   rng: () => number = Math.random,
-  fetchPage: PoolPageFetcher = defaultPoolPageFetcher,
+  fetchPage?: PoolPageFetcher,
   options: PackDrawOptions = {},
 ): Promise<PackDraw> {
-  const head = await fetchPage(1);
+  const fetchPoolPage = fetchPage ?? poolPageFetcherFor(options.keys);
+  const head = await fetchPoolPage(1);
   const total = Math.max(head.total, head.ranking.length);
   if (total < 100) throw new Error("Tracked player pool is too small for packs.");
   const drawTotal = poolSliceSize(total, options.topFraction ?? 1);
   const positions = rollUniformPositions(drawTotal, options.count ?? PACK_SIZE, rng);
   const pages = [...new Set(positions.map(rankToPage))];
   const responses = await Promise.all(
-    pages.map(async (page) => (page === 1 ? head : await fetchPage(page))),
+    pages.map(async (page) => (page === 1 ? head : await fetchPoolPage(page))),
   );
   const pagesByNumber = new Map(pages.map((page, index) => [page, responses[index]?.ranking ?? []]));
   const entries = pickPackEntries(positions, pagesByNumber, rng);
   if (entries.length === 0) throw new Error("No players available for this pack.");
 
   if (options.ownedUserIds && options.ownedUserIds.size > 0) {
-    await replaceOwnedPoolEntries(entries, pagesByNumber, head, fetchPage, drawTotal, options.ownedUserIds, rng);
+    await replaceOwnedPoolEntries(entries, pagesByNumber, head, fetchPoolPage, drawTotal, options.ownedUserIds, rng);
   }
 
   const players = sortIntoRevealOrder(entries.map(liveEntryToPackPlayer));
@@ -705,17 +749,20 @@ export async function drawPackPlayers(
   options: PackDrawOptions = {},
 ): Promise<PackDraw> {
   const needsDuplicateProtection = Boolean(options.ownedUserIds && options.ownedUserIds.size > 0);
+  // A keymode draw is pool-only whether asked or not: the fallback would deal
+  // players of any keymode into a pack that promised one.
+  const poolOnly = Boolean(options.poolOnly) || options.keys != null;
   if (isLiveBackendConfigured()) {
     try {
-      return await drawPackPlayersFromPool(rng, defaultPoolPageFetcher, options);
+      return await drawPackPlayersFromPool(rng, undefined, options);
     } catch (error) {
       if (needsDuplicateProtection) throw new Error("Duplicate-protected packs require the tracked player pool.");
-      if (options.poolOnly) throw error;
+      if (poolOnly) throw error;
       // Backend hiccup: degrade to the direct osu! rankings draw below.
     }
   }
   if (needsDuplicateProtection) throw new Error("Duplicate-protected packs require the tracked player pool.");
-  if (options.poolOnly) throw new Error("This draw requires the tracked player pool.");
+  if (poolOnly) throw new Error("This draw requires the tracked player pool.");
   const players = await drawPackPlayersFromOsuApi(rng, options.count ?? PACK_SIZE);
   return {
     players: applyHonoraryHit(

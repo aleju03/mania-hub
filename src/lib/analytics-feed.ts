@@ -94,6 +94,8 @@ const ANALYTICS_MAPS_TAB_LABELS: Record<string, string> = {
 const ANALYTICS_PACK_TYPE_LABELS: Record<string, string> = {
   standard: "Standard",
   wild: "Wild",
+  "4k": "4K",
+  "7k": "7K",
   elite: "Elite",
   legend: "Legend",
 };

@@ -311,7 +311,7 @@ export interface PackPullRecordCard {
 export const recordServerPackPulls = createServerFn({ method: "POST" })
   .validator((input: { packType?: unknown; cards?: unknown }) => {
     const packType =
-      typeof input?.packType === "string" && /^[a-z_]{1,24}$/.test(input.packType) ? input.packType : null;
+      typeof input?.packType === "string" && /^[a-z0-9_]{1,24}$/.test(input.packType) ? input.packType : null;
     const cards: PackPullRecordCard[] = (Array.isArray(input?.cards) ? input.cards : [])
       .slice(0, 10)
       .map((raw: unknown) => {

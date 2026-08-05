@@ -25,7 +25,7 @@ function random01(value: number) {
 /* What the foil does behind the medallion. The packs are told apart at
    selector-thumbnail size (76px wide), where a tint alone is not enough, so
    each type gets its own field treatment as well as its own colour. */
-export type PackMotif = "triangles" | "scatter" | "rays" | "burst";
+export type PackMotif = "triangles" | "scatter" | "lanes4" | "lanes7" | "rays" | "burst";
 
 export interface PackArtStyle {
   accent: { r: number; g: number; b: number };
@@ -46,6 +46,8 @@ export interface PackArtStyle {
 const PACK_ART_RECIPES: Record<PackTypeId, { motif: PackMotif; rank: number }> = {
   standard: { motif: "triangles", rank: 1 },
   wild: { motif: "scatter", rank: 2 },
+  "4k": { motif: "lanes4", rank: 2 },
+  "7k": { motif: "lanes7", rank: 2 },
   elite: { motif: "rays", rank: 3 },
   legend: { motif: "burst", rank: 4 },
 };
@@ -64,7 +66,8 @@ export function packArtStyleFor(type: PackTypeDef): PackArtStyle {
     accent: type.accent,
     name: type.name.toUpperCase(),
     cardCount: type.cardCount,
-    poolLabel: poolLabelFor(type.topFraction),
+    // A keymode pack's terms are who it deals, not how deep it deals.
+    poolLabel: type.keys ? `${type.keys}K MAINS` : poolLabelFor(type.topFraction),
     rank: recipe.rank,
     motif: recipe.motif,
   };
@@ -347,6 +350,12 @@ function drawMotif(
     case "scatter":
       drawTriangleScatter(context, width, height, style.accent);
       return;
+    case "lanes4":
+      drawLanes(context, width, height, style.accent, 4);
+      return;
+    case "lanes7":
+      drawLanes(context, width, height, style.accent, 7);
+      return;
     case "rays":
       drawRays(context, width, height, style.accent, emblemY, 20, 0.075);
       return;
@@ -394,6 +403,38 @@ function drawTriangleScatter(context: CanvasRenderingContext2D, width: number, h
     });
   }
   fillTriangles(context, triangles);
+}
+
+/* The keymode packs' field: the playfield itself. Full-height lanes with a
+   quiet fall of notes, so a 4K and a 7K pack read differently at thumbnail
+   size even before the printed name does - four wide columns against seven
+   narrow ones. Alphas stay in the same whisper range as the other motifs. */
+function drawLanes(context: CanvasRenderingContext2D, width: number, height: number, accent: Rgb, laneCount: number) {
+  const accentSoft = mixRgb(accent, WHITE, 0.4);
+  const laneWidth = width / laneCount;
+  for (let lane = 0; lane < laneCount; lane += 1) {
+    const x = lane * laneWidth;
+    // Alternating lane tint, then separators, so the columns exist even where
+    // no note happens to sit.
+    context.fillStyle = lane % 2 === 0 ? rgba(accent, 0.028) : "rgba(255, 255, 255, 0.018)";
+    context.fillRect(x, 0, laneWidth, height);
+    if (lane > 0) {
+      context.fillStyle = "rgba(255, 255, 255, 0.05)";
+      context.fillRect(x - 1, 0, 2, height);
+    }
+    // A loose fall of notes per lane; the seed keeps the print stable.
+    const noteHeight = Math.max(18, laneWidth * 0.24);
+    const noteInset = laneWidth * 0.14;
+    const notes = 3 + Math.floor(random01(lane * 5.31) * 3);
+    for (let note = 0; note < notes; note += 1) {
+      const seed = lane * 17.23 + note * 6.47;
+      const y = random01(seed) * (height - noteHeight);
+      const tone = random01(seed + 3.9);
+      const alpha = 0.05 + random01(seed + 9.2) * 0.07;
+      context.fillStyle = tone > 0.7 ? rgba(WHITE, alpha * 0.7) : rgba(tone > 0.35 ? accent : accentSoft, alpha);
+      context.fillRect(x + noteInset, y, laneWidth - noteInset * 2, noteHeight);
+    }
+  }
 }
 
 function fillTriangles(

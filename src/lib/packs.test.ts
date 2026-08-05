@@ -352,6 +352,33 @@ describe("tracked pool draws", () => {
     expect(getRankings).not.toHaveBeenCalled();
   });
 
+  it("binds a keymode draw to the keys-filtered pool pages", async () => {
+    const total = 800;
+    vi.mocked(fetchLiveGlobalRankings).mockImplementation(async (options) => {
+      const params = typeof options === "number" || options == null ? { page: 1 } : options;
+      expect(params).toMatchObject({ pool: "packs", keys: 4 });
+      const page = params.page ?? 1;
+      const first = (page - 1) * RANKINGS_PAGE_SIZE + 1;
+      const count = Math.max(0, Math.min(RANKINGS_PAGE_SIZE, total - first + 1));
+      return {
+        ranking: Array.from({ length: count }, (_, index) => makePoolEntry(first + index)),
+        total,
+        page,
+        pageSize: RANKINGS_PAGE_SIZE,
+        fetchedAt: Date.now(),
+      };
+    });
+    const { players } = await drawPackPlayers(mulberry32(11), { keys: 4 });
+    expect(players).toHaveLength(PACK_SIZE);
+  });
+
+  it("never degrades a keymode draw to the osu! rankings, which cannot tell mains apart", async () => {
+    vi.mocked(fetchLiveGlobalRankings).mockRejectedValue(new Error("backend down"));
+    vi.mocked(getRankings).mockClear();
+    await expect(drawPackPlayers(mulberry32(5), { keys: 7 })).rejects.toThrow();
+    expect(getRankings).not.toHaveBeenCalled();
+  });
+
   it("still degrades to the osu! draw for an ordinary pack", async () => {
     // The opposite case, and the reason poolOnly exists: a paid pack owes the
     // viewer cards, so it does fall back.
@@ -503,6 +530,15 @@ describe("pack type lineup", () => {
     // Every shard pack protects against duplicates; Standard stays random.
     for (const type of shardPacks) expect(type.guaranteesNew).toBe(true);
     expect(packTypeById("standard").guaranteesNew).toBeUndefined();
+  });
+
+  it("keeps the keymode filter on exactly the keymode packs", () => {
+    expect(packTypeById("4k").keys).toBe(4);
+    expect(packTypeById("7k").keys).toBe(7);
+    for (const type of PACK_TYPES) {
+      if (type.id === "4k" || type.id === "7k") continue;
+      expect(type.keys).toBeUndefined();
+    }
   });
 });
 

@@ -1867,6 +1867,9 @@ export interface LiveGlobalRankingsParams {
   /* "packs" asks for the card-pack draw pool: the ranked board with manual
      opt-in roster members merged in by pp. Leaderboard surfaces omit it. */
   pool?: "packs";
+  /* With pool "packs", narrows the pool to main-4K or main-7K players (the
+     backend classifies from variant pp, falling back to farmed key stats). */
+  keys?: 4 | 7;
 }
 
 // The combined leaderboard across every tracked country's roster, ranked by pp.
@@ -1879,6 +1882,7 @@ export async function fetchLiveGlobalRankings(options: number | LiveGlobalRankin
     dir: params.dir === "asc" ? "asc" : "desc",
   });
   if (params.pool) query.set("pool", params.pool);
+  if (params.pool && params.keys) query.set("keys", String(params.keys));
   const snapshot = await fetchLiveJson<Record<string, unknown>>(
     `/api/snapshots/global-rankings?${query.toString()}`,
   );

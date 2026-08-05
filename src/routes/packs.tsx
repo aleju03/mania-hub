@@ -272,7 +272,8 @@ function PackTypeSelector({
 }) {
   return (
     <div>
-      <div className="flex items-start justify-center gap-3 sm:gap-5">
+      {/* wrap: six pack types no longer fit one row on phone widths */}
+      <div className="flex flex-wrap items-start justify-center gap-3 sm:gap-5">
         {PACK_TYPES.map((type) => {
           const selected = type.id === selectedId;
           const affordable = canAffordPack(wallet, type);
@@ -474,6 +475,7 @@ function PacksPage() {
         const owned = await getDuplicateProtectionOwned(type, currentWallet, walletApi.syncStatus);
         const draw = await drawPackPlayers(Math.random, {
           topFraction: type.topFraction,
+          keys: type.keys,
           count: type.cardCount,
           honoraryChance: devForceGoatPull() ? 1 : type.honoraryChance,
           honoraryCascadeChance: type.honoraryCascadeChance,
@@ -481,7 +483,9 @@ function PacksPage() {
           ownedGoatUserIds: owned?.ownedGoatUserIds,
         });
         if (cancelled) return;
-        walletApi.notePoolTotal(draw.poolTotal);
+        // poolTotal feeds collection progress over the WHOLE pool; a keymode
+        // draw reports only its filtered slice, so it must not overwrite it.
+        if (!type.keys) walletApi.notePoolTotal(draw.poolTotal);
         if (isLiveBackendConfigured()) {
           void warmLivePackPlayers(draw.players.map((player) => player.user.id)).catch(() => {});
         }

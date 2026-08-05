@@ -3,6 +3,7 @@ import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { errorContext, logWarn } from "../logger.js";
+import { readFarmHelperKeyStatsForUsers } from "./farm-helper-key-stats.js";
 
 const SNAPSHOT_TARGET_TOLERANCE_MS = 36 * 60 * 60 * 1000;
 const GLOBAL_RANKINGS_MAX_PAGE_SIZE = 50;
@@ -46,6 +47,8 @@ export interface GlobalRankingsSnapshot {
 export type GlobalRankingsSort = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 export type GlobalRankingsSortDirection = "asc" | "desc";
 
+export type PackPoolKeymode = 4 | 7;
+
 export interface GlobalRankingsQuery {
   page?: number;
   pageSize?: number;
@@ -55,6 +58,10 @@ export interface GlobalRankingsQuery {
      opt-in roster members merged in by pp. Leaderboard reads omit it and stay
      ranked-only. */
   pool?: "packs";
+  /* With pool "packs", narrows the pool to players whose main keymode this is
+     (see readMainKeymodes). Players whose keymode is unknown are in neither
+     keymode pool. Ignored off the packs pool. */
+  keys?: PackPoolKeymode;
 }
 
 export async function getCountryRankingsSnapshot(
@@ -419,6 +426,89 @@ export async function getPackPoolMembership(db: Db): Promise<{ userIds: Set<numb
   return { userIds: new Set(board.entries.map((entry) => entry.user.id)), total: board.entries.length };
 }
 
+// The keymode packs ("main 4K players only") are the pack pool narrowed to one
+// main keymode and renumbered. Unlike the manual-member merge above, a failed
+// build must NOT degrade to the unfiltered pool: a 4K pack dealing a 7K main
+// breaks the pack's one promise, so errors propagate and the draw fails.
+const PACK_KEYMODE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+const packKeymodeCacheByDb = new WeakMap<Db, Map<PackPoolKeymode, PackPoolMemory>>();
+const packKeymodeBuildByDb = new WeakMap<Db, Map<PackPoolKeymode, Promise<GlobalBoardCache>>>();
+
+/* Main keymode per player: the higher variant pp (users.pp_4k / pp_7k, from
+   osu! profile variants) when the two differ, else the higher per-keymode
+   farmed weighted pp (farm_helper_user_key_stats) for players whose profiles
+   were never variant-enriched. A player with no signal in either source is
+   deliberately absent from the map: better to leave them out of both keymode
+   pools than to guess. */
+async function readMainKeymodes(db: Db, userIds: number[]): Promise<Map<number, PackPoolKeymode>> {
+  const variants = new Map<number, { pp4: number; pp7: number }>();
+  for (let i = 0; i < userIds.length; i += 900) {
+    const chunk = userIds.slice(i, i + 900);
+    if (chunk.length === 0) continue;
+    const rows = (await exec(
+      db,
+      `select user_id, pp_4k, pp_7k from users
+       where user_id in (${chunk.map(() => "?").join(",")})
+         and (pp_4k is not null or pp_7k is not null)`,
+      chunk,
+    )).rows;
+    for (const row of rows) {
+      variants.set(Number(row.user_id), { pp4: Number(row.pp_4k) || 0, pp7: Number(row.pp_7k) || 0 });
+    }
+  }
+  const farmed4 = await readFarmHelperKeyStatsForUsers(db, 4, userIds);
+  const farmed7 = await readFarmHelperKeyStatsForUsers(db, 7, userIds);
+
+  const mains = new Map<number, PackPoolKeymode>();
+  for (const userId of userIds) {
+    const variant = variants.get(userId);
+    if (variant && variant.pp4 !== variant.pp7) {
+      mains.set(userId, variant.pp4 > variant.pp7 ? 4 : 7);
+      continue;
+    }
+    const weighted4 = farmed4.get(userId)?.weightedPp ?? 0;
+    const weighted7 = farmed7.get(userId)?.weightedPp ?? 0;
+    if (weighted4 !== weighted7) mains.set(userId, weighted4 > weighted7 ? 4 : 7);
+  }
+  return mains;
+}
+
+async function buildPackKeymodeBoard(db: Db, pool: GlobalBoardCache, keys: PackPoolKeymode): Promise<GlobalBoardCache> {
+  const mains = await readMainKeymodes(db, pool.entries.map((entry) => entry.user.id));
+  // Renumbered like the manual merge: draws roll uniform positions in
+  // [1, total], so pool positions must be dense within the filtered board.
+  const entries = pool.entries
+    .filter((entry) => mains.get(entry.user.id) === keys)
+    .map((entry, index) => (entry.rank === index + 1 ? entry : { ...entry, rank: index + 1 }));
+  return { entries, builtAt: pool.builtAt };
+}
+
+async function getPackKeymodeBoard(db: Db, keys: PackPoolKeymode): Promise<GlobalBoardCache> {
+  const pool = await getPackPoolBoard(db);
+  const cached = packKeymodeCacheByDb.get(db)?.get(keys);
+  if (cached && cached.boardBuiltAt === pool.builtAt && Date.now() - cached.checkedAt < PACK_KEYMODE_CACHE_TTL_MS) {
+    return cached.board;
+  }
+  let builds = packKeymodeBuildByDb.get(db);
+  if (!builds) packKeymodeBuildByDb.set(db, (builds = new Map()));
+  let build = builds.get(keys);
+  if (!build) {
+    build = buildPackKeymodeBoard(db, pool, keys)
+      .then((board) => {
+        let caches = packKeymodeCacheByDb.get(db);
+        if (!caches) packKeymodeCacheByDb.set(db, (caches = new Map()));
+        caches.set(keys, { board, boardBuiltAt: pool.builtAt, checkedAt: Date.now() });
+        return board;
+      })
+      .finally(() => {
+        builds?.delete(keys);
+      });
+    builds.set(keys, build);
+  }
+  return build;
+}
+
 // The Global leaderboard is the union of every tracked country's roster, ranked
 // by mania pp. Because the warmed rosters span the top mania countries, this is
 // effectively the real global mania top-N (limited to players we track).
@@ -427,7 +517,11 @@ export async function getGlobalRankingsSnapshot(db: Db, query: GlobalRankingsQue
   const pageSize = Math.max(1, Math.min(GLOBAL_RANKINGS_MAX_PAGE_SIZE, Math.floor(query.pageSize ?? 50) || 50));
   const sort = query.sort ?? "rank";
   const dir = query.dir ?? "desc";
-  const board = query.pool === "packs" ? await getPackPoolBoard(db) : await getGlobalBoard(db);
+  const board = query.pool === "packs"
+    ? query.keys
+      ? await getPackKeymodeBoard(db, query.keys)
+      : await getPackPoolBoard(db)
+    : await getGlobalBoard(db);
   const sortedEntries = sortGlobalRankingEntries(board.entries, sort, dir);
   const start = (page - 1) * pageSize;
   // Clones, not the cached rows: accent enrichment mutates response objects in

@@ -4965,6 +4965,7 @@ function parseGlobalRankingsQuery(params: URLSearchParams): {
   sort: GlobalRankingsSort;
   dir: "asc" | "desc";
   pool?: "packs";
+  keys?: 4 | 7;
 } {
   const rawSort = params.get("sort");
   const sort: GlobalRankingsSort =
@@ -4984,7 +4985,18 @@ function parseGlobalRankingsQuery(params: URLSearchParams): {
     pageSize: clampInteger(params.get("pageSize") ?? params.get("limit"), 1, 50, 50),
     sort,
     dir: params.get("dir") === "asc" ? "asc" : "desc",
-    ...(params.get("pool") === "packs" ? { pool: "packs" as const } : {}),
+    // keys narrows the packs pool to one main keymode; it means nothing on
+    // leaderboard reads, so it only parses alongside pool=packs.
+    ...(params.get("pool") === "packs"
+      ? {
+          pool: "packs" as const,
+          ...(params.get("keys") === "4"
+            ? { keys: 4 as const }
+            : params.get("keys") === "7"
+              ? { keys: 7 as const }
+              : {}),
+        }
+      : {}),
   };
 }
 

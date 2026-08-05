@@ -430,7 +430,7 @@ export function normalizeDuelId(value: unknown): string | null {
 }
 
 function normalizePackType(value: unknown): string | null {
-  return typeof value === "string" && /^[a-z_]{1,24}$/.test(value) ? value : null;
+  return typeof value === "string" && /^[a-z0-9_]{1,24}$/.test(value) ? value : null;
 }
 
 interface DuelRowState {

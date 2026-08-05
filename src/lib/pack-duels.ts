@@ -127,7 +127,7 @@ async function postDuel(path: string, body: Record<string, unknown>): Promise<Pa
 export const createPackDuel = createServerFn({ method: "POST" })
   .validator((input: { packType?: unknown; cards?: unknown }) => {
     const packType =
-      typeof input?.packType === "string" && /^[a-z_]{1,24}$/.test(input.packType) ? input.packType : null;
+      typeof input?.packType === "string" && /^[a-z0-9_]{1,24}$/.test(input.packType) ? input.packType : null;
     if (!packType) throw new Error("Invalid duel request.");
     return { packType, cards: validateCards(input?.cards, PACK_DUEL_MAX_CARDS) };
   })
