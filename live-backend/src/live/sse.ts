@@ -121,8 +121,17 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
   return true;
 }
 
+// Live events are dispatched as one shared object to every subscriber, so the
+// serialized SSE frame is cached per event: one stringify per event instead of
+// one per connected client. Hello/replay events are per-connection objects and
+// just pass through the miss path.
+const frameCache = new WeakMap<object, string>();
+
 function writeEvent(res: ServerResponse, event: Pick<LiveEvent, "type" | "sequence" | "payload">): void {
-  res.write(`id: ${event.sequence}\n`);
-  res.write(`event: ${event.type}\n`);
-  res.write(`data: ${JSON.stringify(event.payload)}\n\n`);
+  let frame = frameCache.get(event);
+  if (frame == null) {
+    frame = `id: ${event.sequence}\nevent: ${event.type}\ndata: ${JSON.stringify(event.payload)}\n\n`;
+    frameCache.set(event, frame);
+  }
+  res.write(frame);
 }
