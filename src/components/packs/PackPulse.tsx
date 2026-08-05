@@ -37,14 +37,30 @@ const FEED_LIMIT = 20;
 const ENTRY_TTL_MS = 75_000;
 // Backlog placed instantly on the first poll to give the rail a starting
 // state. These are old pulls, so they never animate; see RailEntry.instant.
-const SEED_COUNT = 15;
+const SEED_COUNT = 5;
 // Entries fade out in place, so however many retire in one sweep tick is how
-// far the survivors below them travel. Fifteen seeds placed in one frame (or a
-// burst dripped in at 80ms apart) would share a tick and drop the rail by the
-// whole stack at once. Keeping retirements more than one sweep tick apart means
-// one entry leaves at a time and the trip below it is a single row.
+// far the survivors below them travel. A batch of seeds placed in one frame
+// (or a burst dripped in at 80ms apart) would share a tick and drop the rail
+// by the whole stack at once. Keeping retirements more than one sweep tick
+// apart means one entry leaves at a time and the trip below it is a single row.
 const RETIRE_STAGGER_MS = 2_000;
-const MAX_VISIBLE = 15;
+/* How tall the rail is allowed to get. It grows downward from under the
+   header, so the honest limit is the window itself: the cap is however many
+   entries fit above the bottom of the screen, re-measured on resize. The
+   ceiling keeps a tall monitor from turning the page edge into a wall of
+   text, the floor keeps a short one reading as a feed. */
+// The rail's top offset plus the caption, which is where entries really begin.
+const RAIL_TOP_PX = 102;
+const RAIL_BOTTOM_GAP_PX = 72;
+// A 24px avatar in a py-1 row, plus the column's 8px gap.
+const RAIL_ROW_PX = 40;
+// Lands the bottom around the middle of the pack shelf on a laptop window.
+const MAX_VISIBLE_CEILING = 16;
+const MIN_VISIBLE = 4;
+function visibleCapForViewport(windowHeight: number): number {
+  const usable = windowHeight - RAIL_TOP_PX - RAIL_BOTTOM_GAP_PX;
+  return Math.max(MIN_VISIBLE, Math.min(MAX_VISIBLE_CEILING, Math.floor(usable / RAIL_ROW_PX)));
+}
 // The drip: buffered pulls enter one at a time so nothing lands in the same
 // frame, but the rhythm follows the backlog on purpose. A clump rushes in as
 // a rapid burst (that energy is the point), a pair rolls in quick, a lone
@@ -108,6 +124,54 @@ export function refreshPackPulseFeed(): void {
   pollFeedNow?.();
 }
 
+/* Admin-only rail rehearsal: fake pulls pushed straight into the drip queue
+   to watch the animation behave under a fast global inflow without waiting
+   for real traffic. Ids count down from -1 so they can never collide with a
+   real pull, are trivially recognizable, and get stripped from the
+   sessionStorage snapshot on save. */
+let simPullId = 0;
+const SIM_TIERS: Array<string | null> = [
+  null,
+  "common",
+  "common",
+  "rare",
+  "elite",
+  "superRare",
+  "ultraRare",
+  "legendary",
+  "mythic",
+  "ascendant",
+  "worldClass",
+  "goat",
+];
+/* Drops every simulated pull still waiting in the drip queue and out of the
+   saved rail, so stopping the sim cannot leave fakes to trickle in later or
+   survive into a restore. */
+function purgeSimulatedPulls(): void {
+  for (let index = pullQueue.length - 1; index >= 0; index -= 1) {
+    if (pullQueue[index].id < 0) pullQueue.splice(index, 1);
+  }
+  savedRailEntries = savedRailEntries.filter((entry) => entry.pull.id > 0);
+}
+
+function pushSimulatedPull(): void {
+  simPullId -= 1;
+  pullQueue.push({
+    id: simPullId,
+    ownerUserId: 2,
+    ownerUsername: "simulator",
+    cardUserId: 2,
+    cardUsername: `simmed pull ${-simPullId}`,
+    cardCountryCode: "CR",
+    cardAvatarUrl: null,
+    tier: SIM_TIERS[Math.floor(Math.random() * SIM_TIERS.length)] ?? null,
+    packType: "standard",
+    isNew: false,
+    isFirstGlobal: Math.random() < 0.12,
+    pulledAt: Date.now(),
+  });
+}
+
 function restoreFeedStateOnce(): void {
   if (feedStateRestored || typeof window === "undefined") return;
   feedStateRestored = true;
@@ -125,8 +189,15 @@ function restoreFeedStateOnce(): void {
     }
     feedSeeded = parsed.seeded === true;
     const now = Date.now();
-    savedRailEntries = (parsed.entries ?? []).filter((entry) => entry?.pull && entry.expiresAt > now);
-    pullQueue.push(...(parsed.queue ?? []).filter((pull) => pull && Number.isFinite(pull.id)));
+    savedRailEntries = (parsed.entries ?? [])
+      .filter((entry) => entry?.pull && entry.expiresAt > now)
+      .slice(0, MAX_VISIBLE_CEILING);
+    const restoredIds = new Set(savedRailEntries.map((entry) => entry.pull.id));
+    for (const pull of parsed.queue ?? []) {
+      if (!pull || !Number.isFinite(pull.id) || restoredIds.has(pull.id)) continue;
+      restoredIds.add(pull.id);
+      pullQueue.push(pull);
+    }
   } catch {
     // Corrupt or unavailable storage: start the session fresh.
   }
@@ -139,8 +210,10 @@ function saveFeedState(): void {
       JSON.stringify({
         seenIds: [...seenPullIds].slice(-200),
         seeded: feedSeeded,
-        entries: savedRailEntries,
-        queue: pullQueue,
+        // Simulated pulls (negative ids) are an admin toy for this page view;
+        // they never survive into the snapshot.
+        entries: savedRailEntries.filter((entry) => entry.pull.id > 0),
+        queue: pullQueue.filter((pull) => pull.id > 0),
       }),
     );
   } catch {
@@ -182,9 +255,12 @@ function PulledStatsLine({ stats }: { stats: LivePackPulledStats }) {
 }
 
 export function PackPulse({ viewerId, revealing = false }: { viewerId: number | null; revealing?: boolean }) {
-  // The collector list is an admin-only prototype for now; the fun fact
-  // itself stays visible to everyone.
-  const canSeeCollectors = canUseAdminFeatures(useAuth());
+  // Admins get the collector list (a prototype; the fun fact itself stays
+  // visible to everyone) and the rail's inflow simulator.
+  const isAdmin = canUseAdminFeatures(useAuth());
+  // While on, a timer keeps the drip queue topped up with fake pulls so the
+  // rail runs at its fast-burst pace.
+  const [simulating, setSimulating] = useState(false);
 
   // Resume from the saved rail, dropping whatever expired while away. On a
   // full page load this is empty (matching the server-rendered HTML); the
@@ -201,6 +277,9 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
   // ref so the drip and the sweep can read it without restarting their timers.
   const hoverPausedAtRef = useRef<number | null>(null);
   const resumeTimerRef = useRef<number | null>(null);
+  // How many entries fit above the bottom of the window. A ref for the same
+  // reason: the drip reads it every tick and must not restart on a resize.
+  const maxVisibleRef = useRef(MAX_VISIBLE_CEILING);
 
   const setEntries = useCallback((updater: (current: RailEntry[]) => RailEntry[]) => {
     setEntriesState((current) => {
@@ -242,6 +321,20 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
   );
 
   useEffect(() => {
+    const measure = () => {
+      const cap = visibleCapForViewport(window.innerHeight);
+      if (cap === maxVisibleRef.current) return;
+      maxVisibleRef.current = cap;
+      // Shrinking the window drops the entries that no longer fit; growing it
+      // just leaves room the next pulls will fill.
+      setEntries((current) => (current.length > cap ? current.slice(0, cap) : current));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [setEntries]);
+
+  useEffect(() => {
     restoreFeedStateOnce();
     const alive = savedRailEntries
       .filter((entry) => entry.expiresAt > Date.now())
@@ -268,9 +361,15 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
       void fetchLivePackRecentPulls(FEED_LIMIT, { includeAll: true })
         .then((pulls) => {
           if (cancelled) return;
-          const fresh = pulls.filter((pull) => !seenPullIds.has(pull.id));
           const wasSeeded = feedSeeded;
-          for (const pull of pulls) seenPullIds.add(pull.id);
+          // Marking each id seen as it is accepted also drops a duplicate id
+          // inside one response, which a plain filter-then-mark would let
+          // through as two rail entries sharing a React key.
+          const fresh = pulls.filter((pull) => {
+            if (!Number.isFinite(pull?.id) || seenPullIds.has(pull.id)) return false;
+            seenPullIds.add(pull.id);
+            return true;
+          });
           feedSeeded = true;
           if (!wasSeeded) {
             // The first poll of the session fills the rail with a taste of
@@ -286,7 +385,13 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                 instant: true,
               }));
             if (seeds.length > 0) {
-              setEntries((current) => [...current, ...seeds].slice(0, MAX_VISIBLE));
+              setEntries((current) => {
+                // Belt and braces against duplicate React keys: whatever is
+                // already on the rail wins over an incoming seed of the same
+                // pull.
+                const have = new Set(current.map((entry) => entry.pull.id));
+                return [...current, ...seeds.filter((seed) => !have.has(seed.pull.id))].slice(0, maxVisibleRef.current);
+              });
             }
             return;
           }
@@ -330,14 +435,19 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
         // The newest entry outlives everything already on the rail, and by
         // enough that it does not share a sweep tick with the one before it.
         // Capped at a full rail's worth of spacing, so a long fast stream (which
-        // evicts from the bottom on MAX_VISIBLE anyway) cannot push retirement
+        // evicts from the bottom on the visible cap anyway) cannot push retirement
         // minutes past the TTL and leave a stale rail once it goes quiet.
         const lastOut = current.reduce((latest, entry) => Math.max(latest, entry.expiresAt), 0);
         const expiresAt = Math.min(
           Math.max(now + ENTRY_TTL_MS, lastOut + RETIRE_STAGGER_MS),
-          now + ENTRY_TTL_MS + MAX_VISIBLE * RETIRE_STAGGER_MS,
+          now + ENTRY_TTL_MS + MAX_VISIBLE_CEILING * RETIRE_STAGGER_MS,
         );
-        return [{ pull, expiresAt }, ...current].slice(0, MAX_VISIBLE);
+        // Same pull already on the rail (however it got there): replace it
+        // instead of rendering two children under one React key.
+        return [{ pull, expiresAt }, ...current.filter((entry) => entry.pull.id !== pull.id)].slice(
+          0,
+          maxVisibleRef.current,
+        );
       });
     }, DRIP_TICK_MS);
     const sweepInterval = window.setInterval(() => {
@@ -362,6 +472,24 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
   }, [documentVisible, setEntries]);
 
   useEffect(() => {
+    if (!simulating) return;
+    const interval = window.setInterval(() => {
+      // Keep the backlog deep enough for the drip's fastest cadence without
+      // letting an unwatched toggle grow the queue unbounded.
+      if (pullQueue.length < 12) pushSimulatedPull();
+    }, 120);
+    return () => {
+      window.clearInterval(interval);
+      // Stopping is immediate. Without this the rail would keep ticking for a
+      // while after the button says "sim pulls" again: a dozen fake pulls are
+      // still queued, and the ones already placed hold their slot for the full
+      // entry TTL. Both go now, so the rail drops straight back to real pulls.
+      purgeSimulatedPulls();
+      setEntries((current) => current.filter((entry) => entry.pull.id > 0));
+    };
+  }, [simulating, setEntries]);
+
+  useEffect(() => {
     if (!viewerId || !isLiveBackendConfigured()) {
       setPulledStats(null);
       return;
@@ -383,101 +511,121 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
     <>
       {/* Live pull ticker, top left. No boxes or glows: floating avatar +
           text, tier carried by the avatar ring and the tier word alone. */}
-      <div
-        className="pointer-events-none absolute left-12 top-[84px] z-20 hidden w-[190px] flex-col gap-2 min-[1450px]:flex"
-        onMouseEnter={pauseRail}
-        onMouseLeave={resumeRail}
-        onFocusCapture={pauseRail}
-        onBlurCapture={resumeRail}
-      >
-        {/* Exits stay in the flow and fade in place, so the entries below them
-            drift rather than snap. What made that drift huge was entries
-            retiring in batches (see SEED_STAGGER_MS): one at a time, the trip
-            is a single row. */}
-        <AnimatePresence initial={false}>
-          {entries.length > 0 && (
-            <motion.div
-              key="caption"
-              className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-osu-f1/50"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.4 }}
-            >
-              <span className="relative flex h-1 w-1">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-osu-pink opacity-50" />
-                <span className="relative inline-flex h-1 w-1 rounded-full bg-osu-pink" />
-              </span>
-              recent global pulls
-            </motion.div>
-          )}
-          {entries.map(({ pull, instant }) => {
-            const notable = pull.isFirstGlobal || (pull.tier !== null && NOTABLE_TIERS.has(pull.tier));
-            const style = tierStyle(pull.tier);
-            const accent = tierAccentRgb(pull.tier);
-            return (
+      <div className="pointer-events-none absolute left-12 top-[84px] z-20 hidden w-[190px] flex-col gap-2 min-[1450px]:flex">
+        {/* Above the feed and outside the pause zone below, on purpose: the
+            list grows and shrinks constantly under a sim, so a toggle sitting
+            under it would slide away from the cursor, and hovering it at all
+            would freeze the rail you are trying to watch. */}
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setSimulating((on) => !on)}
+            className={`pointer-events-auto self-start text-[9px] font-semibold uppercase tracking-[0.14em] transition-colors cursor-pointer ${
+              simulating ? "text-osu-pink" : "text-osu-f1/40 hover:text-osu-f1"
+            }`}
+            title="Admin: flood the rail with fake pulls to preview the animation"
+            aria-pressed={simulating}
+          >
+            {simulating ? "stop sim" : "sim pulls"}
+          </button>
+        )}
+        <div
+          className="flex flex-col gap-2"
+          onMouseEnter={pauseRail}
+          onMouseLeave={resumeRail}
+          onFocusCapture={pauseRail}
+          onBlurCapture={resumeRail}
+        >
+          {/* Retiring entries pop out of the flow rather than fading in place:
+              in place they keep their row for the length of the fade, so a fast
+              inflow stacks ghosts under the live ones and the rail grows down
+              the page. Popped, only the live entries take height and the
+              survivors slide up one row at a time (see RETIRE_STAGGER_MS). */}
+          <AnimatePresence initial={false} mode="popLayout">
+            {entries.length > 0 && (
               <motion.div
-                key={pull.id}
-                layout
-                initial={instant ? false : { opacity: 0, x: -10 }}
-                animate={{ opacity: notable ? 0.95 : 0.6, x: 0 }}
+                key="caption"
+                className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-osu-f1/50"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.25 }}
+                transition={{ duration: 0.4 }}
               >
-                {/* The rail itself stays anonymous (it shows what was pulled,
-                    not who pulled it), but each entry links to that pull's
-                    permalink so you can go look at the card that just landed.
-                    The pull page names the owner. */}
-                <Link
-                  to="/pull/$ownerId/$cardId"
-                  params={{ ownerId: String(pull.ownerUserId), cardId: String(pull.cardUserId) }}
-                  className="pointer-events-auto -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-white/5 hover:opacity-100"
-                  aria-label={`${pull.cardUsername} was pulled`}
-                >
-                  {pull.cardAvatarUrl ? (
-                    <img
-                      src={pull.cardAvatarUrl}
-                      alt=""
-                      className="h-6 w-6 shrink-0 rounded-full object-cover"
-                      style={{ boxShadow: `0 0 0 1.5px rgba(${accent}, ${notable ? 0.8 : 0.35})` }}
-                      loading="lazy"
-                      draggable={false}
-                    />
-                  ) : (
-                    <span
-                      className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-osu-b3"
-                      style={{ boxShadow: `0 0 0 1.5px rgba(${accent}, ${notable ? 0.8 : 0.35})` }}
-                    >
-                      <CountryFlag code={pull.cardCountryCode} size="xs" decorative />
-                    </span>
-                  )}
-                  <span className="flex min-w-0 flex-col">
-                    <span className="flex items-center gap-1 leading-tight">
-                      <span className="truncate text-[11px] font-semibold text-white/90">{pull.cardUsername}</span>
-                      {pull.isFirstGlobal && (
-                        <span title="First time anyone pulled this card" className="flex shrink-0">
-                          <Sparkles className="h-2.5 w-2.5 text-osu-pink" aria-label="first time anyone pulled this card" />
-                        </span>
-                      )}
-                    </span>
-                    <span className="truncate text-[9px] leading-tight">
-                      {style ? (
-                        <span className="font-bold uppercase tracking-wide" style={{ color: `rgba(${accent}, 0.9)` }}>
-                          {style.label}
-                        </span>
-                      ) : (
-                        <span className="text-osu-f1/70">pulled</span>
-                      )}
-                      {pull.pulledAt > 0 && (
-                        <span className="tabular-nums text-osu-f1/50"> · {formatPreciseTimeAgo(pull.pulledAt, now)}</span>
-                      )}
-                    </span>
-                  </span>
-                </Link>
+                <span className="relative flex h-1 w-1">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-osu-pink opacity-50" />
+                  <span className="relative inline-flex h-1 w-1 rounded-full bg-osu-pink" />
+                </span>
+                recent global pulls
               </motion.div>
-            );
-          })}
-        </AnimatePresence>
+            )}
+            {entries.map(({ pull, instant }) => {
+              const notable = pull.isFirstGlobal || (pull.tier !== null && NOTABLE_TIERS.has(pull.tier));
+              const style = tierStyle(pull.tier);
+              const accent = tierAccentRgb(pull.tier);
+              return (
+                <motion.div
+                  key={pull.id}
+                  layout
+                  initial={instant ? false : { opacity: 0, x: -10 }}
+                  animate={{ opacity: notable ? 0.95 : 0.6, x: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
+                >
+                  {/* The rail itself stays anonymous (it shows what was pulled,
+                      not who pulled it), but each entry links to that pull's
+                      permalink so you can go look at the card that just landed.
+                      The pull page names the owner. */}
+                  <Link
+                    to="/pull/$ownerId/$cardId"
+                    params={{ ownerId: String(pull.ownerUserId), cardId: String(pull.cardUserId) }}
+                    className="pointer-events-auto -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-white/5 hover:opacity-100"
+                    aria-label={`${pull.cardUsername} was pulled`}
+                  >
+                    {pull.cardAvatarUrl ? (
+                      <img
+                        src={pull.cardAvatarUrl}
+                        alt=""
+                        className="h-6 w-6 shrink-0 rounded-full object-cover"
+                        style={{ boxShadow: `0 0 0 1.5px rgba(${accent}, ${notable ? 0.8 : 0.35})` }}
+                        loading="lazy"
+                        draggable={false}
+                      />
+                    ) : (
+                      <span
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-osu-b3"
+                        style={{ boxShadow: `0 0 0 1.5px rgba(${accent}, ${notable ? 0.8 : 0.35})` }}
+                      >
+                        <CountryFlag code={pull.cardCountryCode} size="xs" decorative />
+                      </span>
+                    )}
+                    <span className="flex min-w-0 flex-col">
+                      <span className="flex items-center gap-1 leading-tight">
+                        <span className="truncate text-[11px] font-semibold text-white/90">{pull.cardUsername}</span>
+                        {pull.isFirstGlobal && (
+                          <span title="First time anyone pulled this card" className="flex shrink-0">
+                            <Sparkles className="h-2.5 w-2.5 text-osu-pink" aria-label="first time anyone pulled this card" />
+                          </span>
+                        )}
+                      </span>
+                      <span className="truncate text-[9px] leading-tight">
+                        {style ? (
+                          <span className="font-bold uppercase tracking-wide" style={{ color: `rgba(${accent}, 0.9)` }}>
+                            {style.label}
+                          </span>
+                        ) : (
+                          <span className="text-osu-f1/70">pulled</span>
+                        )}
+                        {pull.pulledAt > 0 && (
+                          <span className="tabular-nums text-osu-f1/50"> · {formatPreciseTimeAgo(pull.pulledAt, now)}</span>
+                        )}
+                      </span>
+                    </span>
+                  </Link>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Fun fact, top right: how the community holds your own card. Admins
@@ -486,7 +634,7 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
           stays what it always was, a fact you cannot open. */}
       {showPulledStats && pulledStats && (
         <div className={`pointer-events-none absolute right-12 top-[84px] z-20 hidden max-w-[200px] ${revealing ? "" : "min-[1450px]:block"}`}>
-          {canSeeCollectors ? (
+          {isAdmin ? (
             <CardCollectorsButton className="pointer-events-auto flex items-start justify-end gap-1.5 text-right text-[11px] leading-snug text-osu-f1/80 transition-colors hover:text-white cursor-pointer">
               <PulledStatsLine stats={pulledStats} />
             </CardCollectorsButton>
