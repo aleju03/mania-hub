@@ -17,6 +17,7 @@ import {
   writeReplaySkinPresets,
   writeReplaySkinSettings,
 } from "./replay-skin";
+import type { ReplaySkinSettings } from "./replay-skin";
 import type { SkinSummary } from "./skins";
 
 describe("replay skin settings", () => {
@@ -373,5 +374,108 @@ describe("replay skin settings", () => {
     expect(read).toHaveLength(2);
     expect(read[0].community).toBeUndefined();
     expect(read[1].community).toBeUndefined();
+  });
+});
+
+describe("replay skin storage under quota pressure", () => {
+  // A decoded Percy-style body is megabytes of base64. Anything past this
+  // stands in for the browser's real quota: big enough that settings and a
+  // couple of presets fit comfortably, small enough that one piece of art
+  // does not.
+  const LIMIT = 5000;
+  const ART = `data:image/png;base64,${"A".repeat(6000)}`;
+
+  let storage: Map<string, string>;
+
+  const settingsWithArt = () => normalizeReplaySkinSettings({
+    ...DEFAULT_REPLAY_SKIN_SETTINGS,
+    tapColor: "#101820",
+    hitPosition: 137,
+    keymodeProfiles: {
+      "4": {
+        columnWidth: 91,
+        assets: { columns: [{ lnBody: { name: "LN_Body.png", src: ART, width: 128, height: 4096 } }] },
+      },
+    },
+  });
+
+  beforeEach(() => {
+    storage = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: {
+        clear: () => storage.clear(),
+        getItem: (key: string) => storage.get(key) ?? null,
+        removeItem: (key: string) => storage.delete(key),
+        setItem: (key: string, value: string) => {
+          if (value.length > LIMIT) {
+            const error = new Error(`Setting the value of '${key}' exceeded the quota.`);
+            error.name = "QuotaExceededError";
+            throw error;
+          }
+          storage.set(key, value);
+        },
+      },
+    });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "info").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("keeps a skin's colors and layout when its art will not fit", () => {
+    const settings = settingsWithArt();
+    expect(settings.keymodeProfiles["4"].assets.columns[0]?.lnBody?.src).toBe(ART);
+
+    writeReplaySkinSettings(settings);
+
+    // The art is what did not fit, so the art is what goes; everything the
+    // same write carried survives. Losing the whole object to the quota took
+    // the colors, the hit position and the column width with it.
+    const stored = readReplaySkinSettings();
+    expect(stored.tapColor).toBe("#101820");
+    expect(stored.hitPosition).toBe(137);
+    expect(stored.keymodeProfiles["4"].columnWidth).toBe(91);
+    expect(stored.keymodeProfiles["4"].assets.columns).toEqual([]);
+  });
+
+  it("announces the settings it was handed, not the copy it could store", () => {
+    // The page that just applied the skin still has its art in memory, and the
+    // other surfaces listen for it here. Dropping the event on a failed write
+    // left them drawing the previous skin until a reload.
+    const detail: unknown[] = [];
+    const stubbed = window as unknown as { dispatchEvent: (event: CustomEvent) => void };
+    stubbed.dispatchEvent = (event: CustomEvent) => detail.push(event.detail);
+
+    writeReplaySkinSettings(settingsWithArt());
+
+    expect(detail).toHaveLength(1);
+    expect((detail[0] as ReplaySkinSettings).keymodeProfiles["4"].assets.columns[0]?.lnBody?.src).toBe(ART);
+  });
+
+  it("keeps the other presets when one of them is too big to store", () => {
+    const heavy = createReplaySkinPreset("mokou skin", settingsWithArt());
+    const light = createReplaySkinPreset("plain", DEFAULT_REPLAY_SKIN_SETTINGS);
+
+    writeReplaySkinPresets([heavy, light]);
+
+    const read = readReplaySkinPresets();
+    expect(read.map((preset) => preset.name)).toEqual(["mokou skin", "plain"]);
+    expect(read[0].settings.tapColor).toBe("#101820");
+    expect(read[0].settings.keymodeProfiles["4"].assets.columns).toEqual([]);
+  });
+
+  it("gives up rather than looping when there is no art to drop", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Nothing here embeds art, so there is no smaller version to fall back to.
+    writeReplaySkinPresets(Array.from({ length: 24 }, (_, index) => createReplaySkinPreset(
+      `preset ${index} ${"x".repeat(80)}`.slice(0, 80),
+      DEFAULT_REPLAY_SKIN_SETTINGS,
+    )));
+
+    expect(storage.get(REPLAY_SKIN_PRESETS_STORAGE_KEY)).toBeUndefined();
+    expect(warn).toHaveBeenCalled();
   });
 });

@@ -873,20 +873,94 @@ export function readReplaySkinSettings(): ReplaySkinSettings {
 
 export const REPLAY_SKIN_SETTINGS_CHANGE_EVENT = "mania-hub:replay-skin-settings-change";
 
+// A skin's decoded art rides in the settings as data: URLs, several MB for a
+// Percy-style body and more than the whole localStorage quota on its own. The
+// callers that know they are holding a skin persist the asset-free copy plus a
+// pointer that rebuilds it; the ones that do not used to hand the whole thing
+// to setItem and lose the ENTIRE write to a QuotaExceededError - colors,
+// layout, hit position and all - not just the art it could not fit.
+//
+// So this is the floor under those callers: art that will not fit is dropped
+// and everything else is kept. Nothing is lost for good, because every art
+// source in the editor is a skin that can be re-fetched (the catalog .osk, the
+// owner-skin record), which is the same rebuild the pointer path already does.
+//
+// Walks the asset tree structurally rather than by a list of asset keys, so a
+// new kind of asset cannot quietly slip through it.
+function embedsDecodedArt(value: unknown, depth = 0): boolean {
+  if (depth > 6 || !value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some((entry) => embedsDecodedArt(entry, depth + 1));
+  const record = value as Record<string, unknown>;
+  if (typeof record.src === "string" && record.src.startsWith("data:")) return true;
+  return Object.values(record).some((entry) => embedsDecodedArt(entry, depth + 1));
+}
+
+function replaySkinSettingsEmbedDecodedArt(settings: ReplaySkinSettings): boolean {
+  return Object.values(settings.keymodeProfiles).some((profile) => embedsDecodedArt(profile.assets));
+}
+
+function replaySkinSettingsWithoutDecodedArt(settings: ReplaySkinSettings): ReplaySkinSettings {
+  const keymodeProfiles: Record<string, ReplaySkinKeymodeProfile> = {};
+  for (const [key, profile] of Object.entries(settings.keymodeProfiles)) {
+    keymodeProfiles[key] = embedsDecodedArt(profile.assets)
+      ? { ...profile, assets: EMPTY_REPLAY_SKIN_ASSETS }
+      : profile;
+  }
+  return { ...settings, keymodeProfiles };
+}
+
+// True when the value went in, so callers can tell a stored skin from one that
+// has to be rebuilt from its pointer.
+function setStorageItemWithoutArt<T>(
+  key: string,
+  value: T,
+  embedsArt: (value: T) => boolean,
+  stripArt: (value: T) => T,
+  label: string,
+): boolean {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (error) {
+    if (!embedsArt(value)) {
+      console.warn(`[replay] failed to write ${label}`, error);
+      return false;
+    }
+    try {
+      window.localStorage.setItem(key, JSON.stringify(stripArt(value)));
+      // Expected for any sizeable skin, and handled: the art rebuilds from the
+      // skin pointer on the next load. Worth a line so a genuinely broken
+      // write is not the only thing that ever shows up here.
+      console.info(`[replay] ${label} stored without its art (too large for localStorage)`);
+      return false;
+    } catch (fallbackError) {
+      console.warn(`[replay] failed to write ${label}`, fallbackError);
+      return false;
+    }
+  }
+}
+
 export function writeReplaySkinSettings(settings: ReplaySkinSettings): void {
   if (typeof window === "undefined") return;
 
+  const normalized = normalizeReplaySkinSettings(settings);
+  setStorageItemWithoutArt(
+    REPLAY_SKIN_STORAGE_KEY,
+    normalized,
+    replaySkinSettingsEmbedDecodedArt,
+    replaySkinSettingsWithoutDecodedArt,
+    "replay skin settings",
+  );
+  // Fired even when only the stripped copy landed: the listeners draw from
+  // this detail, and the page that just applied the skin still holds its art
+  // in memory. Dropping the event on a failed write left every other surface
+  // on the page showing the previous skin until a reload.
   try {
-    const normalized = normalizeReplaySkinSettings(settings);
-    window.localStorage.setItem(
-      REPLAY_SKIN_STORAGE_KEY,
-      JSON.stringify(normalized),
-    );
     if (typeof window.dispatchEvent === "function") {
       window.dispatchEvent(new CustomEvent(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, { detail: normalized }));
     }
   } catch (error) {
-    console.warn("[replay] failed to write replay skin settings", error);
+    console.warn("[replay] failed to announce replay skin settings", error);
   }
 }
 
@@ -943,14 +1017,20 @@ export function readReplaySkinPresets(): ReplaySkinPreset[] {
 export function writeReplaySkinPresets(presets: ReplaySkinPreset[]): void {
   if (typeof window === "undefined") return;
 
-  try {
-    window.localStorage.setItem(
-      REPLAY_SKIN_PRESETS_STORAGE_KEY,
-      JSON.stringify(presets.map(normalizePreset).filter(Boolean).slice(0, 24)),
-    );
-  } catch (error) {
-    console.warn("[replay] failed to write replay skin presets", error);
-  }
+  const normalized = presets
+    .map(normalizePreset)
+    .filter((preset): preset is ReplaySkinPreset => preset != null)
+    .slice(0, 24);
+  // A community preset already stores its skin as a pointer, so the art here
+  // belongs to presets saved straight off a loaded draft. One of those is
+  // enough to put the whole list over quota and take the other 23 with it.
+  setStorageItemWithoutArt(
+    REPLAY_SKIN_PRESETS_STORAGE_KEY,
+    normalized,
+    (list) => list.some((preset) => replaySkinSettingsEmbedDecodedArt(preset.settings)),
+    (list) => list.map((preset) => ({ ...preset, settings: replaySkinSettingsWithoutDecodedArt(preset.settings) })),
+    "replay skin presets",
+  );
 }
 
 export function createReplaySkinPreset(
