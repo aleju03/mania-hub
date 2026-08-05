@@ -530,6 +530,11 @@ export async function listPackCollectionCards(
     pageSize: number;
     tier?: string | null;
     query?: string | null;
+    /* "newest" orders by when the card first joined the collection (a
+       duplicate pull does not resurface an old card); anything else is the
+       default rarity order. Legacy cards without a timestamp sink to the end,
+       still in rarity order among themselves. */
+    sort?: "newest" | null;
     /* When set, only cards of these players are listed (the "not tracked"
        filter). Empty means match nothing. */
     restrictToCardUserIds?: readonly number[];
@@ -573,7 +578,9 @@ export async function listPackCollectionCards(
        on serials.card_key = pack_collection_cards.card_key
        and serials.owner_user_id = pack_collection_cards.owner_user_id
      where ${whereSql}
-     order by ${tierRankSql("tier")} desc, pp desc, global_rank asc, username collate nocase asc
+     order by ${
+       options.sort === "newest" ? "pack_collection_cards.first_pulled_at desc, " : ""
+     }${tierRankSql("tier")} desc, pp desc, global_rank asc, username collate nocase asc
      limit ? offset ?`,
     [...args, pageSize, page * pageSize],
   )).rows;

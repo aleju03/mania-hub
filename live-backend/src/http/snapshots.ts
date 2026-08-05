@@ -1948,6 +1948,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     );
     const tier = url.searchParams.get("tier");
     const query = url.searchParams.get("q");
+    const sort = url.searchParams.get("sort") === "newest" ? ("newest" as const) : null;
     // Progress is a garnish on the header; a pool board that cannot build
     // right now must not take the collection page down with it.
     const progress = await getPackPoolMembership(ctx.db)
@@ -1961,6 +1962,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       pageSize,
       tier: untracked ? "all" : tier,
       query,
+      sort,
       restrictToCardUserIds: untracked ? progress?.offPoolUserIds ?? [] : undefined,
     });
     sendJson(req, res, ctx, 200, {

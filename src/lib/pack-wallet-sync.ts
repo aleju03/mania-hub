@@ -146,12 +146,13 @@ export const pushServerPackWallet = createServerFn({ method: "POST" })
   });
 
 export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
-  .validator((input: { page?: unknown; pageSize?: unknown; tier?: unknown; query?: unknown }) => {
+  .validator((input: { page?: unknown; pageSize?: unknown; tier?: unknown; query?: unknown; sort?: unknown }) => {
     const page = Math.max(0, Math.floor(Number(input?.page) || 0));
     const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(Number(input?.pageSize) || 15)));
     const tier = typeof input?.tier === "string" ? input.tier : "all";
     const query = typeof input?.query === "string" ? input.query : "";
-    return { page, pageSize, tier, query };
+    const sort = input?.sort === "newest" ? ("newest" as const) : ("rarity" as const);
+    return { page, pageSize, tier, query, sort };
   })
   .handler(async ({ data }): Promise<ServerPackCollectionPage | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -163,6 +164,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     url.searchParams.set("pageSize", String(data.pageSize));
     url.searchParams.set("tier", data.tier);
     if (data.query) url.searchParams.set("q", data.query);
+    if (data.sort === "newest") url.searchParams.set("sort", "newest");
     const response = await fetch(url, { headers: target.headers });
     if (!response.ok) throw new Error(`Pack collection fetch failed (${response.status}).`);
     const body = (await response.json()) as ServerPackCollectionPage;

@@ -54,6 +54,15 @@ export interface CardMint {
    no idea who is still in the pool. */
 type CollectionTierFilter = ManiaCardTier | "all" | "unrated" | "untracked";
 
+/* "newest" orders by when the card first joined the collection (dup pulls do
+   not resurface a card); "rarity" is the classic tier-then-pp order. */
+type CollectionSortMode = "rarity" | "newest";
+
+const COLLECTION_SORTS: Array<{ id: CollectionSortMode; label: string; hint: string }> = [
+  { id: "rarity", label: "Rarity", hint: "Highest tier first, then pp" },
+  { id: "newest", label: "Newest", hint: "When each card first joined your collection" },
+];
+
 interface CollectionPanelProps {
   wallet: PackWallet | null;
   showLoginNudge: boolean;
@@ -182,25 +191,29 @@ function serverCollectionCacheKey({
   pageSize,
   tier,
   query,
+  sort,
 }: {
   page: number;
   pageSize: number;
   tier: CollectionTierFilter;
   query: string;
+  sort: CollectionSortMode;
 }) {
-  return `${page}:${pageSize}:${tier}:${query}`;
+  return `${page}:${pageSize}:${tier}:${sort}:${query}`;
 }
 
 function serverCollectionFilterKey({
   pageSize,
   tier,
   query,
+  sort,
 }: {
   pageSize: number;
   tier: CollectionTierFilter;
   query: string;
+  sort: CollectionSortMode;
 }) {
-  return `${pageSize}:${tier}:${query}`;
+  return `${pageSize}:${tier}:${sort}:${query}`;
 }
 
 function CollectionPager({
@@ -504,6 +517,7 @@ export function CollectionPanel({
   // it waits for a pause in typing instead of firing a request per keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [tierFilter, setTierFilter] = useState<CollectionTierFilter>("all");
+  const [sortMode, setSortMode] = useState<CollectionSortMode>("rarity");
   // Recycling the last copy removes the card from the collection, so it
   // takes a second tap to confirm.
   const [confirmCardKey, setConfirmCardKey] = useState<string | null>(null);
@@ -537,6 +551,7 @@ export function CollectionPanel({
       pageSize: COLLECTION_PAGE_SIZE,
       tier: "all" as const,
       query: "",
+      sort: "rarity" as const,
     };
     const cacheKey = serverCollectionCacheKey(initialRequest);
     const page = serverCollectionPageCache.get(cacheKey) ?? null;
@@ -717,6 +732,7 @@ export function CollectionPanel({
     pageSize: COLLECTION_PAGE_SIZE,
     tier: tierFilter,
     query: activeQuery.trim().toLowerCase(),
+    sort: sortMode,
   };
   const serverCacheKey = serverCollectionCacheKey(serverRequest);
   const serverFilterKey = serverCollectionFilterKey(serverRequest);
@@ -728,7 +744,11 @@ export function CollectionPanel({
     ? activeServerPage ?? (serverPage?.filterKey === serverFilterKey ? serverPage.page : null)
     : null;
   const localCards = wallet
-    ? ownedCards(wallet).sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp)
+    ? ownedCards(wallet).sort((a, b) =>
+        sortMode === "newest"
+          ? b.firstPulledAt - a.firstPulledAt || tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp
+          : tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp,
+      )
     : [];
   const cards = useServerCollection ? (activeServerPage?.cards as CollectedCard[] | undefined) ?? [] : localCards;
   // tierCounts describe the whole collection (the server computes them without
@@ -834,12 +854,16 @@ export function CollectionPanel({
           : Math.max(0, Math.floor(Number(serverTierCounts[tierFilter === "unrated" ? "unrated" : tierFilter]) || 0));
   const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, expectedFilterTotal - pageStart));
   const placeholderTiers = showSkeletonGrid
-    ? placeholderTiersForPage({
-        count: placeholderCount,
-        pageStart,
-        tierFilter,
-        tierCounts: serverTierCounts,
-      })
+    ? sortMode === "newest" && tierFilter === "all"
+      // Sorted by pull date the page mixes rarities unpredictably, so the
+      // skeletons take the neutral common face instead of guessing an order.
+      ? Array.from({ length: placeholderCount }, () => "common" as ManiaCardTier)
+      : placeholderTiersForPage({
+          count: placeholderCount,
+          pageStart,
+          tierFilter,
+          tierCounts: serverTierCounts,
+        })
     : [];
   const recyclable = useServerCollection ? serverMetaPage?.duplicateShardTotal ?? 0 : wallet ? duplicateShardTotal(wallet) : 0;
   const selectedShardTotal = cards
@@ -861,7 +885,7 @@ export function CollectionPanel({
     setSelected(new Set());
     setSelectionScope("manual");
     setConfirmBulk(false);
-  }, [trimmedQuery, tierFilter]);
+  }, [trimmedQuery, tierFilter, sortMode]);
 
   useEffect(() => {
     if (selectionScope !== "all") setSelected(new Set());
@@ -893,6 +917,7 @@ export function CollectionPanel({
         pageSize: COLLECTION_PAGE_SIZE,
         tier: tierFilter,
         query: trimmedQuery,
+        sort: sortMode,
       },
     })
       .then((page) => {
@@ -914,7 +939,7 @@ export function CollectionPanel({
     return () => {
       cancelled = true;
     };
-  }, [walletReady, useServerCollection, collectionPage, tierFilter, trimmedQuery, serverCacheKey, serverFilterKey, serverRefreshKey]);
+  }, [walletReady, useServerCollection, collectionPage, tierFilter, trimmedQuery, sortMode, serverCacheKey, serverFilterKey, serverRefreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1069,6 +1094,7 @@ export function CollectionPanel({
       ) : null}
 
       {collectionTotal > 0 && (
+        <>
         <div
           ref={collectionControlsRef}
           className="mt-4 flex scroll-mt-[76px] flex-wrap items-center gap-x-3 gap-y-2"
@@ -1144,18 +1170,6 @@ export function CollectionPanel({
               )}
             </div>
           )}
-          {totalPages > 1 && (
-            <div className="ml-auto">
-              <CollectionPager
-                page={currentPage}
-                totalPages={totalPages}
-                pageStart={pageStart}
-                pageEnd={pageEnd}
-                total={filteredTotal}
-                onPageChange={setCollectionPage}
-              />
-            </div>
-          )}
           {import.meta.env.DEV && (
             <button
               type="button"
@@ -1173,6 +1187,44 @@ export function CollectionPanel({
             </button>
           )}
         </div>
+
+        {/* Ordering and paging, kept off the chip row above: chips change what
+            is in the set, these change how it is presented. Plain text rather
+            than pills, like the /maps and /skins listings, so a sort never
+            reads as one more filter. */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-5 gap-y-2" data-select-keep="">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Sort by</span>
+            {COLLECTION_SORTS.map((option) => {
+              const isActive = sortMode === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setSortMode(option.id)}
+                  aria-pressed={isActive}
+                  title={option.hint}
+                  className={`text-[12.5px] font-semibold transition-colors cursor-pointer ${
+                    isActive ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          {totalPages > 1 && (
+            <CollectionPager
+              page={currentPage}
+              totalPages={totalPages}
+              pageStart={pageStart}
+              pageEnd={pageEnd}
+              total={filteredTotal}
+              onPageChange={setCollectionPage}
+            />
+          )}
+        </div>
+        </>
       )}
 
       {collectionTotal === 0 && !serverLoading && !serverPagePending ? (
