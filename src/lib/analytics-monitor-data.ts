@@ -11,7 +11,6 @@ import {
   getAnalyticsBucketMs,
   normalizeAnalyticsViewerSort,
   parseAnalyticsRangeHours,
-  type AnalyticsCacheState,
   type AnalyticsMonitorData,
   type AnalyticsRange,
   type AnalyticsTimelineBucket,
@@ -22,23 +21,15 @@ import {
 
 /* Reads the live backend's in-house analytics store for the admin monitor.
    Server-side only - the admin panel reaches this through the two server
-   functions at the bottom. */
+   functions at the bottom.
 
-// The store answers in milliseconds from a local file, so this window only
-// exists to coalesce refresh bursts across concurrent admin tabs.
-const ANALYTICS_CACHE_FRESH_MS = 4_000;
-const ANALYTICS_ERROR_RETRY_MS = 30_000;
-
-const analyticsMonitorCache = new Map<string, {
-  data: AnalyticsMonitorData | null;
-  promise: Promise<AnalyticsMonitorData> | null;
-  error?: unknown;
-  failedAt?: number;
-}>();
-
-function getAnalyticsCacheKey(rangeHours: AnalyticsRange, recentCountry: string | null): string {
-  return `${clampAnalyticsRangeHours(rangeHours)}:${recentCountry ?? "all"}`;
-}
+   Deliberately uncached here. The frontend serves from two node instances
+   behind a round-robin proxy, so a cache at this layer is two caches: polls
+   alternate between them and the panel flips between two snapshots of
+   different ages. The backend already coalesces concurrent computes and holds
+   the result for a few seconds (`analytics.ts`, MONITOR_CACHE_TTL_MS), and it
+   is one process, so letting both instances read straight through means they
+   cannot disagree. */
 
 function normalizeAnalyticsRangeHours(value: unknown): AnalyticsRange {
   return parseAnalyticsRangeHours(value) ?? ANALYTICS_DEFAULT_RANGE_HOURS;
@@ -64,11 +55,11 @@ function emptyAnalyticsTimeline(rangeHours: AnalyticsRange, now: number): { buck
   };
 }
 
-function createEmptyAnalyticsMonitorData(rangeHours: AnalyticsRange, cacheState: AnalyticsCacheState): AnalyticsMonitorData {
+function createWarmingAnalyticsMonitorData(rangeHours: AnalyticsRange): AnalyticsMonitorData {
   const now = Date.now();
   return {
     rangeHours,
-    cacheState,
+    cacheState: "warming",
     ...emptyAnalyticsTimeline(rangeHours, now),
     activeVisitors: 0,
     pageviewsInRange: 0,
@@ -141,55 +132,20 @@ export const getAnalyticsMonitorData = createServerFn({ method: "POST" })
       throw new Error("Configure LIVE_BACKEND_URL + LIVE_ADMIN_TOKEN in .env to use analytics monitoring.");
     }
 
-    const cacheKey = getAnalyticsCacheKey(data.rangeHours, data.recentCountry);
-    const cached = analyticsMonitorCache.get(cacheKey);
-    const now = Date.now();
-    if (cached?.data && now - cached.data.fetchedAt <= ANALYTICS_CACHE_FRESH_MS) {
-      return { ...cached.data, cacheState: "fresh" };
-    }
+    const pending = fetchAnalyticsMonitorData({
+      rangeHours: data.rangeHours,
+      recentCountry: data.recentCountry,
+    });
 
-    let refreshPromise = cached?.promise ?? null;
-    const failedRecently = cached?.error != null && cached.failedAt != null && now - cached.failedAt <= ANALYTICS_ERROR_RETRY_MS;
-    if (!refreshPromise && failedRecently) {
-      if (cached?.data) return { ...cached.data, cacheState: "stale" };
-      throw cached.error;
-    }
-
-    if (!refreshPromise) {
-      let nextPromise: Promise<AnalyticsMonitorData>;
-      nextPromise = fetchAnalyticsMonitorData({
-        rangeHours: data.rangeHours,
-        recentCountry: data.recentCountry,
-      }).then(
-        (freshData) => {
-          analyticsMonitorCache.set(cacheKey, { data: freshData, promise: null });
-          return freshData;
-        },
-        (err) => {
-          const latest = analyticsMonitorCache.get(cacheKey);
-          if (latest?.promise === nextPromise) {
-            analyticsMonitorCache.set(cacheKey, { data: latest.data, promise: null, error: err, failedAt: Date.now() });
-          }
-          throw err;
-        },
-      );
-      refreshPromise = nextPromise;
-      analyticsMonitorCache.set(cacheKey, { data: cached?.data ?? null, promise: refreshPromise });
-    }
-
-    if (cached?.data) {
-      void refreshPromise.catch(() => undefined);
-      return { ...cached.data, cacheState: "stale" };
-    }
-
-    const settled = await settleWithin(refreshPromise, ANALYTICS_COLD_RESPONSE_BUDGET_MS);
+    const settled = await settleWithin(pending, ANALYTICS_COLD_RESPONSE_BUDGET_MS);
     if (settled.status === "resolved") return settled.value;
-    if (settled.status === "rejected") {
-      throw settled.reason;
-    }
+    if (settled.status === "rejected") throw settled.reason;
 
-    void refreshPromise.catch(() => undefined);
-    return createEmptyAnalyticsMonitorData(data.rangeHours, "warming");
+    // Only the waiting is abandoned, not the work: the backend keeps computing
+    // this key and holds the result, so the retry the panel schedules next
+    // picks it up whichever instance that one lands on.
+    void pending.catch(() => undefined);
+    return createWarmingAnalyticsMonitorData(data.rangeHours);
   });
 
 /* The signed-in roster. Not range-scoped and it changes slowly, so the card

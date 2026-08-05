@@ -71,6 +71,24 @@ describe("SkinCard", () => {
     expect(screen.getByLabelText("Download aleju03 lazer").closest("[href='/skins/aleju03-lazer']")).toBeNull();
   });
 
+  it("credits the author, and credits nobody when the skin has none", () => {
+    render(<SkinCard skin={SKIN} />);
+    expect(screen.getByText("aleju03")).toBeTruthy();
+    cleanup();
+
+    // The uploader is not the author: standing them in that spot claimed they
+    // drew it. The skin page still says "uploaded by" in full.
+    render(<SkinCard skin={{ ...SKIN, author: null }} />);
+    expect(screen.queryByText("aleju03")).toBeNull();
+    expect(screen.queryByText("Aleju03")).toBeNull();
+  });
+
+  it("names the uploader on the moderation shelf, where every uploader's skins are mixed", () => {
+    const { container } = render(<SkinCard skin={{ ...SKIN, author: null }} showUploader />);
+    expect(screen.getByText("Aleju03")).toBeTruthy();
+    expect(container.textContent).toContain("uploaded by");
+  });
+
   it("has nothing to download when the skin carries no file", () => {
     render(<SkinCard skin={{ ...SKIN, oskUrl: null }} />);
     expect(screen.queryByLabelText("Download aleju03 lazer")).toBeNull();

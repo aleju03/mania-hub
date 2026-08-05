@@ -10,6 +10,11 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import {
+  getPublicBucketBaseUrl,
+  getPublicBucketClient,
+  PUBLIC_IMAGE_BUCKET,
+} from "./public-image-store";
 
 // Cache growth is bounded by R2 lifecycle rules configured per prefix (Cloudflare
 // dashboard or the S3 lifecycle API). As of 2026-08-04 the rules are: parsed/ 90d,
@@ -32,6 +37,11 @@ const R2_ADMIN_DELETE_BATCH_SIZE = 1000;
 const R2_ADMIN_SEARCH_SCAN_LIMIT = 5000;
 const R2_ADMIN_FOLDER_STATS_SCAN_LIMIT = 5000;
 const R2_ADMIN_FOLDER_STATS_CONCURRENCY = 4;
+// One page of folder rows plus slack; the browser only ever asks for the rows
+// it is rendering.
+const R2_ADMIN_FOLDER_STATS_LIMIT = 32;
+const R2_ADMIN_DESCRIBE_LIMIT = 32;
+const R2_ADMIN_DESCRIBE_CONCURRENCY = 8;
 
 export type BeatmapAssetKind = "audio" | "background";
 export type ReplayEndpointKind = "legacy" | "modern";
@@ -69,12 +79,12 @@ type UploadedReplay = {
   originalFilename?: string;
 };
 
+// Folder rows come back without counts: summarizing a prefix costs a full
+// paginated scan of it, so the browser lists first and asks for the numbers of
+// the rows it actually renders (getR2AdminFolderStats).
 export type R2AdminFolder = {
   prefix: string;
   name: string;
-  objectCount: number;
-  sizeBytes: number;
-  statsTruncated: boolean;
 };
 
 export type R2AdminObject = {
@@ -87,6 +97,7 @@ export type R2AdminObject = {
 
 export type R2AdminListing = {
   configured: boolean;
+  bucketId: R2AdminBucketId;
   bucket: string;
   prefix: string;
   query: string;
@@ -110,6 +121,8 @@ export type R2AdminPrefixSummary = {
   objectCount: number;
   sizeBytes: number;
   truncated: boolean;
+  /** Name of the file that names the folder, per the root's folderLabelSuffix. */
+  sampleName: string | null;
 };
 
 export type R2AdminSkinDownload = {
@@ -117,6 +130,48 @@ export type R2AdminSkinDownload = {
   name: string;
   sizeBytes: number;
   url: string;
+};
+
+export type R2AdminObjectUrl = {
+  url: string;
+  /** True when the URL is the bucket's public CDN address rather than a signed one. */
+  isPublic: boolean;
+};
+
+export type R2AdminObjectDescription = R2AdminObjectUrl & {
+  key: string;
+  /** Value of the root's metadataLabelKey, when it declares one. */
+  label: string | null;
+};
+
+export type R2AdminBucketId = "replay-cache" | "public";
+
+export type R2AdminRoot = {
+  prefix: string;
+  label: string;
+  /** Shown in the delete dialog for anything under this root. */
+  deleteWarning: string | null;
+  /**
+   * Object metadata field worth reading for rows under this root, for prefixes
+   * whose keys are content hashes and carry their only human-readable detail in
+   * metadata. Costs one HeadObject per row, so it stays opt-in per root.
+   */
+  metadataLabelKey?: string;
+  /**
+   * Extension of the file that names a folder under this root (skins/<uuid>/
+   * holds one <skin name>.osk). Picked up by the scan that counts the folder,
+   * so naming the row costs nothing extra.
+   */
+  folderLabelSuffix?: string;
+};
+
+export type R2AdminBucketInfo = {
+  id: R2AdminBucketId;
+  label: string;
+  bucket: string;
+  configured: boolean;
+  publicBaseUrl: string | null;
+  roots: R2AdminRoot[];
 };
 
 let client: S3Client | null | undefined;
@@ -375,16 +430,68 @@ export async function getReplayVideoSignedUrl(id: string, filename: string): Pro
   return signGetUrl(storageKey, mimeType);
 }
 
-export async function getR2AdminSignedUrl(keyInput: string, mimeType?: string): Promise<string> {
-  const key = normalizeR2AdminObjectKey(keyInput);
-  return signGetUrl(key, mimeType);
+// Reads on a bucket with a custom domain go straight to the CDN address: it is
+// the same URL the site hands out, it costs no signing round-trip, and it is
+// the one an admin actually wants to copy out of the preview.
+export async function getR2AdminObjectUrl(
+  bucketId: string | undefined | null,
+  keyInput: string,
+  mimeType?: string,
+): Promise<R2AdminObjectUrl> {
+  const { def, client } = requireAdminBucket(bucketId);
+  return buildAdminObjectUrl(def, client, normalizeR2AdminObjectKey(def.id, keyInput), mimeType);
+}
+
+async function buildAdminObjectUrl(
+  def: AdminBucketDef,
+  client: S3Client,
+  key: string,
+  mimeType?: string,
+): Promise<R2AdminObjectUrl> {
+  const publicBaseUrl = def.getPublicBaseUrl();
+  if (publicBaseUrl) {
+    const path = key.split("/").map(encodeURIComponent).join("/");
+    return { url: `${publicBaseUrl}/${path}`, isPublic: true };
+  }
+  return {
+    url: await signBucketGetUrl(client, def.bucket, key, mimeType),
+    isPublic: false,
+  };
+}
+
+// Rows the browser wants to show inline: a URL it can point an <img> at, plus
+// whatever readable detail the root declares. Signing is local HMAC work and
+// public URLs are pure string building, so the only R2 operations here are the
+// metadata reads, and only for roots that ask for one.
+export async function describeR2AdminObjects(options: {
+  bucket?: string | null;
+  keys: string[];
+}): Promise<R2AdminObjectDescription[]> {
+  const def = getAdminBucket(options.bucket);
+  const client = resolveAdminClient(def);
+  if (!client) return [];
+
+  const keys = options.keys
+    .slice(0, R2_ADMIN_DESCRIBE_LIMIT)
+    .map((key) => normalizeR2AdminObjectKey(def.id, key));
+
+  return mapWithConcurrency(keys, R2_ADMIN_DESCRIBE_CONCURRENCY, async (key) => {
+    const metadataLabelKey = def.roots
+      .find((root) => key.startsWith(root.prefix))?.metadataLabelKey;
+    const label = metadataLabelKey
+      ? await client.send(new HeadObjectCommand({ Bucket: def.bucket, Key: key }))
+        .then((head) => head.Metadata?.[metadataLabelKey] ?? null, () => null)
+      : null;
+
+    return { key, label, ...await buildAdminObjectUrl(def, client, key) };
+  });
 }
 
 // The live backend writes exactly one <name>.osk per skins/<id>/ folder (see
 // skinOskKey) alongside the preview/screenshot images, so the admin browser can
 // resolve a skin's archive without paging into the folder first.
 export async function getR2AdminSkinOskDownload(prefixInput: string): Promise<R2AdminSkinDownload | null> {
-  const prefix = normalizeR2AdminPrefix(prefixInput);
+  const prefix = normalizeR2AdminPrefix("replay-cache", prefixInput);
   if (!prefix.startsWith(SKINS_PREFIX)) {
     throw new Error("Quick download is only available for skin folders.");
   }
@@ -417,33 +524,132 @@ function assertReplayCacheKey(storageKey: string): void {
   }
 }
 
-// Roots the admin bucket browser may operate on: the evictable replay cache
-// plus durable skin uploads the live backend writes under skins/. Cache
-// eviction and every non-admin path stay locked to replay-cache/ only.
+// ── Admin bucket registry ──
+// The two buckets the admin browser may read. Each declares the roots it may
+// operate on: the private cache bucket exposes the evictable replay cache plus
+// the durable skin uploads the live backend writes under skins/, and the public
+// CDN bucket (cdn.mania-tracker.com) exposes the BBCode image store and the
+// maniacard thumbnail pool. Cache eviction and every non-admin path stay locked
+// to replay-cache/ in the private bucket only. A new top-level prefix is
+// invisible here until it is listed as a root.
 const SKINS_PREFIX = "skins/";
-const ADMIN_BROWSABLE_PREFIXES = [REPLAY_CACHE_PREFIX, SKINS_PREFIX];
 
-function assertAdminBrowsableKey(storageKey: string): void {
-  if (!ADMIN_BROWSABLE_PREFIXES.some((prefix) => storageKey.startsWith(prefix))) {
-    throw new Error(`Refusing to touch R2 key "${storageKey}" outside replay-cache/ or skins/`);
+type AdminBucketDef = {
+  id: R2AdminBucketId;
+  label: string;
+  bucket: string;
+  roots: R2AdminRoot[];
+  getClient: () => S3Client | null;
+  /** Custom-domain base URL, for buckets served publicly. */
+  getPublicBaseUrl: () => string | null;
+};
+
+const ADMIN_BUCKETS: AdminBucketDef[] = [
+  {
+    id: "replay-cache",
+    label: "replay cache",
+    bucket: REPLAY_CACHE_BUCKET,
+    roots: [
+      { prefix: REPLAY_CACHE_PREFIX, label: "replay-cache", deleteWarning: null },
+      {
+        prefix: SKINS_PREFIX,
+        label: "skins",
+        deleteWarning: "Skin files are indexed by the live backend database; deleting them here strands the skin page. Delete the skin from its own page instead, and keep this for orphan cleanup.",
+        folderLabelSuffix: ".osk",
+      },
+    ],
+    getClient,
+    // Private bucket: no public domain is attached to it on purpose, so every
+    // read here goes out as a signed URL.
+    getPublicBaseUrl: () => null,
+  },
+  {
+    id: "public",
+    label: "public cdn",
+    bucket: PUBLIC_IMAGE_BUCKET,
+    roots: [
+      {
+        prefix: "bbcode/",
+        label: "bbcode",
+        deleteWarning: "These URLs are pasted into osu! profiles and there is no other copy of the file. Deleting one breaks every post that embeds it.",
+        // storePublicImage stamps every upload with who sent it, which is the
+        // only readable thing about a content-hash key.
+        metadataLabelKey: "uploaded-by",
+      },
+      { prefix: "maniacards/", label: "maniacards", deleteWarning: null },
+    ],
+    getClient: getPublicBucketClient,
+    getPublicBaseUrl: getPublicBucketBaseUrl,
+  },
+];
+
+export function normalizeR2AdminBucketId(value: string | undefined | null): R2AdminBucketId {
+  const match = ADMIN_BUCKETS.find((entry) => entry.id === value);
+  return match ? match.id : "replay-cache";
+}
+
+function getAdminBucket(bucketId: string | undefined | null): AdminBucketDef {
+  const id = normalizeR2AdminBucketId(bucketId);
+  return ADMIN_BUCKETS.find((entry) => entry.id === id)!;
+}
+
+// Resolving a client can throw when the configured bucket name doesn't match
+// what the store expects, which is a misconfiguration worth surfacing on the
+// bucket itself rather than failing the whole page.
+function resolveAdminClient(def: AdminBucketDef): S3Client | null {
+  try {
+    return def.getClient();
+  } catch {
+    return null;
   }
 }
 
-export function normalizeR2AdminPrefix(prefix: string | undefined | null): string {
+function requireAdminBucket(bucketId: string | undefined | null): { def: AdminBucketDef; client: S3Client } {
+  const def = getAdminBucket(bucketId);
+  const client = def.getClient();
+  if (!client) throw new Error(`R2 bucket "${def.bucket}" is not configured`);
+  return { def, client };
+}
+
+export function listR2AdminBuckets(): R2AdminBucketInfo[] {
+  return ADMIN_BUCKETS.map((def) => ({
+    id: def.id,
+    label: def.label,
+    bucket: def.bucket,
+    configured: resolveAdminClient(def) !== null,
+    publicBaseUrl: def.getPublicBaseUrl(),
+    roots: def.roots,
+  }));
+}
+
+function assertBucketKey(def: AdminBucketDef, storageKey: string): void {
+  if (!def.roots.some((root) => storageKey.startsWith(root.prefix))) {
+    const roots = def.roots.map((root) => root.prefix).join(" or ");
+    throw new Error(`Refusing to touch R2 key "${storageKey}" outside ${roots}`);
+  }
+}
+
+export function normalizeR2AdminPrefix(bucketId: string | undefined | null, prefix?: string | null): string {
+  const def = getAdminBucket(bucketId);
   const raw = (prefix ?? "").trim().replace(/^\/+/, "");
-  if (!raw) return REPLAY_CACHE_PREFIX;
+  if (!raw) return def.roots[0]!.prefix;
   const normalized = raw.endsWith("/") ? raw : `${raw}/`;
-  assertAdminBrowsableKey(normalized);
+  assertBucketKey(def, normalized);
   return normalized;
 }
 
-export function normalizeR2AdminObjectKey(key: string): string {
+export function normalizeR2AdminObjectKey(bucketId: string | undefined | null, key: string): string {
+  const def = getAdminBucket(bucketId);
   const normalized = key.trim().replace(/^\/+/, "");
-  assertAdminBrowsableKey(normalized);
+  assertBucketKey(def, normalized);
   if (!normalized || normalized.endsWith("/")) {
     throw new Error("Choose a file key, not a folder prefix.");
   }
   return normalized;
+}
+
+function isAdminRootPrefix(def: AdminBucketDef, prefix: string): boolean {
+  return def.roots.some((root) => root.prefix === prefix);
 }
 
 function objectNameFromKey(key: string, prefix: string): string {
@@ -477,21 +683,17 @@ async function mapWithConcurrency<T, U>(
   return results;
 }
 
-async function signGetUrl(
+function signBucketGetUrl(
+  r2: S3Client,
+  bucket: string,
   storageKey: string,
   mimeType?: string,
   downloadFilename?: string,
 ): Promise<string> {
-  // Read-only signing may reach any admin-browsable root; every mutating
-  // cache path still asserts the stricter replay-cache/ guard itself.
-  assertAdminBrowsableKey(storageKey);
-  const r2 = getClient();
-  if (!r2) throw new Error("R2 replay cache is not configured");
-
   return getSignedUrl(
     r2,
     new GetObjectCommand({
-      Bucket: REPLAY_CACHE_BUCKET,
+      Bucket: bucket,
       Key: storageKey,
       ResponseContentType: mimeType,
       ResponseContentDisposition: downloadFilename
@@ -500,6 +702,20 @@ async function signGetUrl(
     }),
     { expiresIn: SIGNED_URL_EXPIRES_SECONDS },
   );
+}
+
+async function signGetUrl(
+  storageKey: string,
+  mimeType?: string,
+  downloadFilename?: string,
+): Promise<string> {
+  // Read-only signing may reach any root of the private bucket; every mutating
+  // cache path still asserts the stricter replay-cache/ guard itself.
+  assertBucketKey(getAdminBucket("replay-cache"), storageKey);
+  const r2 = getClient();
+  if (!r2) throw new Error("R2 replay cache is not configured");
+
+  return signBucketGetUrl(r2, REPLAY_CACHE_BUCKET, storageKey, mimeType, downloadFilename);
 }
 
 // Content-Disposition is a signed header, so anything that could break out of
@@ -877,18 +1093,23 @@ export async function putCachedReplay(
   };
 }
 
-export async function getR2AdminListing(
-  prefixInput?: string | null,
-  continuationToken?: string | null,
-  queryInput?: string | null,
-): Promise<R2AdminListing> {
-  const r2 = getClient();
-  const prefix = normalizeR2AdminPrefix(prefixInput);
-  const query = normalizeR2AdminQuery(queryInput);
+export async function getR2AdminListing(options: {
+  bucket?: string | null;
+  prefix?: string | null;
+  continuationToken?: string | null;
+  query?: string | null;
+}): Promise<R2AdminListing> {
+  const def = getAdminBucket(options.bucket);
+  const r2 = resolveAdminClient(def);
+  const prefix = normalizeR2AdminPrefix(def.id, options.prefix);
+  const query = normalizeR2AdminQuery(options.query);
+  const continuationToken = options.continuationToken;
+  const bucketName = def.bucket;
   if (!r2) {
     return {
       configured: false,
-      bucket: REPLAY_CACHE_BUCKET,
+      bucketId: def.id,
+      bucket: bucketName,
       prefix,
       query,
       folders: [],
@@ -911,7 +1132,7 @@ export async function getR2AdminListing(
 
     do {
       const response = await r2.send(new ListObjectsV2Command({
-        Bucket: REPLAY_CACHE_BUCKET,
+        Bucket: bucketName,
         Prefix: prefix,
         MaxKeys: R2_ADMIN_LIST_LIMIT,
         ContinuationToken: token,
@@ -946,7 +1167,8 @@ export async function getR2AdminListing(
 
     return {
       configured: true,
-      bucket: REPLAY_CACHE_BUCKET,
+      bucketId: def.id,
+      bucket: bucketName,
       prefix,
       query,
       folders: [],
@@ -960,27 +1182,19 @@ export async function getR2AdminListing(
   }
 
   const response = await r2.send(new ListObjectsV2Command({
-    Bucket: REPLAY_CACHE_BUCKET,
+    Bucket: bucketName,
     Prefix: prefix,
     Delimiter: "/",
     MaxKeys: R2_ADMIN_LIST_LIMIT,
     ContinuationToken: continuationToken?.trim() || undefined,
   }));
 
-  const folderPrefixes = (response.CommonPrefixes ?? [])
+  const folders = (response.CommonPrefixes ?? [])
     .map((entry) => entry.Prefix)
-    .filter((entry): entry is string => !!entry && entry.startsWith(prefix));
-  const folderSummaries = await mapWithConcurrency(
-    folderPrefixes,
-    R2_ADMIN_FOLDER_STATS_CONCURRENCY,
-    (folderPrefix) => getR2PrefixSummaryInternal(r2, folderPrefix, R2_ADMIN_FOLDER_STATS_SCAN_LIMIT),
-  );
-  const folders = folderPrefixes.map((folderPrefix, index) => ({
+    .filter((entry): entry is string => !!entry && entry.startsWith(prefix))
+    .map((folderPrefix) => ({
       prefix: folderPrefix,
       name: objectNameFromKey(folderPrefix.replace(/\/$/, ""), prefix),
-      objectCount: folderSummaries[index]?.objectCount ?? 0,
-      sizeBytes: folderSummaries[index]?.sizeBytes ?? 0,
-      statsTruncated: folderSummaries[index]?.truncated ?? false,
     }));
 
   const objects = (response.Contents ?? [])
@@ -998,7 +1212,8 @@ export async function getR2AdminListing(
 
   return {
     configured: true,
-    bucket: REPLAY_CACHE_BUCKET,
+    bucketId: def.id,
+    bucket: bucketName,
     prefix,
     query,
     folders,
@@ -1011,20 +1226,45 @@ export async function getR2AdminListing(
   };
 }
 
+// Counts and sizes for the folder rows the browser is showing. Each prefix
+// costs a paginated scan of everything under it, which is why this is a
+// separate call the page makes per visible page of rows instead of something
+// the listing waits on.
+export async function getR2AdminFolderStats(options: {
+  bucket?: string | null;
+  prefixes: string[];
+}): Promise<R2AdminPrefixSummary[]> {
+  const def = getAdminBucket(options.bucket);
+  const r2 = resolveAdminClient(def);
+  if (!r2) return [];
+
+  const prefixes = options.prefixes
+    .slice(0, R2_ADMIN_FOLDER_STATS_LIMIT)
+    .map((prefix) => normalizeR2AdminPrefix(def.id, prefix));
+  return mapWithConcurrency(
+    prefixes,
+    R2_ADMIN_FOLDER_STATS_CONCURRENCY,
+    (prefix) => getR2PrefixSummaryInternal(r2, def, prefix, R2_ADMIN_FOLDER_STATS_SCAN_LIMIT),
+  );
+}
+
 async function getR2PrefixSummaryInternal(
   r2: S3Client,
+  def: AdminBucketDef,
   prefixInput: string,
   maxObjects?: number,
 ): Promise<R2AdminPrefixSummary> {
-  const prefix = normalizeR2AdminPrefix(prefixInput);
+  const prefix = normalizeR2AdminPrefix(def.id, prefixInput);
+  const labelSuffix = def.roots.find((root) => prefix.startsWith(root.prefix))?.folderLabelSuffix;
   let continuationToken: string | undefined;
   let objectCount = 0;
   let sizeBytes = 0;
   let truncated = false;
+  let sampleName: string | null = null;
 
   do {
     const response = await r2.send(new ListObjectsV2Command({
-      Bucket: REPLAY_CACHE_BUCKET,
+      Bucket: def.bucket,
       Prefix: prefix,
       MaxKeys: R2_ADMIN_DELETE_BATCH_SIZE,
       ContinuationToken: continuationToken,
@@ -1035,6 +1275,9 @@ async function getR2PrefixSummaryInternal(
       objectCount += 1;
       const objectSize = Number(entry.Size ?? 0);
       if (Number.isFinite(objectSize) && objectSize > 0) sizeBytes += objectSize;
+      if (labelSuffix && !sampleName && entry.Key.toLowerCase().endsWith(labelSuffix)) {
+        sampleName = entry.Key.slice(prefix.length);
+      }
       if (maxObjects != null && objectCount >= maxObjects) {
         truncated = Boolean(response.IsTruncated);
         break;
@@ -1045,28 +1288,32 @@ async function getR2PrefixSummaryInternal(
     continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
   } while (continuationToken);
 
-  return { prefix, objectCount, sizeBytes, truncated };
+  return { prefix, objectCount, sizeBytes, truncated, sampleName };
 }
 
-export async function getR2AdminPrefixSummary(prefixInput: string): Promise<R2AdminPrefixSummary> {
-  const r2 = getClient();
-  if (!r2) throw new Error("R2 replay cache is not configured");
-  const prefix = normalizeR2AdminPrefix(prefixInput);
-  if (ADMIN_BROWSABLE_PREFIXES.includes(prefix)) {
+export async function getR2AdminPrefixSummary(
+  bucketId: string | undefined | null,
+  prefixInput: string,
+): Promise<R2AdminPrefixSummary> {
+  const { def, client } = requireAdminBucket(bucketId);
+  const prefix = normalizeR2AdminPrefix(def.id, prefixInput);
+  if (isAdminRootPrefix(def, prefix)) {
     throw new Error("Refusing to summarize a root prefix for deletion.");
   }
-  return getR2PrefixSummaryInternal(r2, prefix);
+  return getR2PrefixSummaryInternal(client, def, prefix);
 }
 
-export async function deleteR2AdminObject(keyInput: string): Promise<R2AdminDeleteResult> {
-  const r2 = getClient();
-  if (!r2) throw new Error("R2 replay cache is not configured");
+export async function deleteR2AdminObject(
+  bucketId: string | undefined | null,
+  keyInput: string,
+): Promise<R2AdminDeleteResult> {
+  const { def, client: r2 } = requireAdminBucket(bucketId);
 
-  const key = normalizeR2AdminObjectKey(keyInput);
+  const key = normalizeR2AdminObjectKey(def.id, keyInput);
   let sizeBytes: number | null = null;
   try {
     const head = await r2.send(new HeadObjectCommand({
-      Bucket: REPLAY_CACHE_BUCKET,
+      Bucket: def.bucket,
       Key: key,
     }));
     sizeBytes = Number(head.ContentLength ?? 0);
@@ -1075,7 +1322,7 @@ export async function deleteR2AdminObject(keyInput: string): Promise<R2AdminDele
   }
 
   await r2.send(new DeleteObjectCommand({
-    Bucket: REPLAY_CACHE_BUCKET,
+    Bucket: def.bucket,
     Key: key,
   }));
 
@@ -1086,12 +1333,14 @@ export async function deleteR2AdminObject(keyInput: string): Promise<R2AdminDele
   };
 }
 
-export async function deleteR2AdminPrefix(prefixInput: string): Promise<R2AdminDeleteResult> {
-  const r2 = getClient();
-  if (!r2) throw new Error("R2 replay cache is not configured");
+export async function deleteR2AdminPrefix(
+  bucketId: string | undefined | null,
+  prefixInput: string,
+): Promise<R2AdminDeleteResult> {
+  const { def, client: r2 } = requireAdminBucket(bucketId);
 
-  const prefix = normalizeR2AdminPrefix(prefixInput);
-  if (ADMIN_BROWSABLE_PREFIXES.includes(prefix)) {
+  const prefix = normalizeR2AdminPrefix(def.id, prefixInput);
+  if (isAdminRootPrefix(def, prefix)) {
     throw new Error("Refusing to delete a root prefix.");
   }
 
@@ -1101,7 +1350,7 @@ export async function deleteR2AdminPrefix(prefixInput: string): Promise<R2AdminD
 
   do {
     const listed = await r2.send(new ListObjectsV2Command({
-      Bucket: REPLAY_CACHE_BUCKET,
+      Bucket: def.bucket,
       Prefix: prefix,
       MaxKeys: R2_ADMIN_DELETE_BATCH_SIZE,
       ContinuationToken: continuationToken,
@@ -1115,7 +1364,7 @@ export async function deleteR2AdminPrefix(prefixInput: string): Promise<R2AdminD
 
     if (objects.length > 0) {
       const response = await r2.send(new DeleteObjectsCommand({
-        Bucket: REPLAY_CACHE_BUCKET,
+        Bucket: def.bucket,
         Delete: {
           Objects: objects.map((object) => ({ Key: object.key })),
           Quiet: true,

@@ -18,7 +18,9 @@ import {
   ANALYTICS_RANGE_STORAGE_KEY,
   ANALYTICS_RECENT_EVENTS_LIMIT,
   ANALYTICS_REFRESH_MS,
+  analyticsSnapshotSupersedes,
   clampAnalyticsRangeHours,
+  getAnalyticsViewKey,
   parseAnalyticsRangeHours,
   type AnalyticsCountryRow,
   type AnalyticsMonitorData,
@@ -50,6 +52,9 @@ export function AnalyticsMonitorPanel() {
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
   const hasLoadedRef = useRef(false);
+  // What is currently on screen, so a reply that turns out to be older than it
+  // can be dropped rather than rendered.
+  const shownRef = useRef<{ key: string; fetchedAt: number } | null>(null);
   const pendingRecentEventsRef = useRef<Array<PendingAnalyticsRecentEvent<AnalyticsRecentEventRow>>>([]);
   // Read by the SSE handler so a country-filter change doesn't tear down the
   // stream just to change which events get prepended.
@@ -85,19 +90,23 @@ export function AnalyticsMonitorPanel() {
         const result = await getAnalyticsMonitorData({ data: { rangeHours: targetRange, recentCountry: targetRecentCountry } });
         if (!mountedRef.current) return;
         if (requestId !== requestIdRef.current) return;
-        // Live SSE rows stay overlaid on the snapshot until it returns the
-        // same event ID, so a just-captured event never blinks out.
-        const reconciled = reconcileAnalyticsRecentEvents({
-          snapshot: result.recentEvents,
-          pending: pendingRecentEventsRef.current,
-          country: targetRecentCountry,
-          now: Date.now(),
-          limit: ANALYTICS_RECENT_EVENTS_LIMIT,
-        });
-        pendingRecentEventsRef.current = reconciled.pending;
-        setData({ ...result, recentEvents: reconciled.rows });
-        setDataRange(targetRange);
-        setDataRecentCountry(targetRecentCountry);
+        const viewKey = getAnalyticsViewKey(targetRange, targetRecentCountry);
+        if (analyticsSnapshotSupersedes(shownRef.current, { key: viewKey, fetchedAt: result.fetchedAt, cacheState: result.cacheState })) {
+          // Live SSE rows stay overlaid on the snapshot until it returns the
+          // same event ID, so a just-captured event never blinks out.
+          const reconciled = reconcileAnalyticsRecentEvents({
+            snapshot: result.recentEvents,
+            pending: pendingRecentEventsRef.current,
+            country: targetRecentCountry,
+            now: Date.now(),
+            limit: ANALYTICS_RECENT_EVENTS_LIMIT,
+          });
+          pendingRecentEventsRef.current = reconciled.pending;
+          setData({ ...result, recentEvents: reconciled.rows });
+          setDataRange(targetRange);
+          setDataRecentCountry(targetRecentCountry);
+          shownRef.current = { key: viewKey, fetchedAt: result.fetchedAt };
+        }
         setError(null);
         hasLoadedRef.current = true;
         if (result.cacheState !== "fresh") {
@@ -245,15 +254,11 @@ export function AnalyticsMonitorPanel() {
       ? "warming..."
       : refreshing
         ? "refreshing..."
-        : statusData.cacheState === "stale"
-          ? `cached ${formatTimeAgo(new Date(statusData.fetchedAt).toISOString())}`
-          : `updated ${formatTimeAgo(new Date(statusData.fetchedAt).toISOString())}`
+        : `updated ${formatTimeAgo(new Date(statusData.fetchedAt).toISOString())}`
     : null;
   const statusColorClass = statusData?.cacheState === "warming" || refreshing
     ? "text-osu-pink-light"
-    : statusData?.cacheState === "stale"
-      ? "text-osu-yellow"
-      : "text-osu-f1";
+    : "text-osu-f1";
 
   const recentEvents = currentData?.recentEvents;
   const replayMaps = useMemo(() => buildAnalyticsReplayMapIndex(recentEvents ?? []), [recentEvents]);

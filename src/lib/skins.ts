@@ -106,6 +106,10 @@ export interface SkinsListParams {
   sort?: SkinsSort;
   k?: number;
   variant?: SkinsKeymodeVariant;
+  // One uploader's skins, the "uploader: you" filter. The list stays the public
+  // one, so this shows that uploader's public skins only; their private ones
+  // live on the shelf above the grid.
+  owner?: number | null;
 }
 
 // The list endpoint is browser-cached (max-age=60 + stale-while-revalidate
@@ -136,7 +140,7 @@ const SKINS_LIST_MEMORY_MAX = 12;
 const skinsListMemory = new Map<string, { at: number; result: SkinsListResult }>();
 
 export function skinsListCacheKey(params: SkinsListParams): string {
-  return [params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0, params.variant ?? ""].join("|");
+  return [params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0, params.variant ?? "", params.owner ?? ""].join("|");
 }
 
 export function readCachedSkinsList(key: string): SkinsListResult | null {
@@ -212,6 +216,7 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
     query.set("k", String(params.k));
     if (params.variant) query.set("variant", params.variant);
   }
+  if (params.owner && Number.isInteger(params.owner) && params.owner > 0) query.set("owner", String(params.owner));
   query.set("pageSize", String(SKINS_PAGE_SIZE));
   const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { credentials: "omit", cache: skinsListCacheMode(), ...init });
   if (!response.ok) throw new Error(`Server ${response.status}`);

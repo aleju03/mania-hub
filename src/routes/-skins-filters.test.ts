@@ -4,11 +4,19 @@ import { parseSkinsSearch } from "./skins";
 
 describe("skins search params", () => {
   it("returns defaults for an empty search", () => {
-    expect(parseSkinsSearch({})).toEqual({ q: "", page: 0, sort: "newest", k: 0, special: false });
+    expect(parseSkinsSearch({})).toEqual({ q: "", page: 0, sort: "newest", k: 0, special: false, mine: false });
   });
 
   it("keeps a valid query and page", () => {
-    expect(parseSkinsSearch({ q: "rainbow", page: "2" })).toEqual({ q: "rainbow", page: 2, sort: "newest", k: 0, special: false });
+    expect(parseSkinsSearch({ q: "rainbow", page: "2" })).toEqual({ q: "rainbow", page: 2, sort: "newest", k: 0, special: false, mine: false });
+  });
+
+  it("reads the uploader filter from either the boolean or its URL form", () => {
+    expect(parseSkinsSearch({ mine: true }).mine).toBe(true);
+    expect(parseSkinsSearch({ mine: "true" }).mine).toBe(true);
+    expect(parseSkinsSearch({ mine: "1" }).mine).toBe(true);
+    expect(parseSkinsSearch({ mine: "0" }).mine).toBe(false);
+    expect(parseSkinsSearch({ mine: "aleju03" }).mine).toBe(false);
   });
 
   it("accepts the downloads sort and rejects unknown sorts", () => {

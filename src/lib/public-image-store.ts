@@ -24,7 +24,7 @@ const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 // Guard against a typo or a copied .env pointing uploads at the private cache
 // bucket, where they would be written but never publicly readable.
-const EXPECTED_BUCKET = "mania-hub-public";
+export const PUBLIC_IMAGE_BUCKET = "mania-hub-public";
 
 let client: S3Client | null | undefined;
 
@@ -44,7 +44,7 @@ function getClient(): S3Client | null {
     client = null;
     return client;
   }
-  if (bucket !== EXPECTED_BUCKET) {
+  if (bucket !== PUBLIC_IMAGE_BUCKET) {
     throw new Error(`Refusing to store public images in unexpected R2 bucket "${bucket}"`);
   }
 

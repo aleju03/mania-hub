@@ -2124,6 +2124,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     if (scope.tokened) res.setHeader("cache-control", "private, no-store");
     else res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
     const variant = url.searchParams.get("variant");
+    const owner = Number(url.searchParams.get("owner"));
     const list = await listSkins(ctx.db, {
       q: (url.searchParams.get("q") ?? "").slice(0, 80),
       keymode: Number.isInteger(keymode) && keymode >= 1 && keymode <= 10 ? keymode : null,
@@ -2134,6 +2135,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       pageSize: Number.isFinite(pageSize) ? pageSize : 24,
       includeHidden,
       sort: url.searchParams.get("sort") === "downloads" ? "downloads" : "newest",
+      // One uploader's skins ("uploader: you" on the browse page). Anyone may
+      // ask for anyone's: it only ever narrows what the visibility gate below
+      // already allows this request to see.
+      ownerUserId: Number.isInteger(owner) && owner > 0 ? owner : null,
       // Only an admin-token request carries a vouched-for viewer, so a browser
       // cannot ask for someone else's private shelf by guessing an id.
       privateOwnerUserId: scope.viewerUserId,

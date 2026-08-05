@@ -41,6 +41,10 @@ interface SkinsSearch {
   // The 7K+1 refinement of k=8: true narrows to skins whose eighth column is
   // a scratch lane; false makes 8K mean actual 8K. Meaningless off k=8.
   special?: boolean;
+  // "uploader: you": the grid narrows to the signed-in viewer's own uploads.
+  // Nobody's id is in the URL, so the filter travels as a plain flag and means
+  // whoever is signed in when the link is opened; signed out it means nothing.
+  mine?: boolean;
 }
 
 const DEFAULT_SKINS_SEARCH = {
@@ -49,6 +53,7 @@ const DEFAULT_SKINS_SEARCH = {
   sort: "newest" as SkinsSort,
   k: 0,
   special: false,
+  mine: false,
 };
 
 // 0 means no keymode filter; the options cover the keymodes skins realistically
@@ -75,6 +80,7 @@ export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
     sort: search.sort === "downloads" ? "downloads" : DEFAULT_SKINS_SEARCH.sort,
     k,
     special: k === 8 && (search.special === true || search.special === "true" || search.special === 1 || search.special === "1"),
+    mine: search.mine === true || search.mine === "true" || search.mine === 1 || search.mine === "1",
   };
 }
 
@@ -140,19 +146,25 @@ function SkinCardSkeleton() {
 }
 
 function SkinsPage() {
-  const { q = "", page = 0, sort = "newest", k = 0, special = false } = Route.useSearch();
+  const { q = "", page = 0, sort = "newest", k = 0, special = false, mine = false } = Route.useSearch();
   const navigate = useNavigate();
   const location = useLocation();
   const auth = useAuth();
   const admin = isAdmin(auth);
+  const viewerId = auth.viewer?.id ?? null;
 
   // Only an 8K filter carries a layout refinement: "special" is the 7K+1 chip,
   // "regular" keeps actual-8K skins ahead of the 7K+1 ones sharing the keymode.
   const variant = k === 8 ? (special ? "special" as const : "regular" as const) : undefined;
+  // The list stays the public one, so this is the viewer's public uploads; the
+  // private ones are on the shelf above the grid either way. Signed out the
+  // flag has nobody to point at, so it filters nothing.
+  const owner = mine ? viewerId : null;
+  const mineActive = owner != null;
 
   // Seeded from the in-memory list cache so walking back from a skin page
   // paints the same grid it left, not a screen of skeletons.
-  const [data, setData] = useState<SkinsListResult | null>(() => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k, variant })));
+  const [data, setData] = useState<SkinsListResult | null>(() => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k, variant, owner })));
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
@@ -174,11 +186,11 @@ function SkinsPage() {
     (patch: SkinsSearch) => {
       void navigate({
         to: "/skins",
-        search: { q, sort, k, special, page: 0, ...patch },
+        search: { q, sort, k, special, mine, page: 0, ...patch },
         replace: true,
       });
     },
-    [navigate, q, sort, k, special],
+    [navigate, q, sort, k, special, mine],
   );
 
   // Debounced text search: typing updates local state, the URL follows.
@@ -198,7 +210,7 @@ function SkinsPage() {
       return;
     }
     const controller = new AbortController();
-    const cacheKey = skinsListCacheKey({ q, page, sort, k, variant });
+    const cacheKey = skinsListCacheKey({ q, page, sort, k, variant, owner });
     // A cached page shows immediately and the fetch behind it only swaps the
     // data in; without one this is a cold load and the skeletons are honest.
     const cached = readCachedSkinsList(cacheKey);
@@ -206,7 +218,7 @@ function SkinsPage() {
     setLoading(!cached);
     setFailed(false);
     // One list for everyone, straight from the backend and cacheable there.
-    fetchSkinsListDirect({ q, page, sort, k, variant }, { signal: controller.signal })
+    fetchSkinsListDirect({ q, page, sort, k, variant, owner }, { signal: controller.signal })
       .then((result) => {
         writeCachedSkinsList(cacheKey, result);
         if (controller.signal.aborted) return;
@@ -220,9 +232,8 @@ function SkinsPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [q, page, sort, k, variant, reloadTick]);
+  }, [q, page, sort, k, variant, owner, reloadTick]);
 
-  const viewerId = auth.viewer?.id ?? null;
   useEffect(() => {
     if (!viewerId || !isLiveBackendConfigured()) {
       setPrivateSkins([]);
@@ -375,6 +386,18 @@ function SkinsPage() {
                     );
                   })}
                 </FilterRow>
+                {/* Only worth a row to someone who has an account to filter
+                    by; signed out there is no "you". */}
+                {auth.viewer && (
+                  <FilterRow label="uploader">
+                    <FilterOption active={!mineActive} onClick={() => applySearch({ mine: false })}>
+                      anyone
+                    </FilterOption>
+                    <FilterOption active={mineActive} onClick={() => applySearch({ mine: true })}>
+                      you
+                    </FilterOption>
+                  </FilterRow>
+                )}
                 <FilterRow label="sort by">
                   <FilterOption active={sort === "newest"} onClick={() => applySearch({ sort: "newest" })}>
                     newest
@@ -430,7 +453,7 @@ function SkinsPage() {
                 {privateOpen && (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {privateSkins.length > 0
-                      ? privateSkins.map((skin) => <SkinCard key={skin.id} skin={skin} />)
+                      ? privateSkins.map((skin) => <SkinCard key={skin.id} skin={skin} showUploader={admin} />)
                       : Array.from({ length: privatePending }, (_, index) => <SkinCardSkeleton key={index} />)}
                   </div>
                 )}
@@ -456,9 +479,17 @@ function SkinsPage() {
               </div>
             ) : skins.length === 0 ? (
               <div className="mx-auto max-w-md px-4 py-16 text-center">
-                <div className="text-sm font-bold text-white">{q || k ? "No skins match" : "No skins yet"}</div>
+                <div className="text-sm font-bold text-white">
+                  {mineActive && !q && !k ? "You have not published a skin yet" : q || k || mineActive ? "No skins match" : "No skins yet"}
+                </div>
                 <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-                  {q || k ? "Clear the filters, or upload the skin yourself." : "The first uploaded skin lands here."}
+                  {mineActive && !q && !k
+                    ? privateSkins.length > 0
+                      ? "Your private skins are on the shelf above; anything you publish lands here."
+                      : "Upload a skin and it lands here."
+                    : q || k || mineActive
+                      ? "Clear the filters, or upload the skin yourself."
+                      : "The first uploaded skin lands here."}
                 </p>
               </div>
             ) : (

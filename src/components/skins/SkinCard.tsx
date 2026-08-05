@@ -37,7 +37,9 @@ export function SkinKeymodeTags({ keymodes, specialKeymodes, overlay = false, ma
 // previewKeys is the browse grid's keymode filter: with it set the card fronts
 // that keymode's own render when the skin has one, so filtering 4K shows every
 // skin's 4K playfield even where a 7K render was chosen as the cover.
-export function SkinCard({ skin, previewKeys, onClick }: { skin: SkinSummary; previewKeys?: number; onClick?: () => void }) {
+// showUploader is for the admin private shelf, which mixes every uploader's
+// skins and would otherwise give no way to tell whose is whose.
+export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: { skin: SkinSummary; previewKeys?: number; showUploader?: boolean; onClick?: () => void }) {
   const accent = skin.accentColor ?? SKIN_FALLBACK_ACCENT;
   const isPrivate = skin.visibility === "private";
   const keymodePreview = previewKeys != null ? skin.previews.find((preview) => preview.keys === previewKeys) : undefined;
@@ -107,23 +109,29 @@ export function SkinCard({ skin, previewKeys, onClick }: { skin: SkinSummary; pr
               )}
             </span>
           </div>
-          {/* Primary credit goes to whoever made the skin; the uploader (with
-              avatar) only fronts the card when no author is known. */}
+          {/* Credit is for whoever made the skin. With no author on file the
+              line just drops it: standing the uploader in that spot read as a
+              claim they drew it, and the skin's page says "uploaded by" in
+              full. showUploader is the moderation shelf, where an admin is
+              looking at every uploader's skins at once and needs to tell them
+              apart; it is labelled there, never bare. */}
           <div className="flex items-center gap-1.5 text-[11px] text-osu-f1">
             {skin.author ? (
               <span className="truncate">
                 by <span className="font-semibold text-osu-l2">{skin.author}</span>
               </span>
-            ) : (
+            ) : showUploader ? (
               <>
                 <Avatar userId={skin.ownerUserId} size={14} shape="circle" />
-                <span className="truncate font-semibold text-osu-l2">{skin.ownerUsername}</span>
+                <span className="truncate">
+                  uploaded by <span className="font-semibold text-osu-l2">{skin.ownerUsername}</span>
+                </span>
               </>
-            )}
+            ) : null}
             {skin.publishedAt && (
               <>
-                <span aria-hidden="true">·</span>
-                <span suppressHydrationWarning>{formatTimeAgo(skin.publishedAt)}</span>
+                {(skin.author || showUploader) && <span aria-hidden="true">·</span>}
+                <span className="shrink-0" suppressHydrationWarning>{formatTimeAgo(skin.publishedAt)}</span>
               </>
             )}
             {skin.oskSizeBytes ? (

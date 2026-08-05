@@ -6,72 +6,120 @@ import { requireAdminAccess } from "../../lib/auth";
 import {
   deleteR2AdminObject,
   deleteR2AdminPrefix,
+  describeR2AdminObjects,
+  getR2AdminFolderStats,
   getR2AdminListing,
+  getR2AdminObjectUrl,
   getR2AdminPrefixSummary,
-  getR2AdminSignedUrl,
   getR2AdminSkinOskDownload,
+  listR2AdminBuckets,
+  type R2AdminBucketId,
+  type R2AdminBucketInfo,
   type R2AdminFolder,
   type R2AdminListing,
   type R2AdminObject,
+  type R2AdminObjectDescription,
+  type R2AdminObjectUrl,
   type R2AdminPrefixSummary,
+  type R2AdminRoot,
   type R2AdminSkinDownload,
 } from "../../lib/r2-cache";
+import { keyContext, readableName } from "../../lib/r2-admin-labels";
 import {
   describeUploadedReplayByKey,
   type UploadedReplayDescription,
 } from "../../lib/uploaded-replay-describe";
 import { GradeImg } from "../../components/ui/GradeImg";
 
+// An empty prefix means "the first root of this bucket"; the server resolves it
+// and the answer comes back on the listing, so the roots themselves live in one
+// place (the bucket registry in r2-cache.ts) instead of being mirrored here.
 type R2Search = {
-  prefix: string;
+  bucket?: R2AdminBucketId;
+  prefix?: string;
 };
 
-type PendingDelete =
+type PendingDelete = {
+  bucket: R2AdminBucketId;
+} & (
   | { kind: "object"; key: string; name: string }
-  | { kind: "prefix"; prefix: string; name: string };
+  | { kind: "prefix"; prefix: string; name: string }
+);
 
 type SortKey = "name" | "size" | "modified";
 type SortDirection = "asc" | "desc";
+type SortState = { key: SortKey; direction: SortDirection };
 
-const ROOT_PREFIX = "replay-cache/";
-// The browsable bucket roots; must stay in sync with ADMIN_BROWSABLE_PREFIXES
-// in r2-cache.ts. replay-cache/ is evictable cache, skins/ holds the durable
-// skin uploads written by the live backend.
-const ROOTS = [
-  { label: "replay-cache", prefix: ROOT_PREFIX },
-  { label: "skins", prefix: "skins/" },
-];
+const BUCKET_IDS = ["replay-cache", "public"] as const satisfies readonly R2AdminBucketId[];
+const DEFAULT_BUCKET: R2AdminBucketId = "replay-cache";
 const PAGE_SIZE = 25;
 
+const fetchR2Buckets = createServerFn({ method: "GET" })
+  .handler(async (): Promise<R2AdminBucketInfo[]> => {
+    await requireAdminAccess("R2 bucket management");
+    return listR2AdminBuckets();
+  });
+
 const listR2Objects = createServerFn({ method: "GET" })
-  .validator((data: { prefix?: string; continuationToken?: string | null; query?: string }) => ({
-    prefix: typeof data?.prefix === "string" ? data.prefix : ROOT_PREFIX,
+  .validator((data: {
+    bucket?: string;
+    prefix?: string;
+    continuationToken?: string | null;
+    query?: string;
+  }) => ({
+    bucket: typeof data?.bucket === "string" ? data.bucket : DEFAULT_BUCKET,
+    prefix: typeof data?.prefix === "string" ? data.prefix : "",
     continuationToken: typeof data?.continuationToken === "string" ? data.continuationToken : null,
     query: typeof data?.query === "string" ? data.query : "",
   }))
   .handler(async ({ data }): Promise<R2AdminListing> => {
     await requireAdminAccess("R2 bucket management");
-    return getR2AdminListing(data.prefix, data.continuationToken, data.query);
+    return getR2AdminListing(data);
+  });
+
+const fetchR2FolderStats = createServerFn({ method: "GET" })
+  .validator((data: { bucket?: string; prefixes?: string[] }) => ({
+    bucket: typeof data?.bucket === "string" ? data.bucket : DEFAULT_BUCKET,
+    prefixes: Array.isArray(data?.prefixes)
+      ? data.prefixes.filter((entry): entry is string => typeof entry === "string")
+      : [],
+  }))
+  .handler(async ({ data }): Promise<R2AdminPrefixSummary[]> => {
+    await requireAdminAccess("R2 folder stats");
+    return getR2AdminFolderStats(data);
+  });
+
+const describeR2Objects = createServerFn({ method: "GET" })
+  .validator((data: { bucket?: string; keys?: string[] }) => ({
+    bucket: typeof data?.bucket === "string" ? data.bucket : DEFAULT_BUCKET,
+    keys: Array.isArray(data?.keys)
+      ? data.keys.filter((entry): entry is string => typeof entry === "string")
+      : [],
+  }))
+  .handler(async ({ data }): Promise<R2AdminObjectDescription[]> => {
+    await requireAdminAccess("R2 object listing");
+    return describeR2AdminObjects(data);
   });
 
 const summarizeR2Prefix = createServerFn({ method: "GET" })
-  .validator((data: { prefix?: string }) => ({
+  .validator((data: { bucket?: string; prefix?: string }) => ({
+    bucket: typeof data?.bucket === "string" ? data.bucket : DEFAULT_BUCKET,
     prefix: typeof data?.prefix === "string" ? data.prefix : "",
   }))
   .handler(async ({ data }): Promise<R2AdminPrefixSummary> => {
     await requireAdminAccess("R2 folder preview");
-    return getR2AdminPrefixSummary(data.prefix);
+    return getR2AdminPrefixSummary(data.bucket, data.prefix);
   });
 
-const signR2AdminUrl = createServerFn({ method: "GET" })
-  .validator((data: { key?: string; mimeType?: string }) => ({
+const resolveR2ObjectUrl = createServerFn({ method: "GET" })
+  .validator((data: { bucket?: string; key?: string; mimeType?: string }) => ({
+    bucket: typeof data?.bucket === "string" ? data.bucket : DEFAULT_BUCKET,
     key: typeof data?.key === "string" ? data.key : "",
     mimeType: typeof data?.mimeType === "string" && data.mimeType ? data.mimeType : undefined,
   }))
-  .handler(async ({ data }): Promise<{ url: string }> => {
+  .handler(async ({ data }): Promise<R2AdminObjectUrl> => {
     await requireAdminAccess("R2 object preview");
-    const url = await getR2AdminSignedUrl(data.key, data.mimeType);
-    return { url };
+    return getR2AdminObjectUrl(data.bucket, data.key, data.mimeType);
   });
 
 const signSkinOskDownload = createServerFn({ method: "GET" })
@@ -93,29 +141,34 @@ const describeUploadedReplay = createServerFn({ method: "GET" })
   });
 
 const deleteR2Object = createServerFn({ method: "POST" })
-  .validator((data: { key?: string }) => ({
+  .validator((data: { bucket?: string; key?: string }) => ({
+    bucket: typeof data?.bucket === "string" ? data.bucket : DEFAULT_BUCKET,
     key: typeof data?.key === "string" ? data.key : "",
   }))
   .handler(async ({ data }) => {
     await requireAdminAccess("R2 object deletion");
-    return deleteR2AdminObject(data.key);
+    return deleteR2AdminObject(data.bucket, data.key);
   });
 
 const deleteR2Prefix = createServerFn({ method: "POST" })
-  .validator((data: { prefix?: string }) => ({
+  .validator((data: { bucket?: string; prefix?: string }) => ({
+    bucket: typeof data?.bucket === "string" ? data.bucket : DEFAULT_BUCKET,
     prefix: typeof data?.prefix === "string" ? data.prefix : "",
   }))
   .handler(async ({ data }) => {
     await requireAdminAccess("R2 folder deletion");
-    return deleteR2AdminPrefix(data.prefix);
+    return deleteR2AdminPrefix(data.bucket, data.prefix);
   });
 
 export const Route = createFileRoute("/admin/r2")({
-  validateSearch: (search: Record<string, unknown>): R2Search => ({
-    prefix: typeof search.prefix === "string" && search.prefix.trim()
-      ? search.prefix.trim()
-      : ROOT_PREFIX,
-  }),
+  validateSearch: (search: Record<string, unknown>): R2Search => {
+    const bucket = BUCKET_IDS.find((id) => id === search.bucket);
+    const prefix = typeof search.prefix === "string" ? search.prefix.trim() : "";
+    return {
+      ...(bucket && bucket !== DEFAULT_BUCKET ? { bucket } : {}),
+      ...(prefix ? { prefix } : {}),
+    };
+  },
   head: () => ({
     meta: [
       { title: "R2 - admin" },
@@ -130,6 +183,114 @@ export const Route = createFileRoute("/admin/r2")({
   },
   component: R2AdminPage,
 });
+
+// ── Session caches ──
+// Everything the browser fetches is keyed by bucket + folder + search and kept
+// for the tab's lifetime, so stepping back out of a folder (or back into the
+// page) paints from memory instead of re-running the listing and the per-folder
+// scans behind it. Entries older than the stale window still paint first and
+// refresh in the background.
+const LISTING_STALE_MS = 5 * 60 * 1000;
+const LISTING_CACHE_LIMIT = 40;
+const FOLDER_STATS_CACHE_LIMIT = 600;
+
+type ListingSnapshot = { listing: R2AdminListing; fetchedAt: number };
+type ViewState = { queryInput: string; query: string; page: number };
+
+const EMPTY_VIEW: ViewState = { queryInput: "", query: "", page: 1 };
+
+// Matches the server's per-request cap so nothing asked for is silently dropped.
+const FOLDER_STATS_BATCH = 32;
+const DESCRIBE_BATCH = 32;
+const DESCRIBE_CACHE_LIMIT = 400;
+// Signed URLs are good for six hours; drop them well before that so a long
+// session never renders a dead thumbnail.
+const DESCRIBE_STALE_MS = 4 * 60 * 60 * 1000;
+
+const listingCache = new Map<string, ListingSnapshot>();
+const folderStatsCache = new Map<string, R2AdminPrefixSummary>();
+// Every folder whose stats have been asked for, so a batch is requested once
+// and a folder that failed to scan doesn't retry on every render.
+const folderStatsSeen = new Set<string>();
+const describeCache = new Map<string, { data: R2AdminObjectDescription; fetchedAt: number }>();
+const describeSeen = new Set<string>();
+const describeInflight = new Set<string>();
+const viewStateCache = new Map<string, ViewState>();
+let lastSort: SortState = { key: "name", direction: "asc" };
+let lastThumbnails = true;
+
+// Insertion-ordered eviction: the oldest key goes first, and re-setting a key
+// moves it back to the end.
+function remember<T>(cache: Map<string, T>, key: string, value: T, limit: number): void {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > limit) {
+    const oldest = cache.keys().next();
+    if (oldest.done) break;
+    cache.delete(oldest.value);
+  }
+}
+
+function dropBucketEntries(cache: Map<string, unknown> | Set<string>, bucket: R2AdminBucketId): void {
+  for (const key of [...cache.keys()]) {
+    if (key.startsWith(`${bucket}|`)) cache.delete(key);
+  }
+}
+
+function searchFor(bucket: R2AdminBucketId, prefix?: string): R2Search {
+  return {
+    ...(bucket !== DEFAULT_BUCKET ? { bucket } : {}),
+    ...(prefix ? { prefix } : {}),
+  };
+}
+
+function viewCacheKey(bucket: R2AdminBucketId, prefix: string): string {
+  return `${bucket}|${prefix}`;
+}
+
+function listingCacheKey(bucket: R2AdminBucketId, prefix: string, query: string): string {
+  return `${bucket}|${prefix}|${query}`;
+}
+
+let bucketsCache: R2AdminBucketInfo[] | null = null;
+let bucketsInflight: Promise<R2AdminBucketInfo[]> | null = null;
+
+function loadBuckets(): Promise<R2AdminBucketInfo[]> {
+  if (bucketsCache) return Promise.resolve(bucketsCache);
+  if (!bucketsInflight) {
+    bucketsInflight = fetchR2Buckets()
+      .then((data) => {
+        bucketsCache = data;
+        return data;
+      })
+      .finally(() => {
+        bucketsInflight = null;
+      });
+  }
+  return bucketsInflight;
+}
+
+function useR2Buckets(): R2AdminBucketInfo[] | null {
+  const [buckets, setBuckets] = useState<R2AdminBucketInfo[] | null>(bucketsCache);
+
+  useEffect(() => {
+    if (bucketsCache) {
+      setBuckets(bucketsCache);
+      return;
+    }
+    let active = true;
+    void loadBuckets().then((data) => {
+      if (active) setBuckets(data);
+    }).catch(() => {
+      // The listing call reports the same failure with a message worth showing.
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return buckets;
+}
 
 function formatBytes(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "0 B";
@@ -172,8 +333,27 @@ function compareObjects(a: R2AdminObject, b: R2AdminObject, sortKey: SortKey): n
   return compareText(a.name, b.name);
 }
 
-function compareFolders(a: R2AdminFolder, b: R2AdminFolder, sortKey: SortKey): number {
-  if (sortKey === "size") return a.sizeBytes - b.sizeBytes;
+function folderStatsFor(bucket: R2AdminBucketId, prefix: string): R2AdminPrefixSummary | null {
+  return folderStatsCache.get(viewCacheKey(bucket, prefix)) ?? null;
+}
+
+function describedObject(bucket: R2AdminBucketId, key: string): R2AdminObjectDescription | null {
+  const entry = describeCache.get(viewCacheKey(bucket, key));
+  if (!entry || Date.now() - entry.fetchedAt > DESCRIBE_STALE_MS) return null;
+  return entry.data;
+}
+
+
+function compareFolders(
+  a: R2AdminFolder,
+  b: R2AdminFolder,
+  sortKey: SortKey,
+  bucket: R2AdminBucketId,
+): number {
+  if (sortKey === "size") {
+    return (folderStatsFor(bucket, a.prefix)?.sizeBytes ?? 0)
+      - (folderStatsFor(bucket, b.prefix)?.sizeBytes ?? 0);
+  }
   return compareText(a.name, b.name);
 }
 
@@ -222,14 +402,14 @@ function detectPreviewKind(name: string): { kind: PreviewKind; mimeType?: string
 
 // Sub-path crumbs below the active root; the roots themselves render as the
 // switcher in front of them.
-function pathCrumbs(prefix: string): Array<{ label: string; prefix: string }> {
-  const parts = prefix.replace(/\/+$/, "").split("/").filter(Boolean);
-  const root = ROOTS.find((entry) => entry.prefix === `${parts[0] ?? ""}/`);
+function pathCrumbs(prefix: string, roots: R2AdminRoot[]): Array<{ label: string; prefix: string }> {
+  const root = roots.find((entry) => prefix.startsWith(entry.prefix));
   if (!root) return [];
 
+  const parts = prefix.slice(root.prefix.length).replace(/\/+$/, "").split("/").filter(Boolean);
   const crumbs: Array<{ label: string; prefix: string }> = [];
   let current = root.prefix;
-  for (const part of parts.slice(1)) {
+  for (const part of parts) {
     current += `${part}/`;
     crumbs.push({ label: part, prefix: current });
   }
@@ -306,26 +486,55 @@ function useUploadedReplayDescription(key: string): ReplayDescriptionState {
 function R2AdminPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const [listing, setListing] = useState<R2AdminListing | null>(null);
+  const buckets = useR2Buckets();
+
+  const bucketId = search.bucket ?? DEFAULT_BUCKET;
+  const prefixParam = search.prefix ?? "";
+  const viewKey = viewCacheKey(bucketId, prefixParam);
+
+  // Search text and page number belong to the folder you were looking at, so
+  // they are restored the same way the listing itself is.
+  const [viewKeyState, setViewKeyState] = useState(viewKey);
+  const [view, setView] = useState<ViewState>(() => viewStateCache.get(viewKey) ?? EMPTY_VIEW);
+  if (viewKeyState !== viewKey) {
+    setViewKeyState(viewKey);
+    setView(viewStateCache.get(viewKey) ?? EMPTY_VIEW);
+  }
+
+  const cacheKey = listingCacheKey(bucketId, prefixParam, view.query);
+  const [snapshotKey, setSnapshotKey] = useState(cacheKey);
+  const [snapshot, setSnapshot] = useState<ListingSnapshot | null>(
+    () => listingCache.get(cacheKey) ?? null,
+  );
+  if (snapshotKey !== cacheKey) {
+    setSnapshotKey(cacheKey);
+    setSnapshot(listingCache.get(cacheKey) ?? null);
+  }
+
+  const activeKeyRef = useRef(cacheKey);
+  activeKeyRef.current = cacheKey;
+
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [statsTick, setStatsTick] = useState(0);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
-  const [queryInput, setQueryInput] = useState("");
-  const [query, setQuery] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("name");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [prefixSummary, setPrefixSummary] = useState<R2AdminPrefixSummary | null>(null);
   const [prefixSummaryLoading, setPrefixSummaryLoading] = useState(false);
   const [prefixSummaryError, setPrefixSummaryError] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const [fetchedAt, setFetchedAt] = useState<number | null>(null);
-  const [page, setPage] = useState(1);
   const [preview, setPreview] = useState<R2AdminObject | null>(null);
+  const [sort, setSort] = useState<SortState>(lastSort);
+  const [thumbnails, setThumbnails] = useState(lastThumbnails);
+  const [describeTick, setDescribeTick] = useState(0);
   const requestIdRef = useRef(0);
 
-  const prefix = search.prefix || ROOT_PREFIX;
-  const crumbs = useMemo(() => pathCrumbs(prefix), [prefix]);
+  const listing = snapshot?.listing ?? null;
+  const activeBucket = buckets?.find((entry) => entry.id === bucketId) ?? null;
+  const roots = activeBucket?.roots ?? [];
+  const activePrefix = prefixParam || listing?.prefix || roots[0]?.prefix || "";
+  const crumbs = useMemo(() => pathCrumbs(activePrefix, roots), [activePrefix, roots]);
   const deleteReady = pendingDelete?.kind !== "prefix" || (
     !!prefixSummary &&
     !prefixSummaryLoading &&
@@ -333,41 +542,101 @@ function R2AdminPage() {
   );
 
   useEffect(() => {
+    viewStateCache.set(viewKey, view);
+  }, [viewKey, view]);
+
+  useEffect(() => {
+    lastSort = sort;
+  }, [sort]);
+
+  useEffect(() => {
+    lastThumbnails = thumbnails;
+  }, [thumbnails]);
+
+  useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setQuery(queryInput.trim());
+      setView((current) => {
+        const next = current.queryInput.trim();
+        if (next === current.query) return current;
+        return { ...current, query: next, page: 1 };
+      });
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [queryInput]);
+  }, [view.queryInput]);
 
-  const load = useCallback(async (token: string | null, append: boolean) => {
+  const load = useCallback(async (
+    token: string | null,
+    mode: "replace" | "append" | "revalidate",
+  ) => {
+    const key = listingCacheKey(bucketId, prefixParam, view.query);
     const requestId = ++requestIdRef.current;
-    if (append) {
-      setLoadingMore(true);
-    } else {
-      setLoading(true);
-    }
+    if (mode === "append") setLoadingMore(true);
+    else if (mode === "revalidate") setRefreshing(true);
+    else setLoading(true);
     setError(null);
 
     try {
-      const next = await listR2Objects({ data: { prefix, continuationToken: token, query } });
-      if (requestId !== requestIdRef.current) return;
-      setListing((previous) => append && previous ? mergeListing(previous, next) : next);
-      setFetchedAt(Date.now());
+      const next = await listR2Objects({
+        data: { bucket: bucketId, prefix: prefixParam, continuationToken: token, query: view.query },
+      });
+      const previous = mode === "append" ? listingCache.get(key)?.listing : null;
+      const entry: ListingSnapshot = {
+        listing: previous ? mergeListing(previous, next) : next,
+        fetchedAt: Date.now(),
+      };
+      remember(listingCache, key, entry, LISTING_CACHE_LIMIT);
+      if (requestId === requestIdRef.current && activeKeyRef.current === key) {
+        setSnapshot(entry);
+      }
     } catch (err) {
-      if (requestId !== requestIdRef.current) return;
+      if (requestId !== requestIdRef.current || activeKeyRef.current !== key) return;
       setError(err instanceof Error ? err.message : "Could not load R2 objects.");
     } finally {
-      if (requestId !== requestIdRef.current) return;
-      setLoading(false);
-      setLoadingMore(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+        setLoadingMore(false);
+      }
     }
-  }, [prefix, query]);
+  }, [bucketId, prefixParam, view.query]);
 
   useEffect(() => {
-    setListing(null);
-    setPage(1);
-    void load(null, false);
-  }, [load]);
+    const entry = listingCache.get(cacheKey);
+    if (entry && Date.now() - entry.fetchedAt < LISTING_STALE_MS) return;
+    void load(null, entry ? "revalidate" : "replace");
+  }, [cacheKey, load]);
+
+  // Folder counts arrive after the rows do, in batches the server caps, so a
+  // folder with hundreds of children never blocks the first paint.
+  const folders = listing?.folders;
+  useEffect(() => {
+    if (!folders?.length) return;
+    const batch = folders
+      .map((folder) => folder.prefix)
+      .filter((prefix) => !folderStatsSeen.has(viewCacheKey(bucketId, prefix)))
+      .slice(0, FOLDER_STATS_BATCH);
+    if (batch.length === 0) return;
+
+    // Marking the batch before the request keeps the next tick from asking for
+    // the same folders again, so each round drains what is left.
+    let active = true;
+    for (const prefix of batch) folderStatsSeen.add(viewCacheKey(bucketId, prefix));
+    void fetchR2FolderStats({ data: { bucket: bucketId, prefixes: batch } })
+      .then((rows) => {
+        for (const row of rows) {
+          remember(folderStatsCache, viewCacheKey(bucketId, row.prefix), row, FOLDER_STATS_CACHE_LIMIT);
+        }
+        if (active) setStatsTick((tick) => tick + 1);
+      })
+      .catch(() => {
+        // A failed scan leaves those rows without numbers until a refresh; the
+        // listing itself already reported whatever went wrong.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bucketId, folders, statsTick]);
 
   useEffect(() => {
     if (pendingDelete?.kind !== "prefix") {
@@ -381,7 +650,7 @@ function R2AdminPage() {
     setPrefixSummary(null);
     setPrefixSummaryError(null);
     setPrefixSummaryLoading(true);
-    summarizeR2Prefix({ data: { prefix: pendingDelete.prefix } })
+    summarizeR2Prefix({ data: { bucket: pendingDelete.bucket, prefix: pendingDelete.prefix } })
       .then((summary) => {
         if (!cancelled) setPrefixSummary(summary);
       })
@@ -400,24 +669,40 @@ function R2AdminPage() {
   }, [pendingDelete]);
 
   const goToPrefix = useCallback((nextPrefix: string) => {
-    setQueryInput("");
-    setQuery("");
-    navigate({
-      to: "/admin/r2",
-      search: { prefix: nextPrefix },
-    });
+    navigate({ to: "/admin/r2", search: searchFor(bucketId, nextPrefix) });
+  }, [bucketId, navigate]);
+
+  const goToBucket = useCallback((nextBucket: R2AdminBucketId) => {
+    navigate({ to: "/admin/r2", search: searchFor(nextBucket) });
   }, [navigate]);
 
+  // Refresh re-reads this folder and its counts, and leaves every other folder's
+  // cached listing alone so stepping back out of here is still instant.
+  const refresh = useCallback(() => {
+    for (const folder of listing?.folders ?? []) {
+      const key = viewCacheKey(bucketId, folder.prefix);
+      folderStatsCache.delete(key);
+      folderStatsSeen.delete(key);
+    }
+    void load(null, snapshot ? "revalidate" : "replace");
+  }, [bucketId, listing?.folders, load, snapshot]);
+
   const toggleSort = useCallback((nextKey: SortKey) => {
-    setPage(1);
-    setSortKey((currentKey) => {
-      if (currentKey !== nextKey) {
-        setSortDirection(nextKey === "modified" || nextKey === "size" ? "desc" : "asc");
-        return nextKey;
+    setView((current) => ({ ...current, page: 1 }));
+    setSort((current) => {
+      if (current.key !== nextKey) {
+        return { key: nextKey, direction: nextKey === "name" ? "asc" : "desc" };
       }
-      setSortDirection((currentDirection) => currentDirection === "asc" ? "desc" : "asc");
-      return currentKey;
+      return { key: current.key, direction: current.direction === "asc" ? "desc" : "asc" };
     });
+  }, []);
+
+  const setPage = useCallback((next: number) => {
+    setView((current) => ({ ...current, page: next }));
+  }, []);
+
+  const setQueryInput = useCallback((next: string) => {
+    setView((current) => ({ ...current, queryInput: next }));
   }, []);
 
   const confirmDelete = useCallback(async () => {
@@ -426,13 +711,17 @@ function R2AdminPage() {
     setError(null);
     try {
       if (pendingDelete.kind === "object") {
-        await deleteR2Object({ data: { key: pendingDelete.key } });
+        await deleteR2Object({ data: { bucket: pendingDelete.bucket, key: pendingDelete.key } });
       } else {
-        await deleteR2Prefix({ data: { prefix: pendingDelete.prefix } });
+        await deleteR2Prefix({ data: { bucket: pendingDelete.bucket, prefix: pendingDelete.prefix } });
       }
       setPendingDelete(null);
       setPrefixSummary(null);
-      await load(null, false);
+      // Sizes and counts everywhere in this bucket just moved.
+      dropBucketEntries(listingCache, pendingDelete.bucket);
+      dropBucketEntries(folderStatsCache, pendingDelete.bucket);
+      dropBucketEntries(folderStatsSeen, pendingDelete.bucket);
+      await load(null, "revalidate");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed.");
     } finally {
@@ -441,18 +730,20 @@ function R2AdminPage() {
   }, [deleteReady, load, pendingDelete]);
 
   const sortedFolders = useMemo(() => {
-    const direction = sortDirection === "asc" ? 1 : -1;
-    return [...(listing?.folders ?? [])].sort((a, b) => compareFolders(a, b, sortKey) * direction);
-  }, [listing?.folders, sortDirection, sortKey]);
+    const direction = sort.direction === "asc" ? 1 : -1;
+    return [...(listing?.folders ?? [])]
+      .sort((a, b) => compareFolders(a, b, sort.key, bucketId) * direction);
+    // statsTick: folder sizes land after the rows, and size sort has to follow.
+  }, [listing?.folders, sort, bucketId, statsTick]);
   const sortedObjects = useMemo(() => {
-    const direction = sortDirection === "asc" ? 1 : -1;
-    return [...(listing?.objects ?? [])].sort((a, b) => compareObjects(a, b, sortKey) * direction);
-  }, [listing?.objects, sortDirection, sortKey]);
+    const direction = sort.direction === "asc" ? 1 : -1;
+    return [...(listing?.objects ?? [])].sort((a, b) => compareObjects(a, b, sort.key) * direction);
+  }, [listing?.objects, sort]);
 
   const totalItems = sortedFolders.length + sortedObjects.length;
   const hasMoreOnServer = !!listing?.nextContinuationToken;
   const pageCount = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount);
+  const safePage = Math.min(view.page, pageCount);
   const pageStart = (safePage - 1) * PAGE_SIZE;
   const pageEnd = pageStart + PAGE_SIZE;
 
@@ -468,104 +759,182 @@ function R2AdminPage() {
   }, [sortedFolders.length, sortedObjects, pageStart, pageFolders.length]);
 
   const empty = listing && listing.configured && totalItems === 0;
+  const busy = loading || refreshing;
 
-  const wantedItemsForPage = page * PAGE_SIZE;
+  // Thumbnails and metadata for the rows currently on screen. Public-bucket
+  // URLs are pure string building and signing is local HMAC work, so a batch
+  // only costs R2 operations for roots that declare a metadata field to read.
+  const wantsDescription = useCallback((object: R2AdminObject) => {
+    if (thumbnails && detectPreviewKind(object.name).kind === "image") return true;
+    return roots.some((root) => root.metadataLabelKey && object.key.startsWith(root.prefix));
+  }, [roots, thumbnails]);
+
+  useEffect(() => {
+    const batch = pageObjects
+      .filter(wantsDescription)
+      .map((object) => object.key)
+      .filter((key) => {
+        const cacheKey = viewCacheKey(bucketId, key);
+        if (describeInflight.has(cacheKey)) return false;
+        const cached = describeCache.get(cacheKey);
+        if (cached) return Date.now() - cached.fetchedAt > DESCRIBE_STALE_MS;
+        return !describeSeen.has(cacheKey);
+      })
+      .slice(0, DESCRIBE_BATCH);
+    if (batch.length === 0) return;
+
+    let active = true;
+    for (const key of batch) {
+      describeSeen.add(viewCacheKey(bucketId, key));
+      describeInflight.add(viewCacheKey(bucketId, key));
+    }
+    void describeR2Objects({ data: { bucket: bucketId, keys: batch } })
+      .then((rows) => {
+        for (const row of rows) {
+          remember(
+            describeCache,
+            viewCacheKey(bucketId, row.key),
+            { data: row, fetchedAt: Date.now() },
+            DESCRIBE_CACHE_LIMIT,
+          );
+        }
+        if (active) setDescribeTick((tick) => tick + 1);
+      })
+      .catch(() => {
+        // Rows keep their icon and their key; nothing else depends on this.
+      })
+      .finally(() => {
+        for (const key of batch) describeInflight.delete(viewCacheKey(bucketId, key));
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bucketId, pageObjects, wantsDescription, describeTick]);
+
+  const wantedItemsForPage = view.page * PAGE_SIZE;
   useEffect(() => {
     if (!listing?.configured) return;
-    if (loading || loadingMore) return;
+    if (loading || loadingMore || refreshing) return;
     if (!hasMoreOnServer) return;
     if (totalItems >= wantedItemsForPage) return;
-    void load(listing.nextContinuationToken, true);
-  }, [listing, loading, loadingMore, hasMoreOnServer, totalItems, wantedItemsForPage, load]);
+    void load(listing.nextContinuationToken, "append");
+  }, [listing, loading, loadingMore, refreshing, hasMoreOnServer, totalItems, wantedItemsForPage, load]);
 
   return (
     <div className="flex-1">
       <R2Header
-        fetchedAt={fetchedAt}
-        refreshing={loading}
-        onRefresh={() => void load(null, false)}
+        fetchedAt={snapshot?.fetchedAt ?? null}
+        busy={busy}
+        onRefresh={refresh}
       />
       <div className="bg-osu-b5 min-h-[calc(100vh-60px)]">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5 space-y-5">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5 space-y-4">
           {error ? <ErrorBanner message={error} /> : null}
 
-          <SectionCard
-            title="Bucket browser"
-            subtitle={listing?.bucket ? `bucket: ${listing.bucket}` : "browse and prune cached objects"}
-            right={<Crumbs prefix={prefix} crumbs={crumbs} onNavigate={goToPrefix} />}
-          >
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <SearchInput value={queryInput} onChange={setQueryInput} />
-              <SortToggles sortKey={sortKey} sortDirection={sortDirection} onToggle={toggleSort} />
-            </div>
+          <BucketTabs buckets={buckets} activeId={bucketId} onSelect={goToBucket} />
 
-            <div className="mt-3 rounded-md border border-osu-b3/20 bg-osu-b5/60 overflow-hidden">
-              {listing && !listing.configured ? (
-                <NotConfigured />
-              ) : loading && !listing ? (
-                <EmptyState text="Loading R2 objects..." />
-              ) : empty ? (
-                <EmptyState text={query ? "No matching objects in this scan window." : "This folder is empty."} />
-              ) : (
-                <div className="divide-y divide-osu-b3/20">
-                  {pageFolders.map((folder) => (
-                    <FolderRow
-                      key={folder.prefix}
-                      folder={folder}
-                      onOpen={() => goToPrefix(folder.prefix)}
-                      onDelete={() => setPendingDelete({ kind: "prefix", prefix: folder.prefix, name: folder.name })}
+          <Crumbs
+            roots={roots}
+            prefix={activePrefix}
+            crumbs={crumbs}
+            onNavigate={goToPrefix}
+          />
+
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <SearchInput value={view.queryInput} onChange={setQueryInput} />
+            <div className="flex items-center gap-2">
+              <SortToggles sort={sort} onToggle={toggleSort} />
+              <ThumbnailToggle on={thumbnails} onToggle={() => setThumbnails((current) => !current)} />
+            </div>
+          </div>
+
+          <div className="rounded-md border border-osu-b3/20 bg-osu-b5/60 overflow-hidden">
+            {listing && !listing.configured ? (
+              <NotConfigured bucket={listing.bucket} />
+            ) : !listing ? (
+              <EmptyState text={error ? "Nothing loaded." : "Loading R2 objects..."} />
+            ) : empty ? (
+              <EmptyState text={view.query ? "No matching objects in this scan window." : "This folder is empty."} />
+            ) : (
+              <div className="divide-y divide-osu-b3/20">
+                {pageFolders.map((folder) => (
+                  <FolderRow
+                    key={folder.prefix}
+                    folder={folder}
+                    stats={folderStatsFor(bucketId, folder.prefix)}
+                    downloadable={bucketId === "replay-cache" && isSkinFolderPrefix(folder.prefix)}
+                    onOpen={() => goToPrefix(folder.prefix)}
+                    onDelete={() => setPendingDelete({
+                      bucket: bucketId,
+                      kind: "prefix",
+                      prefix: folder.prefix,
+                      name: folder.name,
+                    })}
+                  />
+                ))}
+                {pageObjects.map((object) =>
+                  isUploadedReplayObject(object.key) ? (
+                    <UploadedReplayRow
+                      key={object.key}
+                      object={object}
+                      onDelete={() => setPendingDelete({
+                        bucket: bucketId,
+                        kind: "object",
+                        key: object.key,
+                        name: object.name,
+                      })}
                     />
-                  ))}
-                  {pageObjects.map((object) =>
-                    isUploadedReplayObject(object.key) ? (
-                      <UploadedReplayRow
-                        key={object.key}
-                        object={object}
-                        onDelete={() => setPendingDelete({ kind: "object", key: object.key, name: object.name })}
-                      />
-                    ) : (
-                      <ObjectRow
-                        key={object.key}
-                        object={object}
-                        onPreview={() => setPreview(object)}
-                        onDelete={() => setPendingDelete({ kind: "object", key: object.key, name: object.name })}
-                      />
-                    ),
-                  )}
-                </div>
-              )}
-            </div>
-
-            {listing?.configured ? (
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-[11px] text-osu-f1 font-mono">
-                  {query
-                    ? `${formatCount(listing.totalObjectsShown)} match · scanned ${formatCount(listing.scannedObjects)}`
-                    : `${formatCount(listing.folders.length)} folders · ${formatCount(listing.totalObjectsShown)} files`}
-                  <span className="text-osu-l2/70"> · </span>
-                  {formatBytes(listing.totalBytesShown)}
-                  {listing.searchTruncated ? <span className="text-osu-yellow/90"> · scan capped</span> : null}
-                </div>
-                <Pagination
-                  page={safePage}
-                  pageCount={pageCount}
-                  hasMoreOnServer={hasMoreOnServer}
-                  loadingMore={loadingMore}
-                  onChange={setPage}
-                />
+                  ) : (
+                    <ObjectRow
+                      key={object.key}
+                      object={object}
+                      description={describedObject(bucketId, object.key)}
+                      showThumbnail={thumbnails}
+                      onPreview={() => setPreview(object)}
+                      onDelete={() => setPendingDelete({
+                        bucket: bucketId,
+                        kind: "object",
+                        key: object.key,
+                        name: object.name,
+                      })}
+                    />
+                  ),
+                )}
               </div>
-            ) : null}
-          </SectionCard>
+            )}
+          </div>
+
+          {listing?.configured ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-[11px] text-osu-f1 font-mono">
+                {view.query
+                  ? `${formatCount(listing.totalObjectsShown)} match · scanned ${formatCount(listing.scannedObjects)}`
+                  : `${formatCount(listing.folders.length)} folders · ${formatCount(listing.totalObjectsShown)} files`}
+                <span className="text-osu-l2/70"> · </span>
+                {formatBytes(listing.totalBytesShown)}
+                {listing.searchTruncated ? <span className="text-osu-yellow/90"> · scan capped</span> : null}
+              </div>
+              <Pagination
+                page={safePage}
+                pageCount={pageCount}
+                hasMoreOnServer={hasMoreOnServer}
+                loadingMore={loadingMore}
+                onChange={setPage}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
 
       {preview ? (
-        <PreviewDialog object={preview} onClose={() => setPreview(null)} />
+        <PreviewDialog bucket={bucketId} object={preview} onClose={() => setPreview(null)} />
       ) : null}
 
       {pendingDelete ? (
         <DeleteDialog
           pending={pendingDelete}
+          warning={deleteWarningFor(roots, pendingDelete)}
           summary={prefixSummary}
           summaryLoading={prefixSummaryLoading}
           summaryError={prefixSummaryError}
@@ -583,13 +952,18 @@ function R2AdminPage() {
   );
 }
 
+function deleteWarningFor(roots: R2AdminRoot[], pending: PendingDelete): string | null {
+  const target = pending.kind === "prefix" ? pending.prefix : pending.key;
+  return roots.find((root) => target.startsWith(root.prefix))?.deleteWarning ?? null;
+}
+
 function R2Header({
   fetchedAt,
-  refreshing,
+  busy,
   onRefresh,
 }: {
   fetchedAt: number | null;
-  refreshing: boolean;
+  busy: boolean;
   onRefresh: () => void;
 }) {
   const [now, setNow] = useState(Date.now());
@@ -605,29 +979,80 @@ function R2Header({
       <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-3 flex items-center gap-3">
         <div className="relative flex-shrink-0">
           <span className="block w-2.5 h-2.5 rounded-full bg-osu-yellow" />
-          {refreshing ? (
+          {busy ? (
             <span className="absolute inset-0 rounded-full bg-osu-yellow animate-ping opacity-75" />
           ) : null}
         </div>
-        <h2 className="text-[13px] sm:text-[15px] font-medium text-osu-c2">R2 bucket</h2>
-        <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-osu-yellow/15 text-osu-yellow">
-          dev
-        </span>
+        <h2 className="text-[13px] sm:text-[15px] font-medium text-osu-c2">R2 buckets</h2>
         <div className="ml-auto flex items-center gap-3 text-[11px] text-osu-f1">
           {fetchedAt ? (
-            <span className={refreshing ? "text-osu-pink-light" : ""}>
-              {refreshing ? "refreshing..." : age != null ? `updated ${age}s ago` : ""}
+            <span className={busy ? "text-osu-pink-light" : ""}>
+              {busy ? "refreshing..." : age != null ? `updated ${age}s ago` : ""}
             </span>
           ) : null}
           <button
             onClick={onRefresh}
-            disabled={refreshing}
+            disabled={busy}
             className="px-2.5 py-1 rounded-md bg-osu-b4/60 border border-osu-b3/30 text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             Refresh
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function BucketTabs({
+  buckets,
+  activeId,
+  onSelect,
+}: {
+  buckets: R2AdminBucketInfo[] | null;
+  activeId: R2AdminBucketId;
+  onSelect: (id: R2AdminBucketId) => void;
+}) {
+  // Before the metadata lands, the active bucket still gets a tab so the row
+  // doesn't pop into place.
+  const entries: Array<{ id: R2AdminBucketId; label: string; bucket: string | null; configured: boolean; isPublic: boolean }> =
+    buckets
+      ? buckets.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        bucket: entry.bucket,
+        configured: entry.configured,
+        isPublic: !!entry.publicBaseUrl,
+      }))
+      : [{ id: activeId, label: activeId, bucket: null, configured: true, isPublic: false }];
+
+  return (
+    <div className="flex flex-wrap items-end gap-x-6 gap-y-1 border-b border-osu-b3/25">
+      {entries.map((entry) => {
+        const active = entry.id === activeId;
+        return (
+          <button
+            key={entry.id}
+            type="button"
+            onClick={() => onSelect(entry.id)}
+            className={`relative flex items-baseline gap-2 pb-2 transition-colors duration-[120ms] cursor-pointer ${
+              active ? "text-white" : "text-osu-l2 hover:text-white"
+            }`}
+          >
+            <span className="text-[15px] font-medium">{entry.label}</span>
+            <span className="text-[11px] font-mono text-osu-f1">
+              {!entry.configured ? "not configured" : entry.bucket ?? ""}
+            </span>
+            {entry.isPublic ? (
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-osu-yellow">
+                public
+              </span>
+            ) : null}
+            {active ? (
+              <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full bg-osu-pink" />
+            ) : null}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -705,61 +1130,36 @@ function Pagination({
   );
 }
 
-function SectionCard({
-  title,
-  subtitle,
-  right,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  right?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 overflow-hidden">
-      <div className="px-4 pt-3 pb-2 border-b border-osu-b3/20 flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold text-osu-c2 uppercase tracking-wider">{title}</div>
-          {subtitle ? <div className="text-[10px] text-osu-f1 mt-0.5 truncate">{subtitle}</div> : null}
-        </div>
-        {right ? <div className="flex-shrink-0">{right}</div> : null}
-      </div>
-      <div className="p-3">{children}</div>
-    </div>
-  );
-}
-
 function Crumbs({
+  roots,
   prefix,
   crumbs,
   onNavigate,
 }: {
+  roots: R2AdminRoot[];
   prefix: string;
   crumbs: Array<{ label: string; prefix: string }>;
   onNavigate: (prefix: string) => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1 text-[12px] font-mono">
-      <div className="flex items-center gap-0.5 rounded-md border border-osu-b3/30 bg-osu-b4/40 p-0.5">
-        {ROOTS.map((root) => {
-          const active = prefix.startsWith(root.prefix);
-          return (
-            <button
-              key={root.prefix}
-              type="button"
-              onClick={() => onNavigate(root.prefix)}
-              className={`px-2 py-0.5 rounded transition-colors duration-[120ms] cursor-pointer ${
-                active
-                  ? "bg-osu-pink/15 text-white"
-                  : "text-osu-l2 hover:text-white hover:bg-osu-b3/40"
-              }`}
-            >
-              {root.label}
-            </button>
-          );
-        })}
-      </div>
+      {roots.map((root) => {
+        const active = prefix.startsWith(root.prefix);
+        return (
+          <button
+            key={root.prefix}
+            type="button"
+            onClick={() => onNavigate(root.prefix)}
+            className={`px-2 py-0.5 rounded transition-colors duration-[120ms] cursor-pointer ${
+              active
+                ? "bg-osu-pink/15 text-white"
+                : "text-osu-l2 hover:text-white hover:bg-osu-b3/40"
+            }`}
+          >
+            {root.label}
+          </button>
+        );
+      })}
       {crumbs.map((crumb, index) => {
         const isLast = index === crumbs.length - 1;
         return (
@@ -809,12 +1209,10 @@ function SearchInput({ value, onChange }: { value: string; onChange: (next: stri
 }
 
 function SortToggles({
-  sortKey,
-  sortDirection,
+  sort,
   onToggle,
 }: {
-  sortKey: SortKey;
-  sortDirection: SortDirection;
+  sort: SortState;
   onToggle: (key: SortKey) => void;
 }) {
   const items: Array<[SortKey, string]> = [
@@ -825,7 +1223,7 @@ function SortToggles({
   return (
     <div className="flex items-center gap-1 rounded-lg bg-osu-b4/40 border border-osu-b3/30 p-1">
       {items.map(([key, label]) => {
-        const active = sortKey === key;
+        const active = sort.key === key;
         return (
           <button
             key={key}
@@ -840,13 +1238,35 @@ function SortToggles({
             <span>{label}</span>
             {active ? (
               <span className="text-[10px] text-osu-pink-light font-mono">
-                {sortDirection === "asc" ? "↑" : "↓"}
+                {sort.direction === "asc" ? "↑" : "↓"}
               </span>
             ) : null}
           </button>
         );
       })}
     </div>
+  );
+}
+
+function ThumbnailToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={on ? "Hide thumbnails" : "Show thumbnails"}
+      className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors duration-[120ms] cursor-pointer ${
+        on
+          ? "border-osu-pink/30 bg-osu-pink/20 text-white"
+          : "border-osu-b3/30 bg-osu-b4/40 text-osu-l2 hover:text-white"
+      }`}
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="9" cy="9" r="2" />
+        <path d="m21 15-5-5L5 21" />
+      </svg>
+      <span>Thumbnails</span>
+    </button>
   );
 }
 
@@ -913,10 +1333,14 @@ function SkinOskDownloadButton({ prefix }: { prefix: string }) {
 
 function FolderRow({
   folder,
+  stats,
+  downloadable,
   onOpen,
   onDelete,
 }: {
   folder: R2AdminFolder;
+  stats: R2AdminPrefixSummary | null;
+  downloadable: boolean;
   onOpen: () => void;
   onDelete: () => void;
 }) {
@@ -927,23 +1351,27 @@ function FolderRow({
         onClick={onOpen}
         className="flex min-w-0 flex-1 items-center gap-3 text-left cursor-pointer"
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-osu-yellow/15 text-osu-yellow">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-osu-yellow/15 text-osu-yellow">
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
             <path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z" />
           </svg>
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-[14px] font-medium text-white truncate">{folder.name}</span>
+            <span className="text-[14px] font-medium text-white truncate">
+              {stats?.sampleName ?? folder.name}
+            </span>
             <span className="text-[11px] text-osu-f1 font-mono shrink-0">
-              {formatCount(folder.objectCount)}{folder.statsTruncated ? "+" : ""} files · {formatBytes(folder.sizeBytes)}
+              {stats
+                ? `${formatCount(stats.objectCount)}${stats.truncated ? "+" : ""} files · ${formatBytes(stats.sizeBytes)}`
+                : <span className="text-osu-f1/40">counting…</span>}
             </span>
           </div>
           <div className="text-[11px] font-mono text-osu-f1/70 truncate mt-0.5">{folder.prefix}</div>
         </div>
         <span className="text-osu-f1/60 shrink-0 text-[14px]">›</span>
       </button>
-      {isSkinFolderPrefix(folder.prefix) ? <SkinOskDownloadButton prefix={folder.prefix} /> : null}
+      {downloadable ? <SkinOskDownloadButton prefix={folder.prefix} /> : null}
       <DeleteIconButton title="Delete folder" onClick={onDelete} />
     </div>
   );
@@ -951,15 +1379,24 @@ function FolderRow({
 
 function ObjectRow({
   object,
+  description,
+  showThumbnail,
   onPreview,
   onDelete,
 }: {
   object: R2AdminObject;
+  description: R2AdminObjectDescription | null;
+  showThumbnail: boolean;
   onPreview: () => void;
   onDelete: () => void;
 }) {
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const { kind } = detectPreviewKind(object.name);
   const previewable = kind !== "other";
+  const thumbnailUrl = showThumbnail && kind === "image" && !thumbnailFailed
+    ? description?.url ?? null
+    : null;
+  const detail = description?.label ?? keyContext(object.key);
   const iconAccent = previewable
     ? "bg-osu-pink/15 text-osu-pink-light"
     : "bg-osu-b3/40 text-osu-l2";
@@ -997,16 +1434,32 @@ function ObjectRow({
         type="button"
         onClick={onPreview}
         className="flex min-w-0 flex-1 items-center gap-3 text-left cursor-pointer"
-        title={previewable ? "Preview" : "Open"}
+        title={previewable ? object.name : object.key}
       >
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${iconAccent}`}>
-          {Icon}
-        </span>
+        {thumbnailUrl ? (
+          <span className="flex h-12 w-12 shrink-0 overflow-hidden rounded-md bg-osu-b3/30">
+            <img
+              src={thumbnailUrl}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              onError={() => setThumbnailFailed(true)}
+              className="h-full w-full object-cover"
+            />
+          </span>
+        ) : (
+          <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-md ${iconAccent}`}>
+            {Icon}
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-[14px] font-medium text-white truncate">{object.name}</span>
+            <span className="text-[14px] font-medium text-white truncate">
+              {readableName(object.name)}
+            </span>
             <span className="text-[11px] text-osu-f1 font-mono shrink-0">
               {formatBytes(object.sizeBytes)} · {formatDate(object.lastModified)}
+              {detail ? ` · ${detail}` : ""}
             </span>
           </div>
           <div className="text-[11px] font-mono text-osu-f1/70 truncate mt-0.5">{object.key}</div>
@@ -1057,8 +1510,8 @@ function UploadedReplayRow({
 
   const content = (
     <>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-osu-pink/10">
-        {data ? <GradeImg grade={data.grade} size={26} /> : <ReplayGlyph pulsing={loading} />}
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-osu-pink/10">
+        {data ? <GradeImg grade={data.grade} size={30} /> : <ReplayGlyph pulsing={loading} />}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 flex-wrap">
@@ -1139,7 +1592,7 @@ function DeleteIconButton({ title, onClick }: { title: string; onClick: () => vo
   );
 }
 
-function NotConfigured() {
+function NotConfigured({ bucket }: { bucket: string }) {
   return (
     <div className="px-4 py-12 text-center">
       <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-osu-yellow/15 text-osu-yellow">
@@ -1149,7 +1602,7 @@ function NotConfigured() {
           <path d="M12 17h.01" />
         </svg>
       </div>
-      <div className="mt-3 text-[12px] font-medium text-white">R2 is not configured</div>
+      <div className="mt-3 text-[12px] font-medium text-white">{bucket} is not configured</div>
       <div className="mt-1 text-[11px] text-osu-f1">
         Set the R2 environment variables to browse this bucket.
       </div>
@@ -1172,26 +1625,36 @@ function ErrorBanner({ message }: { message: string }) {
   );
 }
 
-function PreviewDialog({ object, onClose }: { object: R2AdminObject; onClose: () => void }) {
+function PreviewDialog({
+  bucket,
+  object,
+  onClose,
+}: {
+  bucket: R2AdminBucketId;
+  object: R2AdminObject;
+  onClose: () => void;
+}) {
   const { kind, mimeType } = useMemo(() => detectPreviewKind(object.name), [object.name]);
-  const [url, setUrl] = useState<string | null>(null);
+  const [resolved, setResolved] = useState<R2AdminObjectUrl | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    setUrl(null);
+    setResolved(null);
     setError(null);
-    signR2AdminUrl({ data: { key: object.key, mimeType } })
+    setCopied(false);
+    resolveR2ObjectUrl({ data: { bucket, key: object.key, mimeType } })
       .then((result) => {
-        if (!cancelled) setUrl(result.url);
+        if (!cancelled) setResolved(result);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not sign URL.");
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not resolve the object URL.");
       });
     return () => {
       cancelled = true;
     };
-  }, [object.key, mimeType]);
+  }, [bucket, object.key, mimeType]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -1200,6 +1663,8 @@ function PreviewDialog({ object, onClose }: { object: R2AdminObject; onClose: ()
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  const url = resolved?.url ?? null;
 
   return (
     <div
@@ -1239,7 +1704,7 @@ function PreviewDialog({ object, onClose }: { object: R2AdminObject; onClose: ()
             {error ? (
               <div className="text-[11px] text-osu-red-light text-center">{error}</div>
             ) : !url ? (
-              <div className="text-[11px] text-osu-f1">Signing URL...</div>
+              <div className="text-[11px] text-osu-f1">Resolving URL...</div>
             ) : kind === "audio" ? (
               <audio controls src={url} className="w-full" autoPlay />
             ) : kind === "image" ? (
@@ -1258,7 +1723,18 @@ function PreviewDialog({ object, onClose }: { object: R2AdminObject; onClose: ()
           </div>
         </div>
 
-        <div className="px-4 py-3 border-t border-osu-b3/20 flex justify-end">
+        <div className="px-4 py-3 border-t border-osu-b3/20 flex items-center justify-end gap-2">
+          {url && resolved?.isPublic ? (
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(url).then(() => setCopied(true)).catch(() => {});
+              }}
+              className="px-3 py-1.5 rounded-md bg-osu-b4/60 border border-osu-b3/30 text-[11px] font-medium text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] cursor-pointer"
+            >
+              {copied ? "Copied" : "Copy CDN URL"}
+            </button>
+          ) : null}
           {url ? (
             <a
               href={url}
@@ -1277,6 +1753,7 @@ function PreviewDialog({ object, onClose }: { object: R2AdminObject; onClose: ()
 
 function DeleteDialog({
   pending,
+  warning,
   summary,
   summaryLoading,
   summaryError,
@@ -1286,6 +1763,7 @@ function DeleteDialog({
   onConfirm,
 }: {
   pending: PendingDelete;
+  warning: string | null;
   summary: R2AdminPrefixSummary | null;
   summaryLoading: boolean;
   summaryError: string | null;
@@ -1317,37 +1795,34 @@ function DeleteDialog({
             {pending.kind === "prefix" ? pending.prefix : pending.key}
           </div>
 
-          {(pending.kind === "prefix" ? pending.prefix : pending.key).startsWith("skins/") ? (
+          {warning ? (
             <div className="rounded-md border border-osu-yellow/25 bg-osu-yellow/10 px-2.5 py-2 text-[11px] text-osu-c2">
-              Skin files are indexed by the live backend database; deleting them here strands the skin page.
-              Delete the skin from its own page instead, and keep this for orphan cleanup.
+              {warning}
             </div>
           ) : null}
 
           {pending.kind === "prefix" ? (
-            <>
-              <div className="rounded-md bg-osu-b4/40 border border-osu-b3/20 px-2.5 py-2">
-                <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
-                  Dry-run preview
-                </div>
-                <div className="mt-1 text-[12px] font-mono">
-                  {summaryLoading ? (
-                    <span className="text-osu-f1">scanning...</span>
-                  ) : summaryError ? (
-                    <span className="text-osu-red-light">{summaryError}</span>
-                  ) : summary ? (
-                    <span className="text-white font-bold">
-                      {formatCount(summary.objectCount)} files
-                      <span className="text-osu-l2/70"> · </span>
-                      {formatBytes(summary.sizeBytes)}
-                      {summary.truncated ? <span className="text-osu-yellow/90"> (truncated)</span> : null}
-                    </span>
-                  ) : (
-                    <span className="text-osu-f1">—</span>
-                  )}
-                </div>
+            <div className="rounded-md bg-osu-b4/40 border border-osu-b3/20 px-2.5 py-2">
+              <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
+                Dry-run preview
               </div>
-            </>
+              <div className="mt-1 text-[12px] font-mono">
+                {summaryLoading ? (
+                  <span className="text-osu-f1">scanning...</span>
+                ) : summaryError ? (
+                  <span className="text-osu-red-light">{summaryError}</span>
+                ) : summary ? (
+                  <span className="text-white font-bold">
+                    {formatCount(summary.objectCount)} files
+                    <span className="text-osu-l2/70"> · </span>
+                    {formatBytes(summary.sizeBytes)}
+                    {summary.truncated ? <span className="text-osu-yellow/90"> (truncated)</span> : null}
+                  </span>
+                ) : (
+                  <span className="text-osu-f1">—</span>
+                )}
+              </div>
+            </div>
           ) : null}
 
           {confirming ? (

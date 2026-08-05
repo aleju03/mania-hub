@@ -136,7 +136,9 @@ export interface AnalyticsTimelineBucket {
   visitors: number;
 }
 
-export type AnalyticsCacheState = "fresh" | "stale" | "warming";
+/* "warming" is the empty placeholder a cold range answers with while the
+   backend is still computing it; every other reply is a real measurement. */
+export type AnalyticsCacheState = "fresh" | "warming";
 
 export type AnalyticsRange = number;
 
@@ -162,6 +164,26 @@ export interface AnalyticsMonitorData {
   serverErrors: AnalyticsServerErrorRow[];
   recentServerErrors: AnalyticsRecentServerErrorRow[];
   fetchedAt: number;
+}
+
+/* Identifies what the panel is currently showing, so a reply can be matched
+   against it before it renders. */
+export function getAnalyticsViewKey(rangeHours: AnalyticsRange, recentCountry: string | null): string {
+  return `${clampAnalyticsRangeHours(rangeHours)}:${recentCountry ?? "all"}`;
+}
+
+/* Whether a reply should replace what is on screen. The frontend serves from
+   two node instances behind a round-robin proxy, so replies can land out of
+   order, and a still-warming range answers with an empty placeholder; neither
+   may overwrite numbers already shown for the same view. A different range or
+   country always renders, since the numbers it replaces are not about it. */
+export function analyticsSnapshotSupersedes(
+  shown: { key: string; fetchedAt: number } | null,
+  next: { key: string; fetchedAt: number; cacheState: AnalyticsCacheState },
+): boolean {
+  if (!shown || shown.key !== next.key) return true;
+  if (next.cacheState === "warming") return false;
+  return next.fetchedAt > shown.fetchedAt;
 }
 
 /* The store is a local read on the backend, so the dashboard can poll it at a

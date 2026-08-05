@@ -1,7 +1,7 @@
 /* The traffic chart is only readable if its axis is: ticks have to land on round
    local clock times and stay clear of the range's own start/"now" labels. */
 import { describe, expect, it } from "vitest";
-import { buildAnalyticsTimelineTicks } from "./analytics-monitor";
+import { analyticsSnapshotSupersedes, buildAnalyticsTimelineTicks, getAnalyticsViewKey } from "./analytics-monitor";
 
 const HOUR = 60 * 60_000;
 const DAY = 24 * HOUR;
@@ -54,5 +54,34 @@ describe("buildAnalyticsTimelineTicks", () => {
     expect(buildAnalyticsTimelineTicks(0, 0)).toEqual([]);
     expect(buildAnalyticsTimelineTicks(1_000, 500)).toEqual([]);
     expect(buildAnalyticsTimelineTicks(0, Number.NaN)).toEqual([]);
+  });
+});
+
+/* Two frontend instances serve these polls, so a reply is not automatically
+   newer than the one before it. The panel used to flip between two snapshots
+   of different ages until they converged. */
+describe("analyticsSnapshotSupersedes", () => {
+  const shown = { key: getAnalyticsViewKey(24, null), fetchedAt: 1_000 };
+
+  it("renders a newer snapshot of the same view", () => {
+    expect(analyticsSnapshotSupersedes(shown, { ...shown, fetchedAt: 1_001, cacheState: "fresh" })).toBe(true);
+  });
+
+  it("drops a reply that is older than what is on screen", () => {
+    expect(analyticsSnapshotSupersedes(shown, { ...shown, fetchedAt: 999, cacheState: "fresh" })).toBe(false);
+    expect(analyticsSnapshotSupersedes(shown, { ...shown, fetchedAt: 1_000, cacheState: "fresh" })).toBe(false);
+  });
+
+  it("never blanks real numbers with a warming placeholder", () => {
+    expect(analyticsSnapshotSupersedes(shown, { ...shown, fetchedAt: 9_000, cacheState: "warming" })).toBe(false);
+  });
+
+  it("renders anything for a view the panel is not already showing", () => {
+    expect(analyticsSnapshotSupersedes(null, { ...shown, cacheState: "warming" })).toBe(true);
+    // A range or country switch: stale-looking, but the numbers it replaces
+    // answer a different question, so holding on to them would be wrong.
+    for (const key of [getAnalyticsViewKey(1, null), getAnalyticsViewKey(24, "CR")]) {
+      expect(analyticsSnapshotSupersedes(shown, { key, fetchedAt: 1, cacheState: "warming" })).toBe(true);
+    }
   });
 });

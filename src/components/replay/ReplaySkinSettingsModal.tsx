@@ -4912,7 +4912,9 @@ function ReplaySkinCatalogBrowserDialog({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-semibold text-osu-l1">{skin.name}</span>
                     <span className="block truncate text-[10px] text-osu-f1">
-                      {[skin.author ?? skin.ownerUsername, formatKeymodes(skin.keymodes)].filter(Boolean).join(" · ")}
+                      {/* No author on file means no credit line, not the
+                          uploader standing in for one. */}
+                      {[skin.author, formatKeymodes(skin.keymodes)].filter(Boolean).join(" · ")}
                     </span>
                   </span>
                 </button>

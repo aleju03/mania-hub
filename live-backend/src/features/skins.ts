@@ -622,6 +622,11 @@ export interface SkinsListQuery {
   privateOwnerUserId?: number | null;
   // Restricts the list to that owner's private skins (the shelf itself).
   onlyPrivate?: boolean;
+  // Narrows the list to one uploader, the browse page's "uploader: you" filter.
+  // Public information (every summary carries its uploader), so this needs no
+  // vouched-for viewer and leaves the list as cacheable as it was: the
+  // visibility gate above still decides which of that uploader's skins show.
+  ownerUserId?: number | null;
   // Widens the shelf to every uploader's private skins: the moderation view a
   // true admin gets, the same read /api/skins/get already grants them on a
   // single private skin. Only meaningful together with onlyPrivate.
@@ -663,6 +668,14 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
     args.push(privateOwner);
   } else {
     where.push("visibility = 'public'");
+  }
+
+  const ownerFilter = Number.isInteger(query.ownerUserId) && Number(query.ownerUserId) > 0
+    ? Number(query.ownerUserId)
+    : null;
+  if (ownerFilter != null) {
+    where.push("owner_user_id = ?");
+    args.push(ownerFilter);
   }
 
   const q = query.q?.trim().toLowerCase() ?? "";

@@ -415,6 +415,29 @@ describe("skins feature", () => {
     expect(paged.skins).toHaveLength(1);
   });
 
+  it("narrows the list to one uploader without widening what it may show", async () => {
+    await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Alpha One", sha256: "a1".repeat(32) });
+    await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Alpha Two", sha256: "a2".repeat(32) });
+    await createPublishedSkin({ ownerUserId: 2, ownerUsername: "bravo", name: "Bravo One", sha256: "b1".repeat(32) });
+    await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Alpha Secret", visibility: "private", sha256: "a3".repeat(32) });
+
+    const mine = await listSkins(db, { ownerUserId: 1 });
+    expect(mine.total).toBe(2);
+    expect(mine.skins.map((skin) => skin.name).sort()).toEqual(["Alpha One", "Alpha Two"]);
+    // The owner filter is public: asking for someone else's uploads still gets
+    // only their public catalog.
+    expect((await listSkins(db, { ownerUserId: 2 })).skins.map((skin) => skin.name)).toEqual(["Bravo One"]);
+    // Their private skin joins the list only where the caller was already
+    // vouched for as that owner (the shelf's own read).
+    expect((await listSkins(db, { ownerUserId: 1, privateOwnerUserId: 1 })).total).toBe(3);
+    // And it stays out of an owner filter with no viewer behind it.
+    expect((await listSkins(db, { ownerUserId: 1, privateOwnerUserId: 2 })).total).toBe(2);
+    // Filters compose rather than replace each other.
+    expect((await listSkins(db, { ownerUserId: 1, q: "two" })).total).toBe(1);
+    expect((await listSkins(db, { ownerUserId: 999 })).total).toBe(0);
+    expect((await listSkins(db, { ownerUserId: 0 })).total).toBe(3);
+  });
+
   it("splits an 8K keymode filter into real 8K and 7K+1 via keymodeVariant", async () => {
     await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "True Eight", keymodes: [4, 8] });
     await createPublishedSkin({ ownerUserId: 2, ownerUsername: "bravo", name: "Scratch Eight", keymodes: [4, 8], specialKeymodes: [8] });
