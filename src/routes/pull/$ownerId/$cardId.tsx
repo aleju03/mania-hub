@@ -6,7 +6,7 @@ import { renderCardSkeletonThumbnail, renderCardThumbnail } from "../../../compo
 import { ManiaCardRenderer } from "../../../components/player/maniacard3d/ManiaCardRenderer";
 import { buildManiaCardRenderDataFromSkills } from "../../../components/player/maniacard3d/renderData";
 import { CountryFlag } from "../../../components/ui/CountryFlag";
-import { formatDate, formatOrdinal } from "../../../lib/format";
+import { formatDate } from "../../../lib/format";
 import {
   fetchLivePackSharedCard,
   isLiveBackendConfigured,
@@ -288,21 +288,17 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           )}
         </div>
         {typeof shared.serial === "number" && shared.serial > 0 && (
-          // Pull order, not copy count: first means nobody anywhere had pulled
-          // this player's card before this collector did.
+          // Pull order, not copy count. Mint phrasing, not "first ever": the
+          // permalink describes a holding, and a mint-#1 card may by now sit
+          // in hundreds of collections.
           <div
             className={`text-[13px] tabular-nums ${shared.serial === 1 ? "font-bold text-amber-300" : "text-osu-f1"}`}
           >
-            {shared.serial === 1 ? (
-              "First person ever to pull this card"
-            ) : (
-              <>
-                {formatOrdinal(shared.serial)} person to pull this card
-                {shared.mintedTotal > 0 && (
-                  <span className="text-osu-f1"> out of {shared.mintedTotal.toLocaleString()}</span>
-                )}
-              </>
+            Mint #{shared.serial.toLocaleString()}
+            {shared.mintedTotal > 0 && (
+              <span className="text-osu-f1"> out of {shared.mintedTotal.toLocaleString()}</span>
             )}
+            {shared.serial === 1 && " — pulled before anyone else"}
           </div>
         )}
         <div className="text-[12px] text-osu-f1">

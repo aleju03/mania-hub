@@ -373,7 +373,10 @@ function PacksPage() {
   const autoOpenRef = useRef(false);
   /* Serials for the pack on screen, keyed by wallet card key. Filled in when
      the pull log answers, a beat after the summary appears. */
-  const [serials, setSerials] = useState<Map<string, { serial: number; mintedTotal: number }> | null>(null);
+  const [serials, setSerials] = useState<Map<
+    string,
+    { serial: number; mintedTotal: number; isFirstGlobal: boolean }
+  > | null>(null);
   const [duelBusy, setDuelBusy] = useState(false);
   const [duelError, setDuelError] = useState<string | null>(null);
   /* The duel this pack is being opened to answer, if any. Loaded from the
@@ -871,7 +874,11 @@ function PacksPage() {
                                     new Map(
                                       result.mints.map((mint) => [
                                         mint.cardKey,
-                                        { serial: mint.serial, mintedTotal: mint.mintedTotal },
+                                        {
+                                          serial: mint.serial,
+                                          mintedTotal: mint.mintedTotal,
+                                          isFirstGlobal: mint.isFirstGlobal,
+                                        },
                                       ]),
                                     ),
                                   );

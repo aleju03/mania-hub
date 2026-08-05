@@ -21,7 +21,7 @@ interface PackSummaryProps {
   /* Serials for this pack's cards, keyed by wallet card key. Arrives a beat
      after the summary does: the pull log is written in the background, and
      the numbers land when it answers. */
-  serials: Map<string, { serial: number; mintedTotal: number }> | null;
+  serials: Map<string, { serial: number; mintedTotal: number; isFirstGlobal: boolean }> | null;
   /* Puts this hand up as a duel stake: opening a challenge, or answering one.
      Absent when duelling is unavailable (signed out, or no live backend). */
   onChallenge?: () => void;
@@ -275,14 +275,21 @@ export function PackSummary({
                 {(() => {
                   const mint = serials?.get(packCardKey(card.player.user.id, card.tier));
                   if (!mint) return null;
-                  // Being first is the whole point of printing these: you
-                  // pulled this player's card before anyone else ever did.
-                  const first = mint.serial === 1;
+                  // "First ever" is the server's call, not serial 1: a repull
+                  // of a card you already hold hands back your old serial, so
+                  // a mint-#1 holding resurfacing months later must not read
+                  // as if this pull were the card's first anywhere.
+                  const first = mint.isFirstGlobal;
+                  const heldMintOne = !first && mint.serial === 1;
                   return (
                     <div
-                      className={`mt-0.5 text-[11px] tabular-nums ${first ? "font-bold text-amber-300" : "text-osu-f1"}`}
+                      className={`mt-0.5 text-[11px] tabular-nums ${first || heldMintOne ? "font-bold text-amber-300" : "text-osu-f1"}`}
                     >
-                      {first ? "first ever to pull this" : `${formatOrdinal(mint.serial)} to pull this`}
+                      {first
+                        ? "first ever to pull this"
+                        : heldMintOne
+                          ? "you hold mint #1"
+                          : `${formatOrdinal(mint.serial)} to pull this`}
                     </div>
                   );
                 })()}
