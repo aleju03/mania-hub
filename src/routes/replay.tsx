@@ -68,6 +68,7 @@ import {
   type LiveGlobalRankingEntry,
   type LivePlayerProfileSnapshot,
 } from "../lib/live-backend";
+import { getReplaySpectatorTicket, type ReplaySpectatorTicket } from "../lib/replay-spectator";
 import { isGlobalScope } from "../lib/country";
 import { useAuth } from "../lib/auth-context";
 import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
@@ -84,9 +85,11 @@ import {
   readReplayInputOverlay,
   readReplayLeaderboardVisible,
   readReplayOwnerSkinEnabled,
+  readReplaySpectatorNameShown,
   readReplayStoryboardEnabled,
   readReplayVolume,
   REPLAY_OWNER_SKIN_CHANGE_EVENT,
+  REPLAY_SPECTATOR_NAME_CHANGE_EVENT,
   writeReplayAudioSettings,
   writeReplayBackgroundDim,
   writeReplayBlackPlayfield,
@@ -2557,23 +2560,75 @@ function ReplayViewer({
     })();
   };
 
-  // Anonymous concurrent-watcher count for this replay, osu! spectator-list
-  // style. Connecting registers this viewer, so the count includes them.
-  // Admins observe without counting: their own site visits never trigger or
-  // inflate the spectator number.
+  // Concurrent-watcher count for this replay, osu! spectator-list style.
+  // Connecting registers this viewer, so the count includes them. Admins
+  // observe without counting: their own site visits never trigger or inflate
+  // the spectator number.
   const presenceObserveOnly = auth?.isAdmin === true;
-  const [spectatorCount, setSpectatorCount] = useState<number | null>(null);
+  // Everyone watches anonymously unless they turned "show my name under
+  // spectators" on in settings. The drawer sits over the running replay, so
+  // this is state rather than a read at connect time: flipping it reconnects
+  // the stream and the room sees the change without a refresh. null means the
+  // preference has not been read yet (localStorage is empty during SSR).
+  const [spectatorNameShown, setSpectatorNameShown] = useState<boolean | null>(null);
   useEffect(() => {
-    if (!presenceKey) {
-      setSpectatorCount(null);
+    const sync = () => setSpectatorNameShown(readReplaySpectatorNameShown());
+    sync();
+    window.addEventListener(REPLAY_SPECTATOR_NAME_CHANGE_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(REPLAY_SPECTATOR_NAME_CHANGE_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+  // The name reaches the backend as a signed ticket, never as a bare query
+  // param: EventSource cannot carry a header, and an unsigned name would be
+  // whoever the URL claimed to be. The stream waits for this to settle (null
+  // while it is in flight), so an opted-in viewer joins the room once, named,
+  // instead of joining anonymously and immediately rejoining.
+  const viewerId = auth?.viewer?.id ?? null;
+  const [spectatorIdentity, setSpectatorIdentity] = useState<{ ticket: ReplaySpectatorTicket | null } | null>(null);
+  useEffect(() => {
+    if (spectatorNameShown === null) return;
+    if (!spectatorNameShown || viewerId == null) {
+      setSpectatorIdentity({ ticket: null });
       return;
     }
-    const source = openReplayPresenceEventSource(presenceKey, { observe: presenceObserveOnly });
+    let cancelled = false;
+    setSpectatorIdentity(null);
+    void getReplaySpectatorTicket()
+      .then((ticket) => {
+        if (!cancelled) setSpectatorIdentity({ ticket });
+      })
+      .catch(() => {
+        // No ticket: this viewer just stays part of the count.
+        if (!cancelled) setSpectatorIdentity({ ticket: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [spectatorNameShown, viewerId]);
+
+  const [spectatorCount, setSpectatorCount] = useState<number | null>(null);
+  const [spectatorNames, setSpectatorNames] = useState<string[]>([]);
+  useEffect(() => {
+    if (!presenceKey || !spectatorIdentity) {
+      setSpectatorCount(null);
+      setSpectatorNames([]);
+      return;
+    }
+    const source = openReplayPresenceEventSource(presenceKey, {
+      observe: presenceObserveOnly,
+      identity: spectatorIdentity.ticket,
+    });
     if (!source) return;
     const onCount = (event: MessageEvent) => {
       try {
-        const parsed = JSON.parse(event.data as string) as { count?: unknown };
+        const parsed = JSON.parse(event.data as string) as { count?: unknown; names?: unknown };
         if (typeof parsed.count === "number") setSpectatorCount(parsed.count);
+        setSpectatorNames(
+          Array.isArray(parsed.names) ? parsed.names.filter((name): name is string => typeof name === "string") : [],
+        );
       } catch {
         // Malformed payload: keep the previous count.
       }
@@ -2582,13 +2637,19 @@ function ReplayViewer({
     return () => {
       source.close();
       setSpectatorCount(null);
+      setSpectatorNames([]);
     };
-  }, [presenceKey, presenceObserveOnly]);
+  }, [presenceKey, presenceObserveOnly, spectatorIdentity]);
   const spectatorCountRef = useRef(0);
+  const spectatorNamesRef = useRef<string[]>([]);
   useEffect(() => {
     spectatorCountRef.current = spectatorCount ?? 0;
     rendererRef.current?.setSpectatorCount?.(spectatorCount ?? 0);
   }, [spectatorCount]);
+  useEffect(() => {
+    spectatorNamesRef.current = spectatorNames;
+    rendererRef.current?.setSpectatorNames?.(spectatorNames);
+  }, [spectatorNames]);
 
   // Ingame leaderboard: the map's global top plays for the score's beatmap.
   // The renderer inserts the watched player's live simulated score among
@@ -3503,6 +3564,7 @@ function ReplayViewer({
         renderer.setLeaderboard?.(rendererLeaderboardRef.current, leaderboardPlayerNameRef.current);
         renderer.setLeaderboardVisible?.(leaderboardVisibleRef.current);
         renderer.setSpectatorCount?.(spectatorCountRef.current);
+        renderer.setSpectatorNames?.(spectatorNamesRef.current);
         rendererRef.current = renderer;
         if (ownerSkinReadyToRevealRef.current) releaseOwnerSkinHold();
         if (appliedSkinHydratedRef.current) releaseAppliedSkinHold();

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
 import { ArrowLeftRight, Check, Share2 } from "lucide-react";
 import { StarRatingBadge } from "#/components/maps/SearchCard";
 import { avatarImageSrc } from "#/components/ui/Avatar";
@@ -55,6 +56,9 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
   const playedAt = score ? getScoreTimestamp(score) : "";
   const playedDate = playedAt ? formatDate(playedAt) : null;
   const displayName = playerProfile?.username?.trim() || h.playerName;
+  // Only a name that came from the profile is a real osu! account: an upload's
+  // header name is whatever the client wrote and would link to a dead page.
+  const playerPageUsername = playerProfile?.username?.trim() || null;
   const avatarSrc = avatarImageSrc(playerProfile?.avatarUrl, playerProfile?.id ?? undefined);
   const playerCoverUrl = playerProfile?.coverUrl;
   // Slim cover is osu!'s thin banner crop (the others are tall covers or small
@@ -132,7 +136,12 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
                   <PlayerAvatar src={avatarSrc} name={displayName} size={32} />
                   <div className="min-w-0">
                     <div className={`text-[8px] uppercase tracking-wider ${playerLabelClass}`}>Player</div>
-                    <div className={`truncate text-sm font-bold text-white${playerNameShadow}`}>{displayName}</div>
+                    <PlayerName
+                      username={playerPageUsername}
+                      className={`truncate text-sm font-bold text-white${playerNameShadow}`}
+                    >
+                      {displayName}
+                    </PlayerName>
                   </div>
                 </div>
               </div>
@@ -239,7 +248,12 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             <PlayerAvatar src={avatarSrc} name={displayName} size={46} />
             <div className="min-w-0">
               <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">Player</div>
-              <div className="max-w-[180px] truncate text-[15px] font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]">{displayName}</div>
+              <PlayerName
+                username={playerPageUsername}
+                className="max-w-[180px] truncate text-[15px] font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]"
+              >
+                {displayName}
+              </PlayerName>
             </div>
           </div>
           <div className="h-11 w-px shrink-0 bg-white/10" />
@@ -343,6 +357,26 @@ function DeltaChip({ delta, suffix, decimals = 0 }: { delta: number | null; suff
     <span className={`ml-1 text-[10px] font-semibold ${positive ? "text-osu-green-light" : "text-osu-red-light"}`}>
       {positive ? "+" : "-"}{formatted}{suffix}
     </span>
+  );
+}
+
+// The name over to that player's page, in a new tab like the map link beside
+// it: a same-tab navigation would tear down the replay the viewer is watching.
+// Without a username from the profile (an upload carries whatever name the
+// client wrote) it stays plain text rather than linking somewhere dead.
+function PlayerName({ username, className, children }: { username: string | null; className: string; children: ReactNode }) {
+  if (!username) return <div className={className}>{children}</div>;
+  return (
+    <Link
+      to="/player/$username"
+      params={{ username }}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={username}
+      className={`block transition-colors hover:text-osu-pink-light ${className}`}
+    >
+      {children}
+    </Link>
   );
 }
 

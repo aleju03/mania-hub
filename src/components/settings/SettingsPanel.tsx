@@ -39,9 +39,11 @@ import {
   normalizeReplayVolume,
   readReplayBackgroundDim,
   readReplayOwnerSkinEnabled,
+  readReplaySpectatorNameShown,
   readReplayVolume,
   writeReplayBackgroundDim,
   writeReplayOwnerSkinEnabled,
+  writeReplaySpectatorNameShown,
   writeReplayVolume,
 } from "../../lib/replay-preferences";
 import {
@@ -134,10 +136,13 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
      localStorage during render would break hydration); real values load after
      mount. */
   const [cursorSettings, setCursorSettings] = useState(DEFAULT_CURSOR_SETTINGS);
+  /* Same reason: the switch renders differently once the stored value is in. */
+  const [spectatorNameShown, setSpectatorNameShown] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("skin");
 
   useEffect(() => {
     setCursorSettings(readCursorSettings());
+    setSpectatorNameShown(readReplaySpectatorNameShown());
   }, []);
 
   // The stored settings are asset-free while a skin is applied, so rebuild the
@@ -208,6 +213,8 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     writeReplayOverlaySettings(DEFAULT_REPLAY_OVERLAY_SETTINGS);
     setCursorSettings(DEFAULT_CURSOR_SETTINGS);
     writeCursorSettings(DEFAULT_CURSOR_SETTINGS);
+    setSpectatorNameShown(false);
+    writeReplaySpectatorNameShown(false);
   };
 
   const resetButton = (
@@ -252,6 +259,11 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
             const normalized = normalizeReplayVolume(value / 100);
             setVolume(normalized);
             writeReplayVolume(normalized);
+          }}
+          spectatorNameShown={spectatorNameShown}
+          onSpectatorNameShownChange={(shown) => {
+            setSpectatorNameShown(shown);
+            writeReplaySpectatorNameShown(shown);
           }}
         />
       ) : null}
@@ -771,6 +783,8 @@ function ViewerPanel({
   onBgDimChange,
   volume,
   onVolumeChange,
+  spectatorNameShown,
+  onSpectatorNameShownChange,
 }: {
   scrollSpeed: number;
   onScrollSpeedChange: (value: number) => void;
@@ -778,6 +792,8 @@ function ViewerPanel({
   onBgDimChange: (value: number) => void;
   volume: number;
   onVolumeChange: (value: number) => void;
+  spectatorNameShown: boolean;
+  onSpectatorNameShownChange: (shown: boolean) => void;
 }) {
   const volumePercent = Math.round(volume * 100);
 
@@ -817,6 +833,19 @@ function ViewerPanel({
             hint="Used when a replay or map preview opens."
             className="flex-1"
           />
+        </div>
+      </PanelGroup>
+      <PanelGroup label="Spectators">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-semibold text-osu-l1">
+              Show my name under spectators when watching a replay
+            </div>
+            <div className="text-[11px] text-osu-f1">
+              Off means you are only part of the count. Needs you signed in.
+            </div>
+          </div>
+          <Switch checked={spectatorNameShown} onChange={onSpectatorNameShownChange} />
         </div>
       </PanelGroup>
     </div>

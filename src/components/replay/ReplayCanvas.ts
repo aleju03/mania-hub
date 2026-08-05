@@ -131,6 +131,12 @@ function darkenModBadgeColor(hex: string): string {
 }
 
 const HOLD_VISUAL_GRACE_MS = 60;
+// A busy replay stays a number: however much room the stage has, never more
+// than this many named watchers get a line, and the rest become "+N more".
+const MAX_SPECTATOR_NAMES_DRAWN = 8;
+// What the backend is willing to name at all, so "+N more" counts from the
+// same list the room sent rather than from a trimmed copy.
+const MAX_SPECTATOR_NAMES_KNOWN = 20;
 const BACKGROUND_FADE_DURATION_MS = 180;
 const KEY_KPS_WINDOW_MS = 1000;
 const REPLAY_JUDGEMENT_ASSET_HEIGHT_RATIO = 0.055;
@@ -720,6 +726,7 @@ export class ManiaReplayRenderer {
   private leaderboardGlowAsset: ReplaySkinImageAsset | null = null;
   private suppressOvertakeFlash = false;
   private spectatorCount = 0;
+  private spectatorNames: string[] = [];
   private starRatingTimeline: ManiaStarRatingTimelinePoint[] = [];
   private ppModMultiplier = 1;
   private leftHandMisses = 0;
@@ -1134,10 +1141,20 @@ export class ManiaReplayRenderer {
     if (!this._isPlaying) this.render();
   }
 
-  // Live anonymous watcher count shown osu!-style above the scoreboard.
+  // Live watcher count shown osu!-style above the scoreboard.
   setSpectatorCount(count: number) {
     if (this.spectatorCount === count) return;
     this.spectatorCount = count;
+    if (!this._isPlaying) this.render();
+  }
+
+  // The watchers who asked to be named, in arrival order. Everyone else in the
+  // room is only part of the count above. The whole list is kept, not just the
+  // drawable part: the label needs the total to say how many it left out.
+  setSpectatorNames(names: string[]) {
+    const next = names.slice(0, MAX_SPECTATOR_NAMES_KNOWN);
+    if (next.length === this.spectatorNames.length && next.every((name, i) => name === this.spectatorNames[i])) return;
+    this.spectatorNames = next;
     if (!this._isPlaying) this.render();
   }
 
@@ -4696,19 +4713,41 @@ export class ManiaReplayRenderer {
     }
   }
 
-  // osu!-style spectator counter (count only, never names) riding just above
-  // the scoreboard's slot. It is not an overlay itself: it follows the
-  // leaderboard's position but survives the board being Tab-hidden or
-  // removed outright, and is never draggable or selectable.
+  // osu!-style spectator counter riding just above the scoreboard's slot,
+  // with the names of the watchers who asked to be named listed under it.
+  // It is not an overlay itself: it follows the leaderboard's position but
+  // survives the board being Tab-hidden or removed outright, and is never
+  // draggable or selectable.
+  //
+  // The block grows upward, so the counter keeps its place just above the
+  // board however many names arrive. What it may never do is grow past the
+  // top of the stage and come back down over the board, so the list only
+  // spends room that is actually there: a short stage, or a board dragged
+  // near the top, drops to however many lines fit and says how many it left
+  // out. The room is what decides, not the name count.
   private renderSpectatorLabel(layout: Layout) {
     if (this.spectatorCount <= 0) return;
     const scale = this.getOverlayScale(layout, "leaderboard");
     const height = 26 * scale;
     const width = 152 * scale;
+    const nameHeight = 17 * scale;
+    const gap = 4 * scale;
+    const names = this.spectatorNames;
     const placement = this.overlaySettings.leaderboard;
     const anchorX = Math.max(0, Math.min(Math.max(0, layout.w - width), placement.x * layout.w));
     const anchorY = Math.max(0, Math.min(Math.max(0, layout.h - height), placement.y * layout.h));
-    const y = Math.max(0, anchorY - height - 4 * scale);
+
+    const room = Math.max(0, Math.floor((anchorY - height - gap) / nameHeight));
+    const budget = Math.min(names.length, room, MAX_SPECTATOR_NAMES_DRAWN);
+    // The trailing "+N more" costs a line of its own, and is worth it only
+    // when at least one name is left above it: with room for a single line
+    // the counter already carries the number.
+    const truncated = budget < names.length;
+    const drawn = truncated ? Math.max(0, budget - 1) : budget;
+    const remainder = drawn > 0 && truncated ? names.length - drawn : 0;
+    const lines = drawn + (remainder > 0 ? 1 : 0);
+
+    const y = Math.max(0, anchorY - height - lines * nameHeight - gap);
     this.addText(`Spectators (${this.spectatorCount})`, anchorX + 8 * scale, y + height / 2, {
       fontSize: 15 * scale,
       fill: "#ffffff",
@@ -4716,6 +4755,24 @@ export class ManiaReplayRenderer {
       fontWeight: "600",
       anchorY: 0.5,
     });
+    for (let i = 0; i < drawn; i++) {
+      this.addText(names[i]!, anchorX + 8 * scale, y + height + (i + 0.5) * nameHeight, {
+        fontSize: 13 * scale,
+        fill: "#ffffff",
+        alpha: 0.8,
+        fontWeight: "400",
+        anchorY: 0.5,
+      });
+    }
+    if (remainder > 0) {
+      this.addText(`+${remainder} more`, anchorX + 8 * scale, y + height + (drawn + 0.5) * nameHeight, {
+        fontSize: 13 * scale,
+        fill: "#ffffff",
+        alpha: 0.55,
+        fontWeight: "400",
+        anchorY: 0.5,
+      });
+    }
   }
 
   private getLeaderboardSlotGradient(color: string): FillGradient {

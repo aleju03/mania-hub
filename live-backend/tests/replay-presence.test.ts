@@ -4,16 +4,32 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   getReplayPresenceWatcherCount,
   handleReplayPresence,
+  replaySpectatorSignature,
   resetReplayPresenceForTests,
 } from "../src/live/replay-presence.js";
+
+const ADMIN_TOKEN = "test-admin-token";
 
 function ctx() {
   return {
     config: {
       allowedOrigins: ["http://localhost:3000"],
+      liveAdminToken: ADMIN_TOKEN,
     },
     abuse: undefined,
   } as never;
+}
+
+/** The query a viewer who turned on "show my name under spectators" sends. */
+function namedQuery(userId: number, username: string, options?: { expiresAt?: number; signature?: string }): string {
+  const expiresAt = options?.expiresAt ?? Date.now() + 60_000;
+  const signature = options?.signature ?? replaySpectatorSignature(userId, username, expiresAt, ADMIN_TOKEN);
+  return `&uid=${userId}&name=${encodeURIComponent(username)}&exp=${expiresAt}&sig=${signature}`;
+}
+
+function lastCountPayload(res: { chunks: string[] }): unknown {
+  const frames = res.chunks.join("").split("event: count\ndata: ").slice(1);
+  return JSON.parse(frames[frames.length - 1]!.split("\n")[0]!);
 }
 
 function fakeReq(url: string, origin?: string): IncomingMessage & EventEmitter {
@@ -123,12 +139,80 @@ describe("replay presence", () => {
     expect(getReplayPresenceWatcherCount("score:9")).toBe(0);
   });
 
-  it("never sends names, only counts", () => {
+  it("stays anonymous for watchers who did not opt in", () => {
     const req = fakeReq("/api/replay/presence?key=score:55");
     const res = fakeRes();
     handleReplayPresence(req, res, ctx());
     const stream = res.chunks.join("");
     expect(stream).toMatch(/event: count/);
     expect(JSON.parse(stream.split("data: ")[1]!.split("\n")[0]!)).toEqual({ count: 1 });
+  });
+
+  it("names watchers who sent a valid ticket, and only those", () => {
+    const namedReq = fakeReq(`/api/replay/presence?key=score:70${namedQuery(42, "peppy")}`);
+    const namedRes = fakeRes();
+    handleReplayPresence(namedReq, namedRes, ctx());
+    expect(lastCountPayload(namedRes)).toEqual({ count: 1, names: ["peppy"] });
+
+    // An anonymous watcher joins the count without joining the list.
+    const anonReq = fakeReq("/api/replay/presence?key=score:70");
+    handleReplayPresence(anonReq, fakeRes(), ctx());
+    expect(lastCountPayload(namedRes)).toEqual({ count: 2, names: ["peppy"] });
+
+    // Leaving takes the name back off everyone's screen.
+    const watcherRes = fakeRes();
+    handleReplayPresence(fakeReq("/api/replay/presence?key=score:70"), watcherRes, ctx());
+    namedReq.emit("close");
+    expect(lastCountPayload(watcherRes)).toEqual({ count: 2 });
+  });
+
+  it("ignores forged, expired and unsigned names", () => {
+    const forged = fakeRes();
+    handleReplayPresence(
+      fakeReq(`/api/replay/presence?key=score:71${namedQuery(42, "peppy", { signature: "00" })}`),
+      forged,
+      ctx(),
+    );
+    expect(lastCountPayload(forged)).toEqual({ count: 1 });
+
+    const expired = fakeRes();
+    handleReplayPresence(
+      fakeReq(`/api/replay/presence?key=score:72${namedQuery(42, "peppy", { expiresAt: Date.now() - 1000 })}`),
+      expired,
+      ctx(),
+    );
+    expect(lastCountPayload(expired)).toEqual({ count: 1 });
+
+    // A name someone typed into the URL without a signature at all.
+    const bare = fakeRes();
+    handleReplayPresence(fakeReq("/api/replay/presence?key=score:73&uid=42&name=peppy"), bare, ctx());
+    expect(lastCountPayload(bare)).toEqual({ count: 1 });
+
+    // A signature minted against a different name does not carry over.
+    const swapped = fakeRes();
+    const expiresAt = Date.now() + 60_000;
+    const signature = replaySpectatorSignature(42, "peppy", expiresAt, ADMIN_TOKEN);
+    handleReplayPresence(
+      fakeReq(`/api/replay/presence?key=score:74&uid=42&name=someone-else&exp=${expiresAt}&sig=${signature}`),
+      swapped,
+      ctx(),
+    );
+    expect(lastCountPayload(swapped)).toEqual({ count: 1 });
+  });
+
+  it("names an account once no matter how many tabs it has open", () => {
+    handleReplayPresence(fakeReq(`/api/replay/presence?key=score:80${namedQuery(7, "cookiezi")}`), fakeRes(), ctx());
+    const secondTab = fakeRes();
+    handleReplayPresence(fakeReq(`/api/replay/presence?key=score:80${namedQuery(7, "cookiezi")}`), secondTab, ctx());
+    expect(lastCountPayload(secondTab)).toEqual({ count: 2, names: ["cookiezi"] });
+  });
+
+  it("gives observers the names too", () => {
+    handleReplayPresence(fakeReq(`/api/replay/presence?key=score:90${namedQuery(3, "rafis")}`), fakeRes(), ctx());
+    const observerRes = fakeRes();
+    handleReplayPresence(fakeReq("/api/replay/presence?key=score:90&observe=1"), observerRes, ctx());
+    expect(lastCountPayload(observerRes)).toEqual({ count: 1, names: ["rafis"] });
+    // An observer of their own site is never named in the room.
+    expect(getReplayPresenceWatcherCount("score:90")).toBe(1);
   });
 });

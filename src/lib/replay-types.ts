@@ -95,6 +95,7 @@ export interface ReplayRendererLike {
   setLeaderboard?: (entries: { name: string; score: number; combo: number; rank?: number }[], playerName: string) => void;
   setLeaderboardVisible?: (visible: boolean) => void;
   setSpectatorCount?: (count: number) => void;
+  setSpectatorNames?: (names: string[]) => void;
   setHitsoundTrigger?: (trigger: ReplayHitsoundTrigger | null) => void;
   ready: () => Promise<void>;
   getLiveStats?: () => ReplayLiveStats;

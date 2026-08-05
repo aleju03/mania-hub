@@ -5,6 +5,7 @@ import { buildRandomDrawQuery } from "./maps-random-draw-params";
 import type { LiveMapsRandomDrawParams } from "./maps-random-draw-params";
 import type { ManiaSkills } from "./maniacard";
 import type { MyDataSkillBreakdown } from "./my-data";
+import type { ReplaySpectatorTicket } from "./replay-spectator";
 import { SharedEventSourcePool, type SharedEventSource } from "./shared-event-source";
 
 export type LivePlayerSkills = MyDataSkillBreakdown;
@@ -2192,15 +2193,27 @@ export async function fetchLivePackRecentPulls(
   return Array.isArray(body.pulls) ? body.pulls : [];
 }
 
-/** Anonymous per-replay presence stream for the viewer's ingame-style
- *  "Spectators (N)" counter. `key` is `score:<id>` or `upload:<id>`; the
- *  stream emits `count` events and carries no identities. `observe` receives
- *  counts without registering as a watcher (the admin ignoring themselves). */
-export function openReplayPresenceEventSource(key: string, options?: { observe?: boolean }): EventSource | null {
+/** Per-replay presence stream for the viewer's ingame-style "Spectators (N)"
+ *  counter. `key` is `score:<id>` or `upload:<id>`; the stream emits `count`
+ *  events, anonymous unless a watcher opted into being named. `observe`
+ *  receives them without registering as a watcher (the admin ignoring
+ *  themselves). `identity` is a signed ticket from `getReplaySpectatorTicket`
+ *  and is only sent for viewers who turned the setting on. */
+export function openReplayPresenceEventSource(
+  key: string,
+  options?: { observe?: boolean; identity?: ReplaySpectatorTicket | null },
+): EventSource | null {
   const base = getLiveBackendUrl();
   if (!base || typeof EventSource === "undefined") return null;
   const query = new URLSearchParams({ key });
   if (options?.observe) query.set("observe", "1");
+  const identity = options?.identity;
+  if (identity) {
+    query.set("uid", String(identity.userId));
+    query.set("name", identity.username);
+    query.set("exp", String(identity.expiresAt));
+    query.set("sig", identity.signature);
+  }
   return new EventSource(`${base}/api/replay/presence?${query.toString()}`);
 }
 

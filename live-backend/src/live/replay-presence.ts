@@ -1,35 +1,92 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { sendRateLimited, type HttpContext } from "../http/snapshots.js";
 
-// Anonymous "who else is watching this replay" presence for the replay
-// viewer's ingame-style spectator counter. Pure in-memory refcounts keyed by
-// the replay's identity (like CountryClientTracker): one SSE connection per
-// open viewer, count broadcasts on every join/leave, no names or ids ever
-// stored or sent. Serving-process only, so a single process sees every
-// watcher. `observe=1` connections (the site admin watching their own site)
-// receive counts without ever being counted.
+// "Who else is watching this replay" presence for the replay viewer's
+// ingame-style spectator counter. Pure in-memory refcounts keyed by the
+// replay's identity (like CountryClientTracker): one SSE connection per open
+// viewer, a broadcast on every join/leave, nothing durable. Serving-process
+// only, so a single process sees every watcher. `observe=1` connections (the
+// site admin watching their own site) receive the broadcast without ever
+// being counted.
+//
+// The count is anonymous by default and stays that way: a name only rides
+// along when that viewer turned on "show my name under spectators", and only
+// as a frontend-signed ticket (same scheme as the ghost overlay), so a name on
+// someone else's screen cannot be a query string anyone typed.
 
 const REPLAY_PRESENCE_KEY_PATTERN = /^(score|upload):[A-Za-z0-9_-]{1,64}$/;
 const MAX_TRACKED_KEYS = 2000;
 const MAX_CONNECTIONS_PER_KEY = 256;
 const HEARTBEAT_INTERVAL_MS = 25_000;
+const MAX_NAME_LENGTH = 32;
+// The viewer draws a handful of these; the rest of the room stays a number.
+const MAX_NAMES_SENT = 20;
+
+interface PresenceWatcher {
+  userId: number;
+  username: string;
+}
 
 interface PresenceEntry {
-  watchers: Set<ServerResponse>;
+  // Insertion-ordered, so the named list reads as arrival order.
+  watchers: Map<ServerResponse, PresenceWatcher | null>;
   observers: Set<ServerResponse>;
 }
 
 const entriesByKey = new Map<string, PresenceEntry>();
 
-function countEventPayload(count: number): string {
-  return `event: count\ndata: ${JSON.stringify({ count })}\n\n`;
+/** Frontend-minted proof that this connection really is that osu! account,
+    signed with the shared admin token which only the two servers hold. */
+export function replaySpectatorSignature(
+  userId: number,
+  username: string,
+  expiresAt: number,
+  secret: string,
+): string {
+  return createHmac("sha256", secret).update(`spectator:${userId}:${username}:${expiresAt}`).digest("hex");
+}
+
+function verifySpectatorTicket(
+  params: { userId: number; username: string; expiresAt: number; signature: string },
+  secret: string | undefined,
+  now = Date.now(),
+): boolean {
+  if (!secret || !params.signature || !params.username) return false;
+  if (!Number.isSafeInteger(params.userId) || params.userId <= 0) return false;
+  if (!Number.isFinite(params.expiresAt) || params.expiresAt <= now) return false;
+  const provided = Buffer.from(params.signature);
+  const wanted = Buffer.from(replaySpectatorSignature(params.userId, params.username, params.expiresAt, secret));
+  return provided.length === wanted.length && timingSafeEqual(provided, wanted);
+}
+
+// One line per account, in arrival order: two tabs of the same person count
+// twice in the room but are named once.
+function namedWatchers(entry: PresenceEntry): string[] {
+  const names: string[] = [];
+  const seen = new Set<number>();
+  for (const watcher of entry.watchers.values()) {
+    if (!watcher || seen.has(watcher.userId)) continue;
+    seen.add(watcher.userId);
+    names.push(watcher.username);
+    if (names.length >= MAX_NAMES_SENT) break;
+  }
+  return names;
+}
+
+// Names are left off the payload entirely when nobody opted in, so the
+// anonymous room stays byte-for-byte the count it always was.
+function countEventPayload(entry: PresenceEntry): string {
+  const names = namedWatchers(entry);
+  const payload = names.length > 0 ? { count: entry.watchers.size, names } : { count: entry.watchers.size };
+  return `event: count\ndata: ${JSON.stringify(payload)}\n\n`;
 }
 
 function broadcastCount(key: string): void {
   const entry = entriesByKey.get(key);
   if (!entry) return;
-  const payload = countEventPayload(entry.watchers.size);
-  for (const connection of [...entry.watchers, ...entry.observers]) {
+  const payload = countEventPayload(entry);
+  for (const connection of [...entry.watchers.keys(), ...entry.observers]) {
     try {
       connection.write(payload);
     } catch {
@@ -89,9 +146,20 @@ export function handleReplayPresence(req: IncomingMessage, res: ServerResponse, 
     return true;
   }
   if (!entry) {
-    entry = { watchers: new Set(), observers: new Set() };
+    entry = { watchers: new Map(), observers: new Set() };
     entriesByKey.set(key, entry);
   }
+
+  // An unsigned or expired ticket is not an error: that viewer simply joins
+  // anonymously, exactly like everyone who never turned the setting on.
+  const userId = Number(url.searchParams.get("uid") ?? 0);
+  const username = (url.searchParams.get("name") ?? "").slice(0, MAX_NAME_LENGTH);
+  const expiresAt = Number(url.searchParams.get("exp") ?? 0);
+  const signature = url.searchParams.get("sig") ?? "";
+  const watcher: PresenceWatcher | null =
+    verifySpectatorTicket({ userId, username, expiresAt, signature }, ctx.config.liveAdminToken)
+      ? { userId, username }
+      : null;
 
   res.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
@@ -102,12 +170,12 @@ export function handleReplayPresence(req: IncomingMessage, res: ServerResponse, 
     entry.observers.add(res);
     // Joining changed nothing for anyone else; just seed this observer.
     try {
-      res.write(countEventPayload(entry.watchers.size));
+      res.write(countEventPayload(entry));
     } catch {
       // Close handler cleans up.
     }
   } else {
-    entry.watchers.add(res);
+    entry.watchers.set(res, watcher);
     broadcastCount(key);
   }
 

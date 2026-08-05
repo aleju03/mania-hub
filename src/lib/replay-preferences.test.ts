@@ -6,25 +6,36 @@ import {
   REPLAY_BG_DIM_STORAGE_KEY,
   REPLAY_BEATMAP_HITSOUND_VOLUME_STORAGE_KEY,
   REPLAY_HITSOUND_VOLUME_STORAGE_KEY,
+  REPLAY_SPECTATOR_NAME_CHANGE_EVENT,
+  REPLAY_SPECTATOR_NAME_STORAGE_KEY,
   REPLAY_VOLUME_STORAGE_KEY,
   normalizeReplayBackgroundDim,
   normalizeReplayVolume,
   readReplayBackgroundDim,
   readReplayBeatmapHitsoundVolume,
+  readReplaySpectatorNameShown,
   readReplayVolume,
   writeReplayBackgroundDim,
+  writeReplaySpectatorNameShown,
   writeReplayVolume,
 } from "./replay-preferences";
+
+let dispatched: Event[] = [];
 
 describe("replay preferences", () => {
   beforeEach(() => {
     const storage = new Map<string, string>();
+    dispatched = [];
     vi.stubGlobal("window", {
       localStorage: {
         clear: () => storage.clear(),
         getItem: (key: string) => storage.get(key) ?? null,
         removeItem: (key: string) => storage.delete(key),
         setItem: (key: string, value: string) => storage.set(key, value),
+      },
+      dispatchEvent: (event: Event) => {
+        dispatched.push(event);
+        return true;
       },
     });
   });
@@ -63,6 +74,20 @@ describe("replay preferences", () => {
     // Once the split volume is stored, it wins over the legacy key.
     window.localStorage.setItem(REPLAY_BEATMAP_HITSOUND_VOLUME_STORAGE_KEY, "0.8");
     expect(readReplayBeatmapHitsoundVolume()).toBe(0.8);
+  });
+
+  it("watches anonymously until the viewer asks to be named", () => {
+    expect(readReplaySpectatorNameShown()).toBe(false);
+
+    writeReplaySpectatorNameShown(true);
+    expect(window.localStorage.getItem(REPLAY_SPECTATOR_NAME_STORAGE_KEY)).toBe("true");
+    expect(readReplaySpectatorNameShown()).toBe(true);
+    // The settings drawer opens over a running replay, so the same tab has to
+    // hear the flip: "storage" alone would only reach the other ones.
+    expect(dispatched.map((event) => event.type)).toEqual([REPLAY_SPECTATOR_NAME_CHANGE_EVENT]);
+
+    writeReplaySpectatorNameShown(false);
+    expect(readReplaySpectatorNameShown()).toBe(false);
   });
 
   it("writes normalized preference values", () => {
