@@ -1,8 +1,6 @@
-import crypto from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   getBeatmapAssetBlobKey,
-  getManiaCardThumbnailStorageKey,
   getPointerBlobKey,
   normalizeR2AdminObjectKey,
   normalizeR2AdminPrefix,
@@ -64,28 +62,5 @@ describe("content-addressed beatmap asset blobs", () => {
     expect(getPointerBlobKey("background", { blobkey: "replay-cache/replays/1.osr" })).toBeNull();
     expect(getPointerBlobKey("background", {})).toBeNull();
     expect(getPointerBlobKey("background", undefined)).toBeNull();
-  });
-});
-
-describe("getManiaCardThumbnailStorageKey", () => {
-  it("keeps legacy v1 objects at their existing flat address", () => {
-    const cacheKey = "v1-w240-u4242-0123456789abcdef";
-    const hash = crypto.createHash("sha256").update(cacheKey).digest("hex").slice(0, 40);
-
-    expect(getManiaCardThumbnailStorageKey(cacheKey)).toBe(`replay-cache/maniacards/${hash}.webp`);
-  });
-
-  it("groups v2 variants by renderer version and player", () => {
-    const cacheKey = "v2-w240-u4242-0123456789abcdef";
-    const hash = crypto.createHash("sha256").update(cacheKey).digest("hex").slice(0, 40);
-
-    expect(getManiaCardThumbnailStorageKey(cacheKey)).toBe(
-      `replay-cache/maniacards/v2/4242/${hash}.webp`,
-    );
-  });
-
-  it("rejects malformed direct callers", () => {
-    expect(() => getManiaCardThumbnailStorageKey("../../somewhere"))
-      .toThrow("Invalid maniacard thumbnail cache key.");
   });
 });

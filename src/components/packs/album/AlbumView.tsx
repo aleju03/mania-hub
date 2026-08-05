@@ -28,7 +28,9 @@ import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "../cardSna
 import {
   cardThumbnailKeyForCollectionCard,
   cardThumbnailKeyForData,
+  claimCardThumbnailErrorFallback,
   COLLECTION_CARD_THUMB_WIDTH,
+  forgetRemoteCardThumbnail,
   getMemoryCardThumbnail,
   loadPersistedCardThumbnail,
   loadR2CardThumbnails,
@@ -776,6 +778,7 @@ const AlbumSlot = memo(function AlbumSlot({
   thumbnail,
   onSpotlight,
   onPeek,
+  onThumbnailError,
 }: {
   entry: LiveGlobalRankingEntry | null;
   card: CollectedCard | null;
@@ -783,6 +786,7 @@ const AlbumSlot = memo(function AlbumSlot({
   thumbnail: string | null;
   onSpotlight: (card: CollectedCard, thumbnail: string | null, rect: DOMRect) => void;
   onPeek: (entry: LiveGlobalRankingEntry, owned: boolean) => void;
+  onThumbnailError: (card: CollectedCard) => void;
 }) {
   if (!entry) {
     return <div className="rounded-[7px] bg-osu-b4/25" style={{ aspectRatio: "5 / 7" }} />;
@@ -804,6 +808,11 @@ const AlbumSlot = memo(function AlbumSlot({
               alt={`${card.username} maniacard`}
               className="absolute inset-0 h-full w-full object-cover"
               draggable={false}
+              onError={(event) => {
+                /* Only a remote pool URL can 404 (skeletons and local renders
+                   are data/blob URLs); fall back to rendering this card. */
+                if (/^https?:/.test(event.currentTarget.src)) onThumbnailError(card);
+              }}
             />
           ) : (
             <span className="absolute inset-0 bg-osu-b3" />
@@ -1155,6 +1164,23 @@ export function AlbumView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spreadSignature, bumpThumbnails]);
 
+  /* A slot's remote thumbnail 404ed (the pool URL is built without an
+     existence check, so a lifecycle-expired object surfaces here): evict the
+     dead URL so the slot shows its skeleton, render the card locally, and let
+     rememberCardThumbnailBlob re-upload it for the next viewer. One attempt
+     per key per session; a failed render leaves the skeleton. */
+  const onThumbnailError = useCallback((card: CollectedCard) => {
+    const key = cardThumbnailKeyForCollectionCard(card);
+    if (!key || !claimCardThumbnailErrorFallback(key)) return;
+    forgetRemoteCardThumbnail(key);
+    bumpThumbnails();
+    renderAlbumThumbnail(card)
+      .then((url) => {
+        if (url) bumpThumbnails();
+      })
+      .catch(() => {});
+  }, [bumpThumbnails]);
+
   /* Identity-stable so the memoized slots don't re-render on unrelated
      state changes. */
   const openSpotlight = useCallback((card: CollectedCard, thumbnail: string | null, rect: DOMRect) => {
@@ -1261,6 +1287,7 @@ export function AlbumView({
                   thumbnail={getMemoryCardThumbnail(key)}
                   onSpotlight={openSpotlight}
                   onPeek={openPeek}
+                  onThumbnailError={onThumbnailError}
                 />
               );
             })}

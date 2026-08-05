@@ -1,5 +1,6 @@
 // Server-only storage for the images the BBCode editor uploads, on R2 behind
-// cdn.mania-tracker.com.
+// cdn.mania-tracker.com. The same bucket also carries the maniacard thumbnail
+// pool (pack-thumbnail-store.ts), which borrows the client accessors below.
 //
 // These live in their own bucket rather than the replay cache. Connecting a
 // public domain to an R2 bucket exposes every key in it, and the replay cache
@@ -9,8 +10,10 @@
 // Objects are content-addressed: the same picture uploaded twice is stored
 // once, and a URL always names exactly one set of bytes, which is what makes
 // the immutable year-long cache header true rather than a hope. Nothing under
-// this prefix may be given an R2 lifecycle rule - these URLs get pasted into
+// bbcode/ may be given an R2 lifecycle rule - these URLs get pasted into
 // osu! profiles and have to outlive anything the site itself remembers.
+// (maniacards/ is different: it is re-derivable cache and carries a 90-day
+// expiry rule, scoped to that prefix only.)
 
 import crypto from "node:crypto";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -62,6 +65,19 @@ function getBaseUrl(): string | null {
 
 export function isPublicImageStoreConfigured(): boolean {
   return getClient() !== null && getBaseUrl() !== null;
+}
+
+// Shared accessors for the other stores living in this bucket.
+export function getPublicBucketClient(): S3Client | null {
+  return getClient();
+}
+
+export function getPublicBucketName(): string | null {
+  return getClient() ? getBucket() : null;
+}
+
+export function getPublicBucketBaseUrl(): string | null {
+  return getBaseUrl();
 }
 
 /** Content-addressed key for an image, identical for identical bytes. */

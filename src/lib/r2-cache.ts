@@ -21,6 +21,9 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 // with no other durable copy and must NEVER get a lifecycle rule; the rest is
 // re-derivable cache, so adding a rule later is safe (a miss re-uploads and
 // refreshes the object's age). Replay endpoint kind rides on S3 object metadata.
+// maniacards/ here is a leftover: the live pool moved to the public image
+// bucket (pack-thumbnail-store.ts) on 2026-08-05, and the stranded copies just
+// age out under the existing 90d rule.
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
 const REPLAY_CACHE_PREFIX = "replay-cache/";
 const SIGNED_URL_EXPIRES_SECONDS = 6 * 60 * 60;
@@ -361,70 +364,6 @@ export async function putJsonArtifact(storageKey: string, value: unknown): Promi
   } catch {
     return false;
   }
-}
-
-const MANIACARD_THUMBNAIL_CACHE_PREFIX = `${REPLAY_CACHE_PREFIX}maniacards/`;
-const MANIACARD_THUMBNAIL_CONTENT_TYPE = "image/webp";
-const MANIACARD_THUMBNAIL_KEY_PATTERN = /^(v\d+)-w\d+-u(\d+)-[a-f0-9]{16}$/;
-
-function getPublicReplayCacheUrl(storageKey: string): string | null {
-  const publicBaseUrl = getPublicReplayCacheBaseUrl();
-  return publicBaseUrl
-    ? `${publicBaseUrl}/${storageKey.split("/").map(encodeURIComponent).join("/")}`
-    : null;
-}
-
-export function getManiaCardThumbnailStorageKey(cacheKey: string): string {
-  const match = MANIACARD_THUMBNAIL_KEY_PATTERN.exec(cacheKey);
-  if (!match) throw new Error("Invalid maniacard thumbnail cache key.");
-  const version = match[1]!;
-  const userId = match[2]!;
-  const hash = crypto.createHash("sha256").update(cacheKey).digest("hex").slice(0, 40);
-  // v1 objects predate the inspectable hierarchy. Preserve their address for
-  // old clients while every newer renderer writes into its own removable
-  // namespace and groups a player's variants together in the R2 browser.
-  if (version === "v1") return `${MANIACARD_THUMBNAIL_CACHE_PREFIX}${hash}.webp`;
-  return `${MANIACARD_THUMBNAIL_CACHE_PREFIX}${version}/${userId}/${hash}.webp`;
-}
-
-export async function getManiaCardThumbnailUrl(cacheKey: string): Promise<string | null> {
-  const r2 = getClient();
-  if (!r2) return null;
-
-  const storageKey = getManiaCardThumbnailStorageKey(cacheKey);
-  assertReplayCacheKey(storageKey);
-  try {
-    await r2.send(new HeadObjectCommand({
-      Bucket: REPLAY_CACHE_BUCKET,
-      Key: storageKey,
-    }));
-    return getPublicReplayCacheUrl(storageKey) ?? await signGetUrl(storageKey, MANIACARD_THUMBNAIL_CONTENT_TYPE);
-  } catch {
-    return null;
-  }
-}
-
-export async function putManiaCardThumbnailAndGetUrl(cacheKey: string, buffer: Buffer): Promise<string | null> {
-  const r2 = getClient();
-  if (!r2 || buffer.length === 0) return null;
-
-  // Every pack reveal re-posts the thumbnails it rendered, so most arrivals
-  // already exist. The key is content-addressed (CACHE_VERSION plus the render
-  // inputs), which makes an existing object byte-equivalent to this upload:
-  // answer with a Head instead of rewriting it.
-  const existing = await getManiaCardThumbnailUrl(cacheKey);
-  if (existing) return existing;
-
-  const storageKey = getManiaCardThumbnailStorageKey(cacheKey);
-  assertReplayCacheKey(storageKey);
-  await r2.send(new PutObjectCommand({
-    Bucket: REPLAY_CACHE_BUCKET,
-    Key: storageKey,
-    Body: buffer,
-    ContentType: MANIACARD_THUMBNAIL_CONTENT_TYPE,
-    CacheControl: "public, max-age=31536000, immutable",
-  }));
-  return getPublicReplayCacheUrl(storageKey) ?? await signGetUrl(storageKey, MANIACARD_THUMBNAIL_CONTENT_TYPE);
 }
 
 export async function getReplayVideoSignedUrl(id: string, filename: string): Promise<string | null> {

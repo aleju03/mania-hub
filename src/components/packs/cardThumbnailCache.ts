@@ -205,6 +205,27 @@ export function getMemoryCardThumbnail(key: string | null): string | null {
   return url;
 }
 
+/* Remote thumbnail URLs are constructed without an existence check, so a
+   lifecycle-expired object surfaces as a 404 on the <img> itself. The two
+   helpers below support that path: evict the dead URL so slots fall back to
+   their skeleton while the local render runs, and let each key claim exactly
+   one render-and-reupload attempt per session so a render failure cannot
+   loop. */
+export function forgetRemoteCardThumbnail(key: string): void {
+  const url = memoryCache.get(key);
+  // Object and data URLs came from a local render and cannot 404.
+  if (!url || isObjectUrl(url) || !/^https?:/.test(url)) return;
+  memoryCache.delete(key);
+}
+
+const claimedErrorFallbacks = new Set<string>();
+
+export function claimCardThumbnailErrorFallback(key: string): boolean {
+  if (claimedErrorFallbacks.has(key)) return false;
+  claimedErrorFallbacks.add(key);
+  return true;
+}
+
 export async function loadPersistedCardThumbnail(key: string): Promise<string | null> {
   const memory = getMemoryCardThumbnail(key);
   if (memory) return memory;

@@ -3,7 +3,6 @@ import { createServerFn } from "@tanstack/react-start";
 const THUMBNAIL_KEY_PATTERN = /^v\d+-w\d+-u\d+-[a-f0-9]{16}$/;
 const MAX_THUMBNAIL_BYTES = 350_000;
 const MAX_THUMBNAIL_BATCH = 60;
-const THUMBNAIL_BATCH_CONCURRENCY = 8;
 
 function normalizeThumbnailKey(input: unknown): string {
   const key = typeof input === "string" ? input.trim() : "";
@@ -21,15 +20,20 @@ function decodeWebpDataUrl(dataUrl: string): Buffer {
   return buffer;
 }
 
+// URL resolution is a pure computation now (no existence check; a 404 falls
+// back to a local render client-side), so the answer is stable and cacheable
+// for as long as the bucket config can be trusted not to change mid-day.
+const THUMBNAIL_URL_CACHE_CONTROL = "private, max-age=3600";
+
 export const fetchR2PackCardThumbnail = createServerFn({ method: "GET" })
   .validator((input: { key?: unknown }) => ({
     key: normalizeThumbnailKey(input?.key),
   }))
   .handler(async ({ data }): Promise<{ url: string | null }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
-    setResponseHeader("Cache-Control", "private, no-store");
-    const { getManiaCardThumbnailUrl } = await import("./r2-cache");
-    return { url: await getManiaCardThumbnailUrl(data.key) };
+    setResponseHeader("Cache-Control", THUMBNAIL_URL_CACHE_CONTROL);
+    const { getPackCardThumbnailUrl } = await import("./pack-thumbnail-store");
+    return { url: getPackCardThumbnailUrl(data.key) };
   });
 
 export const fetchR2PackCardThumbnails = createServerFn({ method: "GET" })
@@ -40,23 +44,13 @@ export const fetchR2PackCardThumbnails = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }): Promise<{ urls: Record<string, string> }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
-    setResponseHeader("Cache-Control", "private, no-store");
-    const { getManiaCardThumbnailUrl } = await import("./r2-cache");
+    setResponseHeader("Cache-Control", THUMBNAIL_URL_CACHE_CONTROL);
+    const { getPackCardThumbnailUrl } = await import("./pack-thumbnail-store");
     const urls: Record<string, string> = {};
-    let cursor = 0;
-    const workers = Array.from(
-      { length: Math.min(THUMBNAIL_BATCH_CONCURRENCY, data.keys.length) },
-      async () => {
-        for (;;) {
-          const key = data.keys[cursor];
-          cursor += 1;
-          if (!key) return;
-          const url = await getManiaCardThumbnailUrl(key);
-          if (url) urls[key] = url;
-        }
-      },
-    );
-    await Promise.all(workers);
+    for (const key of data.keys) {
+      const url = getPackCardThumbnailUrl(key);
+      if (url) urls[key] = url;
+    }
     return { urls };
   });
 
@@ -70,8 +64,8 @@ export const uploadR2PackCardThumbnail = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ url: string | null }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
-    const { putManiaCardThumbnailAndGetUrl } = await import("./r2-cache");
+    const { putPackCardThumbnail } = await import("./pack-thumbnail-store");
     return {
-      url: await putManiaCardThumbnailAndGetUrl(data.key, decodeWebpDataUrl(data.dataUrl)),
+      url: await putPackCardThumbnail(data.key, decodeWebpDataUrl(data.dataUrl)),
     };
   });

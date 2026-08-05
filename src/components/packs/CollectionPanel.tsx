@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search, Star } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "#/lib/auth-context";
 import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import {
@@ -34,7 +34,9 @@ import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnap
 import {
   cardThumbnailKeyForCollectionCard,
   cardThumbnailKeyForData,
+  claimCardThumbnailErrorFallback,
   COLLECTION_CARD_THUMB_WIDTH,
+  forgetRemoteCardThumbnail,
   getMemoryCardThumbnail,
   loadPersistedCardThumbnail,
   loadR2CardThumbnails,
@@ -417,11 +419,13 @@ function CollectionCardTile({
   thumbnail,
   canBackfill,
   onApplyMint,
+  onThumbnailError,
 }: {
   card: CollectedCard;
   thumbnail: string | null;
   canBackfill: boolean;
   onApplyMint: (cardKey: string, mint: CardMint) => boolean | Promise<boolean>;
+  onThumbnailError: (card: CollectedCard) => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const previousThumbnailRef = useRef<string | null>(thumbnail);
@@ -477,6 +481,11 @@ function CollectionCardTile({
           animate={{ opacity: 1 }}
           transition={animateThumbnail ? { duration: 0.14, ease: "easeOut" } : { duration: 0 }}
           draggable={false}
+          onError={(event) => {
+            /* Only a remote pool URL can 404 (local renders are blob/data
+               URLs); fall back to rendering this card locally. */
+            if (/^https?:/.test(event.currentTarget.src)) onThumbnailError(card);
+          }}
         />
       )}
       {card.copies > 1 && (
@@ -581,6 +590,22 @@ export function CollectionPanel({
   const [skeletonSim, setSkeletonSim] = useState<"off" | "cards" | "page">("off");
   const collectionControlsRef = useRef<HTMLDivElement | null>(null);
   const [, setThumbnailRevision] = useState(0);
+  /* A tile's remote thumbnail 404ed (pool URLs carry no existence check, so a
+     lifecycle-expired object surfaces here): evict the dead URL so the tile
+     shows its placeholder, render the card locally, and let
+     rememberCardThumbnailBlob re-upload it for the next viewer. One attempt
+     per key per session; a failed render leaves the placeholder. */
+  const handleThumbnailError = useCallback((card: CollectedCard) => {
+    const key = cardThumbnailKeyForCollectionCard(card);
+    if (!key || !claimCardThumbnailErrorFallback(key)) return;
+    forgetRemoteCardThumbnail(key);
+    setThumbnailRevision((revision) => revision + 1);
+    renderCollectionThumbnail(card)
+      .then((thumbnail) => {
+        if (thumbnail) setThumbnailRevision((revision) => revision + 1);
+      })
+      .catch(() => {});
+  }, []);
   const [serverPage, setServerPage] = useState<LoadedServerCollectionPage | null>(() => {
     const initialRequest = {
       page: 0,
@@ -1345,7 +1370,7 @@ export function CollectionPanel({
                     aria-pressed={cardSelected}
                     aria-label={`${cardSelected ? "Deselect" : "Select"} ${card.username}`}
                   >
-                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} />
                     <span
                       className={`pointer-events-none absolute inset-0 rounded-[10px] ${
                         cardSelected ? "ring-2 ring-osu-pink" : "bg-black/45"
@@ -1373,7 +1398,7 @@ export function CollectionPanel({
                     style={liftedCardId === card.userId ? { visibility: "hidden" } : undefined}
                     aria-label={`View ${card.username}'s card`}
                   >
-                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} />
                   </button>
                 )}
                 {selecting ? null : card.copies > 1 ? (
