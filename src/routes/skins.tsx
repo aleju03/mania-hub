@@ -428,7 +428,7 @@ function SkinsPage() {
                   </button>
                 </h2>
                 {privateOpen && (
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {privateSkins.length > 0
                       ? privateSkins.map((skin) => <SkinCard key={skin.id} skin={skin} />)
                       : Array.from({ length: privatePending }, (_, index) => <SkinCardSkeleton key={index} />)}
@@ -437,7 +437,7 @@ function SkinsPage() {
               </div>
             )}
             {loading && !data ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {Array.from({ length: 9 }, (_, index) => (
                   <SkinCardSkeleton key={index} />
                 ))}
@@ -463,7 +463,7 @@ function SkinsPage() {
               </div>
             ) : (
               <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {skins.map((skin) => (
                     // Cards front the filtered keymode's own render (7K+1 is
                     // the 8K one) instead of whatever cover the uploader chose.

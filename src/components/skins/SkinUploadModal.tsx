@@ -1218,7 +1218,7 @@ function FormStep({
   }, [imported]);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <div className="min-w-0">
         <div className="relative overflow-hidden rounded-xl border border-osu-b3/30 bg-osu-b4">
           <div className="aspect-video w-full">

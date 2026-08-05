@@ -244,7 +244,7 @@ function SkinDetailPage() {
                 </Link>
               </div>
             ) : (
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="min-w-0">
                   <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
                     {hero ? (
