@@ -87,6 +87,9 @@ const config = defineConfig({
   server: devServerOptions(),
   build: {
     chunkSizeWarningLimit: 1500,
+    // Skips the gzip-size column in build logs; run a local build with this
+    // removed when actual compressed sizes are needed.
+    reportCompressedSize: false,
     rollupOptions: {
       onwarn: suppressDependencyBuildWarnings,
     },
