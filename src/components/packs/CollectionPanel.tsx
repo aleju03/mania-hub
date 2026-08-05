@@ -63,6 +63,30 @@ const COLLECTION_SORTS: Array<{ id: CollectionSortMode; label: string; hint: str
   { id: "newest", label: "Newest", hint: "When each card first joined your collection" },
 ];
 
+/* How you read your own collection is a standing preference, not a transient
+   lens like the rarity chips, so it survives a reload. On its own key rather
+   than in the packs cache, like the maps search sort: a cache-version bump or
+   a quota eviction must not take it with them. */
+const COLLECTION_SORT_STORAGE_KEY = "mania-hub-collection-sort-v1";
+
+function readStoredCollectionSort(): CollectionSortMode {
+  if (typeof window === "undefined") return "rarity";
+  try {
+    return window.localStorage.getItem(COLLECTION_SORT_STORAGE_KEY) === "newest" ? "newest" : "rarity";
+  } catch {
+    return "rarity";
+  }
+}
+
+function writeStoredCollectionSort(mode: CollectionSortMode): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(COLLECTION_SORT_STORAGE_KEY, mode);
+  } catch {
+    // Private mode or a full quota: the choice just lasts this session.
+  }
+}
+
 interface CollectionPanelProps {
   wallet: PackWallet | null;
   showLoginNudge: boolean;
@@ -517,7 +541,9 @@ export function CollectionPanel({
   // it waits for a pause in typing instead of firing a request per keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [tierFilter, setTierFilter] = useState<CollectionTierFilter>("all");
-  const [sortMode, setSortMode] = useState<CollectionSortMode>("rarity");
+  // Safe to read storage in the initializer: the panel renders null until the
+  // wallet hydrates, so its first real render is already client-side.
+  const [sortMode, setSortMode] = useState<CollectionSortMode>(readStoredCollectionSort);
   // Recycling the last copy removes the card from the collection, so it
   // takes a second tap to confirm.
   const [confirmCardKey, setConfirmCardKey] = useState<string | null>(null);
@@ -551,7 +577,9 @@ export function CollectionPanel({
       pageSize: COLLECTION_PAGE_SIZE,
       tier: "all" as const,
       query: "",
-      sort: "rarity" as const,
+      // The stored sort, so a remembered order still hits the page cache on
+      // the way back to /packs instead of always missing it.
+      sort: readStoredCollectionSort(),
     };
     const cacheKey = serverCollectionCacheKey(initialRequest);
     const page = serverCollectionPageCache.get(cacheKey) ?? null;
@@ -640,6 +668,13 @@ export function CollectionPanel({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [menu, selecting]);
+
+  // The one place the order changes, so remembering it lives here rather than
+  // in an effect that would rewrite storage on every mount.
+  const applySortMode = (mode: CollectionSortMode) => {
+    setSortMode(mode);
+    writeStoredCollectionSort(mode);
+  };
 
   const toggleSelected = (cardKey: string) => {
     if (selectionScope === "all") {
@@ -1201,7 +1236,7 @@ export function CollectionPanel({
                 <button
                   key={option.id}
                   type="button"
-                  onClick={() => setSortMode(option.id)}
+                  onClick={() => applySortMode(option.id)}
                   aria-pressed={isActive}
                   title={option.hint}
                   className={`text-[12.5px] font-semibold transition-colors cursor-pointer ${
