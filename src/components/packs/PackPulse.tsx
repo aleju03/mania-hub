@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Sparkles, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchLivePackPulledStats,
   fetchLivePackRecentPulls,
@@ -38,6 +38,12 @@ const ENTRY_TTL_MS = 75_000;
 // Backlog placed instantly on the first poll to give the rail a starting
 // state. These are old pulls, so they never animate; see RailEntry.instant.
 const SEED_COUNT = 15;
+// Entries fade out in place, so however many retire in one sweep tick is how
+// far the survivors below them travel. Fifteen seeds placed in one frame (or a
+// burst dripped in at 80ms apart) would share a tick and drop the rail by the
+// whole stack at once. Keeping retirements more than one sweep tick apart means
+// one entry leaves at a time and the trip below it is a single row.
+const RETIRE_STAGGER_MS = 2_000;
 const MAX_VISIBLE = 15;
 // The drip: buffered pulls enter one at a time so nothing lands in the same
 // frame, but the rhythm follows the backlog on purpose. A clump rushes in as
@@ -49,6 +55,12 @@ function dripGapMs(queueLength: number): number {
   if (queueLength >= 2) return 200;
   return 500;
 }
+// Reading an entry (or aiming at its link) is impossible while the rail keeps
+// sliding, so pointing at it freezes the drip and the expiry sweep. The rail is
+// click-through, which means the gaps between entries belong to the page behind
+// it: crossing one fires a leave, so resuming waits out a short grace instead of
+// letting the list jump while the pointer travels down it.
+const HOVER_RESUME_GRACE_MS = 200;
 
 const NOTABLE_TIERS = new Set<string>([
   "ultraRare",
@@ -185,6 +197,50 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
   // against hydration mismatch because entries render [] on the server.
   const [now, setNow] = useState(() => Date.now());
 
+  // When the pointer went onto the rail, or null while it is running. Held in a
+  // ref so the drip and the sweep can read it without restarting their timers.
+  const hoverPausedAtRef = useRef<number | null>(null);
+  const resumeTimerRef = useRef<number | null>(null);
+
+  const setEntries = useCallback((updater: (current: RailEntry[]) => RailEntry[]) => {
+    setEntriesState((current) => {
+      const next = updater(current);
+      savedRailEntries = next;
+      return next;
+    });
+  }, []);
+
+  const pauseRail = useCallback(() => {
+    if (resumeTimerRef.current !== null) {
+      window.clearTimeout(resumeTimerRef.current);
+      resumeTimerRef.current = null;
+    }
+    if (hoverPausedAtRef.current === null) hoverPausedAtRef.current = Date.now();
+  }, []);
+
+  const resumeRail = useCallback(() => {
+    if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = window.setTimeout(() => {
+      resumeTimerRef.current = null;
+      const pausedAt = hoverPausedAtRef.current;
+      hoverPausedAtRef.current = null;
+      if (pausedAt === null) return;
+      // Entries are owed the time they spent held under the cursor, otherwise
+      // everything that ran out while you were reading it leaves the instant
+      // you look away.
+      const held = Date.now() - pausedAt;
+      if (held <= 0) return;
+      setEntries((current) => current.map((entry) => ({ ...entry, expiresAt: entry.expiresAt + held })));
+    }, HOVER_RESUME_GRACE_MS);
+  }, [setEntries]);
+
+  useEffect(
+    () => () => {
+      if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
+    },
+    [],
+  );
+
   useEffect(() => {
     restoreFeedStateOnce();
     const alive = savedRailEntries
@@ -207,13 +263,6 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
   useEffect(() => {
     if (!isLiveBackendConfigured() || !documentVisible) return;
     let cancelled = false;
-    const setEntries = (updater: (current: RailEntry[]) => RailEntry[]) => {
-      setEntriesState((current) => {
-        const next = updater(current);
-        savedRailEntries = next;
-        return next;
-      });
-    };
     const load = () => {
       if (typeof document !== "undefined" && document.hidden) return;
       void fetchLivePackRecentPulls(FEED_LIMIT, { includeAll: true })
@@ -231,7 +280,11 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
             const seedNow = Date.now();
             const seeds = fresh
               .slice(0, SEED_COUNT)
-              .map((pull) => ({ pull, expiresAt: seedNow + ENTRY_TTL_MS, instant: true }));
+              .map((pull, index) => ({
+                pull,
+                expiresAt: seedNow + ENTRY_TTL_MS - index * RETIRE_STAGGER_MS,
+                instant: true,
+              }));
             if (seeds.length > 0) {
               setEntries((current) => [...current, ...seeds].slice(0, MAX_VISIBLE));
             }
@@ -267,17 +320,32 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
     };
     source?.addEventListener("pack_pull", onPackPull);
     const dripInterval = window.setInterval(() => {
-      if (pullQueue.length === 0) return;
+      if (pullQueue.length === 0 || hoverPausedAtRef.current !== null) return;
       const now = Date.now();
       if (now - lastEmitMs < dripGapMs(pullQueue.length)) return;
       lastEmitMs = now;
       const pull = pullQueue.shift();
       if (!pull) return;
-      setEntries((current) => [{ pull, expiresAt: now + ENTRY_TTL_MS }, ...current].slice(0, MAX_VISIBLE));
+      setEntries((current) => {
+        // The newest entry outlives everything already on the rail, and by
+        // enough that it does not share a sweep tick with the one before it.
+        // Capped at a full rail's worth of spacing, so a long fast stream (which
+        // evicts from the bottom on MAX_VISIBLE anyway) cannot push retirement
+        // minutes past the TTL and leave a stale rail once it goes quiet.
+        const lastOut = current.reduce((latest, entry) => Math.max(latest, entry.expiresAt), 0);
+        const expiresAt = Math.min(
+          Math.max(now + ENTRY_TTL_MS, lastOut + RETIRE_STAGGER_MS),
+          now + ENTRY_TTL_MS + MAX_VISIBLE * RETIRE_STAGGER_MS,
+        );
+        return [{ pull, expiresAt }, ...current].slice(0, MAX_VISIBLE);
+      });
     }, DRIP_TICK_MS);
     const sweepInterval = window.setInterval(() => {
       const now = Date.now();
+      // The clock keeps running under the cursor (the labels are text, they do
+      // not move anything), only the retirement waits.
       setNow(now);
+      if (hoverPausedAtRef.current !== null) return;
       setEntries((current) => {
         const alive = current.filter((entry) => entry.expiresAt > now);
         return alive.length === current.length ? current : alive;
@@ -291,7 +359,7 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
       window.clearInterval(sweepInterval);
       source?.close();
     };
-  }, [documentVisible]);
+  }, [documentVisible, setEntries]);
 
   useEffect(() => {
     if (!viewerId || !isLiveBackendConfigured()) {
@@ -315,7 +383,17 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
     <>
       {/* Live pull ticker, top left. No boxes or glows: floating avatar +
           text, tier carried by the avatar ring and the tier word alone. */}
-      <div className="pointer-events-none absolute left-12 top-[84px] z-20 hidden w-[190px] flex-col gap-2 min-[1450px]:flex">
+      <div
+        className="pointer-events-none absolute left-12 top-[84px] z-20 hidden w-[190px] flex-col gap-2 min-[1450px]:flex"
+        onMouseEnter={pauseRail}
+        onMouseLeave={resumeRail}
+        onFocusCapture={pauseRail}
+        onBlurCapture={resumeRail}
+      >
+        {/* Exits stay in the flow and fade in place, so the entries below them
+            drift rather than snap. What made that drift huge was entries
+            retiring in batches (see SEED_STAGGER_MS): one at a time, the trip
+            is a single row. */}
         <AnimatePresence initial={false}>
           {entries.length > 0 && (
             <motion.div
