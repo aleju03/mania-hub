@@ -26,7 +26,9 @@ export async function backfillSkinSpecialKeymodes(
   if (done) return 0;
   const rows = (await exec(
     db,
-    "select id, osk_key from skins where status != 'pending' and osk_key is not null",
+    // An owner-corrected list (special_keymodes_manual) outranks anything a
+    // re-scan of skin.ini could derive, so those rows are not re-classified.
+    "select id, osk_key from skins where status != 'pending' and osk_key is not null and special_keymodes_manual = 0",
   )).rows;
   let updated = 0;
   let failed = 0;

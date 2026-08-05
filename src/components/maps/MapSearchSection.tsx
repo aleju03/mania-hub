@@ -907,7 +907,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   useEffect(() => {
     if (!liveBackendEnabled) {
       setLoading(false);
-      setError("Search needs the live backend running.");
+      setError("Search is unavailable right now. Try again in a bit.");
       return;
     }
     if (awaitingSavedSort) return;
@@ -956,7 +956,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   const items = result?.items ?? lastResultRef.current?.items ?? [];
   const total = result?.total ?? lastResultRef.current?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
-  const effectiveError = liveBackendEnabled ? error : "Search needs the live backend running.";
+  const effectiveError = liveBackendEnabled ? error : "Search is unavailable right now. Try again in a bit.";
   const hasLoadedResult = result !== null || lastResultRef.current !== null;
   const showLoadingSkeleton = !effectiveError && liveBackendEnabled && (loading || !hasLoadedResult) && items.length === 0;
   // No "updating" suffix while refreshing: the label sits next to a flex-1

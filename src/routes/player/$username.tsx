@@ -3059,7 +3059,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   }, [user.id, liveConfigured]);
 
   if (!liveConfigured) {
-    return <div className="py-8 text-center text-sm text-osu-f1">Skill ratings need the live backend, which is not configured.</div>;
+    return <div className="py-8 text-center text-sm text-osu-f1">Skill ratings are unavailable right now.</div>;
   }
   if (skillsError) {
     return <div className="py-8 text-center text-sm text-osu-f1">Could not load skill ratings. Try again in a bit.</div>;

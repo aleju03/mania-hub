@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   GhostHub,
   ghostViewerSignature,
@@ -101,6 +101,10 @@ function connect(hubCtx: ReturnType<typeof ctx>, route: string, viewer?: { id: n
   const res = fakeRes();
   return { req, res, handled: handleGhost(req, res, hubCtx.ctx) };
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("ghost route normalization", () => {
   it("lowercases, strips query and trailing slash", () => {
@@ -227,6 +231,38 @@ describe("ghost hub targeting", () => {
 
     hub.hub!.endSession("/player/jakads");
     expect((events(viewer.res, "ghost").at(-1) as { visual: { clip: string } }).visual.clip).toBe("sleep");
+  });
+
+  it("ends every session at once and pulls him off every screen", async () => {
+    const hub = ctx();
+    const onMaps = connect(hub, "/maps");
+    const onTracker = connect(hub, "/tracker");
+    await Promise.all([onMaps.handled, onTracker.handled]);
+    hub.hub!.applyControl({ route: "/maps", audience: { mode: "everyone" } });
+    hub.hub!.applyControl({ route: "/tracker", audience: { mode: "everyone" } });
+    expect(events(onMaps.res, "ghost")).toHaveLength(1);
+    expect(events(onTracker.res, "ghost")).toHaveLength(1);
+
+    expect(hub.hub!.endAllSessions()).toBe(2);
+    expect(events(onMaps.res, "ghost").at(-1)).toEqual({ present: false });
+    expect(events(onTracker.res, "ghost").at(-1)).toEqual({ present: false });
+    expect(hub.hub!.listSessions()).toEqual([]);
+    expect(hub.hub!.endAllSessions()).toBe(0);
+  });
+
+  it("expires an idle session on its own, with no further traffic", async () => {
+    vi.useFakeTimers();
+    const hub = ctx();
+    const viewer = connect(hub, "/maps");
+    await viewer.handled;
+    hub.hub!.applyControl({ route: "/maps", audience: { mode: "everyone" } });
+    expect(events(viewer.res, "ghost")).toHaveLength(1);
+
+    /* The panel is gone: no more control ticks, no presence polls. The hub's
+       own sweep is the only thing left to notice the session went idle. */
+    await vi.advanceTimersByTimeAsync(11 * 60_000);
+    expect(events(viewer.res, "ghost").at(-1)).toEqual({ present: false });
+    expect(hub.hub!.listSessions()).toEqual([]);
   });
 
   it("drops a session that stopped receiving control traffic", async () => {
@@ -443,6 +479,21 @@ describe("ghost http surface", () => {
     const staleTicket = fakeRes();
     await handleGhost(postReq("/api/ghost/control?ticket=not-a-ticket", { route: "/maps" }), staleTicket, hub.ctx);
     expect(staleTicket.statusCode).toBe(401);
+  });
+
+  it("ends one route with a route and everything without one", async () => {
+    const hub = ctx();
+    hub.hub!.applyControl({ route: "/maps", audience: { mode: "everyone" } });
+    hub.hub!.applyControl({ route: "/tracker", audience: { mode: "everyone" } });
+
+    const one = fakeRes();
+    await handleGhost(postReq("/api/ghost/control", { op: "end", route: "/maps" }, { token: ADMIN_TOKEN }), one, hub.ctx);
+    expect(JSON.parse(one.body)).toMatchObject({ ok: true, sessions: [{ route: "/tracker" }] });
+
+    // The disconnect button: no route, so whatever is left ends too.
+    const all = fakeRes();
+    await handleGhost(postReq("/api/ghost/control", { op: "end" }, { token: ADMIN_TOKEN }), all, hub.ctx);
+    expect(JSON.parse(all.body)).toMatchObject({ ok: true, sessions: [] });
   });
 
   it("expires tickets", () => {

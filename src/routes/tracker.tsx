@@ -983,9 +983,9 @@ function ScoresPage() {
       ? "Live feed reconnecting"
       : "Live updates on";
   const liveStatusTitle = liveFeedState === "delayed"
-    ? "Connected, but the backend hasn't ingested new scores for a few minutes. Recent plays will appear once it catches up."
+    ? "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
     : liveFeedState === "reconnecting"
-      ? "Lost the connection to the live backend; retrying."
+      ? "Connection lost; reconnecting."
       : "New scores stream in live over this connection.";
   const scoreWindowLabel = selectedIsGlobal
     ? liveTrackerTotal == null && !useLiveBackendFilteredScores

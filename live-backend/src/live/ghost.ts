@@ -29,6 +29,7 @@ const HEARTBEAT_INTERVAL_MS = 25_000;
 const TICKET_TTL_MS = 60 * 60_000;
 // A session with no control traffic is a closed tab: stop haunting the page.
 const SESSION_IDLE_MS = 10 * 60_000;
+const SESSION_SWEEP_INTERVAL_MS = 60_000;
 const MAX_SESSIONS = 8;
 /* Phone-width, matching GHOST_NARROW_WIDTH in src/lib/ghost-shared.ts. */
 const NARROW_VIEWPORT_WIDTH = 768;
@@ -171,7 +172,13 @@ export class GhostHub {
   private readonly replies: GhostReply[] = [];
   private replySeq = 0;
 
-  constructor(private readonly limits: { maxClients: number; maxClientsPerIp: number }) {}
+  constructor(private readonly limits: { maxClients: number; maxClientsPerIp: number }) {
+    /* Idle expiry must not depend on more control traffic arriving: a session
+       orphaned by a closed panel (or by an end that lost a race with its own
+       last movement tick) would otherwise haunt the page forever. unref'd so
+       it never holds the process open. */
+    setInterval(() => this.expireSessions(Date.now()), SESSION_SWEEP_INTERVAL_MS).unref();
+  }
 
   issueTicket(now = Date.now()): { ticket: string; expiresAt: number } {
     for (const [ticket, expiresAt] of this.tickets) {
@@ -264,6 +271,19 @@ export class GhostHub {
     if (!normalized || !this.sessions.delete(normalized)) return false;
     this.resyncRoute(normalized);
     return true;
+  }
+
+  /** Every session at once. Disconnect means "off every screen", not "off the
+      page the panel thinks it was driving": a retarget whose end lost a race
+      can have left him behind on a page the target already moved off. */
+  endAllSessions(): number {
+    const ended = this.sessions.size;
+    if (ended === 0) return 0;
+    this.sessions.clear();
+    for (const client of this.clients.values()) {
+      if (client.showing) this.hide(client);
+    }
+    return ended;
   }
 
   listSessions(now = Date.now()): GhostSessionState[] {
@@ -715,7 +735,10 @@ export async function handleGhost(req: IncomingMessage, res: ServerResponse, ctx
     return true;
   }
   if (body.op === "end") {
-    const ended = ctx.ghost.endSession(String(body.route ?? ""));
+    // No route means all of them: the panel's disconnect button.
+    const ended = body.route == null
+      ? ctx.ghost.endAllSessions() > 0
+      : ctx.ghost.endSession(String(body.route));
     sendGhostJson(res, 200, { ok: ended, sessions: ctx.ghost.listSessions() });
     return true;
   }

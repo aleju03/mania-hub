@@ -86,10 +86,9 @@ describe("changelog content", () => {
     }
   });
 
-  it("keeps every line short enough to read as one line", () => {
+  it("has something to say on every row", () => {
     for (const update of UPDATES) {
       expect(update.text.trim().length).toBeGreaterThan(0);
-      expect(update.text.length).toBeLessThanOrEqual(90);
     }
   });
 

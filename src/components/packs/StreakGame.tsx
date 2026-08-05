@@ -360,7 +360,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
     const token = (deal.current += 1);
     const stale = () => token !== deal.current;
     if (!isLiveBackendConfigured()) {
-      setError("The higher or lower game needs the live backend.");
+      setError("Higher or lower is unavailable right now. Try again in a bit.");
       setDealing(false);
       return;
     }

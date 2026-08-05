@@ -1750,6 +1750,12 @@ async function migrateSkins(db: Db): Promise<void> {
     // backfilled once for the existing catalog by backfillSkinSpecialKeymodes.
     await db.execute("alter table skins add column special_keymodes_json text not null default '[]'");
   }
+  if (!skinColumns.includes("special_keymodes_manual")) {
+    // Set once the owner corrects the 7K+1 detection by hand. A manual list
+    // wins over anything derived from skin.ini: .osk replacements and backfill
+    // re-scans must leave it alone.
+    await db.execute("alter table skins add column special_keymodes_manual integer not null default 0");
+  }
   if (!skinColumns.includes("private_secret")) {
     // The capability behind a private skin's stored objects: it is a segment of
     // every R2 key the skin writes (so the public bucket URL cannot be guessed

@@ -1184,7 +1184,7 @@ export function AlbumView({
   if (!isLiveBackendConfigured() || !trackedCountries || sections.length <= 1) {
     return (
       <div className="py-10 text-center text-[12px] text-osu-f1">
-        The album needs the live backend to list each country's players.
+        The album is unavailable right now. Try again in a bit.
       </div>
     );
   }

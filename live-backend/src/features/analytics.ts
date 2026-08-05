@@ -24,6 +24,9 @@ const MONITOR_CACHE_TTL_MS = 4_000;
 /* Ceiling on one read of the signed-in roster. Not a display limit: the pp and
    rank sorts have to see every viewer to name the best of them. */
 export const MAX_VIEWER_ROWS = 20_000;
+/* One player's trail is read on demand from an admin click, so this is only a
+   ceiling on how much of it a single request can pull back. */
+export const MAX_VIEWER_EVENT_ROWS = 300;
 const TIMELINE_BUCKETS = 48;
 
 // Query-side display defaults.
@@ -298,6 +301,15 @@ export class AnalyticsStore {
     `);
     await exec(this.db, "create index if not exists idx_analytics_events_ts on analytics_events(ts desc)");
     await exec(this.db, "create index if not exists idx_analytics_events_event_ts on analytics_events(event, ts desc)");
+    // One signed-in player's trail (see getViewerEvents). Partial, because most
+    // events belong to signed-out visitors and indexing their null viewer_id
+    // would double the index for nothing; the query repeats the `is not null`
+    // so SQLite is allowed to use it.
+    await exec(this.db, `
+      create index if not exists idx_analytics_events_viewer
+      on analytics_events(cast(json_extract(props, '$.viewer_id') as integer), ts desc)
+      where json_extract(props, '$.viewer_id') is not null
+    `);
 
     // Durable roster of every osu! account that has browsed while signed in.
     // Kept as its own projection because analytics_events is pruned at
@@ -528,6 +540,41 @@ export class AnalyticsStore {
   async countViewers(): Promise<number> {
     const row = (await exec(this.db, "select count(*) as n from analytics_viewers")).rows[0];
     return Number(row?.n ?? 0);
+  }
+
+  /* What one signed-in player has been doing, newest first. Narrower than the
+     feed's rules on purpose: this is asked for by name, so the only things
+     dropped are bots and the player's own admin browsing. The roster is durable
+     and events are not, so a long-dormant account can legitimately answer with
+     nothing - that is retention, not an error. */
+  async getViewerEvents(viewerId: number, limit = MAX_VIEWER_EVENT_ROWS): Promise<AnalyticsFeedEvent[]> {
+    if (!Number.isFinite(viewerId)) return [];
+    await this.flush();
+    const capped = Math.min(MAX_VIEWER_EVENT_ROWS, Math.max(1, Math.round(limit)));
+    const rows = (await exec(this.db, `
+      select ts, event, path, country, selected_country, distinct_id, screen_width, viewport_width, viewer_username, referring_domain, props
+      from analytics_events
+      where json_extract(props, '$.viewer_id') is not null
+        and cast(json_extract(props, '$.viewer_id') as integer) = ?
+        and is_bot = 0
+        and (path is null or path not like '/admin/%')
+      order by ts desc limit ?
+    `, [Math.round(viewerId), capped])).rows;
+    return rows.map((row) => this.buildFeedEvent({
+      ts: Number(row.ts),
+      event: String(row.event ?? ""),
+      distinctId: String(row.distinct_id ?? ""),
+      host: null,
+      path: row.path == null ? null : String(row.path),
+      country: row.country == null ? null : String(row.country),
+      selectedCountry: row.selected_country == null ? null : String(row.selected_country),
+      viewerUsername: row.viewer_username == null ? null : String(row.viewer_username),
+      referringDomain: row.referring_domain == null ? null : String(row.referring_domain),
+      screenWidth: row.screen_width == null ? null : Number(row.screen_width),
+      viewportWidth: row.viewport_width == null ? null : Number(row.viewport_width),
+      isBot: false,
+      properties: parseJson<Record<string, unknown>>(row.props, {}),
+    }));
   }
 
   async prune(now = Date.now()): Promise<number> {

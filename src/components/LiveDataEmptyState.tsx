@@ -23,8 +23,7 @@ export function LiveBackendRequired() {
     <div className="mx-auto max-w-md px-4 py-16 text-center">
       <div className="text-sm font-bold text-white">Live data is unavailable</div>
       <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-        This page needs the live backend and none is configured
-        (VITE_LIVE_BACKEND_URL is not set).
+        Try again in a bit.
       </p>
     </div>
   );

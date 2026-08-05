@@ -284,6 +284,30 @@ describe("AnalyticsStore capture + monitor", () => {
     expect(after[0]!.firstSeen).toBeLessThan(NOW - 200 * 60_000);
   });
 
+  it("answers one signed-in player's own trail, newest first", async () => {
+    const visit = (viewerId: number, path: string, minutesAgo: number, event?: string) =>
+      pageview({ distinctId: `d${viewerId}`, path, minutesAgo, event, properties: { viewer_username: `p${viewerId}`, viewer_id: viewerId } });
+
+    store.capture(visit(111, "/tracker", 60), {});
+    store.capture(visit(111, "/replay", 10, "replay_view"), {});
+    // Their own admin browsing, another player, an anonymous visitor and a bot
+    // all stay out of this player's trail.
+    store.capture(visit(111, "/admin/live-backend", 5), {});
+    store.capture(visit(222, "/maps", 2), {});
+    store.capture(pageview({ distinctId: "anon", path: "/maps", minutesAgo: 3 }), {});
+    store.capture(visit(111, "/skins", 1), { isBot: true });
+    await store.flush();
+
+    const events = await store.getViewerEvents(111);
+    expect(events.map((row) => row.event)).toEqual(["replay_view", "$pageview"]);
+    expect(events.map((row) => row.path)).toEqual(["/replay", "/tracker"]);
+    expect(events[0]!.ts).toBeGreaterThan(events[1]!.ts);
+    expect(await store.getViewerEvents(111, 1)).toHaveLength(1);
+    // The roster outlives the events behind it, so an unknown player is empty
+    // rather than an error.
+    expect(await store.getViewerEvents(999)).toEqual([]);
+  });
+
   it("seeds the roster from events already stored when the table is new", async () => {
     store.capture(pageview({ distinctId: "d1", minutesAgo: 90, properties: { viewer_username: "juan", viewer_id: 111 } }), {});
     store.capture(pageview({ distinctId: "d1", minutesAgo: 20, properties: { viewer_username: "juan", viewer_id: 111 } }), { geoCountry: "CR" });

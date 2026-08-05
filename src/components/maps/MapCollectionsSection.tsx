@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { ArrowLeft } from "lucide-react";
 import {
   fetchLiveMapCollection,
   fetchLiveMapCollections,
@@ -25,11 +26,17 @@ import { PATTERN_COLOR, SearchCard, patternLabel } from "./SearchCard";
 interface Props {
   selectedCollectionId: string;
   onSelect: (id: string) => void;
+  // Both pickers live in the route's search params: opening a pack unmounts
+  // the browse grid, so local state here reset to 4K + dan on the way back.
+  keyFilter: number;
+  axis: Axis;
+  onKeyFilterChange: (keys: number) => void;
+  onAxisChange: (axis: Axis) => void;
   liveBackendEnabled: boolean;
 }
 
 const PATTERN_DESCRIPTION: Record<string, string> = {
-  jack: "Repeated notes hammered on the same columns: single jacks, chordjack, all of it.",
+  jack: "Repeated notes hammered on the same columns.",
   stream: "Fast single-note runs flowing across the keys.",
   jumpstream: "Streams broken up by two-note jumps.",
   handstream: "Streams thickened with three-note hand chords.",
@@ -183,18 +190,16 @@ function CollectionTile({ summary, onClick }: { summary: LiveMapCollectionSummar
   );
 }
 
-function CollectionsBrowse({ onSelect, liveBackendEnabled }: { onSelect: (id: string) => void; liveBackendEnabled: boolean }) {
+function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxisChange, liveBackendEnabled }: Omit<Props, "selectedCollectionId">) {
   const [collections, setCollections] = useState<LiveMapCollectionSummary[] | null>(null);
   const [rotation, setRotation] = useState<LiveMapCollectionsRotation | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [keyFilter, setKeyFilter] = useState(4);
-  const [axis, setAxis] = useState<Axis>("dan");
   const [rebuilding, setRebuilding] = useState(false);
   const canRebuild = useAuth().canUseAdminFeatures;
 
   useEffect(() => {
     if (!liveBackendEnabled) {
-      setError("Collections need the live backend running.");
+      setError("Collections are unavailable right now. Try again in a bit.");
       return;
     }
     let cancelled = false;
@@ -273,13 +278,13 @@ function CollectionsBrowse({ onSelect, liveBackendEnabled }: { onSelect: (id: st
           <SegmentedControl
             options={availableKeys.length > 0 ? availableKeys : [4, 7]}
             value={keyFilter}
-            onChange={setKeyFilter}
+            onChange={onKeyFilterChange}
             render={(key) => `${key}K`}
           />
           <SegmentedControl<Axis>
             options={["dan", "msd"]}
             value={axis}
-            onChange={setAxis}
+            onChange={onAxisChange}
             render={(option) => (option === "dan" ? "Dan est." : "MSD")}
           />
         </div>
@@ -351,7 +356,7 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
 
   useEffect(() => {
     if (!liveBackendEnabled) {
-      setError("Collections need the live backend running.");
+      setError("Collections are unavailable right now. Try again in a bit.");
       return;
     }
     let cancelled = false;
@@ -384,8 +389,13 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
 
   return (
     <div className="flex flex-col gap-4">
-      <button type="button" onClick={onBack} className="self-start text-[12px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer">
-        ← All collections
+      <button
+        type="button"
+        onClick={onBack}
+        className="group self-start inline-flex items-center gap-1.5 rounded-lg bg-osu-b4 px-2.5 py-1.5 text-[11px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3 hover:text-white"
+      >
+        <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" aria-hidden="true" />
+        <span>All collections</span>
       </button>
 
       {error ? (
@@ -428,14 +438,21 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
   );
 }
 
-export function MapCollectionsSection({ selectedCollectionId, onSelect, liveBackendEnabled }: Props) {
+export function MapCollectionsSection({ selectedCollectionId, onSelect, keyFilter, axis, onKeyFilterChange, onAxisChange, liveBackendEnabled }: Props) {
   return (
     <div className="bg-osu-b5 min-h-[60vh]">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-4">
         {selectedCollectionId ? (
           <CollectionDetail id={selectedCollectionId} onBack={() => onSelect("")} liveBackendEnabled={liveBackendEnabled} />
         ) : (
-          <CollectionsBrowse onSelect={onSelect} liveBackendEnabled={liveBackendEnabled} />
+          <CollectionsBrowse
+            onSelect={onSelect}
+            keyFilter={keyFilter}
+            axis={axis}
+            onKeyFilterChange={onKeyFilterChange}
+            onAxisChange={onAxisChange}
+            liveBackendEnabled={liveBackendEnabled}
+          />
         )}
       </div>
     </div>

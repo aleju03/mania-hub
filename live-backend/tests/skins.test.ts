@@ -28,6 +28,7 @@ import {
   setSkinAccent,
   setSkinCoverKeymode,
   setSkinHidden,
+  setSkinSpecialKeymodes,
   SKIN_DESCRIPTION_MAX_LENGTH,
   SKIN_MAX_PENDING_PER_USER,
   SKIN_MAX_PER_USER,
@@ -765,6 +766,74 @@ describe("backfillSkinSpecialKeymodes", () => {
     // No marker was written, so the next boot scans again.
     const meta = (await exec(db, "select 1 from live_meta where key like 'skin_special_keymodes_backfill:%'")).rows;
     expect(meta).toHaveLength(0);
+  });
+});
+
+describe("setSkinSpecialKeymodes", () => {
+  it("lets the owner correct the 7K+1 label and keeps everyone else out", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 101, ownerUsername: "delta", name: "Mislabelled", keymodes: [4, 8] });
+    expect((await getSkin(db, id))?.specialKeymodes).toEqual([]);
+
+    const foreign = await setSkinSpecialKeymodes(db, id, [8], 202);
+    expect(foreign).toEqual({ ok: false, error: "forbidden" });
+
+    const set = await setSkinSpecialKeymodes(db, id, [8], 101);
+    expect(set.ok).toBe(true);
+    if (set.ok) expect(set.skin.specialKeymodes).toEqual([8]);
+    expect((await getSkin(db, id))?.specialKeymodesManual).toBe(true);
+
+    // Clearing the label back to plain 8K is also a manual correction.
+    const cleared = await setSkinSpecialKeymodes(db, id, [], 101);
+    expect(cleared.ok).toBe(true);
+    if (cleared.ok) expect(cleared.skin.specialKeymodes).toEqual([]);
+    expect((await getSkin(db, id))?.specialKeymodesManual).toBe(true);
+  });
+
+  it("rejects keymodes the skin does not ship", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 101, ownerUsername: "delta", name: "Four Only", keymodes: [4] });
+    expect(await setSkinSpecialKeymodes(db, id, [8], 101)).toEqual({ ok: false, error: "invalid_keymodes" });
+    expect(await setSkinSpecialKeymodes(db, id, [1], 101)).toEqual({ ok: false, error: "invalid_keymodes" });
+  });
+
+  it("survives a .osk replacement, minus keymodes the new build dropped", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 101, ownerUsername: "delta", name: "Corrected", keymodes: [6, 8] });
+    await setSkinSpecialKeymodes(db, id, [6, 8], 101);
+    const before = await getSkin(db, id);
+    if (!before) throw new Error("skin row missing");
+
+    // The new archive detects nothing special, and no longer ships 6K; the
+    // manual 8 holds, the manual 6 goes with its keymode.
+    await replaceSkinOsk(db, before, {
+      key: `skins/${id}/skin-r1.osk`,
+      url: `https://cdn.example/skins/${id}/skin-r1.osk`,
+      sizeBytes: 2048,
+      sha256: "ba".repeat(32),
+      keymodes: [4, 8],
+      specialKeymodes: [],
+      iniAuthor: null,
+    });
+    const updated = await getSkin(db, id);
+    expect(updated?.keymodes).toEqual([4, 8]);
+    expect(updated?.specialKeymodes).toEqual([8]);
+    expect(updated?.specialKeymodesManual).toBe(true);
+  });
+
+  it("is skipped by the special-keymodes backfill", async () => {
+    const corrected = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Hand Fixed", keymodes: [8] });
+    await setSkinSpecialKeymodes(db, corrected, [], 1);
+    const scanned = await createPublishedSkin({ ownerUserId: 2, ownerUsername: "bravo", name: "Auto Scanned", keymodes: [8] });
+    const archives: Record<string, Buffer> = {
+      // Both archives read as 7K+1, but only the untouched row may change.
+      [(await getSkin(db, corrected))!.oskKey!]: await buildOsk({
+        "skin.ini": "[Mania]\nKeys: 8\nColumnLineWidth: 0,4,0,0,0,0,0,0,0\n",
+      }),
+      [(await getSkin(db, scanned))!.oskKey!]: await buildOsk({
+        "skin.ini": "[Mania]\nKeys: 8\nColumnLineWidth: 0,4,0,0,0,0,0,0,0\n",
+      }),
+    };
+    expect(await backfillSkinSpecialKeymodes(db, async (key) => archives[key] ?? null)).toBe(1);
+    expect((await getSkin(db, corrected))?.specialKeymodes).toEqual([]);
+    expect((await getSkin(db, scanned))?.specialKeymodes).toEqual([8]);
   });
 });
 

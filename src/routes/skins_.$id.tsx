@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Check, Download, Globe, ImageIcon, Lock, MonitorPlay, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Download, Lock, MonitorPlay, Settings } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -7,6 +7,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags } from "../components/skins/SkinCard";
 import { SkinAssetExplorer } from "../components/skins/SkinAssetExplorer";
 import { SkinPreviewEditorModal } from "../components/skins/SkinPreviewEditorModal";
+import { SkinSettingsModal } from "../components/skins/SkinSettingsModal";
 import { SkinUpdateModal } from "../components/skins/SkinUpdateModal";
 import { Avatar } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
@@ -20,7 +21,7 @@ import {
   writeMyReplaySkinMemory,
 } from "../lib/replay-owner-skin";
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
-import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, setMySkinVisibility, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
+import { fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, readSkinsBrowseEntry, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -84,11 +85,9 @@ function SkinDetailPage() {
   const auth = useAuth();
   const navigate = useNavigate();
   const historyIndex = useRouterState({ select: (state) => state.location.state.__TSR_index });
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [editingPreviews, setEditingPreviews] = useState(false);
   const [updatingFile, setUpdatingFile] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [nameDraft, setNameDraft] = useState("");
 
   // Stepping back keeps the browse page's filters, page and scroll; only a skin
   // reached from somewhere else takes the plain /skins route.
@@ -108,8 +107,6 @@ function SkinDetailPage() {
       void navigate({ to: "/skins/$id", params: { id: skin.slug }, replace: true });
     }
   }, [skin?.slug, params.id, navigate]);
-  const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
   // "Use for my replays": idle -> working (download + import + save) -> set.
   const [replaySkinStatus, setReplaySkinStatus] = useState<"idle" | "working" | "set">("idle");
   const [replaySkinError, setReplaySkinError] = useState<string | null>(null);
@@ -198,75 +195,6 @@ function SkinDetailPage() {
 
   const isOwner = skin != null && auth.viewer?.id === skin.ownerUserId;
   const isPrivate = skin?.visibility === "private";
-
-  const removeSkin = async () => {
-    if (!skin || busy) return;
-    setBusy(true);
-    setActionError(null);
-    const result = isOwner && !auth.isAdmin
-      ? await deleteMySkin({ data: { id: skin.id } })
-      : await moderateSkin({ data: { id: skin.id, action: "delete" } }).catch(() => ({ ok: false }));
-    setBusy(false);
-    if (result.ok) {
-      // The browse list is browser-cached; force the next fetches to
-      // revalidate so the deleted skin does not linger.
-      markSkinsListStale();
-      void navigate({ to: "/skins", search: {} });
-    } else {
-      setActionError("The delete failed. Try again.");
-      setConfirmingDelete(false);
-    }
-  };
-
-  const openRename = () => {
-    if (!skin) return;
-    setNameDraft(skin.name);
-    setActionError(null);
-    setRenaming(true);
-  };
-
-  const submitRename = async () => {
-    if (!skin || busy) return;
-    const name = nameDraft.trim();
-    if (!name) {
-      setActionError("The skin needs a name.");
-      return;
-    }
-    if (name === skin.name) {
-      setRenaming(false);
-      return;
-    }
-    setBusy(true);
-    setActionError(null);
-    const result = await renameSkin({ data: { id: skin.id, name } }).catch(() => ({ ok: false as const, skin: undefined }));
-    setBusy(false);
-    if (!result.ok || !result.skin) {
-      setActionError("The rename failed. Try again.");
-      return;
-    }
-    // The browse list is browser-cached, so its card would keep the old title.
-    markSkinsListStale();
-    setEdited(result.skin);
-    setRenaming(false);
-  };
-
-  const toggleVisibility = async () => {
-    if (!skin || busy) return;
-    setBusy(true);
-    setActionError(null);
-    const next = isPrivate ? "public" : "private";
-    const result = await setMySkinVisibility({ data: { id: skin.id, visibility: next } })
-      .catch(() => ({ ok: false as const, skin: undefined }));
-    setBusy(false);
-    if (!result.ok || !result.skin) {
-      setActionError("Changing who can see this skin failed. Try again.");
-      return;
-    }
-    // The browse grid is browser-cached, so a skin that just left (or joined)
-    // the catalog would linger on it either way.
-    markSkinsListStale();
-    setEdited(result.skin);
-  };
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -510,133 +438,36 @@ function SkinDetailPage() {
                   </dl>
 
                   {(isOwner || auth.isAdmin) && (
-                    <div className="flex flex-col gap-2.5 rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-3">
-                      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                        {auth.isAdmin && !isOwner ? "Moderation" : "Your skin"}
-                      </span>
-                      {/* The column is a fixed 320px, so the label and three
-                          buttons cannot share a line. They flow as one plain
-                          row instead: pushing delete to the far right left the
-                          buttons stepping up and down as the row wrapped. */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        {!confirmingDelete && (
-                          <>
-                            {/* Ships a newer build of the same skin: the page,
-                                its link and its download count stay put. */}
-                            <button
-                              type="button"
-                              onClick={() => setUpdatingFile(true)}
-                              disabled={busy}
-                              title="Replace the .osk with a newer build of this skin"
-                              className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
-                            >
-                              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                              Update file
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingPreviews(true)}
-                              disabled={busy}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
-                            >
-                              <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                              Edit previews
-                            </button>
-                            <button
-                              type="button"
-                              onClick={renaming ? () => setRenaming(false) : openRename}
-                              disabled={busy}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
-                            >
-                              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                              Rename
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void toggleVisibility()}
-                              disabled={busy}
-                              title={isPrivate
-                                ? "Put this skin on /skins for anyone to download"
-                                : "Take this skin off /skins. Your replays keep playing in it"}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
-                            >
-                              {isPrivate ? <Globe className="h-3.5 w-3.5" aria-hidden="true" /> : <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
-                              {isPrivate ? "Make public" : "Make private"}
-                            </button>
-                          </>
-                        )}
-                        {confirmingDelete ? (
-                          <span className="flex flex-wrap items-center gap-2 text-[12px]">
-                            <span className="text-osu-f1">Delete for good?</span>
-                            <button
-                              type="button"
-                              onClick={() => void removeSkin()}
-                              disabled={busy}
-                              className="inline-flex items-center gap-1.5 rounded-full bg-osu-red/25 px-3 py-1.5 font-bold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/40 disabled:opacity-50"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                              Delete
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmingDelete(false)}
-                              disabled={busy}
-                              className="font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
-                            >
-                              Keep it
-                            </button>
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setConfirmingDelete(true)}
-                            disabled={busy}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-osu-red/35 px-3 py-1.5 text-[12px] font-semibold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/20 disabled:opacity-50"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            Delete skin
-                          </button>
-                        )}
-                      </div>
-                      {renaming && !confirmingDelete && (
-                        <form
-                          className="flex flex-wrap items-center gap-2"
-                          onSubmit={(event) => {
-                            event.preventDefault();
-                            void submitRename();
-                          }}
-                        >
-                          <input
-                            type="text"
-                            autoFocus
-                            value={nameDraft}
-                            maxLength={SKIN_NAME_MAX_LENGTH}
-                            disabled={busy}
-                            onChange={(event) => setNameDraft(event.target.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Escape") setRenaming(false);
-                            }}
-                            aria-label="Skin name"
-                            className="min-w-0 flex-1 rounded-lg border border-osu-b3/30 bg-osu-b5 px-3 py-2 text-[13.5px] text-osu-l1 transition-colors focus:border-osu-pink/50 focus:outline-none"
-                          />
-                          <button
-                            type="submit"
-                            disabled={busy || !nameDraft.trim()}
-                            className="rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:opacity-50"
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setRenaming(false)}
-                            disabled={busy}
-                            className="px-1 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:opacity-50"
-                          >
-                            Cancel
-                          </button>
-                        </form>
-                      )}
-                      {actionError && <span className="text-[12px] font-semibold text-osu-red-light">{actionError}</span>}
+                    <>
+                      {/* One entry point for everything owner-side; the modal
+                          holds name, keymodes, visibility, file, previews and
+                          delete, so the sidebar stays one button. */}
+                      <button
+                        type="button"
+                        onClick={() => setSettingsOpen(true)}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-osu-b3/50 px-5 py-2 text-[13px] font-bold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white"
+                      >
+                        <Settings className="h-4 w-4" aria-hidden="true" />
+                        {auth.isAdmin && !isOwner ? "Moderate skin" : "Skin settings"}
+                      </button>
+                      <SkinSettingsModal
+                        skin={skin}
+                        open={settingsOpen}
+                        onClose={() => setSettingsOpen(false)}
+                        onSaved={setEdited}
+                        onDeleted={() => {
+                          setSettingsOpen(false);
+                          void navigate({ to: "/skins", search: {} });
+                        }}
+                        onUpdateFile={() => {
+                          setSettingsOpen(false);
+                          setUpdatingFile(true);
+                        }}
+                        onEditPreviews={() => {
+                          setSettingsOpen(false);
+                          setEditingPreviews(true);
+                        }}
+                      />
                       <SkinPreviewEditorModal
                         skin={skin}
                         open={editingPreviews}
@@ -652,7 +483,7 @@ function SkinDetailPage() {
                           setHeroIndex(0);
                         }}
                       />
-                    </div>
+                    </>
                   )}
                 </div>
               </div>

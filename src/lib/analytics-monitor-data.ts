@@ -6,6 +6,7 @@ import {
   ANALYTICS_DEFAULT_RANGE_HOURS,
   ANALYTICS_RECENT_EVENTS_LIMIT,
   ANALYTICS_TIMELINE_BUCKETS,
+  ANALYTICS_VIEWER_EVENTS_LIMIT,
   clampAnalyticsRangeHours,
   getAnalyticsBucketMs,
   normalizeAnalyticsViewerSort,
@@ -14,6 +15,7 @@ import {
   type AnalyticsMonitorData,
   type AnalyticsRange,
   type AnalyticsTimelineBucket,
+  type AnalyticsViewerEventsResult,
   type AnalyticsViewerSort,
   type AnalyticsViewersResult,
 } from "./analytics-monitor";
@@ -206,6 +208,28 @@ export const getAnalyticsViewers = createServerFn({ method: "POST" })
     });
     if (!response.ok) throw new Error(`Analytics viewers failed (${response.status}).`);
     return await response.json() as AnalyticsViewersResult;
+  });
+
+/* What one signed-in player has been doing. Its own call rather than part of
+   the roster: a trail per row would be hundreds of scans for the handful anyone
+   actually opens. */
+export const getAnalyticsViewerEvents = createServerFn({ method: "POST" })
+  .validator((data: { viewerId?: unknown }) => {
+    const viewerId = Number(data?.viewerId);
+    if (!Number.isFinite(viewerId) || viewerId <= 0) throw new Error("A viewer id is required.");
+    return { viewerId: Math.round(viewerId) };
+  })
+  .handler(async ({ data }: { data: { viewerId: number } }): Promise<AnalyticsViewerEventsResult> => {
+    await requireAdminAccess("Analytics viewer events");
+    const base = getServerLiveBackendUrl();
+    const token = process.env.LIVE_ADMIN_TOKEN;
+    if (!base || !token) throw new Error("Configure LIVE_BACKEND_URL + LIVE_ADMIN_TOKEN in .env to use analytics monitoring.");
+    const params = new URLSearchParams({ viewerId: String(data.viewerId), limit: String(ANALYTICS_VIEWER_EVENTS_LIMIT) });
+    const response = await fetch(`${base}/api/admin/analytics/viewer-events?${params}`, {
+      headers: { authorization: `Bearer ${token}`, connection: "close" },
+    });
+    if (!response.ok) throw new Error(`Analytics viewer events failed (${response.status}).`);
+    return await response.json() as AnalyticsViewerEventsResult;
   });
 
 /* Trades the admin session for a short-lived SSE ticket: EventSource can't

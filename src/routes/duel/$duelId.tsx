@@ -224,7 +224,7 @@ function DuelPage() {
   const load = useCallback(async () => {
     if (!canDuel) return;
     if (!isLiveBackendConfigured()) {
-      setLoadError("Duels need the live backend.");
+      setLoadError("Duels are unavailable right now. Try again in a bit.");
       return;
     }
     try {

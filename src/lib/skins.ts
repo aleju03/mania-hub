@@ -445,6 +445,40 @@ export const setSkinCoverKeymode = createServerFn({ method: "POST" })
     }
   });
 
+// Corrects which of a skin's keymodes are really (N-1)+1 layouts. Detection
+// reads skin.ini's separator lines, which plenty of 7K+1 skins never set, so
+// the uploader gets the last word; once set, re-uploads keep the manual list.
+export const setSkinSpecialKeymodes = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; specialKeymodes?: unknown }) => {
+    const id = typeof data.id === "string" ? data.id.trim() : "";
+    const specialKeymodes = Array.isArray(data.specialKeymodes)
+      ? data.specialKeymodes.map((entry) => Math.round(Number(entry)))
+      : null;
+    if (!id || id.length > 64 || !specialKeymodes || specialKeymodes.length > 10
+      || specialKeymodes.some((keys) => !Number.isInteger(keys) || keys < 2 || keys > 10)) {
+      throw new Error("Invalid keymodes request.");
+    }
+    return { id, specialKeymodes };
+  })
+  .handler(async ({ data }): Promise<{ ok: boolean; skin?: SkinSummary }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return { ok: false };
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/special-keymodes`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({ userId: cfg.userId, id: data.id, specialKeymodes: data.specialKeymodes, asAdmin: cfg.isAdmin }),
+      });
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary } | null;
+      if (!response.ok || !body?.ok || !body.skin) return { ok: false };
+      return { ok: true, skin: body.skin };
+    } catch {
+      return { ok: false };
+    }
+  });
+
 // Retitles an already published skin. The URL slug is not rebuilt: it was
 // assigned at publish time and is what shared links point at.
 export const renameSkin = createServerFn({ method: "POST" })

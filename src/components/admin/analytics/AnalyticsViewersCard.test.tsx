@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AnalyticsRecentEventRow } from "../../../lib/analytics-feed";
 import type { AnalyticsViewersResult } from "../../../lib/analytics-monitor";
 
 const getAnalyticsViewers = vi.hoisted(() => vi.fn());
-vi.mock("../../../lib/analytics-monitor-data", () => ({ getAnalyticsViewers }));
+const getAnalyticsViewerEvents = vi.hoisted(() => vi.fn());
+vi.mock("../../../lib/analytics-monitor-data", () => ({ getAnalyticsViewers, getAnalyticsViewerEvents }));
 
 const { AnalyticsViewersCard } = await import("./AnalyticsViewersCard");
 
@@ -37,9 +39,25 @@ function manyViewers(count = 12): AnalyticsViewersResult {
   };
 }
 
+/* One row of a player's trail. Only the fields the description reads are worth
+   spelling out; the rest of the shape is noise here. */
+function activityEvent(overrides: Partial<AnalyticsRecentEventRow>): AnalyticsRecentEventRow {
+  return {
+    eventId: null,
+    timestamp: "",
+    ts: NOW,
+    event: "$pageview",
+    path: "/tracker",
+    deviceKind: "desktop",
+    distinctId: "d111",
+    ...overrides,
+  } as AnalyticsRecentEventRow;
+}
+
 afterEach(() => {
   cleanup();
   getAnalyticsViewers.mockReset();
+  getAnalyticsViewerEvents.mockReset();
 });
 
 describe("AnalyticsViewersCard", () => {
@@ -129,6 +147,58 @@ describe("AnalyticsViewersCard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "PP" }));
     await waitFor(() => expect(screen.getByText(/showing the 12 highest by pp/)).toBeTruthy());
+  });
+
+  it("opens one player's own trail on demand", async () => {
+    getAnalyticsViewers.mockResolvedValue(RESULT);
+    getAnalyticsViewerEvents.mockResolvedValue({
+      viewerId: 111,
+      events: [
+        activityEvent({ ts: NOW - 60_000, path: "/player/kanaria" }),
+        activityEvent({
+          ts: NOW - 300_000,
+          event: "replay_view",
+          path: "/replay",
+          replayTitle: "Blue Zenith",
+          replayArtist: "xi",
+          replayPlayer: "cookiezi",
+        }),
+      ],
+    });
+    render(<AnalyticsViewersCard />);
+    await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
+    // Nothing is fetched until a row is actually opened.
+    expect(getAnalyticsViewerEvents).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show what juan has been doing" }));
+    await waitFor(() => expect(screen.getByText("kanaria's profile")).toBeTruthy());
+    expect(getAnalyticsViewerEvents).toHaveBeenCalledWith({ data: { viewerId: 111 } });
+    expect(screen.getByText("xi - Blue Zenith")).toBeTruthy();
+    // Only the row that was asked for.
+    expect(getAnalyticsViewerEvents).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide what juan has been doing" }));
+    expect(screen.queryByText("kanaria's profile")).toBeNull();
+  });
+
+  it("distinguishes a pruned trail from a broken one", async () => {
+    getAnalyticsViewers.mockResolvedValue(RESULT);
+    getAnalyticsViewerEvents.mockResolvedValue({ viewerId: 111, events: [] });
+    render(<AnalyticsViewersCard />);
+    await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Show what juan has been doing" }));
+    await waitFor(() => expect(screen.getByText("Nothing left in the retention window for this player.")).toBeTruthy());
+  });
+
+  it("reports a failed trail load on the row that asked for it", async () => {
+    getAnalyticsViewers.mockResolvedValue(RESULT);
+    getAnalyticsViewerEvents.mockRejectedValue(new Error("Analytics viewer events failed (500)."));
+    render(<AnalyticsViewersCard />);
+    await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Show what juan has been doing" }));
+    await waitFor(() => expect(screen.getByText("Analytics viewer events failed (500).")).toBeTruthy());
   });
 
   it("says so plainly when nobody has signed in yet", async () => {

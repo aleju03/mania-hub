@@ -171,8 +171,12 @@ type MapsSearch = {
   sCountryOnly: boolean;
   sSort: string;
   sDir: string;
-  // Collections tab: selected pack id ("" = browse grid).
+  // Collections tab: selected pack id ("" = browse grid). The grid's keymode
+  // and difficulty-axis pickers live here too: opening a pack unmounts the
+  // grid, so component state would snap back to 4K + dan on the way back.
   col: string;
+  cKey: number;
+  cAxis: "dan" | "msd";
   // Shared map link: beatmap id whose detail modal auto-opens (0 = none).
   map: number;
   country: string | undefined;
@@ -248,6 +252,8 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sSort: DEFAULT_SEARCH_SORT.sort,
   sDir: DEFAULT_SEARCH_SORT.dir,
   col: "",
+  cKey: 4,
+  cAxis: "dan",
   map: 0,
   country: undefined,
 };
@@ -670,6 +676,11 @@ export const Route = createFileRoute("/maps")({
     sSort: SEARCH_SORT_VALUES.includes(String(search.sSort)) ? String(search.sSort) : DEFAULT_MAPS_SEARCH.sSort,
     sDir: search.sDir === "asc" ? "asc" : DEFAULT_MAPS_SEARCH.sDir,
     col: typeof search.col === "string" ? search.col.slice(0, 80) : DEFAULT_MAPS_SEARCH.col,
+    cKey: (() => {
+      const n = Math.round(Number(search.cKey));
+      return Number.isInteger(n) && n >= 1 && n <= 10 ? n : DEFAULT_MAPS_SEARCH.cKey;
+    })(),
+    cAxis: search.cAxis === "msd" ? "msd" : DEFAULT_MAPS_SEARCH.cAxis,
     map: Math.max(0, Math.floor(Number(search.map) || 0)),
     country: parseCountrySearchParam(search.country),
   }),
@@ -1648,6 +1659,10 @@ function MapsPage() {
           <MapCollectionsSection
             selectedCollectionId={mapsSearch.col}
             onSelect={(id) => updateMapsSearch({ col: id })}
+            keyFilter={mapsSearch.cKey}
+            axis={mapsSearch.cAxis}
+            onKeyFilterChange={(cKey) => updateMapsSearch({ cKey })}
+            onAxisChange={(cAxis) => updateMapsSearch({ cAxis })}
             liveBackendEnabled={liveBackendEnabled}
           />
         )

@@ -107,6 +107,17 @@ export interface AnalyticsViewersResult {
   sort?: AnalyticsViewerSort;
 }
 
+/* One player's own trail, read on demand from the roster. Empty is a real
+   answer: the roster is durable and the events behind it are pruned. */
+export interface AnalyticsViewerEventsResult {
+  viewerId: number;
+  events: AnalyticsRecentEventRow[];
+}
+
+// How much of one player's trail a single request pulls back. Matches the
+// backend ceiling.
+export const ANALYTICS_VIEWER_EVENTS_LIMIT = 300;
+
 export interface AnalyticsBounceStats {
   bounced: number;
   landers: number;

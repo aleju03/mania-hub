@@ -153,6 +153,13 @@ function GhostAdminPage() {
      his head, where you are already looking. */
   const [composing, setComposing] = useState(false);
   const [showAllRoutes, setShowAllRoutes] = useState(false);
+  /* What the cursor is over on the sprite bar. The tiles carry no words, so
+     this line is where the name of the thing about to be clicked lives. */
+  const [hint, setHint] = useState<string | null>(null);
+  /* Showing him to a whole page is the one control here that cannot be taken
+     back, so it asks twice. Armed by the first click, and it lapses on its own
+     rather than sitting there waiting to be leaned on. */
+  const [armEveryone, setArmEveryone] = useState(false);
   /* The quick "is X here" lookup over the roster. Only signed-in viewers have
      names, so anyone browsing signed out is findable as a count, not by name. */
   const [viewerQuery, setViewerQuery] = useState("");
@@ -201,6 +208,13 @@ function GhostAdminPage() {
   /* The route the backend currently holds a session on, which lags the input
      box while you are typing a new one. */
   const activeRouteRef = useRef<string | null>(null);
+  /* Control patches still on the wire, and the newest end queued behind them.
+     Two fetches can reach the backend in either order, so an end has to wait
+     for every patch in flight (a patch that overtook it would quietly recreate
+     the session on a screen nobody is driving anymore), and the next patch
+     waits for the end so a quick reconnect cannot be killed by a late one. */
+  const inflightPatchesRef = useRef<Set<Promise<unknown>>>(new Set());
+  const lastEndRef = useRef<Promise<unknown>>(Promise.resolve());
   /* Loop-visible copy of everything the send payload needs, so the rAF loop
      never has to be torn down and rebuilt on a settings change. */
   const settingsRef = useRef({ route: "/", audience, character, pose, scale, anchor, connected, ticket });
@@ -357,6 +371,13 @@ function GhostAdminPage() {
     }
   }, [base]);
 
+  /* Ends one route's session, or with no route every session there is, ordered
+     behind whatever control traffic is still in flight. */
+  const endSessions = useCallback((route?: string) => {
+    const settled = Promise.all([lastEndRef.current, ...inflightPatchesRef.current]);
+    lastEndRef.current = settled.then(() => post(route ? { op: "end", route } : { op: "end" }));
+  }, [post]);
+
   const buildVisual = useCallback((): GhostVisual => {
     const state = driveRef.current;
     const settings = settingsRef.current;
@@ -385,24 +406,29 @@ function GhostAdminPage() {
     /* Retargeting to another page has to close the old session, otherwise he
        stays behind on it until it idles out and there are two of him. */
     if (activeRouteRef.current && activeRouteRef.current !== settings.route) {
-      void post({ op: "end", route: activeRouteRef.current });
+      endSessions(activeRouteRef.current);
     }
     activeRouteRef.current = settings.route;
     lastSentRef.current = performance.now();
     dirtyRef.current = false;
-    void post({
+    /* The payload is what this tick saw; only the fetch waits behind the end. */
+    const body = {
       route: settings.route,
       audience: settings.audience,
       ownerUserId: auth.viewer?.id ?? null,
       visual: buildVisual(),
       withViewers: extra?.withViewers === true,
-    }).then((response) => {
+    };
+    const request = lastEndRef.current.then(() => post(body));
+    inflightPatchesRef.current.add(request);
+    void request.then((response) => {
+      inflightPatchesRef.current.delete(request);
       if (!response?.ok || extra?.withViewers !== true) return;
       void response.json().then((payload: { presence?: GhostPresence }) => {
         if (payload.presence) setPresence(payload.presence);
       }).catch(() => undefined);
     });
-  }, [auth.viewer?.id, buildVisual, post]);
+  }, [auth.viewer?.id, buildVisual, endSessions, post]);
 
   /* One loop owns movement: it integrates whatever keys are held, keeps the
      stage in sync, and pushes at a fixed rate rather than per keystroke. */
@@ -618,6 +644,12 @@ function GhostAdminPage() {
     return () => window.clearTimeout(timer);
   }, [bubble]);
 
+  useEffect(() => {
+    if (!armEveryone) return;
+    const timer = window.setTimeout(() => setArmEveryone(false), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [armEveryone]);
+
   const jumpToNewest = useCallback(() => {
     const log = logRef.current;
     if (!log) return;
@@ -638,7 +670,6 @@ function GhostAdminPage() {
   };
 
   const disconnect = () => {
-    const current = activeRouteRef.current ?? settingsRef.current.route;
     setConnected(false);
     settingsRef.current = { ...settingsRef.current, connected: false };
     activeRouteRef.current = null;
@@ -646,7 +677,9 @@ function GhostAdminPage() {
     actionRef.current = null;
     setBubble(null);
     setPicking(false);
-    void post({ op: "end", route: current });
+    /* Every session, not just the active route: a retarget whose end was lost
+       or raced can have left him behind on a page long since moved off. */
+    endSessions();
   };
 
   const say = () => {
@@ -704,6 +737,7 @@ function GhostAdminPage() {
   const aim = (next: GhostAudience, nextRoute?: string) => {
     setAudience(next);
     setPicking(false);
+    setArmEveryone(false);
     if (nextRoute) setRouteInput(nextRoute);
     settingsRef.current = {
       ...settingsRef.current,
@@ -958,54 +992,70 @@ function GhostAdminPage() {
             </div>
           </div>
 
-          {/* Who to be. Each one draws itself rather than being named in a
-              dropdown: the sprite is the thing being picked, and the poses and
-              actions underneath change with it. */}
-          <div className="mb-3 flex flex-wrap gap-2">
-            {GHOST_CHARACTER_LIST.map((entry, index) => (
-              <CharacterCard
-                key={entry.id}
-                character={entry}
-                index={index}
-                active={entry.id === character.id}
-                onClick={() => pickCharacter(entry)}
-              />
-            ))}
-          </div>
-
-          {/* A character with no one-shot moves shows no row rather than an
-              empty one: the dog's whole act is its poses. */}
-          {character.actions.length > 0 ? (
-            <div className="mb-2 flex flex-wrap gap-2">
-              {character.actions.map((action) => (
-                <button
-                  key={action.kind}
-                  type="button"
-                  onClick={() => act(action.kind)}
-                  disabled={!connected}
-                  className="cursor-pointer rounded-md bg-osu-b3/60 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-osu-b3 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {action.label}
-                </button>
+          {/* Who to be, how he stands, what he does: one bar of sprites rather
+              than three rows of names. A pixel character is the one thing that
+              reads faster as a picture than as the word for it, and the line
+              underneath names whatever is under the cursor, so nothing is
+              clicked blind. */}
+          <div className="mb-1 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {GHOST_CHARACTER_LIST.map((entry) => (
+                <CharacterChip
+                  key={entry.id}
+                  character={entry}
+                  active={entry.id === character.id}
+                  onClick={() => pickCharacter(entry)}
+                  onHint={setHint}
+                />
               ))}
             </div>
-          ) : null}
 
-          <div className="mb-6 flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-osu-f1">Pose</span>
-            {character.poses.map((entry) => (
-              <Segment
-                key={entry.kind}
-                active={pose === entry.kind}
-                label={entry.label}
-                onClick={() => {
-                  // Clicking the pose he is already holding drops it and puts
-                  // him back on the walk cycle.
-                  setPose(pose === entry.kind ? "auto" : entry.kind);
-                  dirtyRef.current = true;
-                }}
-              />
-            ))}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-osu-f1">pose</span>
+              {character.poses.map((entry) => (
+                <ClipTile
+                  key={entry.kind}
+                  character={character}
+                  // The walk pose has no clip of its own: it is the absence of
+                  // one, so it shows him walking.
+                  clip={entry.clip ?? walkClipFor(character, "down")}
+                  label={entry.label}
+                  active={pose === entry.kind}
+                  onClick={() => {
+                    // Clicking the pose he is already holding drops it and puts
+                    // him back on the walk cycle.
+                    setPose(pose === entry.kind ? "auto" : entry.kind);
+                    dirtyRef.current = true;
+                  }}
+                  onHint={setHint}
+                />
+              ))}
+            </div>
+
+            {/* A character with no one-shot moves shows nothing rather than an
+                empty group: the dog's whole act is his poses. Kept apart from
+                the poses because these fire once, at the audience, and cannot
+                be taken back. */}
+            {character.actions.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] text-osu-f1">fires once</span>
+                {character.actions.map((action) => (
+                  <ClipTile
+                    key={action.kind}
+                    character={character}
+                    clip={action.clip}
+                    label={action.label}
+                    caption
+                    disabled={!connected}
+                    onClick={() => act(action.kind)}
+                    onHint={setHint}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="mb-6 h-4 truncate text-[11px] text-osu-f1">
+            {hint ?? `holding: ${findGhostPose(character, pose)?.label ?? "Walk"}`}
           </div>
 
           <div>
@@ -1126,10 +1176,29 @@ function GhostAdminPage() {
         <aside className="flex h-[30rem] min-w-0 flex-col overflow-hidden rounded-lg bg-osu-b4/60 lg:sticky lg:top-4 lg:h-[calc(100vh-6rem)]">
           <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 text-xs">
             <span className="text-osu-f1">Seen by</span>
-            <Segment active={audience.mode === "everyone"} onClick={() => aim({ mode: "everyone" })} label="Everyone here" />
+            {/* Two clicks, and the second one says how many people it is about
+                to put him in front of. */}
+            <Segment
+              active={audience.mode === "everyone"}
+              tone={armEveryone ? "warn" : undefined}
+              onClick={() => {
+                if (audience.mode === "everyone") return;
+                if (!armEveryone) {
+                  setArmEveryone(true);
+                  return;
+                }
+                aim({ mode: "everyone" });
+              }}
+              label={armEveryone
+                ? (routeHere ? `Show to all ${routeHere.viewers}?` : "Show to everyone?")
+                : "Everyone here"}
+            />
             <Segment
               active={audience.mode === "user"}
-              onClick={() => setPicking((open) => !open)}
+              onClick={() => {
+                setArmEveryone(false);
+                setPicking((open) => !open);
+              }}
               label={targetViewer?.username ? `Only ${targetViewer.username}` : "Only one person"}
             />
             <Segment active={audience.mode === "none"} onClick={() => aim({ mode: "none" })} label="Nobody" />
@@ -1315,62 +1384,122 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-/* One entry in the picker: the character drawn at its own idle, its name, and
-   the number key that selects it. Sprites are scaled towards a common height so
-   a 19px dog and a 43px Ralsei are both worth looking at here, which is the one
-   place their real sizes are not the point. */
-const CARD_ART_HEIGHT = 34;
+/* Every sprite control is one square of this size. The roster is drawn at wildly
+   different sizes (a 19px dog against a 43px Ralsei, and one pose 220px tall),
+   so each clip is fitted to the box rather than drawn at its own scale: here the
+   picture is the label, not the size. */
+export const GHOST_TILE = 46;
 
-/* Whole numbers only: a pixel sprite at 1.7x is a smeared pixel sprite. */
-function cardScale(character: GhostCharacter): number {
-  return Math.max(1, Math.round(CARD_ART_HEIGHT / ghostClipBounds(character, character.idle).h));
+/* Where to park the frame so the clip's own drawing lands centred in the tile.
+   The frame draws itself up and left of its anchor (the feet), which is why the
+   anchor has to be taken back out of the offset rather than the box just being
+   centred. Whole-number scales only, because a pixel sprite at 1.7x is a smeared
+   pixel sprite; a clip too big to fit at 1x takes the exact fraction instead. */
+export function fitClipToTile(character: GhostCharacter, clip: string): { scale: number; left: number; top: number } {
+  const bounds = ghostClipBounds(character, clip);
+  const raw = Math.min(GHOST_TILE / bounds.w, GHOST_TILE / bounds.h);
+  const scale = raw >= 1 ? Math.floor(raw) : raw;
+  return {
+    scale,
+    left: GHOST_TILE / 2 - (bounds.w * scale) / 2 + (character.anchor.x - bounds.x) * scale,
+    top: GHOST_TILE / 2 - (bounds.h * scale) / 2 + (character.anchor.y - bounds.y) * scale,
+  };
 }
 
-/* Every card is the size of the biggest drawing on the roster, so the row is
-   one line of even boxes and nobody's hat pokes out of the top. */
-const CARD_BOX = {
-  w: Math.max(...GHOST_CHARACTER_LIST.map((entry) => ghostClipBounds(entry, entry.idle).w * cardScale(entry))),
-  h: Math.max(...GHOST_CHARACTER_LIST.map((entry) => ghostClipBounds(entry, entry.idle).h * cardScale(entry))),
-};
+/* One clip, drawn at rest inside its square. */
+function ClipArt({ character, clip }: { character: GhostCharacter; clip: string }) {
+  const fit = fitClipToTile(character, clip);
+  return (
+    <span className="relative block shrink-0 overflow-hidden" style={{ width: GHOST_TILE, height: GHOST_TILE }}>
+      <span className="absolute block" style={{ left: fit.left, top: fit.top }}>
+        <GhostAtlasFrame character={character} clip={clip} frame={0} scale={fit.scale} />
+      </span>
+    </span>
+  );
+}
 
-function CharacterCard({ character, index, active, onClick }: {
+/* One clip as a button: a pose to hold or a move to fire. A pose is its own
+   picture, so it needs no word; the moves carry theirs, because a couple of them
+   share a clip (vanish is appear backwards) and firing the wrong one at somebody
+   cannot be undone. Either way the line under the bar names what is hovered. */
+function ClipTile({ character, clip, label, caption, active = false, disabled = false, onClick, onHint }: {
   character: GhostCharacter;
-  index: number;
-  active: boolean;
+  clip: string;
+  label: string;
+  caption?: boolean;
+  active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
+  onHint: (label: string | null) => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      title={character.blurb}
+      onMouseEnter={() => onHint(label)}
+      onMouseLeave={() => onHint(null)}
+      onFocus={() => onHint(label)}
+      onBlur={() => onHint(null)}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
       aria-pressed={active}
-      className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors ${
+      className={`flex cursor-pointer flex-col items-center gap-0.5 rounded-md px-1 pb-1 pt-0 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
         active ? "bg-osu-pink/25" : "bg-osu-b3/60 hover:bg-osu-b3"
       }`}
     >
-      <span className="relative block" style={{ width: CARD_BOX.w, height: CARD_BOX.h }}>
-        {/* The frame draws itself up and left of its own anchor, so the anchor
-            is parked where the feet belong: bottom centre of the box. */}
-        <span className="absolute bottom-0 left-1/2 block">
-          <GhostAtlasFrame character={character} clip={character.idle} frame={0} scale={cardScale(character)} />
-        </span>
-      </span>
-      <span className="flex flex-col">
-        <span className={`text-sm font-semibold ${active ? "text-white" : "text-osu-f1"}`}>{character.name}</span>
-        <span className="text-[10px] text-osu-f1/60">{index + 1}</span>
-      </span>
+      <ClipArt character={character} clip={clip} />
+      {caption ? <span className="whitespace-nowrap text-[10px] font-semibold text-osu-f1">{label}</span> : null}
     </button>
   );
 }
 
-function Segment({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+/* Who to be. The same square with the name beside it, because three of them is a
+   cast list rather than a palette. */
+function CharacterChip({ character, active, onClick, onHint }: {
+  character: GhostCharacter;
+  active: boolean;
+  onClick: () => void;
+  onHint: (label: string | null) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => onHint(character.blurb)}
+      onMouseLeave={() => onHint(null)}
+      onFocus={() => onHint(character.blurb)}
+      onBlur={() => onHint(null)}
+      title={character.blurb}
+      aria-pressed={active}
+      className={`flex cursor-pointer items-center gap-1.5 rounded-md pr-2.5 text-left transition-colors ${
+        active ? "bg-osu-pink/25" : "bg-osu-b3/60 hover:bg-osu-b3"
+      }`}
+    >
+      <ClipArt character={character} clip={character.idle} />
+      <span className={`text-sm font-semibold ${active ? "text-white" : "text-osu-f1"}`}>{character.name}</span>
+    </button>
+  );
+}
+
+function Segment({ active, label, onClick, tone }: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+  /* "warn" is the armed half of a two-click control: it has to look like a
+     different button than the one that was just clicked. */
+  tone?: "warn";
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={`cursor-pointer rounded-md px-2.5 py-1 font-semibold transition-colors ${
-        active ? "bg-osu-pink/25 text-white" : "bg-osu-b3/60 text-osu-f1 hover:text-white"
+        tone === "warn"
+          ? "bg-osu-red/25 text-white"
+          : active
+            ? "bg-osu-pink/25 text-white"
+            : "bg-osu-b3/60 text-osu-f1 hover:text-white"
       }`}
     >
       {label}

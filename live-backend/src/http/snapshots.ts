@@ -70,7 +70,7 @@ import {
   writeReplayVideoUpload,
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSkins, moveSkinOskKey, privateSkinSecretMatches, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview, type SkinRow } from "../features/skins.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSkins, moveSkinOskKey, privateSkinSecretMatches, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview, type SkinRow } from "../features/skins.js";
 import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../features/user-replay-skins.js";
 import { copySkinObject, deleteSkinObjects, getSkinObject, isPrivateSkinKey, isSkinStorageConfigured, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, privateSkinKey, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
 import { readCachedSkinImage } from "../skins/image-cache.js";
@@ -88,7 +88,7 @@ import { getDiscordShowcase } from "../discord/showcase.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../discord/subscriptions.js";
 import { countUserLinks } from "../discord/identity.js";
 import { OSU_API_BOUND_JOB_TYPES } from "../workers.js";
-import { MAX_VIEWER_ROWS, type AnalyticsStore } from "../features/analytics.js";
+import { MAX_VIEWER_EVENT_ROWS, MAX_VIEWER_ROWS, type AnalyticsStore } from "../features/analytics.js";
 import {
   attachViewerRanks,
   normalizeAnalyticsViewerSort,
@@ -519,6 +519,29 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     if (analyticsViewersCache.size > 16) analyticsViewersCache.clear();
     analyticsViewersCache.set(viewersCacheKey, { at: Date.now(), payload: viewersPayload });
     sendJson(req, res, ctx, 200, viewersPayload);
+    return true;
+  }
+  // One signed-in player's recent trail, asked for from the roster card. Read
+  // on demand rather than folded into the roster: nobody needs 756 trails.
+  if (url.pathname === "/api/admin/analytics/viewer-events") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.analytics) {
+      sendJson(req, res, ctx, 404, { error: "analytics_disabled" });
+      return true;
+    }
+    const viewerId = Number(url.searchParams.get("viewerId"));
+    if (!Number.isFinite(viewerId) || viewerId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_viewer_id" });
+      return true;
+    }
+    const requestedEvents = Number(url.searchParams.get("limit") ?? MAX_VIEWER_EVENT_ROWS);
+    const eventLimit = Number.isFinite(requestedEvents)
+      ? Math.min(MAX_VIEWER_EVENT_ROWS, Math.max(1, Math.round(requestedEvents)))
+      : MAX_VIEWER_EVENT_ROWS;
+    sendJson(req, res, ctx, 200, { viewerId, events: await ctx.analytics.getViewerEvents(viewerId, eventLimit) });
     return true;
   }
   // Short-lived ticket for the admin browser's live SSE stream: EventSource
@@ -2530,7 +2553,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 400, { ok: false, error: "invalid_part" });
     return true;
   }
-  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/rename" || url.pathname === "/api/skins/visibility") {
+  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/rename" || url.pathname === "/api/skins/visibility" || url.pathname === "/api/skins/special-keymodes") {
     // Admin-token gated like /api/skins/delete: the frontend server fn forwards the
     // osu!-verified viewer id, and the ownership check below keeps a user off anyone
     // else's skin. asAdmin is set only by the server fn that verified a true admin.
@@ -2546,7 +2569,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; name?: unknown; asAdmin?: unknown; scope?: unknown; visibility?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; name?: unknown; asAdmin?: unknown; scope?: unknown; visibility?: unknown; specialKeymodes?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     const id = typeof body.id === "string" ? body.id : "";
     if (!Number.isInteger(userId) || userId <= 0 || !id) {
@@ -2580,6 +2603,26 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       const moved = result.changed ? await moveSkinOskForVisibility(ctx, result.skin) : result.skin;
       logInfo("skin_visibility_changed", { id, visibility, by: ownerUserId == null ? "admin" : "owner" });
       sendJson(req, res, ctx, 200, { ok: true, skin: toSkinSummary(moved, { asOwner: true }) });
+      return true;
+    }
+    if (url.pathname === "/api/skins/special-keymodes") {
+      // The owner's word on which keymodes are really (N-1)+1; the values must
+      // be keymodes the skin ships, which the feature checks against the row.
+      const specialKeymodes = Array.isArray(body.specialKeymodes)
+        ? body.specialKeymodes.map((entry) => Math.round(Number(entry)))
+        : null;
+      if (!specialKeymodes || specialKeymodes.length > 10 || specialKeymodes.some((keys) => !Number.isInteger(keys) || keys < 1 || keys > 10)) {
+        sendJson(req, res, ctx, 400, { error: "invalid_request" });
+        return true;
+      }
+      const result = await setSkinSpecialKeymodes(ctx.serveWriteDb ?? ctx.db, id, specialKeymodes, ownerUserId);
+      if (!result.ok) {
+        const status = result.error === "forbidden" ? 403 : result.error === "invalid_keymodes" ? 400 : 404;
+        sendJson(req, res, ctx, status, { ok: false, error: result.error });
+        return true;
+      }
+      logInfo("skin_special_keymodes_changed", { id, specialKeymodes, by: ownerUserId == null ? "admin" : "owner" });
+      sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
       return true;
     }
     if (url.pathname === "/api/skins/cover") {

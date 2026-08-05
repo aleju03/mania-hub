@@ -138,7 +138,7 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
           {error ? (
             <div className="mt-3 text-[12px] text-osu-red-light">{error}</div>
           ) : unsupported ? (
-            <div className="mt-3 text-[12px] text-osu-f1">The backend does not expose this yet (deploy pending).</div>
+            <div className="mt-3 text-[12px] text-osu-f1">This is not available yet. Check back soon.</div>
           ) : report === null ? (
             <div className="py-10 text-center text-[12px] text-osu-f1">Loading...</div>
           ) : (

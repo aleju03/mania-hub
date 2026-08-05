@@ -42,7 +42,7 @@ export const AnalyticsInsights = memo(function AnalyticsInsights({
           <TopProfilesCard rows={data.topProfiles} range={range} />
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <CountriesCard rows={data.topPhysicalCountries} range={range} />
         <ReferrersCard rows={data.topReferrers} range={range} />
         <TopRoutesCard rows={data.topRoutes} range={range} />
@@ -57,7 +57,9 @@ export const AnalyticsInsights = memo(function AnalyticsInsights({
 });
 
 /* Every list in here is the same shape: a label, a count, and a bar behind the
-   row sized against the biggest value in the list. */
+   row sized against the biggest value in the list. The bar is the only frame a
+   row gets - a border around each one on top of the card's own border read as
+   boxes inside boxes. */
 function BarRow({
   children,
   pct,
@@ -70,7 +72,7 @@ function BarRow({
   className?: string;
 }) {
   return (
-    <div className={`relative overflow-hidden rounded-md border border-osu-b3/20 bg-osu-b5/60 ${className}`}>
+    <div className={`relative overflow-hidden rounded-lg bg-osu-b5/50 ${className}`}>
       <div className={`absolute inset-y-0 left-0 ${gradient}`} style={{ width: `${pct}%` }} />
       <div className="relative">{children}</div>
     </div>
@@ -81,6 +83,12 @@ function barPct(value: number, max: number): number {
   return Math.max(3, Math.round((value / max) * 100));
 }
 
+/* The number a row is ranked by. Bigger than the label it sits next to: the
+   count is the thing being read down the column. */
+function BarCount({ value }: { value: number }) {
+  return <span className="flex-shrink-0 text-[13px] font-bold tabular-nums text-white">{formatNumber(value)}</span>;
+}
+
 function TopRoutesCard({ rows, range }: { rows: AnalyticsTopRouteRow[]; range: AnalyticsRange }) {
   const max = Math.max(1, ...rows.map((row) => row.count));
   return (
@@ -88,12 +96,12 @@ function TopRoutesCard({ rows, range }: { rows: AnalyticsTopRouteRow[]; range: A
       {rows.length === 0 ? (
         <AnalyticsEmptyMessage text="No pageviews captured yet." />
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {rows.map((row) => (
-            <BarRow key={row.path} pct={barPct(row.count, max)} gradient="bg-gradient-to-r from-osu-pink/25 to-osu-pink/5">
-              <div className="flex items-center justify-between gap-3 px-3 py-2">
-                <span className="truncate font-mono text-[11px] text-osu-c2">{row.path || "(unknown)"}</span>
-                <span className="flex-shrink-0 text-[11px] font-bold text-white">{formatNumber(row.count)}</span>
+            <BarRow key={row.path} pct={barPct(row.count, max)} gradient="bg-gradient-to-r from-osu-pink/25 to-transparent">
+              <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                <span className="truncate font-mono text-[12px] text-osu-c2">{row.path || "(unknown)"}</span>
+                <BarCount value={row.count} />
               </div>
             </BarRow>
           ))}
@@ -110,15 +118,15 @@ function CountriesCard({ rows, range }: { rows: AnalyticsCountryRow[]; range: An
       {rows.length === 0 ? (
         <AnalyticsEmptyMessage text="No country data yet." />
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {rows.map((row) => {
             const code = row.country.toUpperCase();
             return (
-              <BarRow key={code} pct={barPct(row.count, max)} gradient="bg-gradient-to-r from-osu-blue/20 to-osu-blue/5">
-                <div className="flex items-center gap-2.5 px-3 py-2">
+              <BarRow key={code} pct={barPct(row.count, max)} gradient="bg-gradient-to-r from-osu-blue/20 to-transparent">
+                <div className="flex items-center gap-2.5 px-3 py-2.5">
                   <CountryFlag code={code} size="sm" />
-                  <span className="flex-1 truncate text-[11px] text-osu-c2">{getCountryName(code) || code}</span>
-                  <span className="flex-shrink-0 text-[11px] font-bold text-white">{formatNumber(row.count)}</span>
+                  <span className="flex-1 truncate text-[12px] text-osu-c2">{getCountryName(code) || code}</span>
+                  <BarCount value={row.count} />
                 </div>
               </BarRow>
             );
@@ -136,7 +144,7 @@ function TopProfilesCard({ rows, range }: { rows: AnalyticsTopProfileRow[]; rang
       {rows.length === 0 ? (
         <AnalyticsEmptyMessage text="No profile visits yet." />
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {rows.map((row) => (
             <a
               key={row.username}
@@ -147,19 +155,21 @@ function TopProfilesCard({ rows, range }: { rows: AnalyticsTopProfileRow[]; rang
             >
               <BarRow
                 pct={barPct(row.views, max)}
-                gradient="bg-gradient-to-r from-osu-purple/20 to-osu-purple/5"
-                className="transition-colors duration-[100ms] group-hover:border-osu-purple/40"
+                gradient="bg-gradient-to-r from-osu-purple/20 to-transparent"
+                className="transition-colors duration-[100ms] group-hover:bg-osu-b3/40"
               >
                 <div className="flex items-center justify-between gap-3 px-3 py-2">
-                  <span className="min-w-0 flex-1 truncate text-[11px] text-osu-c2">
-                    <span className="group-hover:underline">{row.username}</span>
+                  {/* The name gets its own line: sharing one with "last visited"
+                      truncated both on a phone. */}
+                  <span className="min-w-0 flex-1 leading-tight">
+                    <span className="block truncate text-[13px] font-medium text-white group-hover:underline">{row.username}</span>
                     {row.lastViewedLabel ? (
-                      <span className="text-osu-f1">
-                        {" "}· last visited {row.lastViewedLabel} <InlineCountryFlag country={row.lastVisitorCountry} />
+                      <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-osu-f1">
+                        last visited {row.lastViewedLabel} <InlineCountryFlag country={row.lastVisitorCountry} />
                       </span>
                     ) : null}
                   </span>
-                  <span className="flex-shrink-0 text-[11px] font-bold text-white">{formatNumber(row.views)}</span>
+                  <BarCount value={row.views} />
                 </div>
               </BarRow>
             </a>
@@ -177,7 +187,7 @@ function TopReplaysCard({ rows, range }: { rows: AnalyticsTopReplayRow[]; range:
       {rows.length === 0 ? (
         <AnalyticsEmptyMessage text="No replays opened yet." />
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {rows.map((row) => {
             const primary = row.title && row.artist
               ? `${row.artist} - ${row.title}`
@@ -192,31 +202,33 @@ function TopReplaysCard({ rows, range }: { rows: AnalyticsTopReplayRow[]; range:
               >
                 <BarRow
                   pct={barPct(row.views, max)}
-                  gradient="bg-gradient-to-r from-osu-yellow/20 to-osu-yellow/5"
-                  className="transition-colors duration-[100ms] group-hover:border-osu-yellow/40"
+                  gradient="bg-gradient-to-r from-osu-yellow/20 to-transparent"
+                  className="transition-colors duration-[100ms] group-hover:bg-osu-b3/40"
                 >
-                  <div className="flex min-w-0 items-center gap-2.5 px-2 py-1.5">
+                  <div className="flex min-w-0 items-center gap-2.5 p-2">
                     {row.coverUrl ? (
-                      <img src={row.coverUrl} alt="" className="h-[34px] w-[56px] flex-shrink-0 rounded-[2px] border border-osu-b3/30 object-cover" loading="lazy" />
+                      <img src={row.coverUrl} alt="" className="h-[38px] w-[62px] flex-shrink-0 rounded object-cover" loading="lazy" />
                     ) : (
-                      <div className="h-[34px] w-[56px] flex-shrink-0 rounded-[2px] bg-osu-b3/30" />
+                      <div className="h-[38px] w-[62px] flex-shrink-0 rounded bg-osu-b3/30" />
                     )}
                     <div className="min-w-0 flex-1 leading-tight">
-                      <div className="truncate text-[11px] font-medium text-white group-hover:underline">{primary}</div>
-                      <div className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-[9px] text-osu-f1">
-                        {row.difficulty ? <span className="text-osu-c2">[{row.difficulty}]</span> : null}
+                      <div className="truncate text-[13px] font-medium text-white group-hover:underline">{primary}</div>
+                      {/* Difficulty and player first, when the map ran out of
+                          room the tail is the part worth losing. */}
+                      <div className="mt-1 flex min-w-0 items-center gap-1 truncate text-[11px] text-osu-f1">
+                        {row.difficulty ? <span className="truncate text-osu-c2">[{row.difficulty}]</span> : null}
                         {row.difficulty && (row.player || row.lastViewedLabel) ? <span>·</span> : null}
                         {row.player ? <span className="truncate">{row.player}</span> : null}
-                        {row.player && row.lastViewedLabel ? <span>·</span> : null}
+                        {row.player && row.lastViewedLabel ? <span className="hidden sm:inline">·</span> : null}
                         {row.lastViewedLabel ? (
                           <>
-                            <span className="flex-shrink-0">last watched {row.lastViewedLabel}</span>
-                            <InlineCountryFlag country={row.lastVisitorCountry} />
+                            <span className="hidden flex-shrink-0 sm:inline">last watched {row.lastViewedLabel}</span>
+                            <span className="hidden sm:inline"><InlineCountryFlag country={row.lastVisitorCountry} /></span>
                           </>
                         ) : null}
                       </div>
                     </div>
-                    <span className="flex-shrink-0 text-[12px] font-bold text-white">{formatNumber(row.views)}</span>
+                    <span className="flex-shrink-0 pr-1 text-[14px] font-bold tabular-nums text-white">{formatNumber(row.views)}</span>
                   </div>
                 </BarRow>
               </a>
@@ -235,20 +247,20 @@ function ReferrersCard({ rows, range }: { rows: AnalyticsReferrerRow[]; range: A
       {rows.length === 0 ? (
         <AnalyticsEmptyMessage text="No external referrers captured yet." />
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {rows.map((row) => {
             const isDirect = row.domain === "$direct";
             return (
               <BarRow
                 key={row.domain}
                 pct={barPct(row.count, max)}
-                gradient="bg-gradient-to-r from-osu-green-light/20 to-osu-green-light/5"
+                gradient="bg-gradient-to-r from-osu-green-light/20 to-transparent"
               >
-                <div className="flex items-center justify-between gap-3 px-3 py-2" title={isDirect ? "" : row.domain}>
-                  <span className={`truncate text-[11px] ${isDirect ? "italic text-osu-f1" : "text-osu-c2"}`}>
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5" title={isDirect ? "" : row.domain}>
+                  <span className={`truncate text-[12px] ${isDirect ? "italic text-osu-f1" : "text-osu-c2"}`}>
                     {formatReferrerLabel(row.domain)}
                   </span>
-                  <span className="flex-shrink-0 text-[11px] font-bold text-white">{formatNumber(row.count)}</span>
+                  <BarCount value={row.count} />
                 </div>
               </BarRow>
             );
@@ -298,12 +310,12 @@ function SharesCard({
       {rows.length === 0 ? (
         <AnalyticsEmptyMessage text="No shares detected yet." />
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {rows.map((row) => (
-            <BarRow key={row.platform} pct={barPct(row.count, max)} gradient="bg-gradient-to-r from-osu-pink/25 to-osu-pink/5">
-              <div className="flex items-center justify-between gap-3 px-3 py-2">
-                <span className="truncate text-[11px] text-osu-c2">{SHARE_PLATFORM_LABELS[row.platform] ?? row.platform}</span>
-                <span className="flex-shrink-0 text-[11px] font-bold text-white">{formatNumber(row.count)}</span>
+            <BarRow key={row.platform} pct={barPct(row.count, max)} gradient="bg-gradient-to-r from-osu-pink/25 to-transparent">
+              <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                <span className="truncate text-[12px] text-osu-c2">{SHARE_PLATFORM_LABELS[row.platform] ?? row.platform}</span>
+                <BarCount value={row.count} />
               </div>
             </BarRow>
           ))}
@@ -345,7 +357,7 @@ function TopSharedPagesCard({ rows, range }: { rows: AnalyticsSharedPageRow[]; r
       {rows.length === 0 ? (
         <AnalyticsEmptyMessage text="No shared pages yet." />
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {rows.map((row, index) => {
             const secondary = row.subjectType === "replay" && row.subject
               ? `/replay?scoreId=${row.subject}`
@@ -354,14 +366,14 @@ function TopSharedPagesCard({ rows, range }: { rows: AnalyticsSharedPageRow[]; r
               <BarRow
                 key={`${row.path}-${row.subject ?? ""}-${index}`}
                 pct={barPct(row.count, max)}
-                gradient="bg-gradient-to-r from-osu-purple/20 to-osu-purple/5"
+                gradient="bg-gradient-to-r from-osu-purple/20 to-transparent"
               >
                 <div className="flex min-w-0 items-center gap-3 px-3 py-2">
                   <div className="min-w-0 flex-1 leading-tight">
-                    <div className="truncate text-[11px] text-osu-c2">{sharedPagePrimary(row)}</div>
-                    <div className="mt-0.5 truncate font-mono text-[9px] text-osu-f1">{secondary}</div>
+                    <div className="truncate text-[13px] font-medium text-white">{sharedPagePrimary(row)}</div>
+                    <div className="mt-1 truncate font-mono text-[11px] text-osu-f1">{secondary}</div>
                   </div>
-                  <span className="flex-shrink-0 text-[11px] font-bold text-white">{formatNumber(row.count)}</span>
+                  <BarCount value={row.count} />
                 </div>
               </BarRow>
             );
@@ -421,7 +433,7 @@ function ServerErrorsCard({
         <button
           type="button"
           onClick={() => setShowRecentLog((value) => !value)}
-          className="h-7 cursor-pointer rounded-md border border-osu-b3/30 bg-osu-b5/70 px-2 text-[10px] font-semibold text-osu-c2 transition-colors duration-[120ms] hover:border-osu-red/35 hover:bg-osu-b3/50 hover:text-white"
+          className="h-7 cursor-pointer rounded-md border border-osu-b3/30 bg-osu-b5/70 px-2.5 text-[11px] font-semibold text-osu-c2 transition-colors duration-[120ms] hover:border-osu-red/35 hover:bg-osu-b3/50 hover:text-white"
           title={showRecentLog ? "Hide detailed recent errors" : "Show detailed recent errors"}
         >
           {showRecentLog ? "Hide log" : "Show log"}
@@ -432,26 +444,30 @@ function ServerErrorsCard({
         <AnalyticsEmptyMessage text="No server errors recorded." />
       ) : (
         <div className="space-y-3">
-          <div className="font-mono text-[10px] text-osu-f1">
+          <div className="font-mono text-[11px] text-osu-f1">
             {formatNumber(total)} total
             {callerSummary ? <span className="ml-2 text-osu-l2/70">· {callerSummary}</span> : null}
           </div>
 
           {rows.length > 0 ? (
-            <div className="grid grid-cols-1 gap-1.5 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-1 lg:grid-cols-2">
               {rows.map((row, index) => {
                 const statusLabel = row.status == null ? "no-resp" : String(row.status);
                 return (
                   <BarRow
                     key={`${row.caller}-${row.path}-${row.status ?? "x"}-${index}`}
                     pct={100}
-                    gradient="bg-gradient-to-r from-osu-red/20 to-osu-red/5"
+                    gradient="bg-gradient-to-r from-osu-red/20 to-transparent"
                   >
-                    <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5">
-                      <span className={`w-12 flex-shrink-0 text-right font-mono text-[10px] font-bold ${statusColorClass(row.status)}`}>{statusLabel}</span>
-                      <span className="max-w-[40%] flex-shrink-0 truncate text-[11px] font-medium text-white">{row.caller || "unknown"}</span>
-                      <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-osu-f1">{row.path || "(unknown)"}</span>
-                      <span className="flex-shrink-0 text-[11px] font-bold text-white">{formatNumber(row.count)}</span>
+                    {/* Caller over path rather than beside it: four columns on one
+                        line left nothing but ellipses on a phone. */}
+                    <div className="flex min-w-0 items-center gap-2.5 px-2.5 py-2">
+                      <span className={`w-[52px] flex-shrink-0 text-right font-mono text-[12px] font-bold ${statusColorClass(row.status)}`}>{statusLabel}</span>
+                      <div className="min-w-0 flex-1 leading-tight">
+                        <div className="truncate text-[12px] font-medium text-white">{row.caller || "unknown"}</div>
+                        <div className="mt-0.5 truncate font-mono text-[11px] text-osu-f1">{row.path || "(unknown)"}</div>
+                      </div>
+                      <BarCount value={row.count} />
                     </div>
                   </BarRow>
                 );
@@ -460,32 +476,36 @@ function ServerErrorsCard({
           ) : null}
 
           {recent.length > 0 && !showRecentLog ? (
-            <div className="rounded-md border border-osu-b3/20 bg-osu-b5/40 px-3 py-2 text-[10px] text-osu-f1">
+            <div className="text-[11px] text-osu-f1">
               Detailed recent log hidden. Use Show log when you need raw error bodies and rate-limit context.
             </div>
           ) : null}
 
           {recent.length > 0 && showRecentLog ? (
             <div>
-              <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">Recent log</div>
-              <div className="max-h-[420px] space-y-1.5 overflow-y-auto pr-1">
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-osu-f1">Recent log</div>
+              <div className="max-h-[420px] space-y-1 overflow-y-auto pr-1">
                 {recent.map((row, index) => {
                   const statusLabel = row.status == null ? "no-resp" : String(row.status);
                   const rateContext = formatRateLimitContext(row);
                   return (
-                    <div key={`${row.timestamp}-${index}`} className="overflow-hidden rounded-md border border-osu-b3/20 bg-osu-b5/60">
-                      <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5">
-                        <span className="w-20 flex-shrink-0 font-mono text-[10px] text-osu-f1">{row.timestamp || "—"}</span>
-                        <span className={`w-10 flex-shrink-0 text-right font-mono text-[10px] font-bold ${statusColorClass(row.status)}`}>{statusLabel}</span>
-                        <span className="max-w-[35%] flex-shrink-0 truncate text-[11px] font-medium text-white">{row.caller || "unknown"}</span>
-                        <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-osu-f1">{row.path || "(unknown)"}</span>
-                        {row.attempts != null && row.attempts > 1 ? <span className="flex-shrink-0 font-mono text-[9px] text-osu-yellow">x{row.attempts}</span> : null}
+                    <div key={`${row.timestamp}-${index}`} className="overflow-hidden rounded-lg bg-osu-b5/50">
+                      <div className="flex min-w-0 items-start gap-2.5 px-2.5 py-2">
+                        <span className={`w-[52px] flex-shrink-0 text-right font-mono text-[12px] font-bold ${statusColorClass(row.status)}`}>{statusLabel}</span>
+                        <div className="min-w-0 flex-1 leading-tight">
+                          <div className="flex min-w-0 items-baseline gap-2">
+                            <span className="truncate text-[12px] font-medium text-white">{row.caller || "unknown"}</span>
+                            {row.attempts != null && row.attempts > 1 ? <span className="flex-shrink-0 font-mono text-[11px] text-osu-yellow">x{row.attempts}</span> : null}
+                            <span className="ml-auto flex-shrink-0 font-mono text-[11px] text-osu-f1">{row.timestamp || "—"}</span>
+                          </div>
+                          <div className="mt-0.5 truncate font-mono text-[11px] text-osu-f1">{row.path || "(unknown)"}</div>
+                        </div>
                       </div>
                       {row.bodyPreview ? (
-                        <div className="-mt-0.5 break-all px-2.5 pb-1.5 font-mono text-[10px] text-osu-l2/70">{row.bodyPreview}</div>
+                        <div className="break-all px-2.5 pb-2 pl-[68px] font-mono text-[11px] text-osu-l2/80">{row.bodyPreview}</div>
                       ) : null}
                       {row.context || rateContext ? (
-                        <div className="-mt-0.5 break-all px-2.5 pb-1.5 font-mono text-[10px] text-osu-f1">
+                        <div className="break-all px-2.5 pb-2 pl-[68px] font-mono text-[11px] text-osu-f1">
                           {row.context ? <span className="text-osu-c2">{row.context}</span> : null}
                           {row.context && rateContext ? <span className="text-osu-l2/50"> · </span> : null}
                           {rateContext ? <span className="text-osu-yellow/90">{rateContext}</span> : null}

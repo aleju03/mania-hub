@@ -57,6 +57,9 @@ export interface SkinRow {
   // Keymodes whose layout is really (N-1)+1, e.g. [8] on a 7K+1 skin; always
   // a subset of keymodes. Derived from skin.ini alongside them.
   specialKeymodes: number[];
+  // True once the owner has corrected specialKeymodes by hand
+  // (setSkinSpecialKeymodes); detection then keeps its hands off the list.
+  specialKeymodesManual: boolean;
   accentColor: string | null;
   downloadCount: number;
   status: "pending" | "published" | "hidden";
@@ -264,14 +267,20 @@ export async function replaceSkinOsk(
 ): Promise<void> {
   const author = skin.author ?? (cleanText(patch.iniAuthor ?? "", SKIN_AUTHOR_MAX_LENGTH) || null);
   const now = nowIso();
+  const keymodes = normalizeKeymodes(patch.keymodes);
+  // An owner-corrected 7K+1 list survives the new build (minus keymodes the
+  // archive no longer ships); otherwise the new skin.ini decides.
+  const specialKeymodes = skin.specialKeymodesManual
+    ? skin.specialKeymodes.filter((keys) => keymodes.includes(keys))
+    : normalizeKeymodes(patch.specialKeymodes);
   await exec(
     db,
     `update skins set
        osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
        keymodes_json = ?, special_keymodes_json = ?, author = ?, search_text = ?, osk_updated_at = ?, updated_at = ?
      where id = ?`,
-    [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(normalizeKeymodes(patch.keymodes)),
-     JSON.stringify(normalizeKeymodes(patch.specialKeymodes)),
+    [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(keymodes),
+     JSON.stringify(specialKeymodes),
      author, buildSearchText(skin.name, skin.ownerUsername, author), now, now, skin.id],
   );
 }
@@ -350,6 +359,40 @@ export async function setSkinCoverKeymode(
   const entry = row.previews.find((preview) => preview.keys === keys);
   if (!entry) return { ok: false, error: "no_preview" };
   await attachSkinPreview(db, id, entry);
+  const updated = await getSkin(db, id);
+  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }) } : { ok: false, error: "not_found" };
+}
+
+export type SetSkinSpecialKeymodesResult =
+  | { ok: true; skin: SkinSummary }
+  | { ok: false; error: "not_found" | "forbidden" | "invalid_keymodes" };
+
+// The owner's correction for the 7K+1 detection: skinners routinely ship an
+// (N-1)+1 layout without the skin.ini separator the detector reads, so the
+// catalog mislabels the skin as plain NK (and vice versa). The list replaces
+// the detected one outright and flips the manual flag, which tells .osk
+// replacements and backfill re-scans to leave it alone from here on.
+// ownerUserId null is the admin path, which skips the ownership check.
+export async function setSkinSpecialKeymodes(
+  db: Db,
+  id: string,
+  rawSpecialKeymodes: number[],
+  ownerUserId: number | null,
+): Promise<SetSkinSpecialKeymodesResult> {
+  const row = await getSkin(db, id);
+  if (!row || row.status === "pending") return { ok: false, error: "not_found" };
+  if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
+  const specialKeymodes = normalizeKeymodes(rawSpecialKeymodes);
+  // Special means (N-1)+1, so 1K cannot be one, and a keymode the skin does
+  // not ship cannot be labelled at all.
+  if (specialKeymodes.some((keys) => keys < 2 || !row.keymodes.includes(keys))) {
+    return { ok: false, error: "invalid_keymodes" };
+  }
+  await exec(
+    db,
+    "update skins set special_keymodes_json = ?, special_keymodes_manual = 1, updated_at = ? where id = ?",
+    [JSON.stringify(specialKeymodes), nowIso(), id],
+  );
   const updated = await getSkin(db, id);
   return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }) } : { ok: false, error: "not_found" };
 }
@@ -837,6 +880,7 @@ function rowToSkin(row: Record<string, unknown>): SkinRow {
     description: textOrNull(row.description),
     keymodes: normalizeKeymodes(parseJson<unknown>(String(row.keymodes_json ?? "[]"), [])),
     specialKeymodes: normalizeKeymodes(parseJson<unknown>(String(row.special_keymodes_json ?? "[]"), [])),
+    specialKeymodesManual: Number(row.special_keymodes_manual) === 1,
     accentColor: textOrNull(row.accent_color),
     downloadCount: Math.max(0, Math.floor(Number(row.download_count) || 0)),
     status,
