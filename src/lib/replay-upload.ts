@@ -20,11 +20,22 @@ const STABLE_MOD_BITS: Array<{ bit: number; acronym: string }> = [
   { bit: 1 << 17, acronym: "6K" },
   { bit: 1 << 18, acronym: "7K" },
   { bit: 1 << 19, acronym: "8K" },
+  { bit: 1 << 20, acronym: "FI" },
+  // Stable stores no shuffle seed, so the judgement engine treats a seedless RD
+  // as a no-op and leaves the columns alone; carrying it is still worth it so
+  // the viewer shows what was actually played.
+  { bit: 1 << 21, acronym: "RD" },
   { bit: 1 << 24, acronym: "9K" },
   { bit: 1 << 26, acronym: "1K" },
   { bit: 1 << 27, acronym: "3K" },
   { bit: 1 << 28, acronym: "2K" },
+  { bit: 1 << 29, acronym: "SV2" },
+  // Mirror flips the chart's columns. Dropping it left the notes unmirrored
+  // while the replay's presses stayed mirrored, so nothing lined up.
+  { bit: 1 << 30, acronym: "MR" },
 ];
+// Deliberately unmapped: 1 << 25 is stable's KeyCoop (2P co-op), which shares no
+// meaning with lazer's "CO" (Cover) - mapping it would trigger the cover overlay.
 
 export interface UploadedReplayParseResult {
   replay: ServerReplay;
