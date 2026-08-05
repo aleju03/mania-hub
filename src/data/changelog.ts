@@ -27,6 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-05", text: "Performance optimizations and speedups everywhere" },
   { date: "2026-08-05", text: "You can now show your name under the spectators of a replay you are watching, from settings", to: "/settings" },
   { date: "2026-08-05", text: "The player name on a replay opens their profile", to: "/replay" },
   { date: "2026-08-04", text: "New higher or lower difficulty mode: anyone in the entire pool (previously was only the top 1000)", to: "/streak" },
