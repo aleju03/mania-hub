@@ -278,15 +278,18 @@ export function PackSummary({
                   // "First ever" is the server's call, not serial 1: a repull
                   // of a card you already hold hands back your old serial, so
                   // a serial-1 holding resurfacing months later must not read
-                  // as if this pull were the card's first anywhere. It still
-                  // gets the plain ordinal ("1st to pull this"), which is true
-                  // whenever it happened.
+                  // as if this pull were the card's first anywhere. Everything
+                  // short of first-global renders as a plain ordinal with the
+                  // pull count ("1st of 97 to pull this"), so being an early
+                  // number never masquerades as being the only one.
                   const first = mint.isFirstGlobal;
                   return (
                     <div
-                      className={`mt-0.5 text-[11px] tabular-nums ${first || mint.serial === 1 ? "font-bold text-amber-300" : "text-osu-f1"}`}
+                      className={`mt-0.5 text-[11px] tabular-nums ${first ? "font-bold text-amber-300" : "text-osu-f1"}`}
                     >
-                      {first ? "first ever to pull this" : `${formatOrdinal(mint.serial)} to pull this`}
+                      {first
+                        ? "first ever to pull this"
+                        : `${formatOrdinal(mint.serial)} of ${mint.mintedTotal.toLocaleString()} to pull this`}
                     </div>
                   );
                 })()}
