@@ -179,9 +179,10 @@ async function confirmTopPlayAgainstWindow(
 }
 
 // One running confirmation absorbs this many pending siblings for the same
-// user: they share one best-scores window fetch, so each extra score costs
-// only its pp-gain history call. Bounded so a burst still finishes well
-// inside the lane watchdog even with the token bucket saturated.
+// user: they share one best-scores window fetch, so an extra score costs at
+// most a pp-gain history call (and none at all once the user has a stored
+// projection). Bounded so a burst still finishes well inside the lane
+// watchdog even with the token bucket saturated.
 const TOP_PLAY_BATCH_SIBLING_LIMIT = 10;
 
 /**
@@ -379,15 +380,24 @@ async function calculateTopPlayPpGain(
   const beatmapId = score.beatmap_id ?? score.beatmap?.id;
   if (!beatmapId) return calculateApproxPpGainMap(bestScores)[score.id] ?? 0;
 
-  // The score-history endpoint only returns preserved scores, and osu! drops
-  // the preserve flag from a same-map best as soon as the new score beats it.
-  // The pre-refresh top-scores projection still holds that score, so it
-  // competes with the fetched history for the replacement baseline; the
-  // history comes first so a fresher copy of the same score id wins the dedupe.
+  // The stored projection is the last full best-scores window osu! returned,
+  // so it already holds every previous same-map score that can materially move
+  // the gain: a same-map best below the top-200 cutoff would enter the
+  // hypothetical set at weight 0.95^199, which rounds to nothing. The
+  // score-history endpoint adds no information on top of that (it only returns
+  // preserved scores, and osu! drops the preserve flag from a same-map best as
+  // soon as the new score beats it, so by confirmation time the projection is
+  // the better source), so a populated projection skips the API call entirely.
   const storedSameMap = previousTopScores.filter((stored) => (stored.beatmap_id ?? stored.beatmap?.id) === beatmapId);
+  if (previousTopScores.length > 0) {
+    return calculateReplacementPpGain(bestScores, score.id, getPreviousBeatmapBestScore(storedSameMap, score));
+  }
+
+  // No stored projection (a user the backfill sweep has not reached yet): the
+  // history endpoint is the only source for a previous same-map best.
   try {
     const history = await osu.getBeatmapUserScoresAll(beatmapId, score.user_id, "job:refresh_user_top_scores:pp_gain");
-    return calculateReplacementPpGain(bestScores, score.id, getPreviousBeatmapBestScore(dedupeScoresById([...history, ...storedSameMap]), score));
+    return calculateReplacementPpGain(bestScores, score.id, getPreviousBeatmapBestScore(dedupeScoresById(history), score));
   } catch (error) {
     console.warn("[top-plays] failed to fetch same-beatmap score history for pp gain", {
       beatmapId,
@@ -395,8 +405,6 @@ async function calculateTopPlayPpGain(
       userId: score.user_id,
       error: error instanceof Error ? error.message : String(error),
     });
-    const storedPrevious = getPreviousBeatmapBestScore(storedSameMap, score);
-    if (storedPrevious) return calculateReplacementPpGain(bestScores, score.id, storedPrevious);
     return calculateApproxPpGainMap(bestScores)[score.id] ?? 0;
   }
 }
