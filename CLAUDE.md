@@ -9,8 +9,6 @@ Mania Hub (mania-tracker.com) is an osu!mania community site with two cooperatin
 - **Frontend** (`src/`): TanStack Start + Vite + React 19, SSR via Nitro (node-server preset, self-hosted on the VPS; the Vercel preset only builds when `process.env.VERCEL` is set, kept as a rollback target). File-based routes in `src/routes/`; `src/routeTree.gen.ts` is generated, do not hand-edit.
 - **Live backend** (`live-backend/`): always-on Node service that ingests osu! scores from Kayla's oSC Socket.IO feed, keeps durable SQLite projections, runs a DB-backed job queue, and streams updates to browsers over SSE.
 
-Surfaces: rankings (country + global), live tracker, top plays, maps, snipes, farm helper, replay viewer (with video export), player profiles (about/recent/activity/maniacard), personal goals, a My Data dashboard, card packs (collectible maniacards), a BBCode profile editor, settings, admin dashboards. An optional Discord bot (maniabot) has its own dev-gated `/discord` showcase.
-
 Countries are dynamic, not hardcoded: the backend keeps a `country_registry` with per-country status (cold -> warm -> active, can pause) and feature tier (`indexed` / `maps_warm` / `live` / `snipes`). Visiting a cold country can activate it (rate-limited). A synthetic `GLOBAL` scope aggregates all tracked countries. Default/home country is `CR`.
 
 See `AGENTS.md` for the fuller repository guide (endpoint lists, per-feature models, job details); this file is the condensed version.
@@ -19,20 +17,7 @@ See `AGENTS.md` for the fuller repository guide (endpoint lists, per-feature mod
 
 Do not start dev servers or run builds unprompted; the user usually has servers running locally (frontend `3000`, live backend `7227`).
 
-| Task | Command |
-| --- | --- |
-| Frontend dev | `npm run dev` |
-| Frontend tests | `npm run test` |
-| Frontend typecheck | `npx tsc --noEmit` |
-| Single test file | `npx vitest run path/to/file.test.ts` (add `-t "name"` for one case) |
-| Backend dev | `cd live-backend && npm run dev` |
-| Backend tests | `cd live-backend && npm test` |
-| Backend typecheck | `cd live-backend && npx tsc --noEmit` |
-| Backend tests + build | `cd live-backend && npm run verify` |
-| oSC smoke test | `cd live-backend && npm run smoke:osc` |
-| Backend DB compaction | `cd live-backend && npm run compact:storage` (also `compact:maps-farmed`) |
-| Sync prod DB to local | `npm run live-db:update` (fresh VPS snapshot); `npm run live-db:sync-from-vps` reuses the newest existing backup (`--dry-run` supported) |
-| Dan benchmark/analyze | `npm run dan:benchmark`, `npm run dan:analyze` |
+Scripts live in `package.json` and `live-backend/package.json`. Non-obvious: `npm run live-db:update` pulls a fresh VPS snapshot of the prod DB to local, while `npm run live-db:sync-from-vps` reuses the newest existing backup (`--dry-run` supported).
 
 Minimum verification: for live backend changes run `npm test` and `npx tsc --noEmit` inside `live-backend/`; for type-sensitive frontend changes run `npx tsc --noEmit` at the root.
 
@@ -53,11 +38,7 @@ Client state: one Zustand store in `src/store.ts`, persisted to localStorage (`m
 
 osu! API layer: `src/lib/osu.ts` is a facade over `src/lib/osu/` domain modules (rankings, maps, replay, snipes, tracker, top-plays, pattern-analysis, dan, users, beatmaps; plus shared support modules). All authenticated osu! calls stay server-side; never put osu! credentials or direct authenticated calls in client components.
 
-Replay viewer: parsing (`replay-parser.ts`, `replay-frames.ts`), judgement (`mania-replay-judgement.ts`, stable vs lazer timing differs - reuse existing score utilities in `src/lib/score.ts` rather than re-normalising), skins, scroll speed, visibility mods, overlays, storyboards (`src/lib/storyboard/` parser + timelines, `replay-storyboard.ts` loader against the backend's `/api/storyboard` bundle), Pixi/canvas rendering, and WebCodecs video export (`replay-video-encoder.ts`) are separate modules; keep changes scoped to the right one.
-
 Dan estimator: `src/lib/dan-estimator/` (features, scoring, family choice, LN subsystem, courses, labels) with `src/lib/dan-estimator.ts` as entry; `daniel-estimator.ts` is an alternative algorithm. The backend has its own copy under `live-backend/src/dan/`. Benchmarks via `scripts/dan-benchmark.ts` against curated labels. **Dan and LN dan classification must stay algorithmic: never add title/artist/creator/beatmap-id/beatmapset-id/filename or any chart-identity shortcuts to force results.**
-
-SEO/OG: `src/lib/seo.ts` builds meta + OG URLs and defines the `OG_IMAGE_VERSION` constant; `src/routes/api/og.ts` renders images with @vercel/og and caches them in R2 keyed by that version - bump `OG_IMAGE_VERSION` in `seo.ts` when changing OG layouts. Sitemap in `src/routes/api/sitemap.ts`.
 
 ## Conventions
 
@@ -77,5 +58,3 @@ Local secrets live in `.env` (root) and `live-backend/.env`. Key vars:
 Admin UI is at `/admin/live-backend` (frontend) talking to backend `/api/admin/*`. Some admin controls (reset-local-db, delete-country) are destructive; treat with care.
 
 Skins carry a `visibility` (`public`/`private`) alongside `status`. A private skin is off `/skins`, off the duplicate guard, has no counted download, and 404s for anyone but its uploader (a true admin can still read it for moderation, and their private-skins shelf on `/skins` lists every uploader's, via `allPrivate=1` on `/api/skins/list`). Its R2 objects live under a `p-<secret>` key segment, never get a public bucket URL, and only answer to `?t=<secret>`, which `toSkinSummary(row, { asOwner })` attaches for owner-scoped reads only - so any new endpoint that serves a skin must go through that serializer rather than the row. Replay viewers never receive a private `.osk`: `/api/replay-skin/bundle` builds a zip of just the assets that player's stored settings draw (`live-backend/src/skins/replay-bundle.ts`, in-memory cache, no derived artifact in R2) and the client opens it exactly like an archive. What that protects is the file and the page, not the pixels a replay puts on screen.
-
-`/admin/ghost` drives the owner-only ghost overlay: pick a character, pick a route, pick an audience (everyone there / one signed-in viewer / nobody), then walk him around a visitor's screen with WASD, talk through a speech bubble, and fire Deltarune-style actions. The roster is Ralsei, Starwalker and the Annoying Dog (number keys switch, and poses, actions and the size range all follow the character); each is one atlas under `public/images/ghost/` with its clip manifest in `src/lib/ghost-shared.ts`, which is also where a new character is added. Backend sessions live in `live-backend/src/live/ghost.ts` (in-memory, `ENABLE_GHOST`), the visitor overlay in `src/components/ghost/` (mounted from `__root.tsx`; every page open holds one ghost SSE connection on its own budget). See `AGENTS.md` for the endpoint and identity-signing detail.
