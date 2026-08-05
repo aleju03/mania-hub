@@ -6,6 +6,7 @@ import { createDb, exec, migrate, type Db } from "../src/db.js";
 import {
   applyPackCollectionCardMint,
   ensurePackCollectionCardKeys,
+  getPackCollectionPoolProgress,
   getPackWallet,
   listPackCollectionCards,
   listPackCollectionOwnedCardKeys,
@@ -228,6 +229,107 @@ describe("GOAT cards alongside their player's ordinary card", () => {
     const goat = await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: `${BOJII}:goat` });
     expect(goat.gained).toBe(400);
     expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).total).toBe(0);
+  });
+});
+
+/* The header's completion ratio: owned players still in the draw pool over the
+   pool size. Retired players (fell off the rankings after being pulled) report
+   separately instead of inflating the ratio past 100%, and honorary GOATs
+   outside the pool count in neither number. */
+describe("pack collection pool progress", () => {
+  const BOJII = 10083439; // honorary roster
+
+  function progressCard(userId: number, tier: string) {
+    return {
+      userId,
+      username: `player${userId}`,
+      avatarUrl: `https://a.ppy.sh/${userId}`,
+      countryCode: "CR",
+      tier,
+      tierLabel: tier,
+      skills: null,
+      pp: 1000,
+      globalRank: 10,
+      copies: 1,
+      recycledCopies: 0,
+      firstPulledAt: 100,
+      lastPulledAt: 200,
+    };
+  }
+
+  function progressPayload(cards: Record<string, unknown>): string {
+    return JSON.stringify({
+      cards,
+      shards: 0,
+      shardsSpent: 0,
+      charges: 5,
+      lastRefillAt: 0,
+      openedPacks: 0,
+      poolTotal: null,
+    });
+  }
+
+  it("splits owned players into in-pool, retired, and off-pool honorary", async () => {
+    const payload = progressPayload({
+      "42": progressCard(42, "rare"),
+      "43": progressCard(43, "rare"),
+      [`${BOJII}:goat`]: progressCard(BOJII, "goat"),
+    });
+    await savePackWallet(db, USER_ID, payload, 0, 1000);
+
+    // 42 is still in the pool, 43 has fallen off the rankings, and BOJII's
+    // GOAT sits outside the pool here, so only the first two register.
+    const progress = await getPackCollectionPoolProgress(db, USER_ID, {
+      userIds: new Set([42, 77, 78]),
+      total: 3,
+    });
+    expect(progress).toEqual({ poolTotal: 3, poolOwnedCount: 1, retiredOwnedCount: 1, offPoolUserIds: [43] });
+  });
+
+  it("lists and recycles only the restricted players under the untracked filter", async () => {
+    const payload = progressPayload({
+      "42": progressCard(42, "rare"),
+      "43": progressCard(43, "rare"),
+      [`${BOJII}:goat`]: progressCard(BOJII, "goat"),
+    });
+    await savePackWallet(db, USER_ID, payload, 0, 1000);
+
+    const filtered = await listPackCollectionCards(db, USER_ID, {
+      page: 0,
+      pageSize: 15,
+      restrictToCardUserIds: [43],
+    });
+    expect(filtered.total).toBe(1);
+    expect(filtered.cards[0].userId).toBe(43);
+
+    // An empty restriction means the pool was unreadable; it must match
+    // nothing rather than fall open to the whole collection.
+    expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15, restrictToCardUserIds: [] })).total).toBe(0);
+
+    const recycled = await recyclePackCollectionCards(db, USER_ID, {
+      mode: "whole_matching",
+      tier: "all",
+      query: "",
+      restrictToCardUserIds: [43],
+    });
+    expect(recycled.gained).toBe(2);
+    const remaining = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
+    expect(remaining.total).toBe(2);
+    expect(remaining.cards.map((card) => card.userId).sort()).toEqual([BOJII, 42].sort());
+  });
+
+  it("counts a ranked honorary player once across their GOAT and ordinary card", async () => {
+    const payload = progressPayload({
+      [String(BOJII)]: progressCard(BOJII, "worldClass"),
+      [`${BOJII}:goat`]: progressCard(BOJII, "goat"),
+    });
+    await savePackWallet(db, USER_ID, payload, 0, 1000);
+
+    const progress = await getPackCollectionPoolProgress(db, USER_ID, {
+      userIds: new Set([BOJII]),
+      total: 1,
+    });
+    expect(progress).toEqual({ poolTotal: 1, poolOwnedCount: 1, retiredOwnedCount: 0, offPoolUserIds: [] });
   });
 });
 

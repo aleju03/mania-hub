@@ -25,12 +25,12 @@ import { clearFarmHelperFeedback, listFarmHelperFeedback, normalizeFarmHelperFee
 import { FarmHelperTimings, timeStage } from "../features/farm-helper-timing.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
-import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
+import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, getPackPoolMembership, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
-import { applyPackCollectionCardMint, getPackWallet, HONORARY_USER_IDS, listPackCollectionCards, listPackCollectionOwnedCardKeys,
-  normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
+import { applyPackCollectionCardMint, getPackCollectionPoolProgress, getPackWallet, HONORARY_USER_IDS, listPackCollectionCards,
+  listPackCollectionOwnedCardKeys, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getHonoraryPullsReport, getPackCardCollectors, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
 import { createPackDuel, getPackDuel, joinPackDuel, pickPackDuelStat, redactDuelFor } from "../features/pack-duels.js";
 import {
@@ -1861,12 +1861,24 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         sendJson(req, res, ctx, 400, { error: "invalid_recycle_request" });
         return true;
       }
+      const recycleTier = typeof body.tier === "string" ? body.tier : "all";
+      // The "not tracked" filter recycles by player restriction, not by tier.
+      // If the pool can't be read the restriction stays empty and nothing is
+      // recycled; the alternative would recycle the whole collection.
+      const recycleUntracked = mode === "whole_matching" && recycleTier === "untracked";
+      const untrackedIds = recycleUntracked
+        ? await getPackPoolMembership(ctx.db)
+            .then((pool) => getPackCollectionPoolProgress(ctx.db, walletUserId, pool))
+            .then((progress) => progress.offPoolUserIds)
+            .catch(() => [] as number[])
+        : undefined;
       const result = await recyclePackCollectionCards(ctx.serveWriteDb ?? ctx.db, walletUserId, {
         mode,
         cardKey: cardKey ?? undefined,
         cardKeys: hasBulkKeys ? cardKeys : undefined,
-        tier: typeof body.tier === "string" ? body.tier : "all",
+        tier: recycleUntracked ? "all" : recycleTier,
         query: typeof body.query === "string" ? body.query.slice(0, 120) : "",
+        restrictToCardUserIds: untrackedIds,
       });
       sendJson(req, res, ctx, 200, { gained: result.gained, payload: result.wallet.payload, rev: result.wallet.rev });
       return true;
@@ -1886,7 +1898,27 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     );
     const tier = url.searchParams.get("tier");
     const query = url.searchParams.get("q");
-    sendJson(req, res, ctx, 200, await listPackCollectionCards(ctx.db, walletUserId, { page, pageSize, tier, query }));
+    // Progress is a garnish on the header; a pool board that cannot build
+    // right now must not take the collection page down with it.
+    const progress = await getPackPoolMembership(ctx.db)
+      .then((pool) => getPackCollectionPoolProgress(ctx.db, walletUserId, pool))
+      .catch(() => null);
+    // "untracked" is not a tier: it lists the owned players who left the draw
+    // pool. With no pool to compare against the filter honestly shows nothing.
+    const untracked = tier === "untracked";
+    const collectionPage = await listPackCollectionCards(ctx.db, walletUserId, {
+      page,
+      pageSize,
+      tier: untracked ? "all" : tier,
+      query,
+      restrictToCardUserIds: untracked ? progress?.offPoolUserIds ?? [] : undefined,
+    });
+    sendJson(req, res, ctx, 200, {
+      ...collectionPage,
+      poolProgress: progress
+        ? { poolTotal: progress.poolTotal, poolOwnedCount: progress.poolOwnedCount, retiredOwnedCount: progress.retiredOwnedCount }
+        : null,
+    });
     return true;
   }
   if (url.pathname === "/api/osu/beatmap-file") {

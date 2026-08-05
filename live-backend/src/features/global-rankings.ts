@@ -411,6 +411,14 @@ async function getPackPoolBoard(db: Db): Promise<GlobalBoardCache> {
   return build;
 }
 
+/* Membership view of the pack pool, for collection progress: who is currently
+   pullable, and how many players that is. Same merged board the draws page
+   through, so the numbers agree with what a pack can actually deal. */
+export async function getPackPoolMembership(db: Db): Promise<{ userIds: Set<number>; total: number }> {
+  const board = await getPackPoolBoard(db);
+  return { userIds: new Set(board.entries.map((entry) => entry.user.id)), total: board.entries.length };
+}
+
 // The Global leaderboard is the union of every tracked country's roster, ranked
 // by mania pp. Because the warmed rosters span the top mania countries, this is
 // effectively the real global mania top-N (limited to players we track).

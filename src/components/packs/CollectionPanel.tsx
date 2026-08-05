@@ -41,6 +41,12 @@ export interface CardMint {
   tierLabel: string | null;
 }
 
+/* "untracked" is the pseudo-filter for owned players who left the draw pool;
+   like "unrated" it rides the tier param, but the server resolves it by pool
+   membership rather than by tier. Server collections only: a local wallet has
+   no idea who is still in the pool. */
+type CollectionTierFilter = ManiaCardTier | "all" | "unrated" | "untracked";
+
 interface CollectionPanelProps {
   wallet: PackWallet | null;
   showLoginNudge: boolean;
@@ -50,7 +56,7 @@ interface CollectionPanelProps {
   onRecycleCard: (cardKey: string) => number | Promise<number>;
   onRecycleWhole: (cardKey: string) => number | Promise<number>;
   onRecycleWholeMany: (cardKeys: string[]) => number | Promise<number>;
-  onRecycleWholeMatching: (filter: { tier: ManiaCardTier | "all" | "unrated"; query: string }) => number | Promise<number>;
+  onRecycleWholeMatching: (filter: { tier: CollectionTierFilter; query: string }) => number | Promise<number>;
   onRecycleAll: () => number | Promise<number>;
   /* Resolves true when the repair actually landed (locally or server-side). */
   onApplyMint: (cardKey: string, mint: CardMint) => boolean | Promise<boolean>;
@@ -133,11 +139,13 @@ function placeholderTiersForPage({
 }: {
   count: number;
   pageStart: number;
-  tierFilter: ManiaCardTier | "all" | "unrated";
+  tierFilter: CollectionTierFilter;
   tierCounts: Record<string, number>;
 }): ManiaCardTier[] {
   if (tierFilter !== "all") {
-    const tier = tierFilter === "unrated" ? "common" : tierFilter;
+    // Unrated and untracked cards have no single rarity; commons are the
+    // neutral skeleton face.
+    const tier = tierFilter === "unrated" || tierFilter === "untracked" ? "common" : tierFilter;
     return Array.from({ length: count }, () => tier);
   }
 
@@ -170,7 +178,7 @@ function serverCollectionCacheKey({
 }: {
   page: number;
   pageSize: number;
-  tier: ManiaCardTier | "all" | "unrated";
+  tier: CollectionTierFilter;
   query: string;
 }) {
   return `${page}:${pageSize}:${tier}:${query}`;
@@ -182,7 +190,7 @@ function serverCollectionFilterKey({
   query,
 }: {
   pageSize: number;
-  tier: ManiaCardTier | "all" | "unrated";
+  tier: CollectionTierFilter;
   query: string;
 }) {
   return `${pageSize}:${tier}:${query}`;
@@ -488,7 +496,7 @@ export function CollectionPanel({
   // Searching a synced collection is a server round trip per distinct query, so
   // it waits for a pause in typing instead of firing a request per keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [tierFilter, setTierFilter] = useState<ManiaCardTier | "all" | "unrated">("all");
+  const [tierFilter, setTierFilter] = useState<CollectionTierFilter>("all");
   // Recycling the last copy removes the card from the collection, so it
   // takes a second tap to confirm.
   const [confirmCardKey, setConfirmCardKey] = useState<string | null>(null);
@@ -721,6 +729,19 @@ export function CollectionPanel({
   // carries them. Keeping them across filter switches stops the rarity chips
   // from flashing and lets the loading skeletons match the real per-rarity counts.
   const serverTierCounts = serverMetaPage?.tierCounts ?? serverPage?.page.tierCounts ?? {};
+  // Like tierCounts, pool progress describes the whole collection, so any
+  // loaded page's copy is current enough to keep the header from flashing.
+  const serverPoolProgress = useServerCollection
+    ? serverMetaPage?.poolProgress ?? serverPage?.page.poolProgress ?? null
+    : null;
+  // The chip this filter lives on disappears when its count reaches zero
+  // (recycled away, or the players came back); don't strand the view there.
+  useEffect(() => {
+    if (tierFilter !== "untracked") return;
+    if (!useServerCollection || (serverPoolProgress !== null && serverPoolProgress.retiredOwnedCount === 0)) {
+      setTierFilter("all");
+    }
+  }, [tierFilter, useServerCollection, serverPoolProgress]);
   const serverCollectionTotal = Object.values(serverTierCounts).reduce((sum, count) => sum + count, 0);
   const ownedTiers: Array<ManiaCardTier | null> = useServerCollection
     ? Object.keys(serverTierCounts)
@@ -743,6 +764,8 @@ export function CollectionPanel({
     if (trimmedQuery && !card.username.toLowerCase().includes(trimmedQuery)) return false;
     if (tierFilter === "all") return true;
     if (tierFilter === "unrated") return card.tier === null;
+    // Pool membership is server knowledge; the chip never renders locally.
+    if (tierFilter === "untracked") return false;
     return card.tier === tierFilter;
   });
   const filteredTotal = useServerCollection ? serverMetaPage?.total ?? 0 : visibleCards.length;
@@ -769,7 +792,9 @@ export function CollectionPanel({
       ? filteredTotal
       : tierFilter === "all"
         ? collectionTotal
-        : Math.max(0, Math.floor(Number(serverTierCounts[tierFilter === "unrated" ? "unrated" : tierFilter]) || 0));
+        : tierFilter === "untracked"
+          ? serverPoolProgress?.retiredOwnedCount ?? 0
+          : Math.max(0, Math.floor(Number(serverTierCounts[tierFilter === "unrated" ? "unrated" : tierFilter]) || 0));
   const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, expectedFilterTotal - pageStart));
   const placeholderTiers = showSkeletonGrid
     ? placeholderTiersForPage({
@@ -911,6 +936,17 @@ export function CollectionPanel({
 
   if (!wallet) return null;
 
+  // Progress is measured against the current draw pool when the server knows
+  // it: owned players still in the pool over the pool size, so players who
+  // fell off the rankings can no longer push the header past 100%. They show
+  // as a separate retired count instead. A local wallet only knows the pool
+  // size from its last draw, so it keeps the old ratio, clamped.
+  const progressOwned = serverPoolProgress ? serverPoolProgress.poolOwnedCount : collectionTotal;
+  const progressPool = serverPoolProgress ? serverPoolProgress.poolTotal : wallet.poolTotal;
+  const retiredOwned = serverPoolProgress?.retiredOwnedCount ?? 0;
+  const progressPercent =
+    progressPool !== null && progressPool > 0 ? Math.min(100, (progressOwned / progressPool) * 100) : null;
+
   return (
     <section className="mx-auto w-full max-w-[820px]">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -918,20 +954,20 @@ export function CollectionPanel({
           <div className="flex items-baseline gap-2">
             <h2 className="text-sm font-bold text-white">Collection</h2>
             <span className="text-[12px] text-osu-f1 tabular-nums">
-              {collectionTotal}
-              {wallet.poolTotal ? ` / ${wallet.poolTotal.toLocaleString()}` : ""} players
+              {progressOwned.toLocaleString()}
+              {progressPool ? ` / ${progressPool.toLocaleString()}` : ""} players
             </span>
           </div>
-          {wallet.poolTotal !== null && wallet.poolTotal > 0 && collectionTotal > 0 && (
+          {progressPercent !== null && collectionTotal > 0 && (
             <div className="mt-1 flex items-center gap-1.5">
               <div className="h-1 w-[140px] overflow-hidden rounded-full bg-osu-b3/40">
                 <div
                   className="h-full rounded-full bg-osu-pink/70 transition-[width] duration-500"
-                  style={{ width: `${Math.max(1, Math.min(100, (collectionTotal / wallet.poolTotal) * 100))}%` }}
+                  style={{ width: `${Math.max(1, progressPercent)}%` }}
                 />
               </div>
               <span className="text-[10px] text-osu-f1 tabular-nums">
-                {((collectionTotal / wallet.poolTotal) * 100).toFixed(1)}%
+                {progressPercent.toFixed(1)}%
               </span>
             </div>
           )}
@@ -1023,7 +1059,7 @@ export function CollectionPanel({
                   <button
                     key={value}
                     type="button"
-                    onClick={() => setTierFilter(selected ? "all" : (value as ManiaCardTier | "all" | "unrated"))}
+                    onClick={() => setTierFilter(selected ? "all" : (value as CollectionTierFilter))}
                     className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-[filter] cursor-pointer ${
                       rgb
                         ? selected
@@ -1053,6 +1089,22 @@ export function CollectionPanel({
                   </button>
                 );
               })}
+              {useServerCollection && retiredOwned > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setTierFilter(tierFilter === "untracked" ? "all" : "untracked")}
+                  className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-[filter] cursor-pointer ${
+                    tierFilter === "untracked"
+                      ? "border-osu-pink/50 bg-osu-b4 text-white"
+                      : "border-osu-b3/30 bg-osu-b4/30 text-osu-f1 hover:bg-osu-b4/70"
+                  }`}
+                  title="Players you own whose card left the draw pool: out of every tracked top 100 and not opted in. They rejoin the pool, and the completion count, if they come back."
+                  aria-pressed={tierFilter === "untracked"}
+                >
+                  Not tracked
+                  <span className="font-semibold tabular-nums opacity-65">{retiredOwned}</span>
+                </button>
+              )}
             </div>
           )}
           {totalPages > 1 && (

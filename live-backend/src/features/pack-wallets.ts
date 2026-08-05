@@ -48,6 +48,51 @@ export interface PackCollectionPage {
   filteredShardTotal: number;
 }
 
+/* Collection progress measured against the current draw pool. Owned players
+   split three ways: still in the pool (the numerator; this includes honorary
+   members who are also live ranked players), honorary GOATs outside the pool
+   (the GOAT chip tracks those), and retired players who fell off the rankings
+   after being pulled. The header used to divide all owned rows by the live
+   pool size, and retired cards pushed it past 100%. */
+export interface PackCollectionPoolProgress {
+  poolTotal: number;
+  poolOwnedCount: number;
+  retiredOwnedCount: number;
+  /* The retired players themselves, so the "not tracked" collection filter
+     shows exactly the cards the count describes. Never serialized to clients;
+     the collection endpoint strips it. */
+  offPoolUserIds: number[];
+}
+
+export async function getPackCollectionPoolProgress(
+  db: Db,
+  userId: number,
+  pool: { userIds: Set<number>; total: number },
+): Promise<PackCollectionPoolProgress> {
+  const rows = (await exec(
+    db,
+    "select distinct card_user_id from pack_collection_cards where owner_user_id = ? and copies > 0",
+    [userId],
+  )).rows;
+  let poolOwnedCount = 0;
+  const offPoolUserIds: number[] = [];
+  for (const row of rows) {
+    const ownedId = Number(row.card_user_id);
+    if (pool.userIds.has(ownedId)) poolOwnedCount += 1;
+    else if (!HONORARY_USER_IDS.has(ownedId)) offPoolUserIds.push(ownedId);
+  }
+  return { poolTotal: pool.total, poolOwnedCount, retiredOwnedCount: offPoolUserIds.length, offPoolUserIds };
+}
+
+/* Restricts a card query to specific players. The ids are validated integers
+   inlined into the SQL (not bound parameters) so a large retired set can never
+   trip the parameter limit; an empty restriction matches nothing. */
+function cardUserIdRestrictionSql(userIds: readonly number[]): string {
+  const safe = userIds.filter((id) => Number.isInteger(id) && id > 0);
+  if (safe.length === 0) return "1 = 0";
+  return `pack_collection_cards.card_user_id in (${safe.join(",")})`;
+}
+
 /* The album needs the whole collection, and it walks pages to get there, so a
    small ceiling turns one browse into a dozen round trips. Cards are a few
    hundred bytes each, so a wide page is still a small response. */
@@ -480,7 +525,15 @@ export async function savePackWallet(
 export async function listPackCollectionCards(
   db: Db,
   userId: number,
-  options: { page: number; pageSize: number; tier?: string | null; query?: string | null },
+  options: {
+    page: number;
+    pageSize: number;
+    tier?: string | null;
+    query?: string | null;
+    /* When set, only cards of these players are listed (the "not tracked"
+       filter). Empty means match nothing. */
+    restrictToCardUserIds?: readonly number[];
+  },
 ): Promise<PackCollectionPage> {
   const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(options.pageSize)));
   const page = Math.max(0, Math.floor(options.page));
@@ -493,6 +546,9 @@ export async function listPackCollectionCards(
   if (query) {
     where.push(`lower(${displayUsernameSql}) like ?`);
     args.push(`%${query}%`);
+  }
+  if (options.restrictToCardUserIds) {
+    where.push(cardUserIdRestrictionSql(options.restrictToCardUserIds));
   }
   if (options.tier && options.tier !== "all") {
     if (options.tier === "unrated") where.push("pack_collection_cards.tier is null");
@@ -866,7 +922,16 @@ export function duplicateShardValueForStoredTier(tier: string | null): number {
 export async function recyclePackCollectionCards(
   db: Db,
   userId: number,
-  options: { mode: PackRecycleMode; cardKey?: string; cardKeys?: string[]; tier?: string | null; query?: string | null },
+  options: {
+    mode: PackRecycleMode;
+    cardKey?: string;
+    cardKeys?: string[];
+    tier?: string | null;
+    query?: string | null;
+    /* Same restriction listPackCollectionCards takes, so "recycle everything
+       shown" under the "not tracked" filter recycles exactly what it showed. */
+    restrictToCardUserIds?: readonly number[];
+  },
   now = Date.now(),
 ): Promise<PackRecycleResult> {
   let gained = 0;
@@ -881,6 +946,9 @@ export async function recyclePackCollectionCards(
       // on, or "recycle everything matching" would miss renamed players.
       where.push(`lower(${displayUsernameSql}) like ?`);
       args.push(`%${query}%`);
+    }
+    if (options.restrictToCardUserIds) {
+      where.push(cardUserIdRestrictionSql(options.restrictToCardUserIds));
     }
     if (tier && tier !== "all") {
       if (tier === "unrated") where.push("tier is null");

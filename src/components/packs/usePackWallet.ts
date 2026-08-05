@@ -50,7 +50,7 @@ export interface PackWalletApi {
   recycleWhole: (cardKey: string) => number | Promise<number>;
   /* Whole-recycles a batch of cards in one server round-trip. */
   recycleWholeMany: (cardKeys: string[]) => number | Promise<number>;
-  recycleWholeMatching: (filter: { tier: ManiaCardTier | "all" | "unrated"; query: string }) => number | Promise<number>;
+  recycleWholeMatching: (filter: { tier: ManiaCardTier | "all" | "unrated" | "untracked"; query: string }) => number | Promise<number>;
   recycleAll: () => number | Promise<number>;
   /* Backfills a recomputed mint (skills snapshot + tier) onto an owned
      card; used to upgrade legacy cards collected before snapshots existed.
@@ -95,12 +95,15 @@ function stripWalletCards(wallet: PackWallet): PackWallet {
 
 function collectionCardMatchesFilter(
   card: PackWallet["cards"][string],
-  filter: { tier: ManiaCardTier | "all" | "unrated"; query: string },
+  filter: { tier: ManiaCardTier | "all" | "unrated" | "untracked"; query: string },
 ): boolean {
   const query = filter.query.trim().toLowerCase();
   if (query && !card.username.toLowerCase().includes(query)) return false;
   if (filter.tier === "all") return true;
   if (filter.tier === "unrated") return card.tier === null;
+  // Pool membership is server knowledge; a local wallet can't resolve it, and
+  // the untracked filter is only reachable on synced collections anyway.
+  if (filter.tier === "untracked") return false;
   return card.tier === filter.tier;
 }
 
@@ -271,7 +274,7 @@ export function usePackWallet(): PackWalletApi {
     mode: "duplicates" | "whole" | "all_duplicates" | "whole_matching",
     cardKey?: string,
     cardKeys?: string[],
-    filter?: { tier: ManiaCardTier | "all" | "unrated"; query: string },
+    filter?: { tier: ManiaCardTier | "all" | "unrated" | "untracked"; query: string },
   ) => {
     const sync = syncRef.current;
     if (!sync.enabled) return null;

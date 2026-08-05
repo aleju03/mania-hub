@@ -32,12 +32,24 @@ export interface ServerPackCollectionCard {
   mintedTotal?: number;
 }
 
+/* Progress against the current draw pool: owned players still pullable over
+   the pool size, plus how many owned players have since fallen off the
+   rankings. Honorary GOATs outside the pool sit in neither bucket (the GOAT
+   chip tracks them). Null when the backend could not read the pool for this
+   response. */
+export interface ServerPackCollectionPoolProgress {
+  poolTotal: number;
+  poolOwnedCount: number;
+  retiredOwnedCount: number;
+}
+
 export interface ServerPackCollectionPage {
   cards: ServerPackCollectionCard[];
   total: number;
   tierCounts: Record<string, number>;
   duplicateShardTotal: number;
   filteredShardTotal: number;
+  poolProgress: ServerPackCollectionPoolProgress | null;
 }
 
 export type PushPackWalletResult =
@@ -151,12 +163,21 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     const response = await fetch(url, { headers: target.headers });
     if (!response.ok) throw new Error(`Pack collection fetch failed (${response.status}).`);
     const body = (await response.json()) as ServerPackCollectionPage;
+    const poolProgress =
+      body.poolProgress && typeof body.poolProgress === "object" && Number(body.poolProgress.poolTotal) > 0
+        ? {
+            poolTotal: Math.floor(Number(body.poolProgress.poolTotal)),
+            poolOwnedCount: Math.max(0, Math.floor(Number(body.poolProgress.poolOwnedCount) || 0)),
+            retiredOwnedCount: Math.max(0, Math.floor(Number(body.poolProgress.retiredOwnedCount) || 0)),
+          }
+        : null;
     return {
       cards: Array.isArray(body.cards) ? body.cards : [],
       total: Number(body.total) || 0,
       tierCounts: body.tierCounts && typeof body.tierCounts === "object" ? body.tierCounts : {},
       duplicateShardTotal: Number(body.duplicateShardTotal) || 0,
       filteredShardTotal: Number(body.filteredShardTotal) || 0,
+      poolProgress,
     };
   });
 
