@@ -42,17 +42,30 @@ For a longer local run, start `npm run dev` for 10 to 20 minutes with `TRACKED_C
 ## Production (VPS)
 
 Production is **not** the `Dockerfile` (that is an Alpine/musl dev artifact). It is node 22 on
-glibc under two systemd units on a 4 GB / 2 vCPU host:
+glibc under two systemd units on an 8 GB / 4 vCPU / 75 GB host (Hetzner CX33, rescaled from the
+original 4 GB / 2 vCPU box on 2026-08-05):
 
 | unit | `LIVE_BACKEND_ROLE` | what it does |
 | --- | --- | --- |
 | `mania-hub-live-server.service` | `server` | HTTP + SSE + the maps snapshot worker thread |
 | `mania-hub-live-worker.service` | `worker` | the job queue, oSC ingest, retention, schema migrations |
 
-Keep the split. libSQL work is synchronous on the calling thread and there are only 2 vCPUs, so
-merging the roles would stall HTTP and SSE behind jobs.
+Keep the split. libSQL work is synchronous on the calling thread, so merging the roles would
+stall HTTP and SSE behind jobs.
 
-### Measured memory (Phase 0 baseline, 4 h window at `f397afa`)
+### Memory caps (current)
+
+`MemoryHigh=3000M` on both units (set 2026-08-05 with the 8 GB rescale; runtime drop-ins via
+`systemctl set-property`). No `MemoryMax` — `MemoryHigh` throttles instead of killing, and both
+units' legitimate peaks (server boot board build, worker `refresh_global_maps`) sit well under
+3000M. The frontend `mania-hub-web@` pair keeps `MemoryHigh=500M` each. When retuning, watch
+`memory.events` (`high` counter) and remember the server's cgroup usage is mostly *file page
+cache* from the SQLite reads — plan against `VmHWM` for anon but expect the cgroup to sit at
+whatever cap you give it, because cache expands to fill it. The 4 GB-era plan (slice caps,
+per-unit `MemoryMax`, the unsatisfiable peak+30% arithmetic) is retired; see git history if a
+downsize ever brings it back.
+
+### Measured memory (Phase 0 baseline, 4 h window at `f397afa`, on the old 4 GB / 2 vCPU host)
 
 | | steady | observed peak | lifetime high-water |
 | --- | --- | --- | --- |
@@ -69,25 +82,13 @@ applying any cap**, and raise the worker's numbers if 1984 MB persists. Note tha
 `memory.peak` (2.3-2.4 G for both) additionally counts file page cache charged to the cgroup and is
 inflated by database reads — do not plan heap ceilings against it.
 
-Both peaks are legitimate work, so a cap below them guarantees an OOM kill at every boot / every
-global maps refresh. Note the plan's original arithmetic (per-unit `MemoryMax` = peak + 30-50%,
-*and* 750 MiB-1 GiB left outside the services) is unsatisfiable here — it sums to 4.2-4.8 GiB on a
-3.8 GiB host. Enforce the aggregate on a shared slice instead, and keep the per-unit ceilings as
-runaway protection:
+Both peaks are legitimate work; any cap must clear them. Still true on the 8 GB host:
 
-- swapfile **first** (1-2 GiB, `vm.swappiness=10`): with no swap, `MemoryHigh` throttling reclaims
-  the 256 MB read-only DB mmaps instead of anonymous heap, which is a latency cliff. Swap here is
-  OOM insurance, not capacity.
-- then `MemoryHigh` only (server 1500M, worker 1700M — **but re-check the worker against the note
-  above first; a 1984 MB high-water would make 1700M throttle normal work**) and watch
-  `memory.events` for a week.
-- then a `mania-hub.slice` with `MemoryHigh=2700M` / `MemoryMax=3000M`, plus per-unit
-  `MemoryMax` (server 1900M, worker 2300M) and `MemorySwapMax`.
 - CPU: `CPUWeight` 300 (server) / 60 (worker) so HTTP stays responsive during chart analysis and
-  global refreshes. Do not raise job-lane or compression concurrency.
-- Do not set `--max-old-space-size` in this pass: the worker legitimately reaches ~1.3 GB heap, so
-  any pin below ~1600 MB would crash `refresh_global_maps`. Do not add jemalloc/allocator tuning
-  until the glibc `smaps` evidence justifies it.
+  global refreshes. Do not raise job-lane or compression concurrency without re-measuring.
+- Do not set `--max-old-space-size`: the worker legitimately reaches ~1.3 GB heap, so any pin
+  below ~1600 MB would crash `refresh_global_maps`. Do not add jemalloc/allocator tuning until
+  glibc `smaps` evidence justifies it.
 
 Restart the **worker first** — it owns schema DDL, and the server role blocks on `waitForSchema`
 for up to 60 s. Keep `Restart=on-failure`.
