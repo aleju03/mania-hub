@@ -379,6 +379,81 @@ function getBoardScoreId(score: OscScore): number {
   return Number.isFinite(scoreId) && scoreId > 0 ? scoreId : 0;
 }
 
+export interface SnipeBoardEntry {
+  position: number;
+  user: { id: number; username: string; avatar_url: string };
+  scoreId: number;
+  totalScore: number;
+  pp: number | null;
+  accuracy: number;
+  grade: string;
+  mods: string[];
+  isLazer: boolean;
+  hasReplay: boolean;
+  endedAt: string;
+}
+
+export interface SnipeBoardSnapshot {
+  beatmapId: number;
+  laneKey: string;
+  total: number;
+  entries: SnipeBoardEntry[];
+}
+
+/**
+ * The board a snipe happened on: one country, one beatmap, one lane. This is
+ * the same ordering the projection ranks against (total score desc), so a
+ * row's position here is what the event's boardRank counted.
+ *
+ * Served straight off idx_country_beatmap_scores_rank, and `count(*) over ()`
+ * rides the same scan, so a full board costs one indexed read even when the
+ * caller only wants the top slice.
+ */
+export async function getSnipeBoardSnapshot(
+  db: Db,
+  country: string,
+  beatmapId: number,
+  laneKey: string,
+  limit: number,
+): Promise<SnipeBoardSnapshot> {
+  const rows = (await exec(
+    db,
+    `select s.user_id, s.score_id, s.total_score, s.pp, s.accuracy, s.rank, s.mods_json,
+            s.is_lazer, s.has_replay, s.ended_at,
+            coalesce(nullif(u.username, ''), 'User ' || s.user_id) as username,
+            coalesce(u.avatar_url, '') as avatar_url,
+            count(*) over () as total
+     from country_beatmap_scores s
+     left join users u on u.user_id = s.user_id
+     where s.country = ? and s.beatmap_id = ? and s.lane_key = ?
+     order by s.total_score desc
+     limit ?`,
+    [country.toUpperCase(), beatmapId, laneKey, limit],
+  )).rows;
+  return {
+    beatmapId,
+    laneKey,
+    total: Number(rows[0]?.total ?? 0),
+    entries: rows.map((row, index): SnipeBoardEntry => ({
+      position: index + 1,
+      user: {
+        id: Number(row.user_id),
+        username: String(row.username ?? ""),
+        avatar_url: String(row.avatar_url ?? ""),
+      },
+      scoreId: Number(row.score_id),
+      totalScore: Number(row.total_score),
+      pp: row.pp == null ? null : Number(row.pp),
+      accuracy: Number(row.accuracy ?? 0),
+      grade: String(row.rank ?? ""),
+      mods: parseJson<string[]>(row.mods_json, []),
+      isLazer: Number(row.is_lazer) === 1,
+      hasReplay: Number(row.has_replay) === 1,
+      endedAt: String(row.ended_at ?? ""),
+    })),
+  };
+}
+
 export async function getSnipesSnapshot(db: Db, country: string, limit: number): Promise<{ events: SnipeEvent[]; scannedAt: number }> {
   const rows = (await exec(
     db,

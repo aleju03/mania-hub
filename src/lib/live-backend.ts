@@ -83,6 +83,27 @@ export interface LiveSnipesSnapshot {
   scannedAt: number;
 }
 
+export interface LiveSnipeBoardEntry {
+  position: number;
+  user: { id: number; username: string; avatar_url: string; avatar_accent?: string | null };
+  scoreId: number;
+  totalScore: number;
+  pp: number | null;
+  accuracy: number;
+  grade: string;
+  mods: string[];
+  isLazer: boolean;
+  hasReplay: boolean;
+  endedAt: string;
+}
+
+export interface LiveSnipeBoardSnapshot {
+  beatmapId: number;
+  laneKey: string;
+  total: number;
+  entries: LiveSnipeBoardEntry[];
+}
+
 export type LiveMapsRefreshProgressStatus = "queued" | "running" | "done" | "failed";
 export type LiveMapsRefreshProgressStage = "queued" | "fetching" | "persisting" | "done" | "failed";
 
@@ -1503,6 +1524,24 @@ export async function fetchLiveSnipesSnapshot(country: string, limit = 500, opti
   const query = new URLSearchParams({ country, limit: String(limit) });
   if (options?.observe) query.set("observe", "1");
   return fetchLiveJson(`/api/snapshots/snipes?${query.toString()}`);
+}
+
+/**
+ * The country board a snipe was taken on. The lane is derived backend-side from
+ * the mods and client the score was set with, so callers pass what the snipe
+ * event already carries rather than a lane key.
+ */
+export async function fetchLiveSnipeBoard(
+  country: string,
+  beatmapId: number,
+  params: { mods: string[]; isLazer: boolean; limit?: number },
+  options?: { signal?: AbortSignal },
+): Promise<LiveSnipeBoardSnapshot> {
+  const query = new URLSearchParams({ country, beatmap: String(beatmapId) });
+  if (params.mods.length > 0) query.set("mods", params.mods.join(","));
+  if (params.isLazer) query.set("lazer", "1");
+  if (params.limit != null) query.set("limit", String(params.limit));
+  return fetchLiveJson(`/api/snapshots/snipe-board?${query.toString()}`, options?.signal ? { signal: options.signal } : undefined);
 }
 
 // The Random tab draws server-side: the filters travel with the request and the

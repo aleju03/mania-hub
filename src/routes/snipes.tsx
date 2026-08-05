@@ -17,7 +17,7 @@ import type { SnipeEvent } from "../lib/types";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHiddenUserIds, useSelectedCountry, type SnipesFilters, type SnipesKeyFilter, type SnipesRange } from "../store";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
-import { fetchLiveSnipesSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
+import { fetchLiveSnipeBoard, fetchLiveSnipesSnapshot, isLiveBackendConfigured, openLiveEventSource, type LiveSnipeBoardEntry, type LiveSnipeBoardSnapshot } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { SnipesNotTracked } from "../components/SnipesNotTracked";
@@ -560,6 +560,7 @@ function SnipesPage() {
                         key={key}
                         event={event}
                         eventKey={key}
+                        country={selectedCountry}
                         expanded={expandedKey === key}
                         onToggle={(k) => setExpandedKey((prev) => (prev === k ? null : k))}
                       />
@@ -592,11 +593,13 @@ function SnipesPage() {
 function SnipeRow({
   event,
   eventKey,
+  country,
   expanded,
   onToggle,
 }: {
   event: SnipeEvent;
   eventKey: string;
+  country: string;
   expanded: boolean;
   onToggle: (key: string) => void;
 }) {
@@ -893,8 +896,186 @@ function SnipeRow({
               View beatmap →
             </a>
           </div>
+
+          <SnipeBoard event={event} country={country} />
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Country board behind the snipe ────────────────────────────────────────
+
+const BOARD_LIMIT = 50;
+const BOARD_COLLAPSED_ROWS = 10;
+// Boards only move when someone scores on that exact lane, so one fetch per
+// beatmap survives collapsing and re-expanding rows (and the many rows that
+// share a map on a busy feed).
+const boardCache = new Map<string, LiveSnipeBoardSnapshot>();
+
+function boardCacheKey(country: string, event: SnipeEvent): string {
+  return `${country}:${event.beatmap_id}:${event.mods.join("+")}:${event.isLazer ? "lazer" : "stable"}`;
+}
+
+/**
+ * The full country board the snipe happened on, in the same order the backend
+ * ranks it. Loaded on expand, so a feed of 25 rows costs nothing until someone
+ * opens one.
+ */
+function SnipeBoard({ event, country }: { event: SnipeEvent; country: string }) {
+  const cacheKey = boardCacheKey(country, event);
+  const [board, setBoard] = useState<LiveSnipeBoardSnapshot | null>(() => boardCache.get(cacheKey) ?? null);
+  const [error, setError] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    const cached = boardCache.get(cacheKey);
+    if (cached) {
+      setBoard(cached);
+      return;
+    }
+    const controller = new AbortController();
+    setBoard(null);
+    setError(false);
+    fetchLiveSnipeBoard(country, event.beatmap_id, { mods: event.mods, isLazer: event.isLazer, limit: BOARD_LIMIT }, { signal: controller.signal })
+      .then((snapshot) => {
+        boardCache.set(cacheKey, snapshot);
+        setBoard(snapshot);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError(true);
+      });
+    return () => controller.abort();
+  }, [cacheKey, country, event.beatmap_id, event.isLazer, event.mods]);
+
+  if (error) {
+    return (
+      <div className="relative mt-3 border-t border-osu-b3/20 pt-2.5 text-[10px] text-osu-f1">
+        Couldn't load the board.
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative mt-3 border-t border-osu-b3/20 pt-2.5">
+      <div className="flex items-baseline justify-between gap-3 text-[10px] uppercase tracking-wider text-osu-f1">
+        <span>Leaderboard</span>
+        {board != null && (
+          <span className="tabular-nums normal-case tracking-normal">
+            {board.total > board.entries.length
+              ? `Top ${board.entries.length} of ${formatNumber(board.total)}`
+              : `${formatNumber(board.total)} ${board.total === 1 ? "score" : "scores"}`}
+          </span>
+        )}
+      </div>
+
+      {board == null ? (
+        <div className="flex items-center gap-2 py-3 text-[10px] text-osu-f1">
+          <div className="w-2.5 h-2.5 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+          <span>Loading board…</span>
+        </div>
+      ) : board.entries.length === 0 ? (
+        <div className="py-3 text-[10px] text-osu-f1">No board stored for this lane yet.</div>
+      ) : (
+        <BoardRows board={board} event={event} showAll={showAll} onShowAll={() => setShowAll(true)} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A long board doesn't get to swallow the page: it shows the head plus the two
+ * players this snipe is about, and opens fully on request.
+ */
+function BoardRows({
+  board,
+  event,
+  showAll,
+  onShowAll,
+}: {
+  board: LiveSnipeBoardSnapshot;
+  event: SnipeEvent;
+  showAll: boolean;
+  onShowAll: () => void;
+}) {
+  // Seeded boards can carry no pp at all; a column of dashes says less than no column.
+  const showPp = board.entries.some((row) => row.pp != null && row.pp > 0);
+  const highlightOf = (userId: number): "sniper" | "victim" | null =>
+    userId === event.sniper.id ? "sniper" : userId === event.victim.id ? "victim" : null;
+
+  const head = showAll ? board.entries : board.entries.slice(0, BOARD_COLLAPSED_ROWS);
+  const tail = showAll ? [] : board.entries.slice(BOARD_COLLAPSED_ROWS).filter((entry) => highlightOf(entry.user.id));
+  const hidden = board.entries.length - head.length - tail.length;
+
+  return (
+    <div className="mt-1">
+      {head.map((entry) => (
+        <SnipeBoardRow key={entry.scoreId} entry={entry} showPp={showPp} highlight={highlightOf(entry.user.id)} />
+      ))}
+      {tail.length > 0 && <div className="py-0.5 pl-2 text-[10px] leading-none text-osu-f1">···</div>}
+      {tail.map((entry) => (
+        <SnipeBoardRow key={entry.scoreId} entry={entry} showPp={showPp} highlight={highlightOf(entry.user.id)} />
+      ))}
+      {hidden > 0 && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onShowAll();
+          }}
+          className="mt-1 cursor-pointer text-[10px] text-osu-pink-light transition-colors hover:text-white"
+        >
+          Show all {formatNumber(board.entries.length)}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SnipeBoardRow({
+  entry,
+  showPp,
+  highlight,
+}: {
+  entry: LiveSnipeBoardEntry;
+  showPp: boolean;
+  highlight: "sniper" | "victim" | null;
+}) {
+  // Names carry their own accent color, so the two rows this snipe is about are
+  // marked by the row itself rather than by text color.
+  const rowTint = highlight === "sniper" ? "bg-osu-pink/10" : highlight === "victim" ? "bg-osu-b3/40" : "";
+  return (
+    <div className={`grid grid-cols-[1.75rem_1fr_auto] items-center gap-2 rounded py-1 pr-1.5 ${rowTint}`}>
+      <span className={`text-right text-[11px] font-bold tabular-nums ${highlight === "sniper" ? "text-osu-pink-light" : "text-osu-f1"}`}>
+        #{entry.position}
+      </span>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          window.location.href = `/player/${encodeURIComponent(entry.user.username)}`;
+        }}
+        className="flex min-w-0 cursor-pointer items-center gap-1.5 text-left"
+        title={`Open ${entry.user.username}'s profile`}
+      >
+        <Avatar url={entry.user.avatar_url} size={18} />
+        <UsernameText
+          username={entry.user.username}
+          avatarUrl={entry.user.avatar_url}
+          className="truncate text-xs font-medium text-white"
+        />
+        {entry.mods.map((mod) => (
+          <ModBadge key={mod} mod={mod} size={0.55} />
+        ))}
+        {entry.isLazer && <LazerBadge />}
+      </button>
+      <div className="flex flex-shrink-0 items-center gap-2.5 tabular-nums">
+        <span className="text-[10px] text-osu-f1 hidden sm:inline">{formatAccuracy(entry.accuracy)}</span>
+        <span className="text-xs font-bold text-white">{formatNumber(entry.totalScore)}</span>
+        {showPp && (
+          <span className="w-12 text-right text-[11px] text-osu-l2">
+            {entry.pp != null && entry.pp > 0 ? `${Math.round(entry.pp)}pp` : "-"}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, execBatch, migrate } from "../src/db.js";
-import { getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes.js";
+import { getSnipeBoardSnapshot, getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
 import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getGlobalFarmedBoardCacheStatsForTests, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
@@ -3921,6 +3921,49 @@ describe("live backend", () => {
     const refreshedSnipes = await getSnipesSnapshot(db, "CR", 10);
     expect(refreshedSnipes.events[0].victim.avatar_url).toBe("https://assets.example/fresh-victim.png");
     expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(1);
+  });
+
+  it("reads one lane's country board behind a snipe", async () => {
+    const { db, ingestor } = await setup();
+    const now = new Date().toISOString();
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 101, 1, 'osu_rankings', 1, ?)", [now]);
+    const scores = await fixture<OscScore[]>("scores.json");
+    const current = { ...scores[0], rank: "A", type: "score_mania" };
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values
+         (303, 'Victim', 'https://assets.example/victim.png', 'CR', ?),
+         (404, 'Third', 'https://assets.example/third.png', 'CR', ?)`,
+      [now, now],
+    );
+    await exec(
+      db,
+      `insert into country_beatmap_scores (country, beatmap_id, lane_key, user_id, score_id, total_score, pp, accuracy, rank, mods_json, is_lazer, has_replay, ended_at, updated_at)
+       values
+         ('CR', 501, 'normal:stable', 303, 7000, 900000, 200, 0.97, 'S', '[]', 0, 1, '2026-05-11T00:00:00.000Z', ?),
+         ('CR', 501, 'normal:stable', 404, 7001, 100000, 90, 0.94, 'A', '[]', 0, 0, '2026-05-10T00:00:00.000Z', ?),
+         ('CR', 501, 'dt:stable', 505, 7002, 950000, 400, 0.99, 'S', '["DT"]', 0, 1, '2026-05-09T00:00:00.000Z', ?),
+         ('MX', 501, 'normal:stable', 606, 7003, 990000, 500, 0.99, 'S', '[]', 0, 1, '2026-05-08T00:00:00.000Z', ?)`,
+      [now, now, now, now],
+    );
+    await ingestor.ingestBatch([current]);
+
+    const board = await getSnipeBoardSnapshot(db, "CR", 501, "normal:stable", 50);
+    // The sniper's own row is on the board it just took, one country and one lane only.
+    expect(board.total).toBe(3);
+    expect(board.entries.map((entry) => entry.user.id)).toEqual([101, 303, 404]);
+    expect(board.entries.map((entry) => entry.position)).toEqual([1, 2, 3]);
+    expect(board.entries[1]).toMatchObject({ user: { username: "Victim" }, totalScore: 900000, grade: "S", hasReplay: true });
+
+    // A limited read still reports the full board size.
+    const topOnly = await getSnipeBoardSnapshot(db, "CR", 501, "normal:stable", 1);
+    expect(topOnly.entries).toHaveLength(1);
+    expect(topOnly.total).toBe(3);
+
+    const dtLane = await getSnipeBoardSnapshot(db, "CR", 501, "dt:stable", 50);
+    expect(dtLane.entries).toHaveLength(1);
+    expect(dtLane.entries[0]).toMatchObject({ user: { id: 505, username: "User 505" }, mods: ["DT"] });
   });
 
   it("hydrates metadata-light fallback scores before snipe projection", async () => {

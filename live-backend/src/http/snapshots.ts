@@ -24,6 +24,7 @@ import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoun
 import { clearFarmHelperFeedback, listFarmHelperFeedback, normalizeFarmHelperFeedbackSpeedBucket, normalizeFarmHelperFeedbackVerdict, setFarmHelperFeedback } from "../features/farm-helper-feedback.js";
 import { FarmHelperTimings, timeStage } from "../features/farm-helper-timing.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
+import { getBoardLaneKey } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, getPackPoolMembership, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
@@ -43,7 +44,7 @@ import {
 } from "../features/pack-games.js";
 import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
-import { getSnipesSnapshot } from "../features/snipes.js";
+import { getSnipeBoardSnapshot, getSnipesSnapshot } from "../features/snipes.js";
 import { getSweepReports } from "../features/sweeps-status.js";
 import { getTopPlaysSnapshot, type TopPlaysSnapshotOptions } from "../features/top-plays.js";
 import { getTrackerSnapshot, type TrackerSnapshotFilters } from "../features/tracker.js";
@@ -1089,6 +1090,21 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/snapshots/snipes") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     await sendAccentEnrichedJson(req, res, ctx, 200, await getSnipesSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 500, 1000)));
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/snipe-board") {
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
+    const beatmapId = clampInteger(url.searchParams.get("beatmap"), 1, Number.MAX_SAFE_INTEGER, 0);
+    if (beatmapId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_beatmap" });
+      return true;
+    }
+    // The lane is derived here rather than passed as a key, so the caller only
+    // has to send what a snipe event already carries and the lane format stays
+    // owned by the projection.
+    const laneKey = getBoardLaneKey(parseModAcronyms(url.searchParams.get("mods")), url.searchParams.get("lazer") === "1");
+    res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    await sendAccentEnrichedJson(req, res, ctx, 200, await getSnipeBoardSnapshot(ctx.db, country, beatmapId, laneKey, clampLimit(url.searchParams.get("limit"), 50, 100)));
     return true;
   }
   if (url.pathname === "/api/snapshots/maps-progress") {
@@ -5171,6 +5187,15 @@ function parseUserIds(raw: string | null): number[] {
     .map((part) => Number(part.trim()))
     .filter((id) => Number.isInteger(id) && id > 0)
     .slice(0, 100);
+}
+
+function parseModAcronyms(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((part) => part.trim().toUpperCase())
+    .filter((mod) => /^[A-Z0-9]{2,4}$/.test(mod))
+    .slice(0, 20);
 }
 
 function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability" | "skills"; key: string } | null {
