@@ -34,6 +34,12 @@ export const Route = createFileRoute("/pull/$ownerId/$cardId")({
    height divided by the renderer's 1.05 breathing-room factor. */
 const CANVAS_BREATHING_INSET = "-2.5%";
 
+/* What the backend calls an owner it cannot name: no live users row and no
+   name frozen in the pull log (a collector outside every tracked roster, on a
+   card old enough to predate the pull log). There is no profile to point at,
+   so that one case stays plain text. */
+const UNKNOWN_OWNER_NAME = "a collector";
+
 function isMobileViewport() {
   return (
     typeof window !== "undefined" &&
@@ -300,7 +306,18 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           </div>
         )}
         <div className="text-[12px] text-osu-f1">
-          Pulled by <span className="font-bold text-white">{shared.owner.username}</span>
+          Pulled by{" "}
+          {shared.owner.username === UNKNOWN_OWNER_NAME ? (
+            <span className="font-bold text-white">{shared.owner.username}</span>
+          ) : (
+            <Link
+              to="/player/$username"
+              params={{ username: shared.owner.username }}
+              className="font-bold text-white transition-colors hover:text-osu-pink-light"
+            >
+              {shared.owner.username}
+            </Link>
+          )}
           {shared.card.firstPulledAt > 0 && (
             <span className="tabular-nums"> on {formatDate(new Date(shared.card.firstPulledAt).toISOString())}</span>
           )}
