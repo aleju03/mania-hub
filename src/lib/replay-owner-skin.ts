@@ -240,6 +240,29 @@ export function replaySkinSettingsWithoutAssets(settings: ReplaySkinSettings): R
   return normalizeReplaySkinSettings(dehydrateReplaySkinSettings(settings).settings);
 }
 
+// What a community-linked preset should persist for a draft being applied:
+// the pointer payload, and the copy that goes in localStorage.
+//
+// The two cases differ only in the payload. A draft that still has its art
+// re-dehydrates; a draft that never got its art back keeps the stored payload,
+// because dehydrating it would write a payload with no asset paths over the
+// one that has them and the preset would rebuild as flat shapes forever after.
+//
+// Either way the stored copy comes from the payload. Deriving it from the
+// draft when the art was kept is what put multi-MB data URLs into the preset
+// store and the settings key, where they overflowed the quota and got stripped
+// on the way in.
+export function resolveCommunityPresetSave(
+  normalized: ReplaySkinSettings,
+  storedPayload: unknown,
+): { payload: unknown; assetFree: ReplaySkinSettings } {
+  const payload = replaySkinSettingsEmbedAssets(normalized)
+    ? dehydrateReplaySkinSettings(normalized)
+    : storedPayload;
+  const payloadSettings = isRecord(payload) && payload.settings != null ? payload.settings : null;
+  return { payload, assetFree: normalizeReplaySkinSettings(payloadSettings ?? normalized) };
+}
+
 // Whether any keymode profile embeds decoded image data. Settings that do are
 // too large for localStorage and must persist through a dehydrated pointer.
 export function replaySkinSettingsEmbedAssets(settings: ReplaySkinSettings): boolean {

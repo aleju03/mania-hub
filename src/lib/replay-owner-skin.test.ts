@@ -12,6 +12,7 @@ import {
   readAppliedCommunityReplaySkin,
   rehydrateOwnerReplaySkinSettings,
   replaySkinSettingsEmbedAssets,
+  resolveCommunityPresetSave,
   loadOwnerReplaySkinCached,
   writeMyReplaySkinMemory,
   writeAppliedCommunityReplaySkin,
@@ -291,6 +292,42 @@ describe("my replay skin memory cache", () => {
     expect(await pending).toEqual(savedRecord);
     expect(await fetchMyReplaySkinCached(userId)).toEqual(savedRecord);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("saving a community-linked preset", () => {
+  it("stores the art as paths, never as pixels", () => {
+    // The regression this exists for: the stored copy was derived from the
+    // draft whenever the draft still had its art, so applying a skin wrote
+    // every data URL into the preset store AND the settings key. Both
+    // overflowed the quota and were stripped on the way in - the art was
+    // gone on the next load, and the console said so on every Apply.
+    const draft = settingsWithAssets();
+    expect(replaySkinSettingsEmbedAssets(draft)).toBe(true);
+
+    const { payload, assetFree } = resolveCommunityPresetSave(draft, { v: 1, settings: {} });
+
+    expect(replaySkinSettingsEmbedAssets(assetFree)).toBe(false);
+    expect(JSON.stringify(assetFree)).not.toContain("data:image/");
+    // Everything that is not a pixel still survives the round trip.
+    expect(assetFree.keymodeProfiles["4"].columnStart).toBe(218);
+    // The payload keeps the paths that rebuild it.
+    expect(JSON.stringify(payload)).toContain("mania/note1.png");
+  });
+
+  it("keeps the stored payload when the draft never got its art back", () => {
+    // Dehydrating an art-free draft would overwrite a payload that has asset
+    // paths with one that has none, and the preset would rebuild as flat
+    // shapes forever after.
+    const stored = { v: 1, settings: { style: "bars", keymodeProfiles: {} } };
+
+    const { payload, assetFree } = resolveCommunityPresetSave(
+      normalizeReplaySkinSettings({ ...DEFAULT_REPLAY_SKIN_SETTINGS, hitPosition: 137 }),
+      stored,
+    );
+
+    expect(payload).toBe(stored);
+    expect(assetFree.style).toBe("bars");
   });
 });
 

@@ -62,6 +62,7 @@ import {
   readAppliedCommunityReplaySkin,
   rehydrateOwnerReplaySkinSettings,
   replaySkinSettingsEmbedAssets,
+  resolveCommunityPresetSave,
   setMyReplaySkin,
   writeMyReplaySkinMemory,
 } from "#/lib/replay-owner-skin";
@@ -1564,16 +1565,7 @@ export function ReplaySkinSettingsModal({
       // regular presets keep the full normalized settings as before.
       let nextPreset: ReplaySkinPreset;
       if (selectedPreset.community) {
-        // Dehydrating a draft that never got its art back would write a
-        // payload with no asset paths over the one that has them, and the
-        // preset would rebuild as flat shapes forever after. Keep the stored
-        // payload in that case: the draft holds no art to save anyway.
-        const keptArt = replaySkinSettingsEmbedAssets(normalized);
-        const payload = keptArt ? dehydrateReplaySkinSettings(normalized) : selectedPreset.community.payload;
-        const storedSettings = !keptArt && payload && typeof payload === "object" && "settings" in payload
-          ? (payload as { settings: unknown }).settings
-          : null;
-        const assetFree = normalizeReplaySkinSettings(storedSettings ?? normalized);
+        const { payload, assetFree } = resolveCommunityPresetSave(normalized, selectedPreset.community.payload);
         nextPreset = {
           ...selectedPreset,
           settings: assetFree,
@@ -1581,6 +1573,21 @@ export function ReplaySkinSettingsModal({
           updatedAt: Date.now(),
         };
         appliedCommunity = { skin: selectedPreset.community.skin, payload, assetFree };
+      } else if (loadedCatalogSkin && replaySkinSettingsEmbedAssets(normalized)) {
+        // A plain preset whose art traces back to a loaded skin becomes a
+        // community preset on save, same as "New preset" and the named draft.
+        // Without this the art went into localStorage as data URLs, blew the
+        // quota, and got stripped with nothing to rebuild it from.
+        const payload = dehydrateReplaySkinSettings(normalized);
+        const assetFree = normalizeReplaySkinSettings(payload.settings);
+        nextPreset = {
+          ...selectedPreset,
+          settings: assetFree,
+          community: { skin: loadedCatalogSkin.skin, payload },
+          updatedAt: Date.now(),
+        };
+        rememberHydratedPreset(nextPreset, normalized, loadedCatalogSkin.archive, pendingSounds?.sounds ?? null);
+        appliedCommunity = { skin: loadedCatalogSkin.skin, payload, assetFree };
       } else {
         nextPreset = { ...selectedPreset, settings: normalized, updatedAt: Date.now() };
       }

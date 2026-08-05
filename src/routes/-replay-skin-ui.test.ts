@@ -187,9 +187,11 @@ describe("replay skin settings UI", () => {
     expect(modalSource).toContain("const draftMissingSkinArt = Boolean(communityPresetSkin) && !replaySkinSettingsEmbedAssets(draft);");
     expect(modalSource).toContain("const rebuilt = await rehydrateOwnerReplaySkinSettings(communityPresetPayload, archive);");
     // And Apply must not write that draft over the payload that still has the
-    // asset paths, or the preset rebuilds as flat shapes from then on.
-    expect(modalSource).toContain("const keptArt = replaySkinSettingsEmbedAssets(normalized);");
-    expect(modalSource).toContain("const payload = keptArt ? dehydrateReplaySkinSettings(normalized) : selectedPreset.community.payload;");
+    // asset paths, or the preset rebuilds as flat shapes from then on. Both
+    // that rule and the "stored copy comes from the payload, never the draft"
+    // one live in resolveCommunityPresetSave, unit-tested in
+    // replay-owner-skin.test.ts.
+    expect(modalSource).toContain("resolveCommunityPresetSave(normalized, selectedPreset.community.payload)");
     // A failed rebuild must not stick in the memo either.
     expect(ownerSource).toContain("if (!settings && appliedFullSettings === entry) appliedFullSettings = null;");
   });
