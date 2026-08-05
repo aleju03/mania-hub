@@ -16,7 +16,7 @@ import type { OsuScore } from "#/lib/types";
 import { useWindowActive } from "#/lib/window-activity";
 import { CountryFlag } from "../ui/CountryFlag";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
-import { buildManiaCardRenderData } from "../player/maniacard3d/renderData";
+import { buildManiaCardRenderData, maniaCardAvatarUrl } from "../player/maniacard3d/renderData";
 import type { ManiaCardReadyData, RgbaColor } from "../player/maniacard3d/types";
 import { renderCardThumbnail } from "./cardSnapshot";
 import {
@@ -424,6 +424,19 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     };
   }, []);
 
+  // Warm the avatar cache while the cards are still face-down: the texture
+  // pipeline fetches each avatar on first draw, and a fresh pack is mostly
+  // new players. Same crossOrigin mode as the texture loader so the cached
+  // response stays reusable for canvas work.
+  useEffect(() => {
+    for (const card of cards) {
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.referrerPolicy = "no-referrer";
+      image.src = maniaCardAvatarUrl(card.player.user);
+    }
+  }, [cards]);
+
   useEffect(() => {
     const host = hostRef.current;
     if (!host || typeof ResizeObserver !== "function") return;
@@ -752,24 +765,16 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     const dealMs = reducedMotion ? 0 : 300 + count * 60;
     let nextFlipAt = performance.now() + dealMs;
 
-    // Resolve score promises concurrently and consume whichever card becomes
-    // ready first. The old position-ordered await made one cold card leave all
-    // later (often already-cached) cards face-down, which looked exactly like
-    // reveal-all was loading in frozen batches of four.
-    const pending = new Map<number, Promise<{ position: number; scores: OsuScore[] | null }>>();
-    for (let position = startAt; position < cards.length; position += 1) {
-      pending.set(
-        position,
-        resolveCardScores(cards[position]).then((scores) => ({ position, scores })),
-      );
-    }
-
-    while (pending.size > 0) {
-      const { position, scores } = await Promise.race(pending.values());
-      pending.delete(position);
-      if (cancelledRef.current) return;
+    // Each card runs its whole pipeline (scores, then thumbnail render) in its
+    // own chain, so no card's work waits on another's; rendering used to
+    // happen serially between flips, which stacked avatar fetch + canvas +
+    // WebP encode on top of the flip gap and made prod packs crawl. The flip
+    // loop itself walks the row in position order: a reveal that jumps around
+    // the grid reads as broken, so a cold card holds the line at its slot and
+    // the cards behind it (already prepared) catch up at the normal gap.
+    const prepareCard = async (position: number) => {
       const card = cards[position];
-
+      const scores = await resolveCardScores(card);
       let entry: Omit<RevealedCard, "isNew" | "skills"> = {
         player: card.player,
         tier: null,
@@ -778,7 +783,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
         thumbnail: null,
       };
       let skills: ManiaSkills | null = null;
-      if (scores !== null) {
+      if (scores !== null && !cancelledRef.current) {
         const data = buildManiaCardRenderData({ user: card.player.user, scores });
         if (data.status === "ready") {
           let thumbnail: string | null = null;
@@ -788,7 +793,6 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
           } catch {
             thumbnail = null;
           }
-          if (cancelledRef.current) return;
           entry = {
             player: card.player,
             tier: data.tier,
@@ -799,6 +803,17 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
           skills = data.skills;
         }
       }
+      return { position, entry, skills };
+    };
+
+    const prepared: Array<ReturnType<typeof prepareCard>> = [];
+    for (let position = startAt; position < cards.length; position += 1) {
+      prepared.push(prepareCard(position));
+    }
+
+    for (const promise of prepared) {
+      const { position, entry, skills } = await promise;
+      if (cancelledRef.current) return;
 
       const holdMs = nextFlipAt - performance.now();
       if (holdMs > 0) {

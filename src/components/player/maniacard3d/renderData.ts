@@ -19,6 +19,12 @@ import type {
 
 const EMPTY_CARD_MESSAGE = "Need at least one ranked play with full beatmap data to mint a card.";
 
+/* The CORS-proxied avatar URL the card textures draw from. Exported so reveal
+   flows can warm the browser cache before the texture pipeline needs it. */
+export function maniaCardAvatarUrl(user: { id: number; avatar_url?: string }): string {
+  return avatarImageSrc(user.avatar_url, user.id, { proxy: true }) ?? `/api/avatar?u=${user.id}`;
+}
+
 export function buildManiaCardRenderData({ user, scores, tierOverride }: ManiaCardRenderInput): ManiaCardRenderData {
   const skills = computeManiaSkills(
     scores.map((score) => ({
@@ -71,7 +77,7 @@ export function buildManiaCardRenderDataFromSkills({
     // rather than a.ppy.sh directly. Passing the stored avatar URL through
     // carries osu!'s version token into the proxy URL, which makes each one
     // immutable and lets the CDN hold it instead of re-fetching per render.
-    avatarUrl: avatarImageSrc(user.avatar_url, user.id, { proxy: true }) ?? `/api/avatar?u=${user.id}`,
+    avatarUrl: maniaCardAvatarUrl(user),
     scores,
     skills,
     tier,
