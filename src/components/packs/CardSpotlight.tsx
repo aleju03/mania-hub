@@ -12,6 +12,7 @@ import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
 import { buildManiaCardRenderDataFromSkills } from "../player/maniacard3d/renderData";
 import { CountryFlag } from "../ui/CountryFlag";
 import { renderCardSkeletonThumbnail, renderCardThumbnail } from "./cardSnapshot";
+import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
 export interface CardSpotlightTarget {
   card: CollectedCard;
@@ -123,13 +124,10 @@ export function CardSpotlight({
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [target, onClose]);
+
+  useBodyScrollLock(target != null);
 
   /* Where the card lands: centered, leaving room for the info block below. */
   const layout = useMemo(() => {

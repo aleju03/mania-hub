@@ -28,6 +28,7 @@ import {
   TriStatePill,
 } from "./FilterChips";
 import type { TriStateMode } from "../../lib/maps-random-filter";
+import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
 const SEARCH_PAGE_SIZE = 24;
 const SEARCH_INITIAL_SKELETON_COUNT = 12;
@@ -679,13 +680,10 @@ function MobileFilterSheet({
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  useBodyScrollLock(open);
 
   if (!mounted) return null;
 

@@ -8,6 +8,7 @@ import { OsuLogo } from "../ui/OsuLogo";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { PatternRadar } from "./PatternRadar";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
+import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import {
   PATTERN_COLOR,
   SubPatternChip,
@@ -245,13 +246,10 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [entry, onClose]);
+
+  useBodyScrollLock(entry != null);
 
   const diffs = useMemo(() => (entry ? entryDiffs(entry) : []), [entry]);
   const mixedKeys = useMemo(() => new Set(diffs.map((diff) => diff.keyCount)).size > 1, [diffs]);

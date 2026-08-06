@@ -109,6 +109,7 @@ import type { RandomPattern, RandomWeight } from "../lib/maps-random-draw-params
 import { MapsRandomDrawController } from "../lib/maps-random-draw-state";
 import type { RandomDrawEvent } from "../lib/maps-random-draw-state";
 import { useWindowActive } from "../lib/window-activity";
+import { useBodyScrollLock } from "../lib/use-body-scroll-lock";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -2474,30 +2475,7 @@ function MapDetailsModal({
     if (details) setBodyLockActive(true);
   }, [details]);
 
-  useLayoutEffect(() => {
-    if (!bodyLockActive) return;
-    const prevOverflow = document.body.style.overflow;
-    const prevPaddingRight = document.body.style.paddingRight;
-    const prevScrollbarCompensation = document.documentElement.style.getPropertyValue("--modal-scrollbar-compensation");
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    const hasStableScrollbarGutter =
-      typeof CSS !== "undefined" && CSS.supports?.("scrollbar-gutter", "stable");
-    document.body.style.overflow = "hidden";
-    if (scrollbarWidth > 0 && !hasStableScrollbarGutter) {
-      const currentPaddingRight = parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
-      document.body.style.paddingRight = `${currentPaddingRight + scrollbarWidth}px`;
-      document.documentElement.style.setProperty("--modal-scrollbar-compensation", `${scrollbarWidth}px`);
-    }
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.paddingRight = prevPaddingRight;
-      if (prevScrollbarCompensation) {
-        document.documentElement.style.setProperty("--modal-scrollbar-compensation", prevScrollbarCompensation);
-      } else {
-        document.documentElement.style.removeProperty("--modal-scrollbar-compensation");
-      }
-    };
-  }, [bodyLockActive]);
+  useBodyScrollLock(bodyLockActive);
 
   if (typeof document === "undefined") return null;
 

@@ -42,6 +42,7 @@ import {
   type SkinSummary,
   type SkinVisibility,
 } from "../../lib/skins";
+import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
 
 const VISIBILITY_CHOICES: ReadonlyArray<{ value: SkinVisibility; label: string; hint: string }> = [
@@ -514,30 +515,7 @@ export function SkinUploadModal({
     if (open) setBodyLockActive(true);
   }, [open]);
 
-  useLayoutEffect(() => {
-    if (!bodyLockActive) return;
-    const prevOverflow = document.body.style.overflow;
-    const prevPaddingRight = document.body.style.paddingRight;
-    const prevScrollbarCompensation = document.documentElement.style.getPropertyValue("--modal-scrollbar-compensation");
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    const hasStableScrollbarGutter =
-      typeof CSS !== "undefined" && CSS.supports?.("scrollbar-gutter", "stable");
-    document.body.style.overflow = "hidden";
-    if (scrollbarWidth > 0 && !hasStableScrollbarGutter) {
-      const currentPaddingRight = parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
-      document.body.style.paddingRight = `${currentPaddingRight + scrollbarWidth}px`;
-      document.documentElement.style.setProperty("--modal-scrollbar-compensation", `${scrollbarWidth}px`);
-    }
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.paddingRight = prevPaddingRight;
-      if (prevScrollbarCompensation) {
-        document.documentElement.style.setProperty("--modal-scrollbar-compensation", prevScrollbarCompensation);
-      } else {
-        document.documentElement.style.removeProperty("--modal-scrollbar-compensation");
-      }
-    };
-  }, [bodyLockActive]);
+  useBodyScrollLock(bodyLockActive);
 
   const handleOskFiles = useCallback(async (files: FileList | null) => {
     const picked = files?.[0];

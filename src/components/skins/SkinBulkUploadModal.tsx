@@ -23,6 +23,7 @@ import {
   type DuplicateSkinRef,
   type SkinSummary,
 } from "../../lib/skins";
+import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
 // Admin-only bulk publish: drop a folder's worth of .osk files, watch them go
 // up one by one. Every file takes the same path a single upload does, so the
@@ -288,14 +289,7 @@ export function SkinBulkUploadModal({
     if (open) setBodyLockActive(true);
   }, [open]);
 
-  useLayoutEffect(() => {
-    if (!bodyLockActive) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [bodyLockActive]);
+  useBodyScrollLock(bodyLockActive);
 
   if (typeof document === "undefined") return null;
 
