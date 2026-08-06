@@ -1,12 +1,12 @@
 import { createFileRoute, Link, stripSearchParams, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { MouseEvent } from "react";
-import { getRankings, getUsersRankHistory } from "../lib/osu";
+import { getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy } from "../lib/format";
-import { compareRankDeltaValues, getCrRankChanges, getGlobalRankChange } from "../lib/rankings";
+import { compareRankDeltaValues } from "../lib/rankings";
 import { Avatar } from "../components/ui/Avatar";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -18,12 +18,19 @@ import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
-import { fetchLiveGlobalRankings, fetchLiveRankDeltas, isLiveBackendConfigured, type LiveGlobalRankingEntry, type LiveRankDelta } from "../lib/live-backend";
+import { fetchLiveGlobalRankings, fetchLiveRankDeltas, type LiveGlobalRankingEntry, type LiveRankDelta } from "../lib/live-backend";
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 import { writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 const GLOBAL_RANKINGS_PAGE_SIZE = 50;
+
+// Both 7d columns render the same dash whether the player did not move or the
+// backend has no week-old snapshot for them, so the hover carries the
+// difference. A country only starts answering once it has been tracked for a
+// week, and a player added to a roster mid-week waits out the rest of it.
+const NO_DELTA_TITLE = "No rank data from 7 days ago yet";
+const NO_CHANGE_TITLE = "No change in the last 7 days";
 
 // Without stripping the default page, page=1 gets serialized into the URL
 // and /rankings 307-redirects to /rankings?page=1, which breaks crawling
@@ -104,10 +111,7 @@ function RankingsPage() {
   const selectedCountry = country ?? fallbackCountry;
   const cachedPageOneData = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
-  const rankHistories = useAppStore((state) => state.rankHistories);
-  const rankHistoriesFetchedAt = useAppStore((state) => state.rankHistoriesFetchedAt);
   const setRankings = useAppStore((state) => state.setRankings);
-  const setRankHistories = useAppStore((state) => state.setRankHistories);
   const hiddenUserIds = useHiddenUserIds();
   const [pageTwoData, setPageTwoData] = useState<RankingsResponse | null>(null);
   const [pageTwoFetchedAt, setPageTwoFetchedAt] = useState<number | null>(null);
@@ -116,17 +120,12 @@ function RankingsPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [liveRankDeltas, setLiveRankDeltas] = useState<Record<number, LiveRankDelta>>({});
   const [rankDeltasReady, setRankDeltasReady] = useState(false);
-  // userIds whose osu! rank_history fetch returned nothing. Tracked so the
-  // delta effect does not re-request them every render (would loop forever
-  // because getUsersRankHistory omits users with no history).
-  const triedRankHistoryIdsRef = useRef<Set<number>>(new Set());
   const pageData = page === 1 ? cachedPageOneData : pageTwoData;
   const [rankingsLoading, setRankingsLoading] = useState(!(page === 1 ? cachedPageOneData : pageTwoData));
-  const [rankHistoriesLoading, setRankHistoriesLoading] = useState(false);
+  const [deltasLoading, setDeltasLoading] = useState(false);
   const countryName = getCountryName(selectedCountry);
   const totalPlayers = cachedPageOneData?.total ?? pageData?.total ?? 0;
   const hasNextPage = totalPlayers > 50;
-  const liveBackendEnabled = isLiveBackendConfigured();
   const { warming } = useCountryWarming(selectedCountry);
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const [globalRankings, setGlobalRankings] = useState<LiveGlobalRankingEntry[] | null>(null);
@@ -169,7 +168,6 @@ function RankingsPage() {
     setLiveRankDeltas({});
     setRankDeltasReady(false);
     setError(null);
-    triedRankHistoryIdsRef.current = new Set();
   }, [selectedCountry]);
 
   useEffect(() => {
@@ -251,78 +249,37 @@ function RankingsPage() {
     if (!pageData) return;
     let cancelled = false;
     const userIds = pageData.ranking.slice(0, 50).map((e) => e.user.id);
-    const loadRankHistoryFallback = async (candidateUserIds: number[]) => {
-      const userIdsToFetch = candidateUserIds.filter(
-        (userId) =>
-          !triedRankHistoryIdsRef.current.has(userId) &&
-          (!rankHistories[userId] ||
-            isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories)),
-      );
 
-      if (userIdsToFetch.length === 0) return;
-
-      const histories = await getUsersRankHistory({ data: { userIds: userIdsToFetch } });
-      if (cancelled) return;
-      for (const userId of userIdsToFetch) {
-        if (!histories[userId]) triedRankHistoryIdsRef.current.add(userId);
-      }
-      setRankHistories(histories);
-    };
-
+    // The live backend is the only source for these. There is deliberately no
+    // osu! fallback: rank_history only exists on the single-user endpoint, so
+    // covering a 50-row page from osu! costs 50 calls, in the interactive
+    // limiter lane that skips the shared spacing gate, so they arrive as a
+    // burst. Browsing to a country the backend has no week-old snapshot for
+    // did that on every view: five such pages produced 292 of 315
+    // rank-history calls in one 6h window and helped push the budget to 84/min
+    // against a 55 target (2026-08-06). A row with no delta shows "-" instead,
+    // with the reason on hover.
     const loadRankDeltas = async () => {
       setRankDeltasReady(false);
-      if (liveBackendEnabled) {
-        const liveMissingIds = userIds.filter((userId) => !liveRankDeltas[userId]);
-        if (liveMissingIds.length === 0) {
-          setRankHistoriesLoading(false);
-          setRankDeltasReady(true);
-          return;
-        }
-        setRankHistoriesLoading(true);
-        try {
-          const snapshot = await fetchLiveRankDeltas(selectedCountry, liveMissingIds);
-          if (cancelled) return;
-          if (Object.keys(snapshot.deltas).length > 0) {
-            setLiveRankDeltas((current) => ({ ...current, ...snapshot.deltas }));
-          }
-        } catch {
-          // Deliberately no osu! fallback here. rank_history only exists on the
-          // single-user endpoint, so covering a 50-row page from osu! costs 50
-          // calls -- and it lands in the interactive limiter lane, which skips
-          // the shared spacing gate, so it arrives as a burst. Browsing to an
-          // untracked country did that on every view: five such pages produced
-          // 292 of 315 rank-history calls in one 6h window and helped push the
-          // budget to 84/min against a 55 target (2026-08-06). A country the
-          // backend has no week-old snapshot for now shows "-" instead, which
-          // is already the designed empty state for a missing delta.
-        } finally {
-          if (!cancelled) {
-            setRankHistoriesLoading(false);
-            setRankDeltasReady(true);
-          }
-        }
+      const missingIds = userIds.filter((userId) => !liveRankDeltas[userId]);
+      if (missingIds.length === 0) {
+        setDeltasLoading(false);
+        setRankDeltasReady(true);
         return;
       }
-      const hasAnyRankHistoryToFetch = userIds.some(
-        (userId) =>
-          !triedRankHistoryIdsRef.current.has(userId) &&
-          (!rankHistories[userId] ||
-            isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories)),
-      );
-      if (!hasAnyRankHistoryToFetch) {
-        if (!cancelled) {
-          setRankHistoriesLoading(false);
-          setRankDeltasReady(true);
-        }
-        return;
-      }
-
-      setRankHistoriesLoading(true);
+      setDeltasLoading(true);
       try {
-        await loadRankHistoryFallback(userIds);
+        const snapshot = await fetchLiveRankDeltas(selectedCountry, missingIds);
+        if (cancelled) return;
+        if (Object.keys(snapshot.deltas).length > 0) {
+          setLiveRankDeltas((current) => ({ ...current, ...snapshot.deltas }));
+        }
+      } catch {
+        // Leaves the rows at "-"; a transient backend failure reads the same as
+        // no snapshot yet, and the next page entry retries.
       } finally {
         if (!cancelled) {
-          setRankHistoriesLoading(false);
+          setDeltasLoading(false);
           setRankDeltasReady(true);
         }
       }
@@ -331,13 +288,11 @@ function RankingsPage() {
     void loadRankDeltas();
 
     return () => { cancelled = true; };
-  }, [pageData, selectedCountry, rankHistories, rankHistoriesFetchedAt, setRankHistories, liveBackendEnabled]);
-
-  // Compare current country positions vs 7 days ago.
-  const countryRankChanges = useMemo(() => {
-    if (!pageData || Object.keys(rankHistories).length === 0) return {};
-    return getCrRankChanges(pageData.ranking, rankHistories);
-  }, [pageData, rankHistories]);
+    // liveRankDeltas is read to skip rows already covered, but is deliberately
+    // not a dep: re-running on every delta arrival would re-request the rows
+    // the backend just told us it has no snapshot for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageData, selectedCountry]);
 
   const liveCountryRankChanges = useMemo(() => (
     Object.fromEntries(
@@ -370,15 +325,13 @@ function RankingsPage() {
             ? (aVal as string).localeCompare(bVal as string)
             : (bVal as string).localeCompare(aVal as string);
         case "7d": {
-          const aH = rankHistories[a.entry.user.id];
-          const bH = rankHistories[b.entry.user.id];
-          const aDelta = liveRankDeltas[a.entry.user.id]?.globalChange ?? getGlobalRankChange(aH);
-          const bDelta = liveRankDeltas[b.entry.user.id]?.globalChange ?? getGlobalRankChange(bH);
+          const aDelta = liveRankDeltas[a.entry.user.id]?.globalChange ?? null;
+          const bDelta = liveRankDeltas[b.entry.user.id]?.globalChange ?? null;
           return compareRankDeltaValues(aDelta, bDelta, sortDir) || a.originalRank - b.originalRank;
         }
         case "cr7d": {
-          const aDelta = liveCountryRankChanges[a.entry.user.id] ?? countryRankChanges[a.entry.user.id];
-          const bDelta = liveCountryRankChanges[b.entry.user.id] ?? countryRankChanges[b.entry.user.id];
+          const aDelta = liveCountryRankChanges[a.entry.user.id];
+          const bDelta = liveCountryRankChanges[b.entry.user.id];
           return compareRankDeltaValues(aDelta, bDelta, sortDir) || a.originalRank - b.originalRank;
         }
         case "accuracy":
@@ -408,7 +361,7 @@ function RankingsPage() {
       }
       return sortDir === "desc" ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
     });
-  }, [pageData, page, sortBy, sortDir, rankHistories, liveRankDeltas, countryRankChanges, liveCountryRankChanges, hiddenUserIds]);
+  }, [pageData, page, sortBy, sortDir, liveRankDeltas, liveCountryRankChanges, hiddenUserIds]);
 
   const visibleGlobalRankings = useMemo(
     () => (globalRankings ?? [])
@@ -640,7 +593,7 @@ function RankingsPage() {
                           </Link>
                         </td>
                         <td className="py-2.5 px-3">
-                          <GlobalRankCell history={undefined} rankChange={entry.global_change} loaded />
+                          <GlobalRankCell rankChange={entry.global_change} loaded />
                         </td>
                         <td className="py-2.5 px-3">
                           <CRRankCell change={entry.country_change} loaded />
@@ -691,10 +644,8 @@ function RankingsPage() {
         right={
           <>
             {!pageData && rankingsLoading && !error && <span className="text-[10px] text-osu-f1">Loading rankings...</span>}
-            {pageData && rankHistoriesLoading && (
-              <span className="text-[10px] text-osu-f1">
-                {liveBackendEnabled ? "Checking 7d changes..." : "Loading 7d changes..."}
-              </span>
+            {pageData && deltasLoading && (
+              <span className="text-[10px] text-osu-f1">Checking 7d changes...</span>
             )}
           </>
         }
@@ -764,10 +715,9 @@ function RankingsPage() {
               <div className="px-4 py-8 text-center text-sm text-osu-f1">{error}</div>
             ) : pageData ? (
               sortedRankings.map(({ entry, originalRank }) => {
-                const history = rankHistories[entry.user.id];
                 const liveDelta = liveRankDeltas[entry.user.id];
-                const globalChange = liveDelta?.globalChange ?? getGlobalRankChange(history);
-                const crChange = liveDelta?.countryChange ?? countryRankChanges[entry.user.id] ?? null;
+                const globalChange = liveDelta?.globalChange ?? null;
+                const crChange = liveDelta?.countryChange ?? null;
 
                 // Show the value for the active sort field on the right side
                 const sortedValue = (() => {
@@ -801,16 +751,14 @@ function RankingsPage() {
                   if (sortBy === "7d" || sortBy === "cr7d") {
                     return (
                       <div className="flex items-center gap-2">
-                        {sortBy === "7d" && (history || globalChange !== null || rankDeltasReady) && (
-                          <>
-                            {history && <MiniSparkline data={history} />}
-                            {globalChange !== null && globalChange !== 0 && (
-                              <span className={`font-semibold ${globalChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
-                                {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
-                              </span>
-                            )}
-                            {globalChange === null || globalChange === 0 ? <span>7d -</span> : null}
-                          </>
+                        {sortBy === "7d" && (globalChange !== null || rankDeltasReady) && (
+                          globalChange !== null && globalChange !== 0 ? (
+                            <span className={`font-semibold ${globalChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
+                              {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
+                            </span>
+                          ) : (
+                            <span title={globalChange === null ? NO_DELTA_TITLE : NO_CHANGE_TITLE}>7d -</span>
+                          )
                         )}
                         {sortBy === "cr7d" && (
                           crChange !== null && crChange !== 0 ? (
@@ -818,25 +766,20 @@ function RankingsPage() {
                               {selectedCountry} {crChange > 0 ? `+${crChange}` : crChange}
                             </span>
                           ) : (
-                            <span>{selectedCountry} -</span>
+                            <span title={crChange === null ? NO_DELTA_TITLE : NO_CHANGE_TITLE}>{selectedCountry} -</span>
                           )
                         )}
                       </div>
                     );
                   }
-                  // Default: accuracy + sparkline
+                  // Default: accuracy, plus the 7d move when there is one
                   return (
                     <>
                       <span>{formatAccuracy(entry.hit_accuracy / 100)}</span>
-                      {(history || globalChange !== null) && (
-                        <div className="flex items-center gap-1">
-                          {history && <MiniSparkline data={history} />}
-                          {globalChange !== null && globalChange !== 0 && (
-                            <span className={`font-semibold ${globalChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
-                              {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
-                            </span>
-                          )}
-                        </div>
+                      {globalChange !== null && globalChange !== 0 && (
+                        <span className={`font-semibold ${globalChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
+                          {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
+                        </span>
                       )}
                     </>
                   );
@@ -926,11 +869,10 @@ function RankingsPage() {
                   </tr>
                 ) : pageData ? (
                   sortedRankings.map(({ entry, originalRank }, i: number) => {
-                    const history = rankHistories[entry.user.id];
                     const liveDelta = liveRankDeltas[entry.user.id];
-                    const globalChange = liveDelta?.globalChange ?? getGlobalRankChange(history);
-                    const crChange = liveDelta?.countryChange ?? countryRankChanges[entry.user.id] ?? null;
-                    const deltasLoaded = rankDeltasReady || !!liveDelta || !!history;
+                    const globalChange = liveDelta?.globalChange ?? null;
+                    const crChange = liveDelta?.countryChange ?? null;
+                    const deltasLoaded = rankDeltasReady || !!liveDelta;
 
                     return (
                       <tr
@@ -963,7 +905,7 @@ function RankingsPage() {
                           </Link>
                         </td>
                         <td className="py-2.5 px-3">
-                          <GlobalRankCell history={history} rankChange={globalChange} loaded={deltasLoaded} />
+                          <GlobalRankCell rankChange={globalChange} loaded={deltasLoaded} />
                         </td>
                         <td className="py-2.5 px-3">
                           <CRRankCell change={crChange} loaded={deltasLoaded} />
@@ -1020,47 +962,18 @@ function RankingsPage() {
   );
 }
 
-function MiniSparkline({ data }: { data: number[] }) {
-  const slice = data.slice(-7);
-  if (slice.length < 2) return null;
-
-  const min = Math.min(...slice);
-  const max = Math.max(...slice);
-  const range = max - min || 1;
-  const w = 44;
-  const h = 16;
-  const pad = 1;
-
-  const points = slice.map((v, i) => {
-    const x = pad + (i / (slice.length - 1)) * (w - pad * 2);
-    const y = pad + ((v - min) / range) * (h - pad * 2);
-    return `${x},${y}`;
-  }).join(" ");
-
-  const improved = slice[slice.length - 1] < slice[0];
-  const same = slice[slice.length - 1] === slice[0];
-  const color = same ? "hsl(var(--theme-hue),calc(10% * var(--theme-sat)),50%)" : improved ? "hsl(100,60%,50%)" : "hsl(0,70%,55%)";
-
-  return (
-    <svg width={w} height={h} className="inline-block align-middle flex-shrink-0">
-      <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function GlobalRankCell({ history, rankChange, loaded }: { history: number[] | undefined; rankChange: number | null; loaded: boolean }) {
+function GlobalRankCell({ rankChange, loaded }: { rankChange: number | null; loaded: boolean }) {
   if (!loaded) {
     return <div className="flex items-center justify-center"><Skeleton className="w-20 h-4" /></div>;
   }
   return (
     <div className="flex items-center justify-center gap-2">
-      {history && <MiniSparkline data={history} />}
       {rankChange !== null && rankChange !== 0 ? (
         <span className={`text-[11px] font-semibold ${rankChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
           {rankChange > 0 ? `+${formatNumber(rankChange)}` : formatNumber(rankChange)}
         </span>
       ) : (
-        <span className="text-[11px] text-osu-f1">-</span>
+        <span className="text-[11px] text-osu-f1" title={rankChange === null ? NO_DELTA_TITLE : NO_CHANGE_TITLE}>-</span>
       )}
     </div>
   );
@@ -1071,7 +984,9 @@ function CRRankCell({ change, loaded }: { change: number | null; loaded: boolean
     return <div className="flex items-center justify-center"><Skeleton className="w-8 h-4" /></div>;
   }
   if (change === null || change === 0) {
-    return <div className="text-center text-[11px] text-osu-f1">-</div>;
+    return (
+      <div className="text-center text-[11px] text-osu-f1" title={change === null ? NO_DELTA_TITLE : NO_CHANGE_TITLE}>-</div>
+    );
   }
   return (
     <div className={`text-center text-[11px] font-semibold ${change > 0 ? "text-osu-green" : "text-osu-red"}`}>
@@ -1081,7 +996,9 @@ function CRRankCell({ change, loaded }: { change: number | null; loaded: boolean
 }
 
 function RankDeltaLabel({ label, change }: { label: string; change: number | null }) {
-  if (change === null || change === 0) return <span>{label} -</span>;
+  if (change === null || change === 0) {
+    return <span title={change === null ? NO_DELTA_TITLE : NO_CHANGE_TITLE}>{label} -</span>;
+  }
   return (
     <span className={`font-semibold ${change > 0 ? "text-osu-green" : "text-osu-red"}`}>
       {label} {change > 0 ? `+${formatNumber(change)}` : formatNumber(change)}

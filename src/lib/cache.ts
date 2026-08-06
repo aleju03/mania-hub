@@ -1,6 +1,5 @@
 export const CLIENT_CACHE_TTL = {
   rankings: 5 * 60 * 1000,
-  rankHistories: 5 * 60 * 1000,
   homeRecentScores: 60 * 1000,
   homePopoffs: 2 * 60 * 1000,
   popoffs: 90 * 1000,

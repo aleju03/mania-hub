@@ -10,10 +10,7 @@ export {
   getUserScoresPinned,
   getUserScoresRecent,
 } from "./osu/shared";
-export {
-  getRankings,
-  getUsersRankHistory,
-} from "./osu/rankings";
+export { getRankings } from "./osu/rankings";
 export {
   getBeatmapScoreLookupStatus,
   getBeatmapScores,

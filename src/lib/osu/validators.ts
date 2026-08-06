@@ -129,11 +129,6 @@ export function normalizeRankingsPayload(data: unknown): { type?: string; page?:
   };
 }
 
-export function normalizeRankHistoryPayload(data: unknown): { userIds: number[] } {
-  const input = asInputRecord(data);
-  return { userIds: parseUserIds(input.userIds, MAX_BATCH_USERS) };
-}
-
 export function normalizeBeatmapSearchPayload(data: unknown): {
   query?: string;
   sort?: string;

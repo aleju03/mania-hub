@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
   fetchWithCacheLock,
-  getPersistentCacheEntries,
   osuFetch
 } from "../api";
 import type { RankingsResponse } from "../types";
@@ -10,18 +9,9 @@ import { toLeanRankingEntry } from "./mappers";
 import type { RawRankingsResponse } from "./mappers";
 import {
   OSU_PROXY_STALE_MS,
-  RANKINGS_CACHE_TTL,
-  RANK_HISTORY_CONCURRENCY
+  RANKINGS_CACHE_TTL
 } from "./constants";
-import {
-  normalizeRankHistoryPayload,
-  normalizeRankingsPayload
-} from "./validators";
-import { mapWithConcurrency } from "./concurrency";
-import {
-  fetchAndCacheUserRankHistory,
-  getRankHistoryCacheKey
-} from "./users";
+import { normalizeRankingsPayload } from "./validators";
 
 export const getRankings = createServerFn({ method: "GET" })
   .validator(normalizeRankingsPayload)
@@ -58,46 +48,3 @@ export async function fetchRankingsPage(type: string, page: number, country?: st
   });
 }
 
-// ── Batch user rank history ────────────────────────────────────────────────
-
-export const getUsersRankHistory = createServerFn({ method: "GET" })
-  .validator(normalizeRankHistoryPayload)
-  .handler(async ({ data }: { data: { userIds: number[] } }) => {
-    edgeCache(3600, 86400);
-    const uniqueUserIds = [...new Set(data.userIds)];
-    const cacheKeysByUserId = new Map(uniqueUserIds.map((userId) => [userId, getRankHistoryCacheKey(userId)]));
-    const cachedHistories = await getPersistentCacheEntries<number[] | null>([...cacheKeysByUserId.values()]);
-    const out: Record<number, number[]> = {};
-    const missingUserIds: number[] = [];
-
-    for (const userId of uniqueUserIds) {
-      const cacheKey = cacheKeysByUserId.get(userId)!;
-      if (!cachedHistories.has(cacheKey)) {
-        missingUserIds.push(userId);
-        continue;
-      }
-      const history = cachedHistories.get(cacheKey);
-      if (history?.length) out[userId] = history;
-    }
-
-    const fetchedResults = await mapWithConcurrency(
-      missingUserIds,
-      RANK_HISTORY_CONCURRENCY,
-      async (userId) => {
-        try {
-          const history = await fetchAndCacheUserRankHistory(userId);
-          return { userId, history };
-        } catch {
-          return { userId, history: null };
-        }
-      },
-    );
-
-    fetchedResults.forEach(({ userId, history }) => {
-      if (history?.length) {
-        out[userId] = history;
-      }
-    });
-
-    return out;
-  });

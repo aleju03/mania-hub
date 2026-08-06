@@ -312,8 +312,6 @@ interface AppState {
   avatarAccents: Record<string, CachedAvatarAccent>;
   rankingsByCountry: CountryRecord<RankingsResponse>;
   rankingsFetchedAtByCountry: CountryRecord<number>;
-  rankHistories: Record<number, number[]>;
-  rankHistoriesFetchedAt: Record<number, number>;
   homeRecentScoresByCountry: CountryRecord<LeanHomeScore[]>;
   homeRecentScoresFetchedAtByCountry: CountryRecord<number>;
   homePopoffsByCountry: CountryRecord<LeanHomePopoff[]>;
@@ -337,7 +335,6 @@ interface AppState {
   resetThemeHue: () => void;
   setAvatarAccents: (accents: Record<string, string | null>, fetchedAt?: number) => void;
   setRankings: (country: string, rankings: RankingsResponse) => void;
-  setRankHistories: (histories: Record<number, number[]>) => void;
   setHomeRecentScores: (country: string, scores: LeanHomeScore[]) => void;
   setHomePopoffs: (country: string, popoffs: LeanHomePopoff[]) => void;
   setTopPlaysRange: (country: string, range: TopPlaysRange) => void;
@@ -566,8 +563,6 @@ export const useAppStore = create<AppState>()(
       avatarAccents: initialClientAvatarAccents,
       rankingsByCountry: {},
       rankingsFetchedAtByCountry: {},
-      rankHistories: {},
-      rankHistoriesFetchedAt: {},
       homeRecentScoresByCountry: {},
       homeRecentScoresFetchedAtByCountry: {},
       homePopoffsByCountry: {},
@@ -652,19 +647,6 @@ export const useAppStore = create<AppState>()(
             rankingsFetchedAtByCountry: {
               ...state.rankingsFetchedAtByCountry,
               [normalizedCountry]: Date.now(),
-            },
-          };
-        }),
-      setRankHistories: (histories) =>
-        set((state) => {
-          const fetchedAt = Date.now();
-          return {
-            rankHistories: { ...state.rankHistories, ...histories },
-            rankHistoriesFetchedAt: {
-              ...state.rankHistoriesFetchedAt,
-              ...Object.fromEntries(
-                Object.keys(histories).map((userId) => [Number(userId), fetchedAt]),
-              ),
             },
           };
         }),
@@ -1039,8 +1021,6 @@ export const useAppStore = create<AppState>()(
         // mobile reload was eating before pagehide fired.
         rankingsByCountry: state.rankingsByCountry,
         rankingsFetchedAtByCountry: state.rankingsFetchedAtByCountry,
-        rankHistories: state.rankHistories,
-        rankHistoriesFetchedAt: state.rankHistoriesFetchedAt,
         homeRecentScoresByCountry: state.homeRecentScoresByCountry,
         homeRecentScoresFetchedAtByCountry: state.homeRecentScoresFetchedAtByCountry,
         homePopoffsByCountry: state.homePopoffsByCountry,
