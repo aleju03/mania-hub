@@ -459,6 +459,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   /* Cascade positions whose face has swung into view (what the counter counts). */
   const [cascadeFacesUp, setCascadeFacesUp] = useState<number[]>([]);
   const [flight, setFlight] = useState<CardFlight | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const trayRef = useRef<HTMLDivElement | null>(null);
   const cascadeRef = useRef<HTMLDivElement | null>(null);
 
@@ -715,15 +716,35 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   // Once the tray re-renders with the leaving card's slot, measure it so the
   // flight knows where to land. Layout effect: the measurement and the
   // overlay mount must happen before the browser paints the hidden tile.
+  // Both rects convert into the root's space here (captured and measured
+  // within one frame, so they share one scroll position): the overlay
+  // positions absolute in the root rather than fixed, so a scroll during
+  // the flight carries it along with the tray instead of leaving it pinned
+  // to the viewport.
   useLayoutEffect(() => {
     if (!flight || flight.to) return;
     const tile = trayRef.current?.querySelector(`[data-tray-index="${flight.cardIndex}"]`);
-    if (!(tile instanceof HTMLElement)) {
+    const rootRect = rootRef.current?.getBoundingClientRect();
+    if (!(tile instanceof HTMLElement) || !rootRect) {
       setFlight(null);
       return;
     }
     const rect = tile.getBoundingClientRect();
-    setFlight({ ...flight, to: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } });
+    setFlight({
+      ...flight,
+      from: {
+        left: flight.from.left - rootRect.left,
+        top: flight.from.top - rootRect.top,
+        width: flight.from.width,
+        height: flight.from.height,
+      },
+      to: {
+        left: rect.left - rootRect.left,
+        top: rect.top - rootRect.top,
+        width: rect.width,
+        height: rect.height,
+      },
+    });
   }, [flight]);
 
   // The flight runs on the compositor via the Web Animations API: the next
@@ -931,7 +952,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     : "rgb(226, 232, 240)";
 
   return (
-    <div className="flex flex-col items-center">
+    <div ref={rootRef} className="relative flex flex-col items-center">
       <div className="flex items-baseline gap-1.5 tabular-nums">
         {/* During the cascade the counter runs with the flips as they land. */}
         <span className="text-lg font-black leading-none text-white">
@@ -1274,7 +1295,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
           ref={flightImgRef}
           src={flight.thumbnail}
           alt=""
-          className="pointer-events-none fixed z-40 rounded-[10px] object-cover"
+          className="pointer-events-none absolute z-40 rounded-[10px] object-cover"
           style={{
             left: flight.from.left,
             top: flight.from.top,

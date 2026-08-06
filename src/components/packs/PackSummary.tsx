@@ -105,15 +105,23 @@ export function PackSummary({
      in it, so the card never shows twice. */
   const [liftedCardId, setLiftedCardId] = useState<number | null>(null);
 
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const flightImgRefs = useRef<Map<number, HTMLImageElement>>(new Map());
   const [flights, setFlights] = useState<SummaryFlight[] | null>(null);
 
   /* Measured once on mount, before paint: pair each handed-off rect with its
-     tile's final slot. The real tiles hide while their overlays are in the
-     air, so the cards never show twice. */
+     tile's final slot, both converted into the root's space (the reveal ->
+     summary swap is a same-frame re-render, so all three viewport rects share
+     one scroll position). The overlays position absolute in the root rather
+     than fixed: a scroll during the flight then moves them with the page,
+     instead of leaving them pinned to the viewport while the grid they are
+     landing in slides away underneath. The real tiles hide while their
+     overlays are in the air, so the cards never show twice. */
   useLayoutEffect(() => {
     if (!flyFrom || flyFrom.size === 0 || reducedMotion) return;
+    const rootRect = rootRef.current?.getBoundingClientRect();
+    if (!rootRect) return;
     const next: SummaryFlight[] = [];
     cards.forEach((card, position) => {
       const from = flyFrom.get(position);
@@ -125,8 +133,18 @@ export function PackSummary({
       next.push({
         position,
         thumbnail: card.thumbnail,
-        from,
-        to: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+        from: {
+          left: from.left - rootRect.left,
+          top: from.top - rootRect.top,
+          width: from.width,
+          height: from.height,
+        },
+        to: {
+          left: rect.left - rootRect.left,
+          top: rect.top - rootRect.top,
+          width: rect.width,
+          height: rect.height,
+        },
       });
     });
     if (next.length > 0) setFlights(next);
@@ -173,7 +191,7 @@ export function PackSummary({
   const inFlight = new Set(flights?.map((flight) => flight.position));
 
   return (
-    <div className="flex flex-col items-center">
+    <div ref={rootRef} className="relative flex flex-col items-center">
       {/* What the pack was worth, in figures rather than in a sentence under
           the grid where it used to sit. */}
       <div className="flex items-baseline justify-center gap-7 sm:gap-10">
@@ -372,7 +390,7 @@ export function PackSummary({
           }}
           src={flight.thumbnail}
           alt=""
-          className="pointer-events-none fixed z-40 rounded-[10px] object-cover"
+          className="pointer-events-none absolute z-40 rounded-[10px] object-cover"
           style={{
             left: flight.from.left,
             top: flight.from.top,
