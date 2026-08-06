@@ -30,6 +30,7 @@ export const WIP: string[] = [
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-05", text: "Fixed some bugs on how skins are rendered", to: "/skins" },
   { date: "2026-08-05", text: "New Blitz mode for higher or lower: every round is timed and it has a leaderboard", to: "/streak" },
   { date: "2026-08-05", text: "New top 500 difficulty mode, and an idk button for when you literally have no clue", to: "/streak" },
   { date: "2026-08-05", text: "Sort skins by size, and narrow the grid to your own uploads", to: "/skins" },
