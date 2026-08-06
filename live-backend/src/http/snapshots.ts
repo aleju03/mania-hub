@@ -2407,6 +2407,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     if (object.contentLength != null) res.setHeader("content-length", String(object.contentLength));
     if (object.contentDisposition) res.setHeader("content-disposition", object.contentDisposition);
     res.setHeader("cache-control", cacheControl);
+    // pipe() drops the pipeline when the response dies but leaves the R2 stream
+    // open, so a cancelled .osk download (a reload, or one impatient
+    // double-click) keeps its socket checked out of the S3 pool for good. Fifty
+    // of those and every later R2 read in this process queues behind corpses.
+    res.on("close", () => object.body.destroy());
     object.body.on("error", () => res.destroy());
     object.body.pipe(res);
     return true;
