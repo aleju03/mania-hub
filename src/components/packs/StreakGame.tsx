@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, ChevronUp, Dices, Recycle, Timer } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
@@ -419,13 +418,9 @@ function CardFace({
       </motion.div>
       <div className="mt-3 flex items-center gap-1.5">
         <CountryFlag code={player.countryCode} size="xs" decorative />
-        <Link
-          to="/player/$username"
-          params={{ username: player.username }}
-          className="truncate text-[14px] font-bold text-white hover:underline underline-offset-4 decoration-osu-f1/60"
-        >
-          {player.username}
-        </Link>
+        {/* Not a link: the answer is one profile visit away, and a mid-round tap
+            on a name would either leave the game or hand over the number. */}
+        <span className="truncate text-[14px] font-bold text-white">{player.username}</span>
         {/* Who they are is never the secret: the read is that rank tells you
             nothing about how much someone has played. */}
         <span className="text-[11px] text-osu-f1 tabular-nums">#{player.globalRank.toLocaleString()}</span>
