@@ -272,12 +272,7 @@ function RankingsPage() {
     const loadRankDeltas = async () => {
       setRankDeltasReady(false);
       if (liveBackendEnabled) {
-        const liveMissingIds = userIds.filter(
-          (userId) =>
-            !liveRankDeltas[userId] &&
-            (!rankHistories[userId] ||
-              isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories)),
-        );
+        const liveMissingIds = userIds.filter((userId) => !liveRankDeltas[userId]);
         if (liveMissingIds.length === 0) {
           setRankHistoriesLoading(false);
           setRankDeltasReady(true);
@@ -290,13 +285,16 @@ function RankingsPage() {
           if (Object.keys(snapshot.deltas).length > 0) {
             setLiveRankDeltas((current) => ({ ...current, ...snapshot.deltas }));
           }
-          const usersWithoutLiveDelta = liveMissingIds.filter((userId) => !snapshot.deltas[userId]);
-          await loadRankHistoryFallback(usersWithoutLiveDelta);
         } catch {
-          // Fresh live-backend countries have no week-old snapshots yet, and
-          // transient backend failures should not leave the rankings columns
-          // permanently blank. Fall back to the cached osu! rank_history path.
-          await loadRankHistoryFallback(liveMissingIds);
+          // Deliberately no osu! fallback here. rank_history only exists on the
+          // single-user endpoint, so covering a 50-row page from osu! costs 50
+          // calls -- and it lands in the interactive limiter lane, which skips
+          // the shared spacing gate, so it arrives as a burst. Browsing to an
+          // untracked country did that on every view: five such pages produced
+          // 292 of 315 rank-history calls in one 6h window and helped push the
+          // budget to 84/min against a 55 target (2026-08-06). A country the
+          // backend has no week-old snapshot for now shows "-" instead, which
+          // is already the designed empty state for a missing delta.
         } finally {
           if (!cancelled) {
             setRankHistoriesLoading(false);
