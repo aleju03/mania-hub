@@ -38,6 +38,7 @@ import {
   fetchLiveGlobalRankings,
   fetchLivePackCardSnapshotDirect,
   fetchLivePackCardSnapshotsDirect,
+  fetchLivePackPlayersReady,
   warmLivePackPlayers,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
@@ -52,6 +53,7 @@ vi.mock("./live-backend", async (importOriginal) => ({
   fetchLiveGlobalRankings: vi.fn(),
   fetchLivePackCardSnapshotDirect: vi.fn(),
   fetchLivePackCardSnapshotsDirect: vi.fn(),
+  fetchLivePackPlayersReady: vi.fn(),
   fetchLivePlayerProfileSnapshotDirect: vi.fn(),
   warmLivePackPlayers: vi.fn(async () => {}),
 }));
@@ -310,13 +312,9 @@ describe("tracked pool draws", () => {
   it("re-rolls players whose card the backend has never built", async () => {
     // Whoever the draw deals first has no stored card; everyone else does.
     let coldUserId = 0;
-    vi.mocked(fetchLivePackCardSnapshotsDirect).mockImplementation(async (userIds) => {
+    vi.mocked(fetchLivePackPlayersReady).mockImplementation(async (userIds) => {
       if (coldUserId === 0) coldUserId = userIds[0];
-      return new Map(
-        userIds
-          .filter((userId) => userId !== coldUserId)
-          .map((userId) => [userId, { user: { id: userId }, bestScores: [{ id: 1 } as OsuScore] } as never]),
-      );
+      return new Set(userIds.filter((userId) => userId !== coldUserId));
     });
     const { fetchPage } = makePoolFetcher(5853);
 
@@ -329,7 +327,7 @@ describe("tracked pool draws", () => {
   });
 
   it("deals the hand unchanged when the readiness probe fails", async () => {
-    vi.mocked(fetchLivePackCardSnapshotsDirect).mockRejectedValue(new Error("backend down"));
+    vi.mocked(fetchLivePackPlayersReady).mockRejectedValue(new Error("backend down"));
     const { fetchPage } = makePoolFetcher(5853);
 
     const { players } = await drawPackPlayersFromPool(mulberry32(21), fetchPage);

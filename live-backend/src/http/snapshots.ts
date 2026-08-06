@@ -52,7 +52,7 @@ import {
   removeStreakBest,
   startStreakRun,
 } from "../features/pack-streak.js";
-import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
+import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, selectReadyPackCardUserIds, PACK_CARD_SNAPSHOT_MAX_IDS, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipeBoardSnapshot, getSnipesSnapshot } from "../features/snipes.js";
 import { getSweepReports } from "../features/sweeps-status.js";
@@ -1514,6 +1514,29 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     res.setHeader("cache-control", "public, max-age=15");
     // Uncached players are simply absent; the client's cold path mints them.
     await sendAccentEnrichedJson(req, res, ctx, 200, { cards: await getCachedPackCardSnapshots(ctx.db, userIds) });
+    return true;
+  }
+  if (url.pathname === "/api/packs/cards/ready") {
+    // The draw's "who can I deal?" check. Deliberately not /api/packs/cards:
+    // that builds whole cards, and at 245 packs a minute (2026-08-05's peak)
+    // paying 17-50ms of synchronous SQLite per draw to answer a yes/no is real
+    // event-loop time on the serving process.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "packCards")) return true;
+    const userIds = (url.searchParams.get("ids") ?? "")
+      .split(",")
+      .map((raw) => Math.floor(Number(raw) || 0))
+      .filter((id) => id > 0)
+      .slice(0, PACK_CARD_SNAPSHOT_MAX_IDS);
+    if (userIds.length === 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_ids" });
+      return true;
+    }
+    res.setHeader("cache-control", "public, max-age=15");
+    sendJson(req, res, ctx, 200, { ready: await selectReadyPackCardUserIds(ctx.db, userIds) });
     return true;
   }
   if (url.pathname === "/api/packs/pulls") {

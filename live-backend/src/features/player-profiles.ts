@@ -422,6 +422,33 @@ export async function getCachedPackCardSnapshots(
   }));
 }
 
+/* Which of these players a card could be built for, without building one.
+ *
+ * getCachedPackCardSnapshots answers the same question, but only as a side
+ * effect of unpacking every player's stored score window, folding in their
+ * top-play overlays and joining all of it to beatmap rows - five players'
+ * worth of that is 17-50ms, and a pack draw asks purely so it knows who not to
+ * deal. Two existence checks is what the question actually costs. Same
+ * definition of ready as the snapshot reader: a stored profile snapshot, or a
+ * populated top-score projection. */
+export async function selectReadyPackCardUserIds(db: Db, userIds: readonly number[]): Promise<number[]> {
+  const ids = [...new Set(userIds.map((id) => Math.floor(Number(id))).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  if (ids.length === 0) return [];
+  const ready = new Set<number>();
+  for (const [table, column] of [["profile_snapshots", "user_id"], ["user_top_scores", "user_id"]] as const) {
+    const rows = await selectRowsByIntegerSet(
+      db,
+      `select distinct ${column} as user_id from ${table} where ${column} in`,
+      ids,
+    );
+    for (const row of rows) {
+      const userId = Number(row.user_id);
+      if (Number.isSafeInteger(userId) && userId > 0) ready.add(userId);
+    }
+  }
+  return ids.filter((id) => ready.has(id));
+}
+
 export async function getCachedPackCardSnapshot(
   db: Db,
   rawKey: string,

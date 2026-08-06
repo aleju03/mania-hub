@@ -1189,6 +1189,22 @@ export async function fetchLivePackCardSnapshotsDirect(userIds: readonly number[
   return cards;
 }
 
+/* Which of these players a card can be built for, as a plain yes/no. The draw
+   asks this to decide who it may deal; asking fetchLivePackCardSnapshotsDirect
+   instead would build every card just to throw them away, which at peak pack
+   rates is real synchronous DB time on the backend for no answer it needs. */
+export async function fetchLivePackPlayersReady(userIds: readonly number[]): Promise<Set<number>> {
+  const ids = [...new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))];
+  if (ids.length === 0) return new Set();
+  const base = getLiveBackendUrl();
+  if (!base) throw new Error("Server is not configured.");
+  const response = await fetch(`${base}/api/packs/cards/ready?ids=${ids.join(",")}`, { credentials: "omit" });
+  if (!response.ok) throw new LiveBackendRequestError(response.status, retryAfterMs(response));
+  const payload = await response.json() as { ready?: unknown };
+  const ready = Array.isArray(payload.ready) ? payload.ready : [];
+  return new Set(ready.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0));
+}
+
 export async function fetchLivePackCardSnapshotDirect(key: string): Promise<LivePackCardSnapshot | null> {
   const trimmed = key.trim().slice(0, 120);
   if (!trimmed) throw new Error("Invalid profile key.");

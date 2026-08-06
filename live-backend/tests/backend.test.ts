@@ -8,7 +8,7 @@ import { getSnipeBoardSnapshot, getSnipesSnapshot, updateSnipeProjection } from 
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
 import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getGlobalFarmedBoardCacheStatsForTests, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB, runProfileSnapshotRefreshJob, runProfileUserRefreshJob } from "../src/features/player-profiles.js";
+import { getCachedPackCardSnapshots, selectReadyPackCardUserIds, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB, runProfileSnapshotRefreshJob, runProfileUserRefreshJob } from "../src/features/player-profiles.js";
 import { markUserMissing } from "../src/users.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
@@ -621,6 +621,36 @@ describe("live backend", () => {
     const row = (await exec(db, "select status, keep_warm from country_registry where country = 'MX'")).rows[0];
     expect(String(row.status)).toBe("warm");
     expect(Number(row.keep_warm)).toBe(1);
+  });
+
+  it("reports which players a pack card could be built for", async () => {
+    const { db } = await setup(["CR"]);
+    const at = "2026-08-06T00:00:00.000Z";
+    // Ready via a stored profile snapshot.
+    await exec(
+      db,
+      `insert into profile_snapshots
+       (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+       values (501, 'snapshotted', ?, ?, 200, ?, ?, ?)`,
+      [JSON.stringify({ id: 501, username: "Snapshotted" }), JSON.stringify([]), at, at, at],
+    );
+    // Ready via the top-score projection alone, with no snapshot row.
+    await exec(
+      db,
+      `insert into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at)
+       values (502, 9001, 1, ?, 500, 500, ?, ?)`,
+      [JSON.stringify({ id: 9001 }), at, at],
+    );
+
+    // 503 has neither, so a card cannot be built for them without an osu! call.
+    const ready = await selectReadyPackCardUserIds(db, [501, 502, 503]);
+
+    expect(ready.sort()).toEqual([501, 502]);
+    expect(await selectReadyPackCardUserIds(db, [])).toEqual([]);
+    expect(await selectReadyPackCardUserIds(db, [503])).toEqual([]);
+    // Same answer as the card reader gives, which is the contract that keeps
+    // the draw's cheap check and the reveal's expensive one in agreement.
+    expect((await getCachedPackCardSnapshots(db, [503]))).toEqual([]);
   });
 
   it("retires a country with nothing in it, and revives it on a visit", async () => {

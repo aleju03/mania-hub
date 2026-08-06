@@ -4,6 +4,7 @@ import {
   fetchLivePackCardSnapshotsDirect,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
+  fetchLivePackPlayersReady,
   LiveBackendRequestError,
   warmLivePackPlayers,
   type LiveGlobalRankingEntry,
@@ -579,11 +580,11 @@ const POOL_READINESS_REROLL_ROUNDS = 2;
 async function findNotReadyPackPlayers(userIds: readonly number[]): Promise<Set<number>> {
   if (!isLiveBackendConfigured() || userIds.length === 0) return new Set();
   try {
-    // The raw read, not fetchCachedPackPlayerScoresBatch: that one carries the
-    // reveal path's retry-and-wait, which belongs to a card someone is staring
-    // at, not to a draw that can simply deal the hand it already has.
-    const cards = await fetchLivePackCardSnapshotsDirect(userIds);
-    return new Set(userIds.filter((userId) => !(cards.get(userId)?.bestScores?.length)));
+    // A readiness-only read: no card is built, and no retry-and-wait is carried
+    // over from the reveal path, which belongs to a card someone is staring at
+    // rather than to a draw that can simply deal the hand it already has.
+    const ready = await fetchLivePackPlayersReady(userIds);
+    return new Set(userIds.filter((userId) => !ready.has(userId)));
   } catch {
     return new Set();
   }
