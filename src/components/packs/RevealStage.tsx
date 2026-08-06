@@ -103,9 +103,13 @@ const RENDERER_READY_TIMEOUT_MS = 8000;
 const CASCADE_GAP = 12;
 const CASCADE_MAX_SLOT_WIDTH = 152;
 const CASCADE_MAX_ROW_WIDTH = 820;
-// Past this many remaining cards the cascade wraps into two rows instead of
-// shrinking the tiles into slivers.
-const CASCADE_MAX_PER_ROW = 6;
+// Breathing room the dealt grid keeps inside the stage, above and below.
+const CASCADE_STAGE_PADDING = 56;
+// Below this the tiles stop reading as cards, so wrapping to fix that needs
+// no justification. Above it, the row shape is the better read of a hand and
+// another row has to buy a real size jump.
+const CASCADE_COMFY_SLOT_WIDTH = 96;
+const CASCADE_EXTRA_ROW_GAIN = 1.15;
 // Minimum spacing between consecutive flips when every card's data is
 // already hot, so a cached pack still cascades instead of slapping all
 // the faces over in the same frame.
@@ -115,6 +119,36 @@ const CASCADE_FLIP_GAP_MS = 170;
 // already-paid pack hostage forever. A failed card is still recorded in the
 // wallet and mints itself later from the collection view.
 const CARD_SCORE_WAIT_TIMEOUT_MS = 15_000;
+
+/* How the remaining backs deal out: the row shape that makes the tiles as
+   large as they fit, given the row's width and the vertical room the stage
+   has. One row per pack (what this used to do up to six cards) shrank a
+   five-card reveal into 60px slivers on a phone, right before the summary
+   drew the same cards at 128px. The height budget is the footprint the stack
+   already occupied, so the dealt grid never pushes the caption or tray down,
+   and fewer rows win ties, which leaves desktop on its single row. */
+function cascadeLayout(count: number, rowWidth: number, heightBudget: number) {
+  let best = { rows: [count], slotWidth: 0 };
+  for (let rowCount = 1; rowCount <= count; rowCount += 1) {
+    const perRow = Math.ceil(count / rowCount);
+    const byWidth = (rowWidth - (perRow - 1) * CASCADE_GAP) / perRow;
+    const byHeight = ((heightBudget - (rowCount - 1) * CASCADE_GAP) / rowCount) * (5 / 7);
+    const slotWidth = Math.min(CASCADE_MAX_SLOT_WIDTH, byWidth, byHeight);
+    const gain = best.slotWidth >= CASCADE_COMFY_SLOT_WIDTH ? CASCADE_EXTRA_ROW_GAIN : 1;
+    if (slotWidth <= best.slotWidth * gain) continue;
+    // Rows split as evenly as they can: seven cards read better as 3/2/2
+    // than as 3/3/1 with one card stranded on its own line.
+    const base = Math.floor(count / rowCount);
+    const extra = count % rowCount;
+    best = {
+      rows: Array.from({ length: rowCount }, (_, row) => base + (row < extra ? 1 : 0)),
+      slotWidth,
+    };
+  }
+  // Never zero: the deal-in scale divides by it, and a row overflowing the
+  // stage is already allowed.
+  return { rows: best.rows, slotWidth: Math.max(best.slotWidth, 32) };
+}
 
 async function resolveCardScores(card: PackCardState): Promise<OsuScore[] | null> {
   const deadline = Date.now() + CARD_SCORE_WAIT_TIMEOUT_MS;
@@ -417,7 +451,9 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   const [skipping, setSkipping] = useState(false);
   /* Reveal-all row geometry; null while revealing one by one. scaleFrom is
      the stack-to-tile size ratio so the deal starts at full stack size. */
-  const [cascade, setCascade] = useState<{ start: number; slotWidth: number; scaleFrom: number; perRow: number } | null>(null);
+  const [cascade, setCascade] = useState<
+    { start: number; slotWidth: number; scaleFrom: number; rows: number[] } | null
+  >(null);
   /* Cascade positions whose flip has landed (chime fired, burst showing). */
   const [cascadeLanded, setCascadeLanded] = useState<number[]>([]);
   /* Cascade positions whose face has swung into view (what the counter counts). */
@@ -782,14 +818,19 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     }
 
     const count = cards.length - startAt;
-    const perRow = count > CASCADE_MAX_PER_ROW ? Math.ceil(count / 2) : count;
-    const stageWidth = hostRef.current?.getBoundingClientRect().width ?? 340;
+    const stageRect = hostRef.current?.getBoundingClientRect();
+    const stageWidth = stageRect?.width ?? 340;
+    const stageHeight = stageRect?.height ?? (stageWidth * 7) / 5;
     const rowWidth = Math.min(
       CASCADE_MAX_ROW_WIDTH,
       typeof window !== "undefined" ? window.innerWidth * 0.94 : CASCADE_MAX_ROW_WIDTH,
     );
-    const slotWidth = Math.min(CASCADE_MAX_SLOT_WIDTH, (rowWidth - (perRow - 1) * CASCADE_GAP) / perRow);
-    setCascade({ start: startAt, slotWidth, scaleFrom: (stageWidth * STACK_CARD_SCALE) / slotWidth, perRow });
+    const { rows, slotWidth } = cascadeLayout(
+      count,
+      rowWidth,
+      Math.max(stageHeight - CASCADE_STAGE_PADDING, 120),
+    );
+    setCascade({ start: startAt, slotWidth, scaleFrom: (stageWidth * STACK_CARD_SCALE) / slotWidth, rows });
 
     // Flips wait for the deal-out to finish; the data fetches keep running
     // underneath it. After that, each flip waits only for its data, with a
@@ -880,6 +921,11 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
      run a whole flip ahead, since recording the data is what starts the flip,
      and the last card would already read 5/5 while still face-down. */
   const cascadeShown = (cascade?.start ?? 0) + cascadeFacesUp.length;
+  /* Deal order to grid slot: rows fill in order, and each row centers on its
+     own width, so a short last row sits under the middle of the one above. */
+  const cascadePlacements = (cascade?.rows ?? []).flatMap((rowLength, row) =>
+    Array.from({ length: rowLength }, (_, column) => ({ row, column, rowLength })),
+  );
   const tierColor = current?.glowColor
     ? `rgb(${current.glowColor.r}, ${current.glowColor.g}, ${current.glowColor.b})`
     : "rgb(226, 232, 240)";
@@ -906,10 +952,9 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
           cascade
             ? {
                 height:
-                  Math.ceil((cards.length - cascade.start) / cascade.perRow) *
-                    ((cascade.slotWidth * 7) / 5 + CASCADE_GAP) -
+                  cascade.rows.length * ((cascade.slotWidth * 7) / 5 + CASCADE_GAP) -
                   CASCADE_GAP +
-                  56,
+                  CASCADE_STAGE_PADDING,
               }
             : {}
         }
@@ -973,14 +1018,10 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
             into its slot, then flipping in place as its data lands. */}
         {cascade && cardBack && (
           <div ref={cascadeRef} className="absolute inset-0" style={{ zIndex: 15 }}>
-            {Array.from({ length: cards.length - cascade.start }, (_, slot) => {
+            {cascadePlacements.map(({ row, column, rowLength }, slot) => {
               const position = cascade.start + slot;
-              const count = cards.length - cascade.start;
-              const rowCount = Math.ceil(count / cascade.perRow);
-              const row = Math.floor(slot / cascade.perRow);
-              const column = slot % cascade.perRow;
-              // The last row may be short; it centers on its own width.
-              const rowLength = Math.min(cascade.perRow, count - row * cascade.perRow);
+              const count = cascadePlacements.length;
+              const rowCount = cascade.rows.length;
               const slotHeight = (cascade.slotWidth * 7) / 5;
               const targetX = (column - (rowLength - 1) / 2) * (cascade.slotWidth + CASCADE_GAP);
               const targetY = (row - (rowCount - 1) / 2) * (slotHeight + CASCADE_GAP);
