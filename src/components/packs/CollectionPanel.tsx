@@ -135,7 +135,14 @@ async function throttleRender<T>(task: () => Promise<T>): Promise<T> {
     return await task();
   } finally {
     activeRenders -= 1;
-    renderQueue.shift()?.();
+    const next = renderQueue.shift();
+    if (next) {
+      /* Resolving here keeps the whole visible page in one microtask chain:
+         each canvas mint hands the main thread straight to the next before a
+         queued click can run. A task boundary preserves the two-wide render
+         bound while letting input and the streak-game handoff go first. */
+      window.setTimeout(next, 0);
+    }
   }
 }
 

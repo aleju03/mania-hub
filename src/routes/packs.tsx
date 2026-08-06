@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpDown, Recycle } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
@@ -209,11 +209,12 @@ async function getDuplicateProtectionOwned(
    setup or interaction frames. */
 const packThumbCache = new Map<PackTypeId, string>();
 
-function usePackArtThumbs(): Partial<Record<PackTypeId, string>> {
+function usePackArtThumbs(enabled: boolean): Partial<Record<PackTypeId, string>> {
   const [thumbs, setThumbs] = useState<Partial<Record<PackTypeId, string>>>(() =>
     Object.fromEntries(packThumbCache),
   );
   useEffect(() => {
+    if (!enabled) return;
     const pending = PACK_TYPES.filter((type) => !packThumbCache.has(type.id));
     if (pending.length === 0) return;
     let cancelled = false;
@@ -244,7 +245,17 @@ function usePackArtThumbs(): Partial<Record<PackTypeId, string>> {
         packThumbCache.set(type.id, url);
         setThumbs((current) => ({ ...current, [type.id]: url }));
       }
-      if (pending.length > 0) scheduleNext();
+      if (pending.length > 0) {
+        /* requestIdleCallback scheduled recursively can consume one long idle
+           period with the whole six-foil batch. An input arriving during the
+           first draw then waits behind all six synchronous canvases. Cross a
+           real task boundary before asking for the next idle slot so pointer
+           and keyboard work gets a chance to run between thumbnails. */
+        timeoutHandle = window.setTimeout(() => {
+          timeoutHandle = null;
+          scheduleNext();
+        }, 50);
+      }
     };
     scheduleNext();
     return () => {
@@ -252,7 +263,7 @@ function usePackArtThumbs(): Partial<Record<PackTypeId, string>> {
       if (idleHandle !== null) idleWindow.cancelIdleCallback?.(idleHandle);
       if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
     };
-  }, []);
+  }, [enabled]);
   return thumbs;
 }
 
@@ -354,10 +365,15 @@ function PacksPage() {
   const reducedMotion = useReducedMotion();
   const auth = useAuth();
   const { view, duel: answeringDuelId } = Route.useSearch();
+  /* Local first, URL second: mounting the game must land in the click's own
+     render. Waiting for the router to rematch the whole packs route let idle
+     foil/card-back canvas work run ahead of the interaction for hundreds of
+     milliseconds. The URL still follows after that paint for sharing/back. */
+  const [streakOpen, setStreakOpen] = useState(view === "streak");
   const { countryFeatures } = Route.useRouteContext();
   const navigate = useNavigate();
   const walletApi = usePackWallet();
-  const packThumbs = usePackArtThumbs();
+  const packThumbs = usePackArtThumbs(!streakOpen);
   const [phase, setPhase] = useState<PackPhase>("pack");
   const [packId, setPackId] = useState(0);
   const [packTypeId, setPackTypeId] = useState<PackTypeId>("standard");
@@ -379,11 +395,12 @@ function PacksPage() {
   > | null>(null);
   const [duelBusy, setDuelBusy] = useState(false);
   const [duelError, setDuelError] = useState<string | null>(null);
+  const preparedPackKeyRef = useRef<string | null>(null);
   /* The duel this pack is being opened to answer, if any. Loaded from the
      link so the page knows which pack type to force and who is waiting. */
   const [answering, setAnswering] = useState<LivePackDuel | null>(null);
-  const [collectionPanelReady, setCollectionPanelReady] = useState(true);
-  const [collectionPanelMounted, setCollectionPanelMounted] = useState(true);
+  const [collectionPanelReady, setCollectionPanelReady] = useState(!streakOpen);
+  const [collectionPanelMounted, setCollectionPanelMounted] = useState(!streakOpen);
   // Holds the last wallet the visible collection rendered. Spending a pack
   // changes the live wallet, but the hidden panel should not reconcile its
   // large grid/album subtree in the same frame as the opening handoff.
@@ -394,15 +411,28 @@ function PacksPage() {
      tab switch visibly lag. */
   /* The game takes over the page's middle; everything around it (the ticker,
      the wallet strip, the header) stays exactly where it was. */
-  const streakOpen = view === "streak";
   const [albumOpen, setAlbumOpen] = useState(view === "album");
   /* Once visited, the album stays mounted (hidden) so switching back keeps
      its shelf, open book, and loaded rosters. */
   const [albumMounted, setAlbumMounted] = useState(view === "album");
   useEffect(() => {
+    setStreakOpen(view === "streak");
     setAlbumOpen(view === "album");
     if (view === "album") setAlbumMounted(true);
   }, [view]);
+
+  const showStreakView = (open: boolean) => {
+    setStreakOpen(open);
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        void navigate({
+          to: "/packs",
+          search: open ? { view: "streak" } : {},
+          resetScroll: false,
+        });
+      }, 0);
+    });
+  };
 
   const wallet = walletApi.wallet;
   if (phase === "pack" && wallet) collectionWalletRef.current = wallet;
@@ -431,6 +461,7 @@ function PacksPage() {
   // Build and encode the neutral reveal back while the unopened pack is idle.
   // RevealStage can then mount without a synchronous canvas + PNG spike.
   useEffect(() => {
+    if (streakOpen) return;
     const idleWindow = window as WindowWithIdleCallback;
     let idleId: number | null = null;
     let timeoutId: number | null = null;
@@ -448,7 +479,7 @@ function PacksPage() {
       if (idleId !== null) idleWindow.cancelIdleCallback?.(idleId);
       if (timeoutId !== null) window.clearTimeout(timeoutId);
     };
-  }, []);
+  }, [streakOpen]);
 
   /* Deal a fresh pack from the tracked pool (uniform odds within the pack
      type's slice), then ask the backend to warm the profile snapshots and
@@ -458,6 +489,16 @@ function PacksPage() {
      remainder instead: the charge is already spent. */
   useEffect(() => {
     let cancelled = false;
+    const dealKey = `${packId}:${packTypeId}`;
+    if (streakOpen) return () => {
+      cancelled = true;
+    };
+    // Leaving the game should reveal the unopened deal that was already ready,
+    // not throw it away and spend another tracked-pool draw.
+    if (preparedPackKeyRef.current === dealKey && cards) return () => {
+      cancelled = true;
+    };
+    preparedPackKeyRef.current = null;
     setCards(null);
     setDealError(false);
     if (packId === 0) {
@@ -466,6 +507,7 @@ function PacksPage() {
         if (isLiveBackendConfigured()) {
           void warmLivePackPlayers(pendingPlayers.map((player) => player.user.id)).catch(() => {});
         }
+        preparedPackKeyRef.current = dealKey;
         setCards(buildCardStates(pendingPlayers));
         setPhase("reveal");
         return;
@@ -492,6 +534,7 @@ function PacksPage() {
         if (isLiveBackendConfigured()) {
           void warmLivePackPlayers(draw.players.map((player) => player.user.id)).catch(() => {});
         }
+        preparedPackKeyRef.current = dealKey;
         setCards(buildCardStates(draw.players));
         /* A pack opened straight from the summary pays here rather than at the
            slash, because there is no slash: charging only once the draw
@@ -509,7 +552,7 @@ function PacksPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [packId, packTypeId]);
+  }, [packId, packTypeId, streakOpen]);
 
   /* The slash charged the wallet, so from that moment the unrevealed cards
      are owed to the viewer: keep the remainder in localStorage so leaving the
@@ -521,6 +564,11 @@ function PacksPage() {
   }, [phase, cards]);
 
   useEffect(() => {
+    if (streakOpen) {
+      setCollectionPanelReady(false);
+      setCollectionPanelMounted(false);
+      return;
+    }
     if (phase === "pack") {
       setCollectionPanelReady(true);
       setCollectionPanelMounted(true);
@@ -539,7 +587,7 @@ function PacksPage() {
       setCollectionPanelMounted(true);
       setCollectionPanelReady(true);
     }, reducedMotion);
-  }, [phase, reducedMotion]);
+  }, [phase, reducedMotion, streakOpen]);
 
   /* Duelling is an unfinished prototype, so every entry point is admin-only
      for now. The server functions refuse a non-admin caller regardless. The
@@ -715,10 +763,9 @@ function PacksPage() {
                     are half of why the arcade is on the packs page at all. */}
                 {/* Toggles: the same chip that opens the game closes it, so
                     the way out is where the way in was. */}
-                <Link
-                  to="/packs"
-                  search={streakOpen ? {} : { view: "streak" }}
-                  resetScroll={false}
+                <button
+                  type="button"
+                  onClick={() => showStreakView(!streakOpen)}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${
                     streakOpen
                       ? "border-osu-pink bg-osu-pink/15 text-white"
@@ -728,7 +775,7 @@ function PacksPage() {
                 >
                   <ArrowUpDown className="h-3 w-3" />
                   {streakOpen ? "Leave the game" : "Higher or lower"}
-                </Link>
+                </button>
               </div>
             )}
             {answering && phase !== "reveal" && (
@@ -749,7 +796,7 @@ function PacksPage() {
             {streakOpen ? (
               <StreakGame
                 onExit={() => {
-                  void navigate({ to: "/packs", search: {}, resetScroll: false });
+                  showStreakView(false);
                 }}
               />
             ) : dealError ? (
@@ -905,7 +952,7 @@ function PacksPage() {
               </AnimatePresence>
             )}
 
-            {!dealError && collectionPanelMounted && collectionWallet && (
+            {!streakOpen && !dealError && collectionPanelMounted && collectionWallet && (
               <div className={showCollectionPanel ? "mt-14" : "hidden"}>
                 <div className="mx-auto mb-3 flex w-full max-w-[820px] items-center justify-end gap-1">
                   {(["grid", "album"] as const).map((mode) => {
