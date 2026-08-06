@@ -238,6 +238,7 @@ export async function createApp() {
     }),
     {
       retentionDays: config.analyticsRetentionDays,
+      databaseUrl: config.analyticsDatabaseUrl,
       // Outside production there is no live-site host to allowlist; show
       // local traffic in the feed instead of filtering everything out.
       feedHosts: config.nodeEnv === "production" ? undefined : null,

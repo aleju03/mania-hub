@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, type Db } from "../src/db.js";
-import { AnalyticsStore, deviceKindFor, normalizeAnalyticsEvent } from "../src/features/analytics.js";
+import { AnalyticsStore, deviceKindFor, monitorCacheTtlMs, normalizeAnalyticsEvent } from "../src/features/analytics.js";
 
 let dir = "";
 let db: Db;
@@ -468,6 +468,36 @@ describe("AnalyticsStore realtime", () => {
       store.capture(pageview({ distinctId: "no-key-1", path: "/maps" }), {});
       store.capture(pageview({ distinctId: "no-key-2", path: "/skins" }), {});
       expect(new Set(await feedIds())).toEqual(new Set(["no-key-1", "no-key-2"]));
+    });
+  });
+
+  describe("monitor cache", () => {
+    it("scales the TTL with the range and caps it", () => {
+      expect(monitorCacheTtlMs(1)).toBe(4_000);
+      expect(monitorCacheTtlMs(24)).toBe(4_000);
+      expect(monitorCacheTtlMs(168)).toBe(15_120);
+      expect(monitorCacheTtlMs(720)).toBe(60_000);
+    });
+
+    it("serves an expired entry stale while recomputing in the background", async () => {
+      store.capture(pageview({ distinctId: "swr-1" }), {});
+      const first = await store.getMonitorData({ rangeHours: 24 });
+      expect(first.uniqueVisitorsInRange).toBe(1);
+
+      store.capture(pageview({ distinctId: "swr-2" }), {});
+      const cache = (store as unknown as { monitorCache: Map<string, { at: number }> }).monitorCache;
+      for (const entry of cache.values()) entry.at -= 10 * 60_000;
+
+      // The expired entry answers this poll instantly, byte-for-byte.
+      const stale = await store.getMonitorData({ rangeHours: 24 });
+      expect(stale).toBe(first);
+
+      // The refresh it kicked off lands, and the next poll sees the new event.
+      const inflight = (store as unknown as { monitorInFlight: Map<string, Promise<unknown>> }).monitorInFlight;
+      await Promise.all([...inflight.values()]);
+      const fresh = await store.getMonitorData({ rangeHours: 24 });
+      expect(fresh).not.toBe(first);
+      expect(fresh.uniqueVisitorsInRange).toBe(2);
     });
   });
 

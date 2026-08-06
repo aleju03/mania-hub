@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Worker } from "node:worker_threads";
 import { exec, execBatch, json, parseJson, type Db, type DbStatement } from "../db.js";
 import { logInfo, logWarn, errorContext } from "../logger.js";
 
@@ -17,10 +18,27 @@ const MAX_EVENTS_PER_CAPTURE = 50;
 const PRUNE_INTERVAL_MS = 60 * 60_000;
 const LIVE_TICKET_TTL_MS = 10 * 60_000;
 const ACTIVE_VISITOR_WINDOW_MS = 5 * 60_000;
-// Just under the admin page's 5s poll: every poll misses the previous poll's
-// entry, so each browser refreshes once per cycle while concurrent tabs and
-// the second frontend instance ride the same scan.
+/* Freshness floor for the monitor cache: just under the admin page's 5s poll,
+   so a small range still refreshes once per cycle while concurrent tabs and
+   the second frontend instance ride the same scan. The TTL then grows with the
+   range, because a 30d aggregate over a multi-hundred-MB events file is
+   seconds of scanning to answer and does not change meaningfully between two
+   polls. Expired entries are served stale while one recompute runs in the
+   background (getMonitorData), so an open tab never blocks on a rescan. */
 const MONITOR_CACHE_TTL_MS = 4_000;
+const MONITOR_CACHE_TTL_MAX_MS = 60_000;
+const MONITOR_CACHE_TTL_PER_RANGE_HOUR_MS = 90;
+
+export function monitorCacheTtlMs(rangeHours: number): number {
+  return Math.min(MONITOR_CACHE_TTL_MAX_MS, Math.max(MONITOR_CACHE_TTL_MS, Math.round(rangeHours * MONITOR_CACHE_TTL_PER_RANGE_HOUR_MS)));
+}
+
+/* Ranges at and above this run the scan set in a worker thread: local libsql
+   executes synchronously on the calling thread, so a multi-second scan on the
+   serving loop stalls every request and SSE write in the process. Short ranges
+   stay inline — their scans are milliseconds, cheaper than a thread spawn. */
+const MONITOR_THREAD_MIN_RANGE_HOURS = 72;
+const MONITOR_THREAD_TIMEOUT_MS = 60_000;
 /* Ceiling on one read of the signed-in roster. Not a display limit: the pp and
    rank sorts have to see every viewer to name the best of them. */
 export const MAX_VIEWER_ROWS = 20_000;
@@ -42,6 +60,9 @@ export interface AnalyticsStoreOptions {
   /* The site owner's signed-in username, excluded from the recent feed. */
   feedExcludedViewer?: string | null;
   displayTimeZone?: string;
+  /* file: URL of the analytics database, which lets large monitor scans run on
+     a worker thread's own read connection. Absent (tests, dev) = always inline. */
+  databaseUrl?: string | null;
 }
 
 export interface AnalyticsEventRecord {
@@ -277,6 +298,7 @@ export class AnalyticsStore {
       feedHosts: options.feedHosts === undefined ? DEFAULT_FEED_HOSTS : options.feedHosts,
       feedExcludedViewer: options.feedExcludedViewer === undefined ? DEFAULT_FEED_EXCLUDED_VIEWER : options.feedExcludedViewer,
       displayTimeZone: options.displayTimeZone ?? DEFAULT_DISPLAY_TIME_ZONE,
+      databaseUrl: options.databaseUrl ?? null,
     };
   }
 
@@ -609,32 +631,6 @@ export class AnalyticsStore {
 
   // --- display helpers ---
 
-  private timeLabel(ts: number): string {
-    return new Intl.DateTimeFormat("en-US", {
-      timeZone: this.options.displayTimeZone,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-    }).format(new Date(ts));
-  }
-
-  private dateTimeLabel(ts: number): string {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: this.options.displayTimeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date(ts));
-    const time = new Intl.DateTimeFormat("en-US", {
-      timeZone: this.options.displayTimeZone,
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    }).format(new Date(ts));
-    return `${parts} ${time}`;
-  }
-
   /* The recent-activity feed's visibility rules, shared by the monitor query
      and the live SSE stream so both always agree. */
   feedFilterAccepts(event: Pick<AnalyticsEventRecord, "distinctId" | "host" | "viewerUsername" | "path" | "event" | "isBot">, recentCountry?: string | null, country?: string | null): boolean {
@@ -650,73 +646,28 @@ export class AnalyticsStore {
   }
 
   buildFeedEvent(record: AnalyticsEventRecord): AnalyticsFeedEvent {
-    const props = record.properties;
-    const str = (key: string): string | null => {
-      const value = props[key];
-      if (value == null) return null;
-      const text = String(value);
-      return text ? text : null;
-    };
-    return {
-      eventId: str("$insert_id"),
-      timestamp: this.timeLabel(record.ts),
-      ts: record.ts,
-      event: record.event,
-      path: record.path ?? "",
-      country: record.country,
-      selectedCountry: record.selectedCountry,
-      deviceKind: deviceKindFor(record.screenWidth, record.viewportWidth),
-      distinctId: record.distinctId,
-      mapsTab: str("maps_tab"),
-      mapsQuery: str("maps_query"),
-      mapsFilters: str("maps_filters"),
-      mapsSort: str("maps_sort"),
-      mapsCollection: str("maps_collection"),
-      mapsPage: str("maps_page"),
-      mapsBeatmapId: str("maps_beatmap_id"),
-      rankingsPage: str("rankings_page"),
-      profileUsername: str("profile_username"),
-      replayPlayer: str("replay_player"),
-      replayScoreId: str("replay_score_id"),
-      replayTitle: str("replay_title"),
-      replayArtist: str("replay_artist"),
-      replayDifficulty: str("replay_difficulty"),
-      viewUrl: str("$current_url"),
-      farmHelperUser: str("farm_helper_user"),
-      packType: str("pack_type"),
-      packUsername: str("pack_username"),
-      farmMapTitle: str("farm_map_title"),
-      farmMapUser: str("farm_map_user"),
-      skinsQuery: str("skins_query"),
-      skinsKeys: str("skins_keys"),
-      skinsSort: str("skins_sort"),
-      skinsPage: str("skins_page"),
-      skinRef: str("skin_ref"),
-      skinName: str("skin_name"),
-      skinKeymodes: str("skin_keymodes"),
-      skinUploadError: str("skin_upload_error"),
-      viewerUsername: record.viewerUsername,
-      referrer: record.referringDomain,
-    };
+    return buildMonitorFeedEvent(this.options.displayTimeZone, record);
   }
 
   // --- queries ---
 
-  /* The monitor scan set is ~14 sequential aggregate queries, each pinning the
-     serving loop; the admin page re-asks every 5s and each of the two frontend
-     instances asks separately. A short cache turns that into one scan per
-     window for everyone. Tests pass an explicit `now` and bypass it. */
+  /* One scan set per cache window for everyone: concurrent tabs and both
+     frontend instances share a compute via monitorInFlight, an expired entry
+     answers instantly while its replacement computes in the background, and
+     the TTL grows with the range (monitorCacheTtlMs). Tests pass an explicit
+     `now` and bypass all of it. */
   async getMonitorData(params: { rangeHours: number; recentCountry?: string | null; recentLimit?: number; now?: number }): Promise<AnalyticsMonitorResponse> {
     if (params.now != null) return this.computeMonitorData(params);
+    const rangeHours = Math.min(720, Math.max(1, Math.round(params.rangeHours || 24)));
     const key = [
-      Math.min(720, Math.max(1, Math.round(params.rangeHours || 24))),
+      rangeHours,
       normalizeCountryCode(params.recentCountry) ?? "all",
       Math.min(1000, Math.max(1, Math.round(params.recentLimit ?? 1000))),
     ].join(":");
     const hit = this.monitorCache.get(key);
-    if (hit && Date.now() - hit.at < MONITOR_CACHE_TTL_MS) return hit.data;
+    if (hit && Date.now() - hit.at < monitorCacheTtlMs(rangeHours)) return hit.data;
     const inflight = this.monitorInFlight.get(key);
-    if (inflight) return inflight;
+    if (inflight) return hit ? hit.data : inflight;
     const promise = this.computeMonitorData(params)
       .then((data) => {
         if (this.monitorCache.size > 32) this.monitorCache.clear();
@@ -727,240 +678,40 @@ export class AnalyticsStore {
         this.monitorInFlight.delete(key);
       });
     this.monitorInFlight.set(key, promise);
+    if (hit) {
+      // Stale-while-revalidate: the recompute that just started refreshes the
+      // cache for the next poll; only a cold range ever waits on a scan. A
+      // failed refresh keeps serving the stale entry, so it must say so.
+      promise.catch((error) => logWarn("analytics_monitor_refresh_failed", errorContext(error)));
+      return hit.data;
+    }
     return promise;
   }
 
   private async computeMonitorData(params: { rangeHours: number; recentCountry?: string | null; recentLimit?: number; now?: number }): Promise<AnalyticsMonitorResponse> {
-    const now = params.now ?? Date.now();
-    const rangeHours = Math.min(720, Math.max(1, Math.round(params.rangeHours || 24)));
-    const since = now - rangeHours * 60 * 60_000;
-    const activeSince = now - ACTIVE_VISITOR_WINDOW_MS;
-    const recentCountry = normalizeCountryCode(params.recentCountry) ?? null;
-    const recentLimit = Math.min(1000, Math.max(1, Math.round(params.recentLimit ?? 1000)));
-
-    // Flush first so "recent" really means seconds-ago.
-    await this.flush();
-
-    // Queries run sequentially on purpose: local libsql executes synchronously
-    // on the event loop, so a Promise.all here would just serialize anyway
-    // while pinning the loop; each await gives other requests a turn.
-    const overview = (await exec(this.db, `
-      select
-        count(distinct case when ts > ? and distinct_id != 'server' then distinct_id end) as active,
-        sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews,
-        count(distinct case when distinct_id != 'server' then distinct_id end) as visitors,
-        count(*) as events_total,
-        sum(case when event = 'page_shared' then 1 else 0 end) as shares
-      from analytics_events where ts > ? and is_bot = 0
-    `, [activeSince, since])).rows[0];
-
-    const topRoutes = (await exec(this.db, `
-      select path as p, count(*) as c from analytics_events
-      where event = '$pageview' and ts > ? and is_bot = 0
-        and path is not null and path != '/' and path not like '/admin/%'
-      group by p order by c desc limit 10
-    `, [since])).rows;
-
-    const feedHostClause = this.options.feedHosts
-      ? ` and host in (${this.options.feedHosts.map(() => "?").join(", ")})`
-      : "";
-    const feedViewerClause = this.options.feedExcludedViewer
-      ? " and (viewer_username is null or lower(viewer_username) != ?)"
-      : "";
-    const recentArgs: Array<string | number> = [since];
-    if (this.options.feedHosts) recentArgs.push(...this.options.feedHosts);
-    if (this.options.feedExcludedViewer) recentArgs.push(this.options.feedExcludedViewer.toLowerCase());
-    if (recentCountry) recentArgs.push(recentCountry);
-    recentArgs.push(recentLimit);
-    const recent = (await exec(this.db, `
-      select ts, event, path, country, selected_country, distinct_id, screen_width, viewport_width, viewer_username, referring_domain, props
-      from analytics_events
-      where ts > ? and is_bot = 0 and distinct_id != 'server'${feedHostClause}${feedViewerClause}${recentCountry ? " and country = ?" : ""}
-        and (path is null or path not like '/admin/%')
-        and not (event = '$pageview' and path = '/')
-      order by ts desc limit ?
-    `, recentArgs)).rows;
-
-    const topCountries = (await exec(this.db, `
-      select country as c, count(distinct distinct_id) as n from analytics_events
-      where ts > ? and is_bot = 0 and country is not null
-      group by c order by n desc limit 20
-    `, [since])).rows;
-
-    // SQLite's bare-columns-with-max() rule makes `country` come from the
-    // max(ts) row — the argMax(country, timestamp) these replace.
-    const topProfiles = (await exec(this.db, `
-      select json_extract(props, '$.profile_username') as u, count(*) as n, max(ts) as last_ts, country as last_country
-      from analytics_events
-      where event = '$pageview' and ts > ? and is_bot = 0 and json_extract(props, '$.profile_username') is not null
-      group by u order by n desc, last_ts desc limit 10
-    `, [since])).rows;
-
-    const topReplays = (await exec(this.db, `
-      select json_extract(props, '$.replay_score_id') as score_id,
-        json_extract(props, '$.replay_title') as title,
-        json_extract(props, '$.replay_artist') as artist,
-        json_extract(props, '$.replay_difficulty') as difficulty,
-        json_extract(props, '$.replay_player') as player,
-        json_extract(props, '$.replay_cover_url') as cover_url,
-        count(*) as n, max(ts) as last_ts, country as last_country
-      from analytics_events
-      where event = 'replay_view' and ts > ? and is_bot = 0 and json_extract(props, '$.replay_score_id') is not null
-      group by score_id order by n desc, last_ts desc limit 10
-    `, [since])).rows;
-
-    const topReferrers = (await exec(this.db, `
-      select referring_domain as d, count(distinct distinct_id) as n from analytics_events
-      where event = '$pageview' and ts > ? and is_bot = 0 and referring_domain is not null
-        and referring_domain not in ('localhost', '127.0.0.1', '::1')
-        and referring_domain not like '%-aleju03s-projects.vercel.app'
-      group by d order by n desc limit 10
-    `, [since])).rows;
-
-    const serverErrors = (await exec(this.db, `
-      select json_extract(props, '$.caller') as c, json_extract(props, '$.path') as p, json_extract(props, '$.status') as s, count(*) as n
-      from analytics_events
-      where event = 'osu_api_error' and ts > ? and json_extract(props, '$.caller') is not null
-      group by c, p, s order by n desc limit 10
-    `, [since])).rows;
-
-    const recentServerErrors = (await exec(this.db, `
-      select ts, props from analytics_events
-      where event = 'osu_api_error' and ts > ? and json_extract(props, '$.caller') is not null
-      order by ts desc limit 15
-    `, [since])).rows;
-
-    const bounce = (await exec(this.db, `
-      select sum(case when pv = 1 then 1 else 0 end) as bounced, count(*) as landers from (
-        select distinct_id, count(*) as pv, sum(case when path = '/' then 1 else 0 end) as landings
-        from analytics_events
-        where event = '$pageview' and ts > ? and is_bot = 0
-        group by distinct_id having landings > 0
-      )
-    `, [since])).rows[0];
-
-    const sharePlatforms = (await exec(this.db, `
-      select json_extract(props, '$.crawler') as c, count(*) as n from analytics_events
-      where event = 'page_shared' and ts > ? and json_extract(props, '$.crawler') is not null
-      group by c order by n desc limit 12
-    `, [since])).rows;
-
-    // Traffic shape over the range, bucketed so the admin chart is a fixed
-    // width regardless of range. Buckets are aligned to `since` (not to wall
-    // clock) so the newest bucket always ends at "now".
-    const bucketMs = Math.max(60_000, Math.ceil((rangeHours * 60 * 60_000) / TIMELINE_BUCKETS));
-    const timelineRows = (await exec(this.db, `
-      select cast((ts - ?) / ? as integer) as b,
-        count(*) as events,
-        sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews,
-        count(distinct distinct_id) as visitors
-      from analytics_events
-      where ts > ? and is_bot = 0 and distinct_id != 'server'
-      group by b order by b
-    `, [since, bucketMs, since])).rows;
-    const timelineByBucket = new Map<number, AnalyticsTimelineBucket>();
-    for (const row of timelineRows) {
-      const bucket = Number(row.b);
-      if (!Number.isFinite(bucket) || bucket < 0 || bucket >= TIMELINE_BUCKETS) continue;
-      timelineByBucket.set(bucket, {
-        ts: since + bucket * bucketMs,
-        events: Number(row.events ?? 0),
-        pageviews: Number(row.pageviews ?? 0),
-        visitors: Number(row.visitors ?? 0),
-      });
-    }
-    const timeline: AnalyticsTimelineBucket[] = Array.from({ length: TIMELINE_BUCKETS }, (_, index) => (
-      timelineByBucket.get(index) ?? { ts: since + index * bucketMs, events: 0, pageviews: 0, visitors: 0 }
-    ));
-
-    const sharePages = (await exec(this.db, `
-      select json_extract(props, '$.pathname') as p, json_extract(props, '$.subject') as s,
-        json_extract(props, '$.subject_type') as t, count(*) as n
-      from analytics_events
-      where event = 'page_shared' and ts > ? and json_extract(props, '$.pathname') is not null
-        and json_extract(props, '$.pathname') not like '/admin/%'
-      group by p, s order by n desc limit 12
-    `, [since])).rows;
-
-    return {
-      rangeHours,
-      bucketMs,
-      timeline,
-      activeVisitors: Number(overview?.active ?? 0),
-      pageviewsInRange: Number(overview?.pageviews ?? 0),
-      uniqueVisitorsInRange: Number(overview?.visitors ?? 0),
-      eventsInRange: Number(overview?.events_total ?? 0),
-      bounce: {
-        bounced: Number(bounce?.bounced ?? 0),
-        landers: Number(bounce?.landers ?? 0),
-      },
-      topRoutes: topRoutes.map((row) => ({ path: String(row.p ?? ""), count: Number(row.c ?? 0) })),
-      recentEvents: recent.map((row) => this.buildFeedEvent({
-        ts: Number(row.ts),
-        event: String(row.event ?? ""),
-        distinctId: String(row.distinct_id ?? ""),
-        host: row.host == null ? null : String(row.host),
-        path: row.path == null ? null : String(row.path),
-        country: row.country == null ? null : String(row.country),
-        selectedCountry: row.selected_country == null ? null : String(row.selected_country),
-        viewerUsername: row.viewer_username == null ? null : String(row.viewer_username),
-        referringDomain: row.referring_domain == null ? null : String(row.referring_domain),
-        screenWidth: row.screen_width == null ? null : Number(row.screen_width),
-        viewportWidth: row.viewport_width == null ? null : Number(row.viewport_width),
-        isBot: false,
-        properties: parseJson<Record<string, unknown>>(row.props, {}),
-      })),
-      topPhysicalCountries: topCountries.map((row) => ({ country: String(row.c ?? ""), count: Number(row.n ?? 0) })),
-      topProfiles: topProfiles.map((row) => ({
-        username: String(row.u ?? ""),
-        views: Number(row.n ?? 0),
-        lastViewedLabel: row.last_ts == null ? null : this.dateTimeLabel(Number(row.last_ts)),
-        lastVisitorCountry: row.last_country == null ? null : String(row.last_country),
-      })),
-      topReplays: topReplays.map((row) => ({
-        scoreId: String(row.score_id ?? ""),
-        title: row.title == null ? null : String(row.title),
-        artist: row.artist == null ? null : String(row.artist),
-        difficulty: row.difficulty == null ? null : String(row.difficulty),
-        player: row.player == null ? null : String(row.player),
-        coverUrl: row.cover_url == null ? null : String(row.cover_url),
-        views: Number(row.n ?? 0),
-        lastViewedLabel: row.last_ts == null ? null : this.dateTimeLabel(Number(row.last_ts)),
-        lastVisitorCountry: row.last_country == null ? null : String(row.last_country),
-      })),
-      topReferrers: topReferrers.map((row) => ({ domain: String(row.d ?? ""), count: Number(row.n ?? 0) })),
-      shareEvents: Number(overview?.shares ?? 0),
-      sharesByPlatform: sharePlatforms.map((row) => ({ platform: String(row.c ?? ""), count: Number(row.n ?? 0) })),
-      topSharedPages: sharePages.map((row) => ({
-        path: String(row.p ?? ""),
-        subject: row.s == null ? null : String(row.s),
-        subjectType: row.t == null ? null : String(row.t),
-        count: Number(row.n ?? 0),
-      })),
-      serverErrors: serverErrors.map((row) => ({
-        caller: row.c == null ? "unknown" : String(row.c),
-        path: String(row.p ?? ""),
-        status: row.s == null ? null : Number(row.s),
-        count: Number(row.n ?? 0),
-      })),
-      recentServerErrors: recentServerErrors.map((row) => {
-        const props = parseJson<Record<string, unknown>>(row.props, {});
-        return {
-          timestamp: this.timeLabel(Number(row.ts)),
-          caller: props.caller == null ? "unknown" : String(props.caller),
-          path: props.path == null ? "" : String(props.path),
-          status: props.status == null ? null : Number(props.status),
-          bodyPreview: props.body_preview == null ? null : String(props.body_preview),
-          attempts: props.attempts == null ? null : Number(props.attempts),
-          kind: props.kind == null ? null : String(props.kind),
-          context: formatServerErrorContext(props.context),
-          ratePerMin: props.rate_per_min == null ? null : Number(props.rate_per_min),
-          rateRemaining: props.rate_remaining == null ? null : Number(props.rate_remaining),
-          rateLimit: props.rate_limit == null ? null : Number(props.rate_limit),
-          retryAfter: props.retry_after == null ? null : String(props.retry_after),
-        };
-      }),
+    const resolved = {
+      rangeHours: params.rangeHours,
+      recentCountry: params.recentCountry,
+      recentLimit: params.recentLimit,
+      now: params.now ?? Date.now(),
     };
+    // Flush first so "recent" really means seconds-ago. The write batch lives
+    // on this thread, so it must land before any worker thread reads the file.
+    await this.flush();
+    const rangeHours = Math.min(720, Math.max(1, Math.round(resolved.rangeHours || 24)));
+    if (rangeHours >= MONITOR_THREAD_MIN_RANGE_HOURS && this.options.databaseUrl?.startsWith("file:") && !import.meta.url.endsWith(".ts")) {
+      try {
+        const data = await computeMonitorInThread(this.options.databaseUrl, this.options, resolved);
+        if (data) return data;
+        // The thread ran but failed (query error, timeout): inline reproduces
+        // the failure loudly, or answers correctly at the cost of one stutter.
+        logWarn("analytics_monitor_thread_fell_back_inline", { range_hours: rangeHours });
+      } catch {
+        // The thread could not start (no compiled worker file: vitest, tsx dev),
+        // where an inline scan of a small local database is the right substitute.
+      }
+    }
+    return computeMonitorSnapshot(this.db, this.options, resolved);
   }
 
   async getValleyVisitors(now = Date.now()): Promise<AnalyticsValleyResponse> {
@@ -987,6 +738,372 @@ export class AnalyticsStore {
       })),
     };
   }
+}
+
+export function buildMonitorFeedEvent(displayTimeZone: string, record: AnalyticsEventRecord): AnalyticsFeedEvent {
+  const props = record.properties;
+  const str = (key: string): string | null => {
+    const value = props[key];
+    if (value == null) return null;
+    const text = String(value);
+    return text ? text : null;
+  };
+  return {
+    eventId: str("$insert_id"),
+    timestamp: timeLabelFor(displayTimeZone, record.ts),
+    ts: record.ts,
+    event: record.event,
+    path: record.path ?? "",
+    country: record.country,
+    selectedCountry: record.selectedCountry,
+    deviceKind: deviceKindFor(record.screenWidth, record.viewportWidth),
+    distinctId: record.distinctId,
+    mapsTab: str("maps_tab"),
+    mapsQuery: str("maps_query"),
+    mapsFilters: str("maps_filters"),
+    mapsSort: str("maps_sort"),
+    mapsCollection: str("maps_collection"),
+    mapsPage: str("maps_page"),
+    mapsBeatmapId: str("maps_beatmap_id"),
+    rankingsPage: str("rankings_page"),
+    profileUsername: str("profile_username"),
+    replayPlayer: str("replay_player"),
+    replayScoreId: str("replay_score_id"),
+    replayTitle: str("replay_title"),
+    replayArtist: str("replay_artist"),
+    replayDifficulty: str("replay_difficulty"),
+    viewUrl: str("$current_url"),
+    farmHelperUser: str("farm_helper_user"),
+    packType: str("pack_type"),
+    packUsername: str("pack_username"),
+    farmMapTitle: str("farm_map_title"),
+    farmMapUser: str("farm_map_user"),
+    skinsQuery: str("skins_query"),
+    skinsKeys: str("skins_keys"),
+    skinsSort: str("skins_sort"),
+    skinsPage: str("skins_page"),
+    skinRef: str("skin_ref"),
+    skinName: str("skin_name"),
+    skinKeymodes: str("skin_keymodes"),
+    skinUploadError: str("skin_upload_error"),
+    viewerUsername: record.viewerUsername,
+    referrer: record.referringDomain,
+  };
+}
+
+export async function computeMonitorSnapshot(db: Db, options: MonitorComputeOptions, params: { rangeHours: number; recentCountry?: string | null; recentLimit?: number; now: number }): Promise<AnalyticsMonitorResponse> {
+  const now = params.now;
+  const rangeHours = Math.min(720, Math.max(1, Math.round(params.rangeHours || 24)));
+  const since = now - rangeHours * 60 * 60_000;
+  const activeSince = now - ACTIVE_VISITOR_WINDOW_MS;
+  const recentCountry = normalizeCountryCode(params.recentCountry) ?? null;
+  const recentLimit = Math.min(1000, Math.max(1, Math.round(params.recentLimit ?? 1000)));
+
+  // Queries run sequentially on purpose: local libsql executes synchronously
+  // on the event loop, so a Promise.all here would just serialize anyway
+  // while pinning the loop; each await gives other requests a turn.
+  const overview = (await exec(db, `
+    select
+      count(distinct case when ts > ? and distinct_id != 'server' then distinct_id end) as active,
+      sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews,
+      count(distinct case when distinct_id != 'server' then distinct_id end) as visitors,
+      count(*) as events_total,
+      sum(case when event = 'page_shared' then 1 else 0 end) as shares
+    from analytics_events where ts > ? and is_bot = 0
+  `, [activeSince, since])).rows[0];
+
+  const topRoutes = (await exec(db, `
+    select path as p, count(*) as c from analytics_events
+    where event = '$pageview' and ts > ? and is_bot = 0
+      and path is not null and path != '/' and path not like '/admin/%'
+    group by p order by c desc limit 10
+  `, [since])).rows;
+
+  const feedHostClause = options.feedHosts
+    ? ` and host in (${options.feedHosts.map(() => "?").join(", ")})`
+    : "";
+  const feedViewerClause = options.feedExcludedViewer
+    ? " and (viewer_username is null or lower(viewer_username) != ?)"
+    : "";
+  const recentArgs: Array<string | number> = [since];
+  if (options.feedHosts) recentArgs.push(...options.feedHosts);
+  if (options.feedExcludedViewer) recentArgs.push(options.feedExcludedViewer.toLowerCase());
+  if (recentCountry) recentArgs.push(recentCountry);
+  recentArgs.push(recentLimit);
+  const recent = (await exec(db, `
+    select ts, event, path, country, selected_country, distinct_id, screen_width, viewport_width, viewer_username, referring_domain, props
+    from analytics_events
+    where ts > ? and is_bot = 0 and distinct_id != 'server'${feedHostClause}${feedViewerClause}${recentCountry ? " and country = ?" : ""}
+      and (path is null or path not like '/admin/%')
+      and not (event = '$pageview' and path = '/')
+    order by ts desc limit ?
+  `, recentArgs)).rows;
+
+  const topCountries = (await exec(db, `
+    select country as c, count(distinct distinct_id) as n from analytics_events
+    where ts > ? and is_bot = 0 and country is not null
+    group by c order by n desc limit 20
+  `, [since])).rows;
+
+  // SQLite's bare-columns-with-max() rule makes `country` come from the
+  // max(ts) row — the argMax(country, timestamp) these replace.
+  const topProfiles = (await exec(db, `
+    select json_extract(props, '$.profile_username') as u, count(*) as n, max(ts) as last_ts, country as last_country
+    from analytics_events
+    where event = '$pageview' and ts > ? and is_bot = 0 and json_extract(props, '$.profile_username') is not null
+    group by u order by n desc, last_ts desc limit 10
+  `, [since])).rows;
+
+  const topReplays = (await exec(db, `
+    select json_extract(props, '$.replay_score_id') as score_id,
+      json_extract(props, '$.replay_title') as title,
+      json_extract(props, '$.replay_artist') as artist,
+      json_extract(props, '$.replay_difficulty') as difficulty,
+      json_extract(props, '$.replay_player') as player,
+      json_extract(props, '$.replay_cover_url') as cover_url,
+      count(*) as n, max(ts) as last_ts, country as last_country
+    from analytics_events
+    where event = 'replay_view' and ts > ? and is_bot = 0 and json_extract(props, '$.replay_score_id') is not null
+    group by score_id order by n desc, last_ts desc limit 10
+  `, [since])).rows;
+
+  const topReferrers = (await exec(db, `
+    select referring_domain as d, count(distinct distinct_id) as n from analytics_events
+    where event = '$pageview' and ts > ? and is_bot = 0 and referring_domain is not null
+      and referring_domain not in ('localhost', '127.0.0.1', '::1')
+      and referring_domain not like '%-aleju03s-projects.vercel.app'
+    group by d order by n desc limit 10
+  `, [since])).rows;
+
+  const serverErrors = (await exec(db, `
+    select json_extract(props, '$.caller') as c, json_extract(props, '$.path') as p, json_extract(props, '$.status') as s, count(*) as n
+    from analytics_events
+    where event = 'osu_api_error' and ts > ? and json_extract(props, '$.caller') is not null
+    group by c, p, s order by n desc limit 10
+  `, [since])).rows;
+
+  const recentServerErrors = (await exec(db, `
+    select ts, props from analytics_events
+    where event = 'osu_api_error' and ts > ? and json_extract(props, '$.caller') is not null
+    order by ts desc limit 15
+  `, [since])).rows;
+
+  const bounce = (await exec(db, `
+    select sum(case when pv = 1 then 1 else 0 end) as bounced, count(*) as landers from (
+      select distinct_id, count(*) as pv, sum(case when path = '/' then 1 else 0 end) as landings
+      from analytics_events
+      where event = '$pageview' and ts > ? and is_bot = 0
+      group by distinct_id having landings > 0
+    )
+  `, [since])).rows[0];
+
+  const sharePlatforms = (await exec(db, `
+    select json_extract(props, '$.crawler') as c, count(*) as n from analytics_events
+    where event = 'page_shared' and ts > ? and json_extract(props, '$.crawler') is not null
+    group by c order by n desc limit 12
+  `, [since])).rows;
+
+  // Traffic shape over the range, bucketed so the admin chart is a fixed
+  // width regardless of range. Buckets are aligned to `since` (not to wall
+  // clock) so the newest bucket always ends at "now".
+  const bucketMs = Math.max(60_000, Math.ceil((rangeHours * 60 * 60_000) / TIMELINE_BUCKETS));
+  const timelineRows = (await exec(db, `
+    select cast((ts - ?) / ? as integer) as b,
+      count(*) as events,
+      sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews,
+      count(distinct distinct_id) as visitors
+    from analytics_events
+    where ts > ? and is_bot = 0 and distinct_id != 'server'
+    group by b order by b
+  `, [since, bucketMs, since])).rows;
+  const timelineByBucket = new Map<number, AnalyticsTimelineBucket>();
+  for (const row of timelineRows) {
+    const bucket = Number(row.b);
+    if (!Number.isFinite(bucket) || bucket < 0 || bucket >= TIMELINE_BUCKETS) continue;
+    timelineByBucket.set(bucket, {
+      ts: since + bucket * bucketMs,
+      events: Number(row.events ?? 0),
+      pageviews: Number(row.pageviews ?? 0),
+      visitors: Number(row.visitors ?? 0),
+    });
+  }
+  const timeline: AnalyticsTimelineBucket[] = Array.from({ length: TIMELINE_BUCKETS }, (_, index) => (
+    timelineByBucket.get(index) ?? { ts: since + index * bucketMs, events: 0, pageviews: 0, visitors: 0 }
+  ));
+
+  const sharePages = (await exec(db, `
+    select json_extract(props, '$.pathname') as p, json_extract(props, '$.subject') as s,
+      json_extract(props, '$.subject_type') as t, count(*) as n
+    from analytics_events
+    where event = 'page_shared' and ts > ? and json_extract(props, '$.pathname') is not null
+      and json_extract(props, '$.pathname') not like '/admin/%'
+    group by p, s order by n desc limit 12
+  `, [since])).rows;
+
+  return {
+    rangeHours,
+    bucketMs,
+    timeline,
+    activeVisitors: Number(overview?.active ?? 0),
+    pageviewsInRange: Number(overview?.pageviews ?? 0),
+    uniqueVisitorsInRange: Number(overview?.visitors ?? 0),
+    eventsInRange: Number(overview?.events_total ?? 0),
+    bounce: {
+      bounced: Number(bounce?.bounced ?? 0),
+      landers: Number(bounce?.landers ?? 0),
+    },
+    topRoutes: topRoutes.map((row) => ({ path: String(row.p ?? ""), count: Number(row.c ?? 0) })),
+    recentEvents: recent.map((row) => buildMonitorFeedEvent(options.displayTimeZone, {
+      ts: Number(row.ts),
+      event: String(row.event ?? ""),
+      distinctId: String(row.distinct_id ?? ""),
+      host: row.host == null ? null : String(row.host),
+      path: row.path == null ? null : String(row.path),
+      country: row.country == null ? null : String(row.country),
+      selectedCountry: row.selected_country == null ? null : String(row.selected_country),
+      viewerUsername: row.viewer_username == null ? null : String(row.viewer_username),
+      referringDomain: row.referring_domain == null ? null : String(row.referring_domain),
+      screenWidth: row.screen_width == null ? null : Number(row.screen_width),
+      viewportWidth: row.viewport_width == null ? null : Number(row.viewport_width),
+      isBot: false,
+      properties: parseJson<Record<string, unknown>>(row.props, {}),
+    })),
+    topPhysicalCountries: topCountries.map((row) => ({ country: String(row.c ?? ""), count: Number(row.n ?? 0) })),
+    topProfiles: topProfiles.map((row) => ({
+      username: String(row.u ?? ""),
+      views: Number(row.n ?? 0),
+      lastViewedLabel: row.last_ts == null ? null : dateTimeLabelFor(options.displayTimeZone, Number(row.last_ts)),
+      lastVisitorCountry: row.last_country == null ? null : String(row.last_country),
+    })),
+    topReplays: topReplays.map((row) => ({
+      scoreId: String(row.score_id ?? ""),
+      title: row.title == null ? null : String(row.title),
+      artist: row.artist == null ? null : String(row.artist),
+      difficulty: row.difficulty == null ? null : String(row.difficulty),
+      player: row.player == null ? null : String(row.player),
+      coverUrl: row.cover_url == null ? null : String(row.cover_url),
+      views: Number(row.n ?? 0),
+      lastViewedLabel: row.last_ts == null ? null : dateTimeLabelFor(options.displayTimeZone, Number(row.last_ts)),
+      lastVisitorCountry: row.last_country == null ? null : String(row.last_country),
+    })),
+    topReferrers: topReferrers.map((row) => ({ domain: String(row.d ?? ""), count: Number(row.n ?? 0) })),
+    shareEvents: Number(overview?.shares ?? 0),
+    sharesByPlatform: sharePlatforms.map((row) => ({ platform: String(row.c ?? ""), count: Number(row.n ?? 0) })),
+    topSharedPages: sharePages.map((row) => ({
+      path: String(row.p ?? ""),
+      subject: row.s == null ? null : String(row.s),
+      subjectType: row.t == null ? null : String(row.t),
+      count: Number(row.n ?? 0),
+    })),
+    serverErrors: serverErrors.map((row) => ({
+      caller: row.c == null ? "unknown" : String(row.c),
+      path: String(row.p ?? ""),
+      status: row.s == null ? null : Number(row.s),
+      count: Number(row.n ?? 0),
+    })),
+    recentServerErrors: recentServerErrors.map((row) => {
+      const props = parseJson<Record<string, unknown>>(row.props, {});
+      return {
+        timestamp: timeLabelFor(options.displayTimeZone, Number(row.ts)),
+        caller: props.caller == null ? "unknown" : String(props.caller),
+        path: props.path == null ? "" : String(props.path),
+        status: props.status == null ? null : Number(props.status),
+        bodyPreview: props.body_preview == null ? null : String(props.body_preview),
+        attempts: props.attempts == null ? null : Number(props.attempts),
+        kind: props.kind == null ? null : String(props.kind),
+        context: formatServerErrorContext(props.context),
+        ratePerMin: props.rate_per_min == null ? null : Number(props.rate_per_min),
+        rateRemaining: props.rate_remaining == null ? null : Number(props.rate_remaining),
+        rateLimit: props.rate_limit == null ? null : Number(props.rate_limit),
+        retryAfter: props.retry_after == null ? null : String(props.retry_after),
+      };
+    }),
+  };
+}
+
+/* The slice of store options the monitor scan needs — everything in it is
+   structured-clone-safe, because the worker thread receives it as workerData. */
+export type MonitorComputeOptions = Pick<Required<AnalyticsStoreOptions>, "feedHosts" | "feedExcludedViewer" | "displayTimeZone">;
+
+function timeLabelFor(timeZone: string, ts: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(new Date(ts));
+}
+
+function dateTimeLabelFor(timeZone: string, ts: number): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(ts));
+  const time = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(ts));
+  return `${parts} ${time}`;
+}
+
+/* Runs the monitor scan set in a one-shot worker thread on its own read
+   connection (WAL handles the concurrency with the main thread's writer).
+   Resolves null when the thread ran but failed (query error, timeout), so the
+   caller can fall back inline; rejects only when the thread itself cannot
+   start — the compiled worker file is missing, i.e. vitest/dev. */
+function computeMonitorInThread(
+  databaseUrl: string,
+  options: MonitorComputeOptions,
+  params: { rangeHours: number; recentCountry?: string | null; recentLimit?: number; now: number },
+): Promise<AnalyticsMonitorResponse | null> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const worker = new Worker(new URL("./analytics-monitor-worker.js", import.meta.url), {
+      workerData: {
+        databaseUrl,
+        options: {
+          feedHosts: options.feedHosts,
+          feedExcludedViewer: options.feedExcludedViewer,
+          displayTimeZone: options.displayTimeZone,
+        },
+        params,
+      },
+    });
+    // The thread must never keep an exiting process alive.
+    worker.unref();
+    let online = false;
+    let settled = false;
+    const settle = (value: AnalyticsMonitorResponse | null, spawnError?: unknown): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      void worker.terminate().catch(() => undefined);
+      if (spawnError !== undefined) rejectPromise(spawnError instanceof Error ? spawnError : new Error(String(spawnError)));
+      else resolvePromise(value);
+    };
+    const timer = setTimeout(() => settle(null), MONITOR_THREAD_TIMEOUT_MS);
+    timer.unref();
+    worker.on("online", () => {
+      online = true;
+    });
+    worker.on("message", (result: { ok: boolean; data?: AnalyticsMonitorResponse; error?: string }) => {
+      if (!result.ok) logWarn("analytics_monitor_worker_failed", { error: result.error });
+      settle(result.ok ? result.data ?? null : null);
+    });
+    worker.on("error", (error) => {
+      if (online) {
+        logWarn("analytics_monitor_worker_error", errorContext(error));
+        settle(null);
+      } else {
+        settle(null, error);
+      }
+    });
+    worker.on("exit", () => settle(null));
+  });
 }
 
 /* Folds a flush batch into the durable viewer roster. Collapsed per viewer
