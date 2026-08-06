@@ -94,7 +94,15 @@ export function canModerateSkinKeymodes(userId: number | null | undefined): bool
   return userId != null && SKIN_KEYMODE_MODERATOR_USER_IDS.includes(userId);
 }
 
-export type SkinsSort = "newest" | "downloads" | "size";
+// Three sort options, each a pair: the browse page shows one label per pair and
+// clicking the active one flips it to the other direction.
+export type SkinsSort = "newest" | "oldest" | "downloads" | "downloads-asc" | "size" | "size-asc";
+
+const SKINS_SORTS: readonly string[] = ["newest", "oldest", "downloads", "downloads-asc", "size", "size-asc"];
+
+export function isSkinsSort(value: unknown): value is SkinsSort {
+  return typeof value === "string" && SKINS_SORTS.includes(value);
+}
 
 // Refines a keymode filter by layout: "special" is the 7K+1 filter (8K skins
 // whose eighth column is a scratch lane), "regular" makes 8K mean actual 8K.
@@ -211,7 +219,8 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
   const q = params.q?.trim() ?? "";
   if (q) query.set("q", q.slice(0, 80));
   if (params.page) query.set("page", String(params.page));
-  if (params.sort === "downloads" || params.sort === "size") query.set("sort", params.sort);
+  // Newest is the backend's default too, so only a moved sort travels.
+  if (params.sort && params.sort !== "newest") query.set("sort", params.sort);
   if (params.k && Number.isInteger(params.k) && params.k >= 1 && params.k <= 10) {
     query.set("k", String(params.k));
     if (params.variant) query.set("variant", params.variant);

@@ -82,7 +82,7 @@ import {
   writeReplayVideoUpload,
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, privateSkinSecretMatches, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview, type SkinRow } from "../features/skins.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, parseSkinsListSort, privateSkinSecretMatches, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview, type SkinRow } from "../features/skins.js";
 import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../features/user-replay-skins.js";
 import { copySkinObject, deleteSkinObjects, getSkinObject, isPrivateSkinKey, isSkinStorageConfigured, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, privateSkinKey, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
 import { readCachedSkinImage } from "../skins/image-cache.js";
@@ -2250,9 +2250,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       page: Number.isFinite(page) ? page : 0,
       pageSize: Number.isFinite(pageSize) ? pageSize : 24,
       includeHidden,
-      sort: url.searchParams.get("sort") === "downloads" ? "downloads"
-        : url.searchParams.get("sort") === "size" ? "size"
-          : "newest",
+      sort: parseSkinsListSort(url.searchParams.get("sort")),
       // One uploader's skins ("uploader: you" on the browse page). Anyone may
       // ask for anyone's: it only ever narrows what the visibility gate below
       // already allows this request to see.

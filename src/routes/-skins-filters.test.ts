@@ -19,10 +19,12 @@ describe("skins search params", () => {
     expect(parseSkinsSearch({ mine: "aleju03" }).mine).toBe(false);
   });
 
-  it("accepts the downloads and size sorts and rejects unknown sorts", () => {
-    expect(parseSkinsSearch({ sort: "downloads" }).sort).toBe("downloads");
-    expect(parseSkinsSearch({ sort: "size" }).sort).toBe("size");
-    expect(parseSkinsSearch({ sort: "oldest" }).sort).toBe("newest");
+  it("accepts both directions of every sort and rejects unknown ones", () => {
+    for (const sort of ["oldest", "downloads", "downloads-asc", "size", "size-asc"]) {
+      expect(parseSkinsSearch({ sort }).sort).toBe(sort);
+    }
+    expect(parseSkinsSearch({ sort: "newest-asc" }).sort).toBe("newest");
+    expect(parseSkinsSearch({ sort: "size-desc" }).sort).toBe("newest");
   });
 
   it("keeps a keymode filter in range and drops anything else", () => {

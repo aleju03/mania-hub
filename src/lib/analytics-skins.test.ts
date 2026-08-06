@@ -30,6 +30,13 @@ describe("getSkinsPageviewProperties", () => {
     });
   });
 
+  it("names both directions of every sort toggle", () => {
+    expect(getSkinsPageviewProperties(params("sort=oldest")).skins_sort).toBe("oldest");
+    expect(getSkinsPageviewProperties(params("sort=downloads-asc")).skins_sort).toBe("least downloaded");
+    expect(getSkinsPageviewProperties(params("sort=size")).skins_sort).toBe("largest");
+    expect(getSkinsPageviewProperties(params("sort=size-asc")).skins_sort).toBe("smallest");
+  });
+
   it("ignores a keymode outside the pickable range", () => {
     expect(getSkinsPageviewProperties(params("k=0"))).toEqual({});
     expect(getSkinsPageviewProperties(params("k=99"))).toEqual({});

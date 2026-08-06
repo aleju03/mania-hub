@@ -610,6 +610,26 @@ export async function getSkinByRef(db: Db, ref: string): Promise<SkinRow | null>
   return row ? rowToSkin(row as Record<string, unknown>) : null;
 }
 
+export type SkinsListSort = "newest" | "oldest" | "downloads" | "downloads-asc" | "size" | "size-asc";
+
+// A row with no stored .osk and one never published carry a null in the column
+// being sorted on. Null orders below every value in SQLite, so descending drops
+// them to the bottom by itself and only the ascending halves need the null test
+// to keep them off the top.
+const SKINS_ORDER_SQL: Record<SkinsListSort, string> = {
+  newest: "published_at desc, created_at desc",
+  oldest: "published_at is null, published_at asc, created_at asc",
+  downloads: "download_count desc, published_at desc, created_at desc",
+  "downloads-asc": "download_count asc, published_at desc, created_at desc",
+  size: "osk_size_bytes desc, published_at desc, created_at desc",
+  "size-asc": "osk_size_bytes is null, osk_size_bytes asc, published_at desc, created_at desc",
+};
+
+/** The list sort a query string asked for; anything unknown means newest. */
+export function parseSkinsListSort(value: string | null | undefined): SkinsListSort {
+  return value != null && value in SKINS_ORDER_SQL ? value as SkinsListSort : "newest";
+}
+
 export interface SkinsListQuery {
   q?: string | null;
   keymode?: number | null;
@@ -620,9 +640,8 @@ export interface SkinsListQuery {
   page?: number;
   pageSize?: number;
   includeHidden?: boolean;
-  // "size" is largest .osk first; rows without a stored file sort last (null
-  // orders below every number in SQLite, and desc puts it at the bottom).
-  sort?: "newest" | "downloads" | "size";
+  // Three orderings, each with both directions (the browse page toggles them).
+  sort?: SkinsListSort;
   // Whose private skins this list may carry. The browse grid passes nothing
   // and stays public; the "your private skins" shelf passes the signed-in
   // viewer, which the endpoint only trusts from an admin-token request.
@@ -704,11 +723,7 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
   }
   const whereSql = where.join(" and ");
 
-  const orderSql = query.sort === "downloads"
-    ? "download_count desc, published_at desc, created_at desc"
-    : query.sort === "size"
-      ? "osk_size_bytes desc, published_at desc, created_at desc"
-      : "published_at desc, created_at desc";
+  const orderSql = SKINS_ORDER_SQL[query.sort ?? "newest"] ?? SKINS_ORDER_SQL.newest;
   const totalRow = (await exec(db, `select count(*) as total from skins where ${whereSql}`, args)).rows[0];
   const rows = (await exec(
     db,

@@ -7,9 +7,15 @@
 // string (stripSearchParams(DEFAULT_SKINS_SEARCH)), so a param being there at
 // all already means the visitor moved it off its default.
 
+// Both directions of every sort option, named by what they put on top rather
+// than by the label on the button, so the feed line says which way it went.
 const SORT_LABELS: Record<string, string> = {
   newest: "newest",
+  oldest: "oldest",
   downloads: "most downloaded",
+  "downloads-asc": "least downloaded",
+  size: "largest",
+  "size-asc": "smallest",
 };
 
 const MAX_QUERY_CHARS = 80;

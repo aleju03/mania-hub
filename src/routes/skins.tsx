@@ -1,5 +1,5 @@
 import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Layers, Lock, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Layers, Lock, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -16,6 +16,7 @@ import { isLiveBackendConfigured } from "../lib/live-backend";
 import {
   fetchPrivateSkinsShelf,
   fetchSkinsListDirect,
+  isSkinsSort,
   readCachedPrivateShelf,
   readCachedSkinsList,
   readPrivateShelfOpen,
@@ -56,6 +57,16 @@ const DEFAULT_SKINS_SEARCH = {
   mine: false,
 };
 
+// One entry per sort option, each holding both of its directions: picking an
+// option sorts it descending, clicking it again flips to ascending. Only the
+// date option renames itself, because "oldest" is the word for it; the other
+// two are nouns that read the same either way and let the arrow say which.
+const SORT_OPTIONS: Array<{ label: string; ascLabel?: string; desc: SkinsSort; asc: SkinsSort }> = [
+  { label: "newest", ascLabel: "oldest", desc: "newest", asc: "oldest" },
+  { label: "downloads", desc: "downloads", asc: "downloads-asc" },
+  { label: "size", desc: "size", asc: "size-asc" },
+];
+
 // 0 means no keymode filter; the options cover the keymodes skins realistically
 // declare. 8K splits into 7K+1 (scratch-lane layouts) and actual 8K.
 const KEYMODE_FILTERS: Array<{ label: string; k: number; special: boolean }> = [
@@ -77,7 +88,7 @@ export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
   return {
     q,
     page: Number.isInteger(page) && page > 0 ? page : DEFAULT_SKINS_SEARCH.page,
-    sort: search.sort === "downloads" || search.sort === "size" ? search.sort : DEFAULT_SKINS_SEARCH.sort,
+    sort: isSkinsSort(search.sort) ? search.sort : DEFAULT_SKINS_SEARCH.sort,
     k,
     special: k === 8 && (search.special === true || search.special === "true" || search.special === 1 || search.special === "1"),
     mine: search.mine === true || search.mine === "true" || search.mine === 1 || search.mine === "1",
@@ -113,22 +124,34 @@ function FilterRow({ label, children }: { label: string; children: React.ReactNo
 function FilterOption({
   active,
   onClick,
+  direction,
   children,
 }: {
   active: boolean;
   onClick: () => void;
+  // A sort option carries the direction it is currently ordered in; the arrow
+  // only shows while the option is active, so the row still reads as plain text
+  // apart from the one sort in force.
+  direction?: "asc" | "desc";
   children: React.ReactNode;
 }) {
+  const Arrow = direction === "asc" ? ArrowUp : ArrowDown;
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`text-[12.5px] font-semibold tabular-nums transition-colors cursor-pointer ${
+      className={`inline-flex items-baseline gap-0.5 text-[12.5px] font-semibold tabular-nums transition-colors cursor-pointer ${
         active ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
       }`}
     >
       {children}
+      {active && direction && (
+        <>
+          <Arrow className="h-3 w-3 self-center" aria-hidden="true" />
+          <span className="sr-only">{direction === "desc" ? "descending" : "ascending"}</span>
+        </>
+      )}
     </button>
   );
 }
@@ -399,15 +422,19 @@ function SkinsPage() {
                   </FilterRow>
                 )}
                 <FilterRow label="sort by">
-                  <FilterOption active={sort === "newest"} onClick={() => applySearch({ sort: "newest" })}>
-                    newest
-                  </FilterOption>
-                  <FilterOption active={sort === "downloads"} onClick={() => applySearch({ sort: "downloads" })}>
-                    most downloaded
-                  </FilterOption>
-                  <FilterOption active={sort === "size"} onClick={() => applySearch({ sort: "size" })}>
-                    size
-                  </FilterOption>
+                  {SORT_OPTIONS.map((option) => {
+                    const direction = sort === option.desc ? "desc" as const : sort === option.asc ? "asc" as const : undefined;
+                    return (
+                      <FilterOption
+                        key={option.label}
+                        active={direction != null}
+                        direction={direction}
+                        onClick={() => applySearch({ sort: direction === "desc" ? option.asc : option.desc })}
+                      >
+                        {direction === "asc" ? option.ascLabel ?? option.label : option.label}
+                      </FilterOption>
+                    );
+                  })}
                   {data && (
                     <span
                       className={`ml-auto text-[12px] text-osu-f1 tabular-nums transition-opacity ${loading ? "opacity-45" : ""}`}

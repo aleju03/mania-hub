@@ -357,17 +357,33 @@ describe("skins feature", () => {
     // downloads sort puts the most-downloaded first regardless of recency
     await exec(db, "delete from skins");
     const first = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Old But Gold" });
-    await createPublishedSkin({ ownerUserId: 2, ownerUsername: "bravo", name: "Fresh" });
+    const fresh = await createPublishedSkin({ ownerUserId: 2, ownerUsername: "bravo", name: "Fresh" });
     await exec(db, "update skins set download_count = 50 where id = ?", [first]);
+    // A day apart, so the date sorts below cannot tie on the publish clock.
+    await exec(db, "update skins set published_at = ? where id = ?", ["2026-01-01T00:00:00.000Z", first]);
+    await exec(db, "update skins set published_at = ? where id = ?", ["2026-01-02T00:00:00.000Z", fresh]);
     const byDownloads = await listSkins(db, { sort: "downloads" });
     expect(byDownloads.skins.map((skin) => skin.name)).toEqual(["Old But Gold", "Fresh"]);
+    const byFewestDownloads = await listSkins(db, { sort: "downloads-asc" });
+    expect(byFewestDownloads.skins.map((skin) => skin.name)).toEqual(["Fresh", "Old But Gold"]);
+
+    // the date option's own flip: publish order, earliest first
+    const byOldest = await listSkins(db, { sort: "oldest" });
+    expect(byOldest.skins.map((skin) => skin.name)).toEqual(["Old But Gold", "Fresh"]);
 
     // size sort is largest .osk first, whatever the recency or downloads say;
     // a row with no stored file sinks to the bottom rather than erroring.
+    const small = await createPublishedSkin({ ownerUserId: 3, ownerUsername: "charlie", name: "Tiny" });
     await exec(db, "update skins set osk_size_bytes = 99999 where id != ?", [first]);
+    await exec(db, "update skins set osk_size_bytes = 10 where id = ?", [small]);
     await exec(db, "update skins set osk_size_bytes = null where id = ?", [first]);
     const bySize = await listSkins(db, { sort: "size" });
-    expect(bySize.skins.map((skin) => skin.name)).toEqual(["Fresh", "Old But Gold"]);
+    expect(bySize.skins.map((skin) => skin.name)).toEqual(["Fresh", "Tiny", "Old But Gold"]);
+
+    // the same option flipped: smallest first, and the file-less row stays at
+    // the bottom instead of counting as the smallest of all.
+    const bySizeAsc = await listSkins(db, { sort: "size-asc" });
+    expect(bySizeAsc.skins.map((skin) => skin.name)).toEqual(["Tiny", "Fresh", "Old But Gold"]);
   });
 
   it("rejects expired tickets", async () => {
