@@ -42,6 +42,16 @@ import {
   STREAK_METRICS_MAX_IDS,
   streakShardReward,
 } from "../features/pack-games.js";
+import {
+  cashOutStreakRun,
+  getStreakBoard,
+  guessStreakRound,
+  normalizeStreakGuess,
+  normalizeStreakPool,
+  normalizeStreakRunId,
+  removeStreakBest,
+  startStreakRun,
+} from "../features/pack-streak.js";
 import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipeBoardSnapshot, getSnipesSnapshot } from "../features/snipes.js";
@@ -72,10 +82,11 @@ import {
   writeReplayVideoUpload,
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSkins, moveSkinOskKey, privateSkinSecretMatches, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview, type SkinRow } from "../features/skins.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, privateSkinSecretMatches, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview, type SkinRow } from "../features/skins.js";
 import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../features/user-replay-skins.js";
 import { copySkinObject, deleteSkinObjects, getSkinObject, isPrivateSkinKey, isSkinStorageConfigured, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, privateSkinKey, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
 import { readCachedSkinImage } from "../skins/image-cache.js";
+import { computeSkinVisualSignature } from "../skins/visual-signature.js";
 import { getReplaySkinBundle, replaySkinBundleVersion } from "../skins/replay-bundle.js";
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
@@ -1747,6 +1758,88 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, redactDuelFor(result.duel, userId));
     return true;
   }
+  if (url.pathname === "/api/packs/games/streak/board") {
+    // The blitz board. Public, like every other leaderboard on the site: it
+    // is a list of usernames and the streak they reached. `me` is whose rank
+    // to resolve when they did not make the top ten.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const viewerId = Math.floor(Number(url.searchParams.get("me")) || 0);
+    const board = await getStreakBoard(
+      ctx.db,
+      normalizeStreakPool(url.searchParams.get("pool")),
+      viewerId > 0 ? viewerId : null,
+    );
+    res.setHeader("cache-control", "no-store");
+    sendJson(req, res, ctx, 200, board);
+    return true;
+  }
+  const streakRunMatch = url.pathname.match(/^\/api\/packs\/games\/streak\/(start|guess|cashout)$/);
+  if (streakRunMatch) {
+    /* Blitz runs. Server-to-server like the rest of the arcade: the
+       frontend's server function authenticates the osu! cookie and forwards
+       the verified viewer, so a run can only ever be played as yourself.
+       Unlike the casual claim next to it, nothing here takes the client's word
+       for what happened - the pair, the question, the answer and the clock all
+       live in the run row. */
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    const userId = Math.floor(Number(body.userId) || 0);
+    if (userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_game_player" });
+      return true;
+    }
+    const writeDb = ctx.serveWriteDb ?? ctx.db;
+    if (streakRunMatch[1] === "start") {
+      const run = await startStreakRun(writeDb, {
+        userId,
+        username: String(body.username ?? ""),
+        pool: normalizeStreakPool(body.pool),
+      });
+      if (!run) {
+        sendJson(req, res, ctx, 503, { error: "streak_pool_unavailable" });
+        return true;
+      }
+      sendJson(req, res, ctx, 200, run);
+      return true;
+    }
+    const runId = normalizeStreakRunId(body.runId);
+    if (!runId) {
+      sendJson(req, res, ctx, 400, { error: "invalid_run" });
+      return true;
+    }
+    if (streakRunMatch[1] === "cashout") {
+      const result = await cashOutStreakRun(writeDb, { userId, runId });
+      if (!result) {
+        sendJson(req, res, ctx, 404, { error: "run_not_found" });
+        return true;
+      }
+      sendJson(req, res, ctx, 200, result);
+      return true;
+    }
+    const guess = normalizeStreakGuess(body.guess);
+    if (!guess) {
+      sendJson(req, res, ctx, 400, { error: "invalid_guess" });
+      return true;
+    }
+    const result = await guessStreakRound(writeDb, { userId, runId, guess });
+    if (!result) {
+      sendJson(req, res, ctx, 404, { error: "run_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, result);
+    return true;
+  }
   const packGameMatch = url.pathname.match(/^\/api\/packs\/games\/(streak|allowance)$/);
   if (packGameMatch) {
     // The arcade's till. Server-to-server like the pull log and the wallet:
@@ -2134,7 +2227,9 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       page: Number.isFinite(page) ? page : 0,
       pageSize: Number.isFinite(pageSize) ? pageSize : 24,
       includeHidden,
-      sort: url.searchParams.get("sort") === "downloads" ? "downloads" : "newest",
+      sort: url.searchParams.get("sort") === "downloads" ? "downloads"
+        : url.searchParams.get("sort") === "size" ? "size"
+          : "newest",
       // One uploader's skins ("uploader: you" on the browse page). Anyone may
       // ask for anyone's: it only ever narrows what the visibility gate below
       // already allows this request to see.
@@ -2176,6 +2271,39 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     if (scope.tokened) res.setHeader("cache-control", "private, no-store");
     else res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
     sendJson(req, res, ctx, 200, { skin: toSkinSummary(skin, { asOwner: isOwner || scope.asAdmin }) });
+    return true;
+  }
+  if (url.pathname === "/api/skins/similar") {
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const ref = url.searchParams.get("id") ?? "";
+    const skin = ref ? await getSkinByRef(ctx.db, ref) : null;
+    // Only a skin with a public page recommends others: a hidden or private
+    // ref gets the same 404 /api/skins/get gives a stranger, which keeps this
+    // endpoint tokenless and its responses shareable. The candidates are
+    // public rows only either way.
+    if (!skin || skin.status !== "published" || skin.visibility !== "public") {
+      sendJson(req, res, ctx, 404, { error: "not_found" });
+      return true;
+    }
+    const limit = Number(url.searchParams.get("limit") ?? 6);
+    // The keymode the viewer has open, so the answer is "what looks like the
+    // playfield on screen" rather than "what looks like this skin somewhere in
+    // its range". Part of the URL, so each keymode caches separately.
+    const keys = Number(url.searchParams.get("keys"));
+    // Longer-lived than the list: a new upload joining someone's strip five
+    // minutes late is invisible, and every skin page hits this once per view.
+    res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=600");
+    sendJson(req, res, ctx, 200, {
+      skins: await listSimilarSkins(
+        ctx.db,
+        skin,
+        Number.isInteger(limit) ? limit : 6,
+        Number.isInteger(keys) && keys >= 1 && keys <= 10 ? keys : null,
+      ),
+    });
     return true;
   }
   if (url.pathname === "/api/skins/download") {
@@ -2557,6 +2685,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         sendJson(req, res, ctx, 409, { ok: false, error: "duplicate", duplicate });
         return true;
       }
+      // What the notes look like, for the similar-skins scoring. Best effort:
+      // an archive with no digestible note art just leaves the column null and
+      // scoring falls back to the sampled accent.
+      const visual = await computeSkinVisualSignature(buffer).catch(() => null);
       if (editing) {
         // An update lands on a fresh key (the published object is cached
         // immutably) but keeps the skin's own download filename. The old build
@@ -2571,6 +2703,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
           keymodes: validation.info.keymodes,
           specialKeymodes: validation.info.specialKeymodes,
           iniAuthor: validation.info.author,
+          visual,
         });
         if (skin.oskKey && skin.oskKey !== key) {
           await deleteSkinObjects(ctx.config, [skin.oskKey]).catch((error) => {
@@ -2592,6 +2725,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         specialKeymodes: validation.info.specialKeymodes,
         accentColor: validation.info.accentColor,
         iniAuthor: validation.info.author,
+        visual,
       });
       logInfo("skin_upload_osk", { id: skin.id, ownerUserId: skin.ownerUserId, sizeBytes: uploaded.sizeBytes, keymodes: validation.info.keymodes });
       sendJson(req, res, ctx, 200, { ok: true, keymodes: validation.info.keymodes });
@@ -2852,6 +2986,38 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const ok = await setSkinHidden(ctx.serveWriteDb ?? ctx.db, id, action === "hide");
     if (ok) logInfo("skin_moderated", { id, action });
     sendJson(req, res, ctx, ok ? 200 : 404, { ok });
+    return true;
+  }
+  if (url.pathname === "/api/admin/packs/streak/remove") {
+    /* Take one streak off the board. Not a ban and not a wipe: the account is
+       untouched and free to set another one, which is the whole moderation
+       model here (a streak nobody can explain is worth removing; deciding the
+       person behind it may never play again is not the same call). */
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ userId?: unknown; pool?: unknown }>((await readBody(req)) || "{}", {});
+    const userId = Math.floor(Number(body.userId) || 0);
+    if (userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_request" });
+      return true;
+    }
+    const pool = normalizeStreakPool(body.pool);
+    const result = await removeStreakBest(ctx.serveWriteDb ?? ctx.db, { userId, pool });
+    if (result.removed) {
+      logInfo("streak_best_removed", {
+        userId,
+        pool,
+        streak: result.entry?.streak ?? 0,
+        runsDeleted: result.runsDeleted,
+      });
+    }
+    sendJson(req, res, ctx, result.removed ? 200 : 404, { ok: result.removed, ...result });
     return true;
   }
   if (url.pathname === "/api/admin/ingest-fixture") {

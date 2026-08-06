@@ -98,8 +98,10 @@ describe("changelog content", () => {
     }
   });
 
-  it("keeps the wip line short: it renders as one run of text", () => {
+  it("keeps the wip list short: one line each at the foot of the modal", () => {
     expect(WIP.length).toBeLessThanOrEqual(4);
-    expect(WIP.join(" · ").length).toBeLessThanOrEqual(140);
+    for (const item of WIP) {
+      expect(item.length).toBeLessThanOrEqual(70);
+    }
   });
 });

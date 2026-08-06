@@ -767,6 +767,66 @@ create table if not exists pack_game_rewards (
 create index if not exists idx_pack_game_rewards_day
   on pack_game_rewards(day);
 
+-- Ranked higher-or-lower runs. The casual game is scored in the browser and
+-- always will be (the numbers it asks about are public), which is fine while
+-- the only stake is a capped shard allowance. A public leaderboard is a
+-- different stake, so a ranked run is dealt here instead: the server picks both
+-- players and the question, keeps the face-down card's answer in round_json
+-- where the client never sees it, and only counts a guess that arrived before
+-- deadline_at. The streak column is therefore something the account did rather
+-- than a number it reported, which is the whole reason the board can exist.
+create table if not exists pack_streak_runs (
+  id text primary key,
+  user_id integer not null,
+  username text not null,
+  pool text not null,
+  streak integer not null default 0,
+  status text not null,
+  ended_by text,
+  -- The round on the table, answer included. Never sent to the client whole.
+  round_json text,
+  -- Everyone this run has already dealt, so it never asks the same card twice.
+  seen_json text,
+  dealt_at integer,
+  deadline_at integer,
+  -- How long each guess took, kept so an inhuman run can be told apart from a
+  -- fast one after the fact. Nothing reads it during play.
+  guess_ms_json text,
+  created_at integer not null,
+  updated_at integer not null
+);
+create index if not exists idx_pack_streak_runs_user
+  on pack_streak_runs(user_id, pool, streak desc);
+-- The hourly sweep for runs somebody walked away from. Partial on purpose:
+-- only a handful of rows are live at once, so the index stays tiny and the
+-- write it costs on every guess is nothing. The retention delete next to it
+-- is left to scan, since indexing it would tax the same writes for a bulk
+-- delete that runs once an hour and nobody waits on.
+create index if not exists idx_pack_streak_runs_live
+  on pack_streak_runs(deadline_at) where status = 'live';
+
+-- What the board actually reads: one row per account per pool, holding their
+-- best run and when they reached it. The runs above used to be the board's
+-- source of truth (a max() over the whole history), which made the run log
+-- durable by construction - it could never be pruned without deleting somebody
+-- else's record - and turned every board read into a grouped scan of it. With
+-- the best kept here the board is an indexed ten-row read, and a run row goes
+-- back to being what it is: a transient record of one game, prunable on the
+-- ordinary schedule.
+create table if not exists pack_streak_bests (
+  user_id integer not null,
+  pool text not null,
+  username text not null,
+  streak integer not null,
+  -- When this best was set. Ties on the board go to whoever got there first.
+  achieved_at integer not null,
+  run_id text,
+  updated_at integer not null,
+  primary key (user_id, pool)
+);
+create index if not exists idx_pack_streak_bests_board
+  on pack_streak_bests(pool, streak desc, achieved_at asc);
+
 -- Discord bot: live-feed channel subscriptions. A row means "post events of
 -- feed_type for `country` into Discord channel_id". The unique key keeps a
 -- channel from being subscribed twice to the same feed/country pair.

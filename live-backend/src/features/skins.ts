@@ -3,6 +3,7 @@ import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { nowIso } from "../shared/score.js";
+import { normalizeSkinVisualSignature, skinSimilarityMatch, SKIN_SIMILARITY_FLOOR, type SkinSimilarityFacts, type SkinVisualSignature } from "../skins/similarity.js";
 import { slugifySkinName } from "../skins/slug.js";
 
 // Community skin uploads. The upload ticket is the pending row itself:
@@ -61,6 +62,10 @@ export interface SkinRow {
   // (setSkinSpecialKeymodes); detection then keeps its hands off the list.
   specialKeymodesManual: boolean;
   accentColor: string | null;
+  // Digest of the note art inside the .osk (shape mask, aspect, palette),
+  // computed at upload and compared by the similar-skins scoring. Null when
+  // the archive ships no digestible note images; never serialized to clients.
+  visual: SkinVisualSignature | null;
   downloadCount: number;
   status: "pending" | "published" | "hidden";
   visibility: SkinVisibility;
@@ -239,7 +244,7 @@ export async function getSkinForUpload(db: Db, id: string, token: string): Promi
 export async function attachSkinOsk(
   db: Db,
   skin: SkinRow,
-  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; specialKeymodes: number[]; accentColor: string | null; iniAuthor: string | null },
+  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; specialKeymodes: number[]; accentColor: string | null; iniAuthor: string | null; visual?: SkinVisualSignature | null },
 ): Promise<void> {
   // An author typed in the upload form wins; skin.ini's Author fills the gap.
   const author = skin.author ?? (cleanText(patch.iniAuthor ?? "", SKIN_AUTHOR_MAX_LENGTH) || null);
@@ -248,10 +253,10 @@ export async function attachSkinOsk(
     `update skins set
        osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
        keymodes_json = ?, special_keymodes_json = ?, accent_color = coalesce(accent_color, ?),
-       author = ?, search_text = ?, updated_at = ?
+       visual_json = ?, author = ?, search_text = ?, updated_at = ?
      where id = ?`,
     [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(patch.keymodes), JSON.stringify(normalizeKeymodes(patch.specialKeymodes)), patch.accentColor,
-     author, buildSearchText(skin.name, skin.ownerUsername, author), nowIso(), skin.id],
+     patch.visual ? JSON.stringify(patch.visual) : null, author, buildSearchText(skin.name, skin.ownerUsername, author), nowIso(), skin.id],
   );
 }
 
@@ -263,7 +268,7 @@ export async function attachSkinOsk(
 export async function replaceSkinOsk(
   db: Db,
   skin: SkinRow,
-  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; specialKeymodes: number[]; iniAuthor: string | null },
+  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; specialKeymodes: number[]; iniAuthor: string | null; visual?: SkinVisualSignature | null },
 ): Promise<void> {
   const author = skin.author ?? (cleanText(patch.iniAuthor ?? "", SKIN_AUTHOR_MAX_LENGTH) || null);
   const now = nowIso();
@@ -277,10 +282,10 @@ export async function replaceSkinOsk(
     db,
     `update skins set
        osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
-       keymodes_json = ?, special_keymodes_json = ?, author = ?, search_text = ?, osk_updated_at = ?, updated_at = ?
+       keymodes_json = ?, special_keymodes_json = ?, visual_json = ?, author = ?, search_text = ?, osk_updated_at = ?, updated_at = ?
      where id = ?`,
     [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(keymodes),
-     JSON.stringify(specialKeymodes),
+     JSON.stringify(specialKeymodes), patch.visual ? JSON.stringify(patch.visual) : null,
      author, buildSearchText(skin.name, skin.ownerUsername, author), now, now, skin.id],
   );
 }
@@ -615,7 +620,9 @@ export interface SkinsListQuery {
   page?: number;
   pageSize?: number;
   includeHidden?: boolean;
-  sort?: "newest" | "downloads";
+  // "size" is largest .osk first; rows without a stored file sort last (null
+  // orders below every number in SQLite, and desc puts it at the bottom).
+  sort?: "newest" | "downloads" | "size";
   // Whose private skins this list may carry. The browse grid passes nothing
   // and stays public; the "your private skins" shelf passes the signed-in
   // viewer, which the endpoint only trusts from an admin-token request.
@@ -699,7 +706,9 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
 
   const orderSql = query.sort === "downloads"
     ? "download_count desc, published_at desc, created_at desc"
-    : "published_at desc, created_at desc";
+    : query.sort === "size"
+      ? "osk_size_bytes desc, published_at desc, created_at desc"
+      : "published_at desc, created_at desc";
   const totalRow = (await exec(db, `select count(*) as total from skins where ${whereSql}`, args)).rows[0];
   const rows = (await exec(
     db,
@@ -723,6 +732,144 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
     page,
     pageSize,
   };
+}
+
+// A similar-skins entry: the summary plus which of the candidate's keymodes
+// the visual match was made on, so the strip fronts the render that actually
+// matched rather than whatever cover the uploader chose. Null when the score
+// came from the accent fallback.
+export type SimilarSkinSummary = SkinSummary & { matchKeys: number | null };
+
+// A scored candidate before it is worth hydrating: the four facts similarity
+// reads plus the tiebreakers, and nothing that costs a kilobyte to parse.
+interface SimilarSkinCandidate {
+  id: string;
+  downloadCount: number;
+  publishedAt: string | null;
+  facts: SkinSimilarityFacts;
+}
+
+// Both halves of the strip are cached in the serving process, because the work
+// is a scan of the whole public catalog and the catalog changes far less often
+// than skin pages are opened: the parsed candidate facts (shared by every
+// skin's strip, so a burst of different skin pages parses the catalog once
+// between uploads) and the finished strips themselves, one per skin and
+// keymode asked for.
+//
+// Keyed by a catalog version - how many public published skins there are and
+// the newest updated_at among them - so a publish, delete, rename, moderation
+// action or .osk replacement drops both. Download counts deliberately do not
+// bump updated_at, so the finished strips also carry a TTL: it keeps the
+// counts on the cards no more stale than the endpoint's own cache header
+// already promises, without making every download invalidate the catalog.
+const SIMILAR_ANSWER_TTL_MS = 5 * 60_000;
+const SIMILAR_ANSWER_MAX_ENTRIES = 100;
+
+let similarCatalogVersion: string | null = null;
+let similarCandidates: SimilarSkinCandidate[] | null = null;
+const similarAnswers = new Map<string, { skins: SimilarSkinSummary[]; expiresAt: number }>();
+
+// Test seam, and a restart-equivalent for the admin reset paths.
+export function clearSimilarSkinsCache(): void {
+  similarCatalogVersion = null;
+  similarCandidates = null;
+  similarAnswers.clear();
+}
+
+async function skinCatalogVersion(db: Db): Promise<string> {
+  const row = (await exec(
+    db,
+    "select count(*) as total, max(updated_at) as newest from skins where status = 'published' and visibility = 'public'",
+  )).rows[0];
+  return `${Number(row?.total) || 0}|${String(row?.newest ?? "")}`;
+}
+
+async function loadSimilarCandidates(db: Db): Promise<SimilarSkinCandidate[]> {
+  // Narrow on purpose: a whole row carries the previews and screenshots JSON
+  // (over a kilobyte apiece) that only the handful of winners ever serialize.
+  const rows = (await exec(
+    db,
+    `select id, author, keymodes_json, accent_color, visual_json, download_count, published_at
+     from skins where status = 'published' and visibility = 'public'`,
+  )).rows;
+  return rows.map((raw) => {
+    const row = raw as Record<string, unknown>;
+    return {
+      id: String(row.id),
+      downloadCount: Math.max(0, Math.floor(Number(row.download_count) || 0)),
+      publishedAt: textOrNull(row.published_at),
+      facts: {
+        author: textOrNull(row.author),
+        keymodes: normalizeKeymodes(parseJson<unknown>(String(row.keymodes_json ?? "[]"), [])),
+        accentColor: textOrNull(row.accent_color),
+        visual: normalizeSkinVisualSignature(parseJson<unknown>(String(row.visual_json ?? "null"), null)),
+      },
+    };
+  });
+}
+
+// The detail page's "similar skins" strip: the public catalog scored against
+// the skin being viewed (src/skins/similarity.ts says what similar means),
+// junk below the floor dropped, ties broken toward what people download.
+// Candidates are public rows only, so what comes back is exactly what
+// /api/skins/list would show anyone, and the target skin never recommends
+// itself. Only the winners are read back in full, by id.
+export async function listSimilarSkins(db: Db, skin: SkinRow, limit = 6, keys?: number | null): Promise<SimilarSkinSummary[]> {
+  const capped = Math.max(1, Math.min(12, Math.floor(limit)));
+  // The keymode the viewer has open, when the page said: the answer to "what
+  // looks like this" is genuinely different per keymode, since skins change
+  // note shape across their range.
+  const atKeys = Number.isInteger(keys) && Number(keys) >= 1 && Number(keys) <= 10 ? Number(keys) : null;
+  const version = await skinCatalogVersion(db);
+  if (version !== similarCatalogVersion) {
+    similarCatalogVersion = version;
+    similarCandidates = null;
+    similarAnswers.clear();
+  }
+  const answerKey = `${skin.id}|${capped}|${atKeys ?? "any"}`;
+  const cached = similarAnswers.get(answerKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.skins;
+
+  similarCandidates ??= await loadSimilarCandidates(db);
+  const winners = similarCandidates
+    .filter((candidate) => candidate.id !== skin.id)
+    .map((candidate) => ({ candidate, match: skinSimilarityMatch(skin, candidate.facts, { keys: atKeys }) }))
+    .filter((entry) => entry.match.score >= SKIN_SIMILARITY_FLOOR)
+    .sort((a, b) => b.match.score - a.match.score
+      || b.candidate.downloadCount - a.candidate.downloadCount
+      || (b.candidate.publishedAt ?? "").localeCompare(a.candidate.publishedAt ?? ""))
+    .slice(0, capped);
+
+  let skins: SimilarSkinSummary[] = [];
+  if (winners.length > 0) {
+    const full = new Map<string, SkinRow>();
+    for (const raw of (await exec(
+      db,
+      `select * from skins where id in (${winners.map(() => "?").join(", ")})`,
+      winners.map((entry) => entry.candidate.id),
+    )).rows) {
+      const row = rowToSkin(raw as Record<string, unknown>);
+      full.set(row.id, row);
+    }
+    // A row that vanished between the two queries (deleted mid-request) drops
+    // out rather than showing up half-built.
+    skins = winners
+      .map((entry) => {
+        const row = full.get(entry.candidate.id);
+        return row ? { ...toSkinSummary(row), matchKeys: entry.match.matchKeys } : null;
+      })
+      .filter((entry): entry is SimilarSkinSummary => entry != null);
+  }
+
+  // Oldest out first: the map keeps insertion order, and a strip nobody is
+  // asking for any more is the one worth dropping.
+  similarAnswers.set(answerKey, { skins, expiresAt: Date.now() + SIMILAR_ANSWER_TTL_MS });
+  while (similarAnswers.size > SIMILAR_ANSWER_MAX_ENTRIES) {
+    const oldest = similarAnswers.keys().next();
+    if (oldest.done) break;
+    similarAnswers.delete(oldest.value);
+  }
+  return skins;
 }
 
 // Counts a download and hands back the redirect target. Only published public
@@ -915,6 +1062,7 @@ function rowToSkin(row: Record<string, unknown>): SkinRow {
     specialKeymodes: normalizeKeymodes(parseJson<unknown>(String(row.special_keymodes_json ?? "[]"), [])),
     specialKeymodesManual: Number(row.special_keymodes_manual) === 1,
     accentColor: textOrNull(row.accent_color),
+    visual: normalizeSkinVisualSignature(parseJson<unknown>(String(row.visual_json ?? "null"), null)),
     downloadCount: Math.max(0, Math.floor(Number(row.download_count) || 0)),
     status,
     visibility: row.visibility === "private" ? "private" : "public",

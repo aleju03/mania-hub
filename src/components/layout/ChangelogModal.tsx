@@ -164,7 +164,9 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
                   working on next
                 </div>
                 <div className="mt-1 text-[12.5px] leading-relaxed text-osu-c2/80">
-                  {WIP.join(" · ")}
+                  {WIP.map((item) => (
+                    <div key={item}>{item}</div>
+                  ))}
                 </div>
               </div>
             ) : null}

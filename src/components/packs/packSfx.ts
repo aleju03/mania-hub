@@ -293,6 +293,24 @@ export function playStreakMilestone() {
   playNoise(ctx, { at: 0.14, duration: 0.4, gain: 0.03, startFreq: 7200, q: 0.7 });
 }
 
+/* Dice, for a guess nobody wanted to make. A handful of dry knocks at falling
+   intervals so it lands rather than rattling forever, then the settle: two
+   clacks close together, the way a die does when it stops caring. Wooden on
+   purpose - the shard clink next to it is metal, and these two should never be
+   mistaken for each other. */
+export function playDiceRoll() {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  let at = 0;
+  for (let knock = 0; knock < 6; knock += 1) {
+    // Each gap a little longer than the last: a die slowing down.
+    at += 0.045 + knock * 0.016 + Math.random() * 0.01;
+    playNoise(ctx, { at, duration: 0.05, gain: 0.055, startFreq: 900 + Math.random() * 700, q: 2.4 });
+    playTone(ctx, { at, freq: 220 + Math.random() * 90, duration: 0.045, gain: 0.03, type: "triangle" });
+  }
+  playNoise(ctx, { at: at + 0.09, duration: 0.06, gain: 0.05, startFreq: 700, endFreq: 420, q: 2 });
+}
+
 /* Shard clinks when cards are recycled; a bigger haul jingles longer. */
 export function playRecycleClink(gained: number) {
   const ctx = ensureAudio();

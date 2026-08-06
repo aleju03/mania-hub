@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireAdminAccess } from "./auth";
+import { requireAdminAccess, requireTrueAdminAccess } from "./auth";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import { buildRandomDrawQuery } from "./maps-random-draw-params";
 import type { LiveMapsRandomDrawParams } from "./maps-random-draw-params";
@@ -2098,6 +2098,77 @@ export async function fetchLiveStreakMetrics(userIds: number[]): Promise<Map<num
   }
   return metrics;
 }
+
+/* The blitz higher-or-lower board: the ten longest streaks recorded in a
+   pool, plus where the viewer sits when they did not make it. Public, like
+   every other leaderboard here, and read fresh rather than cached because it
+   is sitting next to the game that changes it. */
+export interface LiveStreakBoardEntry {
+  rank: number;
+  userId: number;
+  username: string;
+  streak: number;
+  achievedAt: number;
+}
+
+export interface LiveStreakBoard {
+  pool: "top500" | "top" | "anyone";
+  entries: LiveStreakBoardEntry[];
+  viewer: LiveStreakBoardEntry | null;
+}
+
+export async function fetchLiveStreakBoard(
+  pool: "top500" | "top" | "anyone",
+  viewerId?: number | null,
+): Promise<LiveStreakBoard> {
+  const me = Number.isInteger(viewerId) && (viewerId ?? 0) > 0 ? `&me=${viewerId}` : "";
+  const body = await fetchLiveJson<Partial<LiveStreakBoard>>(`/api/packs/games/streak/board?pool=${pool}${me}`);
+  return {
+    pool,
+    entries: Array.isArray(body.entries) ? body.entries : [],
+    viewer: body.viewer ?? null,
+  };
+}
+
+export interface LiveStreakRemoveResult {
+  ok: boolean;
+  removed: boolean;
+  entry: LiveStreakBoardEntry | null;
+  runsDeleted: number;
+}
+
+/* Moderation for the blitz board, done from the board itself. Deletes one
+   record (and that account's ended runs in the pool); the account keeps
+   playing and can set another streak, so this removes a result rather than a
+   player. True-admin only, and server-side rather than a browser fetch for the
+   same reason every other admin call here is: the backend token never leaves
+   the server. */
+export const removeLiveStreakBest = createServerFn({ method: "POST" })
+  .validator((data: { userId?: unknown; pool?: unknown }) => {
+    const userId = Number(data?.userId);
+    if (!Number.isInteger(userId) || userId <= 0) throw new Error("A user id is required.");
+    return {
+      userId,
+      pool: data?.pool === "top500" || data?.pool === "anyone" ? data.pool : "top" as const,
+    };
+  })
+  .handler(async ({ data }): Promise<LiveStreakRemoveResult> => {
+    await requireTrueAdminAccess("Server remove streak best");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = { "content-type": "application/json" };
+    if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    const response = await fetch(`${base}/api/admin/packs/streak/remove`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ userId: data.userId, pool: data.pool }),
+    });
+    const body = await response.json() as LiveStreakRemoveResult & { error?: unknown };
+    if (!response.ok) {
+      throw new Error(response.status === 404 ? "That account has no streak in this pool." : `Server ${response.status}`);
+    }
+    return body;
+  });
 
 export interface LiveSharedPackCard {
   owner: { userId: number; username: string };

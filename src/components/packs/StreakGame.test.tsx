@@ -11,6 +11,7 @@ import type { LiveGlobalRankingEntry } from "#/lib/live-backend";
 
 const sfx = vi.hoisted(() => ({
   playCardDraw: vi.fn(),
+  playDiceRoll: vi.fn(),
   playRecycleClink: vi.fn(),
   playStreakCorrect: vi.fn(),
   playStreakMilestone: vi.fn(),
@@ -20,17 +21,35 @@ const sfx = vi.hoisted(() => ({
 vi.mock("./packSfx", () => sfx);
 
 const fetchLiveGlobalRankings = vi.hoisted(() => vi.fn());
+const fetchLiveStreakBoard = vi.hoisted(() => vi.fn());
 vi.mock("#/lib/live-backend", () => ({
   fetchLiveGlobalRankings,
+  fetchLiveStreakBoard,
   isLiveBackendConfigured: () => true,
   warmLivePackPlayers: vi.fn(() => Promise.resolve()),
+  // Pulled in by the leaderboard the game renders; exercised in its own test.
+  removeLiveStreakBest: vi.fn(),
 }));
 
-vi.mock("#/lib/auth-context", () => ({ useAuth: () => ({ viewer: null, loginAvailable: false }) }));
+const viewer = vi.hoisted(() => ({ current: null as null | { id: number; username: string } }));
+vi.mock("#/lib/auth-context", () => ({
+  useAuth: () => ({ viewer: viewer.current, loginAvailable: false }),
+}));
 vi.mock("#/lib/analytics", () => ({ track: vi.fn() }));
 vi.mock("#/lib/pack-games", () => ({
   fetchPackGameAllowance: vi.fn(() => Promise.resolve(null)),
   claimStreakShards: vi.fn(() => Promise.resolve(null)),
+}));
+const blitz = vi.hoisted(() => ({
+  startBlitzStreak: vi.fn(),
+  guessBlitzStreak: vi.fn(),
+  cashOutBlitzStreak: vi.fn(),
+}));
+vi.mock("#/lib/streak-blitz", () => ({
+  ...blitz,
+  BLITZ_ROUND_GRACE_MS: 1500,
+  blitzClientDeadline: (round: { deadlineAt: number; serverNow: number }, receivedAt: number) =>
+    round.deadlineAt + (receivedAt - round.serverNow),
 }));
 // Cards mint from stored scores; the art itself is a canvas, so the game gets
 // the tier (which is what colours the names) and no thumbnail.
@@ -79,11 +98,36 @@ function entry(id: number, plays: number): LiveGlobalRankingEntry {
    always the right answer. */
 const RANKING = Array.from({ length: 40 }, (_, index) => entry(index + 1, 10_000 + index * 1_000));
 
+/* A server-dealt round, as the blitz endpoints hand it over: the face-up
+   card carries its number and the face-down one carries none. */
+function blitzRound(index: number, leftId: number, rightId: number, dealtAt: number) {
+  const player = (id: number) => ({
+    userId: id,
+    username: `player${id}`,
+    countryCode: "CR",
+    avatarUrl: `https://a.ppy.sh/${id}`,
+    globalRank: id,
+    pp: 12_000,
+  });
+  return {
+    index,
+    metric: "plays" as const,
+    left: { player: player(leftId), value: 10_000 + leftId * 1_000 },
+    right: { player: player(rightId) },
+    deadlineAt: dealtAt + 12_000,
+    serverNow: dealtAt,
+  };
+}
+
 beforeEach(() => {
   vi.spyOn(Math, "random").mockReturnValue(0);
   fetchLiveGlobalRankings.mockReset();
   fetchLiveGlobalRankings.mockResolvedValue({ ranking: RANKING, total: RANKING.length });
+  fetchLiveStreakBoard.mockReset();
+  fetchLiveStreakBoard.mockResolvedValue({ pool: "top500", entries: [], viewer: null });
+  viewer.current = null;
   for (const fn of Object.values(sfx)) fn.mockClear();
+  for (const fn of Object.values(blitz)) fn.mockReset();
 });
 
 afterEach(() => {
@@ -148,6 +192,195 @@ describe("the hard mode", () => {
     // One right answer on the board: the run would be dumped by a switch, so
     // the chips wait for it to end.
     expect((screen.getByRole("button", { name: "Anyone" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("blitz mode", () => {
+  it("asks for a sign-in rather than dealing a board nobody can be ranked on", async () => {
+    render(<StreakGame onExit={() => {}} />);
+    await settle();
+
+    fireEvent.click(screen.getByRole("button", { name: "Blitz" }));
+    await settle();
+    expect(await screen.findByText(/Sign in with osu!/)).toBeTruthy();
+    expect(blitz.startBlitzStreak).not.toHaveBeenCalled();
+  });
+
+  it("plays the round the server dealt, with its number withheld", async () => {
+    viewer.current = { id: 99, username: "runner" };
+    blitz.startBlitzStreak.mockResolvedValue({
+      runId: "abcdefgh1234",
+      pool: "top",
+      streak: 0,
+      status: "live",
+      endedBy: null,
+      round: blitzRound(1, 1, 2, Date.now()),
+    });
+    render(<StreakGame onExit={() => {}} />);
+    await settle();
+
+    fireEvent.click(screen.getByRole("button", { name: "Blitz" }));
+    await settle();
+    expect(blitz.startBlitzStreak).toHaveBeenCalledWith({ data: { pool: "top500" } });
+    // The card being guessed at shows a question mark, because its number
+    // never left the backend.
+    expect(await screen.findByText("? plays")).toBeTruthy();
+  });
+
+  it("takes the verdict from the server even when the browser would disagree", async () => {
+    viewer.current = { id: 99, username: "runner" };
+    blitz.startBlitzStreak.mockResolvedValue({
+      runId: "abcdefgh1234",
+      pool: "top",
+      streak: 0,
+      status: "live",
+      endedBy: null,
+      round: blitzRound(1, 1, 2, Date.now()),
+    });
+    /* The revealed number beats the face-up one, so a client scoring this
+       itself would call "more plays" right. The server says otherwise, and the
+       server is the one that counts. */
+    blitz.guessBlitzStreak.mockResolvedValue({
+      runId: "abcdefgh1234",
+      pool: "top",
+      streak: 0,
+      status: "ended",
+      endedBy: "wrong",
+      round: null,
+      correct: false,
+      expired: false,
+      revealed: { userId: 2, value: 999_999 },
+      reward: { granted: 0, remainingToday: 1200, cap: 1200 },
+    });
+    render(<StreakGame onExit={() => {}} />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Blitz" }));
+    await settle();
+
+    fireEvent.click(await screen.findByRole("button", { name: /more plays/i }));
+    await settle();
+    expect(blitz.guessBlitzStreak).toHaveBeenCalledWith({
+      data: { runId: "abcdefgh1234", guess: "more" },
+    });
+    expect(sfx.playStreakWrong).toHaveBeenCalledTimes(1);
+    expect(sfx.playStreakCorrect).not.toHaveBeenCalled();
+  });
+
+  it("sweeps the clock bar every frame rather than in interval-sized hops", async () => {
+    viewer.current = { id: 99, username: "runner" };
+    blitz.startBlitzStreak.mockResolvedValue({
+      runId: "abcdefgh1234",
+      pool: "top500",
+      streak: 0,
+      status: "live",
+      endedBy: null,
+      round: blitzRound(1, 1, 2, Date.now()),
+    });
+    const { container } = render(<StreakGame onExit={() => {}} />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Blitz" }));
+    await settle();
+
+    const bar = container.querySelector("[data-clock-bar]") as HTMLElement;
+    expect(bar).toBeTruthy();
+    /* Sampled over a fifth of a second. The old clock ticked state on a 100ms
+       interval, which is two positions in this window and reads as hopping;
+       a frame loop is a dozen. */
+    const seen = new Set<string>();
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        const started = Date.now();
+        const sample = () => {
+          seen.add(bar.style.transform);
+          if (Date.now() - started < 200) requestAnimationFrame(sample);
+          else resolve();
+        };
+        requestAnimationFrame(sample);
+      });
+    });
+    expect(seen.size).toBeGreaterThan(4);
+  });
+
+  it("closes the run when the clock runs out, and stops taking guesses first", async () => {
+    viewer.current = { id: 99, username: "runner" };
+    const dealtAt = Date.now();
+    blitz.startBlitzStreak.mockResolvedValue({
+      runId: "abcdefgh1234",
+      pool: "top",
+      streak: 0,
+      status: "live",
+      endedBy: null,
+      // A round with 300ms on it, so the clock can be watched running out.
+      round: { ...blitzRound(1, 1, 2, dealtAt), deadlineAt: dealtAt + 300 },
+    });
+    blitz.cashOutBlitzStreak.mockResolvedValue({
+      runId: "abcdefgh1234",
+      pool: "top",
+      streak: 0,
+      status: "ended",
+      endedBy: "timeout",
+      round: null,
+      correct: false,
+      expired: true,
+      revealed: { userId: 2, value: 12_000 },
+      reward: null,
+    });
+    render(<StreakGame onExit={() => {}} />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Blitz" }));
+    await settle();
+    await screen.findByText("? plays");
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    });
+    expect((screen.getByRole("button", { name: /more plays/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Out of time.")).toBeTruthy();
+    expect(blitz.cashOutBlitzStreak).not.toHaveBeenCalled();
+
+    // The grace the backend allows for the wire, waited out so it agrees this
+    // was a timeout rather than closing it early as a cash-out.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1700));
+    });
+    expect(blitz.cashOutBlitzStreak).toHaveBeenCalledWith({ data: { runId: "abcdefgh1234" } });
+  });
+});
+
+describe("rolling for it", () => {
+  it("picks a side, locks the board while the dice are in the air, then plays it", async () => {
+    render(<StreakGame onExit={() => {}} />);
+    await settle();
+    await screen.findByText(/have more or fewer/);
+
+    fireEvent.click(screen.getByRole("button", { name: /guess at random/i }));
+    // Math.random is pinned to 0, so the dice pick "more" - the right answer
+    // in this fixture. Nothing is submitted until they land.
+    expect(sfx.playDiceRoll).toHaveBeenCalledTimes(1);
+    expect(sfx.playStreakCorrect).not.toHaveBeenCalled();
+    expect((screen.getByRole("button", { name: /more plays/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /fewer plays/i }) as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    });
+    expect(sfx.playStreakCorrect).toHaveBeenCalledWith(1);
+  });
+
+  it("throws the dice away when a re-deal beats them to the board", async () => {
+    render(<StreakGame onExit={() => {}} />);
+    await settle();
+    await screen.findByText(/have more or fewer/);
+
+    fireEvent.click(screen.getByRole("button", { name: /guess at random/i }));
+    // A pool switch mid-roll: the round the dice were thrown at is gone, so
+    // the guess they picked must not land on the one that replaced it.
+    fireEvent.click(screen.getByRole("button", { name: "Anyone" }));
+    await settle();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    });
+    expect(sfx.playStreakCorrect).not.toHaveBeenCalled();
   });
 });
 

@@ -20,27 +20,43 @@ import type { LiveGlobalRankingEntry } from "./live-backend";
 // projection read per page of the pool, so a long run is a handful of cached
 // reads and never an osu! API call.
 
-/* How deep the game draws. The top of the pool is the part the community can
-   actually argue about; too deep and a name means nothing and the read
-   turns into a coin flip. Which is exactly what the hard mode sells: "anyone"
-   draws from the entire tracked snapshot, where most names mean nothing and
-   the guess has to come off rank, country and instinct alone. */
-export type StreakPool = "top" | "anyone";
+/* How deep the game draws, in three steps. The top of the pool is the part the
+   community can actually argue about, and how far down that goes is a matter
+   of taste: 500 is the part most people could name, 1000 is the part somebody
+   could. Past that a name means nothing and the read turns into a coin flip,
+   which is exactly what the hard mode sells: "anyone" draws from the entire
+   tracked snapshot, where the guess has to come off rank, country and instinct
+   alone.
+
+   "top" is the 1000 pool rather than the 500 one because it was the 1000 pool
+   first, and best streaks stored under that name on someone's machine should
+   keep meaning what they meant when they were earned. */
+export type StreakPool = "top500" | "top" | "anyone";
 export const STREAK_POOL_PLAYERS = 1000;
+export const STREAK_POOL_PLAYERS_TIGHT = 500;
 export const STREAK_PAGE_SIZE = 50;
+
+/* How far down the rankings each pool reaches. Infinity is the whole tracked
+   snapshot, clamped by what it actually holds wherever it is used. */
+export function streakPoolDepth(pool: StreakPool): number {
+  if (pool === "anyone") return Number.MAX_SAFE_INTEGER;
+  return pool === "top500" ? STREAK_POOL_PLAYERS_TIGHT : STREAK_POOL_PLAYERS;
+}
 
 /* Kept close to the seen set: a run this long has emptied a page or two of the
    pool, and repeats read as the game running out rather than as a challenge. */
 export const STREAK_REFILL_THRESHOLD = 12;
 
-/* One best per pool: a 20-streak against the top 1000 and a 20-streak against
+/* One best per pool: a 20-streak against the top 500 and a 20-streak against
    the whole snapshot are different achievements, and overwriting one with the
    other would erase whichever game someone is actually good at. */
 export const STREAK_BEST_STORAGE_KEY = "mania-hub-streak-best-v1";
 export const STREAK_BEST_ANYONE_STORAGE_KEY = "mania-hub-streak-best-anyone-v1";
+export const STREAK_BEST_TOP500_STORAGE_KEY = "mania-hub-streak-best-top500-v1";
 
 function bestStreakKey(pool: StreakPool): string {
-  return pool === "anyone" ? STREAK_BEST_ANYONE_STORAGE_KEY : STREAK_BEST_STORAGE_KEY;
+  if (pool === "anyone") return STREAK_BEST_ANYONE_STORAGE_KEY;
+  return pool === "top500" ? STREAK_BEST_TOP500_STORAGE_KEY : STREAK_BEST_STORAGE_KEY;
 }
 
 /* Mirrors the backend's milestone spacing so the board can say what the next
@@ -265,10 +281,7 @@ export function streakMetricValue(player: StreakPlayer, metric: StreakMetric): n
 /* The pages the game may draw from: as much of the pool as the mode's depth
    allows, and never more than the snapshot actually holds. */
 export function streakPageCount(total: number, pool: StreakPool = "top"): number {
-  const depth = Math.min(
-    pool === "anyone" ? Number.MAX_SAFE_INTEGER : STREAK_POOL_PLAYERS,
-    Math.max(0, Math.floor(total)),
-  );
+  const depth = Math.min(streakPoolDepth(pool), Math.max(0, Math.floor(total)));
   return Math.max(1, Math.ceil(depth / STREAK_PAGE_SIZE));
 }
 
@@ -308,14 +321,15 @@ export function streakPageSlice(
 }
 
 /* The loaded entries a mode is allowed to draw from. Pages are shared between
-   the two games (they come off the same rankings pagination), so a hard run's
-   deep pages must not leak rank-8000 names into a top-1000 draw. */
+   the pools (they come off the same rankings pagination), so a deep run's
+   pages must not leak rank-8000 names into a top-500 draw. */
 export function streakPoolEntries(
   entries: readonly LiveGlobalRankingEntry[],
   pool: StreakPool,
 ): readonly LiveGlobalRankingEntry[] {
   if (pool === "anyone") return entries;
-  return entries.filter((entry) => entry.rank <= STREAK_POOL_PLAYERS);
+  const depth = streakPoolDepth(pool);
+  return entries.filter((entry) => entry.rank <= depth);
 }
 
 /* The next player to put on the board: anyone loaded who has not appeared in

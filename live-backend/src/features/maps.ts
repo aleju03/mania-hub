@@ -4578,12 +4578,38 @@ export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{
     // One country's parse+merge is the unit of synchronous work; yield between
     // them so HTTP requests can interleave with this aggregation. The payload is
     // fetched, parsed locally and folded here, then goes out of scope before the
-    // next country loads — the multi-hundred-MB set of parsed trees is never
-    // held resident at once (deliberately uncached).
+    // next country loads, so no set of parsed trees is ever held resident at
+    // once (deliberately uncached).
     await yieldToEventLoop();
     const payloadRow = (await exec(
       db,
-      "select payload_json from country_maps_snapshots where country = ?",
+      // The farmed section is ~90% of a country payload (190 MB across all
+      // countries) and this merge never reads it: the loop below folds only
+      // mostPlayed, favourites, favouritesByPlayer and beatmapsetsPool, and
+      // GLOBAL's farmed data lives in the row-granular projection instead.
+      // Dropping it in SQL keeps 190 MB of JSON out of V8 per rebuild.
+      //
+      // Replaced with an empty array rather than json_remove'd: both payload
+      // validators (isStoredCountryMapsData, isCountryMapsDataShape) require
+      // `farmed` to be an array, so removing the key would fail every country
+      // and silently produce an empty GLOBAL snapshot.
+      //
+      // The json_valid guard preserves this loop's tolerance for a malformed
+      // payload: json_replace raises on invalid JSON, which would fail the
+      // whole job, where today the row is skipped by parseJson's null default.
+      //
+      // Note this makes the validators' Array.isArray(farmed) check always
+      // pass *for this reader*, so a row whose farmed was some other type
+      // would now merge where it used to be skipped. No writer can produce
+      // that (every one serializes farmed through compactMapsSnapshotForStorage
+      // or writes []), and merging is the better outcome anyway: the section
+      // is not folded here, so skipping dropped a country's whole
+      // popular/favourites contribution over a field this job never reads.
+      `select case when json_valid(payload_json)
+                then json_replace(payload_json, '$.farmed', json('[]'))
+                else payload_json
+              end as payload_json
+       from country_maps_snapshots where country = ?`,
       [String(countryRow.country)],
     )).rows[0];
     const stored = payloadRow ? toStoredCountryMapsData(parseJson<unknown>(payloadRow.payload_json, null)) : null;

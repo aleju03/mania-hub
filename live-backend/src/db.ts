@@ -1756,6 +1756,13 @@ async function migrateSkins(db: Db): Promise<void> {
     // re-scans must leave it alone.
     await db.execute("alter table skins add column special_keymodes_manual integer not null default 0");
   }
+  if (!skinColumns.includes("visual_json")) {
+    // Digest of the note art inside the .osk (shape mask, aspect, palette) for
+    // the similar-skins scoring. Written at upload/replacement and backfilled
+    // once for the existing catalog by backfillSkinVisualSignatures; null when
+    // the archive ships no digestible note images.
+    await db.execute("alter table skins add column visual_json text");
+  }
   if (!skinColumns.includes("private_secret")) {
     // The capability behind a private skin's stored objects: it is a segment of
     // every R2 key the skin writes (so the public bucket URL cannot be guessed

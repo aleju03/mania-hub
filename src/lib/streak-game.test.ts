@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import type { LiveGlobalRankingEntry } from "./live-backend";
 import {
@@ -12,13 +13,17 @@ import {
   STREAK_METRICS,
   STREAK_PAGE_SIZE,
   STREAK_POOL_PLAYERS,
+  STREAK_POOL_PLAYERS_TIGHT,
+  readBestStreak,
   streakMetricValue,
+  streakPoolDepth,
   streakPageCount,
   streakPageSlice,
   streakPoolEntries,
   streakRankPage,
   streakShardValue,
   toStreakPlayer,
+  writeBestStreak,
   type StreakPlayerExtras,
 } from "./streak-game";
 
@@ -91,6 +96,29 @@ describe("streak draw", () => {
     const entries = [entry(3), entry(1_200), entry(5_000)];
     expect(streakPoolEntries(entries, "top").map((e) => e.rank)).toEqual([3]);
     expect(streakPoolEntries(entries, "anyone")).toHaveLength(3);
+  });
+
+  it("draws the three pool depths apart", () => {
+    // Pages are shared between the pools, so the tightest one has to filter
+    // rather than trust what happens to be loaded.
+    const entries = [entry(3), entry(640), entry(1_200)];
+    expect(streakPoolEntries(entries, "top500").map((e) => e.rank)).toEqual([3]);
+    expect(streakPoolEntries(entries, "top").map((e) => e.rank)).toEqual([3, 640]);
+    expect(streakPoolEntries(entries, "anyone")).toHaveLength(3);
+
+    expect(streakPoolDepth("top500")).toBe(STREAK_POOL_PLAYERS_TIGHT);
+    expect(streakPoolDepth("top")).toBe(STREAK_POOL_PLAYERS);
+    expect(streakPageCount(10_000, "top500")).toBe(STREAK_POOL_PLAYERS_TIGHT / STREAK_PAGE_SIZE);
+    expect(pickUnloadedPage(10_000, new Set(), () => 0.999999, "top500")).toBe(10);
+  });
+
+  it("keeps one best per pool, so a tighter run cannot overwrite a deeper one", () => {
+    writeBestStreak(11, "top500");
+    writeBestStreak(22, "top");
+    writeBestStreak(33, "anyone");
+    expect(readBestStreak("top500")).toBe(11);
+    expect(readBestStreak("top")).toBe(22);
+    expect(readBestStreak("anyone")).toBe(33);
   });
 
   it("aims the hard draw at the page holding a pool position", () => {

@@ -24,9 +24,16 @@ export interface ChangelogUpdate {
 
 /** Short list of what is being worked on now. Keep it to three or four.
     Leave it empty to hide the section entirely. */
-export const WIP: string[] = [];
+export const WIP: string[] = [
+  "Adding filter by regions rather than just countries",
+  "Balancing unfairly underrated 4K maniacards",
+];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-05", text: "New Blitz mode for higher or lower: every round is timed and it has a leaderboard", to: "/streak" },
+  { date: "2026-08-05", text: "New top 500 difficulty mode, and an idk button for when you literally have no clue", to: "/streak" },
+  { date: "2026-08-05", text: "Sort skins by size, and narrow the grid to your own uploads", to: "/skins" },
+  { date: "2026-08-05", text: "New 4K and 7K packs: every card in one is a player who mains that keymode", to: "/packs" },
   { date: "2026-08-05", text: "Performance optimizations and speedups everywhere" },
   { date: "2026-08-05", text: "You can now show your name under the spectators of a replay you are watching, from settings", to: "/settings" },
   { date: "2026-08-05", text: "The player name on a replay opens their profile", to: "/replay" },

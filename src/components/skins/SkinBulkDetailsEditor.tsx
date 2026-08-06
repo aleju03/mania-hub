@@ -649,7 +649,7 @@ export function SkinBulkDetailsEditor({
                     maxLength={SKIN_DESCRIPTION_MAX_LENGTH}
                     rows={3}
                     onChange={(event) => setDescription(event.target.value)}
-                    placeholder="What you changed, where the parts are from, best keymodes..."
+                    placeholder="A line about the skin"
                     className="w-full resize-y rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] leading-relaxed text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
                   />
                 </label>

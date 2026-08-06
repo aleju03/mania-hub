@@ -672,7 +672,13 @@ function PacksPage() {
               while cards are flipping. */}
           <PackPulse viewerId={auth.viewer?.id ?? null} revealing={phase === "reveal"} />
 
-          <div className="mx-auto w-full max-w-[960px] flex-1 px-4 py-8 sm:px-5 sm:py-12">
+          {/* The game brings a leaderboard with it, so the page makes room for
+              the rail rather than squeezing the board it sits beside. */}
+          <div
+            className={`mx-auto w-full flex-1 px-4 py-8 sm:px-5 sm:py-12 ${
+              streakOpen ? "max-w-[1320px]" : "max-w-[960px]"
+            }`}
+          >
             {wallet && phase !== "reveal" && (
               // The two numbers that decide what you can open are the point of
               // this strip, so they carry the weight and everything else sits

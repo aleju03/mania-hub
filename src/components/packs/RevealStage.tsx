@@ -299,15 +299,38 @@ interface CascadeTileProps {
   landed: boolean;
   reducedMotion: boolean;
   onLanded: () => void;
+  /* Fires the moment the flip swings past edge-on and the face becomes
+     readable, which is halfway through the animation. Flips overlap, so the
+     counter tracks this rather than the landing: by the time one flip
+     completes the next card is already half turned. */
+  onFaceVisible: () => void;
 }
 
-function CascadeTile({ entry, username, cardBack, landed, reducedMotion, onLanded }: CascadeTileProps) {
+function CascadeTile({
+  entry,
+  username,
+  cardBack,
+  landed,
+  reducedMotion,
+  onLanded,
+  onFaceVisible,
+}: CascadeTileProps) {
   const firedRef = useRef(false);
+  const facedRef = useRef(false);
   const flipped = entry !== undefined;
+
+  const showFace = () => {
+    if (!flipped || facedRef.current) return;
+    facedRef.current = true;
+    onFaceVisible();
+  };
 
   const fire = () => {
     if (!flipped || firedRef.current) return;
     firedRef.current = true;
+    // Safety net: if no frame ever reported passing 90deg, the face is
+    // certainly up by now.
+    showFace();
     onLanded();
   };
 
@@ -326,6 +349,9 @@ function CascadeTile({ entry, username, cardBack, landed, reducedMotion, onLande
         initial={false}
         animate={{ rotateY: flipped ? 180 : 0 }}
         transition={{ duration: reducedMotion ? 0 : 0.36, ease: [0.3, 0.1, 0.3, 1] }}
+        onUpdate={(latest) => {
+          if (Number(latest.rotateY) >= 90) showFace();
+        }}
         onAnimationComplete={fire}
       >
         <div
@@ -394,6 +420,8 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   const [cascade, setCascade] = useState<{ start: number; slotWidth: number; scaleFrom: number; perRow: number } | null>(null);
   /* Cascade positions whose flip has landed (chime fired, burst showing). */
   const [cascadeLanded, setCascadeLanded] = useState<number[]>([]);
+  /* Cascade positions whose face has swung into view (what the counter counts). */
+  const [cascadeFacesUp, setCascadeFacesUp] = useState<number[]>([]);
   const [flight, setFlight] = useState<CardFlight | null>(null);
   const trayRef = useRef<HTMLDivElement | null>(null);
   const cascadeRef = useRef<HTMLDivElement | null>(null);
@@ -718,6 +746,10 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     return sourceRects;
   };
 
+  const handleCascadeFaceVisible = (position: number) => {
+    setCascadeFacesUp((current) => (current.includes(position) ? current : [...current, position]));
+  };
+
   const handleCascadeLanded = (position: number) => {
     setCascadeLanded((current) => (current.includes(position) ? current : [...current, position]));
     const entry = revealedRef.current[position];
@@ -843,7 +875,11 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   /* While the cascade runs, cards from `start` on live in the dealt-out row,
      not the tray; only the ones revealed before the skip stay below. */
   const trayEntries = revealed.slice(0, skipping ? (cascade?.start ?? revealed.length) : index);
-  const revealedCount = revealed.reduce((count, entry) => count + (entry ? 1 : 0), 0);
+  /* Cards showing their face during the cascade: the ones revealed before the
+     skip plus the flips past edge-on. Counting recorded data instead would
+     run a whole flip ahead, since recording the data is what starts the flip,
+     and the last card would already read 5/5 while still face-down. */
+  const cascadeShown = (cascade?.start ?? 0) + cascadeFacesUp.length;
   const tierColor = current?.glowColor
     ? `rgb(${current.glowColor.r}, ${current.glowColor.g}, ${current.glowColor.b})`
     : "rgb(226, 232, 240)";
@@ -853,7 +889,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       <div className="flex items-baseline gap-1.5 tabular-nums">
         {/* During the cascade the counter runs with the flips as they land. */}
         <span className="text-lg font-black leading-none text-white">
-          {skipping ? Math.max(1, revealedCount) : Math.min(index + 1, cards.length)}
+          {skipping ? Math.max(1, cascadeShown) : Math.min(index + 1, cards.length)}
         </span>
         <span className="text-[12px] text-osu-f1">/ {cards.length}</span>
       </div>
@@ -985,6 +1021,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
                     landed={cascadeLanded.includes(position)}
                     reducedMotion={reducedMotion}
                     onLanded={() => handleCascadeLanded(position)}
+                    onFaceVisible={() => handleCascadeFaceVisible(position)}
                   />
                 </motion.div>
               );

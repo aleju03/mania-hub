@@ -49,6 +49,7 @@ vi.mock("../src/skins/r2.js", async (importOriginal) => {
 
 import { copySkinObject, deleteSkinObjects, getSkinObject, readSkinObject, uploadSkinObject } from "../src/skins/r2.js";
 import { clearSkinImageCache } from "../src/skins/image-cache.js";
+import { clearSimilarSkinsCache } from "../src/features/skins.js";
 
 let dir = "";
 let db: Db;
@@ -67,6 +68,8 @@ beforeEach(async () => {
   vi.mocked(deleteSkinObjects).mockClear();
   vi.mocked(copySkinObject).mockClear();
   clearSkinImageCache();
+  // Process-level, so a fresh database per test has to drop it too.
+  clearSimilarSkinsCache();
 });
 
 afterEach(async () => {
@@ -293,6 +296,43 @@ describe("skins HTTP endpoints", () => {
     expect(ownList.headers["cache-control"]).toBe("private, no-store");
     expect((await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=101`, ADMIN))).body.skin.downloadCount).toBe(2);
     expect((await call(mockReq("GET", "/api/skins/list", ADMIN))).body.skins[0].downloadCount).toBe(2);
+  });
+
+  it("recommends lookalikes only for skins with a public page", async () => {
+    // Two catalog skins by the same skin.ini author in the same colourway;
+    // different keymode blocks keep the archives byte-distinct past the
+    // duplicate guard.
+    const publish = async (osk: Buffer, visibility?: string) => {
+      const started = await call(bodyReq(
+        "POST",
+        "/api/skins/start",
+        JSON.stringify({ userId: 101, username: "delta", name: "Cloudy Skies", visibility }),
+        ADMIN,
+      ));
+      const { id, token } = started.body as { id: string; token: string };
+      await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, osk));
+      await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview`, PNG_BYTES));
+      const finished = await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+      expect(finished.status).toBe(200);
+      return finished.body.skin as { id: string; slug: string };
+    };
+    const first = await publish(await buildOskBuffer([4]));
+    const second = await publish(await buildOskBuffer([4, 7]));
+
+    const similar = await call(mockReq("GET", `/api/skins/similar?id=${first.id}`));
+    expect(similar.status).toBe(200);
+    expect(similar.body.skins.map((skin: { id: string }) => skin.id)).toEqual([second.id]);
+    // Shareable and longer-lived than the list: every page view asks for it.
+    expect(similar.headers["cache-control"]).toContain("public");
+    expect(similar.headers["cache-control"]).toContain("max-age=300");
+    // The pretty slug resolves the same way the raw id does.
+    expect((await call(mockReq("GET", `/api/skins/similar?id=${first.slug}`))).status).toBe(200);
+
+    // A private ref answers exactly like a missing one: the endpoint is
+    // tokenless, so it must not even confirm the skin exists.
+    const hoarded = await publish(await buildOskBuffer([7]), "private");
+    expect((await call(mockReq("GET", `/api/skins/similar?id=${hoarded.id}`))).status).toBe(404);
+    expect((await call(mockReq("GET", "/api/skins/similar?id=missing"))).status).toBe(404);
   });
 
   it("requires both osk and preview before finish", async () => {

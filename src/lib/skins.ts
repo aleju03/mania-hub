@@ -94,7 +94,7 @@ export function canModerateSkinKeymodes(userId: number | null | undefined): bool
   return userId != null && SKIN_KEYMODE_MODERATOR_USER_IDS.includes(userId);
 }
 
-export type SkinsSort = "newest" | "downloads";
+export type SkinsSort = "newest" | "downloads" | "size";
 
 // Refines a keymode filter by layout: "special" is the 7K+1 filter (8K skins
 // whose eighth column is a scratch lane), "regular" makes 8K mean actual 8K.
@@ -211,7 +211,7 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
   const q = params.q?.trim() ?? "";
   if (q) query.set("q", q.slice(0, 80));
   if (params.page) query.set("page", String(params.page));
-  if (params.sort === "downloads") query.set("sort", "downloads");
+  if (params.sort === "downloads" || params.sort === "size") query.set("sort", params.sort);
   if (params.k && Number.isInteger(params.k) && params.k >= 1 && params.k <= 10) {
     query.set("k", String(params.k));
     if (params.variant) query.set("variant", params.variant);
@@ -221,6 +221,32 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
   const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { credentials: "omit", cache: skinsListCacheMode(), ...init });
   if (!response.ok) throw new Error(`Server ${response.status}`);
   return response.json() as Promise<SkinsListResult>;
+}
+
+// A similar-skins entry: the summary plus which of its keymodes the backend's
+// visual match was made on, so the strip can front that keymode's render
+// instead of the uploader-chosen cover. Absent or null when the match came
+// from the accent fallback (or an older backend).
+export type SimilarSkin = SkinSummary & { matchKeys?: number | null };
+
+// The detail page's similar-skins strip. The endpoint only answers for skins
+// with a public page and only ever recommends public ones, so this is a plain
+// browser fetch riding the shared cache; every failure mode is an empty strip.
+export async function fetchSimilarSkins(ref: string, keys?: number | null, init?: RequestInit): Promise<SimilarSkin[]> {
+  const base = getLiveBackendUrl();
+  if (!base) return [];
+  const query = new URLSearchParams({ id: ref });
+  // The keymode on screen: the backend answers "similar at this keymode", so
+  // a skin that only matches elsewhere in its range does not show up here.
+  if (keys != null && Number.isInteger(keys) && keys >= 1 && keys <= 10) query.set("keys", String(keys));
+  try {
+    const response = await fetch(`${base}/api/skins/similar?${query.toString()}`, { credentials: "omit", ...init });
+    if (!response.ok) return [];
+    const body = (await response.json()) as { skins?: SimilarSkin[] };
+    return Array.isArray(body.skins) ? body.skins : [];
+  } catch {
+    return [];
+  }
 }
 
 export const fetchSkinById = createServerFn({ method: "GET" })

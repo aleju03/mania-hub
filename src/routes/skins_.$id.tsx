@@ -6,6 +6,7 @@ import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags } from "../components/skins/SkinCard";
 import { SkinAssetExplorer } from "../components/skins/SkinAssetExplorer";
+import { SimilarSkins } from "../components/skins/SimilarSkins";
 import { SkinPreviewEditorModal } from "../components/skins/SkinPreviewEditorModal";
 import { SkinSettingsModal } from "../components/skins/SkinSettingsModal";
 import { SkinUpdateModal } from "../components/skins/SkinUpdateModal";
@@ -72,10 +73,21 @@ interface GalleryItem {
   width: number | null;
   height: number | null;
   label: string;
+  // The keymode this render is of, when it is one: the similar-skins strip
+  // fronts every card with the same keymode the viewer has open here.
+  keys: number | null;
 }
 
 function SkinDetailPage() {
   const loaded = Route.useLoaderData() as SkinSummary | null;
+  // The similar strip links skin pages to each other, so this component now
+  // re-renders in place instead of remounting when the param changes. Keying
+  // the view by skin resets everything held per skin: the chosen hero image,
+  // the replay-skin button, whichever modal was open.
+  return <SkinDetailView key={loaded?.id ?? "missing"} loaded={loaded} />;
+}
+
+function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
   // Editing the previews hands back the updated skin; holding it locally shows
   // the new cover and renders right away, without waiting out the browser
   // cache on /api/skins/get.
@@ -175,15 +187,16 @@ function SkinDetailPage() {
   const gallery = useMemo<GalleryItem[]>(() => {
     if (!skin) return [];
     const previews: GalleryItem[] = skin.previews.length > 0
-      ? skin.previews.map((preview) => ({ url: preview.url, width: preview.width, height: preview.height, label: keymodeLabel(preview.keys, skin.specialKeymodes) }))
+      ? skin.previews.map((preview) => ({ url: preview.url, width: preview.width, height: preview.height, label: keymodeLabel(preview.keys, skin.specialKeymodes), keys: preview.keys }))
       : skin.previewUrl
-        ? [{ url: skin.previewUrl, width: skin.previewWidth, height: skin.previewHeight, label: "Preview" }]
+        ? [{ url: skin.previewUrl, width: skin.previewWidth, height: skin.previewHeight, label: "Preview", keys: null }]
         : [];
     const screenshots: GalleryItem[] = skin.screenshots.map((shot, index) => ({
       url: shot.url,
       width: shot.width,
       height: shot.height,
       label: `Shot ${index + 1}`,
+      keys: null,
     }));
     return [...previews, ...screenshots];
   }, [skin]);
@@ -495,6 +508,13 @@ function SkinDetailPage() {
                   )}
                 </div>
               </div>
+            )}
+            {/* Only a skin on the catalog offers lookalikes: the endpoint
+                404s hidden and private refs (it is tokenless, so it answers
+                only for skins with a public page), and asking anyway would
+                just burn a request. */}
+            {skin && skin.status === "published" && skin.visibility === "public" && (
+              <SimilarSkins skinRef={skin.slug ?? skin.id} keys={hero?.keys ?? null} />
             )}
           </div>
         </div>

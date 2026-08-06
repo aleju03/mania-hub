@@ -19,8 +19,9 @@ describe("skins search params", () => {
     expect(parseSkinsSearch({ mine: "aleju03" }).mine).toBe(false);
   });
 
-  it("accepts the downloads sort and rejects unknown sorts", () => {
+  it("accepts the downloads and size sorts and rejects unknown sorts", () => {
     expect(parseSkinsSearch({ sort: "downloads" }).sort).toBe("downloads");
+    expect(parseSkinsSearch({ sort: "size" }).sort).toBe("size");
     expect(parseSkinsSearch({ sort: "oldest" }).sort).toBe("newest");
   });
 

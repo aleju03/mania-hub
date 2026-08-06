@@ -9,6 +9,7 @@ import {
   attachSkinOsk,
   attachSkinPreview,
   backfillSkinSlugs,
+  clearSimilarSkinsCache,
   createPendingSkin,
   deleteSkin,
   findPublishedSkinByOskSha256,
@@ -19,6 +20,7 @@ import {
   getSkinForEdit,
   getSkinForUpload,
   listExpiredPendingSkins,
+  listSimilarSkins,
   listSkins,
   privateSkinSecretMatches,
   recordSkinDownload,
@@ -53,6 +55,10 @@ beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "mania-skins-"));
   db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
   await migrate(db);
+  // The similar-skins caches live in the process, not the database, so a
+  // fresh database per test needs them dropped or one test's catalog answers
+  // the next one's questions.
+  clearSimilarSkinsCache();
 });
 
 afterEach(async () => {
@@ -67,6 +73,8 @@ async function createPublishedSkin(input: {
   specialKeymodes?: number[];
   sha256?: string;
   visibility?: "public" | "private";
+  author?: string | null;
+  accent?: string | null;
 }): Promise<string> {
   const created = await createPendingSkin(db, {
     ownerUserId: input.ownerUserId,
@@ -84,8 +92,8 @@ async function createPublishedSkin(input: {
     sha256: input.sha256 ?? "ab".repeat(32),
     keymodes: input.keymodes ?? [4],
     specialKeymodes: input.specialKeymodes ?? [],
-    accentColor: "#ff66aa",
-    iniAuthor: null,
+    accentColor: input.accent === undefined ? "#ff66aa" : input.accent,
+    iniAuthor: input.author ?? null,
   });
   await attachSkinPreview(db, created.id, {
     key: skinPreviewKey(created.id, "webp"),
@@ -353,6 +361,13 @@ describe("skins feature", () => {
     await exec(db, "update skins set download_count = 50 where id = ?", [first]);
     const byDownloads = await listSkins(db, { sort: "downloads" });
     expect(byDownloads.skins.map((skin) => skin.name)).toEqual(["Old But Gold", "Fresh"]);
+
+    // size sort is largest .osk first, whatever the recency or downloads say;
+    // a row with no stored file sinks to the bottom rather than erroring.
+    await exec(db, "update skins set osk_size_bytes = 99999 where id != ?", [first]);
+    await exec(db, "update skins set osk_size_bytes = null where id = ?", [first]);
+    const bySize = await listSkins(db, { sort: "size" });
+    expect(bySize.skins.map((skin) => skin.name)).toEqual(["Fresh", "Old But Gold"]);
   });
 
   it("rejects expired tickets", async () => {
@@ -529,6 +544,88 @@ describe("skins feature", () => {
     expect(await getSkin(db, expired.id)).toBeNull();
     expect((await getSkin(db, keep.id))?.status).toBe("pending");
     expect((await getSkin(db, published))?.status).toBe("published");
+  });
+});
+
+describe("similar skins", () => {
+  it("ranks the catalog by accent, keymodes and author, and trims the junk", async () => {
+    const target = await createPublishedSkin({
+      ownerUserId: 1, ownerUsername: "delta", name: "Target",
+      keymodes: [4], accent: "#ff66aa", author: "sona", sha256: "01".repeat(32),
+    });
+    // Same hand, near colour: the skinner's own series should lead the strip.
+    await createPublishedSkin({
+      ownerUserId: 2, ownerUsername: "echo", name: "Series Two",
+      keymodes: [4], accent: "#ff5599", author: "sona", sha256: "02".repeat(32),
+    });
+    // Someone else's near-identical colourway lands behind it.
+    await createPublishedSkin({
+      ownerUserId: 3, ownerUsername: "foxtrot", name: "Lookalike",
+      keymodes: [4], accent: "#ff77bb", author: "nova", sha256: "03".repeat(32),
+    });
+    // Different keymode, different hand, far colour: under the floor, absent.
+    await createPublishedSkin({
+      ownerUserId: 4, ownerUsername: "golf", name: "Unrelated",
+      keymodes: [10], accent: "#113322", author: "nova", sha256: "04".repeat(32),
+    });
+
+    const row = await getSkin(db, target);
+    expect(row).not.toBeNull();
+    if (!row) return;
+    const strip = await listSimilarSkins(db, row, 6);
+    expect(strip.map((skin) => skin.name)).toEqual(["Series Two", "Lookalike"]);
+    // The target never recommends itself.
+    expect(strip.some((skin) => skin.id === target)).toBe(false);
+
+    expect((await listSimilarSkins(db, row, 1)).map((skin) => skin.name)).toEqual(["Series Two"]);
+  });
+
+  it("caches the strip but notices the catalog moving under it", async () => {
+    const target = await createPublishedSkin({
+      ownerUserId: 1, ownerUsername: "delta", name: "Target",
+      keymodes: [4], accent: "#ff66aa", author: "sona", sha256: "01".repeat(32),
+    });
+    const row = await getSkin(db, target);
+    expect(row).not.toBeNull();
+    if (!row) return;
+    expect(await listSimilarSkins(db, row, 6)).toEqual([]);
+
+    // A publish has to reach a strip that was cached as empty.
+    await createPublishedSkin({
+      ownerUserId: 2, ownerUsername: "echo", name: "Newcomer",
+      keymodes: [4], accent: "#ff5599", author: "sona", sha256: "02".repeat(32),
+    });
+    expect((await listSimilarSkins(db, row, 6)).map((skin) => skin.name)).toEqual(["Newcomer"]);
+
+    // So does a moderation hide, which changes no count the strip itself
+    // holds - only the row's status and updated_at.
+    const hidden = (await exec(db, "select id from skins where name = 'Newcomer'")).rows[0];
+    await setSkinHidden(db, String(hidden.id), true);
+    expect(await listSimilarSkins(db, row, 6)).toEqual([]);
+  });
+
+  it("only ever recommends what the public catalog shows", async () => {
+    const target = await createPublishedSkin({
+      ownerUserId: 1, ownerUsername: "delta", name: "Target",
+      keymodes: [4], accent: "#ff66aa", author: "sona", sha256: "01".repeat(32),
+    });
+    // A private twin and a hidden twin would both top the ranking; neither may
+    // appear, no matter how similar.
+    await createPublishedSkin({
+      ownerUserId: 2, ownerUsername: "echo", name: "Hoarded Twin",
+      keymodes: [4], accent: "#ff66aa", author: "sona", sha256: "02".repeat(32),
+      visibility: "private",
+    });
+    const hidden = await createPublishedSkin({
+      ownerUserId: 3, ownerUsername: "foxtrot", name: "Hidden Twin",
+      keymodes: [4], accent: "#ff66aa", author: "sona", sha256: "03".repeat(32),
+    });
+    await setSkinHidden(db, hidden, true);
+
+    const row = await getSkin(db, target);
+    expect(row).not.toBeNull();
+    if (!row) return;
+    expect(await listSimilarSkins(db, row, 6)).toEqual([]);
   });
 });
 

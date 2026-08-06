@@ -4,11 +4,13 @@ import { createServerFn } from "@tanstack/react-start";
 // earning identity always comes from the osu! login cookie, never from client
 // input, so a run can only ever be claimed as yourself.
 //
-// A streak is scored in the browser, which means a scripted client could claim
-// a run it never played - the answers are public data either way. The daily
-// allowance on the backend is what makes that pointless rather than this
-// route: a day of play is worth the same whether it was earned or faked, and
-// it is priced below a single Wild pack.
+// A casual streak is scored in the browser, which means a scripted client
+// could claim a run it never played - the answers are public data either way.
+// The daily allowance on the backend is what makes that pointless rather than
+// this route: a day of play is worth the same whether it was earned or faked,
+// and it is priced below a single Wild pack. Blitz runs are a different
+// thing entirely and live in streak-blitz.ts, because a leaderboard cannot be
+// fed by a number the client picked.
 
 export interface PackGameAllowance {
   granted: number;
@@ -16,7 +18,9 @@ export interface PackGameAllowance {
   cap: number;
 }
 
-async function gameTarget(): Promise<{ base: string; headers: HeadersInit; userId: number } | null> {
+async function gameTarget(): Promise<
+  { base: string; headers: HeadersInit; userId: number; username: string } | null
+> {
   const { readCurrentAuth } = await import("./auth-server");
   const auth = await readCurrentAuth();
   if (!auth.viewer) return null;
@@ -24,10 +28,13 @@ async function gameTarget(): Promise<{ base: string; headers: HeadersInit; userI
   if (!base) return null;
   const headers: HeadersInit = { "content-type": "application/json" };
   if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
-  return { base, headers, userId: auth.viewer.id };
+  return { base, headers, userId: auth.viewer.id, username: auth.viewer.username };
 }
 
-async function postGame(path: string, body: Record<string, unknown>): Promise<PackGameAllowance | null> {
+/* One place that knows the arcade's server-to-server convention: the admin
+   token plus the viewer the osu! cookie proved, never an id off the request
+   body. Everything the arcade posts goes through here. */
+export async function postPackGame<T>(path: string, body: Record<string, unknown>): Promise<T | null> {
   const { setResponseHeader } = await import("@tanstack/react-start/server");
   setResponseHeader("Cache-Control", "private, no-store");
   const target = await gameTarget();
@@ -35,10 +42,15 @@ async function postGame(path: string, body: Record<string, unknown>): Promise<Pa
   const response = await fetch(`${target.base}${path}`, {
     method: "POST",
     headers: target.headers,
-    body: JSON.stringify({ ...body, userId: target.userId }),
+    body: JSON.stringify({ ...body, userId: target.userId, username: target.username }),
   });
   if (!response.ok) return null;
-  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  return (await response.json().catch(() => null)) as T | null;
+}
+
+async function postGame(path: string, body: Record<string, unknown>): Promise<PackGameAllowance | null> {
+  const payload = await postPackGame<Record<string, unknown>>(path, body);
+  if (!payload) return null;
   return {
     granted: Math.max(0, Number(payload.granted) || 0),
     remainingToday: Math.max(0, Number(payload.remainingToday) || 0),

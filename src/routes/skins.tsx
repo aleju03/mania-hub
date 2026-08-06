@@ -77,7 +77,7 @@ export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
   return {
     q,
     page: Number.isInteger(page) && page > 0 ? page : DEFAULT_SKINS_SEARCH.page,
-    sort: search.sort === "downloads" ? "downloads" : DEFAULT_SKINS_SEARCH.sort,
+    sort: search.sort === "downloads" || search.sort === "size" ? search.sort : DEFAULT_SKINS_SEARCH.sort,
     k,
     special: k === 8 && (search.special === true || search.special === "true" || search.special === 1 || search.special === "1"),
     mine: search.mine === true || search.mine === "true" || search.mine === 1 || search.mine === "1",
@@ -404,6 +404,9 @@ function SkinsPage() {
                   </FilterOption>
                   <FilterOption active={sort === "downloads"} onClick={() => applySearch({ sort: "downloads" })}>
                     most downloaded
+                  </FilterOption>
+                  <FilterOption active={sort === "size"} onClick={() => applySearch({ sort: "size" })}>
+                    size
                   </FilterOption>
                   {data && (
                     <span

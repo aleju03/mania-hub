@@ -7,6 +7,7 @@ import { exec } from "./db.js";
 import { pruneAvatarAccents } from "./features/avatar-accents.js";
 import { pruneOsuProxyCache } from "./features/osu-proxy-cache.js";
 import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB } from "./features/player-profiles.js";
+import { sweepAbandonedStreakRuns } from "./features/pack-streak.js";
 import { deleteSkin, listExpiredPendingSkins } from "./features/skins.js";
 import { logInfo, logWarn, errorContext } from "./logger.js";
 import { deleteSkinObjects, type SkinStorageConfig } from "./skins/r2.js";
@@ -36,6 +37,13 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
   // longer tail. Durable ownership counts live in pack_collection_cards.
   const packPullCutoffMs = Date.now() - PACK_PULL_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
   const packPullNotableCutoffMs = Date.now() - NOTABLE_PACK_PULL_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  // A finished blitz run is a transient record of one game: what it is worth
+  // to the board already lives in pack_streak_bests, so the row only has to
+  // outlive the question "was that run played by a human". Runs somebody
+  // walked away from are closed first, since a run reaches the board (and gets
+  // paid) by ending.
+  const streakRunCutoffMs = Date.now() - BLITZ_STREAK_RUN_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const streakRunsSwept = await sweepAbandonedStreakRuns(db);
   const oldReplayVideoJobs = (await exec(
     db,
     "select id from replay_video_exports where status in ('done', 'failed', 'cancelled') and updated_at < ?",
@@ -82,6 +90,8 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     farmHelperFeedbackResolved: Number((await exec(db, "delete from farm_helper_feedback where resolved_at is not null and resolved_at < ?", [resolvedFeedbackCutoffMs])).rowsAffected ?? 0),
     packPullEvents: Number((await exec(db, "delete from pack_pull_events where notable = 0 and pulled_at < ?", [packPullCutoffMs])).rowsAffected ?? 0),
     packPullEventsNotable: Number((await exec(db, "delete from pack_pull_events where notable = 1 and pulled_at < ?", [packPullNotableCutoffMs])).rowsAffected ?? 0),
+    streakRunsSwept,
+    streakRuns: Number((await exec(db, "delete from pack_streak_runs where status = 'ended' and updated_at < ?", [streakRunCutoffMs])).rowsAffected ?? 0),
     // Slow self-healing refresh: a pruned accent recomputes the next time the
     // avatar shows up in a payload. Also bounds churn from avatar changes.
     avatarAccents: await pruneAvatarAccents(db),
@@ -141,6 +151,12 @@ export const RESOLVED_FARM_HELPER_FEEDBACK_RETENTION_DAYS = 180;
 // community feed and are rare enough to keep for a year.
 export const PACK_PULL_EVENT_RETENTION_DAYS = 60;
 export const NOTABLE_PACK_PULL_EVENT_RETENTION_DAYS = 365;
+
+// Long enough that a suspicious board entry can still be checked against the
+// run that set it (guess_ms_json lives on the run row), short enough that the
+// log of every game ever played does not become permanent. The board itself is
+// durable and unaffected.
+export const BLITZ_STREAK_RUN_LOG_RETENTION_DAYS = 45;
 
 // Parked jobs whose only reason to exist was "someone is looking at this
 // profile right now". They are enqueued from the profile read path alone, and

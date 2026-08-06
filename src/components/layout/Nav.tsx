@@ -77,6 +77,36 @@ function preserveSearchWithCountryOnFirstPage(country: string) {
   return ((prev: Record<string, unknown>) => ({ ...prev, country, page: 0 })) as never;
 }
 
+/* The dev-tools menu, listed once and rendered by both the desktop dropdown
+   and the phone drawer (it used to be the same eight links written out twice).
+   Ordered by how often each gets opened rather than by when it was built, and
+   read two at a time, so the pairs above are the ones that matter. `adminOnly`
+   items need real admin; the last two also show in plain dev mode. Kept
+   `as const` for the same reason NAV_LEAVES is. */
+const ADMIN_TOOLS = [
+  { to: "/admin/live-backend", label: "Monitoring", adminOnly: true },
+  { to: "/valley", label: "Valley", adminOnly: true },
+  { to: "/admin/todos", label: "Todos", adminOnly: true },
+  { to: "/admin/ghost", label: "Ghost", adminOnly: true },
+  { to: "/admin/r2", label: "R2", adminOnly: true, search: { prefix: "replay-cache/" } },
+  { to: "/admin/discord", label: "Discord", adminOnly: true },
+  { to: "/admin/dan-classifier", label: "Chart Patterns", adminOnly: false },
+  { to: "/admin/og-preview", label: "OG preview", adminOnly: false },
+] as const;
+
+type AdminTool = (typeof ADMIN_TOOLS)[number];
+
+function adminToolsFor(adminMode: boolean): AdminTool[] {
+  return ADMIN_TOOLS.filter((tool) => adminMode || !tool.adminOnly);
+}
+
+/* The r2 entry is the only one that carries search params, and TanStack types
+   `search` per route, so it is passed through untyped rather than making every
+   other entry declare an empty one. */
+function adminToolSearch(tool: AdminTool): never | undefined {
+  return "search" in tool ? (tool.search as never) : undefined;
+}
+
 export function Nav() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -664,87 +694,29 @@ export function Nav() {
                   {devToolsLabel}
                 </button>
                 {adminMenuOpen && (
+                  /* Two columns: eight tools in one column ran most of the way
+                     down the page. The dividers are borders on the cells rather
+                     than a grid gap, because a gap is a hole - the menu's own
+                     background does not paint there and the page reads through
+                     the seams. */
                   <div
-                    className="absolute right-0 top-full mt-2 w-44 rounded-lg bg-osu-b5 border border-osu-b3/50 shadow-xl overflow-hidden z-[80]"
+                    className="absolute right-0 top-full mt-2 w-56 grid grid-cols-2 rounded-lg bg-osu-b5 border border-osu-b3/50 shadow-xl overflow-hidden z-[80]"
                     role="menu"
                   >
-                    {adminMode && (
-                      <div className="flex">
-                        <Link
-                          to="/admin/live-backend"
-                          onClick={() => setAdminMenuOpen(false)}
-                          className="flex-1 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
-                          role="menuitem"
-                        >
-                          Monitoring
-                        </Link>
-                        <Link
-                          to="/valley"
-                          onClick={() => setAdminMenuOpen(false)}
-                          className="flex-1 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-l border-osu-b3/30"
-                          role="menuitem"
-                        >
-                          Valley
-                        </Link>
-                      </div>
-                    )}
-                    {adminMode && (
+                    {adminToolsFor(adminMode).map((tool, index) => (
                       <Link
-                        to="/admin/r2"
-                        search={{ prefix: "replay-cache/" }}
+                        key={tool.to}
+                        to={tool.to}
+                        search={adminToolSearch(tool)}
                         onClick={() => setAdminMenuOpen(false)}
-                        className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
+                        className={`px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors ${
+                          index > 1 ? "border-t border-osu-b3/30" : ""
+                        } ${index % 2 === 1 ? "border-l border-osu-b3/30" : ""}`}
                         role="menuitem"
                       >
-                        R2
+                        {tool.label}
                       </Link>
-                    )}
-                    {adminMode && (
-                      <Link
-                        to="/admin/discord"
-                        onClick={() => setAdminMenuOpen(false)}
-                        className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
-                        role="menuitem"
-                      >
-                        Discord
-                      </Link>
-                    )}
-                    {adminMode && (
-                      <Link
-                        to="/admin/todos"
-                        onClick={() => setAdminMenuOpen(false)}
-                        className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
-                        role="menuitem"
-                      >
-                        Todos
-                      </Link>
-                    )}
-                    {adminMode && (
-                      <Link
-                        to="/admin/ghost"
-                        onClick={() => setAdminMenuOpen(false)}
-                        className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
-                        role="menuitem"
-                      >
-                        Ghost
-                      </Link>
-                    )}
-                    <Link
-                      to="/admin/dan-classifier"
-                      onClick={() => setAdminMenuOpen(false)}
-                      className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
-                      role="menuitem"
-                    >
-                      Chart Patterns
-                    </Link>
-                    <Link
-                      to="/admin/og-preview"
-                      onClick={() => setAdminMenuOpen(false)}
-                      className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
-                      role="menuitem"
-                    >
-                      OG preview
-                    </Link>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1120,75 +1092,21 @@ export function Nav() {
                   <div className="text-[10px] uppercase tracking-wide text-osu-f1 font-semibold px-1">
                     {devToolsLabel}
                   </div>
-                  {adminMode && (
-                    <div className="flex gap-2">
+                  {/* Same list, same order, two across: the drawer is already
+                      long by the time it reaches this. */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {adminToolsFor(adminMode).map((tool) => (
                       <Link
-                        to="/admin/live-backend"
+                        key={tool.to}
+                        to={tool.to}
+                        search={adminToolSearch(tool)}
                         onClick={() => setMenuOpen(false)}
-                        className="flex-1 text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                        className="text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
                       >
-                        Monitoring
+                        {tool.label}
                       </Link>
-                      <Link
-                        to="/valley"
-                        onClick={() => setMenuOpen(false)}
-                        className="flex-1 text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
-                      >
-                        Valley
-                      </Link>
-                    </div>
-                  )}
-                  {adminMode && (
-                    <Link
-                      to="/admin/r2"
-                      search={{ prefix: "replay-cache/" }}
-                      onClick={() => setMenuOpen(false)}
-                      className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
-                    >
-                      R2
-                    </Link>
-                  )}
-                  {adminMode && (
-                    <Link
-                      to="/admin/discord"
-                      onClick={() => setMenuOpen(false)}
-                      className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
-                    >
-                      Discord
-                    </Link>
-                  )}
-                  {adminMode && (
-                    <Link
-                      to="/admin/todos"
-                      onClick={() => setMenuOpen(false)}
-                      className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
-                    >
-                      Todos
-                    </Link>
-                  )}
-                  {adminMode && (
-                    <Link
-                      to="/admin/ghost"
-                      onClick={() => setMenuOpen(false)}
-                      className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
-                    >
-                      Ghost
-                    </Link>
-                  )}
-                  <Link
-                    to="/admin/dan-classifier"
-                    onClick={() => setMenuOpen(false)}
-                    className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
-                  >
-                    Chart Patterns
-                  </Link>
-                  <Link
-                    to="/admin/og-preview"
-                    onClick={() => setMenuOpen(false)}
-                    className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
-                  >
-                    OG preview
-                  </Link>
+                    ))}
+                  </div>
                 </div>
               )}
       </div>
