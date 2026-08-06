@@ -65,9 +65,19 @@ export function blitzClientDeadline(round: BlitzStreakRound, receivedAt: number)
   return round.deadlineAt + (receivedAt - round.serverNow);
 }
 
+/* Mirrors normalizeStreakPool on the backend. This used to recognise only
+   "anyone" and collapse everything else to "top", which silently dropped
+   "top500" -- so the Top 500 board could never receive a row, and because
+   Top 500 is the default mode its runs were filed onto the Top 1000 board
+   instead. The two pools are meant to be separate games. */
+export function normalizeBlitzStreakPool(value: unknown): StreakPool {
+  if (value === "anyone") return "anyone";
+  return value === "top500" ? "top500" : "top";
+}
+
 export const startBlitzStreak = createServerFn({ method: "POST" })
   .validator((input: { pool?: unknown }) => ({
-    pool: (input?.pool === "anyone" ? "anyone" : "top") as StreakPool,
+    pool: normalizeBlitzStreakPool(input?.pool),
   }))
   .handler(async ({ data }): Promise<BlitzStreakRun | null> =>
     postPackGame<BlitzStreakRun>("/api/packs/games/streak/start", { pool: data.pool }),
