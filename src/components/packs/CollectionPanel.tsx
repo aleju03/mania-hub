@@ -190,11 +190,12 @@ function placeholderTiersForPage({
   pageStart: number;
   tierFilter: CollectionTierFilter;
   tierCounts: Record<string, number>;
-}): ManiaCardTier[] {
+}): Array<ManiaCardTier | null> {
   if (tierFilter !== "all") {
-    // Unrated and untracked cards have no single rarity; commons are the
-    // neutral skeleton face.
-    const tier = tierFilter === "unrated" || tierFilter === "untracked" ? "common" : tierFilter;
+    // Unrated and untracked cards keep whatever rarity they were pulled at, so
+    // their skeletons take the rarity-less face rather than claiming a page of
+    // commons the loaded cards then contradict.
+    const tier = tierFilter === "unrated" || tierFilter === "untracked" ? null : tierFilter;
     return Array.from({ length: count }, () => tier);
   }
 
@@ -1239,7 +1240,7 @@ export function CollectionPanel({
                       ? "border-osu-pink/50 bg-osu-b4 text-white"
                       : "border-osu-b3/30 bg-osu-b4/30 text-osu-f1 hover:bg-osu-b4/70"
                   }`}
-                  title="Players you own whose card left the draw pool: out of every tracked top 100 and not opted in. They rejoin the pool, and the completion count, if they come back."
+                  title="Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back."
                   aria-pressed={tierFilter === "untracked"}
                 >
                   Not tracked
