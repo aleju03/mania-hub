@@ -75,13 +75,19 @@ import {
 /* How long the answer sits on screen before the board moves on. Long enough to
    read the number that just beat you, short enough that a good run never waits
    on the animation. Blitz deadlines are dealt with this hold added on top,
-   so the round landing behind it is still worth its full twelve seconds. */
+   so the round landing behind it is still worth its full twelve seconds; the
+   opening deal carries the same hold, spent turning the two cards face up. */
 const REVEAL_HOLD_MS = 1250;
 const COUNT_UP_MS = 700;
 /* How long the dice are in the air before the guess they picked is submitted.
    Long enough to hear them land and see which button they chose, short enough
    that it is not a meaningful bite out of a blitz clock. */
 const DICE_SETTLE_MS = 620;
+/* What a blitz round is worth on screen. Mirrors STREAK_ROUND_MS on the
+   backend: the deadline arrives with the mint/reveal hold folded in, and if
+   the cards were ready early the countdown must not show the surplus as
+   thinking time - it runs twelve seconds and the rest is quiet grace. */
+const BLITZ_ROUND_MS = 12_000;
 
 /* The question prints each name in the colour of the card under it, and that
    colour only exists once the card mints, so let it arrive rather than snap. */
@@ -113,6 +119,11 @@ interface StreakCard {
    background for next time. */
 const cardCache = new Map<number, StreakCard>();
 
+/* One mint per player, however many times the board asks: a blitz guess
+   pre-mints the next pair while the reveal is still up, and the round showing
+   asks again for whichever card has not landed yet. */
+const mintsInFlight = new Map<number, Promise<StreakCard>>();
+
 /* The question numbers beyond the rankings snapshot (best-play stars, join
    date, playtime, ...), one batched read per page of the pool and kept for
    the session: runs re-draw the same players, and the server answers from
@@ -135,6 +146,18 @@ async function loadStreakMetrics(entries: readonly LiveGlobalRankingEntry[]): Pr
 async function mintStreakCard(player: StreakPlayer): Promise<StreakCard> {
   const cached = cardCache.get(player.userId);
   if (cached) return cached;
+  const inFlight = mintsInFlight.get(player.userId);
+  if (inFlight) return inFlight;
+  const minting = mintStreakCardFresh(player);
+  mintsInFlight.set(player.userId, minting);
+  try {
+    return await minting;
+  } finally {
+    mintsInFlight.delete(player.userId);
+  }
+}
+
+async function mintStreakCardFresh(player: StreakPlayer): Promise<StreakCard> {
   let card: StreakCard = { player, thumbnail: null, nameStyle: null, minted: true };
   try {
     const scores = await fetchCachedPackPlayerScores(player.userId);
@@ -641,8 +664,9 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
   }, []);
 
   /* Puts a server-dealt round on the board. The cards go up before their art
-     does: the question is answerable the moment the names are readable, and
-     the clock is already running, so nothing waits on a thumbnail. */
+     does, so the question is answerable the moment the names are readable, but
+     the countdown stays hidden until both have turned over: the deadline the
+     server dealt includes a hold for exactly this wait. */
   const showBlitzRound = useCallback((payload: BlitzStreakRound, receivedAt: number, token: number) => {
     const left = blitzStreakPlayer(payload.left.player);
     const right = blitzStreakPlayer(payload.right.player);
@@ -657,6 +681,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
     setVerdict(null);
     setRolled(null);
     setTimedOut(false);
+    setClockDeadline(null);
     playCardDraw();
     for (const [side, player] of [["left", left], ["right", right]] as const) {
       if (cardCache.has(player.userId)) continue;
@@ -958,6 +983,13 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
         playStreakCorrect(result.streak);
         if (result.streak % STREAK_MILESTONE === 0) playStreakMilestone();
         const next = result.round;
+        /* Mint the next pair while the reveal is still on screen: the hold the
+           server pays for the reveal then covers the art too, so the next
+           round usually lands face up with its countdown already showable. */
+        if (next) {
+          void mintStreakCard(blitzStreakPlayer(next.left.player));
+          void mintStreakCard(blitzStreakPlayer(next.right.player));
+        }
         window.setTimeout(() => {
           if (token !== deal.current) {
             busy.current = false;
@@ -1036,6 +1068,32 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
     finish(streak, "cashout");
   }, [auth.viewer, finish, over, streak]);
 
+  /* The countdown holds while either card is still face down: a timer running
+     against two card backs reads as time stolen. The deadline is the server's
+     and was dealt with a hold for this wait, so the hold here is bounded by
+     the same amount - past it the clock appears anyway rather than hiding
+     time that is running out regardless. */
+  const cardsFaceUp = !!round && round.left.minted && round.right.minted;
+  const [clockForced, setClockForced] = useState(false);
+  useEffect(() => {
+    if (!blitz || !round?.deadlineAt || cardsFaceUp) return;
+    setClockForced(false);
+    const show = window.setTimeout(() => setClockForced(true), REVEAL_HOLD_MS);
+    return () => window.clearTimeout(show);
+  }, [blitz, cardsFaceUp, round?.deadlineAt]);
+
+  /* What the countdown (and the buttons it kills) runs against: armed the
+     moment the cards are face up, twelve seconds, never more. Cards that
+     minted early would otherwise show the leftover hold as a 13 on the clock.
+     Capped at the server's deadline, so it can never promise time the server
+     will not honour. */
+  const [clockDeadline, setClockDeadline] = useState<number | null>(null);
+  useEffect(() => {
+    const deadline = round?.deadlineAt;
+    if (!blitz || !deadline || !(cardsFaceUp || clockForced)) return;
+    setClockDeadline((current) => current ?? Math.min(deadline, Date.now() + BLITZ_ROUND_MS));
+  }, [blitz, cardsFaceUp, clockForced, round?.deadlineAt]);
+
   /* The clock. It kills the buttons the moment it hits zero, then waits out
      the grace the backend allows for the wire before closing the run, so the
      server agrees it was a timeout rather than ending it a second early as a
@@ -1045,7 +1103,12 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
     const deadline = round?.deadlineAt;
     if (!blitz || over || verdict || !deadline) return;
     const id = runId.current;
-    const hitZero = window.setTimeout(() => setTimedOut(true), Math.max(0, deadline - Date.now()));
+    /* The buttons die with the countdown the player was shown, not with the
+       server's later deadline; the close below still waits out the real one. */
+    const hitZero = window.setTimeout(
+      () => setTimedOut(true),
+      Math.max(0, (clockDeadline ?? deadline) - Date.now()),
+    );
     const close = window.setTimeout(() => {
       if (!id || busy.current) return;
       busy.current = true;
@@ -1069,7 +1132,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
       window.clearTimeout(hitZero);
       window.clearTimeout(close);
     };
-  }, [finish, over, blitz, round, streak, verdict]);
+  }, [finish, over, blitz, clockDeadline, round, streak, verdict]);
 
   // The whole game is two choices, so the arrow keys should make them.
   useEffect(() => {
@@ -1197,8 +1260,8 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
                   <span className="font-semibold text-osu-f1">Dealing a matchup…</span>
                 )}
               </div>
-              {blitz && round?.deadlineAt && !over && (
-                <RoundClock key={round.deadlineAt} deadlineAt={round.deadlineAt} frozen={revealed} />
+              {blitz && clockDeadline !== null && !over && (
+                <RoundClock key={clockDeadline} deadlineAt={clockDeadline} frozen={revealed} />
               )}
               <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-osu-f1">
                 {!over && (

@@ -120,7 +120,8 @@ function blitzRound(index: number, leftId: number, rightId: number, dealtAt: num
     metric: "plays" as const,
     left: { player: player(leftId), value: 10_000 + leftId * 1_000 },
     right: { player: player(rightId) },
-    deadlineAt: dealtAt + 12_000,
+    // As the backend deals it: twelve seconds plus the mint/reveal hold.
+    deadlineAt: dealtAt + 12_000 + 1_250,
     serverNow: dealtAt,
   };
 }
@@ -371,6 +372,44 @@ describe("blitz mode", () => {
       });
     });
     expect(seen.size).toBeGreaterThan(4);
+  });
+
+  it("holds the countdown until both cards are face up", async () => {
+    viewer.current = { id: 99, username: "runner" };
+    /* Players no other test has minted, so both cards genuinely start face
+       down, and mints that only finish when the test says so. */
+    const finishMints: Array<(scores: unknown[]) => void> = [];
+    fetchCachedPackPlayerScores.mockImplementation(
+      () => new Promise((resolve) => {
+        finishMints.push(resolve);
+      }),
+    );
+    blitz.startBlitzStreak.mockResolvedValue({
+      runId: "abcdefgh1234",
+      pool: "top",
+      streak: 0,
+      status: "live",
+      endedBy: null,
+      round: blitzRound(1, 61, 62, Date.now()),
+    });
+    const { container } = render(<StreakGame onExit={() => {}} />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Blitz" }));
+    await settle();
+    await screen.findByText("? plays");
+
+    // The round is up and answerable, but the clock does not run against two
+    // card backs. The server dealt this wait into the deadline.
+    expect(container.querySelector("[data-clock-bar]")).toBeNull();
+
+    await act(async () => {
+      for (const finish of finishMints) finish([{}]);
+    });
+    await settle();
+    expect(container.querySelector("[data-clock-bar]")).toBeTruthy();
+    // The countdown runs the twelve seconds it advertises: the hold the server
+    // folded into the deadline is quiet grace, not a 13 on the clock.
+    expect(screen.getByText("12")).toBeTruthy();
   });
 
   it("closes the run when the clock runs out, and stops taking guesses first", async () => {

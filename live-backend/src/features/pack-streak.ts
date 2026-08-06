@@ -40,7 +40,10 @@ export const STREAK_ROUND_GRACE_MS = 1_500;
    showing what the last card had, which is the only chance anyone gets to read
    it. That hold is added on top of the thinking time so every round is worth
    the same twelve seconds, rather than the second one quietly being worth
-   ten. Mirrors REVEAL_HOLD_MS in the game component. */
+   ten. The opening deal gets the same hold for a different wait: both cards
+   land face down while the browser mints their art, and the client keeps the
+   countdown hidden until they turn over (or this runs out, whichever is
+   first). Mirrors REVEAL_HOLD_MS in the game component. */
 export const STREAK_REVEAL_HOLD_MS = 1_250;
 
 /* Blitz draws from the same three pools the casual game offers, and keeps a
@@ -480,7 +483,10 @@ export async function startStreakRun(db: Db, input: StartStreakRunInput): Promis
   if (!round) return null;
 
   const id = generateStreakRunId(rng);
-  const deadlineAt = now + STREAK_ROUND_MS;
+  /* The opening pair is dealt face down while the browser mints both cards'
+     art, so the first round is paid the hold every later round gets for its
+     reveal: the countdown the player sees never runs against card backs. */
+  const deadlineAt = now + STREAK_ROUND_MS + STREAK_REVEAL_HOLD_MS;
   await exec(
     db,
     `insert into pack_streak_runs

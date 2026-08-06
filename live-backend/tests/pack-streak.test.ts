@@ -124,7 +124,9 @@ describe("dealing a blitz round", () => {
     // The face-down card is a name and a rank. Its number is the question.
     expect(JSON.stringify(run.round?.right)).not.toContain("value");
     expect(run.round?.left.player.userId).not.toBe(run.round?.right.player.userId);
-    expect(run.round?.deadlineAt).toBe(NOW + STREAK_ROUND_MS);
+    // The opening deal carries the same hold later rounds get for their
+    // reveal: this one is spent minting the two cards' art.
+    expect(run.round?.deadlineAt).toBe(NOW + STREAK_ROUND_MS + STREAK_REVEAL_HOLD_MS);
   });
 
   it("carries the answered card over as the next round's face-up one", async () => {
@@ -218,7 +220,7 @@ describe("what ends a run", () => {
       userId: PLAYER,
       runId: run.runId,
       guess: correctGuessFor(run),
-      now: NOW + STREAK_ROUND_MS + 1000,
+      now: NOW + STREAK_ROUND_MS + STREAK_REVEAL_HOLD_MS + 1000,
     });
     expect(justInTime?.expired).toBe(false);
     expect(justInTime?.streak).toBe(1);
