@@ -3552,14 +3552,18 @@ function ReplaySkinPreview({
               // head as a nub of body colour, which is exactly what a skin's
               // rectangular body did under its round note.
               const bodyHeadY = settings.upscroll ? lnHeadY + headHeight / 2 : lnHeadY - headHeight / 2;
-              const bodyTop = Math.min(bodyHeadY, lnTailEnd);
-              const bodyBottom = Math.max(bodyHeadY, lnTailEnd);
+              // Directional, like the stage: art whose head is taller than the
+              // sample hold is long has no body to show, and an absolute span
+              // would flip it into a nub on the far side of the head.
+              const bodyTop = settings.upscroll ? bodyHeadY : lnTailEnd;
+              const bodyBottom = settings.upscroll ? lnTailEnd : bodyHeadY;
+              const hasBody = bodyBottom > bodyTop;
               const bodyPick = identifyColumn(col, "lnBody");
               const tailPick = identifyColumn(col, "lnTail");
               const headPick = identifyColumn(col, columnAssets.lnHead ? "lnHead" : "tap");
               return (
                 <div key={`ln-${col}`}>
-                  {bodyAsset ? (
+                  {!hasBody ? null : bodyAsset ? (
                     // Cascaded from the tail end at natural aspect, like the
                     // stage: a stretched copy flattens the art's cap into the
                     // body and loses the shorter-looking lead-in. On upscroll

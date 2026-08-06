@@ -3447,9 +3447,14 @@ export class ManiaReplayRenderer {
         const tailDelta = this.skinSettings.upscroll ? -barPercyTrim : barPercyTrim;
         const bodyHeadY = headEndY;
         const bodyTailY = tailEndY + tailDelta;
-        const barBodyTop = Math.min(bodyHeadY, bodyTailY);
-        const barBodyBottom = Math.max(bodyHeadY, bodyTailY);
-        this.barLnBodyWithTopFade(x, barBodyTop, barWidth, barBodyBottom - barBodyTop, color, bodyAlpha, noteFadeHeight, 0.55, layout);
+        // Directional, like the skin-art path: the trimmed tail crosses the
+        // head in the last stretch of a hold, and an absolute span would flip
+        // there and draw the leftover past the receptor.
+        const barBodyTop = this.skinSettings.upscroll ? bodyHeadY : bodyTailY;
+        const barBodyBottom = this.skinSettings.upscroll ? bodyTailY : bodyHeadY;
+        if (barBodyBottom > barBodyTop) {
+          this.barLnBodyWithTopFade(x, barBodyTop, barWidth, barBodyBottom - barBodyTop, color, bodyAlpha, noteFadeHeight, 0.55, layout);
+        }
       } else {
         // Unjudged taps keep scrolling past the receptors until the actual hit
         // (headTime) despawns them; falling behind on a dense section visibly
@@ -5495,8 +5500,15 @@ export class ManiaReplayRenderer {
     const tailBoxTop = this.skinSettings.upscroll ? tailEndY : tailEndY - tailHeight;
     const bodyHeadY = this.skinSettings.upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;
     const bodyTailY = this.skinSettings.upscroll ? tailBoxTop + tailHeight : tailBoxTop;
-    const bodyTop = Math.min(bodyHeadY, bodyTailY);
-    const bodyBottom = Math.max(bodyHeadY, bodyTailY);
+    // Directional, NOT min/max: the body runs from the tail end toward the
+    // head and is spent once the tail reaches the head's centre, which every
+    // hold played through does in its last half-cap at the receptor. Taking
+    // the absolute span flipped it there and drew the remainder on the far
+    // side of the centre - under a round cap that reads as two dark corners
+    // poking out below the head, growing until the tail lands. The built-in
+    // styles already stop instead of flipping (getHoldBodyRange returns null).
+    const bodyTop = this.skinSettings.upscroll ? bodyHeadY : bodyTailY;
+    const bodyBottom = this.skinSettings.upscroll ? bodyTailY : bodyHeadY;
     // Where the body stops being DRAWN is a separate question from where its
     // cascade starts: it stops at the cap's centre, stable's rule, so the join
     // hides under the widest part of the art and a hollow cap (ArrowMania's
@@ -5544,7 +5556,9 @@ export class ManiaReplayRenderer {
           );
         });
       }
-    } else {
+    } else if (clipBottom > clipTop) {
+      // Span-checked here too: a spent body is no body, and the flat fallback
+      // used to be handed a negative height for those frames.
       this.barLnBodyWithTopFade(colX + 3, clipTop, colWidth - 6, clipBottom - clipTop, this.skinSettings.lnBodyColor, bodyAlpha, fadeHeight, 0.55, visibilityLayout);
     }
 

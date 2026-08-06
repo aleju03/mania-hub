@@ -207,6 +207,24 @@ describe("longNoteGeometry", () => {
     expect(geometry.bodyBottom).toBe(420);
     expect(geometry.tailBoxTop).toBe(420);
   });
+
+  it("runs the body out instead of flipping it once the tail reaches the head's centre", () => {
+    // The last half-cap of every hold played through: the tail closes on the
+    // head at the receptor. Taking the absolute span drew that remainder on
+    // the far side of the centre, which under a round cap surfaces as two
+    // corners of body poking out below the head until the tail lands.
+    const spent = longNoteGeometry({ ...downscroll, tailEndY: 580, tailHeight: 0 });
+    expect(spent.bodyBottom).toBeLessThan(spent.bodyTop);
+    // Still a body while the tail is above the centre.
+    const alive = longNoteGeometry({ ...downscroll, tailEndY: 540, tailHeight: 0 });
+    expect(alive.bodyTop).toBe(540);
+    expect(alive.bodyBottom).toBe(600 - 48);
+  });
+
+  it("mirrors the spent-body case for upscroll", () => {
+    const spent = longNoteGeometry({ upscroll: true, headEndY: 120, tailEndY: 140, headHeight: 96, tailHeight: 0 });
+    expect(spent.bodyBottom).toBeLessThan(spent.bodyTop);
+  });
 });
 
 describe("lnTailArtEdgeFraction", () => {

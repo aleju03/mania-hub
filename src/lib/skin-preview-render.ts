@@ -782,9 +782,13 @@ export function longNoteGeometry(input: {
   const tailBoxTop = upscroll ? tailEndY : tailEndY - tailHeight;
   const headSideY = upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;
   const tailSideY = upscroll ? tailBoxTop + tailHeight : tailBoxTop;
+  // Directional, NOT min/max. A hold whose tail has come within half a cap of
+  // the head has no body left, and taking the absolute span would flip it and
+  // draw that remainder on the far side of the head's centre. Callers treat
+  // bodyBottom <= bodyTop as nothing to draw.
   return {
-    bodyTop: Math.min(headSideY, tailSideY),
-    bodyBottom: Math.max(headSideY, tailSideY),
+    bodyTop: upscroll ? headSideY : tailSideY,
+    bodyBottom: upscroll ? tailSideY : headSideY,
     headBoxTop,
     tailBoxTop,
   };

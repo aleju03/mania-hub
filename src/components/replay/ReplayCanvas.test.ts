@@ -482,8 +482,11 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(branch?.[1]).toBeTruthy();
     expect(branch![1]).toContain("const bodyHeadY = headEndY;");
     expect(branch![1]).toContain("const bodyTailY = tailEndY + tailDelta;");
-    expect(branch![1]).toContain("const barBodyTop = Math.min(bodyHeadY, bodyTailY);");
-    expect(branch![1]).toContain("const barBodyBottom = Math.max(bodyHeadY, bodyTailY);");
+    // Directional span: the trimmed tail crosses the head at the end of a
+    // hold, where min/max would flip and draw the leftover past the receptor.
+    expect(branch![1]).toContain("const barBodyTop = this.skinSettings.upscroll ? bodyHeadY : bodyTailY;");
+    expect(branch![1]).toContain("const barBodyBottom = this.skinSettings.upscroll ? bodyTailY : bodyHeadY;");
+    expect(branch![1]).toContain("if (barBodyBottom > barBodyTop) {");
     expect(branch![1]).toContain("this.barLnBodyWithTopFade(x, barBodyTop, barWidth, barBodyBottom - barBodyTop, color, bodyAlpha");
     expect(source).not.toContain("bottom - noteHeight, barWidth, noteHeight");
     expect(source).not.toContain("noteHeight / 2, 2, color, headAlpha");
@@ -549,6 +552,25 @@ describe("ManiaReplayRenderer skin customization", () => {
     // "pending", and the phantom box would never go away.
     expect(source).toContain('return value === undefined ? "pending" : value;');
     expect(source).not.toContain("lnTailArtTopCache.get(asset.src) ?? ");
+  });
+
+  it("lets an image skin's hold body run out at the head's centre", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const cardSource = fs.readFileSync(path.resolve(__dirname, "../../lib/skin-preview-render.ts"), "utf8");
+
+    // Directional span, not min/max. Every hold held through spends its body
+    // in the last half-cap before the tail lands, and the absolute span
+    // flipped it there: the remainder drew on the far side of the head's
+    // centre, poking out around a round cap as two dark corners at the
+    // receptor that grew until the tail arrived.
+    expect(source).toContain("const bodyTop = this.skinSettings.upscroll ? bodyHeadY : bodyTailY;");
+    expect(source).toContain("const bodyBottom = this.skinSettings.upscroll ? bodyTailY : bodyHeadY;");
+    expect(source).not.toContain("Math.min(bodyHeadY, bodyTailY)");
+    expect(cardSource).toContain("bodyTop: upscroll ? headSideY : tailSideY,");
+    expect(cardSource).not.toContain("Math.min(headSideY, tailSideY)");
+    // The flat fallback body is span-checked too, instead of being handed a
+    // negative height on those frames.
+    expect(source).toContain("} else if (clipBottom > clipTop) {");
   });
 
   it("applies the configured keymode column width to layout", () => {
