@@ -59,7 +59,7 @@ import { getSweepReports } from "../features/sweeps-status.js";
 import { getTopPlaysSnapshot, type TopPlaysSnapshotOptions } from "../features/top-plays.js";
 import { getTrackerSnapshot, type TrackerSnapshotFilters } from "../features/tracker.js";
 import { searchUsers as searchStoredUsers, USER_SEARCH_DEFAULT_LIMIT, USER_SEARCH_MAX_LIMIT } from "../features/user-search.js";
-import { type AbuseBucket, type AbuseGuard, normalizeCountryParam, type RateLimitResult } from "./abuse-guard.js";
+import { type AbuseBucket, type AbuseGuard, clientIp, normalizeCountryParam, type RateLimitResult } from "./abuse-guard.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { CountryClientTracker } from "../live/country-clients.js";
 import type { LiveEventLog } from "../live/event-log.js";
@@ -2328,14 +2328,15 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     return true;
   }
   if (url.pathname === "/api/skins/download") {
-    // Redirect-through download so each grab counts, then the R2 public URL
-    // serves the actual bytes with ContentDisposition: attachment.
+    // Redirect-through download so each grab counts - once per visitor per
+    // skin per day, keyed on IP - then the R2 public URL serves the actual
+    // bytes with ContentDisposition: attachment.
     if (req.method !== "GET") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
     const id = url.searchParams.get("id") ?? "";
-    const target = id ? await recordSkinDownload(ctx.serveWriteDb ?? ctx.db, id) : null;
+    const target = id ? await recordSkinDownload(ctx.serveWriteDb ?? ctx.db, id, clientIp(req, ctx.config)) : null;
     if (!target) {
       sendJson(req, res, ctx, 404, { error: "not_found" });
       return true;

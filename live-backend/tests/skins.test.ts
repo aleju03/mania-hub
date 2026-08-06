@@ -10,6 +10,7 @@ import {
   attachSkinPreview,
   backfillSkinSlugs,
   clearSimilarSkinsCache,
+  clearSkinDownloadDedup,
   createPendingSkin,
   deleteSkin,
   findPublishedSkinByOskSha256,
@@ -55,10 +56,11 @@ beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "mania-skins-"));
   db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
   await migrate(db);
-  // The similar-skins caches live in the process, not the database, so a
-  // fresh database per test needs them dropped or one test's catalog answers
-  // the next one's questions.
+  // The similar-skins caches and the download dedup live in the process, not
+  // the database, so a fresh database per test needs them dropped or one
+  // test's catalog answers the next one's questions.
   clearSimilarSkinsCache();
+  clearSkinDownloadDedup();
 });
 
 afterEach(async () => {
@@ -508,22 +510,26 @@ describe("skins feature", () => {
     expect(await deleteSkin(db, id)).toBeNull();
   });
 
-  it("counts downloads for published skins only", async () => {
+  it("counts downloads for published skins only, once per visitor", async () => {
     const id = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Popular" });
     const { recordSkinDownload } = await import("../src/features/skins.js");
-    expect(await recordSkinDownload(db, id)).toContain("skin.osk");
-    expect(await recordSkinDownload(db, id)).toContain("skin.osk");
+    expect(await recordSkinDownload(db, id, "1.1.1.1")).toContain("skin.osk");
+    // A repeat from the same visitor still gets the file but no second count;
+    // a different visitor counts.
+    expect(await recordSkinDownload(db, id, "1.1.1.1")).toContain("skin.osk");
+    expect((await getSkin(db, id))?.downloadCount).toBe(1);
+    expect(await recordSkinDownload(db, id, "2.2.2.2")).toContain("skin.osk");
     expect((await getSkin(db, id))?.downloadCount).toBe(2);
 
     await setSkinHidden(db, id, true);
-    expect(await recordSkinDownload(db, id)).toBeNull();
+    expect(await recordSkinDownload(db, id, "3.3.3.3")).toBeNull();
     expect((await getSkin(db, id))?.downloadCount).toBe(2);
 
     const pending = await createPendingSkin(db, OWNER);
     expect(pending.ok).toBe(true);
     if (!pending.ok) return;
-    expect(await recordSkinDownload(db, pending.id)).toBeNull();
-    expect(await recordSkinDownload(db, "missing")).toBeNull();
+    expect(await recordSkinDownload(db, pending.id, "1.1.1.1")).toBeNull();
+    expect(await recordSkinDownload(db, "missing", "1.1.1.1")).toBeNull();
   });
 
   it("prunes only long-expired pending uploads through retention", async () => {
@@ -1338,7 +1344,7 @@ describe("private skins", () => {
     expect(copy.ok).toBe(true);
 
     // And it has no counted download.
-    expect(await recordSkinDownload(db, secret)).toBeNull();
+    expect(await recordSkinDownload(db, secret, "1.1.1.1")).toBeNull();
   });
 
   it("hands a true admin every uploader's private skins, whole", async () => {

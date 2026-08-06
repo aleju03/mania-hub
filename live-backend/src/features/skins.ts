@@ -887,14 +887,50 @@ export async function listSimilarSkins(db: Db, skin: SkinRow, limit = 6, keys?: 
   return skins;
 }
 
+// One counted download per visitor per skin per day. The counter is the
+// catalog's popularity signal (the downloads sort, the number on the card),
+// and while it incremented unconditionally two people clicked one skin to
+// 1.4k in an hour - well inside the publicApi rate limit, so only dedup
+// stops it. In memory on purpose: the serving process is the only writer,
+// and the worst a restart forgives is one extra count per visitor per skin.
+const DOWNLOAD_DEDUP_TTL_MS = 24 * 60 * 60_000;
+const DOWNLOAD_DEDUP_MAX_ENTRIES = 100_000;
+const countedDownloads = new Map<string, number>();
+
+// Test seam.
+export function clearSkinDownloadDedup(): void {
+  countedDownloads.clear();
+}
+
+function shouldCountDownload(skinId: string, visitor: string): boolean {
+  const now = Date.now();
+  const key = `${skinId}:${visitor}`;
+  const countedUntil = countedDownloads.get(key);
+  if (countedUntil !== undefined && countedUntil > now) return false;
+  // Delete before set so a lapsed key re-enters at the back, keeping the
+  // map's insertion order the eviction order when the cap trims the front.
+  countedDownloads.delete(key);
+  countedDownloads.set(key, now + DOWNLOAD_DEDUP_TTL_MS);
+  while (countedDownloads.size > DOWNLOAD_DEDUP_MAX_ENTRIES) {
+    const oldest = countedDownloads.keys().next();
+    if (oldest.done) break;
+    countedDownloads.delete(oldest.value);
+  }
+  return true;
+}
+
 // Counts a download and hands back the redirect target. Only published public
 // skins count (and resolve): hidden, pending or private ones return null so the
 // endpoint 404s. A private skin has no counted download at all - its owner
-// fetches the file through the capability URL on their own page.
-export async function recordSkinDownload(db: Db, id: string): Promise<string | null> {
+// fetches the file through the capability URL on their own page. The visitor
+// is the caller's IP: a repeat grab within a day still resolves so the file
+// arrives, it just doesn't count again.
+export async function recordSkinDownload(db: Db, id: string, visitor: string): Promise<string | null> {
   const row = await getSkin(db, id);
   if (!row || row.status !== "published" || row.visibility !== "public" || !row.oskUrl) return null;
-  await exec(db, "update skins set download_count = download_count + 1 where id = ?", [id]);
+  if (shouldCountDownload(row.id, visitor)) {
+    await exec(db, "update skins set download_count = download_count + 1 where id = ?", [row.id]);
+  }
   return row.oskUrl;
 }
 

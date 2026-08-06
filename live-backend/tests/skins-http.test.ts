@@ -49,7 +49,7 @@ vi.mock("../src/skins/r2.js", async (importOriginal) => {
 
 import { copySkinObject, deleteSkinObjects, getSkinObject, readSkinObject, uploadSkinObject } from "../src/skins/r2.js";
 import { clearSkinImageCache } from "../src/skins/image-cache.js";
-import { clearSimilarSkinsCache } from "../src/features/skins.js";
+import { clearSimilarSkinsCache, clearSkinDownloadDedup } from "../src/features/skins.js";
 
 let dir = "";
 let db: Db;
@@ -68,8 +68,9 @@ beforeEach(async () => {
   vi.mocked(deleteSkinObjects).mockClear();
   vi.mocked(copySkinObject).mockClear();
   clearSkinImageCache();
-  // Process-level, so a fresh database per test has to drop it too.
+  // Process-level, so a fresh database per test has to drop them too.
   clearSimilarSkinsCache();
+  clearSkinDownloadDedup();
 });
 
 afterEach(async () => {
@@ -278,8 +279,12 @@ describe("skins HTTP endpoints", () => {
     // A freshly published skin starts at zero rather than at nothing.
     const finished = await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
     expect(finished.body.skin.downloadCount).toBe(0);
-    await call(mockReq("GET", `/api/skins/download?id=${id}`));
-    await call(mockReq("GET", `/api/skins/download?id=${id}`));
+    // Two visitors count; the first one clicking again does not. The repeat
+    // still redirects to the file, it just leaves the counter alone.
+    await call(mockReq("GET", `/api/skins/download?id=${id}`, { "cf-connecting-ip": "203.0.113.1" }));
+    await call(mockReq("GET", `/api/skins/download?id=${id}`, { "cf-connecting-ip": "203.0.113.2" }));
+    const repeat = await call(mockReq("GET", `/api/skins/download?id=${id}`, { "cf-connecting-ip": "203.0.113.1" }));
+    expect(repeat.status).toBe(302);
 
     // A signed-out visitor reads the same count the uploader does, off the
     // shared cacheable responses.
