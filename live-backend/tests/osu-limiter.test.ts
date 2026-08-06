@@ -43,6 +43,34 @@ describe("token bucket limiter", () => {
     expect(jobDone).toBe(true);
   });
 
+  it("keeps sustained interactive demand near the target rate", async () => {
+    // The burst bucket used to refill at targetPerMinute, so a steady stream of
+    // page loads ran at roughly twice the target until the hard ceiling caught
+    // it - which is how the budget sat pinned at 120/120 for six minutes on
+    // 2026-08-06. It may still absorb a spike; it may not sustain one.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const target = 60;
+    const burst = 4;
+    const limiter = new TokenBucketLimiter(1000, target, undefined, { interactiveBurstCapacity: burst });
+
+    let done = 0;
+    for (let call = 0; call < 300; call += 1) {
+      void limiter.schedule("api:profile_snapshot", `/users/${call}/mania`, async () => {
+        done += 1;
+      });
+    }
+
+    // The bucket starts full, so the first few go out immediately.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(done).toBeGreaterThanOrEqual(burst);
+    expect(done).toBeLessThanOrEqual(burst + 1);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(done).toBeGreaterThan(target * 0.9);
+    expect(done).toBeLessThanOrEqual(target + 2 * burst + 2);
+  });
+
   it("reports duration and status through onCall", async () => {
     const calls: LimiterCallLog[] = [];
     const limiter = new TokenBucketLimiter(1000, 1000, (entry) => calls.push(entry));

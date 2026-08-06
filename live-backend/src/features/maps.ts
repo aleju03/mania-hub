@@ -21,6 +21,20 @@ import { loadGlobalFarmedBoardFromDisk, readGlobalFarmedBoardDiskHeader, saveGlo
 const MAPS_REFRESH_PRIORITY = -100;
 const MAPS_FARMED_REFRESH_PRIORITY = -100;
 const MAPS_FETCH_CONCURRENCY = 2;
+
+/* How many roster members one invocation seeds per section.
+ *
+ * A never-seeded country needs roughly five osu! calls per roster member
+ * (a best-scores window, most-played, favourites), and those share the same
+ * ~55/min budget as every other lane. A 100-member country therefore ran 12-15
+ * minutes in one go and was killed by the 10-minute job watchdog every time -
+ * marked failed, retried hourly, re-running the whole thing forever while the
+ * abandoned run quietly finished and wrote the snapshot anyway (HR and PY did
+ * exactly this on 2026-08-06). Seeding a slice per invocation and chaining the
+ * rest is the same shape seed_snipe_board already uses, and keeps every run
+ * well inside the watchdog. */
+const MAPS_REFRESH_SEED_BATCH = 20;
+const MAPS_REFRESH_CHAIN_DELAY_MS = 5_000;
 const MAPS_FARMED_SCORE_WINDOW = 200;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 // A speed mod counts as a map's dominant farm mod when more than this share of
@@ -308,6 +322,24 @@ export async function enqueueMapsRefresh(queue: JobQueue, country: string, optio
     `maps:${normalized}`,
     { country: normalized },
     { priority: mapsPriority(options.priority, MAPS_REFRESH_PRIORITY), replaceDone: options.replaceDone ?? true, runAfter: options.runAfter },
+  );
+}
+
+/* The next link of a batched refresh. Its own dedupe key, because the queue's
+   upsert only re-arms a row in queued/failed/deferred state and this is
+   enqueued from inside the still-running job. hasActiveMapsRefresh matches the
+   whole family, so a chain in flight still reads as one active refresh. */
+async function enqueueMapsRefreshContinuation(queue: JobQueue, country: string, batch: number): Promise<void> {
+  const normalized = country.toUpperCase();
+  await queue.enqueue(
+    "refresh_country_maps",
+    `maps:${normalized}:seed:${batch}`,
+    { country: normalized, seedBatch: batch },
+    {
+      priority: mapsPriority(undefined, MAPS_REFRESH_PRIORITY),
+      replaceDone: true,
+      runAfter: new Date(Date.now() + MAPS_REFRESH_CHAIN_DELAY_MS),
+    },
   );
 }
 
@@ -3921,14 +3953,19 @@ function getDominantStoredMapsSpeedMod(players: StoredMapsFarmedPlayer[]): "DT" 
 
 async function hasActiveMapsRefresh(db: Db, country: string): Promise<boolean> {
   const now = nowIso();
+  const key = `maps:${country.toUpperCase()}`;
   const row = (await exec(
     db,
     `select 1 as active
      from jobs
-     where dedupe_key = ?
+     where (dedupe_key = ? or dedupe_key like ?)
        and (status in ('queued', 'running') or (status = 'failed' and run_after > ?))
      limit 1`,
-    [`maps:${country.toUpperCase()}`, now],
+    // A batched refresh continues under maps:XX:seed:N (the queue refuses to
+    // re-arm a dedupe key whose job is still running, so a chain link cannot
+    // reuse the base key). Those links are the same in-flight refresh as far
+    // as every caller of this is concerned.
+    [key, `${key}:seed:%`, now],
   )).rows[0];
   return !!row;
 }
@@ -4025,6 +4062,11 @@ function mapsRefreshProgressMetaKey(country: string): string {
   return `${MAPS_REFRESH_PROGRESS_META_PREFIX}${country.toUpperCase()}`;
 }
 
+function clampCompleted(value: number | undefined, total: number): number {
+  const parsed = Math.floor(Number(value) || 0);
+  return Math.max(0, Math.min(total, parsed));
+}
+
 class MapsRefreshProgressReporter {
   private status: MapsRefreshProgressStatus = "running";
   private stage: MapsRefreshProgressStage = "fetching";
@@ -4041,7 +4083,13 @@ class MapsRefreshProgressReporter {
     private readonly db: Db,
     private readonly country: string,
     private readonly totalUsers: number,
-  ) {}
+    // Work earlier links of a chained refresh already finished. Carried so the
+    // bar keeps climbing across links instead of resetting to zero.
+    seeded: { farmedCompleted?: number; favouritesCompleted?: number } = {},
+  ) {
+    this.farmedCompleted = clampCompleted(seeded.farmedCompleted, totalUsers);
+    this.favouritesCompleted = clampCompleted(seeded.favouritesCompleted, totalUsers);
+  }
 
   start(): Promise<void> {
     return this.write(true);
@@ -4056,9 +4104,19 @@ class MapsRefreshProgressReporter {
     return this.write(false);
   }
 
-  markSectionDone(section: "farmed" | "favourites"): Promise<void> {
-    if (section === "farmed") this.farmedCompleted = this.totalUsers;
-    else this.favouritesCompleted = this.totalUsers;
+  /* `completed` is how far this section actually got, which is the whole
+     roster on a single-pass refresh and less than that on a chained one. */
+  markSectionDone(section: "farmed" | "favourites", completed = this.totalUsers): Promise<void> {
+    const value = clampCompleted(completed, this.totalUsers);
+    if (section === "farmed") this.farmedCompleted = Math.max(this.farmedCompleted, value);
+    else this.favouritesCompleted = Math.max(this.favouritesCompleted, value);
+    return this.write(true);
+  }
+
+  /* This link is done and the next one is queued: still "running" as far as
+     the page is concerned, since the refresh has not finished. */
+  markChained(): Promise<void> {
+    this.stage = "fetching";
     return this.write(true);
   }
 
@@ -4141,12 +4199,30 @@ export async function refreshCountryMaps(
   db: Db,
   osu: Pick<OsuApiClient, "getUserBestScoresWindow" | "getUserMostPlayed" | "getUserFavourites">,
   queue: JobQueue,
-  payload: { country: string },
+  payload: { country: string; seedBatch?: number },
 ): Promise<CountryMapsData> {
   const country = payload.country.toUpperCase();
   const users = await getMapsUsers(db, country);
   if (users.length === 0) throw new MapsRosterNotReadyError(country);
-  const progress = new MapsRefreshProgressReporter(db, country, users.length);
+
+  // Who still needs an osu! fetch, decided here rather than inside each
+  // builder so this invocation can size its slice and hand the rest to the
+  // next link of the chain.
+  const farmedPending = await getUsersMissingMapsFarmedOverlay(db, country, users);
+  const favouritesPending = await getUsersDueForMapsUserLibrary(db, country, users);
+  const farmedBatch = farmedPending.slice(0, MAPS_REFRESH_SEED_BATCH);
+  const favouritesBatch = favouritesPending.slice(0, MAPS_REFRESH_SEED_BATCH);
+  const farmedLeftover = farmedPending.length - farmedBatch.length;
+  const favouritesLeftover = favouritesPending.length - favouritesBatch.length;
+  const partial = farmedLeftover > 0 || favouritesLeftover > 0;
+
+  const progress = new MapsRefreshProgressReporter(db, country, users.length, {
+    // Members seeded by earlier links are already done as far as the /maps
+    // progress bar is concerned; without this a chained refresh would restart
+    // the bar at zero on every link.
+    farmedCompleted: users.length - farmedPending.length,
+    favouritesCompleted: users.length - favouritesPending.length,
+  });
   await progress.start();
   const emptyGeneratedAt = nowIso();
   let latestFarmed: CountryMapsFarmedSection = { farmed: [], generatedAt: emptyGeneratedAt };
@@ -4165,15 +4241,15 @@ export async function refreshCountryMaps(
   };
 
   try {
-    const farmedPromise = buildCountryFarmed(db, osu, queue, country, users, progress).then(async (section) => {
+    const farmedPromise = buildCountryFarmed(db, osu, queue, country, users, farmedBatch, progress).then(async (section) => {
       latestFarmed = section;
-      await progress.markSectionDone("farmed");
+      await progress.markSectionDone("farmed", users.length - farmedLeftover);
       await persistLatest();
       return section;
     });
-    const favouritesPromise = buildCountryFavourites(db, osu, country, users, progress).then(async (section) => {
+    const favouritesPromise = buildCountryFavourites(db, osu, country, users, favouritesBatch, progress).then(async (section) => {
       latestFavourites = section;
-      await progress.markSectionDone("favourites");
+      await progress.markSectionDone("favourites", users.length - favouritesLeftover);
       await persistLatest();
       return section;
     });
@@ -4181,6 +4257,16 @@ export async function refreshCountryMaps(
     const [farmedSection, favSection] = await Promise.all([farmedPromise, favouritesPromise]);
     await progress.markPersisting();
     const value = composeCountryMapsData(farmedSection, favSection);
+    if (partial) {
+      // A slice landed and is already serving; the rest continues in the next
+      // link. No usability assertion here: judging a country empty on a
+      // partial pass would park a country that has simply not been fetched
+      // yet. The final link is what decides that.
+      await persistMapsSnapshot(db, country, value);
+      await enqueueMapsRefreshContinuation(queue, country, (Math.floor(Number(payload.seedBatch)) || 0) + 1);
+      await progress.markChained();
+      return value;
+    }
     assertUsableMapsData(value, country, users.length);
     await persistMapsSnapshot(db, country, value);
     await progress.markDone();
@@ -5275,11 +5361,13 @@ async function buildCountryFarmed(
   queue: JobQueue,
   country: string,
   users: MapsUser[],
+  // This invocation's slice of the members still missing an overlay, chosen by
+  // the caller so it can chain the remainder.
+  pendingUsers: MapsUser[],
   progress?: MapsRefreshProgressReporter,
 ): Promise<CountryMapsFarmedSection> {
-  const missingUsers = await getUsersMissingMapsFarmedOverlay(db, country, users);
-  if (missingUsers.length > 0) {
-    await seedCountryFarmedOverlayUsers(db, osu, queue, country, missingUsers, progress);
+  if (pendingUsers.length > 0) {
+    await seedCountryFarmedOverlayUsers(db, osu, queue, country, pendingUsers, progress);
   }
   return readCountryFarmedOverlaySection(db, country, users);
 }
@@ -5411,9 +5499,10 @@ async function buildCountryFavourites(
   osu: Pick<OsuApiClient, "getUserMostPlayed" | "getUserFavourites">,
   country: string,
   users: MapsUser[],
+  // As with the farmed section: this invocation's slice, sized by the caller.
+  dueUsers: MapsUser[],
   progress?: MapsRefreshProgressReporter,
 ): Promise<CountryMapsFavouritesSection> {
-  const dueUsers = await getUsersDueForMapsUserLibrary(db, country, users);
   if (dueUsers.length > 0) {
     await seedCountryMapsUserLibraryUsers(db, osu, country, dueUsers, progress);
   }

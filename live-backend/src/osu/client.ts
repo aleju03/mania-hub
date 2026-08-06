@@ -53,6 +53,24 @@ export interface OsuScoresResponse {
 
 const DEFAULT_MAX_PENDING_CALLS = 500;
 
+/* How long the interactive burst bucket takes to refill from empty.
+ *
+ * This used to refill at targetPerMinute, which is not a burst at all: the
+ * interactive lane got the paced target rate AND a token stream arriving at
+ * that same rate, so sustained interactive demand ran at ~2x target until the
+ * hard ceiling stopped it. On 2026-08-06 a pack burst over two freshly
+ * activated countries held 120/120 for six minutes that way against a target
+ * of 55. Refilling the whole bucket over a minute keeps the spike absorption
+ * a page load needs (a handful of instant calls) while capping the sustained
+ * overage at interactiveBurstCapacity per minute. */
+const INTERACTIVE_BURST_REFILL_MS = 60_000;
+
+/* Filling a card that nobody is waiting on is background work, not a page
+   load. Under the old "api:profile_snapshot" caller it classified as
+   interactive, which is how pack warms came to share the burst allowance with
+   real page loads and helped hold the budget at its hard ceiling. */
+export const PACK_WARM_CALLER = "job:warm_pack_player";
+
 export class TokenBucketLimiter {
   private starts: number[] = [];
   private recent: Array<{ startedAt: number; caller: string; path: string }> = [];
@@ -203,7 +221,7 @@ export class TokenBucketLimiter {
     if (this.interactiveBurstCapacity <= 0) return;
     const elapsedMs = Math.max(0, now - this.interactiveBurstUpdatedAt);
     if (elapsedMs > 0) {
-      const refill = elapsedMs * (Math.max(1, this.targetPerMinute) / 60_000);
+      const refill = elapsedMs * (this.interactiveBurstCapacity / INTERACTIVE_BURST_REFILL_MS);
       this.interactiveBurstTokens = Math.min(this.interactiveBurstCapacity, this.interactiveBurstTokens + refill);
       this.interactiveBurstUpdatedAt = now;
     }
@@ -258,7 +276,7 @@ export class TokenBucketLimiter {
 }
 
 function classifyLimiterLane(caller: string, path: string): LimiterLane {
-  if (caller.startsWith("job:seed_snipe_board") || caller.startsWith("job:refresh_country_maps") || caller.startsWith("job:refresh_user_maps_farmed_scores") || caller.startsWith("job:refresh_country_roster")) {
+  if (caller.startsWith("job:seed_snipe_board") || caller.startsWith("job:refresh_country_maps") || caller.startsWith("job:refresh_user_maps_farmed_scores") || caller.startsWith("job:refresh_country_roster") || caller.startsWith(PACK_WARM_CALLER)) {
     return "bulk";
   }
   if (caller.startsWith("job:")) return "job";

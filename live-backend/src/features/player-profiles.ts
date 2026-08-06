@@ -5,7 +5,7 @@ import type { Db } from "../db.js";
 import { exec, json, parseJson, writeVariantPps } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { errorContext, logWarn } from "../logger.js";
-import { OsuApiError, type OsuApiClient } from "../osu/client.js";
+import { OsuApiError, PACK_WARM_CALLER, type OsuApiClient } from "../osu/client.js";
 import { calculateWeightedPpTotal, getScoreIdentity, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
 import { compactScoresForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata, selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { packJson, unpackJson } from "../shared/compressed-json.js";
@@ -955,7 +955,9 @@ export async function warmProfileSnapshots(
   void (async () => {
     for (const key of coldKeys) {
       try {
-        await fetchAndStoreProfileSnapshotShared(db, osu, key, "userId");
+        // Bulk lane: nobody is looking at this card yet, so it must not spend
+        // the interactive burst a page load needs.
+        await fetchAndStoreProfileSnapshotShared(db, osu, key, "userId", PACK_WARM_CALLER);
       } catch {
         // Skip to the next player; the reveal's own request retries this one.
       }

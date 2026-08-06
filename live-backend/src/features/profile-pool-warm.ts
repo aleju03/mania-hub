@@ -2,7 +2,7 @@ import type { Db } from "../db.js";
 import { exec } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logInfo } from "../logger.js";
-import { OsuApiError, type OsuApiClient } from "../osu/client.js";
+import { OsuApiError, PACK_WARM_CALLER, type OsuApiClient } from "../osu/client.js";
 import { markUserMissing } from "../users.js";
 import { fetchAndStoreProfileSnapshotShared } from "./player-profiles.js";
 
@@ -68,7 +68,7 @@ export async function runProfilePoolWarmJob(
   let markedMissing = 0;
   for (const userId of userIds) {
     try {
-      await fetchAndStoreProfileSnapshotShared(db, osu, String(userId), "userId");
+      await fetchAndStoreProfileSnapshotShared(db, osu, String(userId), "userId", PACK_WARM_CALLER);
       warmed += 1;
     } catch (error) {
       if (error instanceof OsuApiError && error.status === 404) {

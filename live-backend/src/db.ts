@@ -311,6 +311,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await setMigrationSentinel(target, SCHEMA_MIGRATION_META_KEY, { startedAt: startedAtIso, completedAt: null });
   await migrateCountryRegistryFeatureTier(target);
   await migrateCountryRegistryKeepWarm(target);
+  await migrateCountryRegistryRetiredAt(target);
   await migrateScoreEventsIdentity(target);
   await migrateProfileSnapshots(target);
   await migrateMapsFarmedOverlay(target);
@@ -858,6 +859,16 @@ async function migrateCountryRegistryKeepWarm(db: Db): Promise<void> {
   if (columns.includes("keep_warm")) return;
 
   await db.execute("alter table country_registry add column keep_warm integer not null default 0");
+}
+
+/* Separates a country the worker retired for having no data from one an admin
+   paused on purpose. Both sit at status 'paused' and every scheduler skips
+   both; only the retired one is revived by someone visiting the country. */
+async function migrateCountryRegistryRetiredAt(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(country_registry)")).rows.map((row) => String(row.name));
+  if (columns.includes("retired_at")) return;
+
+  await db.execute("alter table country_registry add column retired_at text");
 }
 
 async function migrateScoreEventsIdentity(db: Db): Promise<void> {

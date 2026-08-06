@@ -1,6 +1,6 @@
 import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
-import { canSeedSnipesForCountry } from "./countries.js";
+import { canSeedSnipesForCountry, isCountryRosterConfirmedEmpty, retireCountry } from "./countries.js";
 import { exec, json, parseJson, writeVariantPps } from "./db.js";
 import { AVATAR_ACCENT_JOB, computeAvatarAccentJob } from "./features/avatar-accents.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
@@ -378,6 +378,7 @@ export class WorkerRunner {
       await this.events.append("job_status", null, { id: job.id, type: job.type, status: "done" }, `job:${job.id}:done:${job.attempts}`);
     } catch (error) {
       if (await this.handleMissingUserJob(workerId, job, lane, error)) return;
+      if (await this.retireEmptyMapsCountry(workerId, job, lane, error)) return;
       if (error instanceof MapsRosterNotReadyError) {
         const retryDelayMs = getRetryDelayMs(job.type, job.attempts, error);
         await this.queue.defer(job.id, retryDelayMs);
@@ -724,6 +725,37 @@ export class WorkerRunner {
       return;
     }
     throw new Error(`Unknown job type: ${job.type}`);
+  }
+
+  /* Retires a country whose maps refresh has failed the same way often enough
+     that it is not going to start working: either the roster's members
+     genuinely have no farmed/most-played/favourite data anywhere
+     (MapsEmptyResultError), or the country has no ranked mania players at all
+     and a completed roster refresh says so. The job is completed rather than
+     failed, so nothing retries it, and the paused registry row keeps every
+     scheduler off the country until someone visits it again. */
+  private async retireEmptyMapsCountry(workerId: string, job: Job, lane: string, error: unknown): Promise<boolean> {
+    if (job.type !== "refresh_country_maps") return false;
+    if (Math.max(1, job.attempts + 1) < POISONED_MAPS_REFRESH_ATTEMPTS) return false;
+    const country = String((job.payload as { country?: unknown }).country ?? "").trim().toUpperCase();
+    if (!country) return false;
+    if (error instanceof MapsRosterNotReadyError) {
+      if (!await isCountryRosterConfirmedEmpty(this.db, country)) return false;
+    } else if (!(error instanceof MapsEmptyResultError)) {
+      return false;
+    }
+    if (!await retireCountry(this.db, country)) return false;
+    await this.queue.complete(job.id);
+    logWarn("country_retired_empty", {
+      job_id: job.id,
+      type: job.type,
+      lane,
+      worker_id: workerId,
+      country,
+      attempts: job.attempts + 1,
+      ...errorContext(error),
+    });
+    return true;
   }
 
   private async handleMissingUserJob(workerId: string, job: Job, lane: string, error: unknown): Promise<boolean> {

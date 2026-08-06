@@ -5,6 +5,7 @@ import {
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
   LiveBackendRequestError,
+  warmLivePackPlayers,
   type LiveGlobalRankingEntry,
 } from "./live-backend";
 import { HONORARY_PACK_POOL, type HonoraryPlayer } from "./honorary-players";
@@ -567,6 +568,67 @@ function rankOfLiveEntry(entry: LiveGlobalRankingEntry): number {
 const POOL_REPLACEMENT_MAX_EXTRA_PAGES = 16;
 const POOL_REPLACEMENT_PAGE_BATCH = 4;
 
+/* How many times a draw re-rolls players the backend has never fetched. Each
+   round costs one batched probe; two is enough to clear a hand in practice and
+   bounds what a draw can spend when the pool is genuinely cold. */
+const POOL_READINESS_REROLL_ROUNDS = 2;
+
+/* Which of these players have no stored best-score window, so their card
+   cannot be built from the local DB. Fails open: a backend hiccup deals the
+   hand exactly as it would have before this existed. */
+async function findNotReadyPackPlayers(userIds: readonly number[]): Promise<Set<number>> {
+  if (!isLiveBackendConfigured() || userIds.length === 0) return new Set();
+  try {
+    // The raw read, not fetchCachedPackPlayerScoresBatch: that one carries the
+    // reveal path's retry-and-wait, which belongs to a card someone is staring
+    // at, not to a draw that can simply deal the hand it already has.
+    const cards = await fetchLivePackCardSnapshotsDirect(userIds);
+    return new Set(userIds.filter((userId) => !(cards.get(userId)?.bestScores?.length)));
+  } catch {
+    return new Set();
+  }
+}
+
+/* Keeps players whose card is not built yet out of the hand.
+ *
+ * Dealing one used to mint their profile inline at reveal time, on the
+ * interactive osu! lane, three calls a card - which is how a pack burst over
+ * two freshly activated countries pinned the API budget at its hard ceiling
+ * for six minutes on 2026-08-06. A not-ready player is treated exactly like an
+ * already-owned one (same re-roll, so pool size and collection-progress
+ * denominators are untouched) and handed to the paced warm instead, which
+ * makes them dealable on their own time. */
+async function replaceNotReadyPoolEntries(
+  entries: LiveGlobalRankingEntry[],
+  pagesByNumber: Map<number, LiveGlobalRankingEntry[]>,
+  head: { ranking: LiveGlobalRankingEntry[]; total: number },
+  fetchPage: PoolPageFetcher,
+  drawTotal: number,
+  ownedUserIds: ReadonlySet<number> | undefined,
+  rng: () => number,
+): Promise<void> {
+  const warmed = new Set<number>();
+  for (let round = 0; round < POOL_READINESS_REROLL_ROUNDS; round += 1) {
+    const notReady = await findNotReadyPackPlayers(entries.map((entry) => entry.user.id));
+    if (notReady.size === 0) return;
+    // Fire-and-forget: the warm is for the next person who draws them, not
+    // this hand, and it runs on the bulk lane so it cannot outrun the budget.
+    const fresh = [...notReady].filter((userId) => !warmed.has(userId));
+    if (fresh.length > 0) {
+      fresh.forEach((userId) => warmed.add(userId));
+      void warmLivePackPlayers(fresh).catch(() => {});
+    } else {
+      // Nothing moved last round: the pool has no ready replacement to offer,
+      // so another probe would ask the same question and get the same answer.
+      return;
+    }
+    // The union is both the slot list and the candidate filter, so a re-roll
+    // can never hand back a duplicate to a duplicate-protected pack.
+    const unavailable = new Set<number>([...(ownedUserIds ?? []), ...notReady]);
+    await replaceOwnedPoolEntries(entries, pagesByNumber, head, fetchPage, drawTotal, unavailable, rng);
+  }
+}
+
 async function replaceOwnedPoolEntries(
   entries: LiveGlobalRankingEntry[],
   pagesByNumber: Map<number, LiveGlobalRankingEntry[]>,
@@ -730,6 +792,8 @@ export async function drawPackPlayersFromPool(
   if (options.ownedUserIds && options.ownedUserIds.size > 0) {
     await replaceOwnedPoolEntries(entries, pagesByNumber, head, fetchPoolPage, drawTotal, options.ownedUserIds, rng);
   }
+
+  await replaceNotReadyPoolEntries(entries, pagesByNumber, head, fetchPoolPage, drawTotal, options.ownedUserIds, rng);
 
   const players = sortIntoRevealOrder(entries.map(liveEntryToPackPlayer));
   return {

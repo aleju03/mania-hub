@@ -38,6 +38,7 @@ import {
   fetchLiveGlobalRankings,
   fetchLivePackCardSnapshotDirect,
   fetchLivePackCardSnapshotsDirect,
+  warmLivePackPlayers,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
   LiveBackendRequestError,
@@ -52,6 +53,7 @@ vi.mock("./live-backend", async (importOriginal) => ({
   fetchLivePackCardSnapshotDirect: vi.fn(),
   fetchLivePackCardSnapshotsDirect: vi.fn(),
   fetchLivePlayerProfileSnapshotDirect: vi.fn(),
+  warmLivePackPlayers: vi.fn(async () => {}),
 }));
 
 vi.mock("./osu", async (importOriginal) => ({
@@ -303,6 +305,37 @@ describe("tracked pool draws", () => {
     }
     // Page 1 is fetched once for the pool size and reused, never refetched.
     expect(calls.filter((page) => page === 1)).toHaveLength(1);
+  });
+
+  it("re-rolls players whose card the backend has never built", async () => {
+    // Whoever the draw deals first has no stored card; everyone else does.
+    let coldUserId = 0;
+    vi.mocked(fetchLivePackCardSnapshotsDirect).mockImplementation(async (userIds) => {
+      if (coldUserId === 0) coldUserId = userIds[0];
+      return new Map(
+        userIds
+          .filter((userId) => userId !== coldUserId)
+          .map((userId) => [userId, { user: { id: userId }, bestScores: [{ id: 1 } as OsuScore] } as never]),
+      );
+    });
+    const { fetchPage } = makePoolFetcher(5853);
+
+    const { players } = await drawPackPlayersFromPool(mulberry32(21), fetchPage);
+
+    expect(players).toHaveLength(PACK_SIZE);
+    expect(players.some((player) => player.user.id === coldUserId)).toBe(false);
+    // The cold player is handed to the paced warm rather than minted inline.
+    expect(vi.mocked(warmLivePackPlayers)).toHaveBeenCalledWith([coldUserId]);
+  });
+
+  it("deals the hand unchanged when the readiness probe fails", async () => {
+    vi.mocked(fetchLivePackCardSnapshotsDirect).mockRejectedValue(new Error("backend down"));
+    const { fetchPage } = makePoolFetcher(5853);
+
+    const { players } = await drawPackPlayersFromPool(mulberry32(21), fetchPage);
+
+    expect(players).toHaveLength(PACK_SIZE);
+    expect(new Set(players.map((player) => player.user.id)).size).toBe(PACK_SIZE);
   });
 
   it("draws bigger packs when the type asks for more cards", async () => {

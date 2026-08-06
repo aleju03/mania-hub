@@ -22,7 +22,7 @@ import { cancelOscCountryCatchup, enqueueOscCountryCatchup, OscBackfill } from "
 import { OscSocketClient } from "../src/osc/client.js";
 import { runScoresFallbackPage, shouldRunScoresFallback } from "../src/osc/scores-fallback.js";
 import { addManualRosterMember, refreshCountryRoster, removeManualRosterMember } from "../src/rosters/country-rosters.js";
-import { activateCountry, canSeedSnipesForCountry, deleteCountryData, ensurePinnedCountries, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus, touchCountryRequest } from "../src/countries.js";
+import { activateCountry, canSeedSnipesForCountry, deleteCountryData, isCountryRosterConfirmedEmpty, retireCountry, ensurePinnedCountries, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus, touchCountryRequest } from "../src/countries.js";
 import { CountryClientTracker } from "../src/live/country-clients.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -621,6 +621,47 @@ describe("live backend", () => {
     const row = (await exec(db, "select status, keep_warm from country_registry where country = 'MX'")).rows[0];
     expect(String(row.status)).toBe("warm");
     expect(Number(row.keep_warm)).toBe(1);
+  });
+
+  it("retires a country with nothing in it, and revives it on a visit", async () => {
+    const { db, queue } = await setup(["CR"]);
+    const config = {
+      trackedCountries: ["CR"],
+      countryWarmTtlMs: 60 * 60 * 1000,
+      rosterRefreshIntervalMs: 24 * 60 * 60 * 1000,
+    };
+    await activateCountry(db, queue, config, "SM");
+
+    // No completed roster refresh yet: an empty roster here means the refresh
+    // has not landed (osu! outage), which must not retire anything.
+    expect(await isCountryRosterConfirmedEmpty(db, "SM")).toBe(false);
+
+    await exec(db, "update country_registry set last_roster_refresh_at = ? where country = 'SM'", [new Date().toISOString()]);
+    expect(await isCountryRosterConfirmedEmpty(db, "SM")).toBe(true);
+
+    expect(await retireCountry(db, "SM")).toBe(true);
+    expect(String((await exec(db, "select status from country_registry where country = 'SM'")).rows[0].status)).toBe("paused");
+    // Paused is what every scheduler already skips.
+    expect(await getActiveCountryCodes(db, config)).not.toContain("SM");
+    // Retiring twice is a no-op rather than a second pause.
+    expect(await retireCountry(db, "SM")).toBe(false);
+
+    // A visitor brings it back through the ordinary activation path.
+    await activateCountry(db, queue, config, "SM");
+    expect(String((await exec(db, "select status from country_registry where country = 'SM'")).rows[0].status)).toBe("active");
+  });
+
+  it("never retires a configured tracked country", async () => {
+    const { db, queue } = await setup(["CR"]);
+    const config = {
+      trackedCountries: ["CR"],
+      countryWarmTtlMs: 60 * 60 * 1000,
+      rosterRefreshIntervalMs: 24 * 60 * 60 * 1000,
+    };
+    await activateCountry(db, queue, config, "CR");
+
+    expect(await retireCountry(db, "CR")).toBe(false);
+    expect(String((await exec(db, "select status from country_registry where country = 'CR'")).rows[0].status)).not.toBe("paused");
   });
 
   it("lets passively warmed countries expire by TTL", async () => {
@@ -4923,7 +4964,21 @@ describe("live backend", () => {
         getUserFavourites: vi.fn(async () => []),
       };
 
-      const snapshot = await refreshCountryMaps(db, osu, queue, { country: "CR" });
+      // A never-seeded country is drained in slices now: one invocation seeds
+      // its batch, persists what it has and chains the rest, so a 100-member
+      // roster no longer runs past the job watchdog in a single pass.
+      let snapshot = await refreshCountryMaps(db, osu, queue, { country: "CR" });
+      expect(osu.getUserBestScoresWindow).toHaveBeenCalledTimes(20);
+      const chained = (await exec(
+        db,
+        "select dedupe_key from jobs where dedupe_key like 'maps:CR:seed:%'",
+      )).rows;
+      expect(chained.length).toBe(1);
+
+      for (let seedBatch = 1; osu.getUserBestScoresWindow.mock.calls.length < 100; seedBatch += 1) {
+        expect(seedBatch).toBeLessThan(10);
+        snapshot = await refreshCountryMaps(db, osu, queue, { country: "CR", seedBatch });
+      }
 
       expect(osu.getUserBestScoresWindow).toHaveBeenCalledTimes(100);
       expect(osu.getUserBestScoresWindow).toHaveBeenCalledWith(10_100, 200, "job:refresh_country_maps:farmed");

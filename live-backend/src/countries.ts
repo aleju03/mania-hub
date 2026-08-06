@@ -54,6 +54,9 @@ export async function activateCountry(
 ): Promise<CountryRegistryRow> {
   const normalized = normalizeCountry(country);
   const configuredTier = getConfiguredCountryFeatureTier(config, normalized);
+  // Somebody is asking for this country, which is the one thing that undoes a
+  // retirement. Read the row after, so the upsert below sees the revived state.
+  await reviveRetiredCountry(db, normalized);
   const existing = await getCountryRegistryRow(db, normalized, config);
   await upsertCountry(db, normalized, {
     pinned: config.trackedCountries.includes(normalized),
@@ -68,6 +71,63 @@ export async function activateCountry(
   const row = await getCountryRegistryRow(db, normalized, config);
   if (!row) throw new Error(`Could not activate country ${normalized}`);
   return row;
+}
+
+/* A roster refresh has run to completion and found nobody: the country has no
+   ranked mania players at all, as opposed to a roster that has not landed yet
+   (osu! outage, sustained 429s) which looks identical from the maps job. Only
+   the confirmed-empty case is safe to retire on. */
+export async function isCountryRosterConfirmedEmpty(db: Db, country: string): Promise<boolean> {
+  const normalized = normalizeCountry(country);
+  const row = (await exec(
+    db,
+    `select cr.last_roster_refresh_at as refreshed,
+            (select count(*) from country_rosters ro where ro.country = cr.country and ro.is_tracked = 1) as members
+     from country_registry cr
+     where cr.country = ?`,
+    [normalized],
+  )).rows[0];
+  if (!row) return false;
+  const refreshed = typeof row.refreshed === "string" ? row.refreshed : null;
+  return Boolean(refreshed) && Number(row.members ?? 0) === 0;
+}
+
+/* Stops spending anything on a country that keeps coming back empty. Paused is
+   an existing state every scheduler already skips (roster refreshes, snipe
+   seeding, the maps feature list), so retiring is just that flag plus dropping
+   the job that would have retried - San Marino was on its 85th attempt and the
+   Vatican its 362nd when this was added.
+
+   Deliberately not a terminal state: the retired_at stamp is what tells a
+   retirement apart from an admin pause, and activateCountry clears it, so
+   someone visiting the country revives it through the normal rate-limited
+   path while an admin's pause stays put. A pinned (TRACKED_COUNTRIES) country
+   is never retired - if one of those is empty, that is a configuration
+   question. */
+export async function retireCountry(db: Db, country: string): Promise<boolean> {
+  const normalized = normalizeCountry(country);
+  const now = nowIso();
+  const result = await exec(
+    db,
+    `update country_registry
+     set status = 'paused', keep_warm = 0, retired_at = ?, updated_at = ?
+     where country = ? and pinned = 0 and status <> 'paused'`,
+    [now, now, normalized],
+  );
+  return Number(result.rowsAffected ?? 0) > 0;
+}
+
+/* Undoes a retirement, and only a retirement: an admin pause has no retired_at
+   and stays exactly where the admin put it. Runs before the activation upsert,
+   which deliberately refuses to lift a pause of its own accord. */
+async function reviveRetiredCountry(db: Db, country: string): Promise<void> {
+  await exec(
+    db,
+    `update country_registry
+     set status = 'active', retired_at = null, updated_at = ?
+     where country = ? and status = 'paused' and retired_at is not null`,
+    [nowIso(), normalizeCountry(country)],
+  );
 }
 
 export async function setCountryPaused(
@@ -97,6 +157,9 @@ export async function setCountryStatus(
      on conflict(country) do update set
        status = excluded.status,
        keep_warm = excluded.keep_warm,
+       -- An explicit status change owns the retirement flag either way: pausing
+       -- by hand is not a retirement, and unpausing by hand clears one.
+       retired_at = null,
        last_requested_at = case when excluded.status = 'paused' then country_registry.last_requested_at else excluded.last_requested_at end,
        updated_at = excluded.updated_at`,
     [normalized, status, configuredTier, config.trackedCountries.includes(normalized) ? 1 : 0, keepWarm ? 1 : 0, now, now, now],
