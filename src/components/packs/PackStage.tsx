@@ -89,6 +89,11 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   // Flips when the async scene creation lands, so effects that push state
   // into the scene (window activity, reduced motion) re-sync to it.
   const [sceneReady, setSceneReady] = useState(false);
+  // Bumped after a WebGL context loss to re-run the scene effect: the old
+  // scene is disposed and acquireCore builds a fresh core, so the stage
+  // recovers instead of showing a dead canvas until a reload.
+  const [sceneEpoch, setSceneEpoch] = useState(0);
+  const sceneLostRef = useRef(false);
   const [ripping, setRipping] = useState(false);
   const [sparks, setSparks] = useState<SlashSpark[]>([]);
 
@@ -319,6 +324,14 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
       textureCanvas: live,
       backCanvas: back,
       reducedMotion: reducedMotionRef.current,
+      onContextLost: () => {
+        // Mobile browsers kill WebGL contexts under memory pressure or when
+        // a page hits the per-page context cap. Flag the loss and drop
+        // sceneReady; the window-activity effect below decides when to
+        // actually rebuild.
+        sceneLostRef.current = true;
+        setSceneReady(false);
+      },
     }).then((scene) => {
       if (cancelled) {
         scene.dispose();
@@ -340,9 +353,18 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
       ripStripCanvasRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sceneEpoch]);
 
   useEffect(() => {
+    if (windowActive && sceneLostRef.current) {
+      // Rebuild only while the tab is active: a context created in a hidden
+      // tab is the first thing the browser purges next, which would loop
+      // loss -> rebuild -> loss in the background. A loss in a hidden tab
+      // waits here until the user comes back.
+      sceneLostRef.current = false;
+      setSceneEpoch((epoch) => epoch + 1);
+      return;
+    }
     sceneRef.current?.setWindowActive(windowActive && stageVisibleRef.current);
   }, [windowActive, sceneReady]);
 

@@ -361,6 +361,11 @@ export class ManiaCardRenderer {
         for (const material of materials) material.dispose();
       });
       renderer.dispose();
+      // dispose() alone leaves the WebGL context alive until the canvas is
+      // garbage collected. Lingering contexts count against the browser's
+      // per-page cap (~16), and hitting it force-loses the oldest live
+      // context, which is the long-lived pack scene singleton.
+      renderer.forceContextLoss();
     }, options.deferGpuRelease === true);
   }
 

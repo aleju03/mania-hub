@@ -147,6 +147,7 @@ declare module "three" {
     render(...args: any[]): void;
     compile(...args: any[]): void;
     dispose(): void;
+    forceContextLoss(): void;
   }
 
   export class PMREMGenerator {

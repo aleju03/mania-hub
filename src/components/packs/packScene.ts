@@ -161,6 +161,11 @@ interface PackSceneCore {
   parkedFrontMap: CanvasTexture;
   parkedBackMap: CanvasTexture;
   dead: boolean;
+  /* Set by the PackScene currently holding the core (exclusive checkout, so
+     one slot suffices): a context loss under a live stage must reach
+     PackStage, or the on-screen canvas stays a dead opaque slab until a full
+     reload. */
+  onLost: (() => void) | null;
 }
 
 let corePromise: Promise<PackSceneCore> | null = null;
@@ -314,10 +319,12 @@ async function buildCore(): Promise<PackSceneCore> {
     parkedFrontMap,
     parkedBackMap,
     dead: false,
+    onLost: null,
   };
   canvas.addEventListener("webglcontextlost", () => {
     core.dead = true;
     corePromise = null;
+    core.onLost?.();
   });
   return core;
 }
@@ -355,6 +362,11 @@ export interface PackSceneOptions {
   textureCanvas: HTMLCanvasElement;
   backCanvas: HTMLCanvasElement;
   reducedMotion: boolean;
+  /* The browser killed the WebGL context while this scene was on screen
+     (GPU memory pressure, per-page context cap). The scene is unusable and
+     will not recover on its own: dispose it and create a fresh one, which
+     rebuilds the dead core from scratch. */
+  onContextLost?: () => void;
 }
 
 /* The only way to obtain a PackScene: resolves once the shared core is built
@@ -393,11 +405,16 @@ export class PackScene {
   private lastRenderedAt = 0;
   private disposed = false;
   private rip: { startedAt: number | null } | null = null;
+  private readonly onContextLost?: () => void;
 
   constructor(options: PackSceneOptions, core: PackSceneCore) {
     this.host = options.host;
     this.reducedMotion = options.reducedMotion;
+    this.onContextLost = options.onContextLost;
     this.core = core;
+    core.onLost = () => {
+      if (!this.disposed) this.onContextLost?.();
+    };
     this.renderer = core.renderer;
     this.scene = core.scene;
     this.camera = core.camera;
@@ -547,6 +564,7 @@ export class PackScene {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.core.onLost = null;
     if (this.frameId !== null) cancelAnimationFrame(this.frameId);
     this.frameId = null;
     this.renderer.domElement.remove();
