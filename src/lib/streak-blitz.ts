@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { postPackGame } from "./pack-games";
 import type { StreakMetric, StreakPool } from "./streak-game";
 
 // The blitz side of higher or lower. Casual runs deal themselves in the
@@ -79,24 +78,27 @@ export const startBlitzStreak = createServerFn({ method: "POST" })
   .validator((input: { pool?: unknown }) => ({
     pool: normalizeBlitzStreakPool(input?.pool),
   }))
-  .handler(async ({ data }): Promise<BlitzStreakRun | null> =>
-    postPackGame<BlitzStreakRun>("/api/packs/games/streak/start", { pool: data.pool }),
-  );
+  .handler(async ({ data }): Promise<BlitzStreakRun | null> => {
+    const { postPackGame } = await import("./pack-games.server");
+    return postPackGame<BlitzStreakRun>("/api/packs/games/streak/start", { pool: data.pool });
+  });
 
 export const guessBlitzStreak = createServerFn({ method: "POST" })
   .validator((input: { runId?: unknown; guess?: unknown }) => ({
     runId: String(input?.runId ?? "").slice(0, 24),
     guess: (input?.guess === "less" ? "less" : "more") as "more" | "less",
   }))
-  .handler(async ({ data }): Promise<BlitzStreakGuessResult | null> =>
-    postPackGame<BlitzStreakGuessResult>("/api/packs/games/streak/guess", {
+  .handler(async ({ data }): Promise<BlitzStreakGuessResult | null> => {
+    const { postPackGame } = await import("./pack-games.server");
+    return postPackGame<BlitzStreakGuessResult>("/api/packs/games/streak/guess", {
       runId: data.runId,
       guess: data.guess,
-    }),
-  );
+    });
+  });
 
 export const cashOutBlitzStreak = createServerFn({ method: "POST" })
   .validator((input: { runId?: unknown }) => ({ runId: String(input?.runId ?? "").slice(0, 24) }))
-  .handler(async ({ data }): Promise<BlitzStreakGuessResult | null> =>
-    postPackGame<BlitzStreakGuessResult>("/api/packs/games/streak/cashout", { runId: data.runId }),
-  );
+  .handler(async ({ data }): Promise<BlitzStreakGuessResult | null> => {
+    const { postPackGame } = await import("./pack-games.server");
+    return postPackGame<BlitzStreakGuessResult>("/api/packs/games/streak/cashout", { runId: data.runId });
+  });

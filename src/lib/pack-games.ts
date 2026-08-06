@@ -18,50 +18,18 @@ export interface PackGameAllowance {
   cap: number;
 }
 
-async function gameTarget(): Promise<
-  { base: string; headers: HeadersInit; userId: number; username: string } | null
-> {
-  const { readCurrentAuth } = await import("./auth-server");
-  const auth = await readCurrentAuth();
-  if (!auth.viewer) return null;
-  const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
-  if (!base) return null;
-  const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
-  return { base, headers, userId: auth.viewer.id, username: auth.viewer.username };
-}
-
-/* One place that knows the arcade's server-to-server convention: the admin
-   token plus the viewer the osu! cookie proved, never an id off the request
-   body. Everything the arcade posts goes through here. */
-export async function postPackGame<T>(path: string, body: Record<string, unknown>): Promise<T | null> {
-  const { setResponseHeader } = await import("@tanstack/react-start/server");
-  setResponseHeader("Cache-Control", "private, no-store");
-  const target = await gameTarget();
-  if (!target) return null;
-  const response = await fetch(`${target.base}${path}`, {
-    method: "POST",
-    headers: target.headers,
-    body: JSON.stringify({ ...body, userId: target.userId, username: target.username }),
-  });
-  if (!response.ok) return null;
-  return (await response.json().catch(() => null)) as T | null;
-}
-
-async function postGame(path: string, body: Record<string, unknown>): Promise<PackGameAllowance | null> {
-  const payload = await postPackGame<Record<string, unknown>>(path, body);
-  if (!payload) return null;
-  return {
-    granted: Math.max(0, Number(payload.granted) || 0),
-    remainingToday: Math.max(0, Number(payload.remainingToday) || 0),
-    cap: Math.max(0, Number(payload.cap) || 0),
-  };
-}
+// The posting helpers live in pack-games.server.ts and are only imported
+// inside handler bodies: this file is pulled into the client bundle by the
+// packs page, and a module-scope path to @tanstack/react-start/server would
+// trip import protection.
 
 /* What this account can still earn from games today. Null when signed out or
    with no live backend, which is how the page knows not to promise shards. */
 export const fetchPackGameAllowance = createServerFn({ method: "POST" }).handler(
-  async (): Promise<PackGameAllowance | null> => postGame("/api/packs/games/allowance", {}),
+  async (): Promise<PackGameAllowance | null> => {
+    const { postGame } = await import("./pack-games.server");
+    return postGame("/api/packs/games/allowance", {});
+  },
 );
 
 /* Cashes in a finished streak run. The backend decides what it is worth and
@@ -70,6 +38,7 @@ export const claimStreakShards = createServerFn({ method: "POST" })
   .validator((input: { streak?: unknown }) => ({
     streak: Math.max(0, Math.min(1000, Math.floor(Number(input?.streak) || 0))),
   }))
-  .handler(async ({ data }): Promise<PackGameAllowance | null> =>
-    postGame("/api/packs/games/streak", { streak: data.streak }),
-  );
+  .handler(async ({ data }): Promise<PackGameAllowance | null> => {
+    const { postGame } = await import("./pack-games.server");
+    return postGame("/api/packs/games/streak", { streak: data.streak });
+  });
