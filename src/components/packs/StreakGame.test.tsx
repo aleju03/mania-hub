@@ -5,7 +5,7 @@
    newest deal may touch state now, and playCardDraw is the tell: it fires once
    per deal that actually lands on the board. */
 import { StrictMode } from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LiveGlobalRankingEntry } from "#/lib/live-backend";
 
@@ -21,9 +21,11 @@ const sfx = vi.hoisted(() => ({
 vi.mock("./packSfx", () => sfx);
 
 const fetchLiveGlobalRankings = vi.hoisted(() => vi.fn());
+const fetchLiveStreakMetrics = vi.hoisted(() => vi.fn());
 const fetchLiveStreakBoard = vi.hoisted(() => vi.fn());
 vi.mock("#/lib/live-backend", () => ({
   fetchLiveGlobalRankings,
+  fetchLiveStreakMetrics,
   fetchLiveStreakBoard,
   isLiveBackendConfigured: () => true,
   warmLivePackPlayers: vi.fn(() => Promise.resolve()),
@@ -53,7 +55,8 @@ vi.mock("#/lib/streak-blitz", () => ({
 }));
 // Cards mint from stored scores; the art itself is a canvas, so the game gets
 // the tier (which is what colours the names) and no thumbnail.
-vi.mock("#/lib/packs", () => ({ fetchCachedPackPlayerScores: vi.fn(() => Promise.resolve([{}])) }));
+const fetchCachedPackPlayerScores = vi.hoisted(() => vi.fn());
+vi.mock("#/lib/packs", () => ({ fetchCachedPackPlayerScores }));
 vi.mock("../player/maniacard3d/renderData", () => ({
   buildManiaCardRenderData: () => ({
     status: "ready",
@@ -62,6 +65,9 @@ vi.mock("../player/maniacard3d/renderData", () => ({
   }),
 }));
 vi.mock("./cardSnapshot", () => ({ renderCardThumbnail: () => Promise.resolve(null) }));
+// The face-down back is canvas art too; jsdom has no 2D context, so hand the
+// board a stand-in instead of a not-implemented warning per test.
+vi.mock("./packArt", () => ({ getCachedCardBackDataUrl: () => "data:image/png;base64,back" }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, params }: { children?: React.ReactNode; params?: { username?: string } }) => (
     <a href={`/player/${params?.username ?? ""}`}>{children}</a>
@@ -123,8 +129,12 @@ beforeEach(() => {
   vi.spyOn(Math, "random").mockReturnValue(0);
   fetchLiveGlobalRankings.mockReset();
   fetchLiveGlobalRankings.mockResolvedValue({ ranking: RANKING, total: RANKING.length });
+  fetchLiveStreakMetrics.mockReset();
+  fetchLiveStreakMetrics.mockResolvedValue(new Map());
   fetchLiveStreakBoard.mockReset();
   fetchLiveStreakBoard.mockResolvedValue({ pool: "top500", entries: [], viewer: null });
+  fetchCachedPackPlayerScores.mockReset();
+  fetchCachedPackPlayerScores.mockResolvedValue([{}]);
   viewer.current = null;
   for (const fn of Object.values(sfx)) fn.mockClear();
   for (const fn of Object.values(blitz)) fn.mockReset();
@@ -143,6 +153,66 @@ async function settle() {
 }
 
 describe("dealing the first board", () => {
+  it("shows an intentional face-down deal instead of a pulsing skeleton", async () => {
+    let finishRanking!: (value: { ranking: LiveGlobalRankingEntry[]; total: number }) => void;
+    fetchLiveGlobalRankings.mockImplementation(
+      () => new Promise((resolve) => {
+        finishRanking = resolve;
+      }),
+    );
+
+    render(<StreakGame onExit={() => {}} />);
+
+    expect(screen.getByText("Dealing a matchup…")).toBeTruthy();
+    const board = screen.getByTestId("streak-dealing-board");
+    expect(board.querySelectorAll("[data-streak-card-back]")).toHaveLength(2);
+    expect(board.querySelector(".animate-pulse")).toBeNull();
+
+    await act(async () => {
+      finishRanking({ ranking: RANKING, total: RANKING.length });
+    });
+    expect(await screen.findByText(/have more or fewer/)).toBeTruthy();
+  });
+
+  it("shows a playable question before the full card thumbnails finish minting", async () => {
+    const delayedRanking = Array.from({ length: 40 }, (_, index) => ({
+      ...entry(10_000 + index, 10_000 + index * 1_000),
+      rank: index + 1,
+    }));
+    fetchLiveGlobalRankings.mockResolvedValue({ ranking: delayedRanking, total: delayedRanking.length });
+    const finishMints: Array<(scores: unknown[]) => void> = [];
+    fetchCachedPackPlayerScores.mockImplementation(
+      () => new Promise((resolve) => {
+        finishMints.push(resolve);
+      }),
+    );
+
+    render(<StreakGame onExit={() => {}} />);
+
+    expect(await screen.findByText(/have more or fewer/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /more plays/i })).toBeTruthy();
+    expect(sfx.playCardDraw).toHaveBeenCalledTimes(1);
+    // Playable, but the art is not in yet: both cards are on the table face
+    // down rather than showing a stand-in front.
+    const faces = () => [...document.querySelectorAll("[data-streak-card-face]")]
+      .map((face) => face.getAttribute("data-streak-card-face"));
+    expect(faces()).toEqual(["back", "back"]);
+
+    for (const finishMint of finishMints) finishMint([{}]);
+    await settle();
+
+    // The mint landing turns them over, whether or not it produced art (the
+    // stubbed renderer here returns none).
+    expect(faces()).toEqual(["front", "front"]);
+  });
+
+  it("does not fetch a second rankings page before the opening question", async () => {
+    render(<StreakGame onExit={() => {}} />);
+    await screen.findByText(/have more or fewer/);
+
+    expect(fetchLiveGlobalRankings).toHaveBeenCalledTimes(1);
+  });
+
   it("lands one deal even though the mount effect runs twice", async () => {
     render(
       <StrictMode>
@@ -162,11 +232,13 @@ describe("dealing the first board", () => {
     await settle();
 
     const question = await screen.findByText(/have more or fewer/);
-    const names = question.querySelectorAll("span");
-    expect(names.length).toBe(2);
-    for (const name of names) {
-      expect((name as HTMLElement).style.color).toBe("rgb(34, 197, 94)");
-    }
+    await waitFor(() => {
+      const names = question.querySelectorAll("span");
+      expect(names.length).toBe(2);
+      for (const name of names) {
+        expect((name as HTMLElement).style.color).toBe("rgb(34, 197, 94)");
+      }
+    });
   });
 });
 

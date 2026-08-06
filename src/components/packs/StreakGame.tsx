@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, ChevronUp, Dices, Recycle, Timer } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { maniaTierTextStyle } from "#/lib/maniacard";
@@ -36,6 +36,7 @@ import {
   STREAK_PAGE_SIZE,
   STREAK_REFILL_THRESHOLD,
   streakMetricValue,
+  streakPageCount,
   streakPageSlice,
   streakPoolEntries,
   streakRankPage,
@@ -50,6 +51,7 @@ import { buildManiaCardRenderData } from "../player/maniacard3d/renderData";
 import { avatarImageSrc } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
 import { renderCardThumbnail } from "./cardSnapshot";
+import { getCachedCardBackDataUrl } from "./packArt";
 import { StreakLeaderboard, useStreakBoard } from "./StreakLeaderboard";
 import {
   playCardDraw,
@@ -82,6 +84,10 @@ const COUNT_UP_MS = 700;
    that it is not a meaningful bite out of a blitz clock. */
 const DICE_SETTLE_MS = 620;
 
+/* The question prints each name in the colour of the card under it, and that
+   colour only exists once the card mints, so let it arrive rather than snap. */
+const NAME_TINT: CSSProperties = { transition: "color 300ms ease, text-shadow 300ms ease" };
+
 interface StreakCard {
   player: StreakPlayer;
   /* The real card front, minted from the player's stored plays. Null when
@@ -95,6 +101,10 @@ interface StreakCard {
      and tier tracks pp while the questions are about numbers the card front
      never shows. */
   nameStyle: CSSProperties | null;
+  /* False while the art is still being minted. The board deals that card face
+     down and turns it over when this goes true - including for a card that
+     came back without art, so no card is left face down forever. */
+  minted: boolean;
 }
 
 /* One card's art, minted from the plays the backend already has stored. Only
@@ -126,7 +136,7 @@ async function loadStreakMetrics(entries: readonly LiveGlobalRankingEntry[]): Pr
 async function mintStreakCard(player: StreakPlayer): Promise<StreakCard> {
   const cached = cardCache.get(player.userId);
   if (cached) return cached;
-  let card: StreakCard = { player, thumbnail: null, nameStyle: null };
+  let card: StreakCard = { player, thumbnail: null, nameStyle: null, minted: true };
   try {
     const scores = await fetchCachedPackPlayerScores(player.userId);
     if (!scores) {
@@ -151,6 +161,7 @@ async function mintStreakCard(player: StreakPlayer): Promise<StreakCard> {
         player,
         nameStyle: maniaTierTextStyle(data.tier, data.glowColor),
         thumbnail: await renderCardThumbnail(data, 300).catch(() => null),
+        minted: true,
       };
     }
   } catch {
@@ -178,7 +189,7 @@ function blitzStreakPlayer(player: BlitzStreakPlayer): StreakPlayer {
 }
 
 function placeholderCard(player: StreakPlayer): StreakCard {
-  return cardCache.get(player.userId) ?? { player, thumbnail: null, nameStyle: null };
+  return cardCache.get(player.userId) ?? { player, thumbnail: null, nameStyle: null, minted: false };
 }
 
 /* Counts from the number already on the board toward the one being revealed,
@@ -292,23 +303,77 @@ interface Round {
   deadlineAt: number | null;
 }
 
+/* The deck's own back: the same art the pack opening deals, so a card the game
+   is still minting is a card lying face down rather than a placeholder. It is
+   drawn on a canvas, so the first paint (and anything without one) gets the CSS
+   twin instead of an empty rectangle. */
+function CardBack({ src }: { src: string | null }) {
+  return (
+    <div
+      data-streak-card-back=""
+      className="absolute inset-0 overflow-hidden rounded-[12px] bg-[linear-gradient(140deg,#221a3d,#161029_55%,#0b0818)] bg-cover bg-center"
+      style={{
+        backgroundImage: src ? `url(${src})` : undefined,
+        backfaceVisibility: "hidden",
+        boxShadow: "0 12px 34px rgba(0,0,0,0.5)",
+      }}
+    >
+      {!src && <div className="absolute inset-[6px] rounded-[8px] border border-white/20" />}
+    </div>
+  );
+}
+
+/* The front of a card that minted without art (a player the backend has no
+   stored plays for). Built from the back's own frame and centre disc so it
+   reads as a card in the same deck, not as a card that failed. */
+function ArtlessCardFront({ player }: { player: StreakPlayer }) {
+  const avatarSrc = avatarImageSrc(player.avatarUrl, player.userId) ?? `/api/avatar?u=${player.userId}`;
+  const [avatarLoaded, setAvatarLoaded] = useState(false);
+  useEffect(() => setAvatarLoaded(false), [avatarSrc]);
+  return (
+    <div className="absolute inset-0 bg-[linear-gradient(140deg,#2a2050,#171130_55%,#0c0919)]">
+      <div className="absolute inset-[6px] rounded-[8px] border border-white/20" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="relative flex h-[62px] w-[62px] items-center justify-center overflow-hidden rounded-full border-2 border-white/25 bg-osu-b5 text-xl font-bold text-white/45 sm:h-[84px] sm:w-[84px] sm:text-2xl">
+          <span aria-hidden>{player.username.trim().slice(0, 1).toUpperCase()}</span>
+          <img
+            src={avatarSrc}
+            alt=""
+            onLoad={() => setAvatarLoaded(true)}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
+              avatarLoaded ? "opacity-100" : "opacity-0"
+            }`}
+            draggable={false}
+          />
+        </div>
+      </div>
+      <div className="absolute inset-x-3 bottom-4 truncate text-center text-[9px] font-bold uppercase tracking-[0.22em] text-white/45">
+        {player.username}
+      </div>
+    </div>
+  );
+}
+
 function CardFace({
   card,
+  cardBack,
   valueText,
   tone,
   caption,
 }: {
   card: StreakCard;
+  cardBack: string | null;
   valueText: string;
   tone: "neutral" | "correct" | "wrong";
   caption: string;
 }) {
   const player = card.player;
+  const reducedMotion = useReducedMotion();
   return (
     <div className="flex w-full flex-col items-center">
       <motion.div
-        className="relative w-[142px] overflow-hidden rounded-[12px] sm:w-[190px]"
-        style={{ aspectRatio: "5 / 7", boxShadow: "0 12px 34px rgba(0,0,0,0.5)" }}
+        className="relative w-[142px] sm:w-[190px]"
+        style={{ aspectRatio: "5 / 7", perspective: 900 }}
         animate={
           tone === "wrong"
             ? { x: [0, -7, 6, -4, 0] }
@@ -318,24 +383,39 @@ function CardFace({
         }
         transition={{ duration: 0.42 }}
       >
-        {card.thumbnail ? (
-          <img
-            src={card.thumbnail}
-            alt={`${player.username} maniacard`}
-            className="h-full w-full object-cover"
-            draggable={false}
-          />
-        ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-osu-b4/70 px-3">
-            <img
-              src={avatarImageSrc(player.avatarUrl, player.userId) ?? `/api/avatar?u=${player.userId}`}
-              alt=""
-              className="h-16 w-16 rounded-lg object-cover"
-              draggable={false}
-            />
-            <span className="text-center text-[12px] font-bold text-white">{player.username}</span>
+        {/* Minting is the only thing between the two faces, so it turns the
+            card over exactly the way the pack reveal does. A card whose art was
+            minted earlier in the session is already face up on mount
+            (initial={false}), so a repeat player never re-flips. */}
+        <motion.div
+          className="relative h-full w-full"
+          data-streak-card-face={card.minted ? "front" : "back"}
+          style={{ transformStyle: "preserve-3d" }}
+          initial={false}
+          animate={{ rotateY: card.minted ? 180 : 0 }}
+          transition={{ duration: reducedMotion ? 0 : 0.44, ease: [0.3, 0.1, 0.3, 1] }}
+        >
+          <CardBack src={cardBack} />
+          <div
+            className="absolute inset-0 overflow-hidden rounded-[12px] bg-osu-b4"
+            style={{
+              transform: "rotateY(180deg)",
+              backfaceVisibility: "hidden",
+              boxShadow: "0 12px 34px rgba(0,0,0,0.5)",
+            }}
+          >
+            {card.thumbnail ? (
+              <img
+                src={card.thumbnail}
+                alt={`${player.username} maniacard`}
+                className="h-full w-full object-cover"
+                draggable={false}
+              />
+            ) : (
+              <ArtlessCardFront player={player} />
+            )}
           </div>
-        )}
+        </motion.div>
       </motion.div>
       <div className="mt-3 flex items-center gap-1.5">
         <CountryFlag code={player.countryCode} size="xs" decorative />
@@ -370,6 +450,51 @@ function CardFace({
   );
 }
 
+/* Waiting for the two data rows is part of dealing a game, not a half-built
+   UI. Two backs land in exactly the footprint the cards will take, so the round
+   arriving does not replace them: the same backs stay put and turn over. */
+function DealingBoard({ cardBack }: { cardBack: string | null }) {
+  return (
+    <div
+      className="mt-9 flex items-start justify-center gap-4 sm:gap-14"
+      data-testid="streak-dealing-board"
+      aria-hidden
+    >
+      {[0, 1].map((slot) => (
+        <div key={slot} className="flex flex-1 flex-col items-center">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.26, delay: slot * 0.07, ease: "easeOut" }}
+            className="relative w-[142px] sm:w-[190px]"
+            style={{ aspectRatio: "5 / 7" }}
+          >
+            <CardBack src={cardBack} />
+          </motion.div>
+          {/* Reserve the metadata footprint so the reveal does not move the
+              rest of the page; unlike the old bars, this space is invisible. */}
+          <div className="h-[76px]" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* The back is a canvas the pack opening already builds and keeps; asking for it
+   here covers the deep link that lands straight in the game, where the packs
+   page never got its idle window to warm one. */
+function useCardBackImage(): string | null {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      setSrc(getCachedCardBackDataUrl());
+    } catch {
+      // No 2D canvas here; the CSS back stands in.
+    }
+  }, []);
+  return src;
+}
+
 export function StreakGame({ onExit }: { onExit: () => void }) {
   const auth = useAuth();
   const [round, setRound] = useState<Round | null>(null);
@@ -384,6 +509,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
   const [newBest, setNewBest] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dealing, setDealing] = useState(true);
+  const cardBack = useCardBackImage();
   /* What the arcade paid for the run that just ended, and what is left of
      today's allowance. Null while signed out or with no backend, which is how
      the page knows not to promise shards. */
@@ -470,7 +596,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
   /* The next player on the board. Pulls another page in when the loaded ones
      are running thin, and once the whole pool has been seen, lets it come
      round again rather than ending a run that was going well. */
-  const nextCard = useCallback(async (keep?: number): Promise<StreakCard | null> => {
+  const nextPlayer = useCallback(async (keep?: number, aimedPage?: number): Promise<StreakPlayer | null> => {
     let player: StreakPlayer | null = null;
     /* The hard mode's draw is aimed, not sifted: a uniformly random pool
        position, then the page that holds it. Picking from the pages already
@@ -478,7 +604,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
        game shares them). One page fetch per round is the price of "literally
        anyone", and the backend answers it from its own snapshot. */
     if (modeRef.current === "anyone" && pool.current.total > 0) {
-      const page = streakRankPage(1 + Math.floor(Math.random() * pool.current.total));
+      const page = aimedPage ?? streakRankPage(1 + Math.floor(Math.random() * pool.current.total));
       if (!pool.current.loaded.has(page)) await fetchPage(page).catch(() => false);
       player = pickStreakPlayer(streakPageSlice(pool.current.entries, page), seen.current, Math.random, undefined, metricsCache);
     }
@@ -498,8 +624,26 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
     }
     if (!player) return null;
     seen.current.add(player.userId);
-    return mintStreakCard(player);
+    return player;
   }, [fetchPage, loadPage]);
+
+  const nextCard = useCallback(async (keep?: number): Promise<StreakCard | null> => {
+    const player = await nextPlayer(keep);
+    return player ? mintStreakCard(player) : null;
+  }, [nextPlayer]);
+
+  /* A casual round is playable from its ranking + metric rows; full card art is
+     presentation, not game state. Put the avatar fallback on the board first,
+     then replace just that side when its stored-score card finishes minting.
+     This is also how Blitz avoids spending its live clock on a thumbnail. */
+  const hydrateRoundCard = useCallback((side: "left" | "right", player: StreakPlayer, token: number) => {
+    void mintStreakCard(player).then((card) => {
+      if (token !== deal.current) return;
+      setRound((current) =>
+        current && current[side].player.userId === player.userId ? { ...current, [side]: card } : current,
+      );
+    });
+  }, []);
 
   /* Puts a server-dealt round on the board. The cards go up before their art
      does: the question is answerable the moment the names are readable, and
@@ -521,14 +665,9 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
     playCardDraw();
     for (const [side, player] of [["left", left], ["right", right]] as const) {
       if (cardCache.has(player.userId)) continue;
-      void mintStreakCard(player).then((card) => {
-        if (token !== deal.current) return;
-        setRound((current) =>
-          current && current[side].player.userId === player.userId ? { ...current, [side]: card } : current,
-        );
-      });
+      hydrateRoundCard(side, player, token);
     }
-  }, []);
+  }, [hydrateRoundCard]);
 
   const start = useCallback(async () => {
     const token = (deal.current += 1);
@@ -580,46 +719,85 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
     }
 
     try {
-      // The first page also tells the game how deep the pool goes, so it is
-      // loaded before anything is drawn from it.
+      // One random page is ample for the opening board. Choosing it across the
+      // mode's whole known depth keeps the first pair uniform without the old
+      // page-1-then-random-page waterfall (which also over-weighted the top 50).
+      // Anyone cannot know its last page before the response reports `total`,
+      // but it is never the initial mode and keeps page 1 as a safe fallback.
       if (pool.current.entries.length === 0) {
-        const snapshot = await fetchLiveGlobalRankings({
-          page: 1,
+        const initialPage = modeRef.current === "anyone"
+          ? 1
+          : 1 + Math.floor(Math.random() * streakPageCount(Number.MAX_SAFE_INTEGER, modeRef.current));
+        let loadedPage = initialPage;
+        let snapshot = await fetchLiveGlobalRankings({
+          page: initialPage,
           pageSize: STREAK_PAGE_SIZE,
           sort: "rank",
           dir: "desc",
         });
         if (stale()) return;
+        // Small/dev pools may not reach the mode's advertised depth. The empty
+        // response still tells us the real total, so retry inside its last page.
+        if (snapshot.ranking.length < 2 && snapshot.total >= 2) {
+          loadedPage = 1 + Math.floor(Math.random() * streakPageCount(snapshot.total, modeRef.current));
+          if (loadedPage !== initialPage) {
+            snapshot = await fetchLiveGlobalRankings({
+              page: loadedPage,
+              pageSize: STREAK_PAGE_SIZE,
+              sort: "rank",
+              dir: "desc",
+            });
+            if (stale()) return;
+          }
+        }
         await loadStreakMetrics(snapshot.ranking);
         if (stale()) return;
-        pool.current = { total: snapshot.total, loaded: new Set([1]), entries: snapshot.ranking };
-        await loadPage();
+        pool.current = { total: snapshot.total, loaded: new Set([loadedPage]), entries: snapshot.ranking };
+      }
+
+      /* Hard mode aims each draw at a uniformly random rank page. Prepare the
+         two opening pages together so two independent network waterfalls do
+         not sit between the click and the question. A repeated page is fetched
+         once and the seen set still makes the two selected players distinct. */
+      let aimedPages: [number, number] | null = null;
+      if (modeRef.current === "anyone" && pool.current.total > 0) {
+        aimedPages = [
+          streakRankPage(1 + Math.floor(Math.random() * pool.current.total)),
+          streakRankPage(1 + Math.floor(Math.random() * pool.current.total)),
+        ];
+        const missingPages = [...new Set(aimedPages)].filter((page) => !pool.current.loaded.has(page));
+        await Promise.all(missingPages.map((page) => fetchPage(page).catch(() => false)));
         if (stale()) return;
       }
-      const first = await nextCard();
-      const second = await nextCard();
+
+      const firstPlayer = await nextPlayer(undefined, aimedPages?.[0]);
+      const secondPlayer = await nextPlayer(undefined, aimedPages?.[1]);
       if (stale()) return;
-      const metric = first && second ? pickStreakMetric(first.player, second.player, Math.random) : null;
-      if (!first || !second || !metric) {
+      const metric = firstPlayer && secondPlayer ? pickStreakMetric(firstPlayer, secondPlayer, Math.random) : null;
+      if (!firstPlayer || !secondPlayer || !metric) {
         setError("The tracked player pool is too small to play right now.");
         return;
       }
+      const first = placeholderCard(firstPlayer);
+      const second = placeholderCard(secondPlayer);
       setRound({
         left: first,
         right: second,
         metric,
-        leftValue: streakMetricValue(first.player, metric) ?? 0,
-        rightValue: streakMetricValue(second.player, metric) ?? 0,
+        leftValue: streakMetricValue(firstPlayer, metric) ?? 0,
+        rightValue: streakMetricValue(secondPlayer, metric) ?? 0,
         deadlineAt: null,
       });
       playCardDraw();
-      upcoming.current = nextCard(second.player.userId);
+      hydrateRoundCard("left", firstPlayer, token);
+      hydrateRoundCard("right", secondPlayer, token);
+      upcoming.current = nextCard(secondPlayer.userId);
     } catch {
       if (!stale()) setError("Could not reach the player pool. Try again in a moment.");
     } finally {
       if (!stale()) setDealing(false);
     }
-  }, [auth.viewer, loadPage, nextCard, showBlitzRound]);
+  }, [auth.viewer, fetchPage, hydrateRoundCard, nextCard, nextPlayer, showBlitzRound]);
 
   useEffect(() => {
     // Warmed here rather than on the first guess: building the context and its
@@ -1008,19 +1186,20 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
                 {round && copy ? (
                   <>
                     {copy.q.prefix}
-                    <span className="inline-block font-bold" style={round.right.nameStyle ?? undefined}>
+                    {/* The tier colour is only known once the card behind the
+                        name mints, so it eases in with the flip instead of
+                        snapping white to gold under the reader. */}
+                    <span className="inline-block font-bold" style={{ ...NAME_TINT, ...round.right.nameStyle }}>
                       {round.right.player.username}
                     </span>
                     {copy.q.middle}
-                    <span className="inline-block font-bold" style={round.left.nameStyle ?? undefined}>
+                    <span className="inline-block font-bold" style={{ ...NAME_TINT, ...round.left.nameStyle }}>
                       {round.left.player.username}
                     </span>
                     {copy.q.suffix}
                   </>
                 ) : (
-                  /* The question is still being dealt: hold its line with a
-                     quiet bar instead of a slogan nobody asked to read. */
-                  <span className="mx-auto block h-[1.2em] w-64 max-w-full animate-pulse rounded-full bg-osu-b4/60" />
+                  <span className="font-semibold text-osu-f1">Dealing a matchup…</span>
                 )}
               </div>
               {blitz && round?.deadlineAt && !over && (
@@ -1057,21 +1236,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
                 </button>
               </div>
             ) : dealing || !round || !copy ? (
-              /* The board's own shape, face down: two card-sized blocks where
-                 the cards will land, so dealing reads as the game arriving
-                 rather than a page thinking. */
-              <div className="mt-9 flex items-start justify-center gap-4 sm:gap-14" aria-hidden>
-                {[0, 1].map((slot) => (
-                  <div key={slot} className="flex flex-1 flex-col items-center">
-                    <div
-                      className="w-[142px] animate-pulse rounded-[12px] bg-osu-b4/60 sm:w-[190px]"
-                      style={{ aspectRatio: "5 / 7" }}
-                    />
-                    <div className="mt-3 h-3.5 w-24 animate-pulse rounded-full bg-osu-b4/60" />
-                    <div className="mt-2.5 h-6 w-32 animate-pulse rounded-full bg-osu-b4/60" />
-                  </div>
-                ))}
-              </div>
+              <DealingBoard cardBack={cardBack} />
             ) : (
               <>
                 <div className="mt-9 flex items-start justify-center gap-4 sm:gap-14">
@@ -1087,6 +1252,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
                     >
                       <CardFace
                         card={round.left}
+                        cardBack={cardBack}
                         valueText={copy.value(leftValue)}
                         tone="neutral"
                         caption={`${Math.round(round.left.player.pp).toLocaleString()}pp`}
@@ -1104,6 +1270,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
                     >
                       <CardFace
                         card={round.right}
+                        cardBack={cardBack}
                         valueText={revealed && round.rightValue !== null ? copy.value(counted) : copy.unknown}
                         tone={verdict ?? "neutral"}
                         caption={`${Math.round(round.right.player.pp).toLocaleString()}pp`}
