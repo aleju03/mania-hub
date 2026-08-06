@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
-import { exec } from "./db.js";
+import { deleteInBatches, exec } from "./db.js";
 import { pruneAvatarAccents } from "./features/avatar-accents.js";
 import { pruneOsuProxyCache } from "./features/osu-proxy-cache.js";
 import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB } from "./features/player-profiles.js";
@@ -62,36 +62,40 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
       logWarn("retention_skin_r2_cleanup_failed", errorContext(error));
     });
   }
+  // Every prune goes through deleteInBatches: a backlogged table (post-outage
+  // catch-up, a lowered cutoff, the once-a-year activity purge) must never hold
+  // the write lock for one giant statement while both processes' writers burn
+  // their busy budgets behind it.
   const results = {
     skinsPendingExpired,
-    scoreEvents: Number((await exec(db, "delete from score_events where received_at < ?", [scoreCutoff])).rowsAffected ?? 0),
-    liveEvents: Number((await exec(db, "delete from live_event_log where created_at < ?", [liveCutoff])).rowsAffected ?? 0),
-    doneJobs: Number((await exec(db, "delete from jobs where status = 'done' and updated_at < ?", [doneJobCutoff])).rowsAffected ?? 0),
-    parkedOnDemandJobs: Number((await exec(
+    scoreEvents: await deleteInBatches(db, "score_events", "received_at < ?", [scoreCutoff]),
+    liveEvents: await deleteInBatches(db, "live_event_log", "created_at < ?", [liveCutoff]),
+    doneJobs: await deleteInBatches(db, "jobs", "status = 'done' and updated_at < ?", [doneJobCutoff]),
+    parkedOnDemandJobs: await deleteInBatches(
       db,
-      `delete from jobs
-       where status = 'deferred_pressure'
+      "jobs",
+      `status = 'deferred_pressure'
          and updated_at < ?
          and type in (${PARKED_ON_DEMAND_JOB_TYPES.map(() => "?").join(", ")})`,
       [parkedOnDemandCutoff, ...PARKED_ON_DEMAND_JOB_TYPES],
-    )).rowsAffected ?? 0),
-    apiCalls: Number((await exec(db, "delete from api_call_log where started_at < ?", [apiCutoff])).rowsAffected ?? 0),
-    replayVideoJobs: Number((await exec(db, "delete from replay_video_exports where status in ('done', 'failed', 'cancelled') and updated_at < ?", [replayVideoCutoff])).rowsAffected ?? 0),
-    rankSnapshots: Number((await exec(db, "delete from country_rank_snapshots where captured_at < ?", [rankSnapshotCutoff])).rowsAffected ?? 0),
-    activityScoreRefs: Number((await exec(db, "delete from player_activity_score_refs where day < ?", [activityCutoffDay])).rowsAffected ?? 0),
-    activityMaps: Number((await exec(db, "delete from player_activity_maps where day < ?", [activityCutoffDay])).rowsAffected ?? 0),
-    activityDays: Number((await exec(db, "delete from player_activity_days where day < ?", [activityCutoffDay])).rowsAffected ?? 0),
+    ),
+    apiCalls: await deleteInBatches(db, "api_call_log", "started_at < ?", [apiCutoff]),
+    replayVideoJobs: await deleteInBatches(db, "replay_video_exports", "status in ('done', 'failed', 'cancelled') and updated_at < ?", [replayVideoCutoff]),
+    rankSnapshots: await deleteInBatches(db, "country_rank_snapshots", "captured_at < ?", [rankSnapshotCutoff]),
+    activityScoreRefs: await deleteInBatches(db, "player_activity_score_refs", "day < ?", [activityCutoffDay]),
+    activityMaps: await deleteInBatches(db, "player_activity_maps", "day < ?", [activityCutoffDay]),
+    activityDays: await deleteInBatches(db, "player_activity_days", "day < ?", [activityCutoffDay]),
     // Discord "last map in channel" memory is only useful while fresh, so 30d is
     // plenty; stale rows just mean /pb asks the user to run /recent again.
-    discordChannelContext: Number((await exec(db, "delete from discord_channel_map_context where updated_at < ?", [daysAgo(30)])).rowsAffected ?? 0),
+    discordChannelContext: await deleteInBatches(db, "discord_channel_map_context", "updated_at < ?", [daysAgo(30)]),
     // Resolved farm-helper feedback marks are spent evidence (the play that
     // retired them drives recs now); active (unresolved) marks are the
     // player's standing preferences and are never pruned.
-    farmHelperFeedbackResolved: Number((await exec(db, "delete from farm_helper_feedback where resolved_at is not null and resolved_at < ?", [resolvedFeedbackCutoffMs])).rowsAffected ?? 0),
-    packPullEvents: Number((await exec(db, "delete from pack_pull_events where notable = 0 and pulled_at < ?", [packPullCutoffMs])).rowsAffected ?? 0),
-    packPullEventsNotable: Number((await exec(db, "delete from pack_pull_events where notable = 1 and pulled_at < ?", [packPullNotableCutoffMs])).rowsAffected ?? 0),
+    farmHelperFeedbackResolved: await deleteInBatches(db, "farm_helper_feedback", "resolved_at is not null and resolved_at < ?", [resolvedFeedbackCutoffMs]),
+    packPullEvents: await deleteInBatches(db, "pack_pull_events", "notable = 0 and pulled_at < ?", [packPullCutoffMs]),
+    packPullEventsNotable: await deleteInBatches(db, "pack_pull_events", "notable = 1 and pulled_at < ?", [packPullNotableCutoffMs]),
     streakRunsSwept,
-    streakRuns: Number((await exec(db, "delete from pack_streak_runs where status = 'ended' and updated_at < ?", [streakRunCutoffMs])).rowsAffected ?? 0),
+    streakRuns: await deleteInBatches(db, "pack_streak_runs", "status = 'ended' and updated_at < ?", [streakRunCutoffMs]),
     // Slow self-healing refresh: a pruned accent recomputes the next time the
     // avatar shows up in a payload. Also bounds churn from avatar changes.
     avatarAccents: await pruneAvatarAccents(db),

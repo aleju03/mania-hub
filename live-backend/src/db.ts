@@ -587,6 +587,39 @@ export async function execBatch(db: Db, statements: DbStatement[], mode: Transac
   return results;
 }
 
+// A single DELETE over a multi-GB table holds the write lock for its whole
+// duration — the hourly retention pass did exactly that, stalling every writer
+// on both processes past the full 15s busy budget (the reopen bursts of
+// 2026-08-06). Deleting in bounded rowid batches keeps each lock hold short,
+// and the pause between batches is what actually lets waiting writers in:
+// back-to-back statements re-acquire the lock faster than a busy-waiting
+// writer polls for it. `table` and `where` are trusted SQL fragments from
+// internal callers, never user input.
+const DELETE_BATCH_ROWS = 5_000;
+const DELETE_BATCH_PAUSE_MS = 50;
+
+export async function deleteInBatches(
+  db: Db,
+  table: string,
+  where: string,
+  args: InValue[] = [],
+  options?: { batchRows?: number },
+): Promise<number> {
+  const batchRows = options?.batchRows ?? DELETE_BATCH_ROWS;
+  let total = 0;
+  for (;;) {
+    const result = await exec(
+      db,
+      `delete from ${table} where rowid in (select rowid from ${table} where ${where} limit ${batchRows})`,
+      args,
+    );
+    const rows = Number(result.rowsAffected ?? 0);
+    total += rows;
+    if (rows < batchRows) return total;
+    await sleep(DELETE_BATCH_PAUSE_MS);
+  }
+}
+
 // Shared write rule for the users.pp_4k / pp_7k columns. Returns a conditional
 // UPDATE only when the payload actually carried a variants array, so a partial
 // user upsert (no variants) leaves the columns intact, while a variants payload

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Db } from "../db.js";
-import { exec, isSqliteBusyError } from "../db.js";
+import { deleteInBatches, exec, isSqliteBusyError } from "../db.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { errorContext, logWarn } from "../logger.js";
 
@@ -165,6 +165,5 @@ export async function getOsuJsonWithProxyCache(
 
 // Retention: a row is useless once even its stale window has passed.
 export async function pruneOsuProxyCache(db: Db): Promise<number> {
-  const result = await exec(db, "delete from osu_proxy_cache where stale_until < ?", [Date.now()]);
-  return result.rowsAffected ?? 0;
+  return deleteInBatches(db, "osu_proxy_cache", "stale_until < ?", [Date.now()]);
 }

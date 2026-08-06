@@ -1,5 +1,5 @@
 import type { Db } from "../db.js";
-import { exec } from "../db.js";
+import { deleteInBatches, exec } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logWarn, errorContext } from "../logger.js";
 
@@ -529,6 +529,5 @@ export async function enrichPayloadAvatarAccents(db: Db, queue: JobQueue | null,
 export const AVATAR_ACCENT_RETENTION_MS = 180 * 24 * 60 * 60 * 1000;
 
 export async function pruneAvatarAccents(db: Db): Promise<number> {
-  const result = await exec(db, "delete from avatar_accents where computed_at < ?", [Date.now() - AVATAR_ACCENT_RETENTION_MS]);
-  return result.rowsAffected ?? 0;
+  return deleteInBatches(db, "avatar_accents", "computed_at < ?", [Date.now() - AVATAR_ACCENT_RETENTION_MS]);
 }
