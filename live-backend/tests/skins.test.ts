@@ -720,6 +720,19 @@ describe("validateOskBuffer", () => {
     expect(result.info.keymodes).toEqual([4, 8]);
     expect(result.info.specialKeymodes).toEqual([8]);
   });
+
+  it("merges a repeated ColumnLineWidth the way osu! fills its slots", async () => {
+    // A block can declare the key twice (the 4K block of "moj skin zielony"
+    // does), and osu! only rewrites the slots the later list names. Reading
+    // last-wins buried the scratch separator under the padded 2-unit default.
+    const buffer = await buildOsk({
+      "skin.ini": "[Mania]\nKeys: 8\nColumnLineWidth: 0,0,0,0,0,0,0,4,0\n//Keys\nColumnLineWidth: 0,0\n",
+    });
+    const result = await validateOskBuffer(buffer);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.info.specialKeymodes).toEqual([8]);
+  });
 });
 
 describe("hasSpecialColumnSeparator", () => {

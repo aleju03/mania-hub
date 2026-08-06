@@ -11,9 +11,12 @@ import type { ReplaySkinSettings } from "./replay-skin";
 
 const INDEX_KEY = "index";
 const CACHE_MAX_ENTRIES = 4;
-// Bumped whenever the importer learns a new element: entries decoded by an
-// older build are missing it, and nothing else in the key would change.
-const CACHE_VERSION = "v4";
+// Bumped whenever the importer learns a new element, or corrects one it was
+// already reading: entries decoded by an older build carry the old answer, and
+// nothing else in the key would change. v5 re-decodes for the [Mania] slot-list
+// merge (a block that declares ColumnLineWidth twice kept the slots the shorter
+// list never reached, so cached skins still hold phantom column lines).
+const CACHE_VERSION = "v5";
 
 function versionedKey(key: string): string {
   return `${CACHE_VERSION}:${key}`;

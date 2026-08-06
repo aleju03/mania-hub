@@ -456,6 +456,29 @@ function stripBom(value: string): string {
   return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
 }
 
+// The [Mania] keys whose value is a comma list of per-column (or per-boundary)
+// slots. osu! parses these into one fixed-length array and each occurrence only
+// overwrites the slots it actually supplies, so a block that declares the key
+// twice keeps whatever the shorter list never reaches. Skins do ship that: the
+// 4K block of "moj skin zielony" (and the SIGMA MEAL edit off the same ini)
+// sets ColumnLineWidth to 0,0,0,0,0 and then leaves a stray 0,0 further down.
+// Plain last-wins dropped the trailing zeros, and padding the short list back
+// up to stable's 2-unit default drew white lines the game never draws.
+const MANIA_SLOT_LIST_KEYS = new Set(["ColumnWidth", "ColumnSpacing", "ColumnLineWidth", "LightingNWidth"]);
+
+function setManiaValue(block: Record<string, string>, key: string, value: string) {
+  const previous = block[key];
+  if (previous == null || !MANIA_SLOT_LIST_KEYS.has(key)) {
+    block[key] = value;
+    return;
+  }
+  const slots = previous.split(",");
+  value.split(",").forEach((slot, index) => {
+    slots[index] = slot;
+  });
+  block[key] = slots.join(",");
+}
+
 function parseSkinIni(content: string): SkinIniData {
   const data: SkinIniData = {
     name: null,
@@ -491,7 +514,7 @@ function parseSkinIni(content: string): SkinIniData {
     } else if (section === "Fonts") {
       data.fonts[key] = value;
     } else if (section === "Mania" && currentMania) {
-      currentMania[key] = value;
+      setManiaValue(currentMania, key, value);
     }
   }
 

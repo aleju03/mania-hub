@@ -256,6 +256,41 @@ describe("importReplaySkinFromOsk keymode synthesis", () => {
   });
 });
 
+describe("importReplaySkinFromOsk column lines", () => {
+  it("keeps the boundaries a repeated ColumnLineWidth never reaches", async () => {
+    // "moj skin zielony" (and the SIGMA MEAL edit off the same ini) turns all
+    // five 4K boundaries off and then leaves a stray two-entry list at the end
+    // of the block. osu! rewrites only the two slots that list names, so the
+    // stage stays lineless; last-wins dropped the trailing zeros and padded
+    // boundaries 2-4 back to the 2-unit default, boxing in the last two lanes.
+    const file = await buildOsk(
+      [
+        "[General]", "Name: DupeLines",
+        "[Mania]", "Keys: 4",
+        "ColumnWidth: 74,74,74,74",
+        "ColumnLineWidth: 0,0,0,0,0",
+        "//Keys",
+        "ColumnLineWidth: 0,0",
+      ].join("\n"),
+      ["mania-note1.png", "mania-note2.png", "mania-key1.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    expect(result.settings.keymodeProfiles["4"].columnLineWidths).toEqual([0, 0, 0, 0, 0]);
+    expect(result.settings.keymodeProfiles["4"].columnWidths).toEqual([74, 74, 74, 74]);
+  });
+
+  it("still pads a short list with stable's 2-unit default", async () => {
+    const file = await buildOsk(
+      ["[General]", "Name: ShortLines", "[Mania]", "Keys: 4", "ColumnLineWidth: 0,0"].join("\n"),
+      ["mania-note1.png", "mania-note2.png", "mania-key1.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    expect(result.settings.keymodeProfiles["4"].columnLineWidths).toEqual([0, 0, 2, 2, 2]);
+  });
+});
+
 describe("importReplaySkinFromOsk per-keymode stage positions", () => {
   it("keeps each [Mania] block's own hit, score and combo positions", async () => {
     // The Teto edit's shape: a lower hit line for 4K than for 7K. Key art is
