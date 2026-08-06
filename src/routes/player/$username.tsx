@@ -115,8 +115,30 @@ const PLAYER_RECENT_OSU_REFRESH_COOLDOWN_MS = 2 * 60_000;
 const PROFILE_SNAPSHOT_BEST_GRACE_MS = 450;
 const PROFILE_SNAPSHOT_REFRESH_DEFER_MS = 2500;
 const PROFILE_USER_METADATA_STALE_MS = 10 * 60_000;
-const PROFILE_USER_METADATA_STALE_CACHE_TTL = 1_000;
+// A snapshot whose user metadata the backend has not refreshed inside
+// PROFILE_USER_METADATA_STALE_MS used to cache for a single second, on the
+// assumption the retry ladder below would pick up the queued refresh and
+// re-cache at the full TTL. It does that about 59% of the time; the rest of the
+// time the entry expired before the visitor could come back, so re-entering a
+// profile paid for another ~690KB snapshot and another skeleton. Nearly every
+// stored profile sits past the stale mark (13,335 of 13,373 on prod), so that
+// was the normal path, not the exception. Keep the shortened TTL -- a stale
+// profile really should be re-checked sooner -- but make it long enough to
+// survive a back-and-forth, and let the stale-while-revalidate window below
+// cover the gap beyond it.
+const PROFILE_USER_METADATA_STALE_CACHE_TTL = 60_000;
+// Past its TTL a cached snapshot is still worth painting immediately while a
+// fresh one loads underneath. Re-entering a profile is the common case and the
+// visitor already saw this data seconds ago; showing it again beats showing a
+// skeleton. Beyond this window the data is old enough to be worth waiting for.
+const PLAYER_SNAPSHOT_STALE_WHILE_REVALIDATE_MS = 30 * 60_000;
 const PROFILE_USER_METADATA_RETRY_DELAYS_MS = [1200, 3500, 8000, 15000] as const;
+// Each ladder rung refetches the whole snapshot, and the ladder re-arms on every
+// mount. Without this, bouncing in and out of a profile multiplies the ladder by
+// the number of visits; one run per profile per cooldown is plenty given the
+// median refresh lands at ~22s.
+const PROFILE_USER_METADATA_RETRY_COOLDOWN_MS = 30_000;
+const playerSnapshotMetadataRetryStartedAt = new Map<string, number>();
 // With SSR pinned next to the backend (fra1 <-> Nuremberg, ~5ms RTT) the happy
 // path is ~50ms; this budget exists to absorb backend event-loop stalls, which
 // run ~0.5-1.5s. Waiting one out beats serving a skeleton: a miss costs the
@@ -806,17 +828,42 @@ function readCachedUser(username: string): OsuUser | undefined {
   return cachedData.data;
 }
 
-function loadPlayerSnapshotCached(username: string, options: { bypassDataCache?: boolean } = {}): Promise<PlayerSnapshotData | null> {
+export function resetPlayerSnapshotCachesForTests(): void {
+  playerSnapshotDataCache.clear();
+  playerSnapshotRequestCache.clear();
+  playerSnapshotMetadataRetryStartedAt.clear();
+  userDataCache.clear();
+  userBestWindowDataCache.clear();
+}
+
+export function loadPlayerSnapshotCached(
+  username: string,
+  options: {
+    bypassDataCache?: boolean;
+    // Invoked when a stale-but-usable entry was served from cache and the
+    // refresh behind it landed, so the page can swap in the newer data.
+    onRevalidated?: (data: PlayerSnapshotData) => void;
+  } = {},
+): Promise<PlayerSnapshotData | null> {
   const cacheKey = username.trim().toLowerCase();
   const now = Date.now();
   const cachedData = playerSnapshotDataCache.get(cacheKey);
-  if (!options.bypassDataCache && cachedData && cachedData.expiresAt > now) {
-    return Promise.resolve(cachedData.data);
-  }
-  if (cachedData) {
+  if (!options.bypassDataCache && cachedData) {
+    if (cachedData.expiresAt > now) return Promise.resolve(cachedData.data);
+    if (now - cachedData.expiresAt <= PLAYER_SNAPSHOT_STALE_WHILE_REVALIDATE_MS) {
+      const { onRevalidated } = options;
+      void fetchPlayerSnapshot(cacheKey, username).then((fresh) => {
+        if (fresh && onRevalidated) onRevalidated(fresh);
+      });
+      return Promise.resolve(cachedData.data);
+    }
+    // Too old to paint. Drop it so a failed refetch cannot resurrect it.
     playerSnapshotDataCache.delete(cacheKey);
   }
+  return fetchPlayerSnapshot(cacheKey, username);
+}
 
+function fetchPlayerSnapshot(cacheKey: string, username: string): Promise<PlayerSnapshotData | null> {
   const cached = playerSnapshotRequestCache.get(cacheKey);
   if (cached) return cached;
 
@@ -1276,6 +1323,14 @@ export function PlayerProfilePage({
       if (!snapshot || !profileSnapshotUserMetadataIsStale(snapshot)) return;
       if (metadataRetryAttempt >= PROFILE_USER_METADATA_RETRY_DELAYS_MS.length) return;
 
+      // Only the first rung is rate limited; once a ladder is running it plays
+      // out in full. This is what stops a back-and-forth from stacking ladders.
+      if (metadataRetryAttempt === 0) {
+        const lastStartedAt = playerSnapshotMetadataRetryStartedAt.get(profileKey);
+        if (lastStartedAt !== undefined && Date.now() - lastStartedAt < PROFILE_USER_METADATA_RETRY_COOLDOWN_MS) return;
+        playerSnapshotMetadataRetryStartedAt.set(profileKey, Date.now());
+      }
+
       const delay = PROFILE_USER_METADATA_RETRY_DELAYS_MS[metadataRetryAttempt++];
       clearMetadataRetry();
       metadataRetryTimer = window.setTimeout(() => {
@@ -1312,7 +1367,13 @@ export function PlayerProfilePage({
       });
 
     const loadSnapshot = () => {
-      loadPlayerSnapshotCached(username)
+      loadPlayerSnapshotCached(username, {
+        onRevalidated: (fresh) => {
+          if (cancelled) return;
+          applySnapshot(fresh);
+          scheduleMetadataRetry(fresh);
+        },
+      })
         .then((snapshot) => {
           if (cancelled) return;
           if (snapshot) {
