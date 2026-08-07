@@ -328,7 +328,9 @@ export class OsuApiClient {
     options: { sharedLimiter?: SharedLimiter } = {},
   ) {
     this.limiter = new TokenBucketLimiter(config.osuApiHardPerMinute, config.osuApiTargetPerMinute, onCall, {
-      interactiveBurstCapacity: 4,
+      // 8 covers ~97% of observed interactive fan-outs (a cold profile page is
+      // 6-8 calls); sustained overage stays at target + 8 per minute.
+      interactiveBurstCapacity: 8,
       sharedLimiter: options.sharedLimiter,
     });
   }
