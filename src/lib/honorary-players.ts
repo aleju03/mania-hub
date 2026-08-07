@@ -1,6 +1,6 @@
 /* The honorary roster: osu!mania's historical greats.
 
-   These twenty-four carry the GOAT tier by user id (see maniacard.ts) rather
+   These twenty-three carry the GOAT tier by user id (see maniacard.ts) rather
    than by card power, and they are the only source of that tier. Many of them
    stopped playing long before the current rating ladder existed, and the
    ranked pool can't represent them:
@@ -8,7 +8,7 @@
    - three accounts are deleted outright, so the osu! API 404s and their profiles
      are served from checked-in Wayback reconstructions
      (live-backend/seeds/archived-players);
-   - eight more still exist but were wiped to 0pp and are unranked, so they are
+   - seven more still exist but were wiped to 0pp and are unranked, so they are
      absent from the global rankings snapshot the pack pool draws from;
    - the rest are still ranked, but a rank-ordered pool would bury the ones
      whose peak is long behind them.
@@ -175,16 +175,6 @@ export const HONORARY_PLAYERS: readonly HonoraryPlayer[] = [
     avatarUrl: "https://a.ppy.sh/903155?1718724914.png",
     peakRank: 67,
     peakPp: 14513.2,
-    archived: false,
-    cardReady: true,
-  },
-  {
-    id: 9452257,
-    username: "[Crz]sel",
-    countryCode: "US",
-    avatarUrl: "https://a.ppy.sh/9452257?1740169726.jpeg",
-    peakRank: 248,
-    peakPp: 0,
     archived: false,
     cardReady: true,
   },
