@@ -188,6 +188,7 @@ const SLOW_HTTP_LOG_EXEMPT = new Set(["/api/live", "/api/audio", "/api/hitsounds
 // own window (see the dispatch block for why).
 const MEDIA_PATHS = new Set(["/api/audio", "/api/hitsounds", "/api/preview-audio", "/api/storyboard"]);
 const MEDIA_RATE_SUFFIX = "media";
+const PACK_POOL_RATE_SUFFIX = "pool";
 
 export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
   const startedAt = performance.now();
@@ -280,8 +281,20 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     return ctx.discord.handleInteraction(req, res);
   }
-  if (url.pathname.startsWith("/api/") && !isAdmin(req, ctx) && !checkRate(req, res, ctx, "publicApi")) {
-    return true;
+  // The pack draw's pool page reads ride the packCards ceiling on their own
+  // window instead of the blanket publicApi budget. On 2026-08-07 a run of
+  // spammed opens drained publicApi with card probes and warms, and every
+  // 429ed pool read here made the client degrade to its direct osu! rankings
+  // draw — the abuse guard was rerouting the spam onto the far pricier osu!
+  // API (~50 rankings calls/min). The draw must stay answerable while the
+  // rest of a spammer's page budget runs dry; its own window still caps it.
+  const isPackPoolDraw = url.pathname === "/api/snapshots/global-rankings"
+    && url.searchParams.get("pool") === "packs";
+  if (url.pathname.startsWith("/api/") && !isAdmin(req, ctx)) {
+    const allowed = isPackPoolDraw
+      ? checkRate(req, res, ctx, "packCards", PACK_POOL_RATE_SUFFIX)
+      : checkRate(req, res, ctx, "publicApi");
+    if (!allowed) return true;
   }
   if (url.pathname === "/healthz") {
     sendJson(req, res, ctx, 200, healthBody(ctx));

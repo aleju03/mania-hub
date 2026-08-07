@@ -2376,7 +2376,10 @@ async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
   const base = getLiveBackendUrl();
   if (!base) throw new Error("Server is not configured.");
   const response = await fetch(`${base}${path}`, { credentials: "omit", ...init });
-  if (!response.ok) throw new Error(`Server ${response.status}`);
+  // Same "Server <status>" message as the plain Error this used to throw, but
+  // carrying the status and a 429's retry-after so callers like the pack draw
+  // can tell a rate-limited request from a broken backend.
+  if (!response.ok) throw new LiveBackendRequestError(response.status, retryAfterMs(response));
   const payload = await response.json();
   // Snapshot payloads carry avatar accents next to avatar URLs; feed them to the accent store so
   // player names and their colors land in the same commit.
