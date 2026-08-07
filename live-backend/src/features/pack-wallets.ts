@@ -242,9 +242,10 @@ const displayUsernameSql = `coalesce(nullif(${liveUserFieldSql("username")}, '')
 
    Collection cards arrive from the client and their tier is otherwise taken on
    trust, which was harmless when the rarest card recycled for 40 shards. GOAT
-   recycles for 1000, so an unchecked `tier: "goat"` on any player is a shard
-   printer: sync a forged card, recycle it, repeat. Membership is a fixed list
-   of ids, so the check is exact and needs no tier index. */
+   recycles for 400 (TIER_SHARD_VALUES in src/lib/pack-collection.ts), so an
+   unchecked `tier: "goat"` on any player is a shard printer: sync a forged
+   card, recycle it, repeat. Membership is a fixed list of ids, so the check is
+   exact and needs no tier index. */
 export const HONORARY_USER_IDS = new Set([
   259972, 1190879, 140148, 8474029, 86188, 5610085, 3360737, 2531335, 2520707, 4140104,
   19970192, 10072733, 903155, 12253636, 2288363, 10083439, 1089335,
@@ -720,7 +721,7 @@ export async function applyPackCollectionCardMint(
   const cardUserId = Number(row.card_user_id);
   if (!Number.isInteger(cardUserId) || cardUserId <= 0) return { applied: false, cardKey: null };
   // Same GOAT guard the wallet import applies: a claimed tier is otherwise
-  // taken on trust, and GOAT recycles for 1000 shards.
+  // taken on trust, and GOAT recycles for 400 shards.
   const tier = claimedTier(mint, cardUserId);
   const currentTier = typeof row.tier === "string" ? row.tier : null;
   if (row.skills_json != null && tierRank(currentTier) >= tierRank(tier)) return { applied: false, cardKey };
