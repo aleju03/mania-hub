@@ -188,6 +188,7 @@ const SLOW_HTTP_LOG_EXEMPT = new Set(["/api/live", "/api/audio", "/api/hitsounds
 // own window (see the dispatch block for why).
 const MEDIA_PATHS = new Set(["/api/audio", "/api/hitsounds", "/api/preview-audio", "/api/storyboard"]);
 const MEDIA_RATE_SUFFIX = "media";
+const SKIN_FILES_RATE_SUFFIX = "skin-files";
 
 export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
   const startedAt = performance.now();
@@ -291,8 +292,17 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   // (see packPoolRatePerMinute in config.ts).
   const isPackPoolDraw = url.pathname === "/api/snapshots/global-rankings"
     && url.searchParams.get("pool") === "packs";
+  // Skin asset files spend the publicApi ceiling on their own window, same
+  // reasoning as MEDIA_PATHS: one detail view fans out ~25 <img> fetches
+  // (previews per keymode + screenshots), which used to spend the page's JSON
+  // budget — twice, in fact, since the handler also charged publicApi — and
+  // on 2026-08-07 one visitor's gallery browse 429ed their next packs
+  // requests. The gate is the only charge now; the handler no longer re-bills.
+  const isSkinFileRead = url.pathname.startsWith("/api/skins/file/");
   if (url.pathname.startsWith("/api/") && !isAdmin(req, ctx)) {
-    const allowed = checkRate(req, res, ctx, isPackPoolDraw ? "packPool" : "publicApi");
+    const allowed = isPackPoolDraw
+      ? checkRate(req, res, ctx, "packPool")
+      : checkRate(req, res, ctx, "publicApi", isSkinFileRead ? SKIN_FILES_RATE_SUFFIX : "");
     if (!allowed) return true;
   }
   if (url.pathname === "/healthz") {
@@ -2368,7 +2378,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    // Rate limiting happened at the gate, on the skin-files window
+    // (SKIN_FILES_RATE_SUFFIX) — no second charge here.
     const parts = url.pathname.split("/").filter(Boolean);
     const id = decodeURIComponent(parts[3] ?? "");
     const filename = decodeURIComponent(parts[4] ?? "");
