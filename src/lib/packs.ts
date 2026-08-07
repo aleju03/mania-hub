@@ -58,8 +58,7 @@ export interface PackTypeDef {
   /* Slice of the pool this pack draws from (1 = the whole pool). */
   topFraction: number;
   /* Narrows the draw to players whose main keymode this is. The filter lives
-     on the server (the packs pool with ?keys=), so these packs never degrade
-     to the direct osu! rankings draw, which cannot tell mains apart. */
+     on the server (the packs pool with ?keys=). */
   keys?: 4 | 7;
   /* Cards dealt per pack. */
   cardCount: number;
