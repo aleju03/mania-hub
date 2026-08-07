@@ -6,7 +6,8 @@ import type { LiveMapsRandomDrawParams } from "./maps-random-draw-params";
 import type { ManiaSkills } from "./maniacard";
 import type { MyDataSkillBreakdown } from "./my-data";
 import type { ReplaySpectatorTicket } from "./replay-spectator";
-import { SharedEventSourcePool, type SharedEventSource } from "./shared-event-source";
+import { CrossTabEventSource, supportsCrossTabEventSource } from "./cross-tab-event-source";
+import { SharedEventSourcePool, type PoolableEventSource, type SharedEventSource } from "./shared-event-source";
 
 export type LivePlayerSkills = MyDataSkillBreakdown;
 import type {
@@ -22,18 +23,25 @@ import type {
   SnipeEvent,
 } from "./types";
 
-export type LiveEventName =
-  | "hello"
-  | "heartbeat"
-  | "status"
-  | "tracker_score"
-  | "score_gain"
-  | "top_play"
-  | "maps_farmed_update"
-  | "snipe"
-  | "goal_completed"
-  | "pack_pull"
-  | "job_status";
+/** Every event name `/api/live` emits. A runtime value (not just a type)
+ *  because the cross-tab relay must addEventListener per name to forward the
+ *  stream to follower tabs — a name missing here would reach the leader tab
+ *  but silently never reach the others. */
+export const LIVE_EVENT_NAMES = [
+  "hello",
+  "heartbeat",
+  "status",
+  "tracker_score",
+  "score_gain",
+  "top_play",
+  "maps_farmed_update",
+  "snipe",
+  "goal_completed",
+  "pack_pull",
+  "job_status",
+] as const;
+
+export type LiveEventName = (typeof LIVE_EVENT_NAMES)[number];
 
 export type LiveCountryFeatureTier = "indexed" | "maps_warm" | "live" | "snipes";
 
@@ -2350,7 +2358,19 @@ export function openReplayPresenceEventSource(
 const AVATAR_LIVE_EVENT_NAMES: LiveEventName[] = ["tracker_score", "score_gain", "top_play", "snipe"];
 
 const liveEventSourcePool = new SharedEventSourcePool((url) => {
-  const source = new EventSource(url);
+  // One live connection per browser, not per tab: tabs elect a leader via Web
+  // Locks and the rest receive the stream over a BroadcastChannel, so a pile
+  // of open tabs holds a single slot of the backend's per-IP SSE budget.
+  let source: PoolableEventSource | null = null;
+  if (supportsCrossTabEventSource()) {
+    try {
+      source = new CrossTabEventSource(url, LIVE_EVENT_NAMES);
+    } catch {
+      // Locked-down contexts (sandboxed iframes, strict privacy modes) can
+      // refuse channel or lock construction; a per-tab connection still works.
+    }
+  }
+  if (!source) source = new EventSource(url);
   const harvest = (event: Event) => {
     const data = (event as MessageEvent).data;
     if (typeof data !== "string" || !data.includes("avatar")) return;
@@ -2360,6 +2380,8 @@ const liveEventSourcePool = new SharedEventSourcePool((url) => {
       // Not JSON or malformed: the consumer decides how to handle it.
     }
   };
+  // Attached on the local fan-out (not the physical EventSource) so follower
+  // tabs harvest accents from relayed events too.
   for (const type of AVATAR_LIVE_EVENT_NAMES) source.addEventListener(type, harvest);
   return source;
 });

@@ -23,6 +23,23 @@ export interface SharedEventSource {
   close(): void;
 }
 
+/** The slice of EventSource the pool needs, so a cross-tab relay (or a test
+ *  fake) can stand in for the real thing. */
+export interface PoolableEventSource {
+  readonly readyState: number;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | EventListenerOptions,
+  ): void;
+  close(): void;
+}
+
 type ListenerRegistration = {
   type: string;
   listener: SharedEventListener;
@@ -30,7 +47,7 @@ type ListenerRegistration = {
 };
 
 type SharedEntry = {
-  source: EventSource;
+  source: PoolableEventSource;
   handles: Set<SharedEventSourceHandle>;
 };
 
@@ -47,7 +64,7 @@ function captureFromOptions(options?: boolean | EventListenerOptions): boolean {
 export class SharedEventSourcePool {
   private readonly entries = new Map<string, SharedEntry>();
 
-  constructor(private readonly createSource: (url: string) => EventSource) {}
+  constructor(private readonly createSource: (url: string) => PoolableEventSource) {}
 
   open(url: string): SharedEventSource {
     let entry = this.entries.get(url);
