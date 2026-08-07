@@ -1,4 +1,14 @@
 # https://www.robotstxt.org/robotstxt.html
+
+# X refuses to render a card image whose URL its robots parser considers
+# blocked, and it has a history of not honoring an Allow carved out of a
+# broader Disallow (the /api/og exception below). A dedicated group means
+# Twitterbot never reads the * group at all: it only fetches URLs humans
+# share, so there is nothing to disallow for it. Discord/Facebook ignore
+# robots.txt entirely and were never affected.
+User-agent: Twitterbot
+Allow: /
+
 User-agent: *
 Allow: /api/og
 Disallow: /api/
