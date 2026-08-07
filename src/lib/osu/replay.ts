@@ -27,7 +27,7 @@ import {
   parseBoundedInt,
   parseOptionalBeatmapChecksum
 } from "./validators";
-import { getScoreEndpointOrder } from "./score-endpoint-order";
+import { getOsuScoreModeName, getScoreEndpointOrder } from "./score-endpoint-order";
 import { decodeStableManiaReplayFrames, getStableManiaReplayScrollSpeedScale } from "../replay-frames";
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
@@ -344,10 +344,17 @@ export const getScore = createServerFn({ method: "GET" })
     for (const endpointKind of getScoreEndpointOrder(data.scoreId)) {
       try {
         if (endpointKind === "modern") {
-          return await osuFetch<OsuScore>(`/scores/${data.scoreId}`, undefined, {
+          const modernScore = await osuFetch<OsuScore>(`/scores/${data.scoreId}`, undefined, {
             caller: "getScore:modern",
             expectedStatuses: [404],
           });
+          // The unified /scores/{id} namespace overlaps stable's per-mode
+          // legacy ids, so a stable .osr's embedded id can 200 here as a
+          // completely unrelated play in another ruleset. Only a hit whose
+          // own ruleset matches counts; otherwise fall through to legacy.
+          const modernMode = getOsuScoreModeName(modernScore) ?? mode;
+          if (modernMode === mode) return modernScore;
+          continue;
         }
 
         const legacyScore = await osuFetch<OsuScore>(

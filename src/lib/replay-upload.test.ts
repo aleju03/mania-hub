@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractReplayScoreIdFromFilename, stableModBitmaskToMods } from "./replay-upload";
+import { extractReplayScoreIdFromFilename, scoreMatchesUploadedReplay, stableModBitmaskToMods } from "./replay-upload";
 
 describe("replay upload helpers", () => {
   it("maps the mania-relevant stable mod bits", () => {
@@ -23,5 +23,41 @@ describe("replay upload helpers", () => {
   it("ignores filenames without a usable score id", () => {
     expect(extractReplayScoreIdFromFilename("replay.osr")).toBeNull();
     expect(extractReplayScoreIdFromFilename(null)).toBeNull();
+  });
+});
+
+// Regression for uploadId Gpn-Zq6fCPZspZmy6yMt: a stable .osr on a graveyard
+// 7K chart embedded legacy score id 2391860323, which /scores/{id} resolved
+// to an unrelated osu!standard play. The viewer then showed that play's 78%
+// accuracy, a "Lazer" client badge, and streamed audio from the wrong
+// beatmapset (making every seek land at the end of the replay).
+describe("scoreMatchesUploadedReplay", () => {
+  const replayHash = "cc3ba9b1afd63595d24e96e45aae5b62";
+
+  it("accepts a score on the exact map revision the replay names", () => {
+    const score = { beatmap: { id: 2943617, checksum: replayHash } };
+    expect(scoreMatchesUploadedReplay(score, replayHash, null)).toBe(true);
+  });
+
+  it("accepts a score on the looked-up beatmap even when the map has a newer revision", () => {
+    const score = { beatmap: { id: 2943617, checksum: "0000aaaa0000aaaa0000aaaa0000aaaa" } };
+    expect(scoreMatchesUploadedReplay(score, replayHash, 2943617)).toBe(true);
+  });
+
+  it("rejects an id-collision score from another map", () => {
+    const score = { beatmap: { id: 3610213, checksum: "5343ed734966efd33f64a7e633352bcf" } };
+    expect(scoreMatchesUploadedReplay(score, replayHash, 2943617)).toBe(false);
+    expect(scoreMatchesUploadedReplay(score, replayHash, null)).toBe(false);
+  });
+
+  it("rejects missing scores and scores without a beatmap", () => {
+    expect(scoreMatchesUploadedReplay(null, replayHash, 2943617)).toBe(false);
+    expect(scoreMatchesUploadedReplay({}, replayHash, 2943617)).toBe(false);
+    expect(scoreMatchesUploadedReplay({ beatmap: null }, replayHash, 2943617)).toBe(false);
+  });
+
+  it("never matches on an absent checksum or beatmap id", () => {
+    expect(scoreMatchesUploadedReplay({ beatmap: { id: 1 } }, "", null)).toBe(false);
+    expect(scoreMatchesUploadedReplay({ beatmap: {} }, null, null)).toBe(false);
   });
 });

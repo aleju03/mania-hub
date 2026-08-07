@@ -23,6 +23,12 @@ describe("replay upload mode", () => {
     expect(routeSource).toContain('"X-Replay-Filename": encodeURIComponent(filename)');
     expect(routeSource).toContain("uploaded.scoreId");
     expect(routeSource).toContain('getScore({ data: { scoreId, mode: "mania" } })');
+    // The embedded score id's namespace overlaps the unified /scores/{id} one,
+    // so the fetched score only counts when it is verifiably this replay's map
+    // (otherwise an unrelated play's accuracy, mods, client badge, and audio
+    // beatmapset would poison the viewer).
+    expect(routeSource).toContain("scoreMatchesUploadedReplay(fetchedScore, uploaded.replay.header.beatmapHash, beatmapMeta?.id)");
+    expect(uploadSource).toContain("export function scoreMatchesUploadedReplay");
     expect(routeSource).toContain("const mods = uploadedScore?.mods ?? uploaded.mods");
     expect(routeSource).toContain("setUploadedReplayMods(mods)");
     expect(routeSource).toContain("lookupBeatmapByChecksum({ data: { checksum } })");

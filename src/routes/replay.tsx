@@ -54,7 +54,7 @@ import {
 } from "../lib/replay-overlays";
 import type { ReplayThumbHand } from "../lib/replay-overlays";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
-import { extractReplayScoreIdFromFilename, parseUploadedReplayBuffer, type UploadedReplayParseResult } from "../lib/replay-upload";
+import { extractReplayScoreIdFromFilename, parseUploadedReplayBuffer, scoreMatchesUploadedReplay, type UploadedReplayParseResult } from "../lib/replay-upload";
 import { matchLocalBeatmapFile } from "../lib/replay-local-beatmap";
 import type { BeatmapChecksumLookupResult } from "../lib/osu/replay";
 import { startProgressPoll } from "../lib/progress-poll";
@@ -1239,7 +1239,14 @@ function ReplayPage() {
     localAssets?: LocalBeatmapAssets;
   }) => {
     const { content, beatmapMeta, uploaded, scorePromise, localAssets } = params;
-    const uploadedScore = await scorePromise;
+    // The .osr's embedded score id can resolve to an unrelated play (its id
+    // namespace overlaps the unified one), so a fetched score only counts
+    // when it is verifiably this replay's map. Otherwise the upload renders
+    // from its own header, judged as a stable play.
+    const fetchedScore = await scorePromise;
+    const uploadedScore = scoreMatchesUploadedReplay(fetchedScore, uploaded.replay.header.beatmapHash, beatmapMeta?.id)
+      ? fetchedScore
+      : null;
     const mods = uploadedScore?.mods ?? uploaded.mods;
     // Prefer the score's beatmap object (mania endpoints mark converts); the
     // checksum lookup reports the map's original mode instead. Without osu!

@@ -57,6 +57,26 @@ export function stableModBitmaskToMods(modsUsed: number): OsuMod[] {
   return mods;
 }
 
+// The trailing "online score id" stable writes into an .osr lives in the
+// per-mode legacy namespace, which overlaps the unified /scores/{id} one — so
+// looking it up can return a completely unrelated play (another user, another
+// map, even another ruleset) that then poisons everything the viewer derives
+// from the score: accuracy, the stable/lazer client badge and judging mode,
+// mods, key count, and the beatmapset the audio streams from (which is what
+// made seeking snap to the end). Only trust a fetched score that is
+// verifiably this replay's map: the exact revision the .osr names, or the
+// beatmap id that revision's checksum lookup resolved to.
+export function scoreMatchesUploadedReplay(
+  score: { beatmap?: { id?: number; checksum?: string | null } | null } | null | undefined,
+  replayBeatmapHash: string | null | undefined,
+  lookedUpBeatmapId: number | null | undefined,
+): boolean {
+  const beatmap = score?.beatmap;
+  if (!beatmap) return false;
+  if (replayBeatmapHash && beatmap.checksum === replayBeatmapHash) return true;
+  return lookedUpBeatmapId != null && beatmap.id === lookedUpBeatmapId;
+}
+
 export function extractReplayScoreIdFromFilename(filename: string | null | undefined): number | null {
   const matches = (filename ?? "").match(/\d{6,}/g);
   if (!matches?.length) return null;

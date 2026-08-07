@@ -173,6 +173,12 @@ export interface OsuScore {
   legacy_score_id?: number | null;
   user_id: number;
   accuracy: number;
+  // The play's own ruleset (legacy responses use mode/mode_int, solo_score
+  // ones ruleset_id). Distinct from beatmap.mode, which stays "osu" for
+  // convert plays.
+  mode?: string;
+  mode_int?: number;
+  ruleset_id?: number;
   beatmap_id?: number;
   build_id?: number | null;
   mods: OsuMod[];
