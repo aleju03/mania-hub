@@ -21,6 +21,13 @@ import {
   type LiveEventName,
 } from "../../lib/live-backend";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
+import {
+  describeOsuCaller,
+  describeOsuPath,
+  OSU_CALL_ORIGINS,
+  type OsuCallOrigin,
+  type OsuEntityNames,
+} from "../../lib/osu-api-callers";
 import { COUNTRY_OPTIONS, getCountryName } from "../../lib/country";
 import { CountryFlag } from "../../components/ui/CountryFlag";
 import { SectionCard } from "../../components/admin/SectionCard";
@@ -149,6 +156,8 @@ interface LiveBackendStatus {
     windowMinutes: number;
     byCaller: Array<{ caller: string; count: number; avgMs?: number | null; maxMs?: number | null; errors?: number }>;
     byPath: Array<{ path: string; count: number; avgMs?: number | null; maxMs?: number | null; errors?: number }>;
+    // Player/map names for the ids inside those paths, admin bodies only.
+    names?: OsuEntityNames;
   };
   worker?: {
     paused: boolean;
@@ -700,7 +709,7 @@ function LiveBackendPage() {
             <AbuseGuardCard status={status} />
           </Section>
 
-          <Section title="osu! API pressure" subtitle="Who and what is burning rate-limit budget">
+          <Section title="osu! API pressure" subtitle="Who and what is burning rate-limit budget, in plain terms">
             <RateBreakdownCard status={status} />
           </Section>
 
@@ -3238,76 +3247,287 @@ function formatCallMs(ms: number): string {
   return `${Math.round(ms)}ms`;
 }
 
-function rateRowHint(row: { avgMs?: number | null; maxMs?: number | null }): string | undefined {
+function rateTimingHint(row: { avgMs?: number | null; maxMs?: number | null }): string | undefined {
   if (row.avgMs == null) return undefined;
-  const avg = formatCallMs(row.avgMs);
-  return row.maxMs != null && row.maxMs > row.avgMs ? `${avg} · max ${formatCallMs(row.maxMs)}` : avg;
+  const avg = `${formatCallMs(row.avgMs)} each`;
+  return row.maxMs != null && row.maxMs > row.avgMs ? `${avg} · ${formatCallMs(row.maxMs)} slowest` : avg;
+}
+
+/* One colour per origin, so the stacked bar, the group headers and the row
+   tints all say the same thing without a legend lookup. */
+const ORIGIN_STYLES: Record<OsuCallOrigin, { dot: string; text: string; bar: string; tint: string }> = {
+  page: { dot: "bg-osu-pink-light", text: "text-osu-pink-light", bar: "bg-osu-pink-light", tint: "bg-osu-pink-light/10" },
+  job: { dot: "bg-osu-yellow", text: "text-osu-yellow", bar: "bg-osu-yellow", tint: "bg-osu-yellow/10" },
+  ingest: { dot: "bg-osu-blue", text: "text-osu-blue", bar: "bg-osu-blue", tint: "bg-osu-blue/10" },
+  admin: { dot: "bg-osu-purple-light", text: "text-osu-purple-light", bar: "bg-osu-purple-light", tint: "bg-osu-purple-light/10" },
+  other: { dot: "bg-osu-b1", text: "text-osu-f1", bar: "bg-osu-b1", tint: "bg-osu-b1/15" },
+};
+
+/* The limiter's priority lanes, named the way an admin would say them. */
+const LIMITER_LANE_LABELS: Record<string, string> = {
+  interactive: "page loads",
+  job: "jobs",
+  bulk: "bulk sweeps",
+  default: "other",
+};
+
+type RateWindowKey = "live" | "recent";
+
+type RateCallerRow = {
+  caller: string;
+  count: number;
+  avgMs?: number | null;
+  maxMs?: number | null;
+  errors?: number;
+};
+
+function share(count: number, total: number): number {
+  return total > 0 ? Math.round((count / total) * 100) : 0;
 }
 
 function RateBreakdownCard({ status }: { status: LiveBackendStatus | null }) {
-  const callers = status?.rate.byCaller ?? [];
-  const paths = status?.rate.byPath ?? [];
-  const historyCallers = status?.apiCallHistory?.byCaller ?? [];
+  const [windowKey, setWindowKey] = useState<RateWindowKey>("recent");
+  const windowMinutes = status?.apiCallHistory?.windowMinutes ?? 15;
+  const live = windowKey === "live";
+  const rawCallers: RateCallerRow[] = (live ? status?.rate.byCaller : status?.apiCallHistory?.byCaller) ?? [];
+  const livePaths = status?.rate.byPath ?? [];
   const historyPaths = status?.apiCallHistory?.byPath ?? [];
-  const windowMin = status?.apiCallHistory?.windowMinutes ?? 15;
-  const max = Math.max(1, ...callers.map((row) => row.count), ...paths.map((row) => row.count), ...historyCallers.map((row) => row.count), ...historyPaths.map((row) => row.count));
+  const paths = live && livePaths.length ? livePaths : historyPaths;
+  const names = status?.apiCallHistory?.names;
+
+  const { groups, total } = useMemo(() => {
+    const described = rawCallers.map((row) => ({ ...row, label: describeOsuCaller(row.caller) }));
+    const sum = described.reduce((count, row) => count + row.count, 0);
+    return {
+      total: sum,
+      groups: OSU_CALL_ORIGINS
+        .map((origin) => {
+          const rows = described.filter((row) => row.label.origin === origin.id).sort((a, b) => b.count - a.count);
+          return { origin, rows, count: rows.reduce((count, row) => count + row.count, 0) };
+        })
+        .filter((group) => group.rows.length > 0)
+        .sort((a, b) => b.count - a.count),
+    };
+  }, [rawCallers]);
+
+  const used = status?.rate.usedLastMinute ?? 0;
+  const target = status?.rate.targetPerMinute ?? status?.rate.hardPerMinute ?? 0;
+  const hard = status?.rate.hardPerMinute ?? 0;
+  const verdict = rateVerdict(used, target, hard);
+  const topGroup = groups[0];
+  const topRow = topGroup?.rows[0];
+  const windowLabel = live ? "the last minute" : `the last ${windowMinutes} minutes`;
+
   return (
-    <SectionCard title="osu! API breakdown" subtitle="Live minute (server + worker + fallback combined) vs the persisted recent window">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Callers, last 60s</div>
-          <RateRows
-            rows={callers.map((row) => ({ label: row.caller, count: row.count }))}
-            max={max}
-            empty="No calls in the last minute."
-          />
-          {status?.rate.byLane?.length ? (
-            <div className="mt-2 text-[10px] text-osu-f1">
-              {status.rate.byLane.map((row) => `${row.lane} ${row.count}`).join(" · ")}
+    <SectionCard
+      title="Where the osu! API budget goes"
+      subtitle="Every call is tagged with what asked for it. Pick a window, then read down: page loads, background upkeep, or score catch-up."
+      actions={
+        <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+          {([
+            { value: "live" as const, label: "Last minute" },
+            { value: "recent" as const, label: `Last ${windowMinutes} min` },
+          ]).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setWindowKey(option.value)}
+              aria-pressed={windowKey === option.value}
+              className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors duration-[120ms] cursor-pointer ${
+                windowKey === option.value ? "bg-osu-b3/55 text-white" : "text-osu-f1 hover:text-osu-l2"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      }
+    >
+      <div className="space-y-3">
+        <div className="rounded-md border border-osu-b3/25 bg-osu-b5/50 px-3 py-2.5">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className={`text-2xl font-bold leading-none tracking-tight ${verdict.tone}`}>{formatNumber(used)}</span>
+            <span className="text-[11px] text-osu-f1">calls in the last minute, out of a paced {formatNumber(target)} a minute</span>
+            <span className={`ml-auto text-[11px] font-semibold ${verdict.tone}`}>{verdict.label}</span>
+          </div>
+          <div className="relative mt-2 h-2 rounded-full bg-osu-b4/70 overflow-hidden">
+            <div
+              className={`absolute inset-y-0 left-0 rounded-full ${verdict.fill}`}
+              style={{ width: `${Math.min(100, hard > 0 ? (used / hard) * 100 : 0)}%` }}
+            />
+            {hard > 0 && target > 0 && target < hard ? (
+              <div className="absolute inset-y-0 w-px bg-osu-c2/70" style={{ left: `${(target / hard) * 100}%` }} />
+            ) : null}
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-osu-f1">
+            <span>Target {formatNumber(target)}/min (the marker)</span>
+            <span>Hard ceiling {formatNumber(hard)}/min (bar end)</span>
+            {status?.rate.pending ? <span className="text-osu-yellow">{formatNumber(status.rate.pending)} calls waiting for a slot</span> : null}
+            {status?.rate.byLane?.length ? (
+              <span className="ml-auto">
+                Priority in the last minute: {status.rate.byLane.map((row) => `${LIMITER_LANE_LABELS[row.lane] ?? row.lane} ${formatNumber(row.count)}`).join(" · ")}
+              </span>
+            ) : null}
+          </div>
+          {topGroup && topRow ? (
+            <div className="mt-2 border-t border-osu-b3/20 pt-2 text-[11px] text-osu-c2">
+              Biggest driver over {windowLabel}:{" "}
+              <span className={`font-semibold ${ORIGIN_STYLES[topGroup.origin.id].text}`}>{topGroup.origin.label.toLowerCase()}</span>
+              {" "}at {share(topGroup.count, total)}% of all calls, led by <span className="font-semibold text-white">{topRow.label.title.toLowerCase()}</span>.
             </div>
           ) : null}
         </div>
-        <div>
-          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Callers, last {windowMin}m</div>
-          <RateRows
-            rows={historyCallers.map((row) => ({ label: row.caller, count: row.count, hint: rateRowHint(row), errors: row.errors }))}
-            max={max}
-            empty="No persisted calls in the recent window."
-          />
-        </div>
-        <div>
-          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Paths, last {windowMin}m</div>
-          <RateRows
-            rows={(paths.length
-              ? paths.map((row) => ({ label: row.path, count: row.count }))
-              : historyPaths.map((row) => ({ label: row.path, count: row.count, hint: rateRowHint(row), errors: row.errors })))}
-            max={max}
-            empty="No recent paths."
-          />
+
+        {total > 0 ? (
+          <div className="rounded-md border border-osu-b3/25 bg-osu-b5/40 px-3 py-2.5">
+            <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Who asked for it, over {windowLabel}</div>
+            <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-full bg-osu-b4/70">
+              {groups.map((group) => (
+                <div
+                  key={group.origin.id}
+                  className={ORIGIN_STYLES[group.origin.id].bar}
+                  style={{ width: `${share(group.count, total)}%` }}
+                  title={`${group.origin.label}: ${formatNumber(group.count)}`}
+                />
+              ))}
+            </div>
+            <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+              {groups.map((group) => (
+                <div key={group.origin.id} className="flex items-baseline gap-1.5 text-[10px]">
+                  <span className={`h-1.5 w-1.5 flex-shrink-0 translate-y-[-1px] rounded-full ${ORIGIN_STYLES[group.origin.id].dot}`} />
+                  <span className={`font-semibold ${ORIGIN_STYLES[group.origin.id].text}`}>{group.origin.label}</span>
+                  <span className="font-mono text-osu-c2">{formatNumber(group.count)}</span>
+                  <span className="text-osu-f1">{share(group.count, total)}%</span>
+                  <span className="min-w-0 truncate text-osu-f1/70">{group.origin.blurb}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
+          <div className="lg:col-span-3">
+            <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">
+              What is calling, over {windowLabel}
+            </div>
+            {groups.length === 0 ? (
+              <div className="rounded-md border border-osu-b3/20 bg-osu-b5/50 px-3 py-4 text-[11px] text-osu-f1">
+                {live ? "No osu! calls in the last minute — nothing is spending budget right now." : "No osu! calls recorded in this window yet."}
+              </div>
+            ) : (
+              <div className="max-h-[560px] space-y-2.5 overflow-y-auto pr-1">
+                {groups.map((group) => (
+                  <div key={group.origin.id} className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${ORIGIN_STYLES[group.origin.id].dot}`} />
+                      <span className={`text-[9px] font-semibold uppercase tracking-wider ${ORIGIN_STYLES[group.origin.id].text}`}>
+                        {group.origin.label}
+                      </span>
+                      <span className="text-[10px] text-osu-f1">
+                        {formatNumber(group.count)} calls · {share(group.count, total)}%
+                      </span>
+                    </div>
+                    {group.rows.map((row) => (
+                      <RateCallerRowView
+                        key={row.caller}
+                        caller={row.caller}
+                        label={row.label}
+                        count={row.count}
+                        percent={share(row.count, total)}
+                        widthPercent={share(row.count, group.rows[0].count)}
+                        timing={rateTimingHint(row)}
+                        errors={row.errors}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="lg:col-span-2">
+            <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">What it fetched from osu!</div>
+            {paths.length === 0 ? (
+              <div className="rounded-md border border-osu-b3/20 bg-osu-b5/50 px-3 py-4 text-[11px] text-osu-f1">Nothing fetched in this window.</div>
+            ) : (
+              <div className="max-h-[560px] space-y-1.5 overflow-y-auto pr-1">
+                {paths.map((row) => {
+                  const described = describeOsuPath(row.path, names);
+                  return (
+                    <div key={row.path} className="relative overflow-hidden rounded-md border border-osu-b3/20 bg-osu-b5/60">
+                      <div
+                        className="absolute inset-y-0 left-0 bg-osu-b1/15"
+                        style={{ width: `${Math.max(4, share(row.count, paths[0].count))}%` }}
+                      />
+                      <div className="relative px-2.5 py-1.5">
+                        <div className="flex items-baseline gap-2">
+                          <span className="min-w-0 flex-1 truncate text-[11px] text-white">
+                            {described.title}
+                            {described.subject ? <span className="text-osu-f1"> · {described.subject}</span> : null}
+                          </span>
+                          <span className="flex-shrink-0 text-[11px] font-bold text-osu-yellow tabular-nums">{formatNumber(row.count)}</span>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-2 text-[9px]">
+                          {rateTimingHint(row) ? <span className="flex-shrink-0 text-osu-f1/80">{rateTimingHint(row)}</span> : null}
+                          {row.errors ? <span className="flex-shrink-0 font-semibold text-osu-red-light">{formatNumber(row.errors)} failed</span> : null}
+                          <span className="ml-auto min-w-0 truncate font-mono text-osu-f1/45" title={row.path}>{row.path}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </SectionCard>
   );
 }
 
-function RateRows({ rows, max, empty }: { rows: Array<{ label: string; count: number; hint?: string; errors?: number }>; max: number; empty: string }) {
-  if (rows.length === 0) return <div className="text-[11px] text-osu-f1 py-3">{empty}</div>;
+function rateVerdict(used: number, target: number, hard: number): { label: string; tone: string; fill: string } {
+  if (hard > 0 && used >= hard) return { label: "At the hard ceiling", tone: "text-osu-red-light", fill: "bg-osu-red-light" };
+  if (target > 0 && used >= target) return { label: "Over target, calls are being paced", tone: "text-osu-yellow", fill: "bg-osu-yellow" };
+  if (target > 0 && used >= target * 0.75) return { label: "Busy, still under target", tone: "text-white", fill: "bg-osu-c2" };
+  return { label: "Comfortably under target", tone: "text-osu-green-light", fill: "bg-osu-green-light" };
+}
+
+function RateCallerRowView({
+  caller,
+  label,
+  count,
+  percent,
+  widthPercent,
+  timing,
+  errors,
+}: {
+  caller: string;
+  label: ReturnType<typeof describeOsuCaller>;
+  count: number;
+  percent: number;
+  widthPercent: number;
+  timing?: string;
+  errors?: number;
+}) {
+  const style = ORIGIN_STYLES[label.origin];
   return (
-    <div className="space-y-1.5">
-      {rows.map((row) => (
-        <div key={row.label} className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden">
-          <div
-            className="absolute inset-y-0 left-0 bg-osu-yellow/10"
-            style={{ width: `${Math.max(4, (row.count / max) * 100)}%` }}
-          />
-          <div className="relative flex items-center gap-2 px-2.5 py-1.5">
-            <span className="min-w-0 flex-1 truncate text-[10px] font-mono text-osu-c2">{row.label}</span>
-            {row.errors ? <span className="text-[10px] font-semibold text-osu-red flex-shrink-0">{row.errors} err</span> : null}
-            {row.hint ? <span className="text-[10px] text-osu-f1 flex-shrink-0">{row.hint}</span> : null}
-            <span className="text-[11px] font-bold text-osu-yellow">{row.count}</span>
-          </div>
+    <div className="relative overflow-hidden rounded-md border border-osu-b3/20 bg-osu-b5/60">
+      <div className={`absolute inset-y-0 left-0 ${style.tint}`} style={{ width: `${Math.max(4, widthPercent)}%` }} />
+      <div className="relative px-2.5 py-2">
+        <div className="flex items-baseline gap-2">
+          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-white">{label.title}</span>
+          {label.surface ? (
+            <span className={`flex-shrink-0 text-[9px] font-semibold uppercase tracking-wider ${style.text}`}>{label.surface}</span>
+          ) : null}
+          <span className="flex-shrink-0 text-[11px] font-bold text-osu-yellow tabular-nums">{formatNumber(count)}</span>
+          <span className="w-8 flex-shrink-0 text-right text-[10px] text-osu-f1 tabular-nums">{percent}%</span>
         </div>
-      ))}
+        <div className="mt-0.5 text-[10px] leading-snug text-osu-f1">{label.detail}</div>
+        <div className="mt-1 flex items-center gap-2 text-[9px]">
+          {timing ? <span className="flex-shrink-0 text-osu-f1/80">{timing}</span> : null}
+          {errors ? <span className="flex-shrink-0 font-semibold text-osu-red-light">{formatNumber(errors)} failed</span> : null}
+          <span className="ml-auto min-w-0 truncate font-mono text-osu-f1/45" title={caller}>{caller}</span>
+        </div>
+      </div>
     </div>
   );
 }

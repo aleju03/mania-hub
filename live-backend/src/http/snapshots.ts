@@ -3959,6 +3959,11 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
   ]);
   const worker = (mirror?.worker as WorkerStatus | null | undefined) ?? ctx.workerStatus?.() ?? null;
   const osc = (mirror?.osc as OscStatus | undefined) ?? ctx.oscStatus();
+  // Only the admin panel renders paths, so the public body never pays for the
+  // name lookups behind them.
+  const apiCallNames = options.includeWorkerActivity
+    ? await apiCallPathNames(ctx.db, [...apiCalls.byPath.map((row) => row.path), ...(sharedRate?.byPath ?? []).map((row) => row.path)])
+    : null;
   // The in-process limiter (or the worker's mirrored copy) only sees its own
   // process's calls; the shared reservation table spans server + worker +
   // scores-fallback, so its last-minute view wins when available.
@@ -4004,7 +4009,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     sqliteBusy,
     scoresFallback,
     abuse: ctx.abuse?.state() ?? null,
-    apiCallHistory: apiCalls,
+    apiCallHistory: apiCallNames ? { ...apiCalls, names: apiCallNames } : apiCalls,
     countries,
     catchup,
     worker: options.includeWorkerActivity ? adminWorkerStatus(worker) : publicWorkerStatus(worker),
@@ -4373,6 +4378,71 @@ async function apiCallHistory(db: Db) {
     byCaller: byCaller.rows.map((row) => ({ caller: String(row.caller), ...stats(row) })),
     byPath: byPath.rows.map((row) => ({ path: String(row.path), ...stats(row) })),
   };
+}
+
+/* Names for the ids inside logged osu! paths, so the admin panel can render
+   "Top 100 · Rii" instead of "/users/39867808/scores/best?mode=mania&...".
+   Admin-only and best-effort: a lookup miss (or a whole failed query) just
+   leaves the panel showing the bare id it already had. */
+const API_PATH_ID_LIMIT = 60;
+
+async function apiCallPathNames(db: Db, paths: string[]): Promise<{
+  users: Record<string, string>;
+  beatmaps: Record<string, string>;
+  beatmapsets: Record<string, string>;
+}> {
+  const empty = { users: {}, beatmaps: {}, beatmapsets: {} };
+  const userIds = new Set<string>();
+  const beatmapIds = new Set<string>();
+  const beatmapsetIds = new Set<string>();
+  for (const path of paths) {
+    for (const [, id] of path.matchAll(/\/users\/(\d+)/g)) userIds.add(id);
+    // /osu/<id> is the .osu file download, the same beatmap id by another name.
+    for (const [, id] of path.matchAll(/\/(?:beatmaps|osu)\/(\d+)/g)) beatmapIds.add(id);
+    for (const [, id] of path.matchAll(/\/beatmapsets\/(\d+)/g)) beatmapsetIds.add(id);
+  }
+  const ids = (set: Set<string>) => [...set].slice(0, API_PATH_ID_LIMIT).map((id) => Number(id));
+  const userList = ids(userIds);
+  const beatmapList = ids(beatmapIds);
+  const beatmapsetList = ids(beatmapsetIds);
+  if (!userList.length && !beatmapList.length && !beatmapsetList.length) return empty;
+  const holes = (count: number) => new Array(count).fill("?").join(",");
+  try {
+    const [users, beatmaps, sets] = await Promise.all([
+      userList.length
+        ? exec(db, `select user_id, username from users where user_id in (${holes(userList.length)})`, userList)
+        : null,
+      beatmapList.length
+        ? exec(
+          db,
+          `select b.beatmap_id as id, s.artist as artist, s.title as title, b.version as version
+             from beatmaps b left join beatmapsets s on s.beatmapset_id = b.beatmapset_id
+            where b.beatmap_id in (${holes(beatmapList.length)})`,
+          beatmapList,
+        )
+        : null,
+      beatmapsetList.length
+        ? exec(
+          db,
+          `select beatmapset_id as id, artist, title from beatmapsets where beatmapset_id in (${holes(beatmapsetList.length)})`,
+          beatmapsetList,
+        )
+        : null,
+    ]);
+    const mapTitle = (row: Record<string, unknown>) => {
+      const artist = row.artist ? String(row.artist) : "";
+      const title = row.title ? String(row.title) : "";
+      const name = [artist, title].filter(Boolean).join(" - ") || `map ${row.id}`;
+      return row.version ? `${name} [${String(row.version)}]` : name;
+    };
+    return {
+      users: Object.fromEntries((users?.rows ?? []).map((row) => [String(row.user_id), String(row.username)])),
+      beatmaps: Object.fromEntries((beatmaps?.rows ?? []).map((row) => [String(row.id), mapTitle(row)])),
+      beatmapsets: Object.fromEntries((sets?.rows ?? []).map((row) => [String(row.id), mapTitle(row)])),
+    };
+  } catch {
+    return empty;
+  }
 }
 
 export async function activatePublicCountry(
