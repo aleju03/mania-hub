@@ -4,6 +4,9 @@ dist
 dist-ssr
 *.local
 .env
+.env.*
+!.env.example
+.claude/
 .nitro
 .tanstack
 .wrangler
