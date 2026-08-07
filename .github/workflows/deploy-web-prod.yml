@@ -1,34 +1,29 @@
-name: Deploy frontend (dev channel) to VPS
+name: Deploy frontend (prod) to VPS
 
-# develop -> ninja.mania-tracker.com ONLY. The apex (mania-tracker.com) is
-# deployed from main by deploy-web-prod.yml; pushing develop never touches
-# what visitors see. Caddy routes ninja to the single mania-hub-web-ninja
-# instance on port 3002, with its own release dir, so the two channels share
-# nothing but the .env.
-#
-# workflow_dispatch is listed but GitHub only surfaces it from the default
-# branch, so the push trigger is the live one.
+# main -> mania-tracker.com. This is the release lane: fast-forwarding main is
+# now the act of shipping to visitors, so main only moves deliberately. The
+# dev channel (develop -> ninja.mania-tracker.com) lives in deploy-web.yml.
 on:
   push:
-    branches: [develop]
+    branches: [main]
     paths-ignore:
       - 'live-backend/**'
       - '**.md'
   workflow_dispatch:
     inputs:
       restart:
-        description: Restart mania-hub-web-ninja after deploying
+        description: Restart mania-hub-web after deploying
         type: boolean
         default: true
 
 concurrency:
-  group: deploy-web-ninja
+  group: deploy-web-prod
   cancel-in-progress: false
 
 env:
   VPS_HOST: ${{ secrets.VPS_HOST }}
   VPS_USER: ${{ secrets.VPS_USER }}
-  WEB_DIR: /home/${{ secrets.VPS_USER }}/apps/mania-hub-web-ninja
+  WEB_DIR: /home/${{ secrets.VPS_USER }}/apps/mania-hub-web
   # Baked into the browser bundle at build time, so it must be the public
   # origin - never the loopback address the server itself uses.
   VITE_LIVE_BACKEND_URL: https://api.mania-tracker.com
@@ -76,38 +71,46 @@ jobs:
           REL="$WEB_DIR/releases/${{ github.sha }}"
           ssh "$VPS_USER@$VPS_HOST" "ln -sfn '$REL' '$WEB_DIR/current.new' && mv -T '$WEB_DIR/current.new' '$WEB_DIR/current'"
 
-      # Single instance: a dev deploy has a ~15s gap while node boots, seen by
-      # nobody but the owner. Caddy's lb_try_duration holds requests through it.
+      # Rolling restart, one instance at a time. Caddy load-balances 3000 and
+      # 3001, so waiting for each to serve before touching the next means there
+      # is always a live upstream and visitors never see the gap. Restarting
+      # both at once would drop every request for the ~15s node takes to boot
+      # on this box, which is what used to surface as a 502 mid-deploy.
       #
       # inputs.* is undefined on a push, which would silently skip this and
       # leave the old release running against a freshly flipped symlink.
-      - name: Restart
+      - name: Rolling restart
         if: github.event_name != 'workflow_dispatch' || inputs.restart
         run: |
           ssh "$VPS_USER@$VPS_HOST" '
             set -e
-            echo "restarting mania-hub-web-ninja"
-            sudo -n systemctl restart mania-hub-web-ninja
-            for i in $(seq 1 90); do
-              code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ninja.mania-tracker.com" "http://127.0.0.1:3002/" || true)
-              if [ "$code" = "200" ]; then echo "  port 3002 ready after ${i}s"; exit 0; fi
-              sleep 1
+            wait_ready() {
+              for i in $(seq 1 90); do
+                code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: mania-tracker.com" "http://127.0.0.1:$1/" || true)
+                if [ "$code" = "200" ]; then echo "  port $1 ready after ${i}s"; return 0; fi
+                sleep 1
+              done
+              echo "  port $1 never returned 200 (last: $code)"
+              systemctl --no-pager -n 40 status "mania-hub-web@$1" || true
+              return 1
+            }
+            for port in 3000 3001; do
+              echo "restarting mania-hub-web@$port"
+              sudo -n systemctl restart "mania-hub-web@$port"
+              wait_ready "$port"
             done
-            echo "  port 3002 never returned 200 (last: $code)"
-            sudo -n systemctl --no-pager -n 40 status mania-hub-web-ninja || true
-            exit 1
           '
 
-      # Through Caddy this time, not the loopback port: catches a config or
+      # Through Caddy this time, not the loopback ports: catches a config or
       # TLS problem that a direct-to-node check would sail straight past.
-      # ninja only - the apex belongs to deploy-web-prod.yml.
+      # Apex + www redirect only - ninja belongs to deploy-web.yml.
       - name: Health check via Caddy
         if: github.event_name != 'workflow_dispatch' || inputs.restart
         run: |
           ssh "$VPS_USER@$VPS_HOST" '
-            code=$(curl -s -o /dev/null -w "%{http_code}" --resolve "ninja.mania-tracker.com:443:127.0.0.1" "https://ninja.mania-tracker.com/" || true)
-            if [ "$code" != "200" ]; then echo "ninja.mania-tracker.com returned $code"; exit 1; fi
-            echo "  ninja.mania-tracker.com ok"
+            code=$(curl -s -o /dev/null -w "%{http_code}" --resolve "mania-tracker.com:443:127.0.0.1" "https://mania-tracker.com/" || true)
+            if [ "$code" != "200" ]; then echo "mania-tracker.com returned $code"; exit 1; fi
+            echo "  mania-tracker.com ok"
           '
 
       # Keep the 3 newest releases; older ones are just disk. Never touches
