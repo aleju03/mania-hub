@@ -57,6 +57,7 @@ export interface Config {
   publicApiRatePerMinute: number;
   publicCostlyRatePerMinute: number;
   packCardsRatePerMinute: number;
+  packPoolRatePerMinute: number;
   countryActivateRatePerMinute: number;
   countryActivateGlobalRatePerMinute: number;
   countryActivateNewPerHour: number;
@@ -298,6 +299,14 @@ export function readConfig(): Config {
     // (profiles, farm helper, maps) used to spend the same costly budget: a few
     // Wild packs left the rest of the site 429ing for the remainder of a minute.
     packCardsRatePerMinute: readInt("PACK_CARDS_RATE_PER_MINUTE", 30),
+    // The draw's pool page reads (pool=packs global rankings). NOT one request
+    // per pack: a duplicate-protected Wild open from a big collection fetches
+    // the head, up to ten position pages, and up to two 16-page replacement
+    // walks — ~40 reads in one legitimate open. Sized to match publicApi so
+    // splitting these reads onto their own window (done so probe spam cannot
+    // starve the draw) never makes a single open worse off than the blanket
+    // budget it left; 30/min here 429ed the owner's very first Wild pack.
+    packPoolRatePerMinute: readInt("PACK_POOL_RATE_PER_MINUTE", 240),
     countryActivateRatePerMinute: readInt("COUNTRY_ACTIVATE_RATE_PER_MINUTE", 10),
     countryActivateGlobalRatePerMinute: readInt("COUNTRY_ACTIVATE_GLOBAL_RATE_PER_MINUTE", 120),
     countryActivateNewPerHour: readInt("COUNTRY_ACTIVATE_NEW_PER_HOUR", 12),

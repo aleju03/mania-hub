@@ -188,7 +188,6 @@ const SLOW_HTTP_LOG_EXEMPT = new Set(["/api/live", "/api/audio", "/api/hitsounds
 // own window (see the dispatch block for why).
 const MEDIA_PATHS = new Set(["/api/audio", "/api/hitsounds", "/api/preview-audio", "/api/storyboard"]);
 const MEDIA_RATE_SUFFIX = "media";
-const PACK_POOL_RATE_SUFFIX = "pool";
 
 export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
   const startedAt = performance.now();
@@ -281,19 +280,19 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     return ctx.discord.handleInteraction(req, res);
   }
-  // The pack draw's pool page reads ride the packCards ceiling on their own
-  // window instead of the blanket publicApi budget. On 2026-08-07 a run of
-  // spammed opens drained publicApi with card probes and warms, and every
-  // 429ed pool read here made the client degrade to its direct osu! rankings
-  // draw — the abuse guard was rerouting the spam onto the far pricier osu!
-  // API (~50 rankings calls/min). The draw must stay answerable while the
-  // rest of a spammer's page budget runs dry; its own window still caps it.
+  // The pack draw's pool page reads get their own bucket instead of the
+  // blanket publicApi budget. On 2026-08-07 a run of spammed opens drained
+  // publicApi with card probes and warms, and every 429ed pool read here made
+  // the client degrade to its direct osu! rankings draw — the abuse guard was
+  // rerouting the spam onto the far pricier osu! API (~50 rankings calls/min).
+  // The draw must stay answerable while the rest of a spammer's page budget
+  // runs dry; its own window still caps it. A full bucket rather than a
+  // borrowed ceiling because one legitimate open can cost ~40 of these reads
+  // (see packPoolRatePerMinute in config.ts).
   const isPackPoolDraw = url.pathname === "/api/snapshots/global-rankings"
     && url.searchParams.get("pool") === "packs";
   if (url.pathname.startsWith("/api/") && !isAdmin(req, ctx)) {
-    const allowed = isPackPoolDraw
-      ? checkRate(req, res, ctx, "packCards", PACK_POOL_RATE_SUFFIX)
-      : checkRate(req, res, ctx, "publicApi");
+    const allowed = checkRate(req, res, ctx, isPackPoolDraw ? "packPool" : "publicApi");
     if (!allowed) return true;
   }
   if (url.pathname === "/healthz") {
@@ -5339,9 +5338,12 @@ function sendCors(req: IncomingMessage, res: ServerResponse, ctx: Pick<HttpConte
     res.setHeader("vary", "origin");
     res.setHeader("access-control-allow-methods", "GET,HEAD,POST,OPTIONS");
     res.setHeader("access-control-allow-headers", "content-type,authorization,range");
+    // retry-after must be exposed or cross-origin clients cannot see how long
+    // a 429 asked them to wait: the pack draw's and card probes' "retry when
+    // the window is about to clear" logic reads it via response.headers.
     res.setHeader(
       "access-control-expose-headers",
-      "accept-ranges,content-length,content-range,content-type,x-audio-mp3-in-mp4,x-audio-size-bytes",
+      "accept-ranges,content-length,content-range,content-type,retry-after,x-audio-mp3-in-mp4,x-audio-size-bytes",
     );
     res.setHeader("access-control-max-age", "600");
   }

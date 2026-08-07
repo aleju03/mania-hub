@@ -5,6 +5,7 @@ export type AbuseBucket =
   | "publicApi"
   | "publicCostly"
   | "packCards"
+  | "packPool"
   | "countryActivate"
   | "countryActivateGlobal"
   | "countryActivateNew"
@@ -142,6 +143,8 @@ function limitForBucket(config: Config, bucket: AbuseBucket): number {
       return Math.max(1, config.publicCostlyRatePerMinute ?? 30);
     case "packCards":
       return Math.max(1, config.packCardsRatePerMinute ?? 30);
+    case "packPool":
+      return Math.max(1, config.packPoolRatePerMinute ?? 240);
     case "countryActivate":
       return Math.max(1, config.countryActivateRatePerMinute ?? 10);
     case "countryActivateGlobal":
