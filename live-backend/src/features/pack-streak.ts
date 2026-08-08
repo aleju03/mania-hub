@@ -1,5 +1,6 @@
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
+import { secureRandom, secureRandomId } from "../shared/secure-random.js";
 import { getGlobalRankingsSnapshot, type GlobalRankingEntry } from "./global-rankings.js";
 import {
   getStreakPlayerMetrics,
@@ -179,7 +180,8 @@ export function normalizeStreakGuess(value: unknown): StreakGuess | null {
 const RUN_ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 const RUN_ID_LENGTH = 12;
 
-export function generateStreakRunId(rng: () => number = Math.random): string {
+export function generateStreakRunId(rng?: () => number): string {
+  if (!rng) return secureRandomId(RUN_ID_ALPHABET, RUN_ID_LENGTH);
   let id = "";
   for (let index = 0; index < RUN_ID_LENGTH; index += 1) {
     id += RUN_ID_ALPHABET[Math.min(RUN_ID_ALPHABET.length - 1, Math.floor(rng() * RUN_ID_ALPHABET.length))];
@@ -464,7 +466,11 @@ export interface StartStreakRunInput {
    stopping. */
 export async function startStreakRun(db: Db, input: StartStreakRunInput): Promise<StreakRunView | null> {
   const now = input.now ?? Date.now();
-  const rng = input.rng ?? Math.random;
+  // The deal decides a public leaderboard, so it draws from the CSPRNG unless a
+  // caller (tests) hands in its own: the face-down card's number is the whole
+  // game, and Math.random's stream is observable from every other draw the
+  // process makes.
+  const rng = input.rng ?? secureRandom;
   if (!Number.isInteger(input.userId) || input.userId <= 0) return null;
 
   const openRows = (await exec(
@@ -528,7 +534,8 @@ export interface StreakGuessInput {
    in time, whether it was right, and what the next pair is. */
 export async function guessStreakRound(db: Db, input: StreakGuessInput): Promise<StreakGuessView | null> {
   const now = input.now ?? Date.now();
-  const rng = input.rng ?? Math.random;
+  // Same reason as the opening deal: this picks the next face-down card.
+  const rng = input.rng ?? secureRandom;
   const run = await readRun(db, input.runId);
   if (!run || run.userId !== input.userId) return null;
   if (run.status !== "live" || !run.round) return endedView(run);

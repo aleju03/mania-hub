@@ -283,27 +283,79 @@ function claimedTier(raw: { tier?: unknown }, userId: number): string | null {
   return raw.tier;
 }
 
-function normalizeCard(value: unknown): StoredPackCard | null {
+/* Bounds for the client-authored card fields.
+
+   These rows are not merely private bookkeeping: username, avatarUrl, tierLabel
+   and skills are read back out by the public share card (getSharedPackCard) and
+   painted into the /pull/... OG image on this site's own domain. Unbounded, a
+   hand-written wallet could mint a shareable card carrying an arbitrary name,
+   an arbitrary image URL and a megabyte of "skills". The caps below are the
+   same ones the mint route already applied - this path simply never got them.
+
+   None of this makes the economy honest (the shard balance is client-authored
+   by design, so a forged tier was never the cheap way to print shards); it
+   bounds what a forged row can *display*. */
+const PACK_CARD_USERNAME_MAX_CHARS = 40;
+const PACK_CARD_TIER_LABEL_MAX_CHARS = 60;
+const PACK_CARD_AVATAR_URL_MAX_CHARS = 300;
+/* Absurdity ceilings, not play limits: real collections sit orders of
+   magnitude below these, and past them a row is only a rendering problem. */
+const PACK_CARD_MAX_COPIES = 100_000;
+const PACK_CARD_MAX_PP = 1_000_000;
+
+/* Keeps a stored avatar to an https URL. Anything else - a javascript: or
+   data: URI, a bare string - degrades to empty, and the read path then falls
+   back to the users row (which is where a tracked player's avatar comes from
+   anyway). */
+function normalizeAvatarUrl(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > PACK_CARD_AVATAR_URL_MAX_CHARS) return "";
+  try {
+    return new URL(value).protocol === "https:" ? value : "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeCard(value: unknown, now: number): StoredPackCard | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Partial<WalletCardPayload>;
   const userId = toFiniteNumber(raw.userId, 0);
   if (!Number.isInteger(userId) || userId <= 0 || typeof raw.username !== "string") return null;
+  const tier = claimedTier(raw, userId);
+  // Oversized skills are dropped rather than rejecting the card: the blob is a
+  // render detail, and losing it costs a stat bar, not the card.
+  let skills: unknown | null = raw.skills && typeof raw.skills === "object" ? raw.skills : null;
+  if (skills !== null && JSON.stringify(skills).length > PACK_CARD_SKILLS_MAX_CHARS) skills = null;
+  // A pull cannot have happened in the future; a clock-skewed or hand-edited
+  // stamp would otherwise sort ahead of every real pull forever.
+  const clampStamp = (input: unknown) => Math.min(now, Math.max(0, Math.floor(toFiniteNumber(input, 0))));
   return {
     userId,
-    username: raw.username,
-    avatarUrl: typeof raw.avatarUrl === "string" ? raw.avatarUrl : typeof raw.avatar_url === "string" ? raw.avatar_url : "",
-    countryCode:
+    username: raw.username.slice(0, PACK_CARD_USERNAME_MAX_CHARS),
+    avatarUrl: normalizeAvatarUrl(typeof raw.avatarUrl === "string" ? raw.avatarUrl : raw.avatar_url),
+    countryCode: normalizeCountryCode(
       typeof raw.countryCode === "string" ? raw.countryCode : typeof raw.country_code === "string" ? raw.country_code : "",
-    tier: claimedTier(raw, userId),
-    tierLabel: claimedTier(raw, userId) === null ? null : (typeof raw.tierLabel === "string" ? raw.tierLabel : null),
-    skills: raw.skills && typeof raw.skills === "object" ? raw.skills : null,
-    pp: toFiniteNumber(raw.pp, 0),
-    globalRank: Math.floor(toFiniteNumber(raw.globalRank ?? raw.global_rank, 0)),
-    copies: Math.max(0, Math.floor(toFiniteNumber(raw.copies, 1))),
-    recycledCopies: Math.max(0, Math.floor(toFiniteNumber(raw.recycledCopies ?? raw.recycled_copies, 0))),
-    firstPulledAt: Math.floor(toFiniteNumber(raw.firstPulledAt ?? raw.first_pulled_at, 0)),
-    lastPulledAt: Math.floor(toFiniteNumber(raw.lastPulledAt ?? raw.last_pulled_at, 0)),
+    ),
+    tier,
+    tierLabel:
+      tier === null ? null : (typeof raw.tierLabel === "string" ? raw.tierLabel.slice(0, PACK_CARD_TIER_LABEL_MAX_CHARS) : null),
+    skills,
+    pp: Math.min(PACK_CARD_MAX_PP, Math.max(0, toFiniteNumber(raw.pp, 0))),
+    globalRank: Math.max(0, Math.floor(toFiniteNumber(raw.globalRank ?? raw.global_rank, 0))),
+    copies: Math.min(PACK_CARD_MAX_COPIES, Math.max(0, Math.floor(toFiniteNumber(raw.copies, 1)))),
+    recycledCopies: Math.min(
+      PACK_CARD_MAX_COPIES,
+      Math.max(0, Math.floor(toFiniteNumber(raw.recycledCopies ?? raw.recycled_copies, 0))),
+    ),
+    firstPulledAt: clampStamp(raw.firstPulledAt ?? raw.first_pulled_at),
+    lastPulledAt: clampStamp(raw.lastPulledAt ?? raw.last_pulled_at),
   };
+}
+
+/* Two letters or nothing: the value is rendered as a flag. */
+function normalizeCountryCode(value: string): string {
+  const code = value.slice(0, 2).toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : "";
 }
 
 function stripCardsFromPayload(payload: string): string {
@@ -367,7 +419,7 @@ async function importCardsFromPayload(
   if (!parsed?.cards || typeof parsed.cards !== "object") return;
 
   const cards = Object.values(parsed.cards)
-    .map(normalizeCard)
+    .map((card) => normalizeCard(card, now))
     .filter((card): card is StoredPackCard => Boolean(card));
   for (const card of cards) {
     await upsertPackCard(db, userId, card, now, mode);

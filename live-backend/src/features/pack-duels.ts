@@ -1,6 +1,7 @@
 import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
+import { secureRandomId } from "../shared/secure-random.js";
 import { DUEL_LOSS_SHARDS, DUEL_TIE_SHARDS, DUEL_WIN_SHARDS, grantPackGameShards } from "./pack-games.js";
 import {
   heldPackCollectionCardKeys,
@@ -414,8 +415,11 @@ const DUEL_ID_LENGTH = 10;
 
 /* Link-shaped id: lowercase, no lookalike characters, long enough that a duel
    cannot be found by guessing (31^10, and an unguessed duel is merely a page
-   showing two hands of cards). */
-export function generateDuelId(random: () => number = Math.random): string {
+   showing two hands of cards). Drawn from the CSPRNG by default so the id
+   space is actually 31^10 rather than whatever Math.random's shared stream
+   makes reachable; callers (tests) can still inject a deterministic rng. */
+export function generateDuelId(random?: () => number): string {
+  if (!random) return secureRandomId(DUEL_ID_ALPHABET, DUEL_ID_LENGTH);
   let id = "";
   for (let index = 0; index < DUEL_ID_LENGTH; index += 1) {
     id += DUEL_ID_ALPHABET[Math.floor(random() * DUEL_ID_ALPHABET.length)] ?? "a";
@@ -565,7 +569,7 @@ export async function createPackDuel(
   challengerUsername: string,
   input: CreatePackDuelInput,
   now = Date.now(),
-  random: () => number = Math.random,
+  random?: () => number,
 ): Promise<CreatePackDuelResult> {
   const packType = normalizePackType(input.packType);
   if (!packType || !Number.isInteger(challengerUserId) || challengerUserId <= 0) {

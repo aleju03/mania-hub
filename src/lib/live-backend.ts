@@ -511,7 +511,10 @@ export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
     try {
       response = await fetch(`${base}/api/admin/status${query}`, { headers, signal: controller.signal });
       if (response.status === 404) {
-        response = await fetch(`${base}/api/status`, { signal: controller.signal });
+        // Rolling-deploy fallback for a backend old enough to predate
+        // /api/admin/status. Carries the same bearer: /api/status is admin-only
+        // now, and on an older backend the header is simply ignored.
+        response = await fetch(`${base}/api/status`, { headers, signal: controller.signal });
       }
     } catch (err) {
       if (isAbortError(err)) {

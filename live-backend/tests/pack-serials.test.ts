@@ -16,12 +16,21 @@ let db: Db;
 const OWNER = 100;
 const OTHER_OWNER = 200;
 const THIRD_OWNER = 300;
-const CARD = 7;
+/* An honorary id, so the same player can be pulled both ordinarily and as a
+   GOAT (the log only accepts that tier for the honorary roster). */
+const CARD = 259972;
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "mania-pack-serials-"));
   db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
   await migrate(db);
+  // The pull log publishes pulls for players it can vouch for; a dealt card
+  // always has a users row behind it.
+  await exec(
+    db,
+    "insert or replace into users (user_id, username, avatar_url, country_code, updated_at) values (?, ?, '', 'CR', '2026-01-01')",
+    [CARD, `player${CARD}`],
+  );
 });
 
 afterEach(async () => {

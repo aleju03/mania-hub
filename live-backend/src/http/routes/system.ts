@@ -6,7 +6,7 @@ import { getDiscordShowcase } from "../../discord/showcase.js";
 import { searchUsers as searchStoredUsers, USER_SEARCH_DEFAULT_LIMIT, USER_SEARCH_MAX_LIMIT } from "../../features/user-search.js";
 import type { HttpContext } from "../context.js";
 import { activatePublicCountry } from "../country-activation.js";
-import { clampInteger } from "../request.js";
+import { clampInteger, isAdmin } from "../request.js";
 import { checkRate, sendAccentEnrichedJson, sendJson } from "../respond.js";
 import { countryFeaturesBody, healthBody, statusBody } from "../status-report.js";
 
@@ -21,6 +21,16 @@ export async function handleSystemRoutes(req: IncomingMessage, res: ServerRespon
     return true;
   }
   if (url.pathname === "/api/status") {
+    // Admin-gated. Even the trimmed public body was a live operational readout
+    // - queue depth and pressure, DB size against its cap, the osu! API budget
+    // and its recent call history, roster/catchup state and the abuse counters
+    // - which is a description of when the backend is least able to absorb
+    // load, served to anyone who asked. Liveness probes want /healthz and
+    // /readyz, which stay open above and cost no queries.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
     sendJson(req, res, ctx, 200, await statusBody(ctx));
     return true;
   }

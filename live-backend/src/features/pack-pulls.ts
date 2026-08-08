@@ -1,13 +1,18 @@
 import type { InValue } from "@libsql/client";
 import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch } from "../db.js";
-import { packCardKey, tierRank, tierRankSql } from "./pack-wallets.js";
+import { HONORARY_USER_IDS, packCardKey, tierRank, tierRankSql } from "./pack-wallets.js";
 
 // Append-only log of pack pulls, the community layer on top of the per-owner
-// pack_collection_cards projection. Rows are self-reported by the client
-// (the draw and mint both happen browser-side), so everything derived here is
-// social flavor, never economy: the feed, "owned by N collectors" counts and
-// "your card got pulled" stats. The wallet itself stays untouched.
+// pack_collection_cards projection. What was pulled is self-reported by the
+// client (the draw and mint both happen browser-side), so everything derived
+// here is social flavor, never economy: the feed, "owned by N collectors"
+// counts and "your card got pulled" stats. The wallet itself stays untouched.
+//
+// Who it was pulled *of* is not taken on trust, because it is published: a
+// card's player must be one this backend already knows (or an honorary), and
+// the name and country on the row are read from the users table rather than
+// from the browser. See resolvePullCardIdentities.
 
 export const PACK_PULL_MAX_CARDS_PER_EVENT = 10;
 // A generous ceiling on how fast a single account can append events: five
@@ -97,7 +102,12 @@ function normalizePullCard(value: unknown): PackPullCardInput | null {
   const raw = value as Record<string, unknown>;
   const userId = Math.floor(Number(raw.userId) || 0);
   if (userId <= 0 || typeof raw.username !== "string" || raw.username.length === 0) return null;
-  const tier = typeof raw.tier === "string" && VALID_TIERS.has(raw.tier) ? raw.tier : null;
+  // GOAT is the honorary roster's tier and nothing else. The wallet path has
+  // always checked this (claimedTier in pack-wallets); the log did not, so a
+  // hand-written pull could put "pulled GOAT <anyone>" on the public feed, the
+  // live SSE stream and the share page's goatPull banner.
+  const claimed = typeof raw.tier === "string" && VALID_TIERS.has(raw.tier) ? raw.tier : null;
+  const tier = claimed === "goat" && !HONORARY_USER_IDS.has(userId) ? null : claimed;
   return {
     userId,
     username: raw.username.slice(0, 40),
@@ -105,6 +115,39 @@ function normalizePullCard(value: unknown): PackPullCardInput | null {
     tier,
     isNew: raw.isNew === true,
   };
+}
+
+/* The pulled players the backend can actually vouch for, with their real names.
+
+   A pull row is client-authored, and its card_username / card_country_code are
+   rendered straight onto the public feed, the /pull/... permalink and that
+   page's OG image - on this site's own domain. Taking those strings on trust
+   meant a fabricated player (any unused id, any name) could be published as if
+   it had been drawn. Every honestly drawn card comes off the pool board, which
+   is built from this table, so requiring a users row costs a real pull nothing
+   and is the cheapest available proof that the player exists.
+
+   Honorary ids are allowlisted alongside: that roster is 23 hardcoded entries
+   of mostly retired accounts, some of which the ingest has no reason to hold,
+   and being on the list is itself the proof. */
+async function resolvePullCardIdentities(
+  db: Db,
+  userIds: number[],
+): Promise<Map<number, { username: string; countryCode: string }>> {
+  const resolved = new Map<number, { username: string; countryCode: string }>();
+  if (userIds.length === 0) return resolved;
+  const rows = (await exec(
+    db,
+    `select user_id, username, country_code from users where user_id in (${userIds.map(() => "?").join(", ")})`,
+    userIds as InValue[],
+  )).rows;
+  for (const row of rows) {
+    resolved.set(Number(row.user_id), {
+      username: String(row.username ?? "").slice(0, 40),
+      countryCode: String(row.country_code ?? "").slice(0, 2).toUpperCase(),
+    });
+  }
+  return resolved;
 }
 
 /* Live identity overlay, same idea as pack-wallets: rows freeze the name at
@@ -206,10 +249,25 @@ export async function recordPackPullEvents(
 ): Promise<{ recorded: number; mints: PackPullMint[]; eventIds: number[] }> {
   const type = normalizePackType(packType);
   if (!type || !Number.isInteger(ownerUserId) || ownerUserId <= 0) return { recorded: 0, mints: [], eventIds: [] };
-  const normalized = (Array.isArray(cards) ? cards : [])
+  const claimed = (Array.isArray(cards) ? cards : [])
     .map(normalizePullCard)
     .filter((card): card is PackPullCardInput => Boolean(card))
     .slice(0, PACK_PULL_MAX_CARDS_PER_EVENT);
+  if (claimed.length === 0) return { recorded: 0, mints: [], eventIds: [] };
+
+  // Drop cards for players this backend has never heard of, and let the users
+  // table - not the browser - name the ones it knows. What reaches the public
+  // feed is then a real player under their current name, whatever the client
+  // sent. Honoraries keep the client's string, since they are an allowlist and
+  // may legitimately have no users row.
+  const identities = await resolvePullCardIdentities(db, [...new Set(claimed.map((card) => card.userId))]);
+  const normalized = claimed
+    .map((card) => {
+      const identity = identities.get(card.userId);
+      if (identity) return { ...card, username: identity.username || card.username, countryCode: identity.countryCode || card.countryCode };
+      return HONORARY_USER_IDS.has(card.userId) ? card : null;
+    })
+    .filter((card): card is PackPullCardInput => card !== null);
   if (normalized.length === 0) return { recorded: 0, mints: [], eventIds: [] };
 
   const hourAgo = now - 60 * 60 * 1000;
@@ -562,14 +620,18 @@ export async function getSharedPackCard(
     [cardUserId],
   )).rows[0];
   // The first time this owner pulled this card as a GOAT. Earliest rather than
-  // latest: a later duplicate says nothing the first one didn't.
-  const goatRow = (await exec(
-    db,
-    `select pack_type, pulled_at from pack_pull_events
-     where owner_user_id = ? and card_user_id = ? and tier = 'goat'
-     order by pulled_at asc limit 1`,
-    [ownerUserId, cardUserId],
-  )).rows[0];
+  // latest: a later duplicate says nothing the first one didn't. The honorary
+  // check is repeated here rather than left to the write path, so rows logged
+  // before that path enforced it cannot still raise the banner.
+  const goatRow = HONORARY_USER_IDS.has(cardUserId)
+    ? (await exec(
+        db,
+        `select pack_type, pulled_at from pack_pull_events
+         where owner_user_id = ? and card_user_id = ? and tier = 'goat'
+         order by pulled_at asc limit 1`,
+        [ownerUserId, cardUserId],
+      )).rows[0]
+    : undefined;
   // The permalink resolved a player to whichever card key the owner holds at
   // the higher tier, so the serial has to be looked up under that same key.
   const cardKey = typeof row.card_key === "string" && row.card_key

@@ -32,8 +32,22 @@ const OWNER_ID = 100;
 const OTHER_OWNER_ID = 200;
 const CARD_A = 1;
 const CARD_B = 2;
+/* A real entry from HONORARY_USER_IDS: the only players who can be pulled as
+   GOAT. */
+const GOAT_CARD = 259972;
 
 const ADMIN = { authorization: "Bearer secret" };
+
+/* Every card the pool can deal belongs to a player in `users` (the pool board
+   is built by joining it), and the pull log now requires that row before it
+   will publish a pull. Fixtures seed it so they describe a real draw. */
+async function seedCardUser(userId: number, username = `player${userId}`, countryCode = "CR"): Promise<void> {
+  await exec(
+    db,
+    "insert or replace into users (user_id, username, avatar_url, country_code, updated_at) values (?, ?, '', ?, '2026-01-01')",
+    [userId, username, countryCode],
+  );
+}
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "mania-pack-pulls-"));
@@ -41,6 +55,9 @@ beforeEach(async () => {
   await migrate(db);
   queue = new JobQueue(db);
   events = new LiveEventLog(db);
+  await seedCardUser(CARD_A);
+  await seedCardUser(CARD_B);
+  await seedCardUser(GOAT_CARD);
 });
 
 afterEach(async () => {
@@ -176,6 +193,43 @@ describe("recordPackPullEvents", () => {
     expect(row.tier).toBeNull();
   });
 
+  it("refuses GOAT for a player outside the honorary roster", async () => {
+    // The wallet path has always checked this; the log did not, so a
+    // hand-written pull could put "pulled GOAT <anyone>" on the public feed.
+    const result = await recordPackPullEvents(db, OWNER_ID, "opener", "legend", [pullCard(CARD_A, "goat")], 10_000);
+    expect(result.recorded).toBe(1);
+    const row = (await exec(db, "select tier from pack_pull_events")).rows[0];
+    expect(row.tier).toBeNull();
+
+    // The honorary roster itself is unaffected.
+    await recordPackPullEvents(db, OWNER_ID, "opener", "legend", [pullCard(GOAT_CARD, "goat")], 11_000);
+    const goatRow = (await exec(db, "select tier from pack_pull_events where card_user_id = ?", [GOAT_CARD])).rows[0];
+    expect(goatRow.tier).toBe("goat");
+  });
+
+  it("drops cards for players the backend has never seen", async () => {
+    // Every pullable card comes off the pool board, which is built by joining
+    // users - so an id with no row there was never dealt by this backend.
+    const result = await recordPackPullEvents(db, OWNER_ID, "opener", "standard", [pullCard(987_654_321, "mythic")], 10_000);
+    expect(result.recorded).toBe(0);
+    expect((await exec(db, "select count(*) as n from pack_pull_events")).rows[0].n).toBe(0);
+  });
+
+  it("names the pulled card from the users row, not the client", async () => {
+    await seedCardUser(CARD_A, "real-name", "JP");
+    await recordPackPullEvents(
+      db,
+      OWNER_ID,
+      "opener",
+      "standard",
+      [pullCard(CARD_A, "rare", { username: "Totally Someone Else", countryCode: "ZZ" })],
+      10_000,
+    );
+    const row = (await exec(db, "select card_username, card_country_code from pack_pull_events")).rows[0];
+    expect(row.card_username).toBe("real-name");
+    expect(row.card_country_code).toBe("JP");
+  });
+
   it("drops batches past the hourly per-owner cap", async () => {
     const now = 1_000_000_000;
     await exec(db, "begin");
@@ -270,11 +324,11 @@ describe("getPackCardCollectors", () => {
   });
 
   it("folds an owner's ordinary card and GOAT into one holder, keeping the better tier", async () => {
-    await seedCollectionCard(OWNER_ID, CARD_A, 1, "rare", 5_000, 5_000);
-    await seedCollectionCard(OWNER_ID, CARD_A, 2, "goat", 8_000, 8_000);
-    await recordPackPullEvents(db, OWNER_ID, "opener", "legend", [pullCard(CARD_A, "goat")], 8_000);
+    await seedCollectionCard(OWNER_ID, GOAT_CARD, 1, "rare", 5_000, 5_000);
+    await seedCollectionCard(OWNER_ID, GOAT_CARD, 2, "goat", 8_000, 8_000);
+    await recordPackPullEvents(db, OWNER_ID, "opener", "legend", [pullCard(GOAT_CARD, "goat")], 8_000);
 
-    const report = await getPackCardCollectors(db, CARD_A);
+    const report = await getPackCardCollectors(db, GOAT_CARD);
     expect(report.owners).toBe(1);
     expect(report.collectors).toHaveLength(1);
     expect(report.collectors[0]).toMatchObject({
@@ -319,7 +373,7 @@ describe("listRecentPackPulls", () => {
     // A non-notable pull that must not appear.
     await recordPackPullEvents(db, OTHER_OWNER_ID, "second", "standard", [pullCard(CARD_A, "common", { isNew: false })], 30_000);
     // The card player renamed since the pull.
-    await exec(db, "insert into users (user_id, username, avatar_url, country_code, updated_at) values (?, 'renamed', 'https://a.ppy.sh/x', 'CR', '2026-01-01')", [CARD_B]);
+    await exec(db, "insert or replace into users (user_id, username, avatar_url, country_code, updated_at) values (?, 'renamed', 'https://a.ppy.sh/x', 'CR', '2026-01-01')", [CARD_B]);
 
     const pulls = await listRecentPackPulls(db, 10);
     expect(pulls).toHaveLength(2);
@@ -335,6 +389,7 @@ describe("listRecentPackPulls", () => {
 
   it("caps the limit", async () => {
     for (let i = 0; i < 60; i++) {
+      await seedCardUser(1000 + i);
       await recordPackPullEvents(db, OWNER_ID, "opener", "standard", [pullCard(1000 + i, "mythic")], 10_000 + i);
     }
     const pulls = await listRecentPackPulls(db, 500);
@@ -495,7 +550,7 @@ describe("pack pull endpoints", () => {
       userId: OWNER_ID,
       username: "opener",
       packType: "standard",
-      cards: [pullCard(CARD_A, "common"), pullCard(CARD_B, "goat")],
+      cards: [pullCard(CARD_A, "common"), pullCard(GOAT_CARD, "goat")],
     }, ADMIN));
 
     // Global events (null country) so every /api/live subscriber gets them,
@@ -504,7 +559,7 @@ describe("pack pull endpoints", () => {
     expect(received[0].type).toBe("pack_pull");
     expect(received[0].country).toBeNull();
     expect(received[0].payload).toMatchObject({ cardUserId: CARD_A, tier: "common", ownerUsername: "opener" });
-    expect(received[1].payload).toMatchObject({ cardUserId: CARD_B, tier: "goat" });
+    expect(received[1].payload).toMatchObject({ cardUserId: GOAT_CARD, tier: "goat" });
 
     // And the rows are durable, so reconnect replay can serve them.
     const logged = (await exec(db, "select type, country from live_event_log where type = 'pack_pull'")).rows;

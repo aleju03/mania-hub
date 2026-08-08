@@ -37,7 +37,7 @@ cd live-backend
 npm run smoke:osc
 ```
 
-For a longer local run, start `npm run dev` for 10 to 20 minutes with `TRACKED_COUNTRIES=CR` and watch `/api/status`. The process should keep oSC JSON below `OSC_JSON_TARGET_PER_MINUTE` and all osu! calls behind the global limiter.
+For a longer local run, start `npm run dev` for 10 to 20 minutes with `TRACKED_COUNTRIES=CR` and watch `/api/status` (admin-gated: pass `-H "Authorization: Bearer $LIVE_ADMIN_TOKEN"`). The process should keep oSC JSON below `OSC_JSON_TARGET_PER_MINUTE` and all osu! calls behind the global limiter.
 
 ## Production (VPS)
 

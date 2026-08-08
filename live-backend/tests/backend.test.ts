@@ -949,12 +949,13 @@ describe("live backend", () => {
       databaseUrl: `file:${join(dir, "test.db")}`,
       maxLocalDbBytes: 1024 * 1024,
       targetLocalDbBytes: 512 * 1024,
+      liveAdminToken: "secret",
     });
     // Pinned countries are seeded at boot in prod (worker + server-role serveWriteDb);
     // the status read path no longer seeds, so seed here to match.
     await ensurePinnedCountries(db, config);
 
-    await routeHttp(mockReq("GET", "/api/status"), first.res, {
+    await routeHttp(mockReq("GET", "/api/status", { authorization: "Bearer secret" }), first.res, {
       db,
       queue,
       events,
@@ -971,7 +972,7 @@ describe("live backend", () => {
 
     release();
     const second = mockRes();
-    await routeHttp(mockReq("GET", "/api/status"), second.res, {
+    await routeHttp(mockReq("GET", "/api/status", { authorization: "Bearer secret" }), second.res, {
       db,
       queue,
       events,
@@ -2823,7 +2824,10 @@ describe("live backend", () => {
     expect(body.storage?.filePath).toContain("test.db");
   });
 
-  it("keeps the operational counters out of the public status body", async () => {
+  it("refuses /api/status without the admin token", async () => {
+    // The body is a live operational readout - queue pressure, the osu! API
+    // budget, DB headroom, abuse counters - so it is not something to hand to
+    // whoever asks. Liveness probes use /healthz and /readyz, which stay open.
     const { db, queue, events } = await setup();
     const response = mockRes();
     await routeHttp(mockReq("GET", "/api/status"), response.res, {
@@ -2835,16 +2839,31 @@ describe("live backend", () => {
       oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
     } as never);
 
+    expect(response.res.statusCode).toBe(401);
+    expect(JSON.parse(response.writes.join(""))).toMatchObject({ error: "unauthorized" });
+  });
+
+  it("keeps the worker-activity internals out of the plain status body", async () => {
+    const { db, queue, events } = await setup();
+    const response = mockRes();
+    await routeHttp(mockReq("GET", "/api/status", { authorization: "Bearer secret" }), response.res, {
+      db,
+      queue,
+      events,
+      config: baseConfig({ nodeEnv: "development", liveAdminToken: "secret", databaseUrl: `file:${join(dir, "test.db")}` }),
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+
     const body = JSON.parse(response.writes.join("")) as Record<string, unknown> & { storage?: Record<string, unknown> };
     expect(response.res.statusCode).toBe(200);
-    // Memory, thread internals and disk layout are operator data; the absolute
-    // database path is a server path nothing public renders.
+    // Memory, thread internals and disk layout are only built for the admin
+    // panel's own endpoint, which asks for them explicitly.
     expect(body.memory).toBeUndefined();
     expect(body.mapsSnapshotThread).toBeUndefined();
     expect(body.disk).toBeUndefined();
     expect(body.storagePaths).toBeUndefined();
     expect(body.storage?.filePath).toBeUndefined();
-    // The rest of the storage block stays public: the site renders it.
     expect(body.storage).toMatchObject({ bytes: expect.any(Number), walBytes: expect.any(Number), overLimit: false });
   });
 

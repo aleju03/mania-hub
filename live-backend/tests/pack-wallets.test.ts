@@ -608,3 +608,85 @@ describe("collection card mints", () => {
       .toEqual({ applied: false, cardKey: null });
   });
 });
+
+/* A wallet is client-authored, and these fields are read back out by the public
+   share card and painted into its OG image on this site's own domain. The caps
+   do not make the economy honest - the shard balance is the client's to write -
+   they bound what a hand-edited wallet can put on a public page. */
+describe("wallet card field bounds", () => {
+  function hostilePayload(overrides: Record<string, unknown>): string {
+    return JSON.stringify({
+      cards: {
+        "42": {
+          userId: 42,
+          username: "delta",
+          avatarUrl: "https://a.ppy.sh/42",
+          countryCode: "CR",
+          tier: "rare",
+          tierLabel: "Rare",
+          skills: null,
+          pp: 1234,
+          globalRank: 5678,
+          copies: 1,
+          recycledCopies: 0,
+          firstPulledAt: 100,
+          lastPulledAt: 200,
+          ...overrides,
+        },
+      },
+      shards: 0,
+      shardsSpent: 0,
+      charges: 5,
+      lastRefillAt: 1000,
+      openedPacks: 1,
+      poolTotal: null,
+    });
+  }
+
+  async function storedCard(): Promise<Record<string, unknown>> {
+    return (await exec(db, "select * from pack_collection_cards where owner_user_id = ?", [USER_ID])).rows[0] as never;
+  }
+
+  it("keeps a non-https avatar out of the stored card", async () => {
+    await savePackWallet(db, USER_ID, hostilePayload({ avatarUrl: "javascript:alert(1)" }), 0, 5000);
+    expect((await storedCard()).avatar_url).toBe("");
+  });
+
+  it("truncates an oversized username and tier label", async () => {
+    await savePackWallet(db, USER_ID, hostilePayload({ username: "n".repeat(500), tierLabel: "L".repeat(500) }), 0, 5000);
+    const card = await storedCard();
+    expect(String(card.username)).toHaveLength(40);
+    expect(String(card.tier_label)).toHaveLength(60);
+  });
+
+  it("drops a country code that is not two letters", async () => {
+    // The value is rendered as a flag, so anything that is not a plain pair of
+    // letters degrades to empty rather than to a broken flag.
+    await savePackWallet(db, USER_ID, hostilePayload({ countryCode: "x9" }), 0, 5000);
+    expect((await storedCard()).country_code).toBe("");
+    await savePackWallet(db, USER_ID, hostilePayload({ countryCode: "" }), 1, 5000);
+    expect((await storedCard()).country_code).toBe("");
+  });
+
+  it("drops an oversized skills blob rather than the card", async () => {
+    const bloat: Record<string, number> = {};
+    for (let i = 0; i < 500; i += 1) bloat[`skill${i}`] = i;
+    await savePackWallet(db, USER_ID, hostilePayload({ skills: bloat }), 0, 5000);
+    const card = await storedCard();
+    expect(card.skills_json).toBeNull();
+    expect(card.card_user_id).toBe(42);
+  });
+
+  it("refuses a pull stamped in the future", async () => {
+    const now = 5000;
+    await savePackWallet(db, USER_ID, hostilePayload({ firstPulledAt: 9e15, lastPulledAt: 9e15 }), 0, now);
+    const card = await storedCard();
+    expect(Number(card.first_pulled_at)).toBe(now);
+    expect(Number(card.last_pulled_at)).toBe(now);
+  });
+
+  it("caps an absurd copy count", async () => {
+    await savePackWallet(db, USER_ID, hostilePayload({ copies: 5_000_000 }), 0, 5000);
+    expect(Number((await storedCard()).copies)).toBe(100_000);
+  });
+});
