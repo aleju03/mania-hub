@@ -61,6 +61,10 @@ interface SlashSpark {
 
 interface PackStageProps {
   onOpened: () => void;
+  /* Fires on the first touch of the pack (any pointerdown on the stage that
+     could start the slash). The page deals the hand off this signal, so the
+     drag plus the rip animation hide the draw's network time. */
+  onGrab?: () => void;
   reducedMotion: boolean;
   /* Tints the foil art and subtitle; omitted = the standard pack look. */
   packType?: PackTypeDef;
@@ -75,8 +79,14 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps) {
+export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
+  // The blade effect below subscribes once ([] deps), so it reads the latest
+  // onGrab through a ref instead of resubscribing per render.
+  const onGrabRef = useRef(onGrab);
+  useEffect(() => {
+    onGrabRef.current = onGrab;
+  }, [onGrab]);
   const packRef = useRef<HTMLDivElement | null>(null);
   // Offscreen 2D canvas the cut renders into; the 3D scene shows it as the
   // front texture of the pack mesh.
@@ -720,6 +730,7 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
       if (event.pointerType === "mouse" && event.button !== 0) return;
       const stage = stageRef.current;
       if (!stage || !(event.target instanceof Node) || !stage.contains(event.target)) return;
+      onGrabRef.current?.();
       bladeHeldRef.current = { pointerId: event.pointerId };
       cutAtPoint(event.clientX, event.clientY);
     };

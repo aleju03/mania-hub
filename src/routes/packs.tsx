@@ -397,6 +397,10 @@ function PacksPage() {
   const [duelBusy, setDuelBusy] = useState(false);
   const [duelError, setDuelError] = useState<string | null>(null);
   const preparedPackKeyRef = useRef<string | null>(null);
+  /* Armed by the deal effect with the draw for the current selection; the
+     pack's first grab pulls it. Null while no deal is owed (already dealt,
+     already started, or nothing selected). */
+  const dealTriggerRef = useRef<(() => void) | null>(null);
   /* The duel this pack is being opened to answer, if any. Loaded from the
      link so the page knows which pack type to force and who is waiting. */
   const [answering, setAnswering] = useState<LivePackDuel | null>(null);
@@ -484,10 +488,13 @@ function PacksPage() {
 
   /* Deal a fresh pack from the tracked pool (uniform odds within the pack
      type's slice), then ask the backend to warm the profile snapshots and
-     start prefetching each player's best scores, so the cards are usually
-     ready by the time the pack is slashed open. A pack paid for earlier but
-     abandoned mid-reveal (navigation, refresh) resumes its unrevealed
-     remainder instead: the charge is already spent. */
+     start prefetching each player's best scores. The draw waits for the
+     first touch of the pack (PackStage's onGrab): browsing the shelf and
+     idling on a selection cost the backend nothing, and the slash plus the
+     rip animation usually hide the whole deal - a slash that outruns it
+     holds on the shuffle until the cards land, exactly like auto-open. A
+     pack paid for earlier but abandoned mid-reveal (navigation, refresh)
+     resumes its unrevealed remainder instead: the charge is already spent. */
   useEffect(() => {
     let cancelled = false;
     const dealKey = `${packId}:${packTypeId}`;
@@ -516,7 +523,7 @@ function PacksPage() {
     }
     const type = packTypeById(packTypeId);
     const currentWallet = walletApi.wallet;
-    void (async () => {
+    const deal = async () => {
       try {
         const owned = await getDuplicateProtectionOwned(type, currentWallet, walletApi.syncStatus);
         const draw = await drawPackPlayers(Math.random, {
@@ -548,9 +555,24 @@ function PacksPage() {
         autoOpenRef.current = false;
         if (!cancelled) setDealError(true);
       }
-    })();
+    };
+    /* Armed, not fired: only a pack somebody actually grabs costs a draw,
+       and switching pack types disarms the old trigger before anything
+       leaves the browser. Auto-open deals immediately - the viewer is
+       already at the shuffle, waiting on nothing but the cards. */
+    if (autoOpenRef.current) {
+      dealTriggerRef.current = null;
+      void deal();
+    } else {
+      dealTriggerRef.current = () => {
+        // Disarmed on first pull, so repeat grabs cannot double-deal.
+        dealTriggerRef.current = null;
+        void deal();
+      };
+    }
     return () => {
       cancelled = true;
+      dealTriggerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [packId, packTypeId, streakOpen]);
@@ -857,6 +879,7 @@ function PacksPage() {
                       <PackStage
                         reducedMotion={reducedMotion}
                         onOpened={handleOpened}
+                        onGrab={() => dealTriggerRef.current?.()}
                         packType={selectedType}
                       />
                     )}
