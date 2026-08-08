@@ -97,7 +97,7 @@ function connect(hubCtx: ReturnType<typeof ctx>, route: string, viewer?: { id: n
     query.set("exp", String(expiresAt));
     query.set("sig", ghostViewerSignature(viewer.id, viewer.username, expiresAt, ADMIN_TOKEN));
   }
-  const req = fakeReq(`/api/ghost/stream?${query.toString()}`);
+  const req = fakeReq(`/api/updates/stream?${query.toString()}`);
   const res = fakeRes();
   return { req, res, handled: handleGhost(req, res, hubCtx.ctx) };
 }
@@ -166,10 +166,10 @@ describe("ghost hub targeting", () => {
       visual: { x: 0.25, y: 0.5 },
     });
 
-    const shown = events(onRoute.res, "ghost");
+    const shown = events(onRoute.res, "update");
     expect(shown).toHaveLength(1);
     expect(shown[0]).toMatchObject({ present: true, visual: { x: 0.25, y: 0.5 } });
-    expect(events(elsewhere.res, "ghost")).toHaveLength(0);
+    expect(events(elsewhere.res, "update")).toHaveLength(0);
   });
 
   it("targets a single signed-in viewer and hides from everyone else", async () => {
@@ -180,19 +180,19 @@ describe("ghost hub targeting", () => {
     await Promise.all([target.handled, other.handled, anon.handled]);
 
     hub.hub!.applyControl({ route: "/tracker", audience: { mode: "user", userId: 42 }, visual: { clip: "idle" } });
-    expect(events(target.res, "ghost")).toHaveLength(1);
-    expect(events(other.res, "ghost")).toHaveLength(0);
-    expect(events(anon.res, "ghost")).toHaveLength(0);
+    expect(events(target.res, "update")).toHaveLength(1);
+    expect(events(other.res, "update")).toHaveLength(0);
+    expect(events(anon.res, "update")).toHaveLength(0);
 
     // Switching to everyone reaches the rest without a reconnect.
     hub.hub!.applyControl({ route: "/tracker", audience: { mode: "everyone" } });
-    expect(events(other.res, "ghost")).toHaveLength(1);
-    expect(events(anon.res, "ghost")).toHaveLength(1);
+    expect(events(other.res, "update")).toHaveLength(1);
+    expect(events(anon.res, "update")).toHaveLength(1);
 
     // "none" pulls him back off every screen that was showing him.
     hub.hub!.applyControl({ route: "/tracker", audience: { mode: "none" } });
-    expect(events(target.res, "ghost").at(-1)).toEqual({ present: false });
-    expect(events(other.res, "ghost").at(-1)).toEqual({ present: false });
+    expect(events(target.res, "update").at(-1)).toEqual({ present: false });
+    expect(events(other.res, "update").at(-1)).toEqual({ present: false });
   });
 
   it("keeps the owner watching regardless of audience", async () => {
@@ -200,16 +200,16 @@ describe("ghost hub targeting", () => {
     const owner = connect(hub, "/goals", { id: 7095193, username: "aleju03" });
     await owner.handled;
     hub.hub!.applyControl({ route: "/goals", audience: { mode: "none" }, ownerUserId: 7095193 });
-    expect(events(owner.res, "ghost")).toMatchObject([{ present: true }]);
+    expect(events(owner.res, "update")).toMatchObject([{ present: true }]);
   });
 
   it("cannot be seen by a viewer whose identity is unsigned", async () => {
     const hub = ctx();
-    const spoofed = fakeReq("/api/ghost/stream?route=/tracker&uid=42&name=target&exp=99999999999999&sig=deadbeef");
+    const spoofed = fakeReq("/api/updates/stream?route=/tracker&uid=42&name=target&exp=99999999999999&sig=deadbeef");
     const res = fakeRes();
     await handleGhost(spoofed, res, hub.ctx);
     hub.hub!.applyControl({ route: "/tracker", audience: { mode: "user", userId: 42 } });
-    expect(events(res, "ghost")).toHaveLength(0);
+    expect(events(res, "update")).toHaveLength(0);
     expect(events(res, "hello")).toMatchObject([{ verified: false }]);
   });
 
@@ -218,7 +218,7 @@ describe("ghost hub targeting", () => {
     hub.hub!.applyControl({ route: "/maps", audience: { mode: "everyone" }, visual: { x: 0.1, y: 0.2 } });
     const late = connect(hub, "/maps");
     await late.handled;
-    expect(events(late.res, "ghost")).toMatchObject([{ present: true, visual: { x: 0.1, y: 0.2 } }]);
+    expect(events(late.res, "update")).toMatchObject([{ present: true, visual: { x: 0.1, y: 0.2 } }]);
   });
 
   it("prefers an exact session over a wildcard and falls back when it ends", async () => {
@@ -227,10 +227,10 @@ describe("ghost hub targeting", () => {
     await viewer.handled;
     hub.hub!.applyControl({ route: "/*", audience: { mode: "everyone" }, visual: { clip: "sleep" } });
     hub.hub!.applyControl({ route: "/player/jakads", audience: { mode: "everyone" }, visual: { clip: "heal" } });
-    expect((events(viewer.res, "ghost").at(-1) as { visual: { clip: string } }).visual.clip).toBe("heal");
+    expect((events(viewer.res, "update").at(-1) as { visual: { clip: string } }).visual.clip).toBe("heal");
 
     hub.hub!.endSession("/player/jakads");
-    expect((events(viewer.res, "ghost").at(-1) as { visual: { clip: string } }).visual.clip).toBe("sleep");
+    expect((events(viewer.res, "update").at(-1) as { visual: { clip: string } }).visual.clip).toBe("sleep");
   });
 
   it("ends every session at once and pulls him off every screen", async () => {
@@ -240,12 +240,12 @@ describe("ghost hub targeting", () => {
     await Promise.all([onMaps.handled, onTracker.handled]);
     hub.hub!.applyControl({ route: "/maps", audience: { mode: "everyone" } });
     hub.hub!.applyControl({ route: "/tracker", audience: { mode: "everyone" } });
-    expect(events(onMaps.res, "ghost")).toHaveLength(1);
-    expect(events(onTracker.res, "ghost")).toHaveLength(1);
+    expect(events(onMaps.res, "update")).toHaveLength(1);
+    expect(events(onTracker.res, "update")).toHaveLength(1);
 
     expect(hub.hub!.endAllSessions()).toBe(2);
-    expect(events(onMaps.res, "ghost").at(-1)).toEqual({ present: false });
-    expect(events(onTracker.res, "ghost").at(-1)).toEqual({ present: false });
+    expect(events(onMaps.res, "update").at(-1)).toEqual({ present: false });
+    expect(events(onTracker.res, "update").at(-1)).toEqual({ present: false });
     expect(hub.hub!.listSessions()).toEqual([]);
     expect(hub.hub!.endAllSessions()).toBe(0);
   });
@@ -256,12 +256,12 @@ describe("ghost hub targeting", () => {
     const viewer = connect(hub, "/maps");
     await viewer.handled;
     hub.hub!.applyControl({ route: "/maps", audience: { mode: "everyone" } });
-    expect(events(viewer.res, "ghost")).toHaveLength(1);
+    expect(events(viewer.res, "update")).toHaveLength(1);
 
     /* The panel is gone: no more control ticks, no presence polls. The hub's
        own sweep is the only thing left to notice the session went idle. */
     await vi.advanceTimersByTimeAsync(11 * 60_000);
-    expect(events(viewer.res, "ghost").at(-1)).toEqual({ present: false });
+    expect(events(viewer.res, "update").at(-1)).toEqual({ present: false });
     expect(hub.hub!.listSessions()).toEqual([]);
   });
 
@@ -270,11 +270,11 @@ describe("ghost hub targeting", () => {
     const viewer = connect(hub, "/snipes");
     await viewer.handled;
     hub.hub!.applyControl({ route: "/snipes", audience: { mode: "everyone" } });
-    expect(events(viewer.res, "ghost")).toHaveLength(1);
+    expect(events(viewer.res, "update")).toHaveLength(1);
 
     // A later tick on another route runs the sweep; the stale one is gone.
     hub.hub!.applyControl({ route: "/maps", audience: { mode: "none" } }, Date.now() + 20 * 60_000);
-    expect(events(viewer.res, "ghost").at(-1)).toEqual({ present: false });
+    expect(events(viewer.res, "update").at(-1)).toEqual({ present: false });
     expect(hub.hub!.listSessions(Date.now() + 20 * 60_000).map((s) => s.route)).toEqual(["/maps"]);
   });
 
@@ -313,13 +313,13 @@ describe("ghost hub targeting", () => {
     // Unset on the first tick: a session starts on the default rather than on
     // nothing, so an old panel that never sends one still draws somebody.
     hub.hub!.applyControl({ route: "/tracker", audience: { mode: "everyone" } });
-    expect(events(viewer.res, "ghost").at(-1)).toMatchObject({ visual: { character: "ralsei" } });
+    expect(events(viewer.res, "update").at(-1)).toMatchObject({ visual: { character: "ralsei" } });
 
     hub.hub!.applyControl({ route: "/tracker", visual: { character: "dog" } });
-    expect(events(viewer.res, "ghost").at(-1)).toMatchObject({ visual: { character: "dog" } });
+    expect(events(viewer.res, "update").at(-1)).toMatchObject({ visual: { character: "dog" } });
     // A tick that says nothing about the character leaves it alone.
     hub.hub!.applyControl({ route: "/tracker", visual: { x: 0.2 } });
-    expect(events(viewer.res, "ghost").at(-1)).toMatchObject({ visual: { character: "dog", x: 0.2 } });
+    expect(events(viewer.res, "update").at(-1)).toMatchObject({ visual: { character: "dog", x: 0.2 } });
   });
 
   it("treats a user audience with no id as nobody", () => {
@@ -419,7 +419,7 @@ describe("ghost replies", () => {
   it("refuses a reply over http without a live connection id", async () => {
     const hub = ctx();
     const res = fakeRes();
-    await handleGhost(postReq("/api/ghost/say", { id: "made-up", text: "hi" }), res, hub.ctx);
+    await handleGhost(postReq("/api/updates/say", { id: "made-up", text: "hi" }), res, hub.ctx);
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain("not_listening");
   });
@@ -429,18 +429,18 @@ describe("ghost http surface", () => {
   it("rejects a wildcard or malformed route on the viewer stream", async () => {
     const hub = ctx();
     const res = fakeRes();
-    await handleGhost(fakeReq("/api/ghost/stream?route=/player/*"), res, hub.ctx);
+    await handleGhost(fakeReq("/api/updates/stream?route=/player/*"), res, hub.ctx);
     expect(res.statusCode).toBe(400);
 
     const missing = fakeRes();
-    await handleGhost(fakeReq("/api/ghost/stream"), missing, hub.ctx);
+    await handleGhost(fakeReq("/api/updates/stream"), missing, hub.ctx);
     expect(missing.statusCode).toBe(400);
   });
 
   it("rejects disallowed origins and unknown paths", async () => {
     const hub = ctx();
     const res = fakeRes();
-    await handleGhost(fakeReq("/api/ghost/stream?route=/maps", { origin: "https://evil.example" }), res, hub.ctx);
+    await handleGhost(fakeReq("/api/updates/stream?route=/maps", { origin: "https://evil.example" }), res, hub.ctx);
     expect(res.statusCode).toBe(403);
     expect(await handleGhost(fakeReq("/api/live?country=CR"), fakeRes(), hub.ctx)).toBe(false);
   });
@@ -449,35 +449,35 @@ describe("ghost http surface", () => {
     const hub = ctx({ hub: new GhostHub({ maxClients: 10, maxClientsPerIp: 2 }) });
     for (let i = 0; i < 2; i += 1) {
       const res = fakeRes();
-      await handleGhost(fakeReq("/api/ghost/stream?route=/maps", { ip: "10.0.0.9" }), res, hub.ctx);
+      await handleGhost(fakeReq("/api/updates/stream?route=/maps", { ip: "10.0.0.9" }), res, hub.ctx);
       expect(res.statusCode).toBe(200);
     }
     const rejected = fakeRes();
-    await handleGhost(fakeReq("/api/ghost/stream?route=/maps", { ip: "10.0.0.9" }), rejected, hub.ctx);
+    await handleGhost(fakeReq("/api/updates/stream?route=/maps", { ip: "10.0.0.9" }), rejected, hub.ctx);
     expect(rejected.statusCode).toBe(503);
     // A different address still gets in.
     const other = fakeRes();
-    await handleGhost(fakeReq("/api/ghost/stream?route=/maps", { ip: "10.0.0.8" }), other, hub.ctx);
+    await handleGhost(fakeReq("/api/updates/stream?route=/maps", { ip: "10.0.0.8" }), other, hub.ctx);
     expect(other.statusCode).toBe(200);
   });
 
   it("requires the admin token or a live ticket to control", async () => {
     const hub = ctx();
     const denied = fakeRes();
-    await handleGhost(postReq("/api/ghost/control", { route: "/maps" }), denied, hub.ctx);
+    await handleGhost(postReq("/api/updates/control", { route: "/maps" }), denied, hub.ctx);
     expect(denied.statusCode).toBe(401);
 
     const withToken = fakeRes();
-    await handleGhost(postReq("/api/ghost/control", { route: "/maps" }, { token: ADMIN_TOKEN }), withToken, hub.ctx);
+    await handleGhost(postReq("/api/updates/control", { route: "/maps" }, { token: ADMIN_TOKEN }), withToken, hub.ctx);
     expect(withToken.statusCode).toBe(200);
 
     const { ticket } = hub.hub!.issueTicket();
     const withTicket = fakeRes();
-    await handleGhost(postReq(`/api/ghost/control?ticket=${ticket}`, { route: "/maps" }), withTicket, hub.ctx);
+    await handleGhost(postReq(`/api/updates/control?ticket=${ticket}`, { route: "/maps" }), withTicket, hub.ctx);
     expect(withTicket.statusCode).toBe(200);
 
     const staleTicket = fakeRes();
-    await handleGhost(postReq("/api/ghost/control?ticket=not-a-ticket", { route: "/maps" }), staleTicket, hub.ctx);
+    await handleGhost(postReq("/api/updates/control?ticket=not-a-ticket", { route: "/maps" }), staleTicket, hub.ctx);
     expect(staleTicket.statusCode).toBe(401);
   });
 
@@ -487,12 +487,12 @@ describe("ghost http surface", () => {
     hub.hub!.applyControl({ route: "/tracker", audience: { mode: "everyone" } });
 
     const one = fakeRes();
-    await handleGhost(postReq("/api/ghost/control", { op: "end", route: "/maps" }, { token: ADMIN_TOKEN }), one, hub.ctx);
+    await handleGhost(postReq("/api/updates/control", { op: "end", route: "/maps" }, { token: ADMIN_TOKEN }), one, hub.ctx);
     expect(JSON.parse(one.body)).toMatchObject({ ok: true, sessions: [{ route: "/tracker" }] });
 
     // The disconnect button: no route, so whatever is left ends too.
     const all = fakeRes();
-    await handleGhost(postReq("/api/ghost/control", { op: "end" }, { token: ADMIN_TOKEN }), all, hub.ctx);
+    await handleGhost(postReq("/api/updates/control", { op: "end" }, { token: ADMIN_TOKEN }), all, hub.ctx);
     expect(JSON.parse(all.body)).toMatchObject({ ok: true, sessions: [] });
   });
 
@@ -507,9 +507,9 @@ describe("ghost http surface", () => {
   it("404s every path when the feature is switched off", async () => {
     const hub = ctx({ hub: null, enableGhost: false });
     const res = fakeRes();
-    expect(await handleGhost(fakeReq("/api/ghost/stream?route=/maps"), res, hub.ctx)).toBe(true);
+    expect(await handleGhost(fakeReq("/api/updates/stream?route=/maps"), res, hub.ctx)).toBe(true);
     expect(res.statusCode).toBe(404);
-    expect(res.body).toContain("ghost_disabled");
+    expect(res.body).toContain("updates_disabled");
   });
 
   it("reports presence for the admin panel", async () => {
@@ -518,12 +518,12 @@ describe("ghost http surface", () => {
     await viewer.handled;
     // No ticket, no roster.
     const res = fakeRes();
-    await handleGhost(fakeReq("/api/ghost/presence"), res, hub.ctx);
+    await handleGhost(fakeReq("/api/updates/presence"), res, hub.ctx);
     expect(res.statusCode).toBe(401);
 
     const { ticket } = hub.hub!.issueTicket();
     const ok = fakeRes();
-    await handleGhost(fakeReq(`/api/ghost/presence?ticket=${ticket}`), ok, hub.ctx);
+    await handleGhost(fakeReq(`/api/updates/presence?ticket=${ticket}`), ok, hub.ctx);
     expect(ok.statusCode).toBe(200);
     const body = JSON.parse(ok.body) as { viewers: Array<{ username: string | null; route: string }> };
     expect(body.viewers).toMatchObject([{ username: "target", route: "/player/jakads" }]);

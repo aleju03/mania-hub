@@ -8,9 +8,9 @@ import { sendRateLimited, type HttpContext } from "../http/snapshots.js";
 // replay presence — nothing here is durable, and a restart simply ends the
 // session.
 //
-// Shape of it: every page open holds one SSE connection on /api/ghost/stream
+// Shape of it: every page open holds one SSE connection on /api/updates/stream
 // carrying its route. The owner drives a session from /admin/ghost through
-// /api/ghost/control (short-lived ticket, so the browser never holds the admin
+// /api/updates/control (short-lived ticket, so the browser never holds the admin
 // token), and the hub fans each state tick out to the connections whose route
 // matches and whose viewer is in the session's audience.
 //
@@ -18,12 +18,17 @@ import { sendRateLimited, type HttpContext } from "../http/snapshots.js";
 // (mintGhostViewerSignature below is the verification side): targeting one
 // person must not be spoofable by editing a query string.
 
-const STREAM_PATH = "/api/ghost/stream";
-const CONTROL_PATH = "/api/ghost/control";
-const PRESENCE_PATH = "/api/ghost/presence";
-const TICKET_PATH = "/api/ghost/ticket";
-const SAY_PATH = "/api/ghost/say";
-const INBOX_PATH = "/api/ghost/inbox";
+/* Deliberately bland on the wire: anything a visitor's devtools can see says
+   "updates", never "ghost" (which reads like surveillance) nor anything that
+   hints a character overlay exists before the owner chooses to show it. A
+   dormant connection only ever carries hello + heartbeat, so the stream passes
+   for a page-scoped site-updates feed. */
+const STREAM_PATH = "/api/updates/stream";
+const CONTROL_PATH = "/api/updates/control";
+const PRESENCE_PATH = "/api/updates/presence";
+const TICKET_PATH = "/api/updates/ticket";
+const SAY_PATH = "/api/updates/say";
+const INBOX_PATH = "/api/updates/inbox";
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const TICKET_TTL_MS = 60 * 60_000;
@@ -431,7 +436,7 @@ export class GhostHub {
     /* One movement tick reaches every client on the route with the same bytes.
        Serialized once here: a wildcard session over 15 Hz would otherwise
        re-stringify the frame per connection, per tick. */
-    const frame = sseFrame("ghost", { present: true, seq: session.seq, visual: session.visual });
+    const frame = sseFrame("update", { present: true, seq: session.seq, visual: session.visual });
     for (const client of this.clientsCovering(session.route)) {
       // A more specific session on the same page wins, so a wildcard tick must
       // not overwrite what an exact one is showing.
@@ -447,12 +452,12 @@ export class GhostHub {
 
   private show(client: GhostClient, session: GhostSessionState): void {
     client.showing = true;
-    write(client.res, "ghost", { present: true, seq: session.seq, visual: session.visual });
+    write(client.res, "update", { present: true, seq: session.seq, visual: session.visual });
   }
 
   private hide(client: GhostClient): void {
     client.showing = false;
-    write(client.res, "ghost", { present: false });
+    write(client.res, "update", { present: false });
   }
 }
 
@@ -643,7 +648,7 @@ export async function handleGhost(req: IncomingMessage, res: ServerResponse, ctx
     return false;
   }
   if (!ctx.ghost || !ctx.config.enableGhost) {
-    sendGhostJson(res, 404, { error: "ghost_disabled" });
+    sendGhostJson(res, 404, { error: "updates_disabled" });
     return true;
   }
   if (!applyCors(req, res, ctx)) {
@@ -794,7 +799,7 @@ function handleGhostStream(req: IncomingMessage, res: ServerResponse, ctx: HttpC
     connectedAt: Date.now(),
   });
   if (!added) {
-    sendGhostJson(res, 503, { error: "ghost_capacity" });
+    sendGhostJson(res, 503, { error: "updates_busy" });
     return true;
   }
 

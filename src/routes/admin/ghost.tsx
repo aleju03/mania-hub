@@ -358,7 +358,7 @@ function GhostAdminPage() {
     const current = settingsRef.current.ticket;
     if (!base || !current) return null;
     try {
-      const response = await fetch(`${base}/api/ghost/control?ticket=${encodeURIComponent(current)}`, {
+      const response = await fetch(`${base}/api/updates/control?ticket=${encodeURIComponent(current)}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -557,7 +557,7 @@ function GhostAdminPage() {
     let cancelled = false;
     const poll = async () => {
       try {
-        const response = await fetch(`${base}/api/ghost/presence?ticket=${encodeURIComponent(ticket)}`);
+        const response = await fetch(`${base}/api/updates/presence?ticket=${encodeURIComponent(ticket)}`);
         if (!response.ok || cancelled) return;
         const payload = await response.json() as GhostPresence;
         if (!cancelled && payload.routes) setPresence(payload);
@@ -583,7 +583,7 @@ function GhostAdminPage() {
      three seconds late reads as being ignored. */
   useEffect(() => {
     if (!base || !ticket || typeof EventSource === "undefined") return;
-    const source = new EventSource(`${base}/api/ghost/inbox?ticket=${encodeURIComponent(ticket)}`);
+    const source = new EventSource(`${base}/api/updates/inbox?ticket=${encodeURIComponent(ticket)}`);
     source.addEventListener("reply", (event) => {
       try {
         const reply = JSON.parse((event as MessageEvent).data) as GhostReply;

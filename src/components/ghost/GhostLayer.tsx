@@ -102,7 +102,10 @@ export function GhostLayer() {
       query.set("vw", String(window.innerWidth));
       query.set("vh", String(window.innerHeight));
 
-      source = new EventSource(`${base}/api/ghost/stream?${query.toString()}`);
+      /* Deliberately bland on the wire: what a curious visitor sees in devtools
+         says "updates", giving away neither surveillance vibes nor that a
+         character overlay exists before it is actually shown. */
+      source = new EventSource(`${base}/api/updates/stream?${query.toString()}`);
       source.addEventListener("hello", (event) => {
         retry = 0;
         try {
@@ -112,7 +115,7 @@ export function GhostLayer() {
           setConnectionId(null);
         }
       });
-      source.addEventListener("ghost", (event) => {
+      source.addEventListener("update", (event) => {
         try {
           const payload = JSON.parse((event as MessageEvent).data) as { present: boolean; visual?: GhostVisual };
           if (!payload.present || !payload.visual) {
@@ -201,7 +204,7 @@ export function GhostLayer() {
 function sendGhostReply(connectionId: string, text: string): void {
   const base = getLiveBackendUrl();
   if (!base) return;
-  void fetch(`${base}/api/ghost/say`, {
+  void fetch(`${base}/api/updates/say`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ id: connectionId, text }),

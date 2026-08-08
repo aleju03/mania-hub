@@ -55,7 +55,7 @@ export const getGhostControlTicket = createServerFn({ method: "POST" })
     const base = getServerLiveBackendUrl();
     const token = process.env.LIVE_ADMIN_TOKEN;
     if (!base || !token) return null;
-    const response = await fetch(`${base}/api/ghost/ticket`, {
+    const response = await fetch(`${base}/api/updates/ticket`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, connection: "close" },
     });

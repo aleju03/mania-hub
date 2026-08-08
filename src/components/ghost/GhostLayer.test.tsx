@@ -68,7 +68,7 @@ describe("GhostLayer navigation", () => {
 
     await act(async () => {
       FakeEventSource.instances[0].emit("hello", { id: "one" });
-      FakeEventSource.instances[0].emit("ghost", {
+      FakeEventSource.instances[0].emit("update", {
         present: true,
         visual: {
           x: 0.5,
@@ -131,7 +131,7 @@ describe("GhostLayer speech replay", () => {
     const source = FakeEventSource.instances[before];
     await act(async () => {
       source.emit("hello", { id: "again" });
-      source.emit("ghost", visual(speech));
+      source.emit("update", visual(speech));
       await Promise.resolve();
     });
   };
@@ -140,7 +140,7 @@ describe("GhostLayer speech replay", () => {
     const view = render(<GhostLayer />);
     await act(async () => {
       FakeEventSource.instances[0].emit("hello", { id: "one" });
-      FakeEventSource.instances[0].emit("ghost", visual({ id: 1, text: "hello" }));
+      FakeEventSource.instances[0].emit("update", visual({ id: 1, text: "hello" }));
       await Promise.resolve();
     });
     expect(screen.getByText("Ralsei sprite: hello")).toBeTruthy();
@@ -160,7 +160,7 @@ describe("GhostLayer speech replay", () => {
     const view = render(<GhostLayer />);
     await act(async () => {
       FakeEventSource.instances[0].emit("hello", { id: "one" });
-      FakeEventSource.instances[0].emit("ghost", visual({ id: 7, text: "still talking" }));
+      FakeEventSource.instances[0].emit("update", visual({ id: 7, text: "still talking" }));
       await Promise.resolve();
     });
     expect(screen.getByText("Ralsei sprite: still talking")).toBeTruthy();
