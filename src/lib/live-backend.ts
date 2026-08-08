@@ -1855,6 +1855,67 @@ export async function fetchLiveUserSearch(query: string, limit?: number): Promis
   return response?.users ?? [];
 }
 
+/* The temporary GOAT nomination poll board (/packs). Read straight from the
+   browser rather than through a server fn: it refreshes on a timer in every
+   open packs tab and carries no per-viewer data, so there is nothing worth
+   spending the frontend node process on. The viewer's own ballot and every
+   write go through src/lib/goat-poll.ts instead, which is where the osu! login
+   is verified. A null return means the poll is off (the endpoint 404s). */
+
+export interface GoatPollNominee {
+  id: string;
+  osuUserId: number | null;
+  username: string;
+  countryCode: string | null;
+  avatarUrl: string | null;
+  banned: boolean;
+  proofUrl: string | null;
+  nominatedBy: number;
+  createdAt: number;
+  up: number;
+  down: number;
+  net: number;
+}
+
+export interface GoatPollBoardPayload {
+  pollId: string;
+  /* The pie fills across opensAt -> closesAt. Both come from the backend: a
+     client that assumed a fixed poll length would draw the wedge at the wrong
+     rate for any poll that was not exactly that long. */
+  opensAt: number;
+  closesAt: number;
+  /* The backend's clock when it answered. */
+  serverNow: number;
+  /* True while the poll is running but unreleased. Only an admin ever sees a
+     board with this set — for everyone else the endpoint 404s. */
+  adminOnly: boolean;
+  nominees: GoatPollNominee[];
+}
+
+export interface GoatPollBoard extends GoatPollBoardPayload {
+  /* The browser's clock when the answer landed, stamped by the widget. It counts
+     down against Date.now() + (serverNow - receivedAt) rather than Date.now(),
+     so a machine whose clock is days out still sees the same deadline as
+     everyone else — and the same one the backend enforces on the way in. Half a
+     round trip of latency is folded into the offset; over a poll measured in
+     hours that is not worth correcting for. */
+  receivedAt: number;
+}
+
+/* The public board read, browser-direct. Returns null when the poll is off —
+   and also when it is admin-only, which is the same 404 on purpose: an
+   unreleased poll should be indistinguishable from one that does not exist.
+   Admins read it through fetchGoatPollBoardAsAdmin() in src/lib/goat-poll.ts
+   instead, which carries the bridge token. */
+export async function fetchGoatPollBoard(): Promise<GoatPollBoardPayload | null> {
+  if (!isLiveBackendConfigured()) return null;
+  try {
+    return await fetchLiveJson<GoatPollBoardPayload>("/api/goat-poll");
+  } catch {
+    return null;
+  }
+}
+
 export interface LiveGlobalRankingEntry {
   rank: number;
   user: { id: number; username: string; avatar_url: string; cover_url: string; country_code: string; avatar_accent: string | null };

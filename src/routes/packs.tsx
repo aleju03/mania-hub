@@ -7,6 +7,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { AlbumView } from "../components/packs/album/AlbumView";
 import { CollectionPanel } from "../components/packs/CollectionPanel";
 import { GoatHoldersButton } from "../components/packs/GoatHoldersButton";
+import { GoatPoll } from "../components/packs/GoatPoll";
 import {
   getCachedCardBackDataUrl,
   getCachedPackFrontCanvas,
@@ -792,6 +793,18 @@ function PacksPage() {
             {duelError && phase !== "reveal" && (
               <div className="mb-6 text-center text-[12px] text-osu-pink-light">{duelError}</div>
             )}
+
+            {/* Temporary GOAT vote. It owns its own placement (RAIL_LAYOUT in
+                GoatPoll.tsx): once the viewport has room for a rail beside the
+                centred 960px column it floats out of flow into the right
+                gutter, below PackPulse's fun fact, so the pack stage keeps its
+                width and stays centred. Narrower screens stack it above the
+                stage as a single collapsed line — a 30h window is too short to
+                hide it from everyone on a laptop, and too small a thing to eat
+                a phone screen with. It yields to the game (which widens the
+                column into the gutter) and to the reveal, exactly as the rest
+                of the page does. */}
+            {!streakOpen && phase !== "reveal" && <GoatPoll />}
 
             {streakOpen ? (
               <StreakGame
