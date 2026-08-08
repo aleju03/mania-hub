@@ -46,6 +46,7 @@ function chartEntry(overrides: Partial<BaselineChartEntry> & { msdValues?: Recor
     msd,
     dtMsd,
     lnRatio: overrides.lnRatio ?? 0,
+    od: overrides.od ?? null,
     patterns: overrides.patterns ?? [],
   };
 }

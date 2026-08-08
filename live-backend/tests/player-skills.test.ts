@@ -11,6 +11,7 @@ import {
   getPlayerSkillBreakdown,
   getRankedPlayRate,
   loadArchivedTrackedEvidence,
+  loadBeatmapOds,
   ssrGoalForAccuracy,
   ssrGoalForScore,
 } from "../src/features/player-skills.js";
@@ -197,6 +198,36 @@ describe("estimateWifeAccuracy", () => {
     expect(estimateWifeAccuracy({})).toBeNull();
     expect(estimateWifeAccuracy(undefined)).toBeNull();
   });
+
+  it("reproduces the historical OD8 per-judgement values by default", () => {
+    // The v15-and-earlier hardcoded table, now computed from the wife3 curve.
+    expect(estimateWifeAccuracy({ perfect: 1 })).toBeCloseTo(0.9994, 3);
+    expect(estimateWifeAccuracy({ great: 1 })).toBeCloseTo(0.9654, 3);
+    expect(estimateWifeAccuracy({ good: 1 })).toBeCloseTo(0.3713, 3);
+    expect(estimateWifeAccuracy({ ok: 1 })).toBeCloseTo(-0.55, 3);
+    expect(estimateWifeAccuracy({ meh: 1 })).toBeCloseTo(-1.1957, 3);
+    const counts = { perfect: 740, great: 247, good: 10, ok: 2, miss: 1 };
+    expect(estimateWifeAccuracy(counts, { od: 8 })).toBe(estimateWifeAccuracy(counts));
+  });
+
+  it("derates wide-window judgements on low OD but keeps MAX at full value", () => {
+    // The stable MAX window does not scale with OD, so real precision keeps
+    // rating; a 300 inside OD0's +-64ms band is worth far less than OD8's.
+    expect(estimateWifeAccuracy({ perfect: 1 }, { od: 0 })).toBeCloseTo(0.9994, 3);
+    expect(estimateWifeAccuracy({ great: 1 }, { od: 0 })).toBeCloseTo(0.7511, 3);
+    const counts = { perfect: 300, great: 650, good: 40, ok: 10 };
+    const od0 = estimateWifeAccuracy(counts, { od: 0 })!;
+    const od5 = estimateWifeAccuracy(counts, { od: 5 })!;
+    const od8 = estimateWifeAccuracy(counts, { od: 8 })!;
+    expect(od0).toBeLessThan(od5);
+    expect(od5).toBeLessThan(od8);
+  });
+
+  it("widens windows for the windowScale option", () => {
+    const counts = { perfect: 300, great: 700 };
+    const scaled = estimateWifeAccuracy(counts, { od: 8, windowScale: 1.4 })!;
+    expect(scaled).toBeLessThan(estimateWifeAccuracy(counts, { od: 8 })!);
+  });
 });
 
 describe("ssrGoalForScore", () => {
@@ -236,6 +267,49 @@ describe("ssrGoalForScore", () => {
       statistics: { count_geki: 600, count_300: 380, count_katu: 15, count_100: 4, count_miss: 1 },
     };
     expect(ssrGoalForScore(score, 1)).toBe(ssrGoalForScore(score, 0));
+  });
+
+  it("values a 300-heavy play far lower on a 0 OD chart than on OD8", () => {
+    const score = {
+      accuracy: 0.997,
+      legacy_score_id: 12345,
+      statistics: { count_geki: 300, count_300: 700 },
+    };
+    const od0 = ssrGoalForScore(score, 0, 0);
+    const od8 = ssrGoalForScore(score, 0, 8);
+    expect(od8).toBeCloseTo(0.9756, 3);
+    expect(od0).toBeCloseTo(0.8256, 3);
+    expect(ssrGoalForScore(score, 0, null)).toBe(od8);
+  });
+
+  it("scales windows for stable EZ/HR but leaves lazer mods alone", () => {
+    const statistics = { count_geki: 300, count_300: 700 };
+    const stableEz = { accuracy: 0.997, legacy_score_id: 12345, statistics, mods: ["EZ"] };
+    const stablePlain = { accuracy: 0.997, legacy_score_id: 12345, statistics, mods: [] };
+    expect(ssrGoalForScore(stableEz, 0, 8)).toBeLessThan(ssrGoalForScore(stablePlain, 0, 8));
+    const lazerStats = { perfect: 300, great: 700 };
+    const lazerEz = { accuracy: 0.997, statistics: lazerStats, mods: ["EZ"] };
+    const lazerPlain = { accuracy: 0.997, statistics: lazerStats, mods: [] };
+    expect(ssrGoalForScore(lazerEz, 0, 8)).toBe(ssrGoalForScore(lazerPlain, 0, 8));
+  });
+});
+
+describe("loadBeatmapOds", () => {
+  it("reads OD from beatmaps metadata and skips absent or absurd values", async () => {
+    await withDb(async (db) => {
+      const insert = "insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at) values (?, ?, 'mania', 'x', ?, ?)";
+      const now = "2026-01-01T00:00:00Z";
+      await exec(db, insert, [101, 1, JSON.stringify({ accuracy: 0 }), now]);
+      await exec(db, insert, [102, 1, JSON.stringify({ accuracy: 8.5 }), now]);
+      await exec(db, insert, [103, 1, JSON.stringify({}), now]);
+      await exec(db, insert, [104, 1, JSON.stringify({ accuracy: 999 }), now]);
+      const ods = await loadBeatmapOds(db, [101, 102, 103, 104, 105]);
+      expect(ods.get(101)).toBe(0);
+      expect(ods.get(102)).toBe(8.5);
+      expect(ods.has(103)).toBe(false);
+      expect(ods.has(104)).toBe(false);
+      expect(ods.has(105)).toBe(false);
+    });
   });
 });
 

@@ -9,6 +9,7 @@ import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file
 import type { OsuApiClient } from "../osu/client.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, persistSessionProfileSnapshot } from "./player-profiles.js";
 import { calculateStableAccuracy, getDisplayedAccuracy, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
+import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
 import { danTableLabelFor } from "../dan/chart-classifier.js";
 import { parseDan } from "../dan/dan-estimator/labels.js";
@@ -43,7 +44,9 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // counts, not raw osu! accuracy: osu! accuracy weighs MAX and 300 identically,
 // so nearly every top play sits at 97%+ and would saturate MinaCalc's 0.965
 // goal cap. The Wife estimate spreads that band back out (MAX:300 ratio is
-// the signal), and goals that still land above the cap get their SSRs
+// the signal), values each judgement against the chart's own OD hit windows
+// (a 300 earned inside OD0's +-64ms is far weaker evidence than one inside
+// OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
 // v14: mod-less archived day-best rows no longer rate at an assumed 1.0x
@@ -51,7 +54,11 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // v15: LN-tail blend - SSRs on hold-bearing charts blend toward a second
 // calc pass that sees LN releases as rows, closing the systematic deficit
 // for LN players (keymode-calibrated; rice charts unchanged).
-export const PLAYER_SKILLS_VERSION = 15;
+// v16: wife goals value judgements against the chart's real OD hit windows
+// (plus stable EZ/HR window scaling) instead of assumed OD8, so low-OD
+// charts stop reading easy 300s as near-MAX precision; stored plays rated
+// under the OD8 assumption purge.
+export const PLAYER_SKILLS_VERSION = 16;
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -92,19 +99,70 @@ const SSR_EXTRAPOLATION_MAX_SLOPE = 1.2;
 // Expected normalized Wife3 points per osu!mania judgement: Etterna's wife3
 // curve (J4: full points inside 5ms, erf falloff with dev 22.7 crossing zero
 // at 65ms, linear to the -2.75 miss weight at 180ms, all normalized to
-// marvelous = 1) averaged uniformly over each stable OD8 hit window (MAX
-// +-16.5ms, 300 +-40, 200 +-73, 100 +-103, 50 +-127). The MAX vs 300 split is
-// the load-bearing part: osu! accuracy scores both as 100%, Wife3 does not,
-// which is what lets two 99%+ plays with different MAX:300 ratios rate
-// differently.
-const EXPECTED_WIFE3_POINTS = {
-  perfect: 0.9994,
-  great: 0.9654,
-  good: 0.3713,
-  ok: -0.55,
-  meh: -1.1957,
-  miss: -2.75,
-} as const;
+// marvelous = 1) averaged uniformly over each judgement's band of the chart's
+// stable hit windows (MAX +-16.5ms fixed; 300/200/100/50 at 64/97/127/151
+// minus 3ms per OD point; at OD8 that is the familiar +-40/73/103/127). The
+// MAX vs 300 split is the load-bearing part: osu! accuracy scores both as
+// 100%, Wife3 does not, which is what lets two 99%+ plays with different
+// MAX:300 ratios rate differently. Valuing the bands at the chart's real OD
+// is what keeps low-OD charts honest: the MAX window does not scale with OD,
+// so true precision keeps its full value, while a 300 earned inside OD0's
+// +-64ms band averages ~0.75 instead of OD8's ~0.97. Unknown OD falls back
+// to the OD8 assumption these constants historically hardcoded. Lazer plays
+// share the stable window model (same assumption the fixed table made), and
+// their LN-side leniency is handled by the lnRatio goal fade below.
+const WIFE3_FULL_POINTS_MS = 5;
+const WIFE3_ZERO_MS = 65;
+const WIFE3_ERF_DEV_MS = 22.7;
+const WIFE3_MISS_MS = 180;
+const WIFE3_MISS_POINTS = -2.75;
+const STABLE_MAX_WINDOW_MS = 16.5;
+const STABLE_WINDOW_BASES_MS = { great: 64, good: 97, ok: 127, meh: 151 } as const;
+const OD_WINDOW_STEP_MS = 3;
+// Stored score payloads and old beatmap rows may carry no OD; assume the OD8
+// the old constants hardcoded so behavior degrades to the historical one.
+const ASSUMED_OD = 8;
+
+type WifeJudgement = "perfect" | keyof typeof STABLE_WINDOW_BASES_MS | "miss";
+
+function wife3PointsAt(ms: number): number {
+  if (ms <= WIFE3_FULL_POINTS_MS) return 1;
+  if (ms <= WIFE3_ZERO_MS) return erf((WIFE3_ZERO_MS - ms) / WIFE3_ERF_DEV_MS);
+  if (ms >= WIFE3_MISS_MS) return WIFE3_MISS_POINTS;
+  return (WIFE3_MISS_POINTS * (ms - WIFE3_ZERO_MS)) / (WIFE3_MISS_MS - WIFE3_ZERO_MS);
+}
+
+function wife3BandAverage(fromMs: number, toMs: number): number {
+  if (!(toMs > fromMs)) return wife3PointsAt(toMs);
+  const steps = 512;
+  const step = (toMs - fromMs) / steps;
+  let sum = 0;
+  for (let i = 0; i < steps; i += 1) sum += wife3PointsAt(fromMs + (i + 0.5) * step);
+  return sum / steps;
+}
+
+const expectedWife3PointsCache = new Map<string, Record<WifeJudgement, number>>();
+
+function expectedWife3Points(od: number, windowScale: number): Record<WifeJudgement, number> {
+  const key = `${od}|${windowScale}`;
+  const cached = expectedWife3PointsCache.get(key);
+  if (cached) return cached;
+  const edges = [
+    STABLE_MAX_WINDOW_MS * windowScale,
+    ...Object.values(STABLE_WINDOW_BASES_MS).map((base) => (base - OD_WINDOW_STEP_MS * od) * windowScale),
+  ];
+  const points = {
+    perfect: wife3BandAverage(0, edges[0]),
+    great: wife3BandAverage(edges[0], edges[1]),
+    good: wife3BandAverage(edges[1], edges[2]),
+    ok: wife3BandAverage(edges[2], edges[3]),
+    meh: wife3BandAverage(edges[3], edges[4]),
+    miss: WIFE3_MISS_POINTS,
+  };
+  expectedWife3PointsCache.set(key, points);
+  return points;
+}
+
 // Etterna's rating_scaler from ScoreManager::CalcPlayerRating.
 const AGGREGATE_RATING_SCALER = 1.04;
 
@@ -271,11 +329,22 @@ export function ssrGoalForAccuracy(accuracy: number): number {
 
 /**
  * Estimated Wife3 percent from a play's judgement counts (lazer or stable
- * naming), or null when the score carries no counts.
+ * naming), or null when the score carries no counts. `od` is the chart's
+ * overall difficulty (null assumes the historical OD8) and `windowScale`
+ * widens/tightens every window (stable EZ/HR).
  */
-export function estimateWifeAccuracy(statistics: OsuScoreStatistics | undefined): number | null {
+export function estimateWifeAccuracy(
+  statistics: OsuScoreStatistics | undefined,
+  options?: { od?: number | null; windowScale?: number },
+): number | null {
   if (!statistics) return null;
-  const counts: Record<keyof typeof EXPECTED_WIFE3_POINTS, number> = {
+  // od == null must fall back to the assumption, not read as a real OD 0.
+  const rawOd = options?.od == null ? Number.NaN : Number(options.od);
+  const od = Number.isFinite(rawOd) ? Math.max(0, Math.min(10, rawOd)) : ASSUMED_OD;
+  const rawScale = Number(options?.windowScale);
+  const windowScale = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 1;
+  const expected = expectedWife3Points(od, windowScale);
+  const counts: Record<WifeJudgement, number> = {
     perfect: readCount(statistics.perfect ?? statistics.count_geki),
     great: readCount(statistics.great ?? statistics.count_300),
     good: readCount(statistics.good ?? statistics.count_katu),
@@ -285,9 +354,9 @@ export function estimateWifeAccuracy(statistics: OsuScoreStatistics | undefined)
   };
   let total = 0;
   let points = 0;
-  for (const [name, count] of Object.entries(counts) as Array<[keyof typeof EXPECTED_WIFE3_POINTS, number]>) {
+  for (const [name, count] of Object.entries(counts) as Array<[WifeJudgement, number]>) {
     total += count;
-    points += count * EXPECTED_WIFE3_POINTS[name];
+    points += count * expected[name];
   }
   return total > 0 ? points / total : null;
 }
@@ -297,13 +366,32 @@ function readCount(value: number | undefined): number {
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
 }
 
-type SsrGoalScore = Pick<OscScore, "accuracy" | "statistics" | "type" | "legacy_score_id" | "legacy_total_score">;
+type SsrGoalScore = Pick<OscScore, "accuracy" | "statistics" | "type" | "legacy_score_id" | "legacy_total_score"> & {
+  mods?: OscScore["mods"] | string[];
+};
+
+// Stable multiplies every mania hit window by 1.4 under EZ and divides it by
+// 1.4 under HR; lazer's mania EZ/HR leave timing windows alone, so only
+// legacy-judged plays scale.
+const STABLE_EZ_WINDOW_SCALE = 1.4;
+
+function stableWindowScale(score: SsrGoalScore): number {
+  if (isLazerScore(score as OscScore)) return 1;
+  let scale = 1;
+  for (const mod of score.mods ?? []) {
+    const acronym = typeof mod === "string" ? mod : String(mod?.acronym ?? "");
+    if (acronym === "EZ") scale *= STABLE_EZ_WINDOW_SCALE;
+    else if (acronym === "HR") scale /= STABLE_EZ_WINDOW_SCALE;
+  }
+  return scale;
+}
 
 /**
  * The SSR goal for a play: the Wife3 estimate when judgement counts exist,
  * raw accuracy otherwise. Only the judgement path may exceed the calc's
  * 0.965 cap; without a MAX:300 breakdown there is no evidence to
- * differentiate high-accuracy plays on.
+ * differentiate high-accuracy plays on. `od` is the chart's overall
+ * difficulty; unknown (null) assumes OD8.
  *
  * Lazer judges LN head and tail separately, which sags the MAX:300 ratio on
  * LN-heavy charts (stable rolls the hold into one judgement), so for
@@ -312,8 +400,8 @@ type SsrGoalScore = Pick<OscScore, "accuracy" | "statistics" | "type" | "legacy_
  * unknown (null) a lazer play falls back to the plain-accuracy goal entirely,
  * since there is no way to tell how much of its ratio sag is LN artifact.
  */
-export function ssrGoalForScore(score: SsrGoalScore, lnRatio?: number | null): number {
-  const wife = estimateWifeAccuracy(score.statistics);
+export function ssrGoalForScore(score: SsrGoalScore, lnRatio?: number | null, od?: number | null): number {
+  const wife = estimateWifeAccuracy(score.statistics, { od, windowScale: stableWindowScale(score) });
   if (wife == null) return ssrGoalForAccuracy(score.accuracy);
   const wifeGoal = Math.max(SSR_GOAL_MIN, Math.min(SSR_GOAL_CAP, wife));
   if (isLazerScore(score as OscScore)) {
@@ -502,6 +590,29 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
   return info;
 }
 
+/**
+ * Overall difficulty per beatmap, from the raw osu! API payload kept in
+ * beatmaps.metadata_json ($.accuracy is the OD). Stored score payloads are
+ * compacted without their beatmap object (compactScoreForStorage), so this
+ * row is the only durable OD source. Charts not yet enriched are simply
+ * absent and fall back to the OD8 assumption.
+ */
+export async function loadBeatmapOds(db: Db, beatmapIds: number[]): Promise<Map<number, number>> {
+  const map = new Map<number, number>();
+  const rows = await selectRowsByIntegerSet(
+    db,
+    "select beatmap_id, json_extract(metadata_json, '$.accuracy') as od from beatmaps where json_valid(metadata_json) and beatmap_id in",
+    beatmapIds,
+  );
+  for (const row of rows) {
+    // json_extract yields NULL for charts without a stored OD; Number(null)
+    // would read as a real OD 0.
+    const od = row.od == null ? Number.NaN : Number(row.od);
+    if (Number.isFinite(od) && od >= 0 && od <= 10) map.set(Number(row.beatmap_id), od);
+  }
+  return map;
+}
+
 function getMissShare(statistics: OsuScoreStatistics | undefined): number | null {
   if (!statistics) return null;
   const counts = [
@@ -651,6 +762,10 @@ export async function computePlayerSkillRatings(
     ...trackedScores.map(beatmapIdOf),
     ...previousPlays.map((play) => play.beatmapId),
   ]);
+  // OD comes from the beatmaps row rather than chart analysis so it is known
+  // for every enriched chart, analyzed or not; the goal is part of the SSR
+  // reuse key, so an OD landing later shifts the goal and the play recomputes.
+  const odByBeatmap = await loadBeatmapOds(db, [...topPlays.map(beatmapIdOf), ...trackedScores.map(beatmapIdOf)]);
 
   // A top play means pp was awarded, so the chart is ranked - and true vibro
   // does not pass mania ranking criteria. A vibro flag on such a chart is the
@@ -678,7 +793,7 @@ export async function computePlayerSkillRatings(
       if (source === "top") unsupportedPlays += 1;
       return;
     }
-    const goal = ssrGoalForScore(score, info?.lnRatio ?? null);
+    const goal = ssrGoalForScore(score, info?.lnRatio ?? null, odByBeatmap.get(beatmapId) ?? null);
     const key = `${beatmapId}:${rate}`;
     const existing = candidates.get(key);
     if (!existing || goal > existing.goal || (goal === existing.goal && source === "top" && existing.source === "tracked")) {

@@ -43,7 +43,8 @@ import type { OscScore } from "../shared/types.js";
 export const SKILL_BASELINE_JOB = "refresh_skill_baseline";
 // Bump to invalidate stored baselines (also bump when the goal function or
 // PLAYER_SKILLS_VERSION semantics change enough to shift the approximate scale).
-export const SKILL_BASELINE_VERSION = 1;
+// v2: goals valued against each chart's real OD windows (player-skills v16).
+export const SKILL_BASELINE_VERSION = 2;
 export const SKILL_BASELINE_CURVES_META_KEY = `skill_baseline_curves:v${SKILL_BASELINE_VERSION}`;
 
 const BASELINE_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60_000;
@@ -76,6 +77,8 @@ export interface BaselineChartEntry {
   msd: Float64Array;
   dtMsd: Float64Array | null;
   lnRatio: number | null;
+  // Overall difficulty from the beatmaps row, for OD-aware wife goals.
+  od: number | null;
   patterns: string[];
 }
 
@@ -281,8 +284,11 @@ export async function loadBaselineChartEntries(db: Db, beatmapIds: number[]): Pr
   const placeholders = ids.map(() => "?").join(", ");
   const rows = (await exec(
     db,
-    `select beatmap_id, key_count, msd_json, msd_dt_json, classification_json from beatmap_chart_analysis
-     where analysis_version = ? and status = 'ready' and msd_json is not null and beatmap_id in (${placeholders})`,
+    `select a.beatmap_id, a.key_count, a.msd_json, a.msd_dt_json, a.classification_json,
+            json_extract(b.metadata_json, '$.accuracy') as od
+     from beatmap_chart_analysis a
+     left join beatmaps b on b.beatmap_id = a.beatmap_id and json_valid(b.metadata_json)
+     where a.analysis_version = ? and a.status = 'ready' and a.msd_json is not null and a.beatmap_id in (${placeholders})`,
     [CHART_ANALYSIS_VERSION, ...ids],
   )).rows;
   for (const row of rows) {
@@ -313,11 +319,15 @@ function rowToChartEntry(row: Record<string, unknown>): BaselineChartEntry | nul
         .map((hit) => String(hit?.id ?? ""))
         .filter(Boolean))]
     : [];
+  // json_extract yields NULL for charts without a stored OD; Number(null)
+  // would read as a real OD 0.
+  const od = row.od == null ? Number.NaN : Number(row.od);
   return {
     keyCount,
     msd,
     dtMsd,
     lnRatio: Number.isFinite(lnRatio) ? Math.max(0, Math.min(1, lnRatio)) : null,
+    od: Number.isFinite(od) && od >= 0 && od <= 10 ? od : null,
     patterns,
   };
 }
@@ -335,9 +345,12 @@ async function loadBaselineRunState(db: Db, runId: string): Promise<{ map: Map<n
   for (;;) {
     const rows = (await exec(
       db,
-      `select beatmap_id, key_count, msd_json, msd_dt_json, classification_json from beatmap_chart_analysis
-       where analysis_version = ? and status = 'ready' and msd_json is not null and beatmap_id > ?
-       order by beatmap_id
+      `select a.beatmap_id, a.key_count, a.msd_json, a.msd_dt_json, a.classification_json,
+              json_extract(b.metadata_json, '$.accuracy') as od
+       from beatmap_chart_analysis a
+       left join beatmaps b on b.beatmap_id = a.beatmap_id and json_valid(b.metadata_json)
+       where a.analysis_version = ? and a.status = 'ready' and a.msd_json is not null and a.beatmap_id > ?
+       order by a.beatmap_id
        limit 2000`,
       [CHART_ANALYSIS_VERSION, cursor],
     )).rows;
@@ -369,7 +382,7 @@ function scoreToApproxPlay(score: OscScore, charts: Map<number, BaselineChartEnt
   return {
     beatmapId,
     rate,
-    goal: ssrGoalForScore(score, entry.lnRatio),
+    goal: ssrGoalForScore(score, entry.lnRatio, entry.od),
     patterns: entry.patterns,
     endedAtMs: Number.isFinite(endedAtMs) ? endedAtMs : null,
   };

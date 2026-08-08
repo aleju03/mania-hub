@@ -170,7 +170,7 @@ function DanChips({ mode }: { mode: MyDataSkillMode }) {
 
 function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, whose: string): string {
   const parts = [
-    `rated from ${mode.analyzedPlays} plays across ${whose} top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio, unranked vibro charts excluded`,
+    `rated from ${mode.analyzedPlays} plays across ${whose} top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded`,
   ];
   if (skills.pendingPlays > 0) parts.push(`${skills.pendingPlays} still analyzing`);
   if (skills.baseline) parts.push("percentiles are among tracked players");
