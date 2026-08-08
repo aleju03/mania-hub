@@ -30,6 +30,7 @@ export const WIP: string[] = [
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-08", text: "Low OD maps no longer increase MSD rating", to: "/my-stats" },
   { date: "2026-08-07", text: "New maniacard update to rebalance 4K players", to: "/packs" },
   { date: "2026-08-07", text: "Uploaded replays on unranked maps show the right accuracy and client again, and seeking now works", to: "/replay" },
   { date: "2026-08-05", text: "Fixed some bugs on how skins are rendered", to: "/skins" },
