@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LegalDocument, LegalParagraph, LegalSection } from "#/components/legal/LegalDocument";
 
-const UPDATED_AT = "July 16, 2026";
+const UPDATED_AT = "August 8, 2026";
 
 export const Route = createFileRoute("/privacy")({
   head: () => ({
@@ -96,9 +96,8 @@ function PrivacyPage() {
         </LegalParagraph>
         <LegalParagraph>
           The server keeps raw score events for about 14 days, live event replay logs for
-          about 7 days, completed background-job records for about 2 days, API call logs for about
-          7 days, country rank snapshots for about 14 days, and player activity summaries for up
-          to 2 years.
+          about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days,
+          and player activity summaries for up to 2 years.
         </LegalParagraph>
         <LegalParagraph>
           Durable public projections such as rankings, maps, top plays, snipes, cached profile
@@ -107,8 +106,15 @@ function PrivacyPage() {
           uses those features.
         </LegalParagraph>
         <LegalParagraph>
-          For privacy, deletion, attribution, takedown, or data concerns, contact the maintainer
-          through the public osu! profile linked in the footer.
+          For privacy, deletion, attribution, takedown, bug reports, or any other concern,
+          email{' '}
+          <a
+            href="mailto:contact@mania-tracker.com"
+            className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
+          >
+            contact@mania-tracker.com
+          </a>{' '}
+          or contact the maintainer through the public osu! profile linked in the footer.
         </LegalParagraph>
       </LegalSection>
     </LegalDocument>

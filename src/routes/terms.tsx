@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LegalDocument, LegalParagraph, LegalSection } from "#/components/legal/LegalDocument";
 
-const UPDATED_AT = "July 1, 2026";
+const UPDATED_AT = "August 8, 2026";
 
 export const Route = createFileRoute("/terms")({
   head: () => ({
@@ -57,8 +57,14 @@ function TermsPage() {
         <LegalParagraph>
           Mania Tracker displays public metadata, cached projections, and derived community views
           for reference. If you own content shown on the site and have an attribution, takedown,
-          or data concern, contact the maintainer through the public osu! profile linked in the
-          footer.
+          or data concern, or to report a bug, email{' '}
+          <a
+            href="mailto:contact@mania-tracker.com"
+            className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
+          >
+            contact@mania-tracker.com
+          </a>{' '}
+          or contact the maintainer through the public osu! profile linked in the footer.
         </LegalParagraph>
       </LegalSection>
 

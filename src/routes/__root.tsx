@@ -494,7 +494,7 @@ function KofiSupportButton() {
               <div className="text-left">
                 <div className="text-sm font-bold text-white">Support mania-tracker</div>
                 <div className="text-[11px] text-osu-f1">
-                  This site is a hobby project running on a single server. If it&apos;s been useful to you, you can help keep it up here.
+                  This site is a hobby project running on a single server. If it&apos;s been useful to you, you can help keep it up here. If you have any suggestions I&apos;ll do my best to add them.
                 </div>
               </div>
               <button
@@ -533,7 +533,7 @@ function KofiSupportButton() {
         className="inline-flex items-center gap-1 rounded-full border border-osu-pink/25 bg-osu-pink/10 px-2 py-0.5 text-[10px] font-semibold text-osu-pink-light/80 hover:bg-osu-pink/20 hover:text-osu-pink-light transition-colors"
       >
         <Coffee className="h-3 w-3" />
-        support the server
+        support
       </a>
       {modal}
     </>
