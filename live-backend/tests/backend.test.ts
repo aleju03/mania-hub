@@ -2347,6 +2347,72 @@ describe("live backend", () => {
     expect(snipes.events[0].victim.id).toBe(303);
   });
 
+  it("answers enrich_beatmap from a fresh local row without an osu! API call", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
+       values (50, 'Fixture Song', 'Fixture Artist', 'mapper', 'ranked', '{}', '{}', ?)`,
+      [now],
+    );
+    await exec(
+      db,
+      `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
+       values (502, 50, 'mania', 'ranked', 4, 5.6, 180, 999, 'Another', 'https://osu.ppy.sh/beatmaps/502', '{}', ?)`,
+      [now],
+    );
+    await queue.enqueue("enrich_beatmap", "beatmap:502", { beatmapId: 502 }, { priority: 90 });
+    const osu = { getBeatmap: vi.fn(async () => ({})) };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    expect(osu.getBeatmap).not.toHaveBeenCalled();
+    const job = (await exec(db, "select status from jobs where dedupe_key = 'beatmap:502'")).rows[0];
+    expect(job.status).toBe("done");
+  });
+
+  it("re-fetches a beatmap whose stored row has gone stale", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const stale = new Date(Date.now() - 40 * 24 * 60 * 60_000).toISOString();
+    await exec(
+      db,
+      `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
+       values (50, 'Fixture Song', 'Fixture Artist', 'mapper', 'ranked', '{}', '{}', ?)`,
+      [stale],
+    );
+    await exec(
+      db,
+      `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
+       values (502, 50, 'mania', 'ranked', 4, 5.6, 180, 999, 'Old Version', 'https://osu.ppy.sh/beatmaps/502', '{}', ?)`,
+      [stale],
+    );
+    await queue.enqueue("enrich_beatmap", "beatmap:502", { beatmapId: 502 }, { priority: 90 });
+    const osu = {
+      getBeatmap: vi.fn(async () => ({
+        id: 502,
+        beatmapset_id: 50,
+        difficulty_rating: 5.8,
+        mode: "mania",
+        status: "ranked",
+        cs: 4,
+        bpm: 180,
+        max_combo: 999,
+        version: "New Version",
+        url: "https://osu.ppy.sh/beatmaps/502",
+        beatmapset: { id: 50, title: "Fixture Song", artist: "Fixture Artist", creator: "mapper", covers: {}, status: "ranked" },
+      })),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    expect(osu.getBeatmap).toHaveBeenCalledTimes(1);
+    const row = (await exec(db, "select version from beatmaps where beatmap_id = 502")).rows[0];
+    expect(row.version).toBe("New Version");
+  });
+
   it("runs queued oSC backfill one page at a time and schedules the next page", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
@@ -3816,6 +3882,14 @@ describe("live backend", () => {
     const row = (await exec(db, "select status, run_after from jobs where dedupe_key = 'top:test:pending'")).rows[0];
     expect(row.status).toBe("failed");
     expect(new Date(String(row.run_after)).getTime() - Date.now()).toBe(2 * 60_000);
+
+    // Each further pending probe re-buys the best-scores window, so the wait
+    // doubles instead of holding flat at 2 minutes.
+    vi.setSystemTime(new Date("2026-05-12T00:07:30.000Z"));
+    await worker.runOnce();
+    const second = (await exec(db, "select status, run_after from jobs where dedupe_key = 'top:test:pending'")).rows[0];
+    expect(second.status).toBe("failed");
+    expect(new Date(String(second.run_after)).getTime() - Date.now()).toBe(4 * 60_000);
   });
 
   it("treats missing users during top-play confirmation as terminal", async () => {

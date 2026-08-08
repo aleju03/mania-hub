@@ -600,6 +600,11 @@ create index if not exists idx_player_activity_maps_user_beatmap on player_activ
 create index if not exists idx_player_activity_maps_beatmap on player_activity_maps(beatmap_id);
 create index if not exists idx_player_activity_maps_day on player_activity_maps(day);
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);
+-- Covers the per-type queue reads (activeDepth, lane defer/reactivate): they all
+-- narrow by status AND type, and shedPressure runs one such count per reserved
+-- lane on every enqueue -- including enqueues on the serving process's small-cache
+-- write connection, where idx_jobs_ready alone left a rowid lookup per candidate.
+create index if not exists idx_jobs_status_type on jobs(status, type, run_after);
 create index if not exists idx_live_event_country_sequence on live_event_log(country, sequence);
 create index if not exists idx_api_call_log_provider_time on api_call_log(provider, started_at desc);
 create index if not exists idx_api_rate_limit_reservations_provider_time on api_rate_limit_reservations(provider, started_at_ms);

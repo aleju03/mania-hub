@@ -692,6 +692,10 @@ export class WorkerRunner {
     }
     if (job.type === "enrich_beatmap") {
       const payload = job.payload as { beatmapId: number };
+      if (await this.hasFreshBeatmapRow(payload.beatmapId)) {
+        await this.processHydratedScores({ beatmapId: payload.beatmapId });
+        return;
+      }
       const beatmap = await this.osu.getBeatmap(payload.beatmapId, "job:enrich_beatmap");
       await this.upsertBeatmap(beatmap, payload.beatmapId);
       await this.processHydratedScores({ beatmapId: payload.beatmapId });
@@ -776,6 +780,34 @@ export class WorkerRunner {
     });
     await this.events.append("job_status", null, { id: job.id, type: job.type, status: "done", reason: "user_missing" }, `job:${job.id}:missing:${job.attempts}`);
     return true;
+  }
+
+  // A beatmap row written recently (by ingest payloads or a prior enrich)
+  // already holds everything this job would buy from the osu! API: the only
+  // dedupe otherwise is the done-jobs table, so once retention prunes it the
+  // same map gets re-fetched every couple of days. Settled statuses are
+  // near-immutable and hold for a month; in-flux ones keep a one-day window so
+  // a qualified -> ranked transition still lands via the API promptly (the
+  // /maps index additionally heals settled statuses from the beatmaps.status
+  // column with zero API calls; see map-search.ts).
+  private async hasFreshBeatmapRow(beatmapId: number): Promise<boolean> {
+    // The beatmapsets join matters: ingest enqueues this job when *either*
+    // half of the payload is missing, so a fresh beatmaps row can coexist with
+    // a beatmapsets row that was never written. Only the pair counts as known.
+    const row = (await exec(
+      this.db,
+      `select b.status, b.updated_at from beatmaps b
+       join beatmapsets s on s.beatmapset_id = b.beatmapset_id
+       where b.beatmap_id = ? and b.metadata_json is not null`,
+      [beatmapId],
+    )).rows[0];
+    if (!row) return false;
+    const updatedAtMs = Date.parse(String(row.updated_at ?? ""));
+    if (!Number.isFinite(updatedAtMs)) return false;
+    const status = String(row.status ?? "").trim().toLowerCase();
+    const settled = status === "ranked" || status === "approved" || status === "loved";
+    const maxAgeMs = settled ? 30 * 24 * 60 * 60_000 : 24 * 60 * 60_000;
+    return Date.now() - updatedAtMs <= maxAgeMs;
   }
 
   private async upsertBeatmap(raw: Record<string, unknown>, beatmapId: number): Promise<void> {
@@ -1076,8 +1108,14 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
   if (error instanceof OsuApiError && error.status === 429) {
     return Math.max(error.retryAfterMs ?? 60_000, 60_000);
   }
-  if (error instanceof TopPlayConfirmationPendingError) return 2 * 60_000;
   const nextAttempt = Math.max(1, attempts + 1);
+  // Every pending probe re-downloads the full best-200 window (two osu! calls),
+  // so the wait doubles per attempt instead of holding flat at 2 minutes. Must
+  // be derived from nextAttempt, not attempts: attempts is still 0 on the first
+  // failure, and an attempts-based exponent fires the first retry at 1 minute.
+  if (error instanceof TopPlayConfirmationPendingError) {
+    return Math.min(2 * 60_000 * 2 ** Math.min(4, nextAttempt - 1), 30 * 60_000);
+  }
   if (isPoisonedMapsRefresh(type, nextAttempt, error)) return POISONED_MAPS_REFRESH_PARK_MS;
   const base = type === "refresh_user_top_scores"
     ? 15_000
