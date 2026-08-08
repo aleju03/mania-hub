@@ -342,6 +342,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migratePlayerSkillBaseline(target);
   await migratePlayerSkillAccModel(target);
   await migrateActivityMapsBestPayload(target);
+  await migrateGoatPoll(target);
   await setMigrationSentinel(target, SCHEMA_MIGRATION_META_KEY, {
     startedAt: startedAtIso,
     completedAt: new Date().toISOString(),
@@ -1708,6 +1709,66 @@ async function migrateFarmHelperFeedback(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_farm_helper_feedback_user_resolved
       on farm_helper_feedback(user_id, resolved_at)
+  `);
+}
+
+async function migrateGoatPoll(db: Db): Promise<void> {
+  // The community poll behind the honorary GOAT roster (src/lib/honorary-players.ts
+  // on the frontend): users nominate osu!mania players and vote them up or down,
+  // and the site owner reads the board by hand when the window closes. Nothing
+  // here is automated on close, and no row is ever promoted to a real honoree by
+  // code. Timestamps are epoch ms (matching user_goals / farm_helper_feedback).
+  //
+  // Both tables carry poll_id so a second poll never collides with this one's
+  // rows: a rerun sets a fresh GOAT_POLL_ID and the old board stays queryable.
+  //
+  // Deliberately absent from retention.ts. The board IS the record of what the
+  // community decided, so it outlives the poll rather than being pruned like the
+  // transient run logs; the whole feature writes a few hundred rows at most.
+  await db.execute(`
+    create table if not exists goat_poll_nominees (
+      id text primary key,
+      poll_id text not null,
+      osu_user_id integer,
+      name_key text not null,
+      username text not null,
+      country_code text,
+      avatar_url text,
+      banned integer not null default 0,
+      proof_url text,
+      nominated_by integer not null,
+      created_at integer not null
+    )
+  `);
+  // Two unique indexes rather than one, because a banned or deleted account may
+  // have no resolvable osu! id (the archive URL is the only handle we get, and
+  // it does not always carry one). name_key always dedupes; the partial index on
+  // osu_user_id additionally collapses the same player nominated once by search
+  // and once by hand under a different spelling.
+  await db.execute(`
+    create unique index if not exists idx_goat_poll_nominee_name
+      on goat_poll_nominees(poll_id, name_key)
+  `);
+  await db.execute(`
+    create unique index if not exists idx_goat_poll_nominee_user
+      on goat_poll_nominees(poll_id, osu_user_id) where osu_user_id is not null
+  `);
+  // value is +1 or -1; clearing a vote deletes the row rather than storing 0, so
+  // the per-account "how many nominees has this user touched" cap counts real
+  // opinions and a user who undoes a vote gets their allowance back.
+  await db.execute(`
+    create table if not exists goat_poll_votes (
+      poll_id text not null,
+      nominee_id text not null,
+      voter_user_id integer not null,
+      value integer not null,
+      updated_at integer not null,
+      primary key (poll_id, nominee_id, voter_user_id)
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_goat_poll_votes_voter
+      on goat_poll_votes(poll_id, voter_user_id)
   `);
 }
 
