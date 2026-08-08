@@ -1,6 +1,6 @@
 import type { InValue } from "@libsql/client";
-import type { Db } from "../db.js";
-import { exec } from "../db.js";
+import type { Db, DbStatement } from "../db.js";
+import { exec, execBatch } from "../db.js";
 import { packCardKey, tierRank, tierRankSql } from "./pack-wallets.js";
 
 // Append-only log of pack pulls, the community layer on top of the per-owner
@@ -113,36 +113,25 @@ function liveUserFieldSql(idColumn: string, field: "username" | "avatar_url"): s
   return `(select u.${field} from users u where u.user_id = pack_pull_events.${idColumn})`;
 }
 
-/* Hands this owner their serial for a card, or returns the one they already
-   hold. The number is computed inside the insert rather than read first and
-   written after, so two pulls landing together cannot claim the same serial,
-   and the (card, owner) primary key makes a repeat pull a no-op: a duplicate
-   never renumbers you, and neither does recycling and repulling.
-
-   mintedTotal counts every serial the card has ever handed out, including
-   owners who have since recycled it, which is the honest denominator for
-   "#7 of 132". */
-export async function assignPackCardSerial(
-  db: Db,
+/* Hands this owner their serial for a card, or leaves the one they already
+   hold, as a statement so a pull can batch it with its event insert. The
+   number is computed inside the insert rather than read first and written
+   after, so two pulls landing together cannot claim the same serial, and the
+   (card, owner) primary key makes a repeat pull a no-op: a duplicate never
+   renumbers you, and neither does recycling and repulling. The registry keeps
+   a row for every serial ever handed out, recycled ones included, which is
+   what makes max(serial) the honest denominator for "#7 of 132". */
+function packCardSerialInsertStatement(
   cardKey: string,
   cardUserId: number,
   ownerUserId: number,
   now: number,
-): Promise<{ serial: number; mintedTotal: number }> {
-  await exec(
-    db,
-    `insert or ignore into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at)
+): DbStatement {
+  return {
+    sql: `insert or ignore into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at)
      select ?, ?, ?, coalesce((select max(serial) from pack_card_serials where card_key = ?), 0) + 1, ?`,
-    [cardKey, cardUserId, ownerUserId, cardKey, now],
-  );
-  const row = (await exec(
-    db,
-    `select
-       (select serial from pack_card_serials where card_key = ? and owner_user_id = ?) as serial,
-       (select max(serial) from pack_card_serials where card_key = ?) as minted_total`,
-    [cardKey, ownerUserId, cardKey],
-  )).rows[0];
-  return { serial: Number(row?.serial) || 0, mintedTotal: Number(row?.minted_total) || 0 };
+    args: [cardKey, cardUserId, ownerUserId, cardKey, now],
+  };
 }
 
 /* Seeds the mint registry from the collections that already exist.
@@ -233,34 +222,56 @@ export async function recordPackPullEvents(
     return { recorded: 0, mints: [], eventIds: [] };
   }
 
-  let recorded = 0;
-  const mints: PackPullMint[] = [];
-  const eventIds: number[] = [];
-  for (const card of normalized) {
-    // First-global means nobody, anywhere, holds or ever pulled this card:
-    // no prior event and no other owner's collection row (the caller's own
-    // row may already exist when the wallet sync raced this call).
-    const priorEvent = (await exec(
+  // First-global means nobody, anywhere, holds or ever pulled this card: no
+  // prior event and no other owner's collection row (the caller's own row may
+  // already exist when the wallet sync raced this call). Both facts are read
+  // set-based here so every write below can travel in one batch; `seenInPull`
+  // stands in for the read-after-write the old per-card loop got for free, so
+  // the same card twice in one pack is still only first-global once. Two
+  // owners racing over a brand-new card can still both read "first" — the
+  // reads sat outside any transaction before the batch too, and the flag is
+  // social flavor, never economy.
+  const cardUserIds = [...new Set(normalized.map((card) => card.userId))];
+  const withPriorEvents = new Set(
+    (await exec(
       db,
-      "select 1 from pack_pull_events where card_user_id = ? limit 1",
-      [card.userId],
-    )).rows[0];
-    const otherOwner = priorEvent
-      ? undefined
+      `select distinct card_user_id from pack_pull_events
+       where card_user_id in (${cardUserIds.map(() => "?").join(", ")})`,
+      cardUserIds as InValue[],
+    )).rows.map((row) => Number(row.card_user_id)),
+  );
+  const unproven = cardUserIds.filter((id) => !withPriorEvents.has(id));
+  const withOtherOwners = new Set(
+    unproven.length === 0
+      ? []
       : (await exec(
           db,
-          "select 1 from pack_collection_cards where card_user_id = ? and owner_user_id != ? limit 1",
-          [card.userId, ownerUserId],
-        )).rows[0];
-    const isFirstGlobal = !priorEvent && !otherOwner;
+          `select distinct card_user_id from pack_collection_cards
+           where card_user_id in (${unproven.map(() => "?").join(", ")}) and owner_user_id != ?`,
+          [...unproven, ownerUserId] as InValue[],
+        )).rows.map((row) => Number(row.card_user_id)),
+  );
+
+  // Every insert goes down in one execBatch: a pull costs one write-lock
+  // acquisition instead of two per card (each separate statement is a separate
+  // chance to eat the busy budget when another writer holds the lock), and a
+  // pull is logged wholly or not at all.
+  const statements: DbStatement[] = [];
+  const pending: { card: PackPullCardInput; cardKey: string; isFirstGlobal: boolean; eventIndex: number }[] = [];
+  const seenInPull = new Set<number>();
+  for (const card of normalized) {
+    const isFirstGlobal =
+      !withPriorEvents.has(card.userId) && !withOtherOwners.has(card.userId) && !seenInPull.has(card.userId);
+    seenInPull.add(card.userId);
     const notable = isFirstGlobal || (card.tier !== null && NOTABLE_TIERS.has(card.tier));
-    const inserted = await exec(
-      db,
-      `insert into pack_pull_events (
+    const cardKey = packCardKey(card.userId, card.tier);
+    pending.push({ card, cardKey, isFirstGlobal, eventIndex: statements.length });
+    statements.push({
+      sql: `insert into pack_pull_events (
          owner_user_id, owner_username, card_user_id, card_username, card_country_code,
          tier, pack_type, is_new, is_first_global, notable, pulled_at
        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+      args: [
         ownerUserId,
         ownerUsername.slice(0, 40),
         card.userId,
@@ -273,18 +284,27 @@ export async function recordPackPullEvents(
         notable ? 1 : 0,
         now,
       ],
-    );
-    recorded += 1;
-    const insertedId = Number(inserted.lastInsertRowid ?? 0);
-    if (insertedId > 0) eventIds.push(insertedId);
+    });
     // Serials are only handed out here, so they exist for signed-in collectors
     // (the only ones whose pulls are logged). An anonymous wallet's cards are
     // unserialled until that browser logs in and pulls them again.
-    const cardKey = packCardKey(card.userId, card.tier);
-    const mint = await assignPackCardSerial(db, cardKey, card.userId, ownerUserId, now);
-    mints.push({ userId: card.userId, cardKey, isFirstGlobal, ...mint });
+    statements.push(packCardSerialInsertStatement(cardKey, card.userId, ownerUserId, now));
   }
-  return { recorded, mints, eventIds };
+  const results = await execBatch(db, statements);
+
+  const eventIds: number[] = [];
+  for (const entry of pending) {
+    const insertedId = Number(results[entry.eventIndex]?.lastInsertRowid ?? 0);
+    if (insertedId > 0) eventIds.push(insertedId);
+  }
+  const serials = await getPackCardSerials(db, ownerUserId, pending.map((entry) => entry.cardKey));
+  const mints = pending.map((entry) => ({
+    userId: entry.card.userId,
+    cardKey: entry.cardKey,
+    isFirstGlobal: entry.isFirstGlobal,
+    ...(serials.get(entry.cardKey) ?? { serial: 0, mintedTotal: 0 }),
+  }));
+  return { recorded: pending.length, mints, eventIds };
 }
 
 /* Community ownership counts for a hand of cards ("owned by N collectors").

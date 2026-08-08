@@ -137,6 +137,20 @@ describe("recordPackPullEvents", () => {
     expect(Number(rows[1].notable)).toBe(0);
   });
 
+  it("the same card twice in one pull is first-global once and shares one serial", async () => {
+    const result = await recordPackPullEvents(db, OWNER_ID, "opener", "standard", [
+      pullCard(CARD_A, "common"),
+      pullCard(CARD_A, "common"),
+    ], 10_000);
+    expect(result.recorded).toBe(2);
+    const rows = (await exec(db, "select is_first_global from pack_pull_events order by id asc")).rows;
+    expect(rows.map((row) => Number(row.is_first_global))).toEqual([1, 0]);
+    // The duplicate is a serial no-op: both mints name the serial the
+    // (card, owner) pair holds, and the denominator does not inflate.
+    expect(result.mints.map((mint) => mint.serial)).toEqual([1, 1]);
+    expect(result.mints.map((mint) => mint.mintedTotal)).toEqual([1, 1]);
+  });
+
   it("a card already in another owner's collection is not first-global", async () => {
     await seedCollectionCard(OTHER_OWNER_ID, CARD_A);
     await recordPackPullEvents(db, OWNER_ID, "opener", "standard", [pullCard(CARD_A, "common")], 10_000);
