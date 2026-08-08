@@ -251,6 +251,86 @@ describe("computeManiaSkills", () => {
     expect(sevenKLeaning).toBeLessThan(pure7k);
   });
 
+  test("rewards sustained scoreboard polish on hard charts", () => {
+    const hardChart = {
+      ...score().beatmap,
+      difficulty_rating: 8.4,
+      accuracy: 9,
+      bpm: 220,
+      count_circles: 1200,
+      max_combo: 1200,
+    };
+    const profileAt = (accuracy: number) =>
+      computeManiaSkills(
+        Array.from({ length: 10 }, (_, i) =>
+          score({ id: i + 1, accuracy, pp: 800 - i * 10, beatmap: hardChart, max_combo: 1200 }),
+        ),
+        { globalPp: 15_000 },
+      );
+
+    // Same charts, same pp, same standing: 99.7 across the board is map-
+    // leaderboard top territory, 99.0 is its page two. The polish bonus has
+    // to separate them by a meaningful slice of a tier.
+    const clean = profileAt(0.997);
+    const farm = profileAt(0.99);
+    if (!clean || !farm) throw new Error("expected both cards to be computable");
+    expect(clean.polish ?? 0).toBeGreaterThan((farm.polish ?? 0) + 200);
+    expect(clean.cardPower).toBeGreaterThan(farm.cardPower + 50);
+  });
+
+  test("rewards credible scores past the difficulty ceiling as apex", () => {
+    const chartAt = (difficulty: number) => ({
+      ...score().beatmap,
+      difficulty_rating: difficulty,
+      count_circles: 1200,
+      max_combo: 1200,
+    });
+    const playOn = (difficulty: number, accuracy: number) =>
+      computeManiaSkills(
+        [score({ accuracy, pp: 900, beatmap: chartAt(difficulty), max_combo: 1100 })],
+        { globalPp: 15_000 },
+      );
+
+    // Both charts saturate the regular SR band (top 8.8), so every other
+    // trait reads them the same - only apex can tell a 10.8★ conquest from
+    // an 8.6★ play. 96% up there is a score few players in the world can
+    // post; the same 96% is nothing special at 8.6★.
+    const conquest = playOn(10.8, 0.96);
+    const hard = playOn(8.6, 0.96);
+    if (!conquest || !hard) throw new Error("expected both cards to be computable");
+    expect(conquest.apex ?? 0).toBeGreaterThan((hard.apex ?? 0) + 300);
+    expect(conquest.cardPower).toBeGreaterThan(hard.cardPower + 40);
+
+    // A scrape-pass is not a conquest: below the 92% credibility floor the
+    // same chart earns no apex at all.
+    expect(playOn(10.8, 0.9)?.apex ?? 0).toBe(0);
+  });
+
+  test("does not count easy-chart accuracy as polish", () => {
+    const chartAt = (difficulty: number) => ({
+      ...score().beatmap,
+      difficulty_rating: difficulty,
+      accuracy: 9,
+      bpm: 220,
+      count_circles: 1200,
+      max_combo: 1200,
+    });
+    const profileOn = (beatmap: ReturnType<typeof chartAt>, accuracy: number) =>
+      computeManiaSkills(
+        Array.from({ length: 10 }, (_, i) =>
+          score({ id: i + 1, accuracy, pp: 500 - i * 10, beatmap, max_combo: 1200 }),
+        ),
+        { globalPp: 12_000 },
+      );
+
+    // The same 99.7-vs-99.0 accuracy edge must be worth far less on 4.2★
+    // charts than on 8.4★ ones: easy-chart perfects are common, so the SR
+    // gate keeps them from reading as scoreboard polish.
+    const easyGap = (profileOn(chartAt(4.2), 0.997)?.cardPower ?? 0) - (profileOn(chartAt(4.2), 0.99)?.cardPower ?? 0);
+    const hardGap = (profileOn(chartAt(8.4), 0.997)?.cardPower ?? 0) - (profileOn(chartAt(8.4), 0.99)?.cardPower ?? 0);
+    expect(hardGap).toBeGreaterThan(easyGap * 2);
+  });
+
   test("does not let half-time density farm read as full-rate speed", () => {
     const denseMap = {
       ...score().beatmap,

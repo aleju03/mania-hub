@@ -26,10 +26,11 @@ export interface ChangelogUpdate {
     Leave it empty to hide the section entirely. */
 export const WIP: string[] = [
   "Adding filter by regions rather than just countries",
-  "Balancing unfairly underrated 4K maniacards",
+  "Fixing skins that don't render correctly",
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-07", text: "New maniacard update to rebalance 4K players", to: "/packs" },
   { date: "2026-08-07", text: "Uploaded replays on unranked maps show the right accuracy and client again, and seeking now works", to: "/replay" },
   { date: "2026-08-05", text: "Fixed some bugs on how skins are rendered", to: "/skins" },
   { date: "2026-08-05", text: "New Blitz mode for higher or lower: every round is timed and it has a leaderboard", to: "/streak" },

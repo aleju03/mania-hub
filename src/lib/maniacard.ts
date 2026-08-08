@@ -21,6 +21,15 @@ export interface ManiaSkills {
   stamina: number;
   versatility: number;
   peak: number;
+  // Scoreboard polish: sustained near-perfect accuracy on genuinely hard
+  // charts, the thing map-leaderboard top spots are made of. Optional
+  // because skills snapshots minted before 2026-08-07 were stored without
+  // it; computeManiaSkills always sets it.
+  polish?: number;
+  // Apex: credible scores on charts past the difficulty range most of the
+  // ladder ever touches (rate-adjusted), the difficulty-conquest twin of
+  // polish. Same optionality story.
+  apex?: number;
   cardPower: number;
   mainKeyMode: number;
   archetype: string;
@@ -51,6 +60,12 @@ interface KeymodeBaseline {
   density: [number, number];
   length: [number, number];
   objects: [number, number];
+  /* Rate-adjusted SR range of the apex trait: where "hard" ends and
+     "few players in the world score here" begins. Starts above the sr band's
+     top because that band saturates exactly where these feats start, and the
+     bar differs per keymode (2026-08-08 pool survey of best credible plays,
+     acc >= 92: the top ~5% of 4K mains reach 9.5, of 7K mains 11.6). */
+  apex: [number, number];
 }
 
 interface TraitSums {
@@ -61,6 +76,9 @@ interface TraitSums {
   control: number;
   stamina: number;
   peak: number;
+  polish: number;
+  apex: number;
+  apexPeak: number;
   weight: number;
   count: number;
 }
@@ -73,6 +91,8 @@ interface KeymodeProfile {
   control: number;
   stamina: number;
   peak: number;
+  polish: number;
+  apex: number;
   strength: number;
   weight: number;
   count: number;
@@ -86,6 +106,7 @@ const BASELINES: Record<number, KeymodeBaseline> = {
     density: [3.2, 9.5],
     length: [65, 240],
     objects: [280, 1800],
+    apex: [9.5, 11.5],
   },
   7: {
     pp: [90, 1700],
@@ -94,6 +115,7 @@ const BASELINES: Record<number, KeymodeBaseline> = {
     density: [3.5, 12.5],
     length: [70, 260],
     objects: [360, 2600],
+    apex: [11.6, 13.6],
   },
 };
 
@@ -104,6 +126,7 @@ const DEFAULT_BASELINE: KeymodeBaseline = {
   density: [3.0, 10.5],
   length: [65, 245],
   objects: [300, 2200],
+  apex: [10.0, 12.5],
 };
 
 function isUsable(score: OsuScore): boolean {
@@ -259,6 +282,30 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
       comboGate,
   );
 
+  // Scoreboard polish: near-perfect accuracy where it is genuinely hard to
+  // hold. The acc curve only wakes up above 99.0 (stable scale) and rises
+  // sharply toward 99.95, so a 99.6+ run reads several times a 99.3 one -
+  // that is the gap between a map-leaderboard top-3 and its page two. The
+  // steep SR gate keeps clean plays on easy charts from counting as polish:
+  // this is deliberately a signal only the top of a scoreboard can emit, not
+  // another accuracy average.
+  const polish = clamp(
+    curve(normalize(acc, 0.99, 0.9995), 2.4) * curve(srScore, 1.35) * missPenalty,
+  );
+
+  // Apex: scoring on charts past the sr band's top, where that band can no
+  // longer tell an 8.8★ from a rate-pushed 10.5★. `star` is already rate-
+  // adjusted, so a DT play is judged at its effective difficulty. The acc
+  // gate asks for a credible score rather than a scrape-pass - it opens at
+  // 92 and rewards up to 98, because 96% up here is a feat few players in
+  // the world can post, and polish already owns the 99+ region on charts
+  // people can actually be clean on.
+  const apex = clamp(
+    curve(normalize(star, ...baseline.apex), 0.9) *
+      curve(normalize(acc, 0.92, 0.98), 1.2) *
+      missPenalty,
+  );
+
   return {
     star,
     precision,
@@ -266,6 +313,8 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
     control,
     stamina,
     peak: ppScore,
+    polish,
+    apex,
   };
 }
 
@@ -278,6 +327,9 @@ function createEmptySums(): TraitSums {
     control: 0,
     stamina: 0,
     peak: 0,
+    polish: 0,
+    apex: 0,
+    apexPeak: 0,
     weight: 0,
     count: 0,
   };
@@ -292,6 +344,13 @@ function toProfile(keyMode: number, sums: TraitSums): KeymodeProfile | null {
   const control = sums.control / sums.weight;
   const stamina = sums.stamina / sums.weight;
   const peak = sums.peak / sums.weight;
+  const polish = sums.polish / sums.weight;
+  // Feats-weighted, unlike every other trait: one play few humans can post
+  // says more about a player's ceiling than the average of two hundred, so
+  // the profile's single best apex play carries most of the trait and the
+  // weighted average only separates the one-hit account from the one that
+  // lives up there.
+  const apex = (sums.apex / sums.weight) * 0.35 + sums.apexPeak * 0.65;
   const strength =
     peak * 0.34 +
     precision * 0.2 +
@@ -307,6 +366,8 @@ function toProfile(keyMode: number, sums: TraitSums): KeymodeProfile | null {
     control,
     stamina,
     peak,
+    polish,
+    apex,
     strength,
     weight: sums.weight,
     count: sums.count,
@@ -320,6 +381,8 @@ function blendProfiles(profiles: KeymodeProfile[]): {
   control: number;
   stamina: number;
   peak: number;
+  polish: number;
+  apex: number;
   mainKeyMode: number;
   versatility: number;
   archetype: string;
@@ -345,7 +408,7 @@ function blendProfiles(profiles: KeymodeProfile[]): {
     : 0;
   const mainBlend = 1 - secondaryBlend;
 
-  const blend = (field: keyof Pick<KeymodeProfile, "precision" | "speed" | "control" | "stamina" | "peak" | "starAvg">) =>
+  const blend = (field: keyof Pick<KeymodeProfile, "precision" | "speed" | "control" | "stamina" | "peak" | "polish" | "apex" | "starAvg">) =>
     main[field] * mainBlend + (secondary?.[field] ?? main[field]) * secondaryBlend;
 
   const balance =
@@ -374,6 +437,8 @@ function blendProfiles(profiles: KeymodeProfile[]): {
     control: blend("control"),
     stamina: blend("stamina"),
     peak: blend("peak"),
+    polish: blend("polish"),
+    apex: blend("apex"),
     mainKeyMode: main.keyMode,
     versatility,
     archetype: keyLabel,
@@ -408,11 +473,31 @@ function calibrateDisplaySkillValues(cardPower: number, values: number[]): numbe
 // single fixed band measured every keymode on 4K PP economics and capped 7K
 // specialists a tier below where their standing sits. Floors/tops are read off
 // the tracked global mania ladder per keymode; 4K keeps the original band.
+//
+// Deliberately NOT recalibrated for the 2026-08-07 4K rebalance: tightening
+// the 4K band to its observed ladder (which tops out at ~22.5k pp against
+// 7K's ~30k) buffed every 12k+ 4K farm profile a tier or more across the
+// board. The thing that actually separates the underrated 4K profiles is
+// sustained scoreboard-caliber accuracy, and that has its own additive term
+// now (POLISH_WEIGHT); raw pp standing keeps its original meaning.
 const PP_PRESTIGE_BANDS: Record<number, [number, number]> = {
   4: [12_000, 24_000],
   7: [10_500, 24_000],
 };
 const DEFAULT_PP_PRESTIGE_BAND: [number, number] = [11_500, 24_000];
+
+// Weights of the two additive bonus terms in cardPower (it clamps at 1, and
+// both bonuses are non-negative, so a card can only gain from them:
+// post-rebalance power is exactly the pre-rebalance power plus the bonuses).
+// They are the two ways a scoreboard belongs to someone:
+// - polish: sustained 99.5+ on charts the elite plays. Sized so a profile of
+//   such runs (polish ~0.5) gains most of a tier, while a typical 98-99%
+//   farm profile (polish under 0.1) barely moves.
+// - apex: credible scores on charts almost nobody can play at all. Sized the
+//   same way: a profile that lives past the apex floor (apex ~0.3+) gains
+//   most of a tier, a profile that visited once gains a nudge.
+const POLISH_WEIGHT = 0.2;
+const APEX_WEIGHT = 0.24;
 
 export interface KeymodePpWeight {
   keyMode: number;
@@ -503,6 +588,9 @@ export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: num
     sums.control += traits.control * weight;
     sums.stamina += traits.stamina * weight;
     sums.peak += traits.peak * weight;
+    sums.polish += traits.polish * weight;
+    sums.apex += traits.apex * weight;
+    sums.apexPeak = Math.max(sums.apexPeak, traits.apex);
     sums.weight += weight;
     sums.count++;
     byKeyMode.set(keyMode, sums);
@@ -519,11 +607,10 @@ export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: num
   // resolveCardGlobalPp falls back to the weighted top-play sum in that case
   // and leaves accounts with a plausible profile pp untouched.
   const effectiveGlobalPp = resolveCardGlobalPp(options.globalPp, scores);
-  // Same weights and terms as before; the only change is that the main PP term
-  // now reads standing on a per-keymode scale (computeKeymodePpPrestige) instead
-  // of a single fixed band, so a 7K main isn't measured on 4K PP economics. This
-  // can only raise a 7K player's standing and leaves 4K and the sub-floor casual
-  // base untouched, so no card is nerfed by the change.
+  // Same weights and terms as before; the main PP term reads standing on a
+  // per-keymode scale (computeKeymodePpPrestige) so a 7K main isn't measured
+  // on 4K PP economics, and the polish bonus below is additive-only - so no
+  // recalibration here has ever nerfed an existing card.
   const ppPrestige = computeKeymodePpPrestige(
     effectiveGlobalPp,
     profiles.map((profile) => ({ keyMode: profile.keyMode, weight: profile.weight })),
@@ -536,7 +623,15 @@ export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: num
     blended.speed * 0.07 +
     blended.precision * 0.05 +
     blended.stamina * 0.07 +
-    elitePpPrestige * 0.07;
+    elitePpPrestige * 0.07 +
+    // Additive bonuses, not a reweight: both are 0 for most profiles, so
+    // they can only lift the scoreboard-caliber ones. pp totals reward
+    // grinding ever-harder charts at 98%; the map boards belong to sustained
+    // 99.5+ on those charts (polish) and to the handful of players who can
+    // post real scores past the difficulty ceiling (apex) - and before these
+    // terms the card could not tell either profile from the farm next door.
+    blended.polish * POLISH_WEIGHT +
+    blended.apex * APEX_WEIGHT;
   const cardPowerValue = toCardValue(cardPower);
   const visibleSkills = calibrateDisplaySkillValues(cardPowerValue, [
     toDisplaySkillValue(blended.control),
@@ -555,6 +650,8 @@ export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: num
     stamina: toDisplaySkillValue(blended.stamina),
     versatility: toDisplaySkillValue(blended.versatility),
     peak: toDisplaySkillValue(blended.peak),
+    polish: toDisplaySkillValue(blended.polish),
+    apex: toDisplaySkillValue(blended.apex),
     cardPower: cardPowerValue,
     mainKeyMode: blended.mainKeyMode,
     archetype: blended.archetype,

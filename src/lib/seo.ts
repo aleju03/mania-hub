@@ -8,7 +8,9 @@ export const SITE_FAVICON_HREF = `${SITE_FAVICON_URL}?v=${SITE_FAVICON_VERSION}`
 export const DEFAULT_DESCRIPTION =
   "See what's happening in osu!mania with live scores, country rankings, top plays, map stats, player profiles, and replays.";
 
-export const OG_IMAGE_VERSION = "39";
+// 40: maniacard rebalance (polish + apex bonus terms) changed tiers/power on
+// thousands of player and maniacard OG images.
+export const OG_IMAGE_VERSION = "40";
 
 /* Builds the og:image URL. The image itself only needs title + country —
    the description stays in the HTML `<meta>` for social-card body text
