@@ -173,7 +173,9 @@ function PollPie({
   }, [closesAt, span, center, radius, visible, offset, onExpire]);
 
   return (
-    <span className="flex shrink-0 items-center gap-1.5">
+    // translate="no": the label rewrites every second; auto-translated text
+    // nodes make those writes land on detached nodes (or crash React).
+    <span translate="no" className="flex shrink-0 items-center gap-1.5">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" className="shrink-0">
         <circle cx={center} cy={center} r={radius} fill="#000000" fillOpacity={0.28} />
         <path ref={pathRef} d="" fill="#f0f0f0" fillOpacity={0.5} />
@@ -701,8 +703,15 @@ export function GoatPoll() {
 
             {nominees.length > 0 && (
               <>
+                {/* translate="no": these rows re-sort and rewrite on every
+                    vote and live frame, and browser auto-translate's <font>
+                    rewrites make React's commits over them throw NotFoundError
+                    (the biggest /packs error in the analytics). Usernames and
+                    tallies are not translatable content; the poll's prose
+                    above stays translatable. */}
                 <motion.ul
                   layout={animatedRows}
+                  translate="no"
                   className={`mt-2.5 border-t border-osu-b3/25 pt-1 ${
                     showAll ? `${EXPANDED_HEIGHT} overflow-y-auto overscroll-contain pr-1` : ""
                   }`}

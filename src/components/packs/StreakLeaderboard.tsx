@@ -204,7 +204,10 @@ export function StreakLeaderboard({
         <div className="pt-3 text-[12px] text-osu-f1">Nobody has finished a blitz run yet.</div>
       ) : (
         <>
-          <ul className="pt-1.5">
+          {/* translate="no" on the rows: usernames and streak counts, redrawn
+              on every board re-read — auto-translate's <font> rewrites make
+              React's commits over translated text throw NotFoundError. */}
+          <ul translate="no" className="pt-1.5">
             {shown.map((entry) => (
               <Row
                 key={entry.userId}
@@ -215,7 +218,7 @@ export function StreakLeaderboard({
             ))}
           </ul>
           {viewer && (
-            <ul className="mt-1 border-t border-osu-b3/40 pt-1">
+            <ul translate="no" className="mt-1 border-t border-osu-b3/40 pt-1">
               <Row entry={viewer} isViewer />
             </ul>
           )}

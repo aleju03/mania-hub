@@ -137,6 +137,9 @@ export function GoatPollVotersModal({
             role="dialog"
             aria-modal="true"
             aria-label={`Votes for ${nominee.username}`}
+            // translate="no": names, tallies and time-agos that update live
+            // while open; auto-translate's <font> rewrites crash React commits.
+            translate="no"
             initial={{ opacity: 0, y: 8, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.99 }}

@@ -754,7 +754,14 @@ function PacksPage() {
               // The two numbers that decide what you can open are the point of
               // this strip, so they carry the weight and everything else sits
               // at caption size around them.
-              <div className="mb-9 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-[12px]">
+              /* translate="no": browser auto-translate (Chrome/Edge for the
+                 zh/es/vi/ru packs crowd) rewrites text nodes into <font>
+                 wrappers, and the next React commit on that node throws
+                 NotFoundError (removeChild/insertBefore) — this strip re-renders
+                 every second while charges regenerate, and the "+1 in Ns" span
+                 unmounts when the wallet fills. Counts and countdowns don't
+                 gain anything from translation anyway. */
+              <div translate="no" className="mb-9 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-[12px]">
                 <div className="flex items-baseline gap-2">
                   <div className="flex translate-y-[-2px] items-center gap-1" aria-hidden="true">
                     {Array.from({ length: MAX_PACK_CHARGES }, (_, position) => (
@@ -868,7 +875,9 @@ function PacksPage() {
                         <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
                           next free pack
                         </div>
-                        <div className="mt-1.5 text-4xl font-black text-white tabular-nums">
+                        {/* translate="no": ticks every second; auto-translated
+                            text nodes crash React on the next commit. */}
+                        <div translate="no" className="mt-1.5 text-4xl font-black text-white tabular-nums">
                           {nextChargeMs !== null ? `${Math.ceil(nextChargeMs / 1000)}s` : "ready"}
                         </div>
                       </div>

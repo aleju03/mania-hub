@@ -114,8 +114,10 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
       transition={{ duration: 0.2 }}
     >
       {/* A bottom sheet on phones (thumb reach, full width) and a centered
-          card from sm up. */}
+          card from sm up. translate="no": all names, counts and time-agos —
+          auto-translate's <font> rewrites crash React commits over them. */}
       <motion.div
+        translate="no"
         className="modal-card-mobile-safe relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border border-osu-b3/20 bg-osu-b4 shadow-[0_12px_60px_rgba(0,0,0,0.7)] sm:max-h-[85vh] sm:w-[520px] sm:rounded-2xl cursor-default"
         onClick={(event) => event.stopPropagation()}
         initial={{ opacity: 0, y: 16 }}

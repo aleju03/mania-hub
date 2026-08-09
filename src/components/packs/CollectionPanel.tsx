@@ -1104,7 +1104,10 @@ export function CollectionPanel({
         <div>
           <div className="flex items-baseline gap-2">
             <h2 className="text-sm font-bold text-white">Collection</h2>
-            <span className="text-[12px] text-osu-f1 tabular-nums">
+            {/* translate="no": these counts rewrite as pool totals and wallet
+                pushes land; auto-translate's <font> rewrites detach the text
+                nodes React keeps updating. */}
+            <span translate="no" className="text-[12px] text-osu-f1 tabular-nums">
               {progressOwned.toLocaleString()}
               {progressPool ? ` / ${progressPool.toLocaleString()}` : ""} players
             </span>

@@ -463,7 +463,11 @@ export function MyDataPanel() {
               </Link>
               {country ? <CountryFlag code={country} size="md" decorative /> : null}
             </div>
-            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-osu-f1 tabular-nums">
+            {/* translate="no": these spans mount as the summary loads and
+                rewrite on refresh; browser auto-translate's <font> rewrites
+                make React's commits over translated runs throw NotFoundError
+                (the /my-stats slice of the /packs crash in the analytics). */}
+            <div translate="no" className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-osu-f1 tabular-nums">
               {summary?.pp != null ? <span className="font-semibold text-osu-pink-light">{Math.round(summary.pp).toLocaleString()}pp</span> : null}
               {summary?.globalRank != null ? <span>#{summary.globalRank.toLocaleString()} global</span> : null}
               {summary?.countryRank != null && country ? <span>#{summary.countryRank.toLocaleString()} {country}</span> : null}
@@ -528,7 +532,11 @@ export function MyDataPanel() {
                     {hasActiveFeedControls ? "No tracked plays match those controls." : <>No tracked plays. Play some ranked maps and they show up here live{topTotal > 0 ? ", or check your top plays" : ""}.</>}
                   </div>
                 ) : (
-                  <div className="space-y-1.5">
+                  /* translate="no": rows prepend live off the SSE stream and
+                     the tail row drops — auto-translate's <font> rewrites
+                     crash React's commits over translated rows. Map titles
+                     and numbers aren't translatable content anyway. */
+                  <div translate="no" className="space-y-1.5">
                     {feed.map((score) => {
                       const key = `${score.beatmap?.id}-${getScoreTimestamp(score)}-${score.pp}`;
                       return <MeScoreRow key={key} score={score} isNew={newKeysRef.current.has(key)} />;
@@ -547,7 +555,7 @@ export function MyDataPanel() {
                   {hasActiveFeedControls ? "No top plays match those controls." : "No top plays recorded yet. As you set new personal bests while tracked, they're saved here."}
                 </div>
               ) : (
-                <div className="space-y-1.5">
+                <div translate="no" className="space-y-1.5">
                   {topPlays.map((tp, i) => (
                     <MeScoreRow key={`${tp.score.beatmap?.id}-${getScoreTimestamp(tp.score)}-${topPageIndex * topLimit + i}`} score={tp.score} ppGain={tp.ppGain} />
                   ))}
@@ -810,7 +818,8 @@ function Pagination({
   };
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-      <div className="text-[10px] font-semibold text-osu-f1 tabular-nums">
+      {/* translate="no": the total climbs live with every tracked play. */}
+      <div translate="no" className="text-[10px] font-semibold text-osu-f1 tabular-nums">
         {first}-{last} of {total.toLocaleString()}
       </div>
       <div className="flex items-center gap-1">

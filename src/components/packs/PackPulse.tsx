@@ -510,8 +510,14 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
   return (
     <>
       {/* Live pull ticker, top left. No boxes or glows: floating avatar +
-          text, tier carried by the avatar ring and the tier word alone. */}
-      <div className="pointer-events-none absolute left-12 top-[84px] z-20 hidden w-[190px] flex-col gap-2 min-[1450px]:flex">
+          text, tier carried by the avatar ring and the tier word alone.
+
+          translate="no" because browser auto-translate replaces text nodes
+          with <font> wrappers and React then throws NotFoundError committing
+          over them — and this rail is nothing but committing: entries mount,
+          exit and re-sort constantly, and every row's "Ns ago" rewrites each
+          second. Usernames and tier words are not translatable content. */}
+      <div translate="no" className="pointer-events-none absolute left-12 top-[84px] z-20 hidden w-[190px] flex-col gap-2 min-[1450px]:flex">
         {/* Above the feed and outside the pause zone below, on purpose: the
             list grows and shrinks constantly under a sim, so a toggle sitting
             under it would slide away from the cursor, and hovering it at all

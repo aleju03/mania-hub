@@ -291,7 +291,10 @@ function RoundClock({ deadlineAt, frozen }: { deadlineAt: number; frozen: boolea
   }, [deadlineAt, frozen, total]);
 
   return (
-    <div className="mt-3 flex w-full max-w-[360px] items-center gap-3">
+    // translate="no": the seconds text is rewritten straight to the DOM every
+    // second; auto-translate's <font> rewrites would eat those writes and its
+    // mutation-watching would re-translate the clock in a loop.
+    <div translate="no" className="mt-3 flex w-full max-w-[360px] items-center gap-3">
       <span
         ref={secondsRef}
         className={`w-5 text-right text-[15px] font-bold tabular-nums ${urgent ? "text-rose-400" : "text-white"}`}
@@ -1240,7 +1243,12 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
                 about is not on the table any more, and leaving it up reads as
                 a live question nobody is allowed to answer. */}
             <div className={`flex flex-col items-center ${error ? "hidden" : ""}`}>
-              <div className="max-w-[580px] text-center text-[17px] leading-snug text-white sm:text-xl">
+              {/* translate="no": this sentence interleaves bare text with the
+                  two name spans and is structurally replaced every round —
+                  browser auto-translate merges and reorders exactly this kind
+                  of run into <font> wrappers, and React's next commit over it
+                  throws NotFoundError. */}
+              <div translate="no" className="max-w-[580px] text-center text-[17px] leading-snug text-white sm:text-xl">
                 {round && copy ? (
                   <>
                     {copy.q.prefix}
@@ -1263,7 +1271,9 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
               {blitz && clockDeadline !== null && !over && (
                 <RoundClock key={clockDeadline} deadlineAt={clockDeadline} frozen={revealed} />
               )}
-              <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-osu-f1">
+              {/* translate="no": both spans mount/unmount as runs start and
+                  end, over numbers auto-translate likes to rewrite. */}
+              <div translate="no" className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-osu-f1">
                 {!over && (
                   <span>
                     next bonus at {nextStreakMilestone(streak).at} in a row
