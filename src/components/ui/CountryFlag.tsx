@@ -6,6 +6,8 @@ import {
   getCountryName,
   isGlobalScope,
 } from "../../lib/country";
+import { isRegionScope } from "../../lib/regions";
+import { RegionIcon } from "./RegionIcon";
 
 type CountryFlagSize = "xs" | "sm" | "md" | "lg";
 
@@ -21,6 +23,15 @@ const globeSizeClass: Record<CountryFlagSize, string> = {
   sm: "h-[10px] w-[10px]",
   md: "h-[12px] w-[12px]",
   lg: "h-5 w-5",
+};
+
+// A hair larger than the globe: the silhouettes carry their own padding
+// inside the 24px viewBox, so equal boxes would read smaller.
+const regionSizeClass: Record<CountryFlagSize, string> = {
+  xs: "h-[9px] w-[9px]",
+  sm: "h-[11px] w-[11px]",
+  md: "h-[14px] w-[14px]",
+  lg: "h-6 w-6",
 };
 
 export function CountryFlag({
@@ -50,6 +61,19 @@ export function CountryFlag({
         title={decorative ? undefined : title}
       >
         <Globe className={globeSizeClass[size]} strokeWidth={2.4} aria-hidden="true" />
+      </span>
+    );
+  }
+
+  if (isRegionScope(normalized)) {
+    return (
+      <span
+        className={`${outerClassName} bg-osu-pink/25 text-osu-pink-light ${muted ? "opacity-60" : ""}`}
+        role={decorative ? undefined : "img"}
+        aria-label={decorative ? undefined : title}
+        title={decorative ? undefined : title}
+      >
+        <RegionIcon code={normalized} className={regionSizeClass[size]} />
       </span>
     );
   }

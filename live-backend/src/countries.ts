@@ -2,6 +2,7 @@ import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import { exec } from "./db.js";
 import type { JobQueue } from "./jobs/queue.js";
+import { getRegion, isRegionCode } from "./regions.js";
 import { nowIso } from "./shared/score.js";
 
 export type CountryRegistryStatus = "active" | "warm" | "paused";
@@ -14,6 +15,40 @@ export const GLOBAL_COUNTRY_CODE = "GLOBAL";
 
 export function isGlobalCountry(country: string | null | undefined): boolean {
   return country?.trim().toUpperCase() === GLOBAL_COUNTRY_CODE;
+}
+
+// What public read endpoints accept in `?country=`: one concrete country, a
+// region (static country group from regions.ts, applied as a read-time
+// `country in (...)` filter), or the synthetic GLOBAL aggregate. `codes: null`
+// means "no country filter at all" (GLOBAL). Regions must stay read-time
+// filters: like GLOBAL they are never written to country_registry /
+// country_rosters and never handed to per-country jobs — normalizeCountry's
+// `.slice(0, 2)` would silently mangle a region code into a garbage country.
+export type CountryScope =
+  | { kind: "country"; code: string; codes: [string] }
+  | { kind: "region"; code: string; codes: string[] }
+  | { kind: "global"; code: string; codes: null };
+
+export function resolveCountryScope(country: string): CountryScope {
+  const code = country.trim().toUpperCase();
+  if (code === GLOBAL_COUNTRY_CODE) return { kind: "global", code, codes: null };
+  const region = getRegion(code);
+  if (region) return { kind: "region", code, codes: [...region.countries] };
+  return { kind: "country", code, codes: [code] };
+}
+
+// GLOBAL and regions are synthetic read scopes, never storable countries.
+export function isSyntheticCountryScope(country: string | null | undefined): boolean {
+  if (country == null) return false;
+  const code = country.trim().toUpperCase();
+  return code === GLOBAL_COUNTRY_CODE || isRegionCode(code);
+}
+
+/** `column = ?` / `column in (...)` for a scope, or null for GLOBAL (no filter). */
+export function countryScopeSql(scope: CountryScope, column: string): { clause: string; args: string[] } | null {
+  if (!scope.codes) return null;
+  if (scope.codes.length === 1) return { clause: `${column} = ?`, args: [scope.codes[0]] };
+  return { clause: `${column} in (${scope.codes.map(() => "?").join(",")})`, args: [...scope.codes] };
 }
 
 export interface CountryRegistryRow {

@@ -1,4 +1,4 @@
-import { isGlobalCountry } from "../countries.js";
+import { countryScopeSql, resolveCountryScope } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -438,12 +438,13 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
   const page = Math.max(1, Math.floor(options.page ?? 1));
   const pageSize = Math.max(1, Math.min(TOP_PLAYS_MAX_PAGE_SIZE, Math.floor(options.pageSize ?? TOP_PLAYS_DEFAULT_PAGE_SIZE)));
   const offset = (page - 1) * pageSize;
-  // Global aggregates every tracked country's detected top plays. The window
-  // cuts on score_time (when the play happened), not detected_at, so backfill
+  // Global aggregates every tracked country's detected top plays; a region
+  // narrows to its member countries at read time. The window cuts on
+  // score_time (when the play happened), not detected_at, so backfill
   // catch-up after downtime doesn't surface days-old plays under "24 hours".
-  const global = isGlobalCountry(country);
-  const where = global ? ["e.score_time >= ?"] : ["e.country = ?", "e.score_time >= ?"];
-  const args: Array<string | number> = global ? [cutoff] : [country, cutoff];
+  const scopeSql = countryScopeSql(resolveCountryScope(country), "e.country");
+  const where = scopeSql ? [scopeSql.clause, "e.score_time >= ?"] : ["e.score_time >= ?"];
+  const args: Array<string | number> = scopeSql ? [...scopeSql.args, cutoff] : [cutoff];
   if (options.keys === "4k") {
     where.push("e.key_count = 4");
   } else if (options.keys === "other") {
@@ -486,9 +487,11 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
 }
 
 async function getTopPlaysPpGains(db: Db, country: string, cutoff: string, options: TopPlaysSnapshotOptions): Promise<TopPlaysPpGainSummary[]> {
-  const global = isGlobalCountry(country);
-  const where = global ? ["e.score_time >= ?", "e.pp_gain >= 0.05"] : ["e.country = ?", "e.score_time >= ?", "e.pp_gain >= 0.05"];
-  const args: Array<string | number> = global ? [cutoff] : [country, cutoff];
+  const scopeSql = countryScopeSql(resolveCountryScope(country), "e.country");
+  const where = scopeSql
+    ? [scopeSql.clause, "e.score_time >= ?", "e.pp_gain >= 0.05"]
+    : ["e.score_time >= ?", "e.pp_gain >= 0.05"];
+  const args: Array<string | number> = scopeSql ? [...scopeSql.args, cutoff] : [cutoff];
   if (options.keys === "4k") {
     where.push("e.key_count = 4");
   } else if (options.keys === "other") {

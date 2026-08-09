@@ -1,9 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { isGlobalCountry } from "../../countries.js";
+import { isGlobalCountry, resolveCountryScope } from "../../countries.js";
 import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot } from "../../features/farm-helper.js";
 import { FarmHelperTimings, timeStage } from "../../features/farm-helper-timing.js";
 import { enrichPayloadAvatarAccents } from "../../features/avatar-accents.js";
-import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot } from "../../features/global-rankings.js";
+import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, getRegionRankingsSnapshot } from "../../features/global-rankings.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation } from "../../features/map-collections.js";
 import { getMapSearchPage, getMapSearchSetEntry } from "../../features/map-search.js";
 import { getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersPageQuery } from "../../features/maps.js";
@@ -20,6 +20,17 @@ import { prepareJsonResponse } from "../prepared-json.js";
 import { clampInteger, clampLimit, parseModAcronyms, parseUserIds } from "../request.js";
 import { checkRate, negotiateEncoding, sendAccentEnrichedJson, sendJson } from "../respond.js";
 import { parseFarmHelperKeyMode, parseFarmHelperSpeedBucket, parseFarmHelperView, parseGlobalRankingsQuery, parseMapsPageQuery, parseMapsPlayersKind, parseMapsRandomDrawQuery, parseMapSearchQuery, parseTopPlaysSnapshotQuery, parseTrackerSnapshotFilters, parseTrackerSnapshotSort, parseTrackerSnapshotSortDirection } from "../snapshot-queries.js";
+
+// The maps surfaces are the one place GLOBAL is a materialized projection
+// rather than a read-time filter, and regions must never grow one (see the
+// regions module). Until a region maps view exists as a pure read, these
+// routes reject region scopes outright instead of serving a garbage lookup
+// against a nonexistent `country_maps_snapshots` row.
+function rejectRegionMapsScope(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, country: string): boolean {
+  if (resolveCountryScope(country).kind !== "region") return false;
+  sendJson(req, res, ctx, 400, { error: "region_not_supported" });
+  return true;
+}
 
 export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL, country: string): Promise<boolean> {
   if (url.pathname === "/api/snapshots/tracker") {
@@ -76,16 +87,19 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   if (url.pathname === "/api/snapshots/maps-progress") {
+    if (rejectRegionMapsScope(req, res, ctx, country)) return true;
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getMapsRefreshProgress(ctx.db, country));
     return true;
   }
   if (url.pathname === "/api/snapshots/maps-page") {
+    if (rejectRegionMapsScope(req, res, ctx, country)) return true;
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     await handleMapsPageSnapshot(req, res, ctx, country, parseMapsPageQuery(url.searchParams));
     return true;
   }
   if (url.pathname === "/api/snapshots/maps-random-draw") {
+    if (rejectRegionMapsScope(req, res, ctx, country)) return true;
     // A draw is uncacheable by construction (it samples), so it is the one maps
     // route that can be made to do real work on every request — hence the
     // costly bucket on top of the blanket public gate.
@@ -99,6 +113,7 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   if (url.pathname === "/api/snapshots/maps-players") {
+    if (rejectRegionMapsScope(req, res, ctx, country)) return true;
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     const kind = parseMapsPlayersKind(url.searchParams.get("kind"));
     const id = clampInteger(url.searchParams.get("id"), 1, Number.MAX_SAFE_INTEGER, 0);
@@ -188,6 +203,14 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
       }
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
       await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
+      return true;
+    }
+    if (resolveCountryScope(country).kind === "region") {
+      // Served as a filtered view of the cached global board; no activation,
+      // registry row, or stat-repair churn (the GLOBAL branch already covers
+      // repairs for the same underlying board).
+      res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+      await sendAccentEnrichedJson(req, res, ctx, 200, await getRegionRankingsSnapshot(ctx.db, country, parseGlobalRankingsQuery(url.searchParams)));
       return true;
     }
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;

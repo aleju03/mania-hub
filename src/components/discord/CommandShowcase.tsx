@@ -3,6 +3,7 @@ import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../../lib/cache";
 import { GLOBAL_SCOPE_CODE, getCountryName, isGlobalScope } from "../../lib/country";
+import { isRegionScope } from "../../lib/regions";
 import { useAuth } from "../../lib/auth-context";
 import type { AuthViewer } from "../../lib/auth-shared";
 import {
@@ -1345,7 +1346,9 @@ const DEFAULT_COMMAND_ID = "link";
 
 export function CommandShowcase() {
   const auth = useAuth();
-  const selectedCountry = useSelectedCountry();
+  const rawScope = useSelectedCountry();
+  // The bot has no region commands; a region scope demos the global forms.
+  const selectedCountry = isRegionScope(rawScope) ? GLOBAL_SCOPE_CODE : rawScope;
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const cachedRankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);

@@ -104,14 +104,20 @@ export class LiveEventLog {
     return event;
   }
 
-  async replay(country: string | null, since: number, limit = 100): Promise<LiveEvent[]> {
+  /** `country` scopes the replay: null = every country, an array = any of them
+   * (region scopes). Country-less rows (site-wide events) always replay. */
+  async replay(country: string | string[] | null, since: number, limit = 100): Promise<LiveEvent[]> {
+    const codes = country == null ? null : Array.isArray(country) ? country : [country];
+    const countryClause = codes && codes.length > 0
+      ? `(country is null or country in (${codes.map(() => "?").join(",")}))`
+      : "1 = 1";
     const result = await exec(
       this.db,
       `select * from live_event_log
-       where sequence > ? and (country is null or ? is null or country = ?)
+       where sequence > ? and ${countryClause}
        order by sequence asc
        limit ?`,
-      [since, country, country, limit],
+      [since, ...(codes ?? []), limit],
     );
     return Promise.all(result.rows.map((row) => this.rowToLiveEvent(row)));
   }

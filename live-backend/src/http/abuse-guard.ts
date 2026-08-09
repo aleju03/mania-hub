@@ -1,5 +1,6 @@
 import type { IncomingMessage } from "node:http";
 import type { Config } from "../config.js";
+import { isRegionCode } from "../regions.js";
 
 export type AbuseBucket =
   | "publicApi"
@@ -132,6 +133,7 @@ export function clientIp(req: IncomingMessage, config: Pick<Config, "trustProxyH
 export function normalizeCountryParam(country: string | null | undefined): string | null {
   const normalized = country?.trim().toUpperCase() ?? "";
   if (normalized === "GLOBAL") return normalized;
+  if (isRegionCode(normalized)) return normalized;
   return /^[A-Z]{2}$/.test(normalized) ? normalized : null;
 }
 

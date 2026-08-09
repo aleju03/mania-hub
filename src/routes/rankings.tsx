@@ -4,6 +4,7 @@ import type { MouseEvent } from "react";
 import { getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
+import { isRegionScope } from "../lib/regions";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy } from "../lib/format";
 import { compareRankDeltaValues } from "../lib/rankings";
@@ -18,7 +19,7 @@ import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
-import { fetchLiveGlobalRankings, fetchLiveRankDeltas, type LiveGlobalRankingEntry, type LiveRankDelta } from "../lib/live-backend";
+import { fetchLiveGlobalRankings, fetchLiveRankDeltas, fetchLiveRankingsSnapshot, type LiveGlobalRankingEntry, type LiveRankDelta } from "../lib/live-backend";
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 import { writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 
@@ -128,25 +129,30 @@ function RankingsPage() {
   const hasNextPage = totalPlayers > 50;
   const { warming } = useCountryWarming(selectedCountry);
   const selectedIsGlobal = isGlobalScope(selectedCountry);
+  const selectedIsRegion = isRegionScope(selectedCountry);
+  // Global and regions share the live-backend board UI (the osu! API has no
+  // leaderboard for either); only the fetcher differs.
+  const boardScope = selectedIsGlobal || selectedIsRegion;
   const [globalRankings, setGlobalRankings] = useState<LiveGlobalRankingEntry[] | null>(null);
   const [globalRankingsTotal, setGlobalRankingsTotal] = useState(0);
   const [globalRankingsLoading, setGlobalRankingsLoading] = useState(false);
   const globalTotalPages = Math.max(1, Math.ceil(globalRankingsTotal / GLOBAL_RANKINGS_PAGE_SIZE));
 
   useEffect(() => {
-    if (!selectedIsGlobal) return;
+    if (!boardScope) return;
     let cancelled = false;
     setGlobalRankings(null);
     setGlobalRankingsLoading(true);
-    fetchLiveGlobalRankings({
+    const params = {
       page,
       pageSize: GLOBAL_RANKINGS_PAGE_SIZE,
-      sort: sortBy === "pp" ? "rank" : sortBy,
+      sort: sortBy === "pp" ? ("rank" as const) : sortBy,
       dir: sortDir,
-    })
+    };
+    (selectedIsGlobal ? fetchLiveGlobalRankings(params) : fetchLiveRankingsSnapshot(selectedCountry, params))
       .then((snapshot) => {
         if (cancelled) return;
-        if (page === 1 && sortBy === "rank" && sortDir === "desc") {
+        if (selectedIsGlobal && page === 1 && sortBy === "rank" && sortDir === "desc") {
           writeGlobalTopPlayersCache(snapshot.ranking, snapshot.fetchedAt);
         }
         setGlobalRankings(snapshot.ranking);
@@ -160,7 +166,7 @@ function RankingsPage() {
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, selectedIsGlobal, sortBy, sortDir]);
+  }, [boardScope, page, selectedCountry, selectedIsGlobal, sortBy, sortDir]);
 
   useEffect(() => {
     setPageTwoData(null);
@@ -171,15 +177,15 @@ function RankingsPage() {
   }, [selectedCountry]);
 
   useEffect(() => {
-    if (!selectedIsGlobal || sortBy !== "pp") return;
+    if (!boardScope || sortBy !== "pp") return;
     setSortBy("rank");
     setSortDir("desc");
-  }, [selectedIsGlobal, sortBy]);
+  }, [boardScope, sortBy]);
 
   useEffect(() => {
-    if (!selectedIsGlobal || globalRankingsTotal === 0 || page <= globalTotalPages) return;
+    if (!boardScope || globalRankingsTotal === 0 || page <= globalTotalPages) return;
     navigate({ to: "/rankings", search: { page: globalTotalPages, country: selectedCountry }, replace: true });
-  }, [globalRankingsTotal, globalTotalPages, navigate, page, selectedCountry, selectedIsGlobal]);
+  }, [boardScope, globalRankingsTotal, globalTotalPages, navigate, page, selectedCountry]);
 
   useEffect(() => {
     if (page === 2 && totalPlayers > 0 && !hasNextPage) {
@@ -188,9 +194,9 @@ function RankingsPage() {
   }, [hasNextPage, navigate, page, selectedCountry, totalPlayers]);
 
   useEffect(() => {
-    if (selectedIsGlobal || page <= 2) return;
+    if (boardScope || page <= 2) return;
     navigate({ to: "/rankings", search: { page: 2, country: selectedCountry }, replace: true });
-  }, [navigate, page, selectedCountry, selectedIsGlobal]);
+  }, [boardScope, navigate, page, selectedCountry]);
 
   useEffect(() => {
     if (!pageData) return;
@@ -199,8 +205,9 @@ function RankingsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    // Global has no single-country leaderboard to fetch from the osu! API.
-    if (isGlobalScope(selectedCountry)) {
+    // Global and regions have no single-country leaderboard to fetch from the
+    // osu! API; the board effect above owns them.
+    if (isGlobalScope(selectedCountry) || isRegionScope(selectedCountry)) {
       setRankingsLoading(false);
       return () => { cancelled = true; };
     }
@@ -378,17 +385,17 @@ function RankingsPage() {
       setSortBy(field);
       setSortDir("desc");
     }
-    if (selectedIsGlobal && page !== 1) {
+    if (boardScope && page !== 1) {
       navigate({ to: "/rankings", search: { page: 1, country: selectedCountry }, replace: true });
     }
   };
 
-  if (selectedIsGlobal) {
+  if (boardScope) {
     return (
       <div className="flex-1">
         <PageHeader
           iconSrc="/images/icons/rankings.svg"
-          title="Global mania rankings"
+          title={selectedIsGlobal ? "Global mania rankings" : `${countryName} mania rankings`}
           right={
             globalRankingsTotal > 0 ? (
               <span className="text-[10px] text-osu-f1">{formatNumber(globalRankingsTotal)} tracked players</span>

@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } fro
 import { motion } from "framer-motion";
 import { CLIENT_CACHE_TTL } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
+import { isRegionScope } from "../lib/regions";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatTimeAgoTooltip, formatPpGain } from "../lib/format";
 import { getBeatmapUrl, getBeatmapKeymodeLabel, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -169,6 +170,8 @@ function PopOffsPage() {
   const prevPopoffListKeyRef = useRef<string | null>(null);
   const countryName = getCountryName(selectedCountry);
   const selectedIsGlobal = isGlobalScope(selectedCountry);
+  // Multi-country scopes (Global, regions) show each row's country flag.
+  const selectedIsMultiCountry = selectedIsGlobal || isRegionScope(selectedCountry);
   const liveBackendEnabled = isLiveBackendConfigured();
   const windowActive = useWindowActive();
   const { warming } = useCountryWarming(selectedCountry);
@@ -765,7 +768,7 @@ function PopOffsPage() {
                           navigate({
                             to: "/player/$username",
                             params: { username: p.user.username },
-                            ...(selectedIsGlobal ? { state: showPlayerCountryFlagState } : {}),
+                            ...(selectedIsMultiCountry ? { state: showPlayerCountryFlagState } : {}),
                           });
                         }}
                         className="cursor-pointer"
@@ -784,7 +787,7 @@ function PopOffsPage() {
                                 navigate({
                                   to: "/player/$username",
                                   params: { username: p.user.username },
-                                  ...(selectedIsGlobal ? { state: showPlayerCountryFlagState } : {}),
+                                  ...(selectedIsMultiCountry ? { state: showPlayerCountryFlagState } : {}),
                                 });
                               }}
                               className="cursor-pointer min-w-0"
@@ -795,7 +798,7 @@ function PopOffsPage() {
                                 className="text-sm font-semibold truncate"
                               />
                             </button>
-                            {selectedIsGlobal && p.user.country_code ? (
+                            {selectedIsMultiCountry && p.user.country_code ? (
                               <CountryFlag code={p.user.country_code} size="sm" />
                             ) : null}
                           </div>

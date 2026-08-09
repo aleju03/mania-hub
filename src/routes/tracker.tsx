@@ -2,6 +2,7 @@ import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react
 import { useState, useEffect, useCallback, useMemo, memo, useRef, type ReactNode } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { getCountryName, isGlobalScope } from "../lib/country";
+import { isRegionScope } from "../lib/regions";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber, formatPpGain } from "../lib/format";
 import {
   getBeatmapUrl,
@@ -396,6 +397,8 @@ function ScoresPage() {
   const selectedCountryRef = useRef(selectedCountry);
   selectedCountryRef.current = selectedCountry;
   const selectedIsGlobal = isGlobalScope(selectedCountry);
+  // Multi-country scopes (Global, regions) show each row's country flag.
+  const selectedIsMultiCountry = selectedIsGlobal || isRegionScope(selectedCountry);
   const feedScores = useAppStore((state) => state.feedScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
   const feedScoresFetchedAt = useAppStore((state) => state.feedScoresFetchedAtByCountry[selectedCountry]) ?? null;
   const addFeedScores = useAppStore((state) => state.addFeedScores);
@@ -1489,7 +1492,7 @@ function ScoresPage() {
                   expandedMultiKeys={expandedMultiKeys}
                   onToggleMulti={handleToggleMulti}
                   ppGainByScoreId={ppGainByScoreId}
-                  showCountryFlag={selectedIsGlobal}
+                  showCountryFlag={selectedIsMultiCountry}
                 />
                 <Pagination
                   page={currentPage}

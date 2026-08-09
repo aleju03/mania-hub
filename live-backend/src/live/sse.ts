@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { isGlobalCountry, touchCountryRequest } from "../countries.js";
+import { resolveCountryScope, touchCountryRequest } from "../countries.js";
 import { exec, type Db } from "../db.js";
 import { normalizeCountryParam } from "../http/abuse-guard.js";
 import { activatePublicCountry, sendRateLimited, type HttpContext } from "../http/snapshots.js";
@@ -52,9 +52,11 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
     return true;
   }
   const observeOnly = url.searchParams.get("observe") === "1";
-  // Global is a synthetic aggregate: fan in every country's events, and never
-  // touch a roster/registry or per-country client counter for it.
-  const global = isGlobalCountry(country);
+  // Global fans in every country's events; a region fans in its member
+  // countries'. Both are synthetic aggregates: never touch a roster/registry
+  // or per-country client counter for them.
+  const scope = resolveCountryScope(country);
+  const scopeSet = scope.codes ? new Set(scope.codes) : null;
   const opened = ctx.abuse?.openSse(req, ctx.config);
   if (opened && !opened.allowed) {
     sendRateLimited(req, res, ctx, opened);
@@ -63,7 +65,7 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
   const releaseSse = opened?.allowed ? opened.release : null;
   let releaseCountryClient: (() => void) | null = null;
   try {
-    if (!observeOnly && !global) {
+    if (!observeOnly && scope.kind === "country") {
       const activated = await activatePublicCountry(req, res, ctx, country);
       if (!activated) {
         releaseSse?.();
@@ -85,11 +87,11 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
   const lastEventId = Number(cursor ?? 0);
   writeEvent(res, { type: "hello", sequence: Number.isFinite(lastEventId) && lastEventId > 0 ? lastEventId : await ctx.events.latestSequence(), payload: { country, status: "connected" } });
   if (cursor != null && Number.isFinite(lastEventId)) {
-    const replay = await ctx.events.replay(global ? null : country, lastEventId, 100);
+    const replay = await ctx.events.replay(scope.codes, lastEventId, 100);
     for (const event of replay) writeEvent(res, event);
   }
   const unsubscribe = ctx.events.subscribe((event) => {
-    if (!global && event.country != null && event.country !== country) return;
+    if (scopeSet && event.country != null && !scopeSet.has(event.country)) return;
     writeEvent(res, event);
   });
   let lastCountryTouchAt = Date.now();
@@ -104,7 +106,7 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
       // cursor with a timestamp, breaking replay on the next reconnect.
       res.write(`event: heartbeat\ndata: ${JSON.stringify({ t: now, ingest_at: ingestAtMs })}\n\n`);
     }).catch(() => undefined);
-    if (!observeOnly && !global && now - lastCountryTouchAt >= countryTouchIntervalMs) {
+    if (!observeOnly && scope.kind === "country" && now - lastCountryTouchAt >= countryTouchIntervalMs) {
       lastCountryTouchAt = now;
       // Off the serving connection (see HttpContext.serveWriteDb): a long-lived
       // SSE stream must never issue a write on the connection that serves reads.

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { isGlobalScope, normalizeCountryScope } from "./country";
+import { isRegionScope } from "./regions";
 import { SITE_FAVICON_HREF, SITE_FAVICON_VERSION } from "./seo";
 
 function setFaviconHref(href: string, type = "image/png"): void {
@@ -25,8 +26,9 @@ function setFaviconHref(href: string, type = "image/png"): void {
 export function useDynamicFavicon(countryCode: string | null | undefined): void {
   useEffect(() => {
     const code = normalizeCountryScope(countryCode);
+    // Regions share the site favicon: there is no flag PNG to composite.
     setFaviconHref(
-      isGlobalScope(code)
+      isGlobalScope(code) || isRegionScope(code)
         ? SITE_FAVICON_HREF
         : `/api/favicon?code=${code}&v=${SITE_FAVICON_VERSION}`,
     );

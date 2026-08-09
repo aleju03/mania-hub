@@ -69,7 +69,7 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
           path: pathname,
           method: req.method ?? "",
           status: res.statusCode,
-          country: /[?&]country=([A-Za-z]{2,6})/.exec(req.url ?? "")?.[1]?.toUpperCase() ?? null,
+          country: /[?&]country=([A-Za-z-]{2,12})/.exec(req.url ?? "")?.[1]?.toUpperCase() ?? null,
           // One path can serve very different work (cached-snapshot's card vs
           // full view, a lookup by id vs username). Without these, a stall hunt
           // can only guess which caller is behind the slow path.

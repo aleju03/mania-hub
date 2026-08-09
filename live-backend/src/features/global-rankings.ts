@@ -3,6 +3,7 @@ import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { errorContext, logWarn } from "../logger.js";
+import { getRegion } from "../regions.js";
 import { readFarmHelperKeyStatsForUsers } from "./farm-helper-key-stats.js";
 
 const SNAPSHOT_TARGET_TOLERANCE_MS = 36 * 60 * 60 * 1000;
@@ -513,15 +514,19 @@ async function getPackKeymodeBoard(db: Db, keys: PackPoolKeymode): Promise<Globa
 // by mania pp. Because the warmed rosters span the top mania countries, this is
 // effectively the real global mania top-N (limited to players we track).
 export async function getGlobalRankingsSnapshot(db: Db, query: GlobalRankingsQuery = {}): Promise<GlobalRankingsSnapshot> {
-  const page = Math.max(1, Math.floor(query.page ?? 1) || 1);
-  const pageSize = Math.max(1, Math.min(GLOBAL_RANKINGS_MAX_PAGE_SIZE, Math.floor(query.pageSize ?? 50) || 50));
-  const sort = query.sort ?? "rank";
-  const dir = query.dir ?? "desc";
   const board = query.pool === "packs"
     ? query.keys
       ? await getPackKeymodeBoard(db, query.keys)
       : await getPackPoolBoard(db)
     : await getGlobalBoard(db);
+  return pageBoardSnapshot(board, query);
+}
+
+function pageBoardSnapshot(board: GlobalBoardCache, query: GlobalRankingsQuery): GlobalRankingsSnapshot {
+  const page = Math.max(1, Math.floor(query.page ?? 1) || 1);
+  const pageSize = Math.max(1, Math.min(GLOBAL_RANKINGS_MAX_PAGE_SIZE, Math.floor(query.pageSize ?? 50) || 50));
+  const sort = query.sort ?? "rank";
+  const dir = query.dir ?? "desc";
   const sortedEntries = sortGlobalRankingEntries(board.entries, sort, dir);
   const start = (page - 1) * pageSize;
   // Clones, not the cached rows: accent enrichment mutates response objects in
@@ -535,6 +540,34 @@ export async function getGlobalRankingsSnapshot(db: Db, query: GlobalRankingsQue
     pageSize,
     fetchedAt: board.builtAt,
   };
+}
+
+// A region leaderboard is the cached global board narrowed to the region's
+// member countries and renumbered — a pure read-time view, like the pack
+// keymode boards above. No projection, job, or snapshot row of its own.
+const REGION_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
+
+const regionBoardCacheByDb = new WeakMap<Db, Map<string, PackPoolMemory>>();
+
+async function getRegionBoard(db: Db, regionCode: string): Promise<GlobalBoardCache> {
+  const board = await getGlobalBoard(db);
+  const cached = regionBoardCacheByDb.get(db)?.get(regionCode);
+  if (cached && cached.boardBuiltAt === board.builtAt && Date.now() - cached.checkedAt < REGION_BOARD_CACHE_TTL_MS) {
+    return cached.board;
+  }
+  const members = new Set(getRegion(regionCode)?.countries ?? []);
+  const entries = board.entries
+    .filter((entry) => members.has(entry.user.country_code?.trim().toUpperCase() ?? ""))
+    .map((entry, index) => (entry.rank === index + 1 ? entry : { ...entry, rank: index + 1 }));
+  const regionBoard: GlobalBoardCache = { entries, builtAt: board.builtAt };
+  let caches = regionBoardCacheByDb.get(db);
+  if (!caches) regionBoardCacheByDb.set(db, (caches = new Map()));
+  caches.set(regionCode, { board: regionBoard, boardBuiltAt: board.builtAt, checkedAt: Date.now() });
+  return regionBoard;
+}
+
+export async function getRegionRankingsSnapshot(db: Db, regionCode: string, query: GlobalRankingsQuery = {}): Promise<GlobalRankingsSnapshot> {
+  return pageBoardSnapshot(await getRegionBoard(db, regionCode), query);
 }
 
 // A country whose roster refresh was queued recently is skipped: with the

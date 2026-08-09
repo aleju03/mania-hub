@@ -1,4 +1,4 @@
-import { isGlobalCountry } from "../countries.js";
+import { countryScopeSql, resolveCountryScope, type CountryScope } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { getDisplayedRank, getScoreTimestamp, toLeanTrackerScore } from "../shared/score.js";
@@ -36,14 +36,16 @@ export async function getTrackerSnapshot(
 ): Promise<{ country: string; scores: LeanTrackerScore[]; gains: Record<number, number>; fetchedAt: number; total: number; offset: number }> {
   // Global aggregates every tracked country (only tracked countries ever land
   // rows in score_events, so dropping the country filter is exactly the union).
-  const global = isGlobalCountry(country);
+  // A region narrows the same table to its member countries at read time.
+  const scope = resolveCountryScope(country);
+  const scopeSql = countryScopeSql(scope, "se.country");
   const clauses = ["se.passed = 1"];
   const args: Array<string | number> = [];
-  if (!global) {
-    clauses.push("se.country = ?");
-    args.push(country);
+  if (scopeSql) {
+    clauses.push(scopeSql.clause);
+    args.push(...scopeSql.args);
   }
-  if (global && options.since) {
+  if (scope.kind === "global" && options.since) {
     clauses.push("se.ended_at >= ?");
     args.push(options.since);
   }
@@ -85,7 +87,7 @@ export async function getTrackerSnapshot(
       .filter((score) => scoreMatchesTrackerSnapshotFilters(score, options.filters))
       .sort((a, b) => compareTrackerScores(a, b, sort, sortDirection));
     const scores = allScores.slice(offset, offset + limit);
-    const gains = await getTrackerScoreGains(db, global, country, scores);
+    const gains = await getTrackerScoreGains(db, scope, scores);
     return { country, scores, gains, fetchedAt: Date.now(), total: allScores.length, offset };
   }
 
@@ -129,7 +131,7 @@ export async function getTrackerSnapshot(
     .map((row) => hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null)))
     .filter((score): score is OscScore => !!score?.beatmap && !!score.beatmapset && !!score.user)
     .map(toLeanTrackerScore);
-  const gains = await getTrackerScoreGains(db, global, country, scores);
+  const gains = await getTrackerScoreGains(db, scope, scores);
   return { country, scores, gains, fetchedAt: Date.now(), total: Number(totalRows[0]?.count ?? scores.length), offset };
 }
 
@@ -157,13 +159,14 @@ function getTrackerScoreTimeMs(score: LeanTrackerScore): number {
   return Number.isFinite(time) ? time : 0;
 }
 
-async function getTrackerScoreGains(db: Db, global: boolean, country: string, scores: LeanTrackerScore[]): Promise<Record<number, number>> {
+async function getTrackerScoreGains(db: Db, scope: CountryScope, scores: LeanTrackerScore[]): Promise<Record<number, number>> {
   const scoreIdPlaceholders = scores.map(() => "?").join(",") || "null";
+  const scopeSql = countryScopeSql(scope, "country");
   const gainRows = (await exec(
     db,
     `select score_id, pp_gain from top_play_events
-     where ${global ? "" : "country = ? and "}score_id in (${scoreIdPlaceholders})`,
-    global ? scores.map((score) => score.id) : [country, ...scores.map((score) => score.id)],
+     where ${scopeSql ? `${scopeSql.clause} and ` : ""}score_id in (${scoreIdPlaceholders})`,
+    [...(scopeSql?.args ?? []), ...scores.map((score) => score.id)],
   )).rows;
   return Object.fromEntries(gainRows.map((row) => [Number(row.score_id), Number(row.pp_gain)]));
 }

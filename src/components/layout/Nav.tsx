@@ -5,6 +5,7 @@ import { BarChart3, ChevronDown, Globe, LogIn, LogOut, Settings, Target, UserRou
 import { SearchInput } from "../ui/SearchInput";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
+import { RegionIcon } from "../ui/RegionIcon";
 import { CountrySelector } from "./CountrySelector";
 import { SettingsDrawer } from "./SettingsDrawer";
 import { ThemePicker } from "./ThemePicker";
@@ -13,6 +14,7 @@ import { searchPlayers } from "../../lib/player-search";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
 import { getCountryFlagGradient, getCountryFlagLargeUrl, getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
+import { isRegionScope } from "../../lib/regions";
 import { isLiveBackendConfigured } from "../../lib/live-backend";
 import { showPlayerCountryFlagState } from "../../lib/player-profile-navigation";
 import { getCachedCountryTier, useCountryWarming } from "../../lib/use-country-warming";
@@ -232,6 +234,7 @@ export function Nav() {
   }, [openGroup]);
 
   const selectedIsGlobal = isGlobalScope(selectedCountry);
+  const selectedIsRegion = isRegionScope(selectedCountry);
   // A CSS background can't onError-fall-back like <img>, so source the flag from
   // flagcdn (universal coverage, incl. countries osu! lacks e.g. Curaçao) rather
   // than osu!'s set, whose missing PNGs would leave the nav crest blank.
@@ -537,6 +540,10 @@ export function Nav() {
                 {selectedIsGlobal ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-osu-pink/35 to-osu-b6">
                     <Globe className="h-5 w-5 text-osu-pink-light" strokeWidth={2.2} />
+                  </div>
+                ) : selectedIsRegion ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-osu-pink/35 to-osu-b6">
+                    <RegionIcon code={selectedCountry} className="h-[22px] w-[22px] text-osu-pink-light" />
                   </div>
                 ) : (
                   <>

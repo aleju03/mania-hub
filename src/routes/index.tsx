@@ -4,10 +4,11 @@ import { motion } from "framer-motion";
 import { getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
+import { isRegionScope } from "../lib/regions";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
 import { getBeatmapKeyCount, getBeatmapKeymodeLabel, getModDisplayList, getScoreDisplayValues, getScoreTimestamp } from "../lib/score";
-import { fetchLiveGlobalRankings, fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource, type LiveGlobalRankingEntry } from "../lib/live-backend";
+import { fetchLiveGlobalRankings, fetchLiveRankingsSnapshot, fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource, type LiveGlobalRankingEntry } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
@@ -65,6 +66,14 @@ export const Route = createFileRoute("/")({
       if (isGlobalScope(scope)) {
         const snapshot = await withHomeLoaderBudget(
           fetchLiveGlobalRankings(HOME_GLOBAL_RANKINGS_FETCH_COUNT),
+        );
+        return snapshot ? { scope, rankings: null, globalRanking: snapshot.ranking } : null;
+      }
+      if (isRegionScope(scope)) {
+        // Regions render the same board-style top players as Global, served
+        // from the backend's filtered view of the global board.
+        const snapshot = await withHomeLoaderBudget(
+          fetchLiveRankingsSnapshot(scope, HOME_GLOBAL_RANKINGS_FETCH_COUNT),
         );
         return snapshot ? { scope, rankings: null, globalRanking: snapshot.ranking } : null;
       }
@@ -339,6 +348,10 @@ function HomePage() {
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
   const selectedIsGlobal = isGlobalScope(selectedCountry);
+  const selectedIsRegion = isRegionScope(selectedCountry);
+  // Global and regions share the board-style "Top players" panel; countries
+  // render the osu! API leaderboard.
+  const boardScope = selectedIsGlobal || selectedIsRegion;
   // SSR fallback: renders real rows on the server paint (what crawlers index)
   // and until the client fetches land. Scope-guarded so a post-hydration
   // country switch never shows the previous scope's board.
@@ -380,9 +393,9 @@ function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    // Global has no single-country leaderboard; its live sections (recent
-    // scores, popoffs) load from the aggregated live snapshots instead.
-    if (selectedIsGlobal) {
+    // Global and regions have no single-country leaderboard; their live
+    // sections (recent scores, popoffs) load from the aggregated snapshots.
+    if (boardScope) {
       setRankingsError(null);
       return () => {
         cancelled = true;
@@ -430,9 +443,19 @@ function HomePage() {
   }, [rankings]);
 
   // Global's left panel shows the combined top players (the same board as the
-  // Rankings page), instead of a single country's leaderboard.
+  // Rankings page), instead of a single country's leaderboard. A region shows
+  // its filtered board the same way (uncached: the persistent cache is the
+  // global board's alone).
   useEffect(() => {
-    if (!selectedIsGlobal) return;
+    if (!boardScope) return;
+    let cancelled = false;
+    if (!selectedIsGlobal) {
+      setGlobalTopPlayers(null);
+      fetchLiveRankingsSnapshot(selectedCountry, HOME_GLOBAL_RANKINGS_FETCH_COUNT)
+        .then((snapshot) => { if (!cancelled) setGlobalTopPlayers(snapshot.ranking); })
+        .catch(() => { if (!cancelled) setGlobalTopPlayers((prev) => prev ?? []); });
+      return () => { cancelled = true; };
+    }
     // Serve the cached board immediately; only hit the network when it's missing
     // or past the TTL. Keep showing the cached board while refreshing so the card
     // never flips back to a skeleton on revisits.
@@ -440,7 +463,6 @@ function HomePage() {
     const fresh = cached && !isCacheStale(cached.fetchedAt, CLIENT_CACHE_TTL.rankings);
     if (cached) setGlobalTopPlayers(cached.data);
     if (fresh) return;
-    let cancelled = false;
     fetchLiveGlobalRankings(HOME_GLOBAL_RANKINGS_FETCH_COUNT)
       .then((snapshot) => {
         writeGlobalTopPlayersCache(snapshot.ranking);
@@ -448,7 +470,7 @@ function HomePage() {
       })
       .catch(() => { if (!cancelled) setGlobalTopPlayers((prev) => prev ?? []); });
     return () => { cancelled = true; };
-  }, [selectedIsGlobal]);
+  }, [boardScope, selectedCountry, selectedIsGlobal]);
 
   useEffect(() => {
     let cancelled = false;
@@ -648,7 +670,7 @@ function HomePage() {
         <div className="max-w-[1200px] mx-auto text-center">
           <div className="flex items-center justify-center gap-3">
             <span className="mode-icon text-osu-pink text-3xl sm:text-5xl">{"\ue802"}</span>
-            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">{selectedIsGlobal ? "Global" : selectedCountry}</span></h1>
+            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">{selectedIsGlobal ? "Global" : selectedIsRegion ? countryName : selectedCountry}</span></h1>
           </div>
         </div>
       </section>
@@ -660,10 +682,10 @@ function HomePage() {
         {/* Country Top players (or Global note) */}
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">{selectedIsGlobal ? "Top players" : "Rankings"}</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">{boardScope ? "Top players" : "Rankings"}</h2>
             <Link to="/rankings" search={{ page: 1, country: selectedCountry }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
           </div>
-          {selectedIsGlobal ? (
+          {boardScope ? (
             <div className="divide-y divide-osu-b3/15">
               {effectiveGlobalTopPlayers == null ? (
                 <>
@@ -793,7 +815,7 @@ function HomePage() {
                   onClick={() => navigate({
                     to: "/player/$username",
                     params: { username: p.user.username },
-                    ...(selectedIsGlobal ? { state: showPlayerCountryFlagState } : {}),
+                    ...(boardScope ? { state: showPlayerCountryFlagState } : {}),
                   })}>
                   {p.score.beatmapsetId && (
                     <>
@@ -868,7 +890,7 @@ function HomePage() {
                   onClick={() => navigate({
                     to: "/player/$username",
                     params: { username: s.user.username },
-                    ...(selectedIsGlobal ? { state: showPlayerCountryFlagState } : {}),
+                    ...(boardScope ? { state: showPlayerCountryFlagState } : {}),
                   })}>
                     <GradeImg grade={s.displayRank} size={22} />
                   <Avatar url={s.user.avatar_url} size={26} />

@@ -69,7 +69,8 @@ import {
   type LivePlayerProfileSnapshot,
 } from "../lib/live-backend";
 import { getReplaySpectatorTicket, type ReplaySpectatorTicket } from "../lib/replay-spectator";
-import { isGlobalScope } from "../lib/country";
+import { GLOBAL_SCOPE_CODE, isGlobalScope } from "../lib/country";
+import { isRegionScope } from "../lib/regions";
 import { useAuth } from "../lib/auth-context";
 import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 import {
@@ -701,7 +702,10 @@ function ReplayPage() {
   const navigate = useNavigate();
   const router = useRouter();
   const canGoBack = useCanGoBack();
-  const selectedCountry = useSelectedCountry();
+  const rawSelectedCountry = useSelectedCountry();
+  // Replay browse scopes osu! scoreboards by country; regions have no osu!
+  // scoreboard scope, so they browse as Global here.
+  const selectedCountry = isRegionScope(rawSelectedCountry) ? GLOBAL_SCOPE_CODE : rawSelectedCountry;
   const hiddenUserIds = useHiddenUserIds();
   const cachedRankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);

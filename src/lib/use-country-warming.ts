@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { activateLiveCountry, isLiveBackendConfigured, type LiveCountryActivation, type LiveCountryFeature, type LiveCountryFeatureTier } from "./live-backend";
 import { isGlobalScope } from "./country";
+import { getRegionDef } from "./regions";
 
 const POLL_INTERVAL_MS = 6_000;
 const COUNTRY_TIER_CACHE_KEY = "mania-hub-country-feature-tiers-v1";
@@ -33,6 +34,24 @@ export function seedCountryTierCache(countries: LiveCountryFeature[] | null | un
     tierCache.set(countryScopeKey(entry.country), entry.featureTier);
   }
   writeTierCache(tierCache);
+}
+
+const TIER_RANK: Record<LiveCountryFeatureTier, number> = { indexed: 0, maps_warm: 1, live: 2, snipes: 3 };
+
+/**
+ * A region's tier is derived, not activated: the best tier among its member
+ * countries (one snipes-tier member is enough for the region's snipe feed to
+ * mean something). Null when no member has a cached tier yet.
+ */
+export function getRegionEffectiveTier(code: string): LiveCountryFeatureTier | null {
+  const region = getRegionDef(code);
+  if (!region) return null;
+  let best: LiveCountryFeatureTier | null = null;
+  for (const country of region.countries) {
+    const tier = tierCache.get(countryScopeKey(country));
+    if (tier && (!best || TIER_RANK[tier] > TIER_RANK[best])) best = tier;
+  }
+  return best;
 }
 
 export interface CountryWarmingState {
@@ -82,6 +101,16 @@ export function useCountryWarming(country: string): CountryWarmingState {
       setWarming(false);
       setChecking(false);
       setFeatureTier("maps_warm");
+      return;
+    }
+    if (getRegionDef(normalizedCountry)) {
+      // Regions are synthetic scopes: nothing to activate or warm on the
+      // backend. Their tier is derived from member countries (bootstrap-fed
+      // cache); default to "live" so the live surfaces render while a fresh
+      // browser waits for its first bootstrap seed.
+      setWarming(false);
+      setChecking(false);
+      setFeatureTier(getRegionEffectiveTier(normalizedCountry) ?? "live");
       return;
     }
 

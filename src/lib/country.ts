@@ -1,3 +1,5 @@
+import { getRegionDef, isRegionScope } from "./regions";
+
 export const DEFAULT_COUNTRY_CODE = "CR";
 
 // "Global" is a synthetic scope, not a real country: it aggregates every tracked
@@ -20,11 +22,14 @@ export function isGlobalScope(code?: string | null): boolean {
 export function normalizeCountryScope(code?: string | null): string {
   const normalized = code?.trim().toUpperCase();
   if (normalized === GLOBAL_SCOPE_CODE) return GLOBAL_SCOPE_CODE;
+  // Regions are synthetic scopes like Global: preserve them instead of letting
+  // normalizeCountryCode collapse them onto the default country.
+  if (normalized && isRegionScope(normalized)) return normalized;
   return normalizeCountryCode(normalized);
 }
 
 export function isSupportedCountryScope(code?: string | null): boolean {
-  return isGlobalScope(code) || isSupportedCountryCode(code);
+  return isGlobalScope(code) || isRegionScope(code) || isSupportedCountryCode(code);
 }
 
 const RAW_COUNTRY_OPTIONS = [
@@ -262,12 +267,15 @@ export function isSupportedCountryCode(code?: string | null): boolean {
 
 export function getCountryName(code?: string | null): string {
   if (isGlobalScope(code)) return GLOBAL_SCOPE_NAME;
+  const region = getRegionDef(code);
+  if (region) return region.name;
   const normalized = normalizeCountryCode(code);
   return COUNTRY_NAME_BY_CODE.get(normalized) ?? normalized;
 }
 
 export function getCountryFlagEmoji(code?: string | null): string {
   if (isGlobalScope(code)) return "\u{1F30D}";
+  if (isRegionScope(code)) return "\u{1F5FA}\u{FE0F}";
   const normalized = normalizeCountryCode(code);
   return String.fromCodePoint(
     ...normalized

@@ -1,3 +1,4 @@
+import { countryScopeSql, resolveCountryScope } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { LiveEventLog } from "../live/event-log.js";
@@ -416,6 +417,7 @@ export async function getSnipeBoardSnapshot(
   laneKey: string,
   limit: number,
 ): Promise<SnipeBoardSnapshot> {
+  const scopeSql = snipeScopeSql(country);
   const rows = (await exec(
     db,
     `select s.user_id, s.score_id, s.total_score, s.pp, s.accuracy, s.rank, s.mods_json,
@@ -425,10 +427,10 @@ export async function getSnipeBoardSnapshot(
             count(*) over () as total
      from country_beatmap_scores s
      left join users u on u.user_id = s.user_id
-     where s.country = ? and s.beatmap_id = ? and s.lane_key = ?
+     where ${scopeSql.clause} and s.beatmap_id = ? and s.lane_key = ?
      order by s.total_score desc
      limit ?`,
-    [country.toUpperCase(), beatmapId, laneKey, limit],
+    [...scopeSql.args, beatmapId, laneKey, limit],
   )).rows;
   return {
     beatmapId,
@@ -454,7 +456,17 @@ export async function getSnipeBoardSnapshot(
   };
 }
 
+// Snipes are per-country boards; a region unions its members' rows at read
+// time. GLOBAL keeps its historical "matches nothing" behavior (the clause
+// compares against the literal scope code) rather than becoming an unfiltered
+// scan nothing renders.
+function snipeScopeSql(country: string): { clause: string; args: string[] } {
+  const scope = resolveCountryScope(country);
+  return countryScopeSql(scope, "s.country") ?? { clause: "s.country = ?", args: [scope.code] };
+}
+
 export async function getSnipesSnapshot(db: Db, country: string, limit: number): Promise<{ events: SnipeEvent[]; scannedAt: number }> {
+  const scopeSql = snipeScopeSql(country);
   const rows = (await exec(
     db,
     `select
@@ -467,10 +479,10 @@ export async function getSnipesSnapshot(db: Db, country: string, limit: number):
      from snipe_events s
      left join users sniper on sniper.user_id = s.sniper_id
      left join users victim on victim.user_id = s.victim_id
-     where s.country = ?
+     where ${scopeSql.clause}
      order by s.detected_at desc
      limit ?`,
-    [country, limit],
+    [...scopeSql.args, limit],
   )).rows;
   const latestDetectedAt = rows[0]?.detected_at == null ? null : new Date(String(rows[0].detected_at)).getTime();
   return {

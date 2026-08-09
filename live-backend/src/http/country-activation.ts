@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { activateCountry, getCountryRegistryRow, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
+import { activateCountry, getCountryRegistryRow, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, resolveCountryScope, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import { exec, type Db } from "../db.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "../features/maps.js";
 import { normalizeCountryParam } from "./abuse-guard.js";
@@ -23,6 +23,26 @@ export async function activatePublicCountry(
       country: GLOBAL_COUNTRY_CODE,
       status: "active",
       featureTier: "maps_warm",
+      pinned: true,
+      keepWarm: true,
+      firstRequestedAt: now,
+      lastRequestedAt: now,
+      lastRosterRefreshAt: now,
+      lastScoreAt: null,
+      activeUsers: 0,
+      lastActiveAt: now,
+      isWarm: true,
+    };
+  }
+  if (resolveCountryScope(country).kind === "region") {
+    // Regions are synthetic read scopes over their member countries: no
+    // registry row, no roster, no jobs. Serving one is a read-time
+    // `country in (...)` filter, so there is nothing to activate or warm.
+    const now = new Date().toISOString();
+    return {
+      country: country.trim().toUpperCase(),
+      status: "active",
+      featureTier: "snipes",
       pinned: true,
       keepWarm: true,
       firstRequestedAt: now,

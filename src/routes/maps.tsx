@@ -7,6 +7,8 @@ import { Dices } from "lucide-react";
 import { getBeatmapFile } from "../lib/osu";
 import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { getCountryName, isGlobalScope } from "../lib/country";
+import { isRegionScope } from "../lib/regions";
+import { RegionIcon } from "../components/ui/RegionIcon";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
 import { MANIA_PATTERN_LABELS } from "../lib/mania-patterns";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -714,6 +716,10 @@ function MapsPage() {
   const tab = mapsSearch.tab;
   // Search + Collections are global catalog views, not country-scoped lenses.
   const isGlobalCatalogTab = tab === "search" || tab === "collections";
+  // Maps boards have no region view (Global is the one materialized aggregate;
+  // regions are read-time filters and the maps projections are per-country).
+  // Country-scoped tabs render a notice instead of fetching for a region.
+  const selectedIsRegion = isRegionScope(selectedCountry);
   const page = mapsSearch.page;
   const keyFilter = mapsSearch.key;
   const beatmapSort = mapsSearch.beatmapSort;
@@ -786,7 +792,7 @@ function MapsPage() {
         : tab === "random"
           ? `Random picks ${scopeSuffix}`
           : `Most farmed ${scopeSuffix}`;
-  const liveMapsBrowseTab = tab === "random" || isGlobalCatalogTab ? null : (tab as LiveMapsBrowseTab);
+  const liveMapsBrowseTab = tab === "random" || isGlobalCatalogTab || selectedIsRegion ? null : (tab as LiveMapsBrowseTab);
   const liveMapsPageParams = useMemo(() => liveMapsBrowseTab ? {
     tab: liveMapsBrowseTab,
     page,
@@ -1134,7 +1140,7 @@ function MapsPage() {
   const isLoading = liveBackendPaged ? liveMapsPagePending : loadingMaps;
 
   useEffect(() => {
-    if (!liveBackendEnabled || !isLoading) return;
+    if (!liveBackendEnabled || !isLoading || selectedIsRegion) return;
 
     let cancelled = false;
     const loadProgress = () => {
@@ -1324,7 +1330,7 @@ function MapsPage() {
   // filter change only refreshes the counts and re-warms the queue: filter
   // changes never auto-reroll, the user must click Reroll.
   useEffect(() => {
-    if (!liveBackendEnabled || tab !== "random") return;
+    if (!liveBackendEnabled || tab !== "random" || selectedIsRegion) return;
     drawController.enterTab(randomDrawKey);
     // Leaving the tab (or superseding this draw with a filter change) drops the
     // in-flight request and the cold-country repoll; the next entry re-arms
@@ -1669,7 +1675,20 @@ function MapsPage() {
         )
       )}
 
-      {!isGlobalCatalogTab && (
+      {!isGlobalCatalogTab && selectedIsRegion && !warming && (
+        <div className="bg-osu-b5">
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-16 text-center">
+            <RegionIcon code={selectedCountry} className="mx-auto h-10 w-10 text-osu-pink-light/70" />
+            <p className="mt-4 text-sm font-semibold text-osu-l2">No region maps boards yet</p>
+            <p className="mt-1 text-xs text-osu-f1">
+              Maps boards are built per country, plus one combined board for Global.
+              There isn't one for {countryName} yet, so pick one of its countries or switch to Global.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!isGlobalCatalogTab && !selectedIsRegion && (
       <>
 
       {/* ── Filter bar: same language as the search tab (icon search bar with

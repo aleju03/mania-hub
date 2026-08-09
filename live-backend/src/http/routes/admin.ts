@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { activateCountry, deleteCountryData, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus } from "../../countries.js";
+import { activateCountry, deleteCountryData, isCountryFeatureAtLeast, isSyntheticCountryScope, setCountryFeatureTier, setCountryPaused, setCountryStatus } from "../../countries.js";
 import { exec, parseJson, type Db } from "../../db.js";
 import { countUserLinks } from "../../discord/identity.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../../discord/subscriptions.js";
@@ -322,7 +322,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    if (isGlobalCountry(country)) {
+    if (isSyntheticCountryScope(country)) {
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
@@ -335,7 +335,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    if (isGlobalCountry(country)) {
+    if (isSyntheticCountryScope(country)) {
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
@@ -348,7 +348,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    if (isGlobalCountry(country)) {
+    if (isSyntheticCountryScope(country)) {
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
@@ -365,7 +365,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    if (isGlobalCountry(country)) {
+    if (isSyntheticCountryScope(country)) {
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
@@ -389,7 +389,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    if (isGlobalCountry(country)) {
+    if (isSyntheticCountryScope(country)) {
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
@@ -405,7 +405,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    if (isGlobalCountry(country)) {
+    if (isSyntheticCountryScope(country)) {
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
@@ -446,7 +446,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    if (isGlobalCountry(country)) {
+    if (isSyntheticCountryScope(country)) {
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
@@ -461,7 +461,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    if (isGlobalCountry(country)) {
+    if (isSyntheticCountryScope(country)) {
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }

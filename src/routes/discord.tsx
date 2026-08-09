@@ -5,6 +5,7 @@ import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { CommandShowcase } from "../components/discord/CommandShowcase";
 import { canUseDevFeatures } from "../lib/auth-shared";
 import { isGlobalScope } from "../lib/country";
+import { isRegionScope } from "../lib/regions";
 import { fetchDiscordPublicInfo, type DiscordPublicInfo } from "../lib/live-backend";
 import { useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
@@ -128,7 +129,9 @@ function HowStep({ n, text }: { n: number; text: React.ReactNode }) {
 
 function FeedsCard({ feedsEnabled }: { feedsEnabled: boolean }) {
   const scope = useSelectedCountry();
-  const country = isGlobalScope(scope) ? "global" : scope;
+  // The bot's country param takes real countries or "global" — regions are a
+  // site-only scope, so the example falls back to global for them.
+  const country = isGlobalScope(scope) || isRegionScope(scope) ? "global" : scope;
   return (
     <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
       <div className="mb-2 flex items-center gap-2">

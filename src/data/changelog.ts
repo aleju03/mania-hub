@@ -25,11 +25,11 @@ export interface ChangelogUpdate {
 /** Short list of what is being worked on now. Keep it to three or four.
     Leave it empty to hide the section entirely. */
 export const WIP: string[] = [
-  "Adding filter by regions rather than just countries",
   "Fixing skins that don't render correctly",
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-08", text: "Pick a whole continent or region, like Europe or Southeast Asia, instead of just one country" },
   { date: "2026-08-08", text: "New maniacard update to rebalance 4K players", to: "/packs" },
   { date: "2026-08-08", text: "Low OD maps no longer increase MSD rating", to: "/my-stats" },
   { date: "2026-08-07", text: "Uploaded replays on unranked maps show the right accuracy and client again, and seeking now works", to: "/replay" },

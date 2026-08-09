@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { isGlobalCountry } from "../../countries.js";
+import { resolveCountryScope } from "../../countries.js";
 import { dbHealth } from "../../db.js";
 import { getDiscordPublicInfo } from "../../discord/index.js";
 import { getDiscordShowcase } from "../../discord/showcase.js";
@@ -95,7 +95,7 @@ export async function handleSystemRoutes(req: IncomingMessage, res: ServerRespon
   if (url.pathname === "/api/events") {
     if (!await activatePublicCountry(req, res, ctx, country)) return true;
     const since = Number(url.searchParams.get("since") ?? 0);
-    sendJson(req, res, ctx, 200, { events: await ctx.events.replay(isGlobalCountry(country) ? null : country, Number.isFinite(since) ? since : 0, 500) });
+    sendJson(req, res, ctx, 200, { events: await ctx.events.replay(resolveCountryScope(country).codes, Number.isFinite(since) ? since : 0, 500) });
     return true;
   }
   return false;

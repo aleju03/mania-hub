@@ -26,6 +26,7 @@
     "replay:validate": "node --env-file-if-exists=.env scripts/replay-validate.ts",
     "replay:build-hitsounds": "node scripts/build-replay-hitsound-bundle.mjs",
     "skins:build-preview-backdrops": "node scripts/build-skin-preview-backdrops.mjs",
+    "regions:build-icons": "node scripts/generate-region-icons.ts",
     "audio:migrate-playback": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/migrate-audio-playback-cache.ts"
   },
   "dependencies": {
