@@ -340,6 +340,11 @@ interface CascadeTileProps {
   onFaceVisible: () => void;
 }
 
+// How long a cascade tile's turn takes; face-visible (the counter's tick and
+// what spoils the tier) is called at the halfway point, when the card passes
+// edge-on.
+const CASCADE_FLIP_MS = 360;
+
 function CascadeTile({
   entry,
   username,
@@ -349,45 +354,63 @@ function CascadeTile({
   onLanded,
   onFaceVisible,
 }: CascadeTileProps) {
+  const flipRef = useRef<HTMLDivElement | null>(null);
+  const startedRef = useRef(false);
   const firedRef = useRef(false);
   const facedRef = useRef(false);
   const flipped = entry !== undefined;
 
-  const showFace = () => {
-    if (!flipped || facedRef.current) return;
-    facedRef.current = true;
-    onFaceVisible();
-  };
-
-  const fire = () => {
-    if (!flipped || firedRef.current) return;
-    firedRef.current = true;
-    // Safety net: if no frame ever reported passing 90deg, the face is
-    // certainly up by now.
-    showFace();
-    onLanded();
-  };
-
-  // Under reduced motion the flip is instant; don't rely on framer emitting a
-  // completion event for a zero-duration animation.
-  useEffect(() => {
-    if (reducedMotion && flipped) fire();
+  /* The flip runs on the compositor via the Web Animations API, like the
+     advance flight below: the other cards' thumbnail paints land on the main
+     thread all through the cascade, and a rAF-driven flip freezes mid-turn
+     under them - on phones long enough to read as the card vanishing. The
+     halfway callback rides a timer instead of a per-frame value, so a stalled
+     main thread delays the counter, never the turn. */
+  useLayoutEffect(() => {
+    if (!flipped || startedRef.current) return;
+    startedRef.current = true;
+    const showFace = () => {
+      if (facedRef.current) return;
+      facedRef.current = true;
+      onFaceVisible();
+    };
+    const fire = () => {
+      if (firedRef.current) return;
+      firedRef.current = true;
+      showFace();
+      onLanded();
+    };
+    const el = flipRef.current;
+    if (!el || reducedMotion || typeof el.animate !== "function") {
+      if (el) el.style.transform = "rotateY(180deg)";
+      fire();
+      return;
+    }
+    const animation = el.animate(
+      [{ transform: "rotateY(0deg)" }, { transform: "rotateY(180deg)" }],
+      { duration: CASCADE_FLIP_MS, easing: "cubic-bezier(0.3, 0.1, 0.3, 1)", fill: "forwards" },
+    );
+    let dead = false;
+    const faceTimer = window.setTimeout(() => {
+      if (!dead) showFace();
+    }, CASCADE_FLIP_MS / 2);
+    animation.finished
+      .then(() => {
+        if (!dead) fire();
+      })
+      .catch(() => {});
+    return () => {
+      dead = true;
+      window.clearTimeout(faceTimer);
+    };
+    // The callbacks are per-render closures; startedRef makes the flip
+    // one-shot regardless.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reducedMotion, flipped]);
+  }, [flipped, reducedMotion]);
 
   return (
     <div className="relative h-full w-full" style={{ perspective: 700 }}>
-      <motion.div
-        className="relative h-full w-full"
-        style={{ transformStyle: "preserve-3d" }}
-        initial={false}
-        animate={{ rotateY: flipped ? 180 : 0 }}
-        transition={{ duration: reducedMotion ? 0 : 0.36, ease: [0.3, 0.1, 0.3, 1] }}
-        onUpdate={(latest) => {
-          if (Number(latest.rotateY) >= 90) showFace();
-        }}
-        onAnimationComplete={fire}
-      >
+      <div ref={flipRef} className="relative h-full w-full" style={{ transformStyle: "preserve-3d" }}>
         <div
           className="absolute inset-0 rounded-[10px] bg-cover bg-center"
           style={{
@@ -410,7 +433,7 @@ function CascadeTile({
             </div>
           )}
         </div>
-      </motion.div>
+      </div>
 
       {/* TierBurst animates in stage-sized pixels; the scale wrapper shrinks
           its whole coordinate space down to tile scale. */}
@@ -872,12 +895,17 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     // the grid reads as broken, so a cold card holds the line at its slot and
     // the cards behind it (already prepared) catch up at the normal gap.
     //
-    // The paints themselves take turns, though: each is a big synchronous
-    // canvas job, and a ten-card pack landing them together starves the deal
-    // and flip animations of frames. Only the paint+encode queues; the score
-    // fetches (the slow, network-bound part) still all run at once, and the
-    // avatars were warmed when the stack mounted.
-    let lastPaint: Promise<void> = Promise.resolve();
+    // The paints themselves take turns, and none may start until the deal-out
+    // has finished: each is a big synchronous canvas job, and on phones the
+    // batch used to freeze the rAF-driven deal mid-flight - giant half-dealt
+    // backs parked over the bottom row, hiding its tiles for a second or
+    // more. Only the paint+encode is held back; the score fetches (the slow,
+    // network-bound part) all run at once from the start, and the avatars
+    // were warmed when the stack mounted.
+    let lastPaint: Promise<void> =
+      dealMs > 0
+        ? new Promise((resolve) => setTimeout(resolve, dealMs + 150))
+        : Promise.resolve();
     const queuePaint = <T,>(work: () => Promise<T>): Promise<T> => {
       const run = lastPaint.then(work);
       lastPaint = run.then(
