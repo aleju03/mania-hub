@@ -27,6 +27,7 @@ import { useDocumentVisible } from "#/lib/window-activity";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { CountryFlag } from "#/components/ui/CountryFlag";
 import { SearchInput } from "#/components/ui/SearchInput";
+import { GoatPollVotersModal } from "./GoatPollVoters";
 
 /* The temporary community vote for the next GOAT card: a timed window where
    players put names up and vote them up or down.
@@ -200,6 +201,7 @@ function NomineeRow({
   disabled,
   animated,
   moderation,
+  onInspect,
   onVote,
 }: {
   nominee: GoatPollNominee;
@@ -217,11 +219,22 @@ function NomineeRow({
     onCancel: () => void;
     onRemove: () => void;
   };
+  /* Also true-admin only: opens the ballot behind this row. Everyone else's
+     name is plain text, so the poll looks the same to them as it always did. */
+  onInspect?: () => void;
   onVote: (nomineeId: string, next: number) => void;
 }) {
   // Clicking the arrow you already picked clears the vote, so undoing does not
   // need a third control.
   const cast = (value: number) => onVote(nominee.id, vote === value ? 0 : value);
+  /* The proof link below is an anchor, so only this line becomes the button —
+     nesting one inside the other is invalid and would swallow the link's click. */
+  const nameLine = (
+    <>
+      <span className="truncate text-[11px] font-semibold text-osu-c1/85">{nominee.username}</span>
+      {nominee.countryCode && <CountryFlag code={nominee.countryCode} size="xs" />}
+    </>
+  );
   return (
     <motion.li layout={animated} className="flex items-center gap-2 py-1">
       {nominee.avatarUrl ? (
@@ -238,10 +251,18 @@ function NomineeRow({
         </span>
       )}
       <span className="flex min-w-0 flex-1 flex-col leading-tight">
-        <span className="flex items-center gap-1.5">
-          <span className="truncate text-[11px] font-semibold text-osu-c1/85">{nominee.username}</span>
-          {nominee.countryCode && <CountryFlag code={nominee.countryCode} size="xs" />}
-        </span>
+        {onInspect ? (
+          <button
+            type="button"
+            onClick={onInspect}
+            title={`See who voted on ${nominee.username}`}
+            className="flex min-w-0 cursor-pointer items-center gap-1.5 text-left transition-opacity hover:opacity-70"
+          >
+            {nameLine}
+          </button>
+        ) : (
+          <span className="flex items-center gap-1.5">{nameLine}</span>
+        )}
         {nominee.banned && nominee.proofUrl && (
           <a
             href={nominee.proofUrl}
@@ -343,6 +364,10 @@ export function GoatPoll() {
   // The row an admin has armed for removal, and the one being removed.
   const [armed, setArmed] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  // The row whose ballot an admin is reading, by id: held as an id rather than
+  // the row itself so a live vote landing while the modal is open updates the
+  // tallies in its header.
+  const [inspecting, setInspecting] = useState<string | null>(null);
   const [manualName, setManualName] = useState("");
   const [manualProof, setManualProof] = useState("");
   const [busy, setBusy] = useState(false);
@@ -507,6 +532,13 @@ export function GoatPoll() {
   );
 
   const nominees = useMemo(() => board?.nominees ?? [], [board]);
+  /* Re-read off the board every render rather than snapshotted on the click, so
+     the modal's header follows the live tallies — and closes itself if the row
+     is removed (by this admin, or off the stream) while it is open. */
+  const inspected = useMemo(
+    () => (inspecting ? nominees.find((nominee) => nominee.id === inspecting) ?? null : null),
+    [inspecting, nominees],
+  );
 
   if (!board) return null;
 
@@ -683,6 +715,7 @@ export function GoatPoll() {
                       disabled={!canVote}
                       animated={animatedRows}
                       moderation={auth.isAdmin ? moderationFor(nominee) : undefined}
+                      onInspect={auth.isAdmin ? () => setInspecting(nominee.id) : undefined}
                       onVote={handleVote}
                     />
                   ))}
@@ -701,6 +734,8 @@ export function GoatPoll() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {auth.isAdmin && <GoatPollVotersModal nominee={inspected} onClose={() => setInspecting(null)} />}
     </section>
   );
 }

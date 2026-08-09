@@ -7,7 +7,7 @@ import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, 
 import { cancelBeatmapOsuFileBackfill, startBeatmapOsuFileBackfill } from "../../features/beatmap-osu-file-backfill.js";
 import { cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, startChartAnalysisBackfill } from "../../features/chart-analysis.js";
 import { importDanBenchmark, isDanBenchmarkFamily, listDanBenchmarkHiddenDiffs, listDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "../../features/dan-benchmark.js";
-import { goatPollWindow, listGoatPollBoard, removeGoatPollNominee } from "../../features/goat-poll.js";
+import { goatPollWindow, listGoatPollBoard, listGoatPollVoters, removeGoatPollNominee } from "../../features/goat-poll.js";
 import { enqueueGlobalMapsRefresh, enqueueMapsRefresh, enqueueMapsRefreshIfDue } from "../../features/maps.js";
 import { rebuildMapCollections } from "../../features/map-collections.js";
 import { getHonoraryPullsReport } from "../../features/pack-pulls.js";
@@ -214,6 +214,50 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       });
     }
     sendJson(req, res, ctx, result.removed ? 200 : 404, { ok: result.removed, ...result });
+    return true;
+  }
+  if (url.pathname === "/api/admin/goat-poll/voters") {
+    /* Who voted for one nominee, and which way. The public board only carries a
+       net number, and the person who has to decide what the poll meant needs to
+       see the ballot behind it — a row lifted by one player's friends looks
+       exactly like a row the community agreed on until you read the names. */
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const window = goatPollWindow();
+    if (!window) {
+      sendJson(req, res, ctx, 404, { error: "poll_not_configured" });
+      return true;
+    }
+    const nomineeId = url.searchParams.get("nomineeId") ?? "";
+    if (!nomineeId) {
+      sendJson(req, res, ctx, 400, { error: "invalid_request" });
+      return true;
+    }
+    const voters = await listGoatPollVoters(ctx.db, window.pollId, nomineeId);
+    /* Anyone signed in can vote, but only tracked-country players are in the
+       users projection, so the analytics viewer roster (every account that has
+       browsed while signed in) fills the rest. Best effort and in the other
+       database — a name is a nicety here, and a bare id still identifies the
+       voter. */
+    const unnamed = voters.filter((voter) => !voter.username).map((voter) => voter.userId);
+    if (unnamed.length > 0 && ctx.analytics) {
+      const names = await ctx.analytics
+        .getViewerNames(unnamed)
+        .catch((error) => {
+          logWarn("goat_poll_voter_names_failed", errorContext(error));
+          return new Map<number, string>();
+        });
+      for (const voter of voters) {
+        if (!voter.username) voter.username = names.get(voter.userId) ?? null;
+      }
+    }
+    sendJson(req, res, ctx, 200, { ok: true, nomineeId, voters });
     return true;
   }
   if (url.pathname === "/api/admin/goat-poll/remove") {

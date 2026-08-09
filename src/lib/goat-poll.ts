@@ -216,6 +216,51 @@ export const removeGoatPollNominee = createServerFn({ method: "POST" })
     return readResult(response, (await response.json().catch(() => ({}))) as BackendResponse);
   });
 
+/** One vote on one nominee. `username` is null when neither the backend's user
+    projection nor its viewer roster knows the id. */
+export interface GoatPollVoter {
+  userId: number;
+  username: string | null;
+  avatarUrl: string | null;
+  countryCode: string | null;
+  value: 1 | -1;
+  votedAt: number;
+}
+
+/**
+ * The ballot behind one row, for the person who has to read the result.
+ *
+ * True-admin only, like removal above and for the same reason: the board shows
+ * everyone a net number on purpose, and who downvoted whom is not a thing this
+ * poll publishes. Returns null when the backend cannot be reached; a non-admin
+ * caller gets the guard's error rather than an empty list, so this never
+ * silently becomes a public read.
+ */
+export const fetchGoatPollVoters = createServerFn({ method: "GET" })
+  .validator((data: { nomineeId: string }) => {
+    if (typeof data?.nomineeId !== "string" || !data.nomineeId) throw new Error("A nominee id is required.");
+    return { nomineeId: data.nomineeId };
+  })
+  .handler(async ({ data }): Promise<GoatPollVoter[] | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const { requireTrueAdminAccess } = await import("./auth-server");
+    await requireTrueAdminAccess("Read the GOAT poll's voters");
+    const base = backendBase();
+    if (!base) return null;
+    try {
+      const response = await fetch(
+        `${base}/api/admin/goat-poll/voters?nomineeId=${encodeURIComponent(data.nomineeId)}`,
+        { headers: bridgeHeaders() },
+      );
+      if (!response.ok) return null;
+      const body = (await response.json()) as { voters?: unknown };
+      return Array.isArray(body.voters) ? (body.voters as GoatPollVoter[]) : [];
+    } catch {
+      return null;
+    }
+  });
+
 /** The signed-in viewer's ballot, read once when the widget mounts. */
 export const fetchMyGoatPollVotes = createServerFn({ method: "GET" }).handler(
   async (): Promise<Record<string, number>> => {

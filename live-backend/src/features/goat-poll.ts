@@ -285,6 +285,57 @@ export async function getGoatPollNominee(db: Db, pollId: string, nomineeId: stri
   return row ? rowToNominee(row as Record<string, unknown>) : null;
 }
 
+/** One vote on one nominee, with whoever cast it. Admin-only — see below. */
+export interface GoatPollVoter {
+  userId: number;
+  username: string | null;
+  avatarUrl: string | null;
+  countryCode: string | null;
+  value: 1 | -1;
+  votedAt: number;
+}
+
+/* Rows past this are not returned. The board is a community poll, not an
+   election, so a nominee with more than this many votes is a story in itself and
+   the list stops being something a person reads. */
+const VOTER_LIST_LIMIT = 1000;
+
+/**
+ * The ballot behind one row: who voted for this nominee, and which way.
+ *
+ * Never joined into the public board, and not because the votes are secret so
+ * much as because publishing them would change them — a board that names your
+ * downvotes is a board people vote on differently. It exists for the one person
+ * who has to act on the result: +8 built out of one player's friends and +8 the
+ * community agreed on read identically as a number, and only this tells them
+ * apart.
+ *
+ * Names come from the users projection where there is one. Voting needs an osu!
+ * login and nothing else, so a voter from an untracked country legitimately has
+ * no row there; the route fills those from the analytics viewer roster, and an
+ * id that neither knows stays a bare id rather than costing an osu! API call.
+ */
+export async function listGoatPollVoters(db: Db, pollId: string, nomineeId: string): Promise<GoatPollVoter[]> {
+  const rows = (await exec(
+    db,
+    `select v.voter_user_id, v.value, v.updated_at, u.username, u.avatar_url, u.country_code
+     from goat_poll_votes v
+     left join users u on u.user_id = v.voter_user_id
+     where v.poll_id = ? and v.nominee_id = ?
+     order by v.value desc, v.updated_at asc
+     limit ?`,
+    [pollId, nomineeId, VOTER_LIST_LIMIT],
+  )).rows;
+  return rows.map((row) => ({
+    userId: Number(row.voter_user_id),
+    username: row.username == null ? null : String(row.username),
+    avatarUrl: row.avatar_url == null ? null : String(row.avatar_url),
+    countryCode: row.country_code == null ? null : String(row.country_code),
+    value: Number(row.value) > 0 ? 1 : -1,
+    votedAt: Number(row.updated_at),
+  }));
+}
+
 /** One voter's ballot, as `{ [nomineeId]: 1 | -1 }`. */
 export async function listGoatPollVotesForUser(
   db: Db,

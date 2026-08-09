@@ -416,6 +416,50 @@ describe("goat poll moderation", () => {
   });
 });
 
+describe("goat poll voters", () => {
+  function voters(nomineeId: string, headers: IncomingMessage["headers"] = ADMIN) {
+    return call(mockReq("GET", `/api/admin/goat-poll/voters?nomineeId=${encodeURIComponent(nomineeId)}`, headers));
+  }
+
+  it("names both sides of one row's ballot, best-known name first", async () => {
+    // A voter the projections know about, and one they do not: only the first
+    // gets a name and a flag, and both are still voters.
+    await exec(db, `insert into users (user_id, username, avatar_url, country_code, updated_at)
+                    values (7, 'Voter Seven', 'https://a.ppy.sh/7', 'CR', '2026-01-01T00:00:00Z')`);
+    const created = await nominate({ userId: 7, username: "Jakads" });
+    await vote({ userId: 8, nomineeId: created.body.nomineeId, value: -1 });
+
+    const list = await voters(created.body.nomineeId);
+    expect(list.status).toBe(200);
+    expect(list.body.voters).toHaveLength(2);
+    // Upvotes first, so the nominator's own vote leads.
+    expect(list.body.voters[0]).toMatchObject({
+      userId: 7,
+      username: "Voter Seven",
+      countryCode: "CR",
+      value: 1,
+    });
+    expect(list.body.voters[1]).toMatchObject({ userId: 8, username: null, value: -1 });
+  });
+
+  it("stays admin-only and answers an unknown nominee with nothing", async () => {
+    const created = await nominate({ userId: 1, username: "Jakads" });
+    expect((await voters(created.body.nomineeId, {})).status).toBe(401);
+    expect((await call(mockReq("GET", "/api/admin/goat-poll/voters", ADMIN))).status).toBe(400);
+    // A row that is not there is an empty ballot, not an error: the board it was
+    // clicked from may just be a refresh behind.
+    const missing = await voters("nope");
+    expect(missing.status).toBe(200);
+    expect(missing.body.voters).toEqual([]);
+  });
+
+  it("404s once the poll is retired", async () => {
+    const created = await nominate({ userId: 1, username: "Jakads" });
+    setPoll({ enabled: false });
+    expect((await voters(created.body.nomineeId)).status).toBe(404);
+  });
+});
+
 describe("goat poll window", () => {
   it("refuses writes once the deadline has passed", async () => {
     await nominate({ userId: 1, username: "Jakads" });

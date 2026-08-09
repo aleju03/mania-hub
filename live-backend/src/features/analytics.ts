@@ -621,6 +621,34 @@ export class AnalyticsStore {
     }));
   }
 
+  /* Usernames for a handful of osu! ids, for callers in the other database who
+     have an id and no name. The viewer roster is the widest name source the
+     backend has — every account that has signed in and browsed, not just the
+     tracked-country rosters — and it costs no osu! API call to ask.
+
+     Chunked because this goes into an `in (...)` list, and the answer is a map
+     rather than rows because the caller is matching ids it already holds. Ids it
+     has never seen simply stay absent. */
+  async getViewerNames(ids: number[]): Promise<Map<number, string>> {
+    const wanted = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+    const names = new Map<number, string>();
+    if (wanted.length === 0) return names;
+    await this.flush();
+    for (let start = 0; start < wanted.length; start += 200) {
+      const chunk = wanted.slice(start, start + 200);
+      const rows = (await exec(
+        this.db,
+        `select viewer_id, username from analytics_viewers where viewer_id in (${chunk.map(() => "?").join(",")})`,
+        chunk,
+      )).rows;
+      for (const row of rows) {
+        const username = String(row.username ?? "").trim();
+        if (username) names.set(Number(row.viewer_id), username);
+      }
+    }
+    return names;
+  }
+
   async prune(now = Date.now()): Promise<number> {
     const cutoff = now - this.options.retentionDays * 24 * 60 * 60_000;
     const result = await exec(this.db, "delete from analytics_events where ts < ?", [cutoff]);
