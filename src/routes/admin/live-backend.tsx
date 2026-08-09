@@ -3281,6 +3281,16 @@ type RateCallerRow = {
   errors?: number;
 };
 
+/* Same widening as RateCallerRow: the live limiter's rows carry no timings or
+   error counts, only the history rows do, and the panel renders both. */
+type RatePathRow = {
+  path: string;
+  count: number;
+  avgMs?: number | null;
+  maxMs?: number | null;
+  errors?: number;
+};
+
 function share(count: number, total: number): number {
   return total > 0 ? Math.round((count / total) * 100) : 0;
 }
@@ -3290,8 +3300,8 @@ function RateBreakdownCard({ status }: { status: LiveBackendStatus | null }) {
   const windowMinutes = status?.apiCallHistory?.windowMinutes ?? 15;
   const live = windowKey === "live";
   const rawCallers: RateCallerRow[] = (live ? status?.rate.byCaller : status?.apiCallHistory?.byCaller) ?? [];
-  const livePaths = status?.rate.byPath ?? [];
-  const historyPaths = status?.apiCallHistory?.byPath ?? [];
+  const livePaths: RatePathRow[] = status?.rate.byPath ?? [];
+  const historyPaths: RatePathRow[] = status?.apiCallHistory?.byPath ?? [];
   const paths = live && livePaths.length ? livePaths : historyPaths;
   const names = status?.apiCallHistory?.names;
 
