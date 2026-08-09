@@ -1881,6 +1881,13 @@ export interface GoatPollNominee {
   net: number;
 }
 
+/* "There is no poll" — a retired one, or an unreleased one seen by someone who
+   is not an admin, which answer the same 404 on purpose. Distinct from null
+   (the backend was unreachable) so the widget can stop polling for good in the
+   first case and keep trying in the second. */
+export const GOAT_POLL_OFF = "goat_poll_off" as const;
+export type GoatPollOff = typeof GOAT_POLL_OFF;
+
 /* The `goat_poll` SSE frame: one changed row, or the id of one that is gone.
    A vote touches exactly one nominee, so the stream carries that row and the
    board patches itself — sending the whole board per click would be up to
@@ -1928,12 +1935,16 @@ export interface GoatPollBoard extends GoatPollBoardPayload {
    unreleased poll should be indistinguishable from one that does not exist.
    Admins read it through fetchGoatPollBoardAsAdmin() in src/lib/goat-poll.ts
    instead, which carries the bridge token. */
-export async function fetchGoatPollBoard(): Promise<GoatPollBoardPayload | null> {
-  if (!isLiveBackendConfigured()) return null;
+export async function fetchGoatPollBoard(): Promise<GoatPollBoardPayload | GoatPollOff | null> {
+  if (!isLiveBackendConfigured()) return GOAT_POLL_OFF;
   try {
     return await fetchLiveJson<GoatPollBoardPayload>("/api/goat-poll");
-  } catch {
-    return null;
+  } catch (error) {
+    /* A 404 is the backend saying there is no poll — retired, or unreleased and
+       this viewer is not an admin. Told apart from a network blip so the widget
+       can stop asking: once a poll is over, every open packs tab would otherwise
+       spend a request on it every 20 seconds for as long as the tab lives. */
+    return error instanceof LiveBackendRequestError && error.status === 404 ? GOAT_POLL_OFF : null;
   }
 }
 

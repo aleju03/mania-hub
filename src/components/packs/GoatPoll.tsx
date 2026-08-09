@@ -14,6 +14,7 @@ import {
 import { HONORARY_PLAYERS } from "#/lib/honorary-players";
 import {
   fetchGoatPollBoard,
+  GOAT_POLL_OFF,
   openLiveEventSource,
   sortGoatPollNominees,
   type GoatPollBoard,
@@ -329,6 +330,9 @@ export function GoatPoll() {
   const visible = useDocumentVisible();
   const wide = useRailWidth();
   const [board, setBoard] = useState<GoatPollBoard | null>(null);
+  /* Set once the backend answers "there is no poll" (retired, or unreleased and
+     this viewer is not an admin). Stops the refresh for the life of the mount. */
+  const [off, setOff] = useState(false);
   const [votes, setVotes] = useState<Record<string, number>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -349,13 +353,24 @@ export function GoatPoll() {
   const admin = canUseAdminFeatures(auth);
 
   useEffect(() => {
+    /* Nothing to ask for and nothing to listen to: the backend has said there
+       is no poll. Without this, a retired poll would cost every open packs tab
+       a 404 every 20 seconds for as long as it stayed open. */
+    if (off) return;
     let cancelled = false;
     const load = () => {
       void (admin ? fetchGoatPollBoardAsAdmin() : fetchGoatPollBoard()).then((next) => {
+        if (cancelled) return;
+        if (next === GOAT_POLL_OFF || (admin && next === null)) {
+          // The admin path returns null for the same 404 (it cannot see one
+          // either), and an admin refreshing the page is a cheap retry.
+          setOff(true);
+          return;
+        }
         // receivedAt is stamped here rather than in either fetcher: the clock
         // that matters is the browser's at the moment the answer landed, and one
         // of those two paths comes back through a server fn.
-        if (!cancelled && next) setBoard({ ...next, receivedAt: Date.now() });
+        if (next) setBoard({ ...next, receivedAt: Date.now() });
       });
     };
     load();
@@ -395,7 +410,7 @@ export function GoatPoll() {
       if (timer) clearInterval(timer);
       source?.removeEventListener("goat_poll", onChange);
     };
-  }, [visible, admin]);
+  }, [visible, admin, off]);
 
   useEffect(() => {
     if (!auth.viewer) return;
