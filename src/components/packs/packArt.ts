@@ -1,4 +1,5 @@
 import type { PackTypeDef, PackTypeId } from "#/lib/packs";
+import { pathRoundRect } from "#/lib/canvas";
 import { drawManiaGlyph } from "../player/maniacard3d/cardTexture";
 
 // Real booster proportions: ~72x122mm, so width/height ~0.6.
@@ -687,7 +688,7 @@ function drawTypeBand(
   const size = fitFontSize(context, style.name, width * 0.44, 26, "900", spacing);
   const bandWidth = trackedWidth(context, style.name, spacing) + 64;
   context.beginPath();
-  context.roundRect(cx - bandWidth / 2, cy - bandHeight / 2, bandWidth, bandHeight, bandHeight / 2);
+  pathRoundRect(context, cx - bandWidth / 2, cy - bandHeight / 2, bandWidth, bandHeight, bandHeight / 2);
   context.fillStyle = rgba(mixRgb(style.accent, WHITE, 0.04), 0.92);
   context.fill();
 
@@ -813,7 +814,7 @@ export function createCardBackCanvas(): HTMLCanvasElement {
   const radius = 28;
 
   context.beginPath();
-  context.roundRect(0, 0, width, height, radius);
+  pathRoundRect(context, 0, 0, width, height, radius);
   context.clip();
 
   const base = context.createLinearGradient(0, 0, width, height);
@@ -834,7 +835,7 @@ export function createCardBackCanvas(): HTMLCanvasElement {
 
   // Frame
   context.beginPath();
-  context.roundRect(16, 16, width - 32, height - 32, radius - 8);
+  pathRoundRect(context, 16, 16, width - 32, height - 32, radius - 8);
   context.strokeStyle = "rgba(255,255,255,0.22)";
   context.lineWidth = 3;
   context.stroke();

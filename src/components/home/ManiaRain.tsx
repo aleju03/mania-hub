@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { pathRoundRect } from "../../lib/canvas";
 import { readCursorSettings, segmentHitsCircle, subscribeCursorSettings } from "../../lib/cursor";
 import { isWindowActive, subscribeWindowActivity } from "../../lib/window-activity";
 
@@ -135,7 +136,7 @@ function drawFallbackNote(
 
   if (NOTE_IMAGES[imgIndex].aspect === "bar") {
     context.beginPath();
-    context.roundRect(-drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight, drawHeight / 2);
+    pathRoundRect(context, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight, drawHeight / 2);
     context.fill();
     return;
   }
