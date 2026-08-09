@@ -13,6 +13,7 @@ import { SkinUpdateModal } from "../components/skins/SkinUpdateModal";
 import { Avatar } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
 import { formatTimeAgo } from "../lib/format";
+import { linkify } from "../lib/linkify";
 import { skinEventProperties } from "../lib/analytics-skins";
 import { track } from "../lib/analytics";
 import {
@@ -369,8 +370,24 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                       )}
                     </div>
                     {skin.description && (
-                      <p className="mt-3 whitespace-pre-line text-[13px] leading-relaxed text-osu-l2">
-                        {skin.description}
+                      /* Descriptions credit sources with long unbroken URLs, so
+                         break anywhere rather than spill out of the column. */
+                      <p className="mt-3 whitespace-pre-line break-words text-[13px] leading-relaxed text-osu-l2 [overflow-wrap:anywhere]">
+                        {linkify(skin.description).map((segment, index) =>
+                          segment.kind === "link" ? (
+                            <a
+                              key={index}
+                              href={segment.href}
+                              target="_blank"
+                              rel="noopener noreferrer nofollow ugc"
+                              className="font-semibold text-osu-l2 underline decoration-osu-pink/50 underline-offset-2 transition-colors hover:text-white hover:decoration-osu-pink"
+                            >
+                              {segment.text}
+                            </a>
+                          ) : (
+                            <span key={index}>{segment.text}</span>
+                          ),
+                        )}
                       </p>
                     )}
                     {skin.oskUrl && (
