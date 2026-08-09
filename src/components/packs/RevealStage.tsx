@@ -832,6 +832,11 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     setActiveFallback(null);
     setMintFailure(null);
     setPhase("stack");
+    /* The cascade never puts the canvas card back up, and on desktop the
+       hidden renderer would keep drawing full-shader frames behind the deal
+       for its whole run (idleMotion "continuous" ignores opacity 0). */
+    rendererRef.current?.dispose({ deferGpuRelease: true });
+    rendererRef.current = null;
 
     if (startAt >= cards.length) {
       onComplete(revealedRef.current, { sourceRects: collectHandoffRects() });
@@ -866,6 +871,22 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     // loop itself walks the row in position order: a reveal that jumps around
     // the grid reads as broken, so a cold card holds the line at its slot and
     // the cards behind it (already prepared) catch up at the normal gap.
+    //
+    // The paints themselves take turns, though: each is a big synchronous
+    // canvas job, and a ten-card pack landing them together starves the deal
+    // and flip animations of frames. Only the paint+encode queues; the score
+    // fetches (the slow, network-bound part) still all run at once, and the
+    // avatars were warmed when the stack mounted.
+    let lastPaint: Promise<void> = Promise.resolve();
+    const queuePaint = <T,>(work: () => Promise<T>): Promise<T> => {
+      const run = lastPaint.then(work);
+      lastPaint = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
+    };
+
     const prepareCard = async (position: number) => {
       const card = cards[position];
       const scores = await resolveCardScores(card);
@@ -882,10 +903,19 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
         if (data.status === "ready") {
           let thumbnail: string | null = null;
           try {
-            thumbnail = await renderCardThumbnail(data, COLLECTION_CARD_THUMB_WIDTH);
+            thumbnail = await queuePaint(() => renderCardThumbnail(data, COLLECTION_CARD_THUMB_WIDTH));
             void rememberCardThumbnailDataUrl(data, thumbnail, COLLECTION_CARD_THUMB_WIDTH);
           } catch {
             thumbnail = null;
+          }
+          if (thumbnail) {
+            /* The flip mounts the face <img> the same instant this card's data
+               lands, and an undecoded WebP paints as a blank tile for the
+               first frames of the turn. Decode it into the image cache now so
+               the face is there the moment it swings past edge-on. */
+            const face = new Image();
+            face.src = thumbnail;
+            if (typeof face.decode === "function") await face.decode().catch(() => undefined);
           }
           entry = {
             player: card.player,

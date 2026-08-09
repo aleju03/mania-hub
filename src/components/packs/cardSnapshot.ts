@@ -41,6 +41,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 async function renderCardThumbnailCanvas(data: ManiaCardReadyData, width: number): Promise<{ canvas: HTMLCanvasElement; dispose: () => void }> {
   const textures = await createCardTextures(data, {
     textureScale: Math.max(0.5, Math.min(1, width / 560)),
+    frontOnly: true,
   });
   const source = textures.frontTexture.image;
   const canvas = document.createElement("canvas");

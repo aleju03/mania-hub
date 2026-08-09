@@ -128,7 +128,10 @@ export async function loadCardFonts(): Promise<void> {
 
 export async function createCardTextures(
   data: ManiaCardReadyData,
-  options: { textureScale?: number } = {},
+  /* frontOnly leaves the back texture blank (it still exists and disposes the
+     same): thumbnail snapshots read only the front, and the back's paint is
+     half the canvas work. */
+  options: { textureScale?: number; frontOnly?: boolean } = {},
 ): Promise<CardTextureSet> {
   // Before measuring, not just before drawing: the username is auto-sized from
   // its measured width, so Arial metrics would size it wrong even if the font
@@ -154,7 +157,7 @@ export async function createCardTextures(
   ]);
 
   drawFront(front, data, layout, avatar, laurel);
-  drawBack(back, data, layout, laurel);
+  if (!options.frontOnly) drawBack(back, data, layout, laurel);
 
   const frontTexture = toTexture(frontCanvas);
   const backTexture = toTexture(backCanvas);
