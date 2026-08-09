@@ -1742,12 +1742,15 @@ async function migrateGoatPoll(db: Db): Promise<void> {
   `);
   // Two unique indexes rather than one, because a banned or deleted account may
   // have no resolvable osu! id (the archive URL is the only handle we get, and
-  // it does not always carry one). name_key always dedupes; the partial index on
-  // osu_user_id additionally collapses the same player nominated once by search
-  // and once by hand under a different spelling.
+  // it does not always carry one). The id index is the real one: it collapses
+  // the same player nominated once by search and once by hand under a different
+  // spelling. name_key (punctuation-stripped, see features/goat-poll.ts) covers
+  // the rows an id cannot, and applies only where there is no id — two accounts
+  // whose names differ only in a dash are two players, and the id says so.
+  await db.execute("drop index if exists idx_goat_poll_nominee_name");
   await db.execute(`
-    create unique index if not exists idx_goat_poll_nominee_name
-      on goat_poll_nominees(poll_id, name_key)
+    create unique index if not exists idx_goat_poll_nominee_name_anon
+      on goat_poll_nominees(poll_id, name_key) where osu_user_id is null
   `);
   await db.execute(`
     create unique index if not exists idx_goat_poll_nominee_user

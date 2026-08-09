@@ -1,7 +1,13 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { HONORARY_PACK_POOL, HONORARY_PLAYERS, honoraryPlayerById, searchHonoraryPlayers } from "./honorary-players";
+import {
+  HONORARY_PACK_POOL,
+  HONORARY_PLAYERS,
+  honoraryPlayerById,
+  honoraryPlayerByName,
+  searchHonoraryPlayers,
+} from "./honorary-players";
 import { applyHonoraryHit, PACK_TYPES, packTypeById, type PackPlayer } from "./packs";
 import { getHonoraryTier, HONORARY_TIER_USER_IDS, MANIA_TIER_STYLES } from "./maniacard";
 
@@ -51,6 +57,20 @@ describe("honorary roster", () => {
     expect(searchHonoraryPlayers("jakads").map((player) => player.username)).toContain("Jakads");
     expect(searchHonoraryPlayers("")).toEqual([]);
     expect(searchHonoraryPlayers("nobodyhere")).toEqual([]);
+  });
+
+  /* What stops the GOAT poll nominating someone who is already a GOAT: the
+     manual path has a typed name and nothing else, so the match has to survive
+     the punctuation a nominator does not reproduce. */
+  it("matches a roster member by name past case and punctuation", () => {
+    expect(honoraryPlayerByName("Jakads")?.id).toBe(259972);
+    expect(honoraryPlayerByName("jak_ads.")?.id).toBe(259972);
+    expect(honoraryPlayerByName("[crz] player")?.id).toBe(1089335);
+    // Card names count: that is the name the community knows him by.
+    expect(honoraryPlayerByName("KaneMining")?.id).toBe(12253636);
+    expect(honoraryPlayerByName("silicosis et")?.id).toBe(12253636);
+    expect(honoraryPlayerByName("nobodyhere")).toBeNull();
+    expect(honoraryPlayerByName("")).toBeNull();
   });
 
   it("keeps players without a renderable card out of the draw pool", () => {

@@ -308,6 +308,30 @@ export function isHonoraryPlayer(id: number | null | undefined): boolean {
   return id != null && BY_ID.has(id);
 }
 
+/* Case, spacing and punctuation stripped, so a name typed from memory still
+   finds the player. Mirrors nameKey in live-backend/src/features/goat-poll.ts —
+   the two answer the same question ("is this the same person?") on either side
+   of the poll bridge, so keep them in step. */
+function nameKey(name: string): string {
+  const stripped = name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  return stripped || name.trim().toLowerCase();
+}
+
+const BY_NAME = new Map<string, HonoraryPlayer>();
+for (const player of HONORARY_PLAYERS) {
+  BY_NAME.set(nameKey(player.username), player);
+  if (player.cardName) BY_NAME.set(nameKey(player.cardName), player);
+}
+
+/* The roster member going by this name, for the callers that have a name and no
+   id — a deleted account nominated by hand, say. Loose about punctuation on
+   purpose: "Jakads." and "jak ads" are the same player as far as "are they
+   already a GOAT?" is concerned. */
+export function honoraryPlayerByName(name: string | null | undefined): HonoraryPlayer | null {
+  if (!name) return null;
+  return BY_NAME.get(nameKey(name)) ?? null;
+}
+
 /* Matches the roster against a search term, so deleted accounts (which the
    osu! user search cannot return) still surface in the player search. Card
    names match too: those are the names the community searches by. */

@@ -7,6 +7,7 @@ import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, 
 import { cancelBeatmapOsuFileBackfill, startBeatmapOsuFileBackfill } from "../../features/beatmap-osu-file-backfill.js";
 import { cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, startChartAnalysisBackfill } from "../../features/chart-analysis.js";
 import { importDanBenchmark, isDanBenchmarkFamily, listDanBenchmarkHiddenDiffs, listDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "../../features/dan-benchmark.js";
+import { goatPollWindow, listGoatPollBoard, removeGoatPollNominee } from "../../features/goat-poll.js";
 import { enqueueGlobalMapsRefresh, enqueueMapsRefresh, enqueueMapsRefreshIfDue } from "../../features/maps.js";
 import { rebuildMapCollections } from "../../features/map-collections.js";
 import { getHonoraryPullsReport } from "../../features/pack-pulls.js";
@@ -213,6 +214,46 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       });
     }
     sendJson(req, res, ctx, result.removed ? 200 : 404, { ok: result.removed, ...result });
+    return true;
+  }
+  if (url.pathname === "/api/admin/goat-poll/remove") {
+    /* Take one nominee off the poll, with their votes. The board is public and
+       anyone signed in can put a name up, so this is the answer to a joke or an
+       abusive nomination — a delete key, not a ban: the nominator keeps their
+       other nominations and the player can be nominated again. */
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const window = goatPollWindow();
+    if (!window) {
+      sendJson(req, res, ctx, 404, { error: "poll_not_configured" });
+      return true;
+    }
+    const body = parseJson<{ nomineeId?: unknown }>((await readBody(req)) || "{}", {});
+    const nomineeId = typeof body.nomineeId === "string" ? body.nomineeId : "";
+    if (!nomineeId) {
+      sendJson(req, res, ctx, 400, { error: "invalid_request" });
+      return true;
+    }
+    const result = await removeGoatPollNominee(ctx.serveWriteDb ?? ctx.db, window.pollId, nomineeId);
+    if (result.removed) {
+      logInfo("goat_poll_nominee_removed", {
+        pollId: window.pollId,
+        nomineeId,
+        username: result.username,
+        votesDeleted: result.votesDeleted,
+      });
+    }
+    sendJson(req, res, ctx, result.removed ? 200 : 404, {
+      ok: result.removed,
+      ...result,
+      nominees: await listGoatPollBoard(ctx.db, window.pollId),
+    });
     return true;
   }
   if (url.pathname === "/api/admin/ingest-fixture") {

@@ -51,6 +51,17 @@ interface BackendResponse {
   votes?: unknown;
 }
 
+/* The osu! id inside a Wayback proof URL, when it carries one. Deliberately
+   lax next to normalizeArchiveProof in the backend, which is what actually
+   validates the link: all this needs to answer is "does this point at a player
+   already on the roster", and a URL that would fail validation there is refused
+   anyway. */
+function archiveProofUserId(proofUrl: string | null | undefined): number | null {
+  if (!proofUrl) return null;
+  const match = /osu\.ppy\.sh\/(?:users|u)\/(\d+)/i.exec(proofUrl);
+  return match ? Number(match[1]) : null;
+}
+
 function unavailable(): GoatPollWriteResult {
   return { ok: false, status: "unavailable", nomineeId: null, nominees: null, votes: null };
 }
@@ -149,15 +160,15 @@ export const nominateGoatPollPlayer = createServerFn({ method: "POST" })
     setResponseHeader("Cache-Control", "private, no-store");
     // The roster lives in one place (honorary-players.ts), so the "they are
     // already a GOAT" check happens here rather than duplicating 23 ids into the
-    // backend. Only catches id-bearing nominations; a banned player nominated by
-    // name is checked against the roster's own name search too.
-    const { isHonoraryPlayer, searchHonoraryPlayers } = await import("./honorary-players");
+    // backend. Three ways in, so all three are checked: the player search (an
+    // id), the manual form (a name), and the archive proof — whose URL is where
+    // a deleted honoree's id actually comes from, since the manual form never
+    // sends one and a roster member typed as "Jakads2" would otherwise sail past
+    // a name check into a duplicate GOAT.
+    const { isHonoraryPlayer, honoraryPlayerByName } = await import("./honorary-players");
     const alreadyHonorary = isHonoraryPlayer(data.osuUserId ?? null)
-      || searchHonoraryPlayers(data.username).some(
-        (player) =>
-          player.username.toLowerCase() === data.username.trim().toLowerCase()
-          || player.cardName?.toLowerCase() === data.username.trim().toLowerCase(),
-      );
+      || isHonoraryPlayer(archiveProofUserId(data.proofUrl))
+      || honoraryPlayerByName(data.username) != null;
     if (alreadyHonorary) {
       return { ok: false, status: "already_honorary", nomineeId: null, nominees: null, votes: null };
     }
@@ -169,6 +180,41 @@ export const nominateGoatPollPlayer = createServerFn({ method: "POST" })
       banned: data.banned,
       proofUrl: data.proofUrl ?? null,
     });
+  });
+
+/**
+ * Moderation for the board, done from the board itself: takes one nominee off,
+ * with their votes. True-admin only, and server-side like every other admin
+ * call, so the backend token never reaches a browser.
+ *
+ * A delete key rather than a ban — the nominator keeps their other nominations
+ * and the player can be put up again — because the poll is open to anyone
+ * signed in and a joke nomination should not be a permanent fixture of a public
+ * board for the rest of the window.
+ */
+export const removeGoatPollNominee = createServerFn({ method: "POST" })
+  .validator((data: { nomineeId: string }) => {
+    if (typeof data?.nomineeId !== "string" || !data.nomineeId) throw new Error("A nominee id is required.");
+    return { nomineeId: data.nomineeId };
+  })
+  .handler(async ({ data }): Promise<GoatPollWriteResult> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const { requireTrueAdminAccess } = await import("./auth-server");
+    await requireTrueAdminAccess("Remove a GOAT poll nominee");
+    const base = backendBase();
+    if (!base) return unavailable();
+    let response: Response;
+    try {
+      response = await fetch(`${base}/api/admin/goat-poll/remove`, {
+        method: "POST",
+        headers: bridgeHeaders(true),
+        body: JSON.stringify({ nomineeId: data.nomineeId }),
+      });
+    } catch {
+      return unavailable();
+    }
+    return readResult(response, (await response.json().catch(() => ({}))) as BackendResponse);
   });
 
 /** The signed-in viewer's ballot, read once when the widget mounts. */

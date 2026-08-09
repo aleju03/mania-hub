@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, ExternalLink, TriangleAlert } from "lucide-react";
+import { ChevronDown, ExternalLink, Trash2, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "#/lib/auth-context";
 import { canUseAdminFeatures } from "#/lib/auth-shared";
@@ -8,8 +8,10 @@ import {
   fetchGoatPollBoardAsAdmin,
   fetchMyGoatPollVotes,
   nominateGoatPollPlayer,
+  removeGoatPollNominee,
   type GoatPollWriteStatus,
 } from "#/lib/goat-poll";
+import { HONORARY_PLAYERS } from "#/lib/honorary-players";
 import { fetchGoatPollBoard, type GoatPollBoard, type GoatPollNominee } from "#/lib/live-backend";
 import { searchPlayers } from "#/lib/player-search";
 import { useDocumentVisible } from "#/lib/window-activity";
@@ -40,6 +42,17 @@ const PROOF_HINT = "web.archive.org link to their osu! profile";
 // something you read and starts being something you scroll past, which on a
 // phone means scrolling past it to reach the packs.
 const VISIBLE_ROWS = 8;
+/* Expanded, the list scrolls inside a fixed height rather than running down the
+   page. It is absolutely positioned in the rail, so an uncapped board does not
+   lengthen the page — it paints over it, and 500 nominees is 16,000px of that. */
+const EXPANDED_HEIGHT = "max-h-[min(60vh,420px)]";
+/* Past this many rows the layout animation comes off. framer-motion measures
+   every row on every render to animate reordering, and this board re-renders on
+   each 20s refresh and each vote — which is fine for a list you can read and
+   ruinous for hundreds. */
+const ANIMATED_ROWS_MAX = 40;
+// Everyone the poll cannot put up, because they are the thing being voted for.
+const HONORARY_IDS: ReadonlySet<number> = new Set(HONORARY_PLAYERS.map((player) => player.id));
 
 /* Above this the widget floats into the page's right gutter; below it stacks in
    flow, collapsed to a single line until tapped. Written twice — Tailwind needs
@@ -116,11 +129,17 @@ function PollPie({
   opensAt,
   closesAt,
   offset,
+  onExpire,
   size = 30,
 }: {
   opensAt: number;
   closesAt: number;
   offset: number;
+  /* Called the first tick past the deadline. The rest of the widget reads
+     `closed` at render time, and nothing else here re-renders — so without this
+     the countdown would read 0s next to a still-open nominate box until the
+     20-second board refresh caught up. */
+  onExpire: () => void;
   size?: number;
 }) {
   const pathRef = useRef<SVGPathElement>(null);
@@ -136,12 +155,13 @@ function PollPie({
       const progress = Math.max(0, Math.min(1, 1 - remaining / span));
       if (pathRef.current) pathRef.current.setAttribute("d", wedgePath(center, center, radius, progress));
       if (labelRef.current) labelRef.current.textContent = formatRemaining(remaining);
+      if (remaining <= 0) onExpire();
     };
     paint();
     if (!visible) return;
     const timer = setInterval(paint, 1000);
     return () => clearInterval(timer);
-  }, [closesAt, span, center, radius, visible, offset]);
+  }, [closesAt, span, center, radius, visible, offset, onExpire]);
 
   return (
     <span className="flex shrink-0 items-center gap-1.5">
@@ -170,18 +190,32 @@ function NomineeRow({
   nominee,
   vote,
   disabled,
+  animated,
+  moderation,
   onVote,
 }: {
   nominee: GoatPollNominee;
   vote: number;
   disabled: boolean;
+  animated: boolean;
+  /* Set only for a true admin: moderation lives on the row, next to the thing
+     being moderated, like the streak board's — and asks twice on the row
+     rather than through a browser dialog, because this sits in the quiet
+     corner of a page that is mostly a card game. */
+  moderation?: {
+    armed: boolean;
+    busy: boolean;
+    onArm: () => void;
+    onCancel: () => void;
+    onRemove: () => void;
+  };
   onVote: (nomineeId: string, next: number) => void;
 }) {
   // Clicking the arrow you already picked clears the vote, so undoing does not
   // need a third control.
   const cast = (value: number) => onVote(nominee.id, vote === value ? 0 : value);
   return (
-    <motion.li layout className="flex items-center gap-2 py-1">
+    <motion.li layout={animated} className="flex items-center gap-2 py-1">
       {nominee.avatarUrl ? (
         <img
           src={nominee.osuUserId ? avatarImageSrc(nominee.avatarUrl, nominee.osuUserId) : nominee.avatarUrl}
@@ -212,7 +246,40 @@ function NomineeRow({
           </a>
         )}
       </span>
+      {/* Armed, the row asks in place: the vote arrows stand down and the two
+          answers take their spot, so nothing jumps and there is no dialog. */}
+      {moderation?.armed ? (
+        <span className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            disabled={moderation.busy}
+            onClick={moderation.onRemove}
+            className="cursor-pointer rounded bg-osu-red px-1.5 py-0.5 text-[10px] font-semibold text-white transition-colors hover:bg-osu-red-light disabled:opacity-50"
+          >
+            {moderation.busy ? "..." : "remove"}
+          </button>
+          <button
+            type="button"
+            disabled={moderation.busy}
+            onClick={moderation.onCancel}
+            className="cursor-pointer text-[10px] text-osu-f1 transition-colors hover:text-white disabled:opacity-50"
+          >
+            no
+          </button>
+        </span>
+      ) : (
       <span className="flex shrink-0 items-center gap-0.5">
+        {moderation && (
+          <button
+            type="button"
+            onClick={moderation.onArm}
+            aria-label={`Remove ${nominee.username} from the poll`}
+            title={`Remove ${nominee.username} from the poll`}
+            className="grid h-6 w-6 cursor-pointer place-items-center rounded p-0.5 text-osu-f1/40 transition-colors hover:bg-osu-red/20 hover:text-osu-red-light"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
         <button
           type="button"
           disabled={disabled}
@@ -245,6 +312,7 @@ function NomineeRow({
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
       </span>
+      )}
     </motion.li>
   );
 }
@@ -259,6 +327,11 @@ export function GoatPoll() {
   const [expanded, setExpanded] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  // True while the collapsible panel is mid-slide; see where it is used below.
+  const [sliding, setSliding] = useState(true);
+  // The row an admin has armed for removal, and the one being removed.
+  const [armed, setArmed] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [manualName, setManualName] = useState("");
   const [manualProof, setManualProof] = useState("");
   const [busy, setBusy] = useState(false);
@@ -301,7 +374,14 @@ export function GoatPoll() {
     return Math.round((board.serverNow - board.receivedAt) / 1000) * 1000;
   }, [board]);
 
-  const closed = board != null && Date.now() + clockOffset >= board.closesAt;
+  /* Set by the pie the moment it ticks past the deadline, so the widget closes
+     itself on the second rather than on the next board refresh. Keyed to the
+     deadline so re-arming the poll (a new closesAt) re-opens it. */
+  const [expiredAt, setExpiredAt] = useState<number | null>(null);
+  const markExpired = useCallback(() => setExpiredAt(board?.closesAt ?? null), [board?.closesAt]);
+
+  const closed =
+    board != null && (expiredAt === board.closesAt || Date.now() + clockOffset >= board.closesAt);
   const canVote = Boolean(auth.viewer) && !closed;
 
   const applyResult = useCallback(
@@ -351,12 +431,37 @@ export function GoatPoll() {
     [canVote, busy, applyResult],
   );
 
+  /* Moderation is true-admin only — `admin` above is the wider dev-access flag
+     that decides who can *see* an unreleased poll, and deleting other people's
+     nominations is a narrower thing than that. Two clicks on the row: the first
+     arms it, the second does it. */
+  const moderationFor = useCallback(
+    (nominee: GoatPollNominee) => ({
+      armed: armed === nominee.id,
+      busy: removing === nominee.id,
+      onArm: () => { setArmed(nominee.id); setMessage(null); },
+      onCancel: () => setArmed(null),
+      onRemove: () => {
+        setRemoving(nominee.id);
+        void removeGoatPollNominee({ data: { nomineeId: nominee.id } })
+          .then((result) => {
+            if (result.nominees) setBoard((prev) => (prev ? { ...prev, nominees: result.nominees! } : prev));
+            if (!result.ok) setMessage("Couldn't remove that nominee.");
+          })
+          .catch(() => setMessage("Couldn't remove that nominee."))
+          .finally(() => { setRemoving(null); setArmed(null); });
+      },
+    }),
+    [armed, removing],
+  );
+
   const nominees = useMemo(() => board?.nominees ?? [], [board]);
 
   if (!board) return null;
 
   const open = wide || expanded;
   const shown = showAll ? nominees : nominees.slice(0, VISIBLE_ROWS);
+  const animatedRows = shown.length <= ANIMATED_ROWS_MAX;
   // The deadline in the reader's own timezone, for anyone who wants to plan
   // around it rather than watch a countdown. Same instant everywhere.
   const endsLabel = new Date(board.closesAt).toLocaleString(undefined, {
@@ -367,22 +472,19 @@ export function GoatPoll() {
 
   const heading = (
     <>
-      <PollPie opensAt={board.opensAt} closesAt={board.closesAt} offset={clockOffset} />
-      <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-osu-c1/85">Decide the next GOAT</span>
-      {/* Only an admin can be looking at this, but it is worth saying out loud:
-          nobody else can see the poll while it is unreleased. */}
-      {board.adminOnly && (
-        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-[0.12em] text-osu-pink/70">
-          admin only
-        </span>
-      )}
+      <PollPie opensAt={board.opensAt} closesAt={board.closesAt} offset={clockOffset} onExpire={markExpired} />
+      {/* Past the deadline there is nothing left to choose, and the board below
+          has stopped being a ballot and become the answer. */}
+      <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-osu-c1/85">
+        {closed ? "The new GOAT" : "Choose a new GOAT"}
+      </span>
     </>
   );
 
   return (
     <section
       className={`mb-6 border-t border-osu-b3/30 pt-2.5 ${RAIL_LAYOUT}`}
-      aria-label="Community vote for the next GOAT"
+      aria-label="Community vote for a new GOAT"
     >
       {wide ? (
         <div className="flex items-center gap-2" title={`Ends ${endsLabel}`}>
@@ -410,12 +512,18 @@ export function GoatPoll() {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="overflow-hidden"
+            onAnimationStart={() => setSliding(true)}
+            onAnimationComplete={() => setSliding(false)}
+            /* overflow-hidden is what keeps the panel's contents inside the
+               height animation, but it also crops the search box's dropdown to
+               the panel — so it is only on while the panel is actually moving.
+               In the rail there is no open/close animation at all. */
+            className={wide || !sliding ? undefined : "overflow-hidden"}
           >
             <p className="mt-2 text-[10px] leading-snug text-osu-f1/80">
               {closed
                 ? "Voting's closed. Thanks for the picks."
-                : "Vote for as many players as you want. The top of the board gets the next GOAT card."}
+                : "Vote for as many players as you want. Whoever finishes first will get added to the GOAT tier."}
             </p>
 
             {!closed && (
@@ -433,6 +541,12 @@ export function GoatPoll() {
                           banned: false,
                         })
                       }
+                      // Someone already on the roster shows up greyed with the
+                      // reason on the row, so the refusal is visible before the
+                      // click rather than as a message after it. The server fn
+                      // still checks: this is the explanation, not the gate.
+                      disabledIds={HONORARY_IDS}
+                      disabledNote="already a GOAT"
                       placeholder="nominate a player..."
                       className="w-full"
                     />
@@ -443,7 +557,7 @@ export function GoatPoll() {
                       aria-expanded={manualOpen}
                     >
                       <TriangleAlert className="h-2.5 w-2.5" />
-                      can't find them? banned or deleted
+                      for banned or deleted
                     </button>
                     <AnimatePresence initial={false}>
                       {manualOpen && (
@@ -504,24 +618,31 @@ export function GoatPoll() {
 
             {nominees.length > 0 && (
               <>
-                <motion.ul layout className="mt-2.5 border-t border-osu-b3/25 pt-1">
+                <motion.ul
+                  layout={animatedRows}
+                  className={`mt-2.5 border-t border-osu-b3/25 pt-1 ${
+                    showAll ? `${EXPANDED_HEIGHT} overflow-y-auto overscroll-contain pr-1` : ""
+                  }`}
+                >
                   {shown.map((nominee) => (
                     <NomineeRow
                       key={nominee.id}
                       nominee={nominee}
                       vote={votes[nominee.id] ?? 0}
                       disabled={!canVote}
+                      animated={animatedRows}
+                      moderation={auth.isAdmin ? moderationFor(nominee) : undefined}
                       onVote={handleVote}
                     />
                   ))}
                 </motion.ul>
-                {!showAll && nominees.length > VISIBLE_ROWS && (
+                {nominees.length > VISIBLE_ROWS && (
                   <button
                     type="button"
-                    onClick={() => setShowAll(true)}
+                    onClick={() => setShowAll((value) => !value)}
                     className="mt-1 cursor-pointer text-[10px] text-osu-f1/60 transition-colors hover:text-osu-c1"
                   >
-                    show all {nominees.length}
+                    {showAll ? "show fewer" : "show all"}
                   </button>
                 )}
               </>

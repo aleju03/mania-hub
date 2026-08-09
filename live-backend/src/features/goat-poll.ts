@@ -19,18 +19,21 @@ import { exec } from "../db.js";
  * The trust model is the goals/pack-wallet bridge: every write takes an
  * osu!-verified viewer id forwarded by a frontend server fn, never a browser
  * claim. The per-IP abuse guard does NOT apply (it bypasses admin-token
- * requests), so the real ceilings are the unique indexes plus the two per-user
- * caps below.
+ * requests), so the real ceilings are the unique indexes and the nomination cap
+ * below.
  */
 
 // A new nominee costs the poll a permanent row and a slot on a board people
 // actually read, so one account gets a handful of chances to put a name up.
 // Voting is where participation should live.
 export const GOAT_POLL_NOMINATE_CAP = 3;
-// Distinct nominees one account may hold a vote on. Well past what a human
-// browsing the board will do, low enough that a script cannot rate every row.
-// Clearing a vote deletes the row and gives the allowance back.
-export const GOAT_POLL_VOTE_CAP = 40;
+/* Voting is deliberately uncapped: the widget says "vote for as many players as
+   you want" and that should be true. A cap never limited write volume anyway —
+   clearing and re-voting is unbounded — so all it bought was a ceiling on how
+   many rows one account could hold an opinion on, which does not stop a
+   coordinated brigade and does stop an enthusiastic reader. The costs that do
+   scale are the board's aggregate query (it grows with total vote rows) and the
+   fact that these rows are never pruned; both are cheap at community scale. */
 const USERNAME_MAX_LENGTH = 32;
 
 /* ==========================================================================
@@ -65,17 +68,14 @@ const USERNAME_MAX_LENGTH = 32;
    ========================================================================== */
 export const GOAT_POLL: { enabled: boolean; adminOnly: boolean; id: string; opensAt: string; closesAt: string } = {
   enabled: true,
-  // Not released yet: built and running, visible to admins only.
-  adminOnly: true,
-  // PREVIEW WINDOW: a 12-hour poll already a third of the way through, so the
-  // pie shows a clear wedge. To watch it actually move, shorten it to a few
-  // minutes — the fill rate is span-relative, so a 5-minute window sweeps a
-  // visible arc every few seconds. Replace both dates with the real 30-hour
-  // window before shipping, and bump `id` so the preview's votes do not seed
-  // the real board.
-  id: "goat-preview",
-  opensAt: "2026-08-08T13:45:00Z",
-  closesAt: "2026-08-09T01:45:00Z",
+  // Released: public board, anyone signed in can nominate and vote.
+  adminOnly: false,
+  // The first real poll. 30 hours rather than 24 so the window covers every
+  // timezone's waking hours at least once — a 24-hour poll opening at this
+  // instant would land entirely inside one night for someone.
+  id: "goat-1",
+  opensAt: "2026-08-08T23:40:00Z",
+  closesAt: "2026-08-10T05:40:00Z",
 };
 
 /* The only accepted spelling of a poll date: an explicit UTC instant.
@@ -140,7 +140,7 @@ export type GoatPollNominateStatus =
   | "invalid_proof"
   | "poll_closed";
 
-export type GoatPollVoteStatus = "recorded" | "cleared" | "cap_reached" | "unknown_nominee" | "poll_closed";
+export type GoatPollVoteStatus = "recorded" | "cleared" | "unknown_nominee" | "poll_closed";
 
 /**
  * The poll's window, or null when it is retired or its dates are unusable. Null
@@ -204,8 +204,24 @@ export function normalizeNomineeUsername(raw: unknown): string | null {
   return trimmed;
 }
 
+/* The identity a nominee gets when no osu! id pins them down.
+ *
+ * Case, spacing and punctuation all come off, not just case: a second row for
+ * the same human is the one way an account can vote for that human twice, by
+ * upvoting "Jakads" and "Jakads." separately while the board reads them as two
+ * players. osu! itself treats a username's spaces and underscores as the same
+ * character, so collapsing those is the game's own rule; the rest of the
+ * stripping is because someone typing a half-remembered name does not reproduce
+ * brackets and dashes.
+ *
+ * Two genuinely different players whose names differ only in punctuation would
+ * collapse into one row, so this is the weaker handle: an osu! id outranks it
+ * whenever either side has one (see findNominee). */
 function nameKey(username: string): string {
-  return username.trim().toLowerCase();
+  const stripped = username.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  // A name made entirely of punctuation would otherwise key to "" and collide
+  // with every other such name.
+  return stripped || username.trim().toLowerCase();
 }
 
 function rowToNominee(row: Record<string, unknown>): GoatPollNominee {
@@ -274,26 +290,46 @@ async function countNominationsBy(db: Db, pollId: string, userId: number): Promi
   return Number(row?.n ?? 0);
 }
 
+/**
+ * The row this nomination already belongs to, or null when the player is not on
+ * the board yet.
+ *
+ * An osu! id is the strongest handle there is, so it is matched first and two
+ * rows carrying different ids are two different players however alike their
+ * names read. A name match only merges into a row that has no id of its own —
+ * which is the duplicate this exists for: the same player put up twice by name,
+ * once as typed and once with a dash in it.
+ */
 async function findNominee(
   db: Db,
   pollId: string,
   osuUserId: number | null,
   key: string,
 ): Promise<string | null> {
+  if (osuUserId != null) {
+    const byId = (await exec(
+      db,
+      "select id from goat_poll_nominees where poll_id = ? and osu_user_id = ?",
+      [pollId, osuUserId],
+    )).rows[0];
+    if (byId) return String(byId.id);
+  }
   const row = (await exec(
     db,
     osuUserId == null
       ? "select id from goat_poll_nominees where poll_id = ? and name_key = ?"
-      : "select id from goat_poll_nominees where poll_id = ? and (name_key = ? or osu_user_id = ?)",
-    osuUserId == null ? [pollId, key] : [pollId, key, osuUserId],
+      : "select id from goat_poll_nominees where poll_id = ? and name_key = ? and osu_user_id is null",
+    [pollId, key],
   )).rows[0];
   return row ? String(row.id) : null;
 }
 
 /**
- * Puts a player on the board. Nominating someone already there is a no-op that
- * reports `already_nominated` with the existing row's id, so the client can jump
- * the user straight to it instead of showing an error for a reasonable action.
+ * Puts a player on the board, with the nominator's upvote already on the row.
+ * Nominating someone already there is a no-op that reports `already_nominated`
+ * with the existing row's id, so the client can jump the user straight to it
+ * instead of showing an error for a reasonable action — and deliberately does
+ * not touch their vote, which may be a considered downvote.
  *
  * A banned nominee must carry a valid Wayback proof; an unbanned one is expected
  * to have come from the player search and so already has an id and avatar.
@@ -350,13 +386,51 @@ export async function nominateGoatPollPlayer(
     if (raced) return { ok: false, status: "already_nominated", nomineeId: raced };
     throw new Error("failed to insert goat poll nominee");
   }
+  // Putting a name up is an endorsement, so it carries the nominator's own
+  // upvote: a row that appears at 0 reads as though the click half-failed, and
+  // nobody nominates a player they would not vote for. Best effort — the vote
+  // cap can refuse it, and a nomination is still worth having without it.
+  await castGoatPollVote(db, window, id, input.userId, 1, now);
   return { ok: true, status: "created", nomineeId: id };
+}
+
+/**
+ * Takes one nominee off the board, with their votes.
+ *
+ * Moderation, not scoring: the poll is public and anyone signed in can put a
+ * name up, so a joke or an abusive nomination needs an answer other than
+ * leaving it there for the rest of the window. It removes a row, not a person —
+ * the nominator keeps their remaining nominations and everyone keeps their
+ * votes on everyone else. A removed player can be nominated again, which is the
+ * right behaviour: this is a delete key, not a ban list.
+ */
+export async function removeGoatPollNominee(
+  db: Db,
+  pollId: string,
+  nomineeId: string,
+): Promise<{ removed: boolean; username: string | null; votesDeleted: number }> {
+  const row = (await exec(
+    db,
+    "select username from goat_poll_nominees where poll_id = ? and id = ?",
+    [pollId, nomineeId],
+  )).rows[0];
+  if (!row) return { removed: false, username: null, votesDeleted: 0 };
+
+  const votes = (await exec(
+    db,
+    "select count(*) as n from goat_poll_votes where poll_id = ? and nominee_id = ?",
+    [pollId, nomineeId],
+  )).rows[0];
+  await exec(db, "delete from goat_poll_votes where poll_id = ? and nominee_id = ?", [pollId, nomineeId]);
+  await exec(db, "delete from goat_poll_nominees where poll_id = ? and id = ?", [pollId, nomineeId]);
+  return { removed: true, username: String(row.username), votesDeleted: Number(votes?.n ?? 0) };
 }
 
 /**
  * Records one vote. `value` is 1, -1, or 0 to clear. Re-voting the same way is
  * idempotent, and flipping a vote rewrites the row rather than stacking, so the
  * (poll, nominee, voter) primary key is what enforces one voice per account.
+ * There is no ceiling on how many nominees one account may back.
  */
 export async function castGoatPollVote(
   db: Db,
@@ -384,21 +458,6 @@ export async function castGoatPollVote(
   }
 
   const normalized = value > 0 ? 1 : -1;
-  // Only a brand new row spends the allowance; flipping an existing vote adds
-  // nothing to the table and must stay possible at the cap.
-  const held = (await exec(
-    db,
-    "select 1 from goat_poll_votes where poll_id = ? and nominee_id = ? and voter_user_id = ?",
-    [window.pollId, nomineeId, userId],
-  )).rows[0];
-  if (!held) {
-    const row = (await exec(
-      db,
-      "select count(*) as n from goat_poll_votes where poll_id = ? and voter_user_id = ?",
-      [window.pollId, userId],
-    )).rows[0];
-    if (Number(row?.n ?? 0) >= GOAT_POLL_VOTE_CAP) return { ok: false, status: "cap_reached" };
-  }
   await exec(
     db,
     `insert into goat_poll_votes (poll_id, nominee_id, voter_user_id, value, updated_at)

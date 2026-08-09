@@ -165,6 +165,31 @@ describe("goat poll nominations", () => {
     expect(byName.body.nominees).toHaveLength(1);
   });
 
+  it("collapses a second row opened by punctuating the same name differently", async () => {
+    // The duplicate that matters: two rows for one human are two things to
+    // upvote, so a single account could back that player twice.
+    await nominate({ userId: 1, username: "Jakads" });
+    expect((await nominate({ userId: 2, username: "Jakads." })).body.status).toBe("already_nominated");
+    // osu! reads a username's spaces and underscores as the same character.
+    expect((await nominate({ userId: 3, username: "jak_ads" })).body.status).toBe("already_nominated");
+    expect((await call(mockReq("GET", "/api/goat-poll"))).body.nominees).toHaveLength(1);
+  });
+
+  it("adopts the id-less row when the same player turns up with an id", async () => {
+    const first = await nominate({ userId: 1, username: "WindyS" });
+    const withId = await nominate({ userId: 2, osuUserId: 1190879, username: "windy s" });
+    expect(withId.body.status).toBe("already_nominated");
+    expect(withId.body.nomineeId).toBe(first.body.nomineeId);
+  });
+
+  it("keeps two accounts apart when their ids differ, however alike the names read", async () => {
+    // The cost of a punctuation-blind name key, paid back by the id: "-Ame-"
+    // and "Ame" can be two real players, and here they are two rows.
+    await nominate({ userId: 1, osuUserId: 111, username: "Ame" });
+    expect((await nominate({ userId: 2, osuUserId: 222, username: "-Ame-" })).body.status).toBe("created");
+    expect((await call(mockReq("GET", "/api/goat-poll"))).body.nominees).toHaveLength(2);
+  });
+
   it("refuses a banned nominee without a valid archive proof", async () => {
     const noProof = await nominate({ userId: 1, username: "Ghost", banned: true });
     expect(noProof.status).toBe(409);
@@ -215,24 +240,43 @@ describe("goat poll nominations", () => {
 });
 
 describe("goat poll votes", () => {
+  it("opens a new row on the nominator's own upvote", async () => {
+    const created = await nominate({ userId: 1, username: "Jakads" });
+    expect(created.body.nominees[0].net).toBe(1);
+    expect(created.body.nominees[0].up).toBe(1);
+    // And it is a real vote, in the nominator's ballot, so their arrow is lit
+    // and clicking it again clears it like any other.
+    expect(created.body.votes[created.body.nomineeId]).toBe(1);
+
+    // Nominating someone already up does NOT touch the caller's vote: theirs
+    // may be a considered downvote.
+    await vote({ userId: 2, nomineeId: created.body.nomineeId, value: -1 });
+    const again = await nominate({ userId: 2, username: "Jakads" });
+    expect(again.body.status).toBe("already_nominated");
+    expect(again.body.votes[created.body.nomineeId]).toBe(-1);
+    expect(again.body.nominees[0].net).toBe(0);
+  });
+
   it("moves net from +1 to -1 to 0 as one voter changes their mind", async () => {
+    // userId 1's nomination carries their upvote, so every net below is one
+    // higher than voter 2's own arrow.
     await nominate({ userId: 1, osuUserId: 999, username: "Jakads" });
     const nomineeId = await firstNomineeId();
 
     const up = await vote({ userId: 2, nomineeId, value: 1 });
-    expect(up.body.nominees[0].net).toBe(1);
-    expect(up.body.nominees[0].up).toBe(1);
+    expect(up.body.nominees[0].net).toBe(2);
+    expect(up.body.nominees[0].up).toBe(2);
     expect(up.body.votes[nomineeId]).toBe(1);
 
     const down = await vote({ userId: 2, nomineeId, value: -1 });
-    expect(down.body.nominees[0].net).toBe(-1);
+    expect(down.body.nominees[0].net).toBe(0);
     // The flip rewrites the row rather than stacking: one voice per account.
-    expect(down.body.nominees[0].up).toBe(0);
+    expect(down.body.nominees[0].up).toBe(1);
     expect(down.body.nominees[0].down).toBe(1);
 
     const cleared = await vote({ userId: 2, nomineeId, value: 0 });
     expect(cleared.body.status).toBe("cleared");
-    expect(cleared.body.nominees[0].net).toBe(0);
+    expect(cleared.body.nominees[0].net).toBe(1);
     expect(cleared.body.votes[nomineeId]).toBeUndefined();
   });
 
@@ -249,10 +293,28 @@ describe("goat poll votes", () => {
     await vote({ userId: 10, nomineeId: hated, value: -1 });
 
     const final = await call(mockReq("GET", "/api/goat-poll"));
+    // Both rows opened at 1 on userId 1's nominating upvote.
     expect(final.body.nominees.map((n: { username: string; net: number }) => [n.username, n.net])).toEqual([
-      ["loved", 1],
-      ["hated", -1],
+      ["loved", 2],
+      ["hated", 0],
     ]);
+  });
+
+  it("lets one account back every nominee on the board", async () => {
+    // Voting is uncapped on purpose — the widget promises "as many players as
+    // you want". One voice per nominee is still structural (the primary key).
+    for (let n = 0; n < 60; n += 1) {
+      await nominate({ userId: 100 + n, username: `Nominee ${n}` });
+    }
+    const board = await call(mockReq("GET", "/api/goat-poll"));
+    for (const nominee of board.body.nominees) {
+      expect((await vote({ userId: 42, nomineeId: nominee.id, value: 1 })).body.status).toBe("recorded");
+    }
+    const ballot = await call(mockReq("GET", "/api/goat-poll/mine?userId=42", ADMIN));
+    expect(Object.keys(ballot.body.votes)).toHaveLength(60);
+    // Every row: its nominator's upvote plus voter 42's.
+    const final = await call(mockReq("GET", "/api/goat-poll"));
+    expect(final.body.nominees.every((n: { net: number }) => n.net === 2)).toBe(true);
   });
 
   it("rejects a vote on an unknown nominee", async () => {
@@ -267,6 +329,41 @@ describe("goat poll votes", () => {
     const bad = await vote({ userId: 2, nomineeId, value: 5 });
     expect(bad.status).toBe(400);
     expect(bad.body.error).toBe("invalid_value");
+  });
+});
+
+describe("goat poll moderation", () => {
+  function remove(payload: Record<string, unknown>, headers: IncomingMessage["headers"] = JSON_HEADERS) {
+    return call(bodyReq("POST", "/api/admin/goat-poll/remove", payload, headers));
+  }
+
+  it("takes one nominee off the board with their votes", async () => {
+    const keep = await nominate({ userId: 1, username: "Jakads" });
+    const drop = await nominate({ userId: 2, username: "Joke Nomination" });
+    await vote({ userId: 3, nomineeId: drop.body.nomineeId, value: 1 });
+
+    const removed = await remove({ nomineeId: drop.body.nomineeId });
+    expect(removed.status).toBe(200);
+    expect(removed.body.username).toBe("Joke Nomination");
+    // The nominating upvote plus voter 3's.
+    expect(removed.body.votesDeleted).toBe(2);
+    expect(removed.body.nominees).toHaveLength(1);
+    expect(removed.body.nominees[0].id).toBe(keep.body.nomineeId);
+
+    // Everyone else's ballot is untouched, and the removed row is gone from it.
+    const ballot = await call(mockReq("GET", "/api/goat-poll/mine?userId=3", ADMIN));
+    expect(ballot.body.votes).toEqual({});
+    // A delete key, not a ban: the same player can go back up.
+    expect((await nominate({ userId: 4, username: "Joke Nomination" })).body.status).toBe("created");
+  });
+
+  it("refuses without the admin token and 404s an unknown nominee", async () => {
+    const created = await nominate({ userId: 1, username: "Jakads" });
+    expect((await remove({ nomineeId: created.body.nomineeId }, { "content-type": "application/json" })).status).toBe(401);
+    expect((await remove({ nomineeId: "nope" })).status).toBe(404);
+    expect((await remove({})).status).toBe(400);
+    // Nothing left the board.
+    expect((await call(mockReq("GET", "/api/goat-poll"))).body.nominees).toHaveLength(1);
   });
 });
 
@@ -349,8 +446,8 @@ describe("goat poll auth", () => {
     const anonBallot = await call(mockReq("GET", "/api/goat-poll/mine?userId=2"));
     expect(anonBallot.status).toBe(401);
 
-    // The vote never landed.
-    expect((await call(mockReq("GET", "/api/goat-poll"))).body.nominees[0].net).toBe(0);
+    // The vote never landed: the row still sits on the nominator's alone.
+    expect((await call(mockReq("GET", "/api/goat-poll"))).body.nominees[0].net).toBe(1);
   });
 
   it("returns one voter's own ballot", async () => {
@@ -395,7 +492,8 @@ describe("goat poll while unreleased", () => {
     expect((await call(mockReq("GET", "/api/goat-poll/mine?userId=2", ADMIN))).status).toBe(404);
 
     expect((await call(mockReq("GET", "/api/goat-poll", ADMIN))).body.nominees).toHaveLength(1);
-    expect((await call(mockReq("GET", "/api/goat-poll", ADMIN))).body.nominees[0].net).toBe(0);
+    // Still on its nominating upvote alone — none of the refused votes landed.
+    expect((await call(mockReq("GET", "/api/goat-poll", ADMIN))).body.nominees[0].net).toBe(1);
   });
 
   it("lets an admin vote and nominate through the same routes", async () => {

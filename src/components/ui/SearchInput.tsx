@@ -17,6 +17,8 @@ export function SearchInput({
   onQueryChange,
   placeholder = "Search player...",
   className = "",
+  disabledIds,
+  disabledNote,
 }: {
   onSearch: (q: string) => Promise<SearchResult[]>;
   onSelect: (user: SearchResult) => void;
@@ -24,6 +26,11 @@ export function SearchInput({
   onQueryChange?: (q: string) => void;
   placeholder?: string;
   className?: string;
+  /* Players the box may show but not pick. Greyed in place rather than filtered
+     out, because searching a name and getting silence reads as a broken search;
+     `disabledNote` is the reason, printed where the flag goes. */
+  disabledIds?: ReadonlySet<number>;
+  disabledNote?: string;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -107,27 +114,39 @@ export function SearchInput({
             transition={{ duration: 0.12 }}
             className="absolute top-full left-0 right-0 mt-1 bg-osu-b4 border border-osu-b3/50 rounded-lg overflow-hidden z-50 shadow-[0_10px_20px_rgba(0,0,0,0.4)]"
           >
-            {results.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => {
-                  onSelect(u);
-                  setQuery("");
-                  onQueryChange?.("");
-                  setOpen(false);
-                }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3 transition-colors duration-[120ms] cursor-pointer text-left"
-              >
-                <img
-                  src={avatarImageSrc(u.avatar_url, u.id)}
-                  alt=""
-                  className="w-7 h-7 rounded-full"
-                  loading="lazy"
-                />
-                <span className="text-sm font-medium text-white">{u.username}</span>
-                <CountryFlag code={u.country_code} size="sm" className="ml-auto" />
-              </button>
-            ))}
+            {results.map((u) => {
+              const disabled = disabledIds?.has(u.id) ?? false;
+              return (
+                <button
+                  key={u.id}
+                  disabled={disabled}
+                  onClick={() => {
+                    onSelect(u);
+                    setQuery("");
+                    onQueryChange?.("");
+                    setOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors duration-[120ms] text-left ${
+                    disabled ? "cursor-default opacity-45" : "hover:bg-osu-b3 cursor-pointer"
+                  }`}
+                >
+                  <img
+                    src={avatarImageSrc(u.avatar_url, u.id)}
+                    alt=""
+                    className={`w-7 h-7 rounded-full ${disabled ? "grayscale" : ""}`}
+                    loading="lazy"
+                  />
+                  <span className="text-sm font-medium text-white">{u.username}</span>
+                  {disabled && disabledNote ? (
+                    <span className="ml-auto text-[10px] font-semibold uppercase tracking-[0.1em] text-osu-f1">
+                      {disabledNote}
+                    </span>
+                  ) : (
+                    <CountryFlag code={u.country_code} size="sm" className="ml-auto" />
+                  )}
+                </button>
+              );
+            })}
           </motion.div>
         )}
       </AnimatePresence>
