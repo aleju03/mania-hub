@@ -19,14 +19,14 @@ import { exec } from "../db.js";
  * The trust model is the goals/pack-wallet bridge: every write takes an
  * osu!-verified viewer id forwarded by a frontend server fn, never a browser
  * claim. The per-IP abuse guard does NOT apply (it bypasses admin-token
- * requests), so the real ceilings are the unique indexes and the nomination cap
- * below.
+ * requests), so what is left holding the line is: an osu! login behind every
+ * write, the unique indexes that keep one player to one row, the vote primary
+ * key that keeps one account to one voice per row, and an admin's delete key.
+ * Neither nominating nor voting is capped — a first poll that told people they
+ * had used up their nominations within the hour was answering a problem the
+ * board did not have, and a board that grows too long is a moderation call, not
+ * a number in here.
  */
-
-// A new nominee costs the poll a permanent row and a slot on a board people
-// actually read, so one account gets a handful of chances to put a name up.
-// Voting is where participation should live.
-export const GOAT_POLL_NOMINATE_CAP = 3;
 /* Voting is deliberately uncapped: the widget says "vote for as many players as
    you want" and that should be true. A cap never limited write volume anyway —
    clearing and re-voting is unbounded — so all it bought was a ceiling on how
@@ -135,7 +135,6 @@ export interface GoatPollNominateInput {
 export type GoatPollNominateStatus =
   | "created"
   | "already_nominated"
-  | "cap_reached"
   | "invalid_username"
   | "invalid_proof"
   | "poll_closed";
@@ -265,6 +264,27 @@ export async function listGoatPollBoard(db: Db, pollId: string): Promise<GoatPol
   return rows.map((row) => rowToNominee(row as Record<string, unknown>));
 }
 
+/**
+ * One row with its tallies, for the live event a write emits. A vote changes
+ * exactly one row, so the stream carries that row rather than the board: a
+ * board is up to 150 KiB at 500 nominees and every viewer would get a copy of
+ * it on every click.
+ */
+export async function getGoatPollNominee(db: Db, pollId: string, nomineeId: string): Promise<GoatPollNominee | null> {
+  const row = (await exec(
+    db,
+    `select n.*,
+            coalesce(sum(case when v.value > 0 then 1 else 0 end), 0) as up,
+            coalesce(sum(case when v.value < 0 then 1 else 0 end), 0) as down
+     from goat_poll_nominees n
+     left join goat_poll_votes v on v.poll_id = n.poll_id and v.nominee_id = n.id
+     where n.poll_id = ? and n.id = ?
+     group by n.id`,
+    [pollId, nomineeId],
+  )).rows[0];
+  return row ? rowToNominee(row as Record<string, unknown>) : null;
+}
+
 /** One voter's ballot, as `{ [nomineeId]: 1 | -1 }`. */
 export async function listGoatPollVotesForUser(
   db: Db,
@@ -279,15 +299,6 @@ export async function listGoatPollVotesForUser(
   const votes: Record<string, number> = {};
   for (const row of rows) votes[String(row.nominee_id)] = Number(row.value) > 0 ? 1 : -1;
   return votes;
-}
-
-async function countNominationsBy(db: Db, pollId: string, userId: number): Promise<number> {
-  const row = (await exec(
-    db,
-    "select count(*) as n from goat_poll_nominees where poll_id = ? and nominated_by = ?",
-    [pollId, userId],
-  )).rows[0];
-  return Number(row?.n ?? 0);
 }
 
 /**
@@ -360,9 +371,6 @@ export async function nominateGoatPollPlayer(
   const key = nameKey(username);
   const existing = await findNominee(db, window.pollId, osuUserId, key);
   if (existing) return { ok: false, status: "already_nominated", nomineeId: existing };
-  if (await countNominationsBy(db, window.pollId, input.userId) >= GOAT_POLL_NOMINATE_CAP) {
-    return { ok: false, status: "cap_reached", nomineeId: null };
-  }
 
   const id = randomUUID();
   const countryCode = typeof input.countryCode === "string" && /^[A-Za-z]{2}$/.test(input.countryCode.trim())

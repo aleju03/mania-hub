@@ -21,7 +21,6 @@ import type { GoatPollBoardPayload, GoatPollNominee } from "./live-backend";
 export type GoatPollWriteStatus =
   | "created"
   | "already_nominated"
-  | "cap_reached"
   | "invalid_username"
   | "invalid_proof"
   | "invalid_value"

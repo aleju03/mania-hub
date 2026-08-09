@@ -12,7 +12,15 @@ import {
   type GoatPollWriteStatus,
 } from "#/lib/goat-poll";
 import { HONORARY_PLAYERS } from "#/lib/honorary-players";
-import { fetchGoatPollBoard, type GoatPollBoard, type GoatPollNominee } from "#/lib/live-backend";
+import {
+  fetchGoatPollBoard,
+  openLiveEventSource,
+  sortGoatPollNominees,
+  type GoatPollBoard,
+  type GoatPollLiveChange,
+  type GoatPollNominee,
+} from "#/lib/live-backend";
+import { DEFAULT_COUNTRY_CODE } from "#/lib/country";
 import { searchPlayers } from "#/lib/player-search";
 import { useDocumentVisible } from "#/lib/window-activity";
 import { avatarImageSrc } from "#/components/ui/Avatar";
@@ -64,7 +72,6 @@ const RAIL_LAYOUT = "min-[1650px]:absolute min-[1650px]:left-[calc(50%+500px)] m
 const STATUS_MESSAGES: Partial<Record<GoatPollWriteStatus, string>> = {
   already_nominated: "Already on the board.",
   already_honorary: "They're already a GOAT.",
-  cap_reached: "You've used all your nominations.",
   invalid_username: "That username doesn't look right.",
   invalid_proof: `Needs a ${PROOF_HINT}.`,
   poll_closed: "The vote just closed.",
@@ -355,9 +362,38 @@ export function GoatPoll() {
     // A hidden tab still takes the one load above (so returning to it shows the
     // truth immediately) but stops paying for the interval.
     const timer = visible ? setInterval(load, REFRESH_MS) : null;
+
+    /* The live path, same as the pack rail's: every vote, nomination and
+       removal lands on the shared /api/live stream as a country-less event the
+       moment the backend writes it, so a board someone else is looking at moves
+       on the click rather than on the poll above — which stays as the backstop
+       for a dropped frame or a stream that never opened. The country is only
+       the anchor the endpoint requires; `observe` keeps a packs visit from
+       touching the country registry. */
+    const source = openLiveEventSource(DEFAULT_COUNTRY_CODE, { observe: true });
+    const onChange = (event: MessageEvent) => {
+      try {
+        const change = JSON.parse(event.data) as GoatPollLiveChange;
+        setBoard((prev) => {
+          // A frame from a previous poll (a rerun bumps the id) is not ours.
+          if (!prev || (change.pollId && change.pollId !== prev.pollId)) return prev;
+          if (change.removedId) {
+            return { ...prev, nominees: prev.nominees.filter((nominee) => nominee.id !== change.removedId) };
+          }
+          if (!change.nominee) return prev;
+          const without = prev.nominees.filter((nominee) => nominee.id !== change.nominee!.id);
+          return { ...prev, nominees: sortGoatPollNominees([...without, change.nominee]) };
+        });
+      } catch {
+        // Malformed frame: the poll backstop carries this change instead.
+      }
+    };
+    source?.addEventListener("goat_poll", onChange);
+
     return () => {
       cancelled = true;
       if (timer) clearInterval(timer);
+      source?.removeEventListener("goat_poll", onChange);
     };
   }, [visible, admin]);
 

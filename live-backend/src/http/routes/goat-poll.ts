@@ -2,11 +2,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseJson } from "../../db.js";
 import {
   castGoatPollVote,
+  getGoatPollNominee,
   goatPollWindow,
   listGoatPollBoard,
   listGoatPollVotesForUser,
   nominateGoatPollPlayer,
 } from "../../features/goat-poll.js";
+import { logWarn } from "../../logger.js";
 import type { HttpContext } from "../context.js";
 import { isAdmin, readBody } from "../request.js";
 import { sendJson } from "../respond.js";
@@ -23,6 +25,25 @@ import { sendJson } from "../respond.js";
  * token from the frontend server fn plus the osu!-verified viewer id in the
  * body, so a browser can never vote or nominate as somebody else.
  */
+/* Every write puts the row it touched on the shared live stream, so a board
+   open in someone else's browser moves the moment a vote lands instead of on
+   its 20-second poll. Country-less, like pack_pull: the poll is one board for
+   the whole site, not a per-country surface.
+
+   The row rather than the board, because a board is up to 150 KiB at 500
+   nominees and this would otherwise send every viewer a copy of it per click.
+   Delivery is best effort — the poll backstop carries anything a dropped frame
+   or a closed stream misses, so a failure here must never fail the write. */
+async function publishGoatPollChange(ctx: HttpContext, pollId: string, nomineeId: string): Promise<void> {
+  try {
+    const nominee = await getGoatPollNominee(ctx.db, pollId, nomineeId);
+    if (!nominee) return;
+    await ctx.events.append("goat_poll", null, { pollId, nominee }, undefined, ctx.serveWriteDb ?? undefined);
+  } catch (error) {
+    logWarn("goat_poll_event_failed", { pollId, nomineeId, error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
 export async function handleGoatPollRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL): Promise<boolean> {
   if (!url.pathname.startsWith("/api/goat-poll")) return false;
 
@@ -134,6 +155,7 @@ export async function handleGoatPollRoutes(req: IncomingMessage, res: ServerResp
         return true;
       }
       const result = await castGoatPollVote(writeDb, window, nomineeId, userId, value);
+      if (result.ok) await publishGoatPollChange(ctx, window.pollId, nomineeId);
       sendJson(req, res, ctx, result.ok ? 200 : 409, {
         ...result,
         nominees: await listGoatPollBoard(ctx.db, window.pollId),
@@ -154,6 +176,7 @@ export async function handleGoatPollRoutes(req: IncomingMessage, res: ServerResp
     // An already-nominated player is reported with the board attached and a 200:
     // it is a reasonable thing for a user to try, and the client's job is to
     // scroll them to the existing row rather than show a failure.
+    if (result.ok && result.nomineeId) await publishGoatPollChange(ctx, window.pollId, result.nomineeId);
     const status = result.ok || result.status === "already_nominated" ? 200 : 409;
     sendJson(req, res, ctx, status, {
       ...result,

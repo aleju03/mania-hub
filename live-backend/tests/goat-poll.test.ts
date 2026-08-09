@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createDb, migrate, type Db } from "../src/db.js";
+import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { GOAT_POLL, normalizeArchiveProof } from "../src/features/goat-poll.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { routeHttp } from "../src/http/snapshots.js";
@@ -227,15 +227,16 @@ describe("goat poll nominations", () => {
     expect(otherSpelling.body.status).toBe("already_nominated");
   });
 
-  it("refuses a fourth nomination from one account", async () => {
-    for (const username of ["one", "two", "three"]) {
-      expect((await nominate({ userId: 7, username })).body.status).toBe("created");
+  it("does not cap how many names one account may put up", async () => {
+    // Uncapped on purpose: a first poll told people they were out of
+    // nominations within the hour, and a board that grows too long is an
+    // admin's delete key rather than a number in the feature module.
+    for (let n = 0; n < 12; n += 1) {
+      expect((await nominate({ userId: 7, username: `Nominee ${n}` })).body.status).toBe("created");
     }
-    const fourth = await nominate({ userId: 7, username: "four" });
-    expect(fourth.status).toBe(409);
-    expect(fourth.body.status).toBe("cap_reached");
-    // Another account is unaffected.
-    expect((await nominate({ userId: 8, username: "four" })).body.status).toBe("created");
+    expect((await call(mockReq("GET", "/api/goat-poll"))).body.nominees).toHaveLength(12);
+    // One player is still one row, whoever puts them up.
+    expect((await nominate({ userId: 8, username: "Nominee 3" })).body.status).toBe("already_nominated");
   });
 });
 
@@ -329,6 +330,54 @@ describe("goat poll votes", () => {
     const bad = await vote({ userId: 2, nomineeId, value: 5 });
     expect(bad.status).toBe(400);
     expect(bad.body.error).toBe("invalid_value");
+  });
+});
+
+describe("goat poll live events", () => {
+  /* Every write puts its changed row on the shared stream so a board open in
+     someone else's browser moves on the vote rather than on its 20s poll. */
+  async function pollEvents(): Promise<Array<{ type: string; country: string | null; payload: Record<string, unknown> }>> {
+    const rows = (await exec(db, "select type, country, payload_json from live_event_log where type = 'goat_poll' order by sequence")).rows;
+    return rows.map((row) => ({
+      type: String(row.type),
+      country: row.country == null ? null : String(row.country),
+      payload: JSON.parse(String(row.payload_json)) as Record<string, unknown>,
+    }));
+  }
+
+  it("emits the changed row on a nomination and on a vote", async () => {
+    const created = await nominate({ userId: 1, username: "Jakads" });
+    const afterNominate = await pollEvents();
+    expect(afterNominate).toHaveLength(1);
+    // Country-less: the poll is one board for the whole site.
+    expect(afterNominate[0].country).toBeNull();
+    expect(afterNominate[0].payload.pollId).toBe("test-poll");
+    // The row, not the board — a board is up to 150 KiB at 500 nominees.
+    expect((afterNominate[0].payload.nominee as { username: string }).username).toBe("Jakads");
+    expect((afterNominate[0].payload.nominee as { net: number }).net).toBe(1);
+
+    await vote({ userId: 2, nomineeId: created.body.nomineeId, value: 1 });
+    const afterVote = await pollEvents();
+    expect(afterVote).toHaveLength(2);
+    expect((afterVote[1].payload.nominee as { id: string; net: number }).id).toBe(created.body.nomineeId);
+    expect((afterVote[1].payload.nominee as { net: number }).net).toBe(2);
+  });
+
+  it("emits a tombstone when an admin removes a nominee", async () => {
+    const created = await nominate({ userId: 1, username: "Joke Nomination" });
+    await call(bodyReq("POST", "/api/admin/goat-poll/remove", { nomineeId: created.body.nomineeId }, JSON_HEADERS));
+    const events = await pollEvents();
+    expect(events[events.length - 1].payload).toEqual({ pollId: "test-poll", removedId: created.body.nomineeId });
+  });
+
+  it("says nothing when a write changes nothing", async () => {
+    const created = await nominate({ userId: 1, username: "Jakads" });
+    await pollEvents();
+    // A duplicate nomination and a rejected vote both leave the board as it was.
+    await nominate({ userId: 2, username: "jakads" });
+    await vote({ userId: 2, nomineeId: "nope", value: 1 });
+    expect(await pollEvents()).toHaveLength(1);
+    expect((await pollEvents())[0].payload.nominee).toMatchObject({ id: created.body.nomineeId });
   });
 });
 

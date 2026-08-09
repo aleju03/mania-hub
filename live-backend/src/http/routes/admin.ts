@@ -242,6 +242,12 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
     }
     const result = await removeGoatPollNominee(ctx.serveWriteDb ?? ctx.db, window.pollId, nomineeId);
     if (result.removed) {
+      // The same live event a vote emits, as a tombstone: boards open elsewhere
+      // drop the row now rather than keeping a removed nomination on screen
+      // until their next poll.
+      await ctx.events
+        .append("goat_poll", null, { pollId: window.pollId, removedId: nomineeId }, undefined, ctx.serveWriteDb ?? undefined)
+        .catch((error) => logWarn("goat_poll_event_failed", { nomineeId, ...errorContext(error) }));
       logInfo("goat_poll_nominee_removed", {
         pollId: window.pollId,
         nomineeId,

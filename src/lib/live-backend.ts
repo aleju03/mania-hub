@@ -38,6 +38,7 @@ export const LIVE_EVENT_NAMES = [
   "snipe",
   "goal_completed",
   "pack_pull",
+  "goat_poll",
   "job_status",
 ] as const;
 
@@ -1878,6 +1879,23 @@ export interface GoatPollNominee {
   up: number;
   down: number;
   net: number;
+}
+
+/* The `goat_poll` SSE frame: one changed row, or the id of one that is gone.
+   A vote touches exactly one nominee, so the stream carries that row and the
+   board patches itself — sending the whole board per click would be up to
+   150 KiB to every viewer. */
+export interface GoatPollLiveChange {
+  pollId: string;
+  nominee?: GoatPollNominee;
+  removedId?: string;
+}
+
+/* The board's own order, mirrored on the client so a patched row lands where
+   the next fetch would put it: best net first, then the one more people
+   actually upvoted, then the earlier nomination. */
+export function sortGoatPollNominees(nominees: GoatPollNominee[]): GoatPollNominee[] {
+  return [...nominees].sort((a, b) => b.net - a.net || b.up - a.up || a.createdAt - b.createdAt);
 }
 
 export interface GoatPollBoardPayload {
