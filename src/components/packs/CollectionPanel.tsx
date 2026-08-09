@@ -637,6 +637,16 @@ export function CollectionPanel({
   const [serverLoading, setServerLoading] = useState(false);
   const [serverMissingKey, setServerMissingKey] = useState<string | null>(null);
   const [serverRefreshKey, setServerRefreshKey] = useState(0);
+  /* A wallet push landing (syncing -> synced) is the moment freshly pulled
+     cards exist server-side, so it's the earliest a re-read can show them.
+     Without this, an open pack never reaches the cached page and a "newest"
+     collection sits stale until a filter change happens to revalidate. */
+  const prevSyncStatusRef = useRef(syncStatus);
+  useEffect(() => {
+    const prev = prevSyncStatusRef.current;
+    prevSyncStatusRef.current = syncStatus;
+    if (prev === "syncing" && syncStatus === "synced") setServerRefreshKey((key) => key + 1);
+  }, [syncStatus]);
   // One-shot "+N" shard floats spawned at the click point of a recycle.
   const [shardBursts, setShardBursts] = useState<Array<{ id: number; x: number; y: number; amount: number }>>([]);
   const burstIdRef = useRef(0);
