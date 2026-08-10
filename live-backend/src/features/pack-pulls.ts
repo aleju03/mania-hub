@@ -835,7 +835,7 @@ export async function getHonoraryPullsReport(
   const args = ids as InValue[];
   const rows = (await exec(
     db,
-    `select card_user_id, owner_user_id, copies, first_pulled_at, last_pulled_at, username as card_username,
+    `select card_user_id, owner_user_id, copies, first_pulled_at, last_pulled_at, updated_at, username as card_username,
        coalesce(
          (select u.username from users u where u.user_id = c.owner_user_id),
          (select e.owner_username from pack_pull_events e
@@ -859,8 +859,20 @@ export async function getHonoraryPullsReport(
     const cardUserId = Number(row.card_user_id);
     const ownerUserId = Number(row.owner_user_id);
     const copies = Number(row.copies) || 0;
-    const firstPulledAt = Number(row.first_pulled_at) || 0;
-    const lastPulledAt = Number(row.last_pulled_at) || 0;
+    /* Pull stamps are client-authored: the wallet is a browser-side economy,
+       and while the sync clamps an incoming stamp to the server's clock it
+       keeps max(existing, incoming), so a row written by a machine running
+       days ahead cannot heal itself on a later sync. Left alone, such a stamp
+       holds both the newest-pull line and the top of the card order until real
+       time catches up with it, printed as "just now" the whole way.
+
+       updated_at is the bound rather than this report's own clock: it is
+       server-written at the same upsert, so it is the latest moment the pull
+       can truly have happened. Clamping to "now" instead would just reprint
+       "just now" on every read, which is the symptom rather than the fix. */
+    const writtenAt = Number(row.updated_at) || capturedAt;
+    const firstPulledAt = Math.min(Number(row.first_pulled_at) || 0, writtenAt);
+    const lastPulledAt = Math.min(Number(row.last_pulled_at) || 0, writtenAt);
     let card = byCard.get(cardUserId);
     if (!card) {
       card = {
@@ -900,12 +912,7 @@ export async function getHonoraryPullsReport(
     } else {
       byCollector.set(ownerUserId, { userId: ownerUserId, username: ownerUsername, cards: 1, copies, lastPulledAt });
     }
-    // Never past capturedAt: pull stamps are client-authored, and one from a
-    // clock running ahead would hold "latest" until real time caught up with
-    // it, rendered as a permanent "just now". Boot repairs such rows
-    // (clampPackCollectionPullStamps), but a report read is not the place to
-    // trust that it already has.
-    if (lastPulledAt > 0 && lastPulledAt <= capturedAt && lastPulledAt > (latest?.pulledAt ?? 0)) {
+    if (lastPulledAt > 0 && lastPulledAt > (latest?.pulledAt ?? 0)) {
       latest = {
         ownerUserId,
         ownerUsername,

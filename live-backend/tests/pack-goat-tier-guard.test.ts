@@ -3,12 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import {
-  clampPackCollectionPullStamps,
-  HONORARY_USER_IDS,
-  recyclePackCollectionCards,
-  savePackWallet,
-} from "../src/features/pack-wallets.js";
+import { HONORARY_USER_IDS, recyclePackCollectionCards, savePackWallet } from "../src/features/pack-wallets.js";
 import { getHonoraryPullsReport, getSharedPackCard } from "../src/features/pack-pulls.js";
 
 // Collection cards are client-supplied and their tier is otherwise trusted.
@@ -293,7 +288,9 @@ describe("future pull stamps", () => {
 
   it("never lets a future stamp claim the latest pull", async () => {
     const now = Date.now();
-    await plantRow(OWNER, HONORARY_ID, now + 86_400_000, now - 60_000);
+    // Written three days ago, stamped a day into the future by the puller's
+    // clock; the other row is a genuinely newer pull from an hour ago.
+    await plantRow(OWNER, HONORARY_ID, now + 86_400_000, now - 3 * 86_400_000);
     await plantRow(OTHER_OWNER, OTHER_HONORARY_ID, now - 3_600_000, now - 3_600_000);
 
     const report = await getHonoraryPullsReport(db, HONORARY_USER_IDS);
@@ -301,21 +298,31 @@ describe("future pull stamps", () => {
     expect(report.latest?.ownerUserId).toBe(OTHER_OWNER);
   });
 
-  it("clamps legacy future stamps to the row's server-written updated_at", async () => {
+  it("reads a future stamp back as the moment the row was written", async () => {
     const now = Date.now();
-    const updatedAt = now - 60_000;
-    await plantRow(OWNER, HONORARY_ID, now + 86_400_000, updatedAt);
-    await plantRow(OTHER_OWNER, OTHER_HONORARY_ID, now - 3_600_000, now - 3_600_000);
+    const writtenAt = now - 3_600_000;
+    await plantRow(OWNER, HONORARY_ID, now + 86_400_000, writtenAt);
 
-    expect(await clampPackCollectionPullStamps(db)).toBe(1);
-    const row = (await exec(
-      db,
-      "select first_pulled_at, last_pulled_at from pack_collection_cards where owner_user_id = ?",
-      [OWNER],
-    )).rows[0];
-    expect(Number(row?.first_pulled_at)).toBe(updatedAt);
-    expect(Number(row?.last_pulled_at)).toBe(updatedAt);
-    // Clean data is left alone, so this can run at every boot.
-    expect(await clampPackCollectionPullStamps(db)).toBe(0);
+    const report = await getHonoraryPullsReport(db, HONORARY_USER_IDS);
+    const card = report.cards[0];
+    /* Every stamp the readout ages, not just the newest-pull line: a future
+       one on any of them prints as "just now" too. The row's server-written
+       updated_at is what they come back as, so the pull ages from there
+       instead of sitting at "just now" on every read. */
+    expect(card?.lastPulledAt).toBe(writtenAt);
+    expect(card?.firstPulledAt).toBe(writtenAt);
+    expect(card?.owners[0]?.lastPulledAt).toBe(writtenAt);
+    expect(card?.owners[0]?.firstPulledAt).toBe(writtenAt);
+    expect(report.collectors[0]?.lastPulledAt).toBe(writtenAt);
+    expect(report.latest?.pulledAt).toBe(writtenAt);
+  });
+
+  it("leaves an ordinary stamp exactly as stored", async () => {
+    const pulledAt = Date.now() - 7_200_000;
+    await plantRow(OWNER, HONORARY_ID, pulledAt, pulledAt + 60_000);
+
+    const report = await getHonoraryPullsReport(db, HONORARY_USER_IDS);
+    expect(report.cards[0]?.lastPulledAt).toBe(pulledAt);
+    expect(report.latest?.pulledAt).toBe(pulledAt);
   });
 });

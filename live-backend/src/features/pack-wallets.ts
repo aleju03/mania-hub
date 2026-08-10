@@ -912,30 +912,6 @@ export async function ensurePackCollectionCardKeys(db: Db): Promise<boolean> {
   return true;
 }
 
-/* Clamps pull stamps that claim to be from the future.
-
-   first/last_pulled_at are client-authored (the wallet is a browser-side
-   economy) and the intake now refuses a stamp past the server's clock, but
-   rows written before that guard can carry one from a machine whose clock ran
-   ahead - and the sync upsert keeps max(existing, incoming), so a clamped
-   re-sync can never heal them. A future stamp is poison for anything that
-   sorts on recency: it holds "latest pull" forever, rendered as a permanent
-   "just now". updated_at is the bound because it is server-written at the
-   same upsert, so it is the latest moment the pull can truly have happened.
-
-   Runs at every boot; the where clause matches nothing once the data is
-   clean. Returns how many rows it repaired. */
-export async function clampPackCollectionPullStamps(db: Db): Promise<number> {
-  const result = await exec(
-    db,
-    `update pack_collection_cards
-        set first_pulled_at = min(first_pulled_at, updated_at),
-            last_pulled_at = min(last_pulled_at, updated_at)
-      where first_pulled_at > updated_at or last_pulled_at > updated_at`,
-  );
-  return Number(result.rowsAffected ?? 0);
-}
-
 /* Which of these cards an account actually holds a copy of right now.
 
    Duels stake real cards, so a hand is no longer a claim the server takes on
