@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -356,9 +356,20 @@ function HomePage() {
   // and until the client fetches land. Scope-guarded so a post-hydration
   // country switch never shows the previous scope's board.
   const loaderSnapshot = loaderData?.scope === selectedCountry ? loaderData : null;
+  const hydrated = useHasHydrated();
   const storeRankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
-  const rankings = storeRankings ?? loaderSnapshot?.rankings ?? null;
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
+  // Persist reads localStorage synchronously, so the store already holds the
+  // board an earlier visit cached by the time React runs the hydration render.
+  // The loader board is the one the server painted and it was fetched for this
+  // request, so it keeps the panel until a client fetch actually lands. Reading
+  // the cached board any sooner mismatches the SSR usernames (React throws the
+  // whole panel away and re-renders it) and trades fresh rows for older ones.
+  const mountedAt = useRef(Date.now());
+  const storeRankingsAreNewer = rankingsFetchedAt != null && rankingsFetchedAt >= mountedAt.current;
+  const rankings = (hydrated && (storeRankingsAreNewer || !loaderSnapshot?.rankings) ? storeRankings : null)
+    ?? loaderSnapshot?.rankings
+    ?? null;
   const recentScores = useAppStore((state) => state.homeRecentScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
   const recentScoresFetchedAt = useAppStore((state) => state.homeRecentScoresFetchedAtByCountry[selectedCountry]) ?? null;
   const trackerFeedScores = useAppStore((state) => state.feedScoresByCountry[selectedCountry]) ?? EMPTY_TRACKER_SCORES;
@@ -368,7 +379,6 @@ function HomePage() {
   const liveBackendEnabled = isLiveBackendConfigured();
   const windowActive = useWindowActive();
   const { warming } = useCountryWarming(selectedCountry);
-  const hydrated = useHasHydrated();
   const hiddenUserIds = useHiddenUserIds();
   const setRankings = useAppStore((state) => state.setRankings);
   const setHomeRecentScores = useAppStore((state) => state.setHomeRecentScores);
