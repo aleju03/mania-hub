@@ -3,7 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { HONORARY_USER_IDS, recyclePackCollectionCards, savePackWallet } from "../src/features/pack-wallets.js";
+import {
+  clampPackCollectionPullStamps,
+  HONORARY_USER_IDS,
+  recyclePackCollectionCards,
+  savePackWallet,
+} from "../src/features/pack-wallets.js";
 import { getHonoraryPullsReport, getSharedPackCard } from "../src/features/pack-pulls.js";
 
 // Collection cards are client-supplied and their tier is otherwise trusted.
@@ -266,5 +271,51 @@ describe("honorary pulls leaderboard", () => {
     expect(report.cards[0]?.owners).toHaveLength(1);
     // Truncation is a display cap on one card's list, not on the leaderboard.
     expect(report.collectors).toHaveLength(2);
+  });
+});
+
+/* Pull stamps are client-authored, and rows synced before the intake refused
+   future ones can carry a stamp from a clock running ahead. Such a stamp would
+   hold "latest pull" until real time caught up with it - days of the readout
+   opening on the same pull, aged "just now". */
+describe("future pull stamps", () => {
+  // The intake clamps these now, so a legacy row has to be planted directly.
+  async function plantRow(owner: number, cardUserId: number, pulledAt: number, updatedAt: number) {
+    await exec(
+      db,
+      `insert into pack_collection_cards
+         (owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label,
+          skills_json, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at)
+       values (?, ?, ?, ?, '', 'KR', 'goat', 'GOAT', null, 1000, 1, 1, 0, ?, ?, ?)`,
+      [owner, cardUserId, `${cardUserId}:goat`, `player${cardUserId}`, pulledAt, pulledAt, updatedAt],
+    );
+  }
+
+  it("never lets a future stamp claim the latest pull", async () => {
+    const now = Date.now();
+    await plantRow(OWNER, HONORARY_ID, now + 86_400_000, now - 60_000);
+    await plantRow(OTHER_OWNER, OTHER_HONORARY_ID, now - 3_600_000, now - 3_600_000);
+
+    const report = await getHonoraryPullsReport(db, HONORARY_USER_IDS);
+    expect(report.latest?.cardUserId).toBe(OTHER_HONORARY_ID);
+    expect(report.latest?.ownerUserId).toBe(OTHER_OWNER);
+  });
+
+  it("clamps legacy future stamps to the row's server-written updated_at", async () => {
+    const now = Date.now();
+    const updatedAt = now - 60_000;
+    await plantRow(OWNER, HONORARY_ID, now + 86_400_000, updatedAt);
+    await plantRow(OTHER_OWNER, OTHER_HONORARY_ID, now - 3_600_000, now - 3_600_000);
+
+    expect(await clampPackCollectionPullStamps(db)).toBe(1);
+    const row = (await exec(
+      db,
+      "select first_pulled_at, last_pulled_at from pack_collection_cards where owner_user_id = ?",
+      [OWNER],
+    )).rows[0];
+    expect(Number(row?.first_pulled_at)).toBe(updatedAt);
+    expect(Number(row?.last_pulled_at)).toBe(updatedAt);
+    // Clean data is left alone, so this can run at every boot.
+    expect(await clampPackCollectionPullStamps(db)).toBe(0);
   });
 });

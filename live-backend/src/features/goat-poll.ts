@@ -243,12 +243,19 @@ function rowToNominee(row: Record<string, unknown>): GoatPollNominee {
 }
 
 /**
- * The public board: every nominee with its tallies, best net first. Ties break
+ * The public board: nominees with their tallies, best net first. Ties break
  * on raw upvotes and then on age, so a nominee who convinced more people
  * outranks a quiet one on the same net, and an early nomination outranks a
  * latecomer that only drew even.
+ *
+ * `limit` caps how many rows come back, from the top of that order. The widget
+ * shows a handful of rows and grows by pages on request, so the 20-second
+ * refresh in every open tab should not carry the whole board (up to 150 KiB at
+ * 500 nominees) to show eight names. Callers that need everything - the write
+ * responses, which return the board they just changed - pass no limit.
  */
-export async function listGoatPollBoard(db: Db, pollId: string): Promise<GoatPollNominee[]> {
+export async function listGoatPollBoard(db: Db, pollId: string, limit?: number): Promise<GoatPollNominee[]> {
+  const capped = limit != null && Number.isInteger(limit) && limit > 0;
   const rows = (await exec(
     db,
     `select n.*,
@@ -258,10 +265,17 @@ export async function listGoatPollBoard(db: Db, pollId: string): Promise<GoatPol
      left join goat_poll_votes v on v.poll_id = n.poll_id and v.nominee_id = n.id
      where n.poll_id = ?
      group by n.id
-     order by (up - down) desc, up desc, n.created_at asc`,
-    [pollId],
+     order by (up - down) desc, up desc, n.created_at asc${capped ? " limit ?" : ""}`,
+    capped ? [pollId, limit] : [pollId],
   )).rows;
   return rows.map((row) => rowToNominee(row as Record<string, unknown>));
+}
+
+/** How many nominees the whole board holds, so a capped read can still say
+    whether there is more to load. */
+export async function countGoatPollNominees(db: Db, pollId: string): Promise<number> {
+  const row = (await exec(db, "select count(*) as n from goat_poll_nominees where poll_id = ?", [pollId])).rows[0];
+  return Number(row?.n ?? 0);
 }
 
 /**

@@ -24,7 +24,7 @@ import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
 import { backfillPackCardSerials } from "./features/pack-pulls.js";
 import { ensurePackDuelsSchema } from "./features/pack-duels.js";
-import { ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
+import { clampPackCollectionPullStamps, ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
 import { backfillSkinSlugs } from "./features/skins.js";
 import { isSkinStorageConfigured, readSkinObject, skinObjectDeletesEnabled } from "./skins/r2.js";
 import { backfillSkinSpecialKeymodes } from "./skins/special-backfill.js";
@@ -188,6 +188,13 @@ export async function createApp() {
     // rows are keyed (owner, card_key) now. Rebuilds the table once on a
     // database created before that; a no-op on every boot after.
     await bootWrite("rekey_pack_collection_cards", () => ensurePackCollectionCardKeys(db));
+    // Pull stamps synced before the intake refused future ones can sit past the
+    // server's clock, where they hold "latest pull" forever. Clamps them to
+    // their row's server-written updated_at; a no-op once the data is clean.
+    await bootWrite("clamp_pack_collection_pull_stamps", async () => {
+      const repaired = await clampPackCollectionPullStamps(db);
+      if (repaired > 0) logInfo("pack_pull_stamps_clamped", { repaired });
+    });
     // Card serials arrived after people had been collecting for months, so the
     // mint registry is seeded from the collections themselves (each row knows
     // when its owner first pulled the card). Only fills gaps, so every boot

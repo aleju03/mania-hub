@@ -1925,6 +1925,9 @@ export interface GoatPollBoardPayload {
      board with this set — for everyone else the endpoint 404s. */
   adminOnly: boolean;
   nominees: GoatPollNominee[];
+  /* How many nominees the whole board holds. `nominees` carries only as many
+     as were asked for, so this is what says whether there are more to load. */
+  totalNominees: number;
 }
 
 export interface GoatPollBoard extends GoatPollBoardPayload {
@@ -1942,10 +1945,14 @@ export interface GoatPollBoard extends GoatPollBoardPayload {
    unreleased poll should be indistinguishable from one that does not exist.
    Admins read it through fetchGoatPollBoardAsAdmin() in src/lib/goat-poll.ts
    instead, which carries the bridge token. */
-export async function fetchGoatPollBoard(): Promise<GoatPollBoardPayload | GoatPollOff | null> {
+export async function fetchGoatPollBoard(limit?: number): Promise<GoatPollBoardPayload | GoatPollOff | null> {
   if (!isLiveBackendConfigured()) return GOAT_POLL_OFF;
   try {
-    return await fetchLiveJson<GoatPollBoardPayload>("/api/goat-poll");
+    // No limit means the whole board. The widget passes how many rows it is
+    // actually showing, so its 20-second refresh stops carrying hundreds of
+    // rows to draw eight.
+    const query = limit != null && Number.isInteger(limit) && limit > 0 ? `?limit=${limit}` : "";
+    return await fetchLiveJson<GoatPollBoardPayload>(`/api/goat-poll${query}`);
   } catch (error) {
     /* A 404 is the backend saying there is no poll — retired, or unreleased and
        this viewer is not an admin. Told apart from a network blip so the widget

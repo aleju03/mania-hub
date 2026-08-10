@@ -240,6 +240,36 @@ describe("goat poll nominations", () => {
   });
 });
 
+/* The widget fetches only the rows it is showing and pages up by "show more"
+   clicks, so the board read takes a limit. The total still reports the whole
+   board: it is what says whether there is more to load. */
+describe("goat poll board paging", () => {
+  it("caps the read at the asked limit, from the top of the order", async () => {
+    for (let n = 0; n < 5; n += 1) await nominate({ userId: n + 1, username: `Nominee ${n}` });
+    const full = await call(mockReq("GET", "/api/goat-poll"));
+    expect(full.body.nominees).toHaveLength(5);
+    expect(full.body.totalNominees).toBe(5);
+    // Two extra voices on one row, so the capped read has a provable top.
+    const favourite = full.body.nominees[3].id;
+    await vote({ userId: 91, nomineeId: favourite, value: 1 });
+    await vote({ userId: 92, nomineeId: favourite, value: 1 });
+
+    const page = await call(mockReq("GET", "/api/goat-poll?limit=2"));
+    expect(page.body.nominees).toHaveLength(2);
+    expect(page.body.nominees[0].id).toBe(favourite);
+    expect(page.body.totalNominees).toBe(5);
+  });
+
+  it("returns the whole board when the limit is missing or unusable", async () => {
+    for (let n = 0; n < 3; n += 1) await nominate({ userId: n + 1, username: `Nominee ${n}` });
+    for (const query of ["", "?limit=abc", "?limit=0", "?limit=-2", "?limit=1.5"]) {
+      const board = await call(mockReq("GET", `/api/goat-poll${query}`));
+      expect(board.body.nominees).toHaveLength(3);
+      expect(board.body.totalNominees).toBe(3);
+    }
+  });
+});
+
 describe("goat poll votes", () => {
   it("opens a new row on the nominator's own upvote", async () => {
     const created = await nominate({ userId: 1, username: "Jakads" });

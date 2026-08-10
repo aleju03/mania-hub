@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseJson } from "../../db.js";
 import {
   castGoatPollVote,
+  countGoatPollNominees,
   getGoatPollNominee,
   goatPollWindow,
   listGoatPollBoard,
@@ -70,6 +71,12 @@ export async function handleGoatPollRoutes(req: IncomingMessage, res: ServerResp
       sendJson(req, res, ctx, 404, { error: "poll_not_configured" });
       return true;
     }
+    // The widget asks for as many rows as it is showing and pages up by "show
+    // more" clicks, so the 20-second refresh in every open tab carries eight
+    // rows instead of the whole board. No limit param means everything, which
+    // is also what a frontend from before the param existed gets.
+    const rawLimit = Number(url.searchParams.get("limit"));
+    const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 1000) : undefined;
     sendJson(req, res, ctx, 200, {
       pollId: window.pollId,
       opensAt: window.opensAt,
@@ -80,7 +87,10 @@ export async function handleGoatPollRoutes(req: IncomingMessage, res: ServerResp
       // machine set to the wrong day still shows the deadline everyone else is
       // voting to — and the one this process enforces.
       serverNow: Date.now(),
-      nominees: await listGoatPollBoard(ctx.db, window.pollId),
+      nominees: await listGoatPollBoard(ctx.db, window.pollId, limit),
+      // The whole board's size, however few rows this answer carries: it is
+      // what tells a capped reader whether "show more" has anything left.
+      totalNominees: await countGoatPollNominees(ctx.db, window.pollId),
     });
     return true;
   }

@@ -116,8 +116,9 @@ async function callGoatPoll(path: string, payload: Record<string, unknown>): Pro
  * `GOAT_POLL.adminOnly` is set, and a browser has no token of its own. Returns
  * null for everyone else, so a non-admin calling this directly learns nothing.
  */
-export const fetchGoatPollBoardAsAdmin = createServerFn({ method: "GET" }).handler(
-  async (): Promise<GoatPollBoardPayload | null> => {
+export const fetchGoatPollBoardAsAdmin = createServerFn({ method: "GET" })
+  .validator((data: { limit?: number } | undefined) => data ?? {})
+  .handler(async ({ data }): Promise<GoatPollBoardPayload | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const { readCurrentAuth } = await import("./auth-server");
@@ -126,15 +127,18 @@ export const fetchGoatPollBoardAsAdmin = createServerFn({ method: "GET" }).handl
     if (!canUseAdminFeatures(auth)) return null;
     const base = backendBase();
     if (!base) return null;
+    // Same paging the public read has: as many rows as the widget is showing,
+    // nothing when the caller wants the whole board.
+    const limit = Number(data?.limit);
+    const query = Number.isInteger(limit) && limit > 0 ? `?limit=${limit}` : "";
     try {
-      const response = await fetch(`${base}/api/goat-poll`, { headers: bridgeHeaders() });
+      const response = await fetch(`${base}/api/goat-poll${query}`, { headers: bridgeHeaders() });
       if (!response.ok) return null;
       return (await response.json()) as GoatPollBoardPayload;
     } catch {
       return null;
     }
-  },
-);
+  });
 
 export const castGoatPollVote = createServerFn({ method: "POST" })
   .validator((data: { nomineeId: string; value: number }) => data)

@@ -900,7 +900,12 @@ export async function getHonoraryPullsReport(
     } else {
       byCollector.set(ownerUserId, { userId: ownerUserId, username: ownerUsername, cards: 1, copies, lastPulledAt });
     }
-    if (lastPulledAt > 0 && lastPulledAt > (latest?.pulledAt ?? 0)) {
+    // Never past capturedAt: pull stamps are client-authored, and one from a
+    // clock running ahead would hold "latest" until real time caught up with
+    // it, rendered as a permanent "just now". Boot repairs such rows
+    // (clampPackCollectionPullStamps), but a report read is not the place to
+    // trust that it already has.
+    if (lastPulledAt > 0 && lastPulledAt <= capturedAt && lastPulledAt > (latest?.pulledAt ?? 0)) {
       latest = {
         ownerUserId,
         ownerUsername,

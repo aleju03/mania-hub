@@ -52,6 +52,11 @@ const PROOF_HINT = "web.archive.org link to their osu! profile";
 // something you read and starts being something you scroll past, which on a
 // phone means scrolling past it to reach the packs.
 const VISIBLE_ROWS = 8;
+/* How many more rows a "show more" click asks the server for. The board only
+   ever fetches as many rows as it is showing (the limit param on the board
+   read), so nobody pays for five hundred nominees to look at eight — and the
+   full list arrives a page at a time for whoever keeps clicking. */
+const SHOW_MORE_STEP = 50;
 /* Expanded, the list scrolls inside a fixed height rather than running down the
    page. It is absolutely positioned in the rail, so an uncapped board does not
    lengthen the page — it paints over it, and 500 nominees is 16,000px of that. */
@@ -369,7 +374,13 @@ export function GoatPoll() {
   const [votes, setVotes] = useState<Record<string, number>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+  /* How many rows the list is showing, which is also how many the board fetch
+     asks the server for. Grows by SHOW_MORE_STEP per "show more" click; the
+     ref carries the current value into the load closure so the 20-second
+     refresh re-fetches at the size the viewer grew the list to. */
+  const [visibleCount, setVisibleCount] = useState(VISIBLE_ROWS);
+  const limitRef = useRef(VISIBLE_ROWS);
+  const reloadRef = useRef<(() => void) | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   // True while the collapsible panel is mid-slide; see where it is used below.
   const [sliding, setSliding] = useState(true);
@@ -396,7 +407,8 @@ export function GoatPoll() {
     if (off) return;
     let cancelled = false;
     const load = () => {
-      void (admin ? fetchGoatPollBoardAsAdmin() : fetchGoatPollBoard()).then((next) => {
+      const limit = limitRef.current;
+      void (admin ? fetchGoatPollBoardAsAdmin({ data: { limit } }) : fetchGoatPollBoard(limit)).then((next) => {
         if (cancelled) return;
         if (next === GOAT_POLL_OFF || (admin && next === null)) {
           // The admin path returns null for the same 404 (it cannot see one
@@ -410,6 +422,10 @@ export function GoatPoll() {
         if (next) setBoard({ ...next, receivedAt: Date.now() });
       });
     };
+    // "show more" needs a fetch at the new limit right on the click, not at the
+    // next 20-second tick, so the handler below reaches the current load
+    // closure through this ref.
+    reloadRef.current = load;
     load();
     // A hidden tab still takes the one load above (so returning to it shows the
     // truth immediately) but stops paying for the interval.
@@ -430,11 +446,27 @@ export function GoatPoll() {
           // A frame from a previous poll (a rerun bumps the id) is not ours.
           if (!prev || (change.pollId && change.pollId !== prev.pollId)) return prev;
           if (change.removedId) {
-            return { ...prev, nominees: prev.nominees.filter((nominee) => nominee.id !== change.removedId) };
+            const nominees = prev.nominees.filter((nominee) => nominee.id !== change.removedId);
+            return {
+              ...prev,
+              nominees,
+              // Counted down only when the row was actually here: a frame for
+              // one this admin already removed locally must not count twice,
+              // and the backstop poll trues the total up within a refresh.
+              totalNominees:
+                nominees.length === prev.nominees.length ? prev.totalNominees : Math.max(0, prev.totalNominees - 1),
+            };
           }
           if (!change.nominee) return prev;
           const without = prev.nominees.filter((nominee) => nominee.id !== change.nominee!.id);
-          return { ...prev, nominees: sortGoatPollNominees([...without, change.nominee]) };
+          // A frame for a row not held locally is usually a fresh nomination.
+          // On a board fetched short it can also be a vote on a row below the
+          // cutoff, which overcounts by one until the backstop poll corrects it.
+          return {
+            ...prev,
+            nominees: sortGoatPollNominees([...without, change.nominee]),
+            totalNominees: without.length === prev.nominees.length ? prev.totalNominees + 1 : prev.totalNominees,
+          };
         });
       } catch {
         // Malformed frame: the poll backstop carries this change instead.
@@ -444,6 +476,7 @@ export function GoatPoll() {
 
     return () => {
       cancelled = true;
+      reloadRef.current = null;
       if (timer) clearInterval(timer);
       source?.removeEventListener("goat_poll", onChange);
     };
@@ -474,7 +507,12 @@ export function GoatPoll() {
 
   const applyResult = useCallback(
     (result: Awaited<ReturnType<typeof castGoatPollVote>>) => {
-      if (result.nominees) setBoard((prev) => (prev ? { ...prev, nominees: result.nominees! } : prev));
+      // The write routes attach the whole board, so its length is the total.
+      if (result.nominees) {
+        setBoard((prev) =>
+          prev ? { ...prev, nominees: result.nominees!, totalNominees: result.nominees!.length } : prev,
+        );
+      }
       if (result.votes) setVotes(result.votes);
       setMessage(result.ok ? null : STATUS_MESSAGES[result.status] ?? null);
     },
@@ -533,7 +571,11 @@ export function GoatPoll() {
         setRemoving(nominee.id);
         void removeGoatPollNominee({ data: { nomineeId: nominee.id } })
           .then((result) => {
-            if (result.nominees) setBoard((prev) => (prev ? { ...prev, nominees: result.nominees! } : prev));
+            if (result.nominees) {
+              setBoard((prev) =>
+                prev ? { ...prev, nominees: result.nominees!, totalNominees: result.nominees!.length } : prev,
+              );
+            }
             if (!result.ok) setMessage("Couldn't remove that nominee.");
           })
           .catch(() => setMessage("Couldn't remove that nominee."))
@@ -542,6 +584,22 @@ export function GoatPoll() {
     }),
     [armed, removing],
   );
+
+  /* One server round trip per click, which is the point: the board arrives a
+     page at a time instead of all at once. The ref moves before the fetch so
+     the reload already asks at the grown size. */
+  const showMore = useCallback(() => {
+    const next = limitRef.current + SHOW_MORE_STEP;
+    limitRef.current = next;
+    setVisibleCount(next);
+    reloadRef.current?.();
+  }, []);
+  /* Collapsing is free: rows past the slice just stop rendering, and the next
+     refresh shrinks the fetch back down to match. */
+  const showFewer = useCallback(() => {
+    limitRef.current = VISIBLE_ROWS;
+    setVisibleCount(VISIBLE_ROWS);
+  }, []);
 
   const nominees = useMemo(() => board?.nominees ?? [], [board]);
   /* Re-read off the board every render rather than snapshotted on the click, so
@@ -555,7 +613,12 @@ export function GoatPoll() {
   if (!board) return null;
 
   const open = wide || expanded;
-  const shown = showAll ? nominees : nominees.slice(0, VISIBLE_ROWS);
+  /* The slice holds either way rows arrive: a paged fetch brings exactly this
+     many, but a write response brings the whole board back. */
+  const shown = nominees.slice(0, visibleCount);
+  // ?? for a backend from before the field existed, which sends the full list.
+  const totalNominees = board.totalNominees ?? nominees.length;
+  const grown = visibleCount > VISIBLE_ROWS;
   const animatedRows = shown.length <= ANIMATED_ROWS_MAX;
   // The deadline in the reader's own timezone, for anyone who wants to plan
   // around it rather than watch a countdown. Same instant everywhere.
@@ -723,7 +786,7 @@ export function GoatPoll() {
                   layout={animatedRows}
                   translate="no"
                   className={`mt-2.5 border-t border-osu-b3/25 pt-1 ${
-                    showAll ? `${EXPANDED_HEIGHT} overflow-y-auto overscroll-contain pr-1` : ""
+                    grown ? `${EXPANDED_HEIGHT} overflow-y-auto overscroll-contain pr-1` : ""
                   }`}
                 >
                   {shown.map((nominee) => (
@@ -739,14 +802,27 @@ export function GoatPoll() {
                     />
                   ))}
                 </motion.ul>
-                {nominees.length > VISIBLE_ROWS && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAll((value) => !value)}
-                    className="mt-1 cursor-pointer text-[10px] text-osu-f1/60 transition-colors hover:text-osu-c1"
-                  >
-                    {showAll ? "show fewer" : "show all"}
-                  </button>
+                {(totalNominees > shown.length || grown) && (
+                  <div className="mt-1 flex items-center gap-3">
+                    {totalNominees > shown.length && (
+                      <button
+                        type="button"
+                        onClick={showMore}
+                        className="cursor-pointer text-[10px] text-osu-f1/60 transition-colors hover:text-osu-c1"
+                      >
+                        show more
+                      </button>
+                    )}
+                    {grown && (
+                      <button
+                        type="button"
+                        onClick={showFewer}
+                        className="cursor-pointer text-[10px] text-osu-f1/60 transition-colors hover:text-osu-c1"
+                      >
+                        show fewer
+                      </button>
+                    )}
+                  </div>
                 )}
               </>
             )}

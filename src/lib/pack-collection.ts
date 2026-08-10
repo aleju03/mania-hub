@@ -1,13 +1,13 @@
 import { getManiaCardTier, type ManiaCardTier, type ManiaSkills } from "./maniacard";
 
-// Pack economy: charges regenerate over time (one every 30 seconds, capped
+// Pack economy: charges regenerate over time (one every 20 seconds, capped
 // at 5), duplicate cards recycle into shards, and shards buy the paid pack
 // types (see PACK_TYPES in packs.ts). Everything lives in localStorage, one
 // wallet per viewer scope; the anonymous wallet is merged into the account
 // wallet on login.
 
 export const MAX_PACK_CHARGES = 5;
-export const PACK_CHARGE_REGEN_MS = 30_000;
+export const PACK_CHARGE_REGEN_MS = 20_000;
 /* Every opened pack banks a few shards, so the shard packs are reachable by
    just playing - duplicates only speed it up. */
 export const PACK_OPEN_SHARD_REWARD = 2;
