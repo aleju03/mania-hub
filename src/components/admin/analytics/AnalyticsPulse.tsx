@@ -35,7 +35,11 @@ export function AnalyticsPulse({
   const timeline = data.timeline ?? [];
   const peak = useMemo(() => timeline.reduce((max, bucket) => Math.max(max, bucket.events), 0), [timeline]);
   const spanMs = (data.bucketMs || 0) * Math.max(1, timeline.length);
-  const live = data.activeVisitors > 0;
+  // The headline counts the last 15 minutes (the backend's window; the label
+  // below names it), with the tighter here-now count kept underneath it.
+  const hereNow = data.activeVisitors;
+  const activeRecently = data.recentVisitors ?? hereNow;
+  const live = activeRecently > 0;
   const [hovered, setHovered] = useState<number | null>(null);
   const startTs = timeline.length > 0 ? timeline[0].ts : 0;
   const ticks = useMemo(
@@ -53,19 +57,19 @@ export function AnalyticsPulse({
         <div className={`col-span-2 flex items-center gap-3 px-4 py-3 sm:flex-1 ${live ? "bg-osu-pink/10" : "bg-osu-b4/40"}`}>
           <span className="relative flex h-3 w-3 flex-shrink-0" aria-hidden="true">
             <span className={`absolute inline-flex h-full w-full rounded-full ${live ? "bg-osu-pink" : "bg-osu-b2"}`} />
-            {live ? <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-osu-pink opacity-60" /> : null}
+            {hereNow > 0 ? <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-osu-pink opacity-60" /> : null}
           </span>
           <div className="min-w-0">
             <div className={`text-3xl font-bold leading-none ${live ? "text-osu-pink-light" : "text-osu-f1"}`}>
-              {formatNumber(data.activeVisitors)}
+              {formatNumber(activeRecently)}
             </div>
             <div className="mt-1 truncate text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
-              here now
-              {onlineCountries > 0 ? (
-                <span className="ml-1.5 normal-case tracking-normal text-osu-l2/70">
-                  from {onlineCountries} {onlineCountries === 1 ? "country" : "countries"}
-                </span>
-              ) : null}
+              active
+              <span className="ml-1.5 normal-case tracking-normal text-osu-l2/70">last 15m</span>
+            </div>
+            <div className="mt-0.5 truncate text-[10px] text-osu-l2/60">
+              {formatNumber(hereNow)} here now
+              {onlineCountries > 0 ? ` from ${onlineCountries} ${onlineCountries === 1 ? "country" : "countries"}` : null}
             </div>
           </div>
         </div>

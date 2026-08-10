@@ -272,6 +272,7 @@ describe("AnalyticsPulse", () => {
       visitors: index === 47 ? 6 : 1,
     })),
     activeVisitors: 7,
+    recentVisitors: 12,
     pageviewsInRange: 1_140,
     uniqueVisitorsInRange: 142,
     eventsInRange: 3_400,
@@ -290,12 +291,20 @@ describe("AnalyticsPulse", () => {
     fetchedAt: NOW,
   };
 
-  it("headlines who is here and the totals behind them", () => {
+  it("headlines the last 15 minutes and keeps here-now underneath it", () => {
     render(<AnalyticsPulse data={base} range={24} onlineCountries={3} />);
-    expect(screen.getByText("7")).toBeTruthy();
-    expect(screen.getByText("from 3 countries")).toBeTruthy();
+    expect(screen.getByText("12")).toBeTruthy();
+    expect(screen.getByText("last 15m")).toBeTruthy();
+    expect(screen.getByText("7 here now from 3 countries")).toBeTruthy();
     expect(screen.getByText("38%")).toBeTruthy();
     expect(screen.getByText("peak 40 events per 30m")).toBeTruthy();
+  });
+
+  it("falls back to the here-now count when the backend sends no 15m window", () => {
+    const legacy = { ...base, recentVisitors: undefined };
+    render(<AnalyticsPulse data={legacy} range={24} onlineCountries={0} />);
+    expect(screen.getByText("7")).toBeTruthy();
+    expect(screen.getByText("7 here now")).toBeTruthy();
   });
 
   it("reads the hovered bucket out next to the title", () => {

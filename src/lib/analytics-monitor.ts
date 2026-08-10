@@ -148,6 +148,10 @@ export interface AnalyticsMonitorData {
   bucketMs: number;
   timeline: AnalyticsTimelineBucket[];
   activeVisitors: number;
+  /* Distinct visitors in the last 15 minutes; the 5-minute activeVisitors
+     count sits beside it. Optional because a backend deployed behind this
+     build answers without it. */
+  recentVisitors?: number;
   pageviewsInRange: number;
   uniqueVisitorsInRange: number;
   eventsInRange: number;

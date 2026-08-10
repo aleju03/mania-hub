@@ -18,6 +18,11 @@ const MAX_EVENTS_PER_CAPTURE = 50;
 const PRUNE_INTERVAL_MS = 60 * 60_000;
 const LIVE_TICKET_TTL_MS = 10 * 60_000;
 const ACTIVE_VISITOR_WINDOW_MS = 5 * 60_000;
+/* A wider read of the same thing: someone who opened a page ten minutes ago is
+   still around in any useful sense, so the admin headline counts this window
+   and keeps the 5m one beside it. The label in AnalyticsPulse names the number
+   of minutes, so move both together. */
+const RECENT_VISITOR_WINDOW_MS = 15 * 60_000;
 /* Freshness floor for the monitor cache: just under the admin page's 5s poll,
    so a small range still refreshes once per cycle while concurrent tabs and
    the second frontend instance ride the same scan. The TTL then grows with the
@@ -140,6 +145,7 @@ export interface AnalyticsMonitorResponse {
   bucketMs: number;
   timeline: AnalyticsTimelineBucket[];
   activeVisitors: number;
+  recentVisitors: number;
   pageviewsInRange: number;
   uniqueVisitorsInRange: number;
   eventsInRange: number;
@@ -824,6 +830,7 @@ export async function computeMonitorSnapshot(db: Db, options: MonitorComputeOpti
   const rangeHours = Math.min(720, Math.max(1, Math.round(params.rangeHours || 24)));
   const since = now - rangeHours * 60 * 60_000;
   const activeSince = now - ACTIVE_VISITOR_WINDOW_MS;
+  const recentSince = now - RECENT_VISITOR_WINDOW_MS;
   const recentCountry = normalizeCountryCode(params.recentCountry) ?? null;
   const recentLimit = Math.min(1000, Math.max(1, Math.round(params.recentLimit ?? 1000)));
 
@@ -833,12 +840,13 @@ export async function computeMonitorSnapshot(db: Db, options: MonitorComputeOpti
   const overview = (await exec(db, `
     select
       count(distinct case when ts > ? and distinct_id != 'server' then distinct_id end) as active,
+      count(distinct case when ts > ? and distinct_id != 'server' then distinct_id end) as recent_active,
       sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews,
       count(distinct case when distinct_id != 'server' then distinct_id end) as visitors,
       count(*) as events_total,
       sum(case when event = 'page_shared' then 1 else 0 end) as shares
     from analytics_events where ts > ? and is_bot = 0
-  `, [activeSince, since])).rows[0];
+  `, [activeSince, recentSince, since])).rows[0];
 
   const topRoutes = (await exec(db, `
     select path as p, count(*) as c from analytics_events
@@ -973,6 +981,7 @@ export async function computeMonitorSnapshot(db: Db, options: MonitorComputeOpti
     bucketMs,
     timeline,
     activeVisitors: Number(overview?.active ?? 0),
+    recentVisitors: Number(overview?.recent_active ?? 0),
     pageviewsInRange: Number(overview?.pageviews ?? 0),
     uniqueVisitorsInRange: Number(overview?.visitors ?? 0),
     eventsInRange: Number(overview?.events_total ?? 0),

@@ -62,6 +62,7 @@ function createWarmingAnalyticsMonitorData(rangeHours: AnalyticsRange): Analytic
     cacheState: "warming",
     ...emptyAnalyticsTimeline(rangeHours, now),
     activeVisitors: 0,
+    recentVisitors: 0,
     pageviewsInRange: 0,
     uniqueVisitorsInRange: 0,
     eventsInRange: 0,
