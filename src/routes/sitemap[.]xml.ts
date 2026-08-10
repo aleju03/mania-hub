@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getCanonicalOrigin } from "#/lib/origin";
+import { fetchSkinSitemapEntries, type SkinSitemapEntry } from "#/lib/skins";
 
 // Paths that should be crawled and indexed. Keep in sync with robots.txt
 // disallow rules: anything disallowed there must not appear here.
@@ -15,14 +16,48 @@ const STATIC_PATHS = [
   { path: "/bbcode", changefreq: "monthly", priority: "0.5" },
 ] as const;
 
-function buildSitemap(origin: string): string {
-  const urls = STATIC_PATHS.map(({ path, changefreq, priority }) => {
-    return `  <url>
-    <loc>${origin}${path}</loc>
+// A skin slug comes from an uploader-chosen name, so it reaches this file as
+// untrusted text even though the generator keeps it tame. Escaping the <loc>
+// is what keeps one odd name from invalidating the whole document.
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+// W3C datetime at date precision. An absent or unparseable stamp drops the
+// hint rather than emitting a lastmod a crawler would reject.
+function lastmodDate(value: string | null): string | null {
+  if (!value) return null;
+  const at = new Date(value);
+  return Number.isNaN(at.getTime()) ? null : at.toISOString().slice(0, 10);
+}
+
+function urlEntry(
+  loc: string,
+  changefreq: string,
+  priority: string,
+  lastmod?: string | null,
+): string {
+  return `  <url>
+    <loc>${escapeXml(loc)}</loc>${lastmod ? `\n    <lastmod>${lastmod}</lastmod>` : ""}
     <changefreq>${changefreq}</changefreq>
     <priority>${priority}</priority>
   </url>`;
-  }).join("\n");
+}
+
+export function buildSitemap(origin: string, skins: SkinSitemapEntry[]): string {
+  const urls = [
+    ...STATIC_PATHS.map(({ path, changefreq, priority }) =>
+      urlEntry(`${origin}${path}`, changefreq, priority)),
+    // Every public skin page. The /skins grid only server-renders its first
+    // page, so for the rest of the catalogue this is the only crawl path.
+    ...skins.map((skin) =>
+      urlEntry(`${origin}${skin.path}`, "monthly", "0.6", lastmodDate(skin.lastmod))),
+  ].join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -35,7 +70,11 @@ export const Route = createFileRoute("/sitemap.xml")({
     handlers: {
       GET: async ({ request }) => {
         const origin = getCanonicalOrigin(request);
-        const xml = buildSitemap(origin);
+        // An unreachable backend serves the static paths alone: a short
+        // sitemap beats a 500, and the s-maxage below means this walk is a
+        // daily cost rather than a per-crawl one.
+        const skins = await fetchSkinSitemapEntries().catch(() => []);
+        const xml = buildSitemap(origin, skins);
         return new Response(xml, {
           status: 200,
           headers: {

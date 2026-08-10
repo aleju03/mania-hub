@@ -240,6 +240,88 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
   return response.json() as Promise<SkinsListResult>;
 }
 
+// How long a server render waits on the backend before giving up and shipping
+// the page without its grid. The call is same-box and answers in single-digit
+// milliseconds, so this only ever trips on a backend that is down or wedged on
+// the write lock - and giving up costs nothing, since the page falls back to
+// fetching the list from the browser the way it always did. Failing fast is
+// what keeps a stalled backend from turning /skins into a blank tab.
+const SKINS_SSR_TIMEOUT_MS = 800;
+
+// The server-render twin of fetchSkinsListDirect: same public list, fetched
+// over LIVE_BACKEND_URL (localhost on the VPS) rather than the public api host,
+// and only ever the default view - no filters, page 0, newest. That is the one
+// /skins URL in the sitemap and the only one a crawler lands on, and asking for
+// it anonymously keeps the response the shared-cacheable one.
+export async function fetchSkinsListSsr(): Promise<SkinsListResult | null> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return null;
+  try {
+    const response = await fetch(`${base}/api/skins/list?pageSize=${SKINS_PAGE_SIZE}`, {
+      signal: AbortSignal.timeout(SKINS_SSR_TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as SkinsListResult;
+    return Array.isArray(body?.skins) ? body : null;
+  } catch {
+    return null;
+  }
+}
+
+// One sitemap row per public skin page. Nothing links to these in the
+// server-rendered HTML beyond the first page of /skins, so the sitemap is the
+// only crawl path the rest of them have.
+export interface SkinSitemapEntry {
+  path: string;
+  // ISO instant of the last change to the skin, or null when unknown; the
+  // caller turns it into a lastmod hint.
+  lastmod: string | null;
+}
+
+// The backend clamps a list page to SKIN_LIST_MAX_PAGE_SIZE, so the whole
+// catalogue takes a walk. 40 pages of 50 is 2000 skins: past that the sitemap
+// comes up short by design instead of walking forever. Raise it if the count
+// ever gets close.
+const SKIN_SITEMAP_PAGE_CAP = 40;
+const SKIN_SITEMAP_TIMEOUT_MS = 4000;
+
+export async function fetchSkinSitemapEntries(): Promise<SkinSitemapEntry[]> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return [];
+  const entries: SkinSitemapEntry[] = [];
+  let seen = 0;
+  for (let page = 0; page < SKIN_SITEMAP_PAGE_CAP; page += 1) {
+    let body: SkinsListResult;
+    try {
+      const response = await fetch(
+        `${base}/api/skins/list?page=${page}&pageSize=${SKIN_LIST_MAX_PAGE_SIZE}`,
+        { signal: AbortSignal.timeout(SKIN_SITEMAP_TIMEOUT_MS) },
+      );
+      if (!response.ok) break;
+      body = (await response.json()) as SkinsListResult;
+    } catch {
+      // A page that fails mid-walk ends the walk: a sitemap missing its tail
+      // still beats a 500, and the next request rebuilds the whole thing.
+      break;
+    }
+    const skins = Array.isArray(body?.skins) ? body.skins : [];
+    if (skins.length === 0) break;
+    seen += skins.length;
+    for (const skin of skins) {
+      // An anonymous list is public-only already, but a private skin's page is
+      // noindex and 404s for everyone but its uploader. The sitemap must never
+      // be the thing that hands a crawler one of those URLs.
+      if (skin.visibility === "private") continue;
+      entries.push({
+        path: `/skins/${skin.slug ?? skin.id}`,
+        lastmod: skin.oskUpdatedAt ?? skin.publishedAt,
+      });
+    }
+    if (skins.length < SKIN_LIST_MAX_PAGE_SIZE || seen >= (body.total ?? 0)) break;
+  }
+  return entries;
+}
+
 // A similar-skins entry: the summary plus which of its keymodes the backend's
 // visual match was made on, so the strip can front that keymode's render
 // instead of the uploader-chosen cover. Absent or null when the match came

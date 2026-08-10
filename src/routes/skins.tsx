@@ -1,6 +1,6 @@
 import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, ChevronDown, Layers, Lock, Upload } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -16,6 +16,7 @@ import { isLiveBackendConfigured } from "../lib/live-backend";
 import {
   fetchPrivateSkinsShelf,
   fetchSkinsListDirect,
+  fetchSkinsListSsr,
   isSkinsSort,
   readCachedPrivateShelf,
   readCachedSkinsList,
@@ -95,7 +96,26 @@ export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
   };
 }
 
+// Whether a /skins URL is the plain browse view the loader server-renders.
+// Anything filtered, paged or sorted paints from the effect the way it always
+// has: those URLs are not in the sitemap and no crawler lands on one.
+export function isDefaultSkinsView(search: SkinsSearch): boolean {
+  return !search.q && !search.page && !search.k && !search.mine
+    && (search.sort ?? "newest") === "newest";
+}
+
 export const Route = createFileRoute("/skins")({
+  loaderDeps: ({ search }) => ({ isDefault: isDefaultSkinsView(search) }),
+  loader: async ({ deps }): Promise<SkinsListResult | null> => {
+    // SSR only: on client navigations the effect below owns the data, so the
+    // loader skipping keeps navigation instant and avoids a duplicate fetch.
+    if (typeof document !== "undefined") return null;
+    if (!deps.isDefault) return null;
+    // The grid ships inside the HTML so the page has its skins, and 24 links
+    // into their pages, before any JS runs. A null here is the old behaviour:
+    // skeletons until the effect lands.
+    return await fetchSkinsListSsr();
+  },
   head: ({ match }) => pageSeo({
     title: "osu!mania skins",
     description: "Browse and download osu!mania skins with previews rendered from each skin's own notes, or publish a skin from an .osk file.",
@@ -185,10 +205,22 @@ function SkinsPage() {
   const owner = mine ? viewerId : null;
   const mineActive = owner != null;
 
+  // The server-rendered grid, present only on a cold load of the plain browse
+  // view; every other URL, and every client navigation, gets null here.
+  const ssrList = Route.useLoaderData();
+  const ssrSeeded = ssrList != null && isDefaultSkinsView({ q, page, sort, k, mine });
+
   // Seeded from the in-memory list cache so walking back from a skin page
-  // paints the same grid it left, not a screen of skeletons.
-  const [data, setData] = useState<SkinsListResult | null>(() => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k, variant, owner })));
-  const [loading, setLoading] = useState(true);
+  // paints the same grid it left, not a screen of skeletons. Failing that, the
+  // server-rendered page starts on its own skins rather than on skeletons it
+  // would replace a moment later.
+  const [data, setData] = useState<SkinsListResult | null>(
+    () => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k, variant, owner })) ?? (ssrSeeded ? ssrList : null),
+  );
+  const [loading, setLoading] = useState(!ssrSeeded);
+  // Consumed by the first run of the list effect, which the server render has
+  // already satisfied. A ref, not state, so spending it never re-renders.
+  const ssrHandled = useRef(ssrSeeded);
   const [failed, setFailed] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
   const [showBulkUploader, setShowBulkUploader] = useState(false);
@@ -232,8 +264,20 @@ function SkinsPage() {
       setFailed(true);
       return;
     }
-    const controller = new AbortController();
     const cacheKey = skinsListCacheKey({ q, page, sort, k, variant, owner });
+    // The server-rendered grid is already on screen and was fetched for this
+    // very request, so the first pass has nothing to do: fetching here would
+    // pull the same 24 rows a second time, once in the HTML and once over the
+    // wire. It still enters the memory cache, so coming back from a skin page
+    // repaints from it. Any later pass (a filter, a retry) fetches normally.
+    if (ssrHandled.current) {
+      ssrHandled.current = false;
+      if (ssrList) writeCachedSkinsList(cacheKey, ssrList);
+      setLoading(false);
+      setFailed(false);
+      return;
+    }
+    const controller = new AbortController();
     // A cached page shows immediately and the fetch behind it only swaps the
     // data in; without one this is a cold load and the skeletons are honest.
     const cached = readCachedSkinsList(cacheKey);
@@ -255,7 +299,7 @@ function SkinsPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [q, page, sort, k, variant, owner, reloadTick]);
+  }, [q, page, sort, k, variant, owner, reloadTick, ssrList]);
 
   useEffect(() => {
     if (!viewerId || !isLiveBackendConfigured()) {
