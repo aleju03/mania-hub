@@ -502,7 +502,12 @@ export function Nav() {
       >
         <div className="absolute inset-x-0 bottom-0 h-px bg-osu-pink/40" />
       </div>
-      <header className="fixed top-0 left-0 right-0 z-50">
+      {/* translate="no" for the same reason the packs panels carry it, except
+          this one rides every route: the group triggers hold bare text next to
+          an icon, so browser auto-translate rewraps that text in <font> nodes
+          and the next commit touching the trigger throws NotFoundError
+          (removeChild/insertBefore). The labels are osu! jargon anyway. */}
+      <header translate="no" className="fixed top-0 left-0 right-0 z-50">
       <div className="absolute inset-0 bg-osu-b6">
         <img
           src="/images/layout/nav2-background-hue0.webp"

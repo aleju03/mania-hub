@@ -909,8 +909,14 @@ function PacksPage() {
                   // between them is a plain same-frame re-render, so the
                   // reveal-all handoff can fly each card straight from its
                   // reveal rect into its summary slot with no blank frame.
+                  // translate="no": card names, usernames and rarity labels
+                  // flip and re-sort through this subtree, which is the most
+                  // commit-heavy stretch on the page - the one auto-translate
+                  // is likeliest to have re-parented out from under React.
+                  // Player names should not be translated regardless.
                   <motion.div
                     key={`open-${packId}`}
+                    translate="no"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
