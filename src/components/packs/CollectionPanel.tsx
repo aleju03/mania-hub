@@ -580,8 +580,9 @@ export function CollectionPanel({
   const [spotlight, setSpotlight] = useState<CardSpotlightTarget | null>(null);
   // The lifted card's grid tile stays hidden past close (spotlight becoming
   // null) until the return flight lands back in the slot, so the card never
-  // shows twice.
-  const [liftedCardId, setLiftedCardId] = useState<number | null>(null);
+  // shows twice. Keyed by wallet card key, not player: a GOAT and an ordinary
+  // card of the same player are two tiles and only the clicked one hides.
+  const [liftedCardKey, setLiftedCardKey] = useState<string | null>(null);
   // Select mode: tiles toggle instead of navigating, and the floating bar
   // recycles every selected card at once (all copies, second click confirms).
   const [selecting, setSelecting] = useState(false);
@@ -1413,10 +1414,10 @@ export function CollectionPanel({
                         thumbnail,
                         rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
                       });
-                      setLiftedCardId(card.userId);
+                      setLiftedCardKey(cardKey);
                     }}
                     className="block w-full transition-transform duration-150 hover:-translate-y-1 cursor-pointer"
-                    style={liftedCardId === card.userId ? { visibility: "hidden" } : undefined}
+                    style={liftedCardKey === cardKey ? { visibility: "hidden" } : undefined}
                     aria-label={`View ${card.username}'s card`}
                   >
                     <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} />
@@ -1701,7 +1702,7 @@ export function CollectionPanel({
       <CardSpotlight
         target={spotlight}
         onClose={() => setSpotlight(null)}
-        onExitComplete={() => setLiftedCardId(null)}
+        onExitComplete={() => setLiftedCardKey(null)}
       />
     </section>
   );

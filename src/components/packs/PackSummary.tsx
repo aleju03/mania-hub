@@ -102,8 +102,9 @@ export function PackSummary({
   // the profile lives behind the player's name and the spotlight's button.
   const [spotlight, setSpotlight] = useState<CardSpotlightTarget | null>(null);
   /* The lifted card's tile stays hidden until the close flight lands back
-     in it, so the card never shows twice. */
-  const [liftedCardId, setLiftedCardId] = useState<number | null>(null);
+     in it, so the card never shows twice. Keyed by grid position, like the
+     handoff flights: one pull can hand back two cards of the same player. */
+  const [liftedPosition, setLiftedPosition] = useState<number | null>(null);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -235,11 +236,11 @@ export function PackSummary({
                     thumbnail: card.thumbnail,
                     rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
                   });
-                  setLiftedCardId(card.player.user.id);
+                  setLiftedPosition(position);
                 }}
                 className="block w-full cursor-pointer"
                 style={
-                  liftedCardId === card.player.user.id || inFlight.has(position)
+                  liftedPosition === position || inFlight.has(position)
                     ? { visibility: "hidden" }
                     : undefined
                 }
@@ -376,7 +377,7 @@ export function PackSummary({
       <CardSpotlight
         target={spotlight}
         onClose={() => setSpotlight(null)}
-        onExitComplete={() => setLiftedCardId(null)}
+        onExitComplete={() => setLiftedPosition(null)}
       />
 
       {/* Handoff flights: each card sliding from where the reveal left it

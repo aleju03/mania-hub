@@ -34,8 +34,9 @@ export function ShowcaseShelf({ userId }: { userId: number }) {
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [spotlight, setSpotlight] = useState<CardSpotlightTarget | null>(null);
   // The lifted card's shelf slot stays hidden until the return flight lands
-  // back in it, so the card never shows twice.
-  const [liftedCardId, setLiftedCardId] = useState<number | null>(null);
+  // back in it, so the card never shows twice. Keyed by card, not player: a
+  // shelf can hold two tiers of the same player and only one is lifted.
+  const [liftedCardKey, setLiftedCardKey] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,7 +103,7 @@ export function ShowcaseShelf({ userId }: { userId: number }) {
             const thumbnail = thumbnails[shelfCardId(card)] ?? null;
             const face = thumbnail ?? renderCardSkeletonThumbnail(collectedCardTier(card as CollectedCard), COLLECTION_CARD_THUMB_WIDTH);
             const offset = index - mid;
-            const lifted = liftedCardId === card.userId;
+            const lifted = liftedCardKey === shelfCardId(card);
             return (
               <motion.div
                 key={shelfCardId(card)}
@@ -122,7 +123,7 @@ export function ShowcaseShelf({ userId }: { userId: number }) {
                       thumbnail,
                       rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
                     });
-                    setLiftedCardId(card.userId);
+                    setLiftedCardKey(shelfCardId(card));
                   }}
                   className="relative block w-[112px] overflow-hidden rounded-[10px] shadow-[0_10px_20px_rgba(0,0,0,0.55)] cursor-pointer sm:w-[150px]"
                   style={{ aspectRatio: "5 / 7" }}
@@ -176,7 +177,7 @@ export function ShowcaseShelf({ userId }: { userId: number }) {
       <CardSpotlight
         target={spotlight}
         onClose={() => setSpotlight(null)}
-        onExitComplete={() => setLiftedCardId(null)}
+        onExitComplete={() => setLiftedCardKey(null)}
       />
     </section>
   );
