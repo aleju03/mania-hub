@@ -281,6 +281,12 @@ create table if not exists country_maps_farmed_scores (
   -- refresh re-fetches the score.
   accuracy real,
   note_count integer,
+  -- Farm-helper lane columns, stored at write time so the peer aggregation
+  -- can filter by keymode in SQL and skip per-row mods_json / played_at
+  -- re-derivation. -1 / null mean "unknown" and readers fall back.
+  key_count integer not null default -1,
+  speed_bucket text,
+  mods_key text,
   primary key (country, user_id, beatmap_id)
 );
 
@@ -563,7 +569,10 @@ create index if not exists idx_country_maps_snapshots_refreshed on country_maps_
 create index if not exists idx_maps_beatmaps_beatmapset on maps_beatmaps(beatmapset_id);
 create index if not exists idx_country_maps_farmed_scores_country_updated on country_maps_farmed_scores(country, updated_at desc);
 create index if not exists idx_country_maps_farmed_scores_country_beatmap on country_maps_farmed_scores(country, beatmap_id);
-create index if not exists idx_country_maps_farmed_scores_user on country_maps_farmed_scores(user_id, beatmap_id, pp);
+-- The old (user_id, beatmap_id, pp) index was superseded by the farm-helper
+-- covering index idx_country_maps_farmed_scores_user_lane, which db.ts creates
+-- (it must come after the lane-column ALTERs and the one-time backfill, both
+-- of which run after this file).
 create index if not exists idx_country_maps_farmed_scores_beatmap_user on country_maps_farmed_scores(beatmap_id, user_id, pp desc);
 create index if not exists idx_global_maps_farmed_scores_beatmap_pp on global_maps_farmed_scores(beatmap_id, pp desc, user_id);
 create index if not exists idx_global_maps_farmed_aggregates_players on global_maps_farmed_aggregates(player_count desc, avg_pp desc, beatmap_id);

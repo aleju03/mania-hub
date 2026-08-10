@@ -25,7 +25,7 @@ import { runRetention } from "../src/retention.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { ACC_MODEL_PRIOR_TYPICAL_ACC, ACC_MODEL_VERSION, predictPlayerAccuracy, type AccModelMode, type PlayerAccModel } from "../src/features/player-acc-model.js";
 import { PLAYER_SKILLS_VERSION } from "../src/features/player-skills.js";
-import { nowIso } from "../src/shared/score.js";
+import { getScoreSpeedBucket, nowIso } from "../src/shared/score.js";
 import type { OsuApiClient } from "../src/osu/client.js";
 import type { OscScore, OsuMod } from "../src/shared/types.js";
 
@@ -155,12 +155,13 @@ async function insertFarmed(
   mods: string[] = [],
   playedAt = updatedAt,
 ): Promise<void> {
+  // Mirrors the real writers: lane columns stored at write time.
   await exec(
     db,
     `insert into country_maps_farmed_scores
-       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
-     values (?, ?, ?, ?, ?, '{}', ?, null, ?, ?, ?)`,
-    [country, userId, beatmapId, nextScoreId++, pp, JSON.stringify(mods), playedAt, updatedAt, updatedAt],
+       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at, speed_bucket, mods_key)
+     values (?, ?, ?, ?, ?, '{}', ?, null, ?, ?, ?, ?, ?)`,
+    [country, userId, beatmapId, nextScoreId++, pp, JSON.stringify(mods), playedAt, updatedAt, updatedAt, getScoreSpeedBucket(mods), mods.join(",")],
   );
 }
 

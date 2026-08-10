@@ -223,6 +223,26 @@ export function getBoardLaneKey(mods: string[], isLazer: boolean): string {
   return `${getScoreSpeedBucket(mods)}:${isLazer ? "lazer" : "stable"}`;
 }
 
+const MOD_DISPLAY_ORDER = [
+  "NF", "EZ", "HD", "HR", "SD", "PF", "DT", "NC", "HT", "DC", "FI", "FL", "MR", "RD", "CO", "SV2",
+];
+
+/** Display-ordered mods with the CL noise dropped. The joined form is the
+    stored lane identity (country_maps_farmed_scores.mods_key), so writer and
+    reader must normalize identically. */
+export function normalizeStoredMods(mods: string[]): string[] {
+  return mods
+    .filter((mod): mod is string => typeof mod === "string" && mod.length > 0 && mod !== "CL")
+    .sort((a, b) => {
+      const aIndex = MOD_DISPLAY_ORDER.indexOf(a);
+      const bIndex = MOD_DISPLAY_ORDER.indexOf(b);
+      if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    });
+}
+
 export function calculateWeightedPp(pp: number, position: number): number {
   return pp * 0.95 ** position;
 }

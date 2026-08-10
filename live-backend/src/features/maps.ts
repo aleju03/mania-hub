@@ -8,7 +8,7 @@ import { exec, execBatch, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { isRankedRosterMember } from "../rosters/country-rosters.js";
-import { getModAcronyms, getScoreIdentity, getScoreJudgementCount, getScoreTimestamp, getStoredScoreAccuracy, nowIso } from "../shared/score.js";
+import { getModAcronyms, getScoreIdentity, getScoreJudgementCount, getScoreSpeedBucket, getScoreTimestamp, getStoredScoreAccuracy, normalizeStoredMods, nowIso } from "../shared/score.js";
 import { throwIfAborted } from "../shared/abort.js";
 import type { OscScore } from "../shared/types.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
@@ -5294,11 +5294,12 @@ export async function recordMapsFarmedScore(
   const row = rows[0];
   if (!row) return null;
   await persistMapsFarmedScoreDisplayMetadata(db, [score], updatedAt);
+  await fillMissingOverlayKeyCounts(db, rows);
   const result = await exec(
     db,
     `insert into country_maps_farmed_scores
-       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at, accuracy, note_count)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at, accuracy, note_count, key_count, speed_bucket, mods_key)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(country, user_id, beatmap_id) do update set
        score_id = excluded.score_id,
        pp = excluded.pp,
@@ -5309,7 +5310,10 @@ export async function recordMapsFarmedScore(
        detected_at = excluded.detected_at,
        updated_at = excluded.updated_at,
        accuracy = excluded.accuracy,
-       note_count = excluded.note_count
+       note_count = excluded.note_count,
+       key_count = excluded.key_count,
+       speed_bucket = excluded.speed_bucket,
+       mods_key = excluded.mods_key
      where excluded.pp > country_maps_farmed_scores.pp
         or (excluded.pp = country_maps_farmed_scores.pp and excluded.detected_at >= country_maps_farmed_scores.detected_at)`,
     [
@@ -5326,6 +5330,9 @@ export async function recordMapsFarmedScore(
       row.updatedAt,
       row.accuracy,
       row.noteCount,
+      row.keyCount,
+      row.speedBucket,
+      row.modsKey,
     ],
   );
   if (Number(result.rowsAffected ?? 0) === 0) return null;
@@ -6000,6 +6007,12 @@ interface MapsFarmedOverlayWriteRow {
   updatedAt: string;
   accuracy: number | null;
   noteCount: number | null;
+  // Farm-helper lane columns (see the migration note in db.ts): the chart's
+  // key count (-1 when the payload carries no beatmap), the score's speed
+  // lane, and the normalized comma-joined mod identity.
+  keyCount: number;
+  speedBucket: string;
+  modsKey: string;
 }
 
 function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updatedAt: string, fallbackUserId?: number): MapsFarmedOverlayWriteRow[] {
@@ -6016,6 +6029,9 @@ function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updated
     const detectedAt = getScoreTimestamp(score) || updatedAt;
     const playedAt = getScoreTimestamp(score) || null;
     const key = `${country}:${userId}:${beatmapId}`;
+    const mods = getModAcronyms(score.mods);
+    const normalizedMods = normalizeStoredMods(mods);
+    const cs = Number(score.beatmap?.cs);
     const candidate = {
       country,
       userId,
@@ -6023,9 +6039,12 @@ function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updated
       scoreId,
       pp,
       scoreJson: "{}",
-      modsJson: json(getModAcronyms(score.mods)),
+      modsJson: json(mods),
       scoreUrl: getScoreUrl(score),
       playedAt,
+      keyCount: Number.isFinite(cs) && cs > 0 ? Math.round(cs) : -1,
+      speedBucket: getScoreSpeedBucket(normalizedMods),
+      modsKey: normalizedMods.join(","),
       detectedAt,
       updatedAt,
       // Peer accuracy is captured here, before the bulky score payload is
@@ -6043,6 +6062,29 @@ function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updated
   return [...rows.values()];
 }
 
+// Best-scores payloads carry beatmap.cs, so keyCount is normally resolved at
+// build time; this covers payloads without a beatmap object by reading the
+// metadata that persistMapsFarmedScoreDisplayMetadata just wrote. Rows that
+// still resolve nothing keep -1 and readers treat them as unknown-keymode.
+async function fillMissingOverlayKeyCounts(db: Db, rows: MapsFarmedOverlayWriteRow[]): Promise<void> {
+  const missing = [...new Set(rows.filter((row) => row.keyCount <= 0).map((row) => row.beatmapId))];
+  if (missing.length === 0) return;
+  const byBeatmap = new Map<number, number>();
+  const placeholders = missing.map(() => "?").join(", ");
+  const metaRows = (await exec(
+    db,
+    `select beatmap_id, cs from maps_beatmaps where beatmap_id in (${placeholders})`,
+    missing,
+  )).rows;
+  for (const row of metaRows) {
+    const cs = Number(row.cs);
+    if (Number.isFinite(cs) && cs > 0) byBeatmap.set(Number(row.beatmap_id), Math.round(cs));
+  }
+  for (const row of rows) {
+    if (row.keyCount <= 0) row.keyCount = byBeatmap.get(row.beatmapId) ?? -1;
+  }
+}
+
 async function replaceUserMapsFarmedOverlay(
   db: Db,
   queue: JobQueue,
@@ -6051,6 +6093,7 @@ async function replaceUserMapsFarmedOverlay(
   rows: MapsFarmedOverlayWriteRow[],
   updatedAt: string,
 ): Promise<void> {
+  await fillMissingOverlayKeyCounts(db, rows);
   const previousByBeatmap = new Map<number, Record<string, unknown>>();
   for (const row of (await exec(
     db,
@@ -6099,8 +6142,8 @@ async function replaceUserMapsFarmedOverlay(
   for (const row of rows) {
     statements.push({
       sql: `insert into country_maps_farmed_scores
-         (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at, accuracy, note_count)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at, accuracy, note_count, key_count, speed_bucket, mods_key)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(country, user_id, beatmap_id) do update set
          score_id = excluded.score_id,
          pp = excluded.pp,
@@ -6111,7 +6154,10 @@ async function replaceUserMapsFarmedOverlay(
          detected_at = excluded.detected_at,
          updated_at = excluded.updated_at,
          accuracy = excluded.accuracy,
-         note_count = excluded.note_count`,
+         note_count = excluded.note_count,
+         key_count = excluded.key_count,
+         speed_bucket = excluded.speed_bucket,
+         mods_key = excluded.mods_key`,
       args: [
         row.country,
         row.userId,
@@ -6126,6 +6172,9 @@ async function replaceUserMapsFarmedOverlay(
         row.updatedAt,
         row.accuracy,
         row.noteCount,
+        row.keyCount,
+        row.speedBucket,
+        row.modsKey,
       ],
     });
   }

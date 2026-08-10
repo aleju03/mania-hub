@@ -4,10 +4,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createDb, exec, json, migrate, type Db } from "../src/db.js";
+import { createDb, exec, execBatch, json, migrate, type Db, type DbStatement } from "../src/db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../src/features/activity.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { buildMapSearchIndexBatch, buildMapStatusPropagationStatement, cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_BUILD_JOB, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses, type MapSearchQuery } from "../src/features/map-search.js";
+import { buildMapSearchIndexBatch, buildMapStatusPropagationStatement, cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_BUILD_JOB, MAP_SEARCH_COUNT_CAP, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses, type MapSearchQuery } from "../src/features/map-search.js";
 import { getMapCollection, getMapCollections, rebuildMapCollections } from "../src/features/map-collections.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -1159,5 +1159,70 @@ describe("bogus ln pattern tag cleanup", () => {
 
     // Idempotent: a second pass finds nothing left to heal.
     expect(await cleanupBogusLnPatternTags(db)).toBe(0);
+  });
+});
+
+describe("map search trigram FTS", () => {
+  it("keeps the FTS mirror in sync and matches substrings through it", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, title: "Freedom Dive", artist: "xi", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, title: "Calm", artist: "Other", primary: "ln", patterns: { ln: 1 } });
+    await buildAll(db);
+
+    // The external-content mirror carries one row per index row.
+    const ftsCount = Number((await exec(db, "select count(*) as c from map_search_fts")).rows[0]?.c);
+    const indexCount = Number((await exec(db, "select count(*) as c from map_search_index")).rows[0]?.c);
+    expect(ftsCount).toBe(indexCount);
+
+    // %substring% semantics survive the trigram routing (3+ char term).
+    const hit = await getMapSearchPage(db, { ...baseQuery(), q: "eedom" });
+    expect(hit.total).toBe(1);
+    expect(hit.items[0].beatmapId).toBe(1);
+
+    // Deletes propagate through the trigger.
+    await exec(db, "delete from map_search_index where beatmap_id = 1");
+    const afterDelete = await getMapSearchPage(db, { ...baseQuery(), q: "eedom" });
+    expect(afterDelete.total).toBe(0);
+  });
+
+  it("drops lone ASCII characters as noise and keeps two-character terms on LIKE", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, title: "Banger", artist: "xi", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, title: "Calm", artist: "Other", primary: "ln", patterns: { ln: 1 } });
+    await buildAll(db);
+
+    // A lone ASCII character is ignored outright (dropping it only widens).
+    const noise = await getMapSearchPage(db, { ...baseQuery(), q: "x" });
+    expect(noise.total).toBe(2);
+    // Two-character terms still filter (the "xi" artist case).
+    const xi = await getMapSearchPage(db, { ...baseQuery(), q: "xi" });
+    expect(xi.total).toBe(1);
+    expect(xi.items[0].beatmapId).toBe(1);
+  });
+
+  it("caps the counted total and short-circuits offsets past the cap", async () => {
+    const db = await makeDb();
+    const now = "2026-01-01T00:00:00Z";
+    const statements: DbStatement[] = [];
+    for (let i = 1; i <= MAP_SEARCH_COUNT_CAP + 1; i += 1) {
+      statements.push({
+        sql: `insert into map_search_index
+           (beatmap_id, beatmapset_id, analysis_version, title, artist, creator, version, search_text, key_count, stars, bpm, length, status, primary_pattern, updated_at)
+         values (?, ?, ?, ?, 'a', 'c', 'v', ?, 4, 5, 180, 120, 'ranked', 'stream', ?)`,
+        args: [i, i, ACTIVITY_SKILL_ANALYSIS_VERSION, `Map ${i}`, `map ${i} a c v`, now],
+      });
+    }
+    await execBatch(db, statements);
+
+    const page = await getMapSearchPage(db, baseQuery());
+    expect(page.total).toBe(MAP_SEARCH_COUNT_CAP);
+    expect(page.totalCapped).toBe(true);
+    expect(page.items.length).toBe(50);
+
+    // Offset past the cap: no page walk, empty items, same capped total.
+    const deep = await getMapSearchPage(db, { ...baseQuery(), page: 200 });
+    expect(deep.items).toEqual([]);
+    expect(deep.total).toBe(MAP_SEARCH_COUNT_CAP);
+    expect(deep.totalCapped).toBe(true);
   });
 });

@@ -29,6 +29,9 @@ export const WIP: string[] = [
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-09", text: "Now you can choose the pattern to showcase on your skin thumbnails", to: "/skins" },
+  { date: "2026-08-09", text: "Map search is much faster, and huge result counts show as 5,000+", to: "/maps" },
+  { date: "2026-08-09", text: "The farm helper loads faster, and an empty board now explains why instead of showing nothing", to: "/farm-helper" },
   { date: "2026-08-08", text: "Pick a whole continent or region, like Europe or Southeast Asia, instead of just one country" },
   { date: "2026-08-08", text: "New maniacard update to rebalance 4K players", to: "/packs" },
   { date: "2026-08-08", text: "Low OD maps no longer increase MSD rating", to: "/my-stats" },

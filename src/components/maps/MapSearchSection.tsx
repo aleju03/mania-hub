@@ -953,14 +953,26 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
 
   const items = result?.items ?? lastResultRef.current?.items ?? [];
   const total = result?.total ?? lastResultRef.current?.total ?? 0;
+  // The backend stops counting at its cap; render the honest "5,000+".
+  const totalCapped = (result ?? lastResultRef.current)?.totalCapped === true;
+  const totalLabel = `${formatNumber(total)}${totalCapped ? "+" : ""}`;
   const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
   const effectiveError = liveBackendEnabled ? error : "Search is unavailable right now. Try again in a bit.";
   const hasLoadedResult = result !== null || lastResultRef.current !== null;
   const showLoadingSkeleton = !effectiveError && liveBackendEnabled && (loading || !hasLoadedResult) && items.length === 0;
   // No "updating" suffix while refreshing: the label sits next to a flex-1
   // input, so any width change resizes the search bar. It dims instead.
-  const countLabel = showLoadingSkeleton ? "Loading maps..." : `${formatNumber(total)} maps`;
+  const countLabel = showLoadingSkeleton ? "Loading maps..." : `${totalLabel} maps`;
   const countRefreshing = loading && hasLoadedResult;
+
+  // A stale ?page= past the last page (a shrunken result set, an old link)
+  // renders an empty board: snap back to the last real page once results are
+  // in. Mirrors the browse tabs' overflow correction in maps.tsx.
+  useEffect(() => {
+    if (loading || !hasLoadedResult || items.length > 0) return;
+    if (ui.page >= totalPages && ui.page > 0) apply({ page: totalPages - 1 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, hasLoadedResult, items.length, ui.page, totalPages]);
 
   const hasActiveFilters =
     ui.q.trim() !== "" ||
@@ -1056,7 +1068,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
             onClear={clearFilters}
             hasActiveFilters={hasActiveFilters}
             collapsedFilterCount={collapsedFilterCount}
-            resultsLabel={`Show ${formatNumber(total)} maps`}
+            resultsLabel={`Show ${totalLabel} maps`}
           />
           <div className="ml-auto">
             <SortSelect options={SORT_OPTIONS} value={ui.sort} onChange={(id) => apply({ sort: id, page: 0 })} />

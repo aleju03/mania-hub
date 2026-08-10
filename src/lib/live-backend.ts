@@ -1399,6 +1399,10 @@ export interface LiveFarmHelperSnapshot {
   // Gain view only: lanes hidden because the player marked them too_hard.
   // Optional so older backends still parse.
   feedbackHiddenCount?: number;
+  // Gain view only: lanes that cleared every gate except the minimum visible
+  // gain (under 1pp for this player). Lets the empty board explain itself.
+  // Optional so older backends still parse.
+  belowGainFloorCount?: number;
   // False while the backend has not analyzed enough of this player's plays to
   // trust its models yet. Absent means ready (older backends don't send it).
   modelsReady?: boolean;
@@ -1676,6 +1680,9 @@ export interface LiveMapSearchResult {
   total: number;
   page: number;
   pageSize: number;
+  // Present (true) when the backend stopped counting at its cap (5000), so
+  // the count renders as "5,000+" instead of a fake-exact number.
+  totalCapped?: boolean;
 }
 
 export interface LiveMapSearchParams {

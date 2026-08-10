@@ -6,6 +6,7 @@ import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { buildFarmHelperSnapshotForBacktest, computeAccBenchmarkScale, computeSurvival, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, invalidateFarmHelperCacheForUser, SURVIVAL_CLEAR_RISK_MAX } from "../src/features/farm-helper.js";
 import { ACC_MODEL_PRIOR_TYPICAL_ACC, ACC_MODEL_VERSION, predictPlayerAccuracy, type AccModelMode, type PlayerAccModel } from "../src/features/player-acc-model.js";
 import { PLAYER_SKILLS_VERSION } from "../src/features/player-skills.js";
+import { getScoreSpeedBucket } from "../src/shared/score.js";
 import { SKILL_BASELINE_VERSION } from "../src/features/skill-baseline.js";
 import { calculateManiaCustomAccuracy, calculateWeightedPpTotal, nowIso } from "../src/shared/score.js";
 import { OsuApiError, type OsuApiClient } from "../src/osu/client.js";
@@ -133,12 +134,17 @@ async function insertFarmed(
   playedAt = updatedAt,
   accuracy: number | null = null,
 ): Promise<void> {
+  // Mirrors the real writers: the lane columns (speed_bucket / mods_key) are
+  // stored at write time and the aggregation reads them instead of mods_json.
   await exec(
     db,
     `insert into country_maps_farmed_scores
-       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at, accuracy)
-     values (?, ?, ?, ?, ?, '{}', ?, null, ?, ?, ?, ?)`,
-    [country, userId, beatmapId, nextScoreId++, pp, JSON.stringify(mods), playedAt, updatedAt, updatedAt, accuracy],
+       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at, accuracy, speed_bucket, mods_key)
+     values (?, ?, ?, ?, ?, '{}', ?, null, ?, ?, ?, ?, ?, ?)`,
+    [
+      country, userId, beatmapId, nextScoreId++, pp, JSON.stringify(mods), playedAt, updatedAt, updatedAt, accuracy,
+      getScoreSpeedBucket(mods), mods.join(","),
+    ],
   );
 }
 
@@ -1735,6 +1741,24 @@ describe("farm helper", () => {
     expect(enriches.some((entry) => entry.key === "user:9541")).toBe(false);
   });
 
+  it("reports lanes hidden only by the gain floor so an empty board can explain itself", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    // A lane peers demonstrably farm, at a pp so far below the subject's tail
+    // that its estimated gain lands under MIN_VISIBLE_GAIN_PP: it must drop
+    // from the board but be counted in belowGainFloorCount.
+    const BM_TINY = 60;
+    await insertBeatmapMeta(BM_TINY, 4, 5);
+    const recent = nowIso();
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_TINY, 3, recent);
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    expect(snapshot.recs.find((rec) => rec.beatmapId === BM_TINY)).toBeUndefined();
+    expect(snapshot.belowGainFloorCount ?? 0).toBeGreaterThanOrEqual(1);
+  });
+
   it("merges the concrete 4K and 7K runs into the Any view (union of recs and totals)", async () => {
     const recent = nowIso();
     const fourkTarget = 8100;
@@ -2065,10 +2089,14 @@ describe("farm helper predicted-accuracy benchmark scaling", () => {
     ]);
   }
 
-  it("floors the multiplier at zero and clamps it at one", () => {
-    // (5 * acc - 4) hits 0 at 80% and goes negative below: floored at 0.
-    expect(computeAccBenchmarkScale({ accConservative: 0.75 }, 0.94)).toBe(0);
-    expect(computeAccBenchmarkScale({ accConservative: 0.8 }, 0.94)).toBe(0);
+  it("floors the multiplier at 0.5 and clamps it at one", () => {
+    // (5 * acc - 4) hits 0 at 80% and goes negative below. The multiplier
+    // used to floor at 0, which could scale every benchmark below the
+    // subject's own tail and empty the whole gain board; it now stops at 0.5
+    // (below half the peer benchmark the model is extrapolating outside its
+    // evidence).
+    expect(computeAccBenchmarkScale({ accConservative: 0.75 }, 0.94)).toBe(0.5);
+    expect(computeAccBenchmarkScale({ accConservative: 0.8 }, 0.94)).toBe(0.5);
     // A prediction above the typical accuracy never inflates the benchmark.
     expect(computeAccBenchmarkScale({ accConservative: 0.999 }, 0.94)).toBe(1);
     expect(computeAccBenchmarkScale({ accConservative: 0.9 }, 0.94))
@@ -2129,12 +2157,14 @@ describe("farm helper predicted-accuracy benchmark scaling", () => {
     expect(rec?.benchmarkPp).toBeCloseTo(620 * storedScale, 1);
   });
 
-  it("drops a chart whose predicted accuracy collapses the multiplier to zero", async () => {
+  it("keeps a collapsed-prediction chart at the floored multiplier instead of dropping it", async () => {
     const bestScores = buildSubjectBestScores();
     await seedPeers();
     await insertBeatmapMeta(BM_ACC, 4, 5);
     // 2.5 MSD above the model's rating with the steepest above-level slope:
-    // predicted error rate saturates, accConservative <= 80%, multiplier 0.
+    // predicted error rate saturates, accConservative <= 80%. The raw ratio
+    // would be 0 (which used to erase the chart, and for a low-accuracy
+    // player could erase the whole board); the floor holds it at 0.5.
     await insertSearchIndex(BM_ACC, STREAM_PAT, 4, { Stream: 27.5 });
     for (let i = 0; i < 15; i += 1) {
       await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_ACC, 620, nowIso());
@@ -2143,12 +2173,14 @@ describe("farm helper predicted-accuracy benchmark scaling", () => {
     await seedSubjectAccModel(model);
 
     const prediction = predictPlayerAccuracy(model, { keyCount: 4, chartOverall: 27.5, family: "stream" })!;
-    expect(computeAccBenchmarkScale(prediction, ACC_MODEL_PRIOR_TYPICAL_ACC)).toBe(0);
+    expect(computeAccBenchmarkScale(prediction, ACC_MODEL_PRIOR_TYPICAL_ACC)).toBe(0.5);
 
     const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
-    // The zero-multiplier chart falls out of the ranking entirely...
-    expect(snapshot.recs.find((candidate) => candidate.beatmapId === BM_ACC)).toBeUndefined();
-    // ...while an un-covered chart (no msd_overall -> no prediction) stays.
+    // The chart stays, at half the unscaled 620 benchmark...
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_ACC);
+    expect(rec?.reason).toBe("missing");
+    expect(rec?.benchmarkPp).toBeCloseTo(310, 1);
+    // ...and an un-covered chart (no msd_overall -> no prediction) stays too.
     expect(snapshot.recs.find((candidate) => candidate.beatmapId === BM_MISSING)?.reason).toBe("missing");
   });
 

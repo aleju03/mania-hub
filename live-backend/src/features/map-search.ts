@@ -144,11 +144,21 @@ export interface MapSearchSetEntry extends MapSearchEntry {
   msdDt?: Record<string, number> | null;
 }
 
+// Count queries stop counting distinct sets past this bound (the UI shows
+// "5,000+"), and page offsets at or past it short-circuit to an empty page:
+// nobody pages that deep, and an unbounded count was a full corpus walk on
+// broad queries. Kept equal so the pages a user can count are the pages they
+// can reach.
+export const MAP_SEARCH_COUNT_CAP = 5000;
+
 export interface MapSearchPage {
   items: MapSearchSetEntry[];
   total: number;
   page: number;
   pageSize: number;
+  // Present (true) when the count stopped at MAP_SEARCH_COUNT_CAP, so the UI
+  // can render "5,000+" instead of a fake-exact number. Additive.
+  totalCapped?: boolean;
 }
 
 // ── Pattern parsing ──────────────────────────────────────────────────────────
@@ -989,13 +999,54 @@ export function parseMapSearchText(q: string): ParsedMapSearchText {
       continue;
     }
     const term = token.replace(/"/g, "").toLowerCase();
-    if (term && terms.length < 6) terms.push(term);
+    if (term && !isNoiseSearchTerm(term) && terms.length < 6) terms.push(term);
   }
   return { terms, filters };
 }
 
+// A lone ASCII character matches most of the catalog and can only be answered
+// by a full search_text scan (too short for the trigram index), so it is
+// treated as noise; dropping it only ever widens results. A single CJK
+// character is a real query and stays.
+function isNoiseSearchTerm(term: string): boolean {
+  return term.length === 1 && term.charCodeAt(0) < 128;
+}
+
 function escapeLike(value: string): string {
   return value.replace(/[%_\\]/g, (c) => `\\${c}`);
+}
+
+// ── Trigram FTS routing ──────────────────────────────────────────────────────
+//
+// map_search_fts (external-content FTS5, trigram tokenizer; created and
+// trigger-synced in db.ts) answers substring searches for terms of 3+
+// characters without scanning search_text. Shorter terms keep the LIKE path,
+// which then only runs over the FTS-narrowed rows whenever a longer term is
+// present. Availability is probed once per Db: a libsql build without the
+// trigram tokenizer leaves every term on LIKE.
+
+const MIN_FTS_TERM_CHARS = 3;
+
+const mapSearchFtsAvailability = new WeakMap<Db, Promise<boolean>>();
+
+function hasMapSearchFts(db: Db): Promise<boolean> {
+  let cached = mapSearchFtsAvailability.get(db);
+  if (!cached) {
+    cached = exec(db, "select 1 from sqlite_master where type = 'table' and name = 'map_search_fts'")
+      .then((result) => result.rows.length > 0)
+      .catch(() => false);
+    mapSearchFtsAvailability.set(db, cached);
+  }
+  return cached;
+}
+
+// Code points, not UTF-16 units: a 3-character CJK term is trigram-indexable.
+function isFtsTerm(term: string): boolean {
+  return [...term].length >= MIN_FTS_TERM_CHARS;
+}
+
+function ftsMatchExpression(terms: string[]): string {
+  return terms.map((term) => `"${term.replaceAll('"', '""')}"`).join(" AND ");
 }
 
 // Columns hold original casing; LIKE is ASCII-case-insensitive in SQLite, which
@@ -1083,7 +1134,7 @@ function applyTokenFilter(filter: SearchTokenFilter, p: string, conditions: stri
 // query can apply the same filter set to both sides of its dedup anti-join.
 // No metadata probes here: the index is kept convert/non-mania-free at write
 // time (build filter, upsert delete, daily prune), so reads trust it as-is.
-function buildWhereParts(query: MapSearchQuery, p = ""): { conditions: string[]; args: InValue[] } {
+function buildWhereParts(query: MapSearchQuery, p = "", fts = false): { conditions: string[]; args: InValue[] } {
   const conditions: string[] = [];
   const args: InValue[] = [];
 
@@ -1098,9 +1149,17 @@ function buildWhereParts(query: MapSearchQuery, p = ""): { conditions: string[];
   if (statusExcludeClause) conditions.push(`not ${statusExcludeClause}`);
 
   const parsedText = parseMapSearchText(query.q);
+  const ftsTerms = fts ? parsedText.terms.filter(isFtsTerm) : [];
   for (const term of parsedText.terms) {
+    if (fts && isFtsTerm(term)) continue;
     conditions.push(`${p}search_text like ? escape '\\'`);
     args.push(`%${escapeLike(term)}%`);
+  }
+  if (ftsTerms.length > 0) {
+    // Uncorrelated subquery: SQLite materializes it once per statement, so
+    // the sibling anti-join reuses the same row set instead of re-matching.
+    conditions.push(`${p}beatmap_id in (select rowid from map_search_fts where map_search_fts match ?)`);
+    args.push(ftsMatchExpression(ftsTerms));
   }
   for (const filter of parsedText.filters) {
     applyTokenFilter(filter, p, conditions, args);
@@ -1211,15 +1270,22 @@ function buildWhereParts(query: MapSearchQuery, p = ""): { conditions: string[];
 }
 
 export async function getMapSearchPage(db: Db, query: MapSearchQuery): Promise<MapSearchPage> {
-  const flat = buildWhereParts(query);
+  const fts = await hasMapSearchFts(db);
+  const flat = buildWhereParts(query, "", fts);
   const flatWhere = flat.conditions.length > 0 ? `where ${flat.conditions.join(" and ")}` : "";
 
+  // DISTINCT streams through an ephemeral index, so the LIMIT stops the count
+  // walk at the cap instead of enumerating every matching set of a broad query.
   const totalRow = (await exec(
     db,
-    `select count(distinct beatmapset_id) as total from map_search_index ${flatWhere}`,
+    `select count(*) as total from (
+       select distinct beatmapset_id from map_search_index ${flatWhere} limit ${MAP_SEARCH_COUNT_CAP + 1}
+     )`,
     flat.args,
   )).rows[0];
-  const total = intOr(totalRow?.total, 0);
+  const rawTotal = intOr(totalRow?.total, 0);
+  const totalCapped = rawTotal > MAP_SEARCH_COUNT_CAP;
+  const total = totalCapped ? MAP_SEARCH_COUNT_CAP : rawTotal;
 
   const orderColumn = SORT_COLUMNS[query.sort] ?? "play_count";
   const orderDir = query.dir === "asc" ? "asc" : "desc";
@@ -1227,6 +1293,11 @@ export async function getMapSearchPage(db: Db, query: MapSearchQuery): Promise<M
   const pageSize = Math.max(1, Math.floor(query.pageSize));
   const page = Math.max(0, Math.floor(query.page));
   const offset = page * pageSize;
+  // Deep offsets cost a full ordered walk up to the offset; past the count cap
+  // they cannot be reached through the UI, so answer them without the walk.
+  if (offset >= MAP_SEARCH_COUNT_CAP) {
+    return { items: [], total, page, pageSize, ...(totalCapped ? { totalCapped } : {}) };
+  }
 
   // One row per beatmapset: a diff represents its set unless a sibling diff that
   // also matches the filters sorts strictly better. This anti-join shape (rather
@@ -1242,8 +1313,8 @@ export async function getMapSearchPage(db: Db, query: MapSearchQuery): Promise<M
   const cmp = orderDir === "asc" ? "<" : ">";
   const orderRef = (alias: string) =>
     orderColumn === "ranked_date" ? `coalesce(${alias}.ranked_date, '')` : `${alias}.${orderColumn}`;
-  const outer = buildWhereParts(query, "i.");
-  const sibling = buildWhereParts(query, "j.");
+  const outer = buildWhereParts(query, "i.", fts);
+  const sibling = buildWhereParts(query, "j.", fts);
   const pageConditions = [
     ...outer.conditions,
     `not exists (
@@ -1291,7 +1362,7 @@ export async function getMapSearchPage(db: Db, query: MapSearchQuery): Promise<M
     return { ...entry, diffCount: diffs.length, diffs };
   });
 
-  return { items, total, page, pageSize };
+  return { items, total, page, pageSize, ...(totalCapped ? { totalCapped } : {}) };
 }
 
 // One set entry keyed off a single diff: the requested beatmap becomes the

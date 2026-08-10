@@ -905,6 +905,24 @@ function FarmHelperPage() {
                         title="Not enough data near your pp yet"
                         body="We don't have enough data on players near your pp to build recommendations. Try another key mode, or check back once more nearby players are tracked."
                       />
+                    ) : view === "gain" && (visibleSnapshot.belowGainFloorCount ?? 0) > 0 ? (
+                      // Peers have farm data, but every lane's estimated gain
+                      // fell under the visibility floor: explain that instead
+                      // of implying there is nothing to see.
+                      <EmptyNotice
+                        eyebrow="no gains here"
+                        title="Nothing here would move your total"
+                        body="Players near your pp are farming maps, but right now every one of them would add less than 1pp for you. The popular view still shows what they play."
+                        action={
+                          <button
+                            type="button"
+                            onClick={() => setView("popular")}
+                            className="rounded-lg bg-osu-b3/60 px-3 py-2 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
+                          >
+                            show popular maps
+                          </button>
+                        }
+                      />
                     ) : (
                       <EmptyNotice
                         eyebrow="all caught up"
@@ -1034,8 +1052,11 @@ function SubjectBar({
           </>
         ) : null}
 
-        <div className="relative flex flex-wrap items-center gap-x-5 gap-y-4 px-4 py-4 sm:px-5">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+        {/* Stacked on mobile: side by side, the gain block squeezes the name
+            row until the username truncates away and "change" rams into the
+            gain eyebrow. One block per row under sm. */}
+        <div className="relative flex flex-col gap-4 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-4 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3 sm:flex-1">
             <span className="inline-flex shrink-0 rounded-full ring-2 ring-white/10">
               <Avatar url={snapshot.avatarUrl} userId={snapshot.userId} size={48} />
             </span>

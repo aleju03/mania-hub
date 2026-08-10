@@ -3,7 +3,7 @@ import { exec, execBatch, parseJson, type DbStatement } from "../db.js";
 import { logWarn } from "../logger.js";
 import { loadActiveFarmHelperFeedback, type ActiveFarmHelperFeedbackMark, type FarmHelperFeedbackVerdict } from "./farm-helper-feedback.js";
 import { getPlayerProfileSnapshot, PROFILE_BEST_SCORES_LIMIT } from "./player-profiles.js";
-import { calculateManiaCustomAccuracy, calculateWeightedPpTotal, extractManiaVariantPps, getModAcronyms, getScoreSpeedBucket, nowIso, type ScoreSpeedBucket } from "../shared/score.js";
+import { calculateManiaCustomAccuracy, calculateWeightedPpTotal, extractManiaVariantPps, getModAcronyms, getScoreSpeedBucket, normalizeStoredMods, nowIso, type ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calibrateProxy, getKeyModePeerPool, type FarmHelperKeyCount } from "./farm-helper-key-stats.js";
@@ -140,6 +140,12 @@ export interface FarmHelperSnapshot {
   // qualified anyway are not counted. Additive; absent on the popular browse
   // and on older cached snapshots.
   feedbackHiddenCount?: number;
+  // Gain view only: how many lanes cleared every gate except the minimum
+  // visible gain (their scaled benchmark would move the baseline by under
+  // MIN_VISIBLE_GAIN_PP). Lets an empty board say "peers are farming, it just
+  // would not move your total" instead of implying there is no data. Additive;
+  // absent on the popular browse and on older cached snapshots.
+  belowGainFloorCount?: number;
   // False when the subject's skill breakdown is not "ready" yet (the same
   // condition that disables the feasibility gate and makes the acc model
   // abstain), so the UI can note that estimates are rough until the player's
@@ -400,7 +406,11 @@ export const SURVIVAL_CLEAR_RISK_MAX = 0.6;
 const FARM_HELPER_CONCRETE_KEY_MODES = ["4k", "7k"] as const satisfies readonly ConcreteFarmHelperKeyMode[];
 
 const CACHE_TTL_MS = 5 * 60_000;
-const CACHE_MAX_ENTRIES = 64;
+// Entries are finished snapshots (tens of KB), not row sets, and one subject
+// can occupy up to six slots (3 keymodes x 2 views), so 64 thrashed under a
+// dozen concurrent players and every eviction was a full rebuild. 256 holds
+// ~40 concurrent subjects for a few MB.
+const CACHE_MAX_ENTRIES = 256;
 
 interface CachedFarmHelper {
   snapshot: FarmHelperSnapshot;
@@ -900,11 +910,13 @@ type ScoredRec = FarmHelperRec & { difficultyFit: number; recencyFit: number };
 
 // One concrete-keymode (or total-pp fallback) run's output before the merged
 // re-rank: its scored recs (rankScore still 0, unsliced), its cohort summary,
-// and how many candidate lanes this run's gain view hid on "too hard" marks.
+// how many candidate lanes this run's gain view hid on "too hard" marks, and
+// how many fell only at the minimum-visible-gain gate.
 interface ModeRunResult {
   scored: ScoredRec[];
   band: PeerBandSummary;
   feedbackHidden: number;
+  belowGainFloor: number;
 }
 
 // Star-fit band for one keymode filter (all scores on the fallback path).
@@ -1024,7 +1036,10 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
     ...(peerBands ? { peerBands } : {}),
     // Gain view only (the popular browse never hides on marks); 0 included so
     // the UI can rely on the field's presence.
-    ...(isPopular ? {} : { feedbackHiddenCount: runs.reduce((sum, run) => sum + run.feedbackHidden, 0) }),
+    ...(isPopular ? {} : {
+      feedbackHiddenCount: runs.reduce((sum, run) => sum + run.feedbackHidden, 0),
+      belowGainFloorCount: runs.reduce((sum, run) => sum + run.belowGainFloor, 0),
+    }),
     // Transparency: the margin adjustment the marks applied (absent when none).
     ...(ctx.feedbackMarginAdjust ? { feedbackMarginAdjust: ctx.feedbackMarginAdjust } : {}),
   };
@@ -1293,18 +1308,18 @@ async function buildModeRun(
   const subjectShape = shapeContext?.shape ?? null;
 
   const band = buildPeerBand(peerMode, peers);
-  if (peers.length === 0) return { scored: [], band, feedbackHidden: 0 };
+  if (peers.length === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
 
   const peerFarmed = await timeStage(ctx.timings, "fh_farm_rows", () =>
-    aggregatePeerFarmedMaps(db, peers, asOf, ctx.timings));
+    aggregatePeerFarmedMaps(db, peers, keyModeToKeys(mode), asOf, ctx.timings));
   band.farmDataCount = peerFarmed.farmDataPeerCount;
-  if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0 };
+  if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
 
   const candidates = gateCandidates(peerFarmed, isPopular);
   ctx.timings?.count("candidates", candidates.length);
-  if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0 };
+  if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
 
-  const { scored, feedbackHidden } = await timeStage(ctx.timings, "fh_score", () => scoreCandidates(db, subject, ctx, {
+  const { scored, feedbackHidden, belowGainFloor } = await timeStage(ctx.timings, "fh_score", () => scoreCandidates(db, subject, ctx, {
     candidates,
     peerSampleSize: peerFarmed.eligiblePeerCount,
     mode,
@@ -1315,7 +1330,7 @@ async function buildModeRun(
     familyTopPp: shapeContext?.familyTopPp ?? null,
     accModel,
   }));
-  return { scored, band, feedbackHidden };
+  return { scored, band, feedbackHidden, belowGainFloor };
 }
 
 // Fallback for subjects with no keymode evidence in either mode: the total-pp
@@ -1334,18 +1349,18 @@ async function buildTotalPpRun(db: Db, subject: PreparedSubject, ctx: BuildCtx, 
   if (ctx.queue && asOf == null) enqueueVariantSelfHeal(ctx.queue, peers);
 
   const band = buildPeerBand("total_pp_fallback", peers);
-  if (peers.length === 0) return { scored: [], band, feedbackHidden: 0 };
+  if (peers.length === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
 
   const peerFarmed = await timeStage(ctx.timings, "fh_farm_rows", () =>
-    aggregatePeerFarmedMaps(db, peers, asOf, ctx.timings));
+    aggregatePeerFarmedMaps(db, peers, null, asOf, ctx.timings));
   band.farmDataCount = peerFarmed.farmDataPeerCount;
-  if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0 };
+  if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
 
   const candidates = gateCandidates(peerFarmed, isPopular);
   ctx.timings?.count("candidates", candidates.length);
-  if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0 };
+  if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
 
-  const { scored, feedbackHidden } = await timeStage(ctx.timings, "fh_score", () => scoreCandidates(db, subject, ctx, {
+  const { scored, feedbackHidden, belowGainFloor } = await timeStage(ctx.timings, "fh_score", () => scoreCandidates(db, subject, ctx, {
     candidates,
     peerSampleSize: peerFarmed.eligiblePeerCount,
     mode: null,
@@ -1356,7 +1371,7 @@ async function buildTotalPpRun(db: Db, subject: PreparedSubject, ctx: BuildCtx, 
     familyTopPp: null,
     accModel,
   }));
-  return { scored, band, feedbackHidden };
+  return { scored, band, feedbackHidden, belowGainFloor };
 }
 
 interface ScoreCandidatesParams {
@@ -1389,7 +1404,7 @@ async function scoreCandidates(
   subject: PreparedSubject,
   ctx: BuildCtx,
   params: ScoreCandidatesParams,
-): Promise<{ scored: ScoredRec[]; feedbackHidden: number }> {
+): Promise<{ scored: ScoredRec[]; feedbackHidden: number; belowGainFloor: number }> {
   const isPopular = ctx.view === "popular";
   const { candidates, peerSampleSize, mode, fit, subjectBenchmarkCap, subjectBestAccuracy, subjectShape, familyTopPp, accModel } = params;
 
@@ -1421,6 +1436,7 @@ async function scoreCandidates(
 
   const scored: ScoredRec[] = [];
   let feedbackHidden = 0;
+  let belowGainFloor = 0;
   for (const { agg, kernelFraction } of candidates) {
     const meta = beatmapMeta.get(agg.beatmapId);
     if (!meta) continue;
@@ -1616,7 +1632,12 @@ async function scoreCandidates(
     const estimatedPpGain = gainBaseline
       ? estimateGain(gainBaseline.entries, gainBaseline.total, agg.beatmapId, benchmark)
       : estimateGain(subject.baselineEntries, subject.baselineTotal, agg.beatmapId, benchmark);
-    if (!isPopular && estimatedPpGain < MIN_VISIBLE_GAIN_PP) continue;
+    if (!isPopular && estimatedPpGain < MIN_VISIBLE_GAIN_PP) {
+      // Cleared every other gate; only the gain floor hides it. Counted so an
+      // otherwise-empty board can explain itself (belowGainFloorCount).
+      belowGainFloor += 1;
+      continue;
+    }
 
     // The too_hard hide, applied as the LAST drop before emission: every gate
     // above has passed, so this lane would genuinely have shown - which is
@@ -1712,7 +1733,7 @@ async function scoreCandidates(
     });
   }
 
-  return { scored: capPushRecs(scored), feedbackHidden };
+  return { scored: capPushRecs(scored), feedbackHidden, belowGainFloor };
 }
 
 // Volume gate for "push": self-derived targets exist for potentially every
@@ -1756,6 +1777,16 @@ function computePushBenchmark(score: SubjectMapScore, bestAccuracy: number | nul
 // benchmark <= 0 check. A degenerate typical accuracy (<= 80%, impossible
 // after the ACC_TYPICAL_MIN clamp) leaves the benchmark unscaled.
 // Exported for tests.
+// Floor on the A8 benchmark scale. The pp-linear (5*acc - 4) axis amplifies
+// accuracy gaps hard: a 93% player vs a 97% typical peer already lands near
+// 0.6, and the confidence-shaded conservative percentile on unplayed harder
+// charts can push the raw ratio toward 0.2, at which point every benchmark
+// scales below the subject's own tail and the whole gain board empties. Below
+// half the peer benchmark the model is extrapolating outside its evidence, so
+// the discount stops there; the belowGainFloorCount empty-state explains the
+// boards that stay empty anyway.
+const ACC_BENCHMARK_SCALE_FLOOR = 0.5;
+
 export function computeAccBenchmarkScale(
   prediction: Pick<PlayerAccPrediction, "accConservative">,
   typicalAccuracy: number,
@@ -1763,7 +1794,7 @@ export function computeAccBenchmarkScale(
   const you = 5 * prediction.accConservative - 4;
   const typical = 5 * typicalAccuracy - 4;
   if (!Number.isFinite(you) || !(typical > 0)) return 1;
-  return Math.max(0, Math.min(1, you / typical));
+  return Math.max(ACC_BENCHMARK_SCALE_FLOOR, Math.min(1, you / typical));
 }
 
 // The typical peer's custom accuracy on one candidate lane: the weighted
@@ -2418,27 +2449,36 @@ export async function getFarmHelperNeighbors(
 async function aggregatePeerFarmedMaps(
   db: Db,
   peers: WeightedPeer[],
+  keys: number | null,
   asOf?: number,
   timings?: FarmHelperTimings,
 ): Promise<PeerFarmedAggregation> {
   const weightById = new Map(peers.map((p) => [p.userId, { wD: p.wD, wB: p.wB }]));
-  const peerIds = peers.map((p) => p.userId);
+  // Inactive peers are dropped up front from the id list (one small lookup)
+  // instead of a correlated NOT EXISTS probing users once per farmed row.
+  const peerIds = await filterActivePeerIds(db, peers.map((p) => p.userId));
   const byPeerLane = new Map<string, CanonicalFarmedScore>();
   for (let i = 0; i < peerIds.length; i += 900) {
     const chunk = peerIds.slice(i, i + 900);
     if (chunk.length === 0) continue;
     const placeholders = chunk.map(() => "?").join(",");
+    // This read stays inside idx_country_maps_farmed_scores_user_lane: every
+    // selected column is in the index (the epoch conversions run over indexed
+    // text), so a cohort read never touches the main table. The keymode
+    // filter admits -1 rows (key count unknown at write time); the JS meta
+    // filter in scoreCandidates stays authoritative for those.
     const rows = (await exec(
       db,
-      `select s.beatmap_id, s.user_id, s.pp, s.mods_json, s.played_at, s.updated_at, s.accuracy
+      `select s.beatmap_id, s.user_id, s.pp, s.mods_key, s.speed_bucket, s.accuracy,
+              cast(strftime('%s', s.played_at) as integer) * 1000 as played_at_ms,
+              cast(strftime('%s', s.updated_at) as integer) * 1000 as updated_at_ms
        from country_maps_farmed_scores s
-       where s.user_id in (${placeholders})
-         and not exists (select 1 from users u where u.user_id = s.user_id and u.is_active = 0)`,
-      chunk,
+       where s.user_id in (${placeholders})${keys != null ? " and s.key_count in (?, -1)" : ""}`,
+      keys != null ? [...chunk, keys] : chunk,
     )).rows;
     timings?.count("farm_rows", rows.length);
     for (const row of rows) {
-      const farmed = parseFarmedScoreRow(row);
+      const farmed = parseFarmedLaneRow(row);
       if (!farmed) continue;
       // Backtest as-of reconstruction: a farmed row only counts if it was set on
       // or before the cutoff. Rows with an unknown played_at (playedAtMs === 0)
@@ -2523,6 +2563,55 @@ function peerRecencyPlayedAtMs(values: number[]): number {
   const sorted = values.filter((value) => value > 0 && Number.isFinite(value)).sort((a, b) => b - a);
   if (sorted.length === 0) return 0;
   return sorted.length >= 5 ? sorted[2] : sorted[0];
+}
+
+async function filterActivePeerIds(db: Db, peerIds: number[]): Promise<number[]> {
+  const inactive = new Set<number>();
+  for (let i = 0; i < peerIds.length; i += 900) {
+    const chunk = peerIds.slice(i, i + 900);
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    const rows = (await exec(
+      db,
+      `select user_id from users where user_id in (${placeholders}) and is_active = 0`,
+      chunk,
+    )).rows;
+    for (const row of rows) inactive.add(Number(row.user_id));
+  }
+  return inactive.size === 0 ? peerIds : peerIds.filter((id) => !inactive.has(id));
+}
+
+// Row parse for the cohort aggregation's lean lane read: the stored lane
+// columns replace the per-row JSON.parse + mods normalization, and the epoch
+// timestamps arrive precomputed from SQL. Rows written without lane columns
+// (an old-version writer during a deploy overlap) degrade to the no-mod
+// normal lane until the player's next overlay refresh rewrites them.
+function parseFarmedLaneRow(row: Record<string, unknown>): CanonicalFarmedScore | null {
+  const userId = Number(row.user_id);
+  const beatmapId = Number(row.beatmap_id);
+  const pp = Number(row.pp);
+  if (!Number.isSafeInteger(userId) || userId <= 0) return null;
+  if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) return null;
+  if (!Number.isFinite(pp) || pp <= 0) return null;
+  const modsKey = row.mods_key == null ? "" : String(row.mods_key);
+  const mods = modsKey === "" ? [] : modsKey.split(",");
+  const stored = row.speed_bucket;
+  const speedBucket: ScoreSpeedBucket = stored === "dt" || stored === "ht" || stored === "normal"
+    ? stored
+    : getScoreSpeedBucket(mods);
+  const playedAtMs = Number(row.played_at_ms);
+  const updatedAtMs = Number(row.updated_at_ms);
+  const accuracyRaw = Number(row.accuracy);
+  return {
+    userId,
+    beatmapId,
+    pp,
+    mods,
+    speedBucket,
+    playedAtMs: Number.isFinite(playedAtMs) && playedAtMs > 0 ? playedAtMs : 0,
+    updatedAtMs: Number.isFinite(updatedAtMs) && updatedAtMs > 0 ? updatedAtMs : 0,
+    accuracy: Number.isFinite(accuracyRaw) && accuracyRaw > 0 && accuracyRaw <= 1 ? accuracyRaw : null,
+  };
 }
 
 function parseFarmedScoreRow(row: Record<string, unknown>): CanonicalFarmedScore | null {
@@ -3151,23 +3240,6 @@ function inferSubjectSpeedBucket(scores: OscScore[], beatmapId: number): ScoreSp
 
 export function farmHelperLaneKey(beatmapId: number, speedBucket: ScoreSpeedBucket): string {
   return `${beatmapId}:${speedBucket}`;
-}
-
-const MOD_DISPLAY_ORDER = [
-  "NF", "EZ", "HD", "HR", "SD", "PF", "DT", "NC", "HT", "DC", "FI", "FL", "MR", "RD", "CO", "SV2",
-];
-
-function normalizeStoredMods(mods: string[]): string[] {
-  return mods
-    .filter((mod): mod is string => typeof mod === "string" && mod.length > 0 && mod !== "CL")
-    .sort((a, b) => {
-      const aIndex = MOD_DISPLAY_ORDER.indexOf(a);
-      const bIndex = MOD_DISPLAY_ORDER.indexOf(b);
-      if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
-    });
 }
 
 function isStale(endedAt: string | null): boolean {

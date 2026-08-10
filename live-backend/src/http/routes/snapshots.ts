@@ -15,7 +15,7 @@ import { getBoardLaneKey } from "../../shared/score.js";
 import type { HttpContext, TimedRequest } from "../context.js";
 import { REQUEST_FARM_HELPER_TIMINGS } from "../context.js";
 import { activatePublicCountry, isObserveCountryRequest } from "../country-activation.js";
-import { buildGlobalMapsResponseOnThread, enforceCompressedLargeBody, getMapsResponseCacheState, MAPS_GLOBAL_STALE_SERVE_MS, MAPS_PAGE_RESPONSE_CACHE_TTL_MS, MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS, pruneMapsResponseCache, serveMapsResponseCached } from "../maps-response-cache.js";
+import { buildGlobalMapsResponseOnThread, enforceCompressedLargeBody, getMapsResponseCacheState, MAP_SEARCH_RESPONSE_CACHE_TTL_MS, MAPS_GLOBAL_STALE_SERVE_MS, MAPS_PAGE_RESPONSE_CACHE_TTL_MS, MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS, pruneMapsResponseCache, serveMapsResponseCached } from "../maps-response-cache.js";
 import { prepareJsonResponse } from "../prepared-json.js";
 import { clampInteger, clampLimit, parseModAcronyms, parseUserIds } from "../request.js";
 import { checkRate, negotiateEncoding, sendAccentEnrichedJson, sendJson } from "../respond.js";
@@ -142,9 +142,28 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
   if (url.pathname === "/api/snapshots/maps-search") {
     // Global catalog search over every chart-analyzed map. No country activation;
     // an optional ?country= intersects with that roster's farmed/played maps.
-    const snapshot = await getMapSearchPage(ctx.db, parseMapSearchQuery(url.searchParams));
+    // Costly bucket: free-text shapes that miss the trigram index (short terms)
+    // still fall back to search_text scans.
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    const query = parseMapSearchQuery(url.searchParams);
+    const cacheState = getMapsResponseCacheState(ctx.db);
+    pruneMapsResponseCache(cacheState.searchResponses, Date.now());
+    const encoding = negotiateEncoding(req);
     res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-    sendJson(req, res, ctx, 200, snapshot);
+    // The parsed (clamped, deduped) query is the entire input, so its JSON is
+    // a canonical key; single-flighted so a burst of one hot query runs once.
+    await serveMapsResponseCached(req, res, ctx, {
+      cache: cacheState.searchResponses,
+      inflight: cacheState.searchInflight,
+      key: `${JSON.stringify(query)}|${encoding ?? "identity"}`,
+      freshnessKey: "",
+      staleServeMs: 0,
+      build: async () => {
+        const snapshot = await getMapSearchPage(ctx.db, query);
+        const prepared = await prepareJsonResponse(200, snapshot, encoding);
+        return { prepared, cacheTtlMs: MAP_SEARCH_RESPONSE_CACHE_TTL_MS };
+      },
+    });
     return true;
   }
   if (url.pathname === "/api/snapshots/map-search-entry") {

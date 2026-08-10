@@ -51,6 +51,14 @@ export interface MapsResponseCache {
   readonly maxEntryBytes: number;
 }
 
+// Maps-search responses: short TTL (the index reconciles statuses on its own
+// cadence and the browser already caches for 60s), sized for a burst of
+// distinct queries. Every repeat of a query inside the TTL costs zero SQL,
+// which is the whole defense for the LIKE-only query shapes.
+export const MAP_SEARCH_RESPONSE_CACHE_TTL_MS = 30_000;
+const MAP_SEARCH_RESPONSE_CACHE_MAX_ENTRIES = 256;
+const MAP_SEARCH_RESPONSE_CACHE_MAX_BYTES = 16 * 1024 * 1024;
+
 // Per-Db cache state so entries never leak across databases (one process holds
 // a single Db in production; tests spin up a fresh Db each). This matters now
 // that GLOBAL keys are stable across generations instead of embedding
@@ -58,6 +66,8 @@ export interface MapsResponseCache {
 interface MapsResponseCacheState {
   pageResponses: MapsResponseCache;
   pageInflight: Map<string, Promise<PreparedJsonResponse>>;
+  searchResponses: MapsResponseCache;
+  searchInflight: Map<string, Promise<PreparedJsonResponse>>;
 }
 
 const mapsResponseCacheByDb = new WeakMap<Db, MapsResponseCacheState>();
@@ -76,6 +86,8 @@ export function getMapsResponseCacheState(db: Db): MapsResponseCacheState {
     state = {
       pageResponses: createMapsResponseCache(MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES, MAPS_PAGE_RESPONSE_CACHE_MAX_BYTES),
       pageInflight: new Map(),
+      searchResponses: createMapsResponseCache(MAP_SEARCH_RESPONSE_CACHE_MAX_ENTRIES, MAP_SEARCH_RESPONSE_CACHE_MAX_BYTES),
+      searchInflight: new Map(),
     };
     mapsResponseCacheByDb.set(db, state);
   }

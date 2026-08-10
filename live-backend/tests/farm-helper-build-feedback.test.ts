@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { buildFarmHelperSnapshotForBacktest, getFarmHelperSnapshot, invalidateFarmHelperCacheForUser } from "../src/features/farm-helper.js";
 import { PLAYER_SKILLS_VERSION } from "../src/features/player-skills.js";
-import { nowIso } from "../src/shared/score.js";
+import { getScoreSpeedBucket, nowIso } from "../src/shared/score.js";
 import type { OsuApiClient } from "../src/osu/client.js";
 import type { OscScore, OsuMod } from "../src/shared/types.js";
 
@@ -120,12 +120,13 @@ async function insertUser(id: number, pp: number, country: string, username = `P
 
 async function insertFarmed(country: string, userId: number, beatmapId: number, pp: number, mods: string[] = []): Promise<void> {
   const now = nowIso();
+  // Mirrors the real writers: lane columns stored at write time.
   await exec(
     db,
     `insert into country_maps_farmed_scores
-       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
-     values (?, ?, ?, ?, ?, '{}', ?, null, ?, ?, ?)`,
-    [country, userId, beatmapId, nextScoreId++, pp, JSON.stringify(mods), now, now, now],
+       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at, speed_bucket, mods_key)
+     values (?, ?, ?, ?, ?, '{}', ?, null, ?, ?, ?, ?, ?)`,
+    [country, userId, beatmapId, nextScoreId++, pp, JSON.stringify(mods), now, now, now, getScoreSpeedBucket(mods), mods.join(",")],
   );
 }
 

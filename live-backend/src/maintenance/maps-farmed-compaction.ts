@@ -1,7 +1,7 @@
 import type { Db } from "../db.js";
 import { exec, json } from "../db.js";
 import { unpackJson } from "../shared/compressed-json.js";
-import { getModAcronyms, getScoreJudgementCount, getScoreTimestamp, getStoredScoreAccuracy, nowIso } from "../shared/score.js";
+import { getModAcronyms, getScoreJudgementCount, getScoreSpeedBucket, getScoreTimestamp, getStoredScoreAccuracy, normalizeStoredMods, nowIso } from "../shared/score.js";
 import { persistScoresDisplayMetadata } from "../shared/score-storage.js";
 import type { OscScore } from "../shared/types.js";
 
@@ -49,6 +49,8 @@ export async function compactMapsFarmedOverlay(db: Db, batchSize: number): Promi
       }
 
       await persistScoresDisplayMetadata(db, [score], String(row.updated_at ?? nowIso()));
+      const mods = getModAcronyms(score.mods);
+      const normalizedMods = normalizeStoredMods(mods);
       await exec(
         db,
         `update country_maps_farmed_scores
@@ -58,15 +60,19 @@ export async function compactMapsFarmedOverlay(db: Db, batchSize: number): Promi
              score_url = ?,
              played_at = ?,
              accuracy = ?,
-             note_count = ?
+             note_count = ?,
+             speed_bucket = ?,
+             mods_key = ?
          where country = ? and user_id = ? and beatmap_id = ?`,
         [
           getMapsFarmedDisplayScoreId(score),
-          json(getModAcronyms(score.mods)),
+          json(mods),
           getScoreUrl(score),
           getScoreTimestamp(score) || null,
           getStoredScoreAccuracy(score),
           getScoreJudgementCount(score),
+          getScoreSpeedBucket(normalizedMods),
+          normalizedMods.join(","),
           String(row.country),
           Number(row.user_id),
           Number(row.beatmap_id),

@@ -3,7 +3,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Config } from "./config.js";
 import { logInfo, logWarn, errorContext } from "./logger.js";
-import { extractManiaVariantPps } from "./shared/score.js";
+import { extractManiaVariantPps, getScoreSpeedBucket, normalizeStoredMods } from "./shared/score.js";
 
 export type Db = Client;
 
@@ -1236,6 +1236,9 @@ async function migrateMapsFarmedOverlay(db: Db): Promise<void> {
       updated_at text not null,
       accuracy real,
       note_count integer,
+      key_count integer not null default -1,
+      speed_bucket text,
+      mods_key text,
       primary key (country, user_id, beatmap_id)
     )
   `);
@@ -1259,6 +1262,33 @@ async function migrateMapsFarmedOverlay(db: Db): Promise<void> {
   if (!farmedColumns.includes("note_count")) {
     await db.execute("alter table country_maps_farmed_scores add column note_count integer");
   }
+  // Farm-helper lane columns: the peer aggregation used to re-derive keymode,
+  // speed lane, and mod identity from mods_json per row on every request, and
+  // could only filter by keymode in JS after fetching the whole cohort's rows.
+  // Stored at write time instead; -1 (key_count) and null (speed_bucket /
+  // mods_key) mean "unknown" and readers fall back to the old derivation.
+  if (!farmedColumns.includes("key_count")) {
+    await db.execute("alter table country_maps_farmed_scores add column key_count integer not null default -1");
+  }
+  if (!farmedColumns.includes("speed_bucket")) {
+    await db.execute("alter table country_maps_farmed_scores add column speed_bucket text");
+  }
+  if (!farmedColumns.includes("mods_key")) {
+    await db.execute("alter table country_maps_farmed_scores add column mods_key text");
+  }
+  await backfillFarmedScoreLanes(db);
+  // Covers the farm-helper peer aggregation outright: the (user_id, key_count)
+  // prefix scopes a cohort read to one keymode, and the remaining columns are
+  // everything that read consumes, so it never touches the main table. Created
+  // after the backfill so the first boot builds it once over final data. It
+  // also supersedes the old (user_id, beatmap_id, pp) index (dropped below;
+  // every user_id-scoped read matches this prefix).
+  await db.execute(`
+    create index if not exists idx_country_maps_farmed_scores_user_lane
+      on country_maps_farmed_scores(user_id, key_count, beatmap_id, pp, speed_bucket, mods_key, played_at, updated_at, accuracy)
+  `);
+  await db.execute("drop index if exists idx_country_maps_farmed_scores_user");
+
   // The GLOBAL projection mirrors the country rows, so it carries the same
   // nullable columns (its table is created by migrations/001_initial.sql).
   const globalFarmedColumns = (await db.execute("pragma table_info(global_maps_farmed_scores)")).rows.map((row) => String(row.name));
@@ -1304,6 +1334,75 @@ async function migrateMapsFarmedOverlay(db: Db): Promise<void> {
     create index if not exists idx_country_maps_favourite_sets_country_set
       on country_maps_favourite_sets(country, beatmapset_id)
   `);
+}
+
+// One-time backfill of the farm-helper lane columns over existing rows. Runs
+// exactly once per database (live_meta flag), synchronously at boot: prod has
+// ~1.8M rows and finishes in well under a minute, and every read written since
+// falls back gracefully for any row a crashed backfill left untouched (the
+// WHERE clauses make a re-run resume instead of redo). key_count copies from
+// maps_beatmaps (the same table readBeatmapMeta prefers, so the SQL filter and
+// the JS meta filter agree); the lane identity maps through a scratch table
+// with one row per distinct mods_json (a few hundred), not a JS pass over
+// every row. A real table rather than a temp one: temp tables are
+// per-connection and the client is free to pool.
+async function backfillFarmedScoreLanes(db: Db): Promise<void> {
+  const flagKey = "farmed_scores_lane_backfill:v1";
+  const done = (await db.execute({ sql: "select 1 from live_meta where key = ?", args: [flagKey] })).rows[0];
+  if (done) return;
+  const startedAt = Date.now();
+
+  await db.execute(`
+    update country_maps_farmed_scores
+    set key_count = coalesce(
+      (select cast(round(b.cs) as integer) from maps_beatmaps b
+        where b.beatmap_id = country_maps_farmed_scores.beatmap_id), -1)
+    where key_count = -1
+  `);
+
+  const distinct = (await db.execute(
+    "select distinct mods_json from country_maps_farmed_scores where speed_bucket is null",
+  )).rows;
+  if (distinct.length > 0) {
+    await db.execute("drop table if exists _farmed_lane_backfill");
+    await db.execute(
+      "create table _farmed_lane_backfill (mods_json text, mods_key text not null, speed_bucket text not null)",
+    );
+    await db.execute("create unique index _farmed_lane_backfill_mods on _farmed_lane_backfill(mods_json)");
+    for (const row of distinct) {
+      const raw = row.mods_json == null ? null : String(row.mods_json);
+      let parsed: string[] = [];
+      try {
+        const value: unknown = raw == null ? [] : JSON.parse(raw);
+        if (Array.isArray(value)) parsed = value.filter((mod): mod is string => typeof mod === "string");
+      } catch {
+        parsed = [];
+      }
+      const mods = normalizeStoredMods(parsed);
+      await db.execute({
+        sql: "insert into _farmed_lane_backfill (mods_json, mods_key, speed_bucket) values (?, ?, ?)",
+        args: [raw, mods.join(","), getScoreSpeedBucket(mods)],
+      });
+    }
+    await db.execute(`
+      update country_maps_farmed_scores
+      set speed_bucket = (select m.speed_bucket from _farmed_lane_backfill m
+             where m.mods_json is country_maps_farmed_scores.mods_json),
+          mods_key = (select m.mods_key from _farmed_lane_backfill m
+             where m.mods_json is country_maps_farmed_scores.mods_json)
+      where speed_bucket is null
+    `);
+    await db.execute("drop table if exists _farmed_lane_backfill");
+  }
+
+  await db.execute({
+    sql: "insert into live_meta (key, value_json, updated_at) values (?, ?, ?) on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at",
+    args: [flagKey, JSON.stringify({ distinctMods: distinct.length }), new Date().toISOString()],
+  });
+  logInfo("farmed_scores_lane_backfill_done", {
+    distinct_mods: distinct.length,
+    duration_ms: Date.now() - startedAt,
+  });
 }
 
 async function migrateApiCallTargets(db: Db): Promise<void> {
@@ -2222,9 +2321,60 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
   await db.execute("create index if not exists idx_map_search_length_id on map_search_index(length, beatmap_id)");
   await db.execute("create index if not exists idx_map_search_date_id on map_search_index(ranked_date, beatmap_id)");
   await db.execute("create index if not exists idx_map_search_raw_dan on map_search_index(raw_dan, beatmap_id)");
+  await migrateMapSearchFts(db);
   // Fresh planner stats so SQLite picks the ordered-scan + anti-join plan over
   // the older key_count-prefixed indexes.
   await analyzeMapSearchIndexIfStale(db);
+}
+
+// Trigram FTS over map_search_index.search_text: free-text terms used to be
+// `search_text like '%term%'` full scans, re-run against every sibling diff
+// inside the page query's dedup anti-join. The external-content FTS5 table
+// keeps the same substring semantics (trigram tokenizer, terms of 3+ chars)
+// behind an index; shorter terms stay on LIKE, over the FTS-narrowed rows
+// whenever a longer term is present. Triggers keep it in sync with every
+// writer (the index builder upserts via ON CONFLICT DO UPDATE, so the
+// update-of-search_text trigger fires; REPLACE is never used on this table).
+// Guarded as best-effort: a libsql build without the trigram tokenizer just
+// logs and keeps the LIKE path (map-search probes availability per process).
+async function migrateMapSearchFts(db: Db): Promise<void> {
+  try {
+    const exists = (await db.execute(
+      "select 1 from sqlite_master where type = 'table' and name = 'map_search_fts'",
+    )).rows[0];
+    if (!exists) {
+      await db.execute(
+        "create virtual table map_search_fts using fts5(search_text, content='map_search_index', content_rowid='beatmap_id', tokenize='trigram')",
+      );
+    }
+    // Triggers before the rebuild: SQLite's single-writer lock means a
+    // concurrent upsert lands either before the rebuild's rescan (covered by
+    // it) or after (covered by the trigger), never in between.
+    await db.execute(`
+      create trigger if not exists map_search_fts_ai after insert on map_search_index begin
+        insert into map_search_fts(rowid, search_text) values (new.beatmap_id, new.search_text);
+      end
+    `);
+    await db.execute(`
+      create trigger if not exists map_search_fts_ad after delete on map_search_index begin
+        insert into map_search_fts(map_search_fts, rowid, search_text) values ('delete', old.beatmap_id, old.search_text);
+      end
+    `);
+    await db.execute(`
+      create trigger if not exists map_search_fts_au after update of search_text on map_search_index begin
+        insert into map_search_fts(map_search_fts, rowid, search_text) values ('delete', old.beatmap_id, old.search_text);
+        insert into map_search_fts(rowid, search_text) values (new.beatmap_id, new.search_text);
+      end
+    `);
+    if (!exists) {
+      await db.execute("insert into map_search_fts(map_search_fts) values ('rebuild')");
+    }
+  } catch (error) {
+    logWarn("map_search_fts_unavailable", {
+      detail: "trigram FTS not created; map search keeps the LIKE path",
+      ...errorContext(error),
+    });
+  }
 }
 
 const MAP_SEARCH_ANALYZE_KEY = "map_search_index_analyze:v1";
