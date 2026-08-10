@@ -7,13 +7,20 @@ import { getLiveBackendUrl, getServerLiveBackendUrl } from "./live-backend";
 // The 50MB .osk upload itself is browser -> live backend with a short-lived
 // ticket minted by startSkinUpload, so the archive never transits the frontend server.
 
-export interface SkinScreenshot {
+export interface SkinImage {
   url: string;
   width: number | null;
   height: number | null;
 }
 
-export interface SkinKeymodePreview extends SkinScreenshot {
+export interface SkinScreenshot extends SkinImage {
+  // What the uploader called this shot ("Score screen"). Null or missing is
+  // unnamed, which the gallery numbers instead. Optional because summaries
+  // cached before names existed lack it.
+  label?: string | null;
+}
+
+export interface SkinKeymodePreview extends SkinImage {
   keys: number;
 }
 
@@ -76,6 +83,7 @@ export const SKIN_DESCRIPTION_MAX_LENGTH = 500;
 export const SKIN_OSK_MAX_BYTES = 50 * 1024 * 1024;
 export const SKIN_SCREENSHOT_MAX_BYTES = 4 * 1024 * 1024;
 export const SKIN_MAX_SCREENSHOTS = 4;
+export const SKIN_SCREENSHOT_LABEL_MAX_LENGTH = 40;
 // Mirrors the backend's per-user cap; used as the page size for the private
 // shelf, which is never paginated.
 export const SKIN_MAX_PER_USER = 30;
@@ -470,16 +478,23 @@ export const deleteMySkin = createServerFn({ method: "POST" })
     }
   });
 
-// Repoints an already published skin's card cover at another keymode's stored
-// preview. No re-render, no upload: the images all exist, this only says which
+// Repoints an already published skin's card cover at another stored image: a
+// keymode's rendered playfield, or one of the uploader's own screenshots by
+// position. No re-render, no upload: the images all exist, this only says which
 // one fronts the card.
-export const setSkinCoverKeymode = createServerFn({ method: "POST" })
-  .validator((data: { id?: unknown; keys?: unknown }) => {
+export const setSkinCover = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; keys?: unknown; screenshot?: unknown }) => {
     const id = typeof data.id === "string" ? data.id.trim() : "";
-    const keys = Math.round(Number(data.keys));
-    if (!id || id.length > 64 || !Number.isInteger(keys) || keys < 1 || keys > 10) {
-      throw new Error("Invalid cover request.");
+    if (!id || id.length > 64) throw new Error("Invalid cover request.");
+    if (data.screenshot !== undefined) {
+      const screenshot = Math.round(Number(data.screenshot));
+      if (!Number.isInteger(screenshot) || screenshot < 0 || screenshot >= SKIN_MAX_SCREENSHOTS) {
+        throw new Error("Invalid cover request.");
+      }
+      return { id, screenshot };
     }
+    const keys = Math.round(Number(data.keys));
+    if (!Number.isInteger(keys) || keys < 1 || keys > 10) throw new Error("Invalid cover request.");
     return { id, keys };
   })
   .handler(async ({ data }): Promise<{ ok: boolean; skin?: SkinSummary }> => {
@@ -491,10 +506,46 @@ export const setSkinCoverKeymode = createServerFn({ method: "POST" })
       const response = await fetch(`${cfg.base}/api/skins/cover`, {
         method: "POST",
         headers: cfg.headers,
-        body: JSON.stringify({ userId: cfg.userId, id: data.id, keys: data.keys, asAdmin: cfg.isAdmin }),
+        // data is { id, keys } or { id, screenshot }; which one it carries is
+        // what picks the target server-side.
+        body: JSON.stringify({ userId: cfg.userId, asAdmin: cfg.isAdmin, ...data }),
       });
       const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary } | null;
       if (!response.ok || !body?.ok) return { ok: false };
+      return { ok: true, skin: body.skin };
+    } catch {
+      return { ok: false };
+    }
+  });
+
+// Renames a published skin's screenshots, by position: "Score screen" instead
+// of "Shot 2". An empty entry puts that shot back to being numbered, and the
+// list is read against the screenshots the row already holds, so it never adds
+// or removes one.
+export const setSkinScreenshotLabels = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; labels?: unknown }) => {
+    const id = typeof data.id === "string" ? data.id.trim() : "";
+    const labels = Array.isArray(data.labels)
+      ? data.labels.map((entry) => (typeof entry === "string" ? entry.slice(0, SKIN_SCREENSHOT_LABEL_MAX_LENGTH) : ""))
+      : null;
+    if (!id || id.length > 64 || !labels || labels.length > SKIN_MAX_SCREENSHOTS) {
+      throw new Error("Invalid screenshot names request.");
+    }
+    return { id, labels };
+  })
+  .handler(async ({ data }): Promise<{ ok: boolean; skin?: SkinSummary }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return { ok: false };
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/screenshot-labels`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({ userId: cfg.userId, id: data.id, labels: data.labels, asAdmin: cfg.isAdmin }),
+      });
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary } | null;
+      if (!response.ok || !body?.ok || !body.skin) return { ok: false };
       return { ok: true, skin: body.skin };
     } catch {
       return { ok: false };
@@ -823,12 +874,14 @@ export function uploadSkinPart(options: {
   blob: Blob;
   width?: number | null;
   height?: number | null;
-  // For part=preview: which keymode this render shows, and whether it is the
-  // card cover. The cover also carries the note-art accent sampled during the
-  // render, which beats the skin.ini colours parsed server-side.
+  // For part=preview: which keymode this render shows. A preview also carries
+  // the note-art accent sampled during the render, which beats the skin.ini
+  // colours parsed server-side. For part=screenshot: what the uploader called
+  // it. Either part can be the card cover.
   keys?: number;
   cover?: boolean;
   accent?: string;
+  label?: string;
   onProgress?: (sentBytes: number, totalBytes: number) => void;
 }): Promise<void> {
   const base = getLiveBackendUrl();
@@ -839,6 +892,7 @@ export function uploadSkinPart(options: {
   if (options.keys) query.set("keys", String(Math.round(options.keys)));
   if (options.cover) query.set("cover", "1");
   if (options.accent && /^#[0-9a-f]{6}$/i.test(options.accent)) query.set("accent", options.accent);
+  if (options.label?.trim()) query.set("label", options.label.trim().slice(0, SKIN_SCREENSHOT_LABEL_MAX_LENGTH));
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${base}/api/skins/upload?${query.toString()}`);
@@ -935,6 +989,12 @@ export function formatSkinFileSize(bytes: number | null | undefined): string {
 // "8K" ordinarily, "7K+1" when the skin declares that keymode as a scratch
 // layout; every pill and preview label goes through this so the two never
 // disagree about what an 8K block really is.
+// What a screenshot is called in the gallery: the uploader's own name for it,
+// or its position when they left it unnamed.
+export function skinScreenshotLabel(shot: SkinScreenshot, index: number): string {
+  return shot.label?.trim() || `Shot ${index + 1}`;
+}
+
 export function keymodeLabel(keys: number, specialKeymodes?: number[]): string {
   return specialKeymodes?.includes(keys) ? `${keys - 1}K+1` : `${keys}K`;
 }

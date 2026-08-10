@@ -598,6 +598,55 @@ describe("skins HTTP endpoints", () => {
     expect((await call(bodyReq("POST", `/api/skins/upload?id=${editId}&token=${editToken}&part=preview&keys=4`, PNG_BYTES))).status).toBe(403);
   });
 
+  it("fronts the card with an uploaded screenshot, named by its uploader", async () => {
+    const { id, token } = await startUpload();
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview&keys=4&cover=1&w=1280&h=720`, PNG_BYTES));
+    // A screenshot uploaded with cover=1 takes the card, and carries the name
+    // the uploader typed in the form.
+    const shot = await call(bodyReq(
+      "POST",
+      `/api/skins/upload?id=${id}&token=${token}&part=screenshot&cover=1&w=1920&h=1080&label=${encodeURIComponent("Score screen")}`,
+      PNG_BYTES,
+    ));
+    expect(shot.status).toBe(200);
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=screenshot&w=1920&h=1080`, PNG_BYTES));
+    await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+
+    const published = (await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin;
+    expect(published.previewUrl).toContain("shot-0");
+    expect(published.previewWidth).toBe(1920);
+    expect(published.screenshots.map((entry: { label: string | null }) => entry.label)).toEqual(["Score screen", null]);
+    // Taking the card is not taking it out of the gallery, and the keymode
+    // render it displaced stays in storage.
+    expect(vi.mocked(deleteSkinObjects)).not.toHaveBeenCalled();
+
+    // Post-publish the cover moves by position, the same way keymodes move.
+    expect((await call(bodyReq("POST", "/api/skins/cover", JSON.stringify({ userId: 101, id, screenshot: 1 })))).status).toBe(401);
+    expect((await call(bodyReq("POST", "/api/skins/cover", JSON.stringify({ userId: 202, id, screenshot: 1 }), ADMIN))).status).toBe(403);
+    expect((await call(bodyReq("POST", "/api/skins/cover", JSON.stringify({ userId: 101, id, screenshot: 9 }), ADMIN))).status).toBe(400);
+    expect((await call(bodyReq("POST", "/api/skins/cover", JSON.stringify({ userId: 101, id, screenshot: 3 }), ADMIN))).status).toBe(404);
+    const moved = await call(bodyReq("POST", "/api/skins/cover", JSON.stringify({ userId: 101, id, screenshot: 1 }), ADMIN));
+    expect(moved.status).toBe(200);
+    expect(moved.body.skin.previewUrl).toContain("shot-1");
+
+    // Renaming is a plain edit: no ticket, no upload, owner or admin only.
+    const rename = (payload: object, headers?: Record<string, string>) =>
+      call(bodyReq("POST", "/api/skins/screenshot-labels", JSON.stringify(payload), headers));
+    expect((await rename({ userId: 101, id, labels: ["Gameplay"] })).status).toBe(401);
+    expect((await rename({ userId: 202, id, labels: ["Gameplay"] }, ADMIN)).status).toBe(403);
+    expect((await rename({ userId: 101, id, labels: ["a", "b", "c", "d", "e"] }, ADMIN)).status).toBe(400);
+    const renamed = await rename({ userId: 101, id, labels: ["Gameplay", ""] }, ADMIN);
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.skin.screenshots.map((entry: { label: string | null }) => entry.label)).toEqual(["Gameplay", null]);
+
+    // Moving the cover back onto a keymode leaves both screenshots alone.
+    const back = await call(bodyReq("POST", "/api/skins/cover", JSON.stringify({ userId: 101, id, keys: 4 }), ADMIN));
+    expect(back.body.skin.previewUrl).toContain("preview-4k");
+    expect(back.body.skin.screenshots).toHaveLength(2);
+    expect(vi.mocked(deleteSkinObjects)).not.toHaveBeenCalled();
+  });
+
   it("edits the name and description of a published skin for its owner only", async () => {
     const { id, token } = await startUpload();
     await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));

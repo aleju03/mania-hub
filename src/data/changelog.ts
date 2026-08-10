@@ -29,6 +29,7 @@ export const WIP: string[] = [
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-10", text: "Name the screenshots you upload with a skin, and put one on the card instead of a playfield", to: "/skins" },
   { date: "2026-08-10", text: "Reduced free pack recharge time from 30s to 20s", to: "/packs" },
   { date: "2026-08-09", text: "Song previews on map search now open a player, and use your default volume", to: "/maps" },
   { date: "2026-08-09", text: "Now you can choose the pattern to showcase on your skin thumbnails", to: "/skins" },

@@ -12,6 +12,13 @@ export interface ProcessedScreenshot {
   url: string;
 }
 
+// A screenshot on an upload form: the processed image plus the name the
+// uploader typed for it, which travels with the upload and titles the shot in
+// the skin page's gallery. Empty means unnamed, and the gallery numbers it.
+export interface DraftScreenshot extends ProcessedScreenshot {
+  label: string;
+}
+
 export async function processScreenshot(file: File): Promise<ProcessedScreenshot | null> {
   const sourceUrl = URL.createObjectURL(file);
   try {

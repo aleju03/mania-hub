@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseJson } from "../../db.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, parseSkinsListSort, privateSkinSecretMatches, recordSkinDownload, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, updateSkinDetails, upsertSkinKeymodePreview, type SkinRow } from "../../features/skins.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, parseSkinsListSort, privateSkinSecretMatches, recordSkinDownload, replaceSkinOsk, setSkinAccent, setSkinCover, setSkinScreenshotLabels, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, updateSkinDetails, upsertSkinKeymodePreview, type SkinCoverTarget, type SkinRow } from "../../features/skins.js";
 import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../../features/user-replay-skins.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import { clientIp } from "../abuse-guard.js";
@@ -634,10 +634,12 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
           }
           // What the row no longer points at: the displaced render, plus the
           // standalone cover object of a pre-keymode skin whose card this
-          // render just took over.
-          const stillReferenced = new Set(
-            skin.previews.filter((preview) => preview.keys !== keys).map((preview) => preview.key),
-          );
+          // render just took over. A screenshot the cover is moving off is not
+          // one of those - the row still lists it in the gallery.
+          const stillReferenced = new Set([
+            ...skin.previews.filter((preview) => preview.keys !== keys).map((preview) => preview.key),
+            ...skin.screenshots.map((shot) => shot.key),
+          ]);
           stillReferenced.add(key);
           // The cover columns follow a re-render of the keymode they point at,
           // so that key counts as referenced only while it stays the cover.
@@ -659,11 +661,29 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       } else {
         const key = storageKey(skinScreenshotKey(skin.id, skin.screenshots.length, sniffed.ext));
         const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
-        const appended = await appendSkinScreenshot(ctx.serveWriteDb ?? ctx.db, skin.id, { key, url: uploaded.url, width, height });
+        // What the uploader called this shot, and whether they picked it over
+        // the rendered playfields as the card cover.
+        const label = url.searchParams.get("label");
+        const appended = await appendSkinScreenshot(ctx.serveWriteDb ?? ctx.db, skin.id, { key, url: uploaded.url, width, height, label });
         if (!appended.ok) {
           await deleteSkinObjects(ctx.config, [key]).catch(() => {});
           sendJson(req, res, ctx, 400, { ok: false, error: appended.error });
           return true;
+        }
+        if (url.searchParams.get("cover") === "1") {
+          await attachSkinPreview(ctx.serveWriteDb ?? ctx.db, skin.id, { key, url: uploaded.url, width, height });
+          // Only a standalone cover object is orphaned by this: the keymode
+          // renders and the other screenshots are all still listed on the row.
+          const stillReferenced = new Set([
+            ...skin.previews.map((preview) => preview.key),
+            ...skin.screenshots.map((shot) => shot.key),
+            key,
+          ]);
+          if (skin.previewKey && !stillReferenced.has(skin.previewKey)) {
+            await deleteSkinObjects(ctx.config, [skin.previewKey]).catch((error) => {
+              logWarn("skin_preview_stale_cleanup_failed", { id: skin.id, ...errorContext(error) });
+            });
+          }
         }
       }
       sendJson(req, res, ctx, 200, { ok: true });
@@ -672,7 +692,7 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     sendJson(req, res, ctx, 400, { ok: false, error: "invalid_part" });
     return true;
   }
-  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/details" || url.pathname === "/api/skins/visibility" || url.pathname === "/api/skins/special-keymodes") {
+  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/details" || url.pathname === "/api/skins/visibility" || url.pathname === "/api/skins/special-keymodes" || url.pathname === "/api/skins/screenshot-labels") {
     // Admin-token gated like /api/skins/delete: the frontend server fn forwards the
     // osu!-verified viewer id, and the ownership check below keeps a user off anyone
     // else's skin. asAdmin is set only by the server fn that verified a true admin;
@@ -691,7 +711,7 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; name?: unknown; description?: unknown; asAdmin?: unknown; asKeymodeModerator?: unknown; scope?: unknown; visibility?: unknown; specialKeymodes?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; screenshot?: unknown; labels?: unknown; name?: unknown; description?: unknown; asAdmin?: unknown; asKeymodeModerator?: unknown; scope?: unknown; visibility?: unknown; specialKeymodes?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     const id = typeof body.id === "string" ? body.id : "";
     if (!Number.isInteger(userId) || userId <= 0 || !id) {
@@ -760,17 +780,44 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       return true;
     }
     if (url.pathname === "/api/skins/cover") {
+      // Either a keymode whose render fronts the card, or the position of one
+      // of the uploader's own screenshots.
+      const screenshot = Math.round(Number(body.screenshot));
       const keys = Math.round(Number(body.keys));
-      if (!Number.isInteger(keys) || keys < 1 || keys > 10) {
+      const target: SkinCoverTarget | null = body.screenshot != null
+        ? (Number.isInteger(screenshot) && screenshot >= 0 && screenshot < SKIN_MAX_SCREENSHOTS
+          ? { kind: "screenshot", index: screenshot }
+          : null)
+        : (Number.isInteger(keys) && keys >= 1 && keys <= 10 ? { kind: "keymode", keys } : null);
+      if (!target) {
         sendJson(req, res, ctx, 400, { error: "invalid_request" });
         return true;
       }
-      const result = await setSkinCoverKeymode(ctx.serveWriteDb ?? ctx.db, id, keys, ownerUserId);
+      const result = await setSkinCover(ctx.serveWriteDb ?? ctx.db, id, target, ownerUserId);
       if (!result.ok) {
         sendJson(req, res, ctx, result.error === "forbidden" ? 403 : 404, { ok: false, error: result.error });
         return true;
       }
-      logInfo("skin_cover_changed", { id, keys, by: ownerUserId == null ? "admin" : "owner" });
+      logInfo("skin_cover_changed", { id, ...target, by: ownerUserId == null ? "admin" : "owner" });
+      sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
+      return true;
+    }
+    if (url.pathname === "/api/skins/screenshot-labels") {
+      // Positional: entry N renames screenshot N, an empty one puts it back to
+      // being numbered on the page.
+      const labels = Array.isArray(body.labels)
+        ? body.labels.map((entry) => (typeof entry === "string" ? entry : ""))
+        : null;
+      if (!labels || labels.length > SKIN_MAX_SCREENSHOTS) {
+        sendJson(req, res, ctx, 400, { error: "invalid_request" });
+        return true;
+      }
+      const result = await setSkinScreenshotLabels(ctx.serveWriteDb ?? ctx.db, id, labels, ownerUserId);
+      if (!result.ok) {
+        sendJson(req, res, ctx, result.error === "forbidden" ? 403 : 404, { ok: false, error: result.error });
+        return true;
+      }
+      logInfo("skin_screenshot_labels_changed", { id, count: labels.length, by: ownerUserId == null ? "admin" : "owner" });
       sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
       return true;
     }

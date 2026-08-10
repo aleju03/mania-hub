@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useSkinBackdropPool } from "./SkinBackdropPicker";
 import { useSkinPatternPool } from "./SkinPatternPicker";
 import { SkinPreviewPickers } from "./SkinPreviewPickers";
+import { SkinScreenshotFields } from "./SkinScreenshotFields";
 import { track } from "../../lib/analytics";
 import { skinEventProperties } from "../../lib/analytics-skins";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
@@ -15,7 +16,8 @@ import {
   finishSkinEdit,
   formatSkinFileSize,
   markSkinsListStale,
-  setSkinCoverKeymode,
+  setSkinCover,
+  setSkinScreenshotLabels,
   skinOskFileUrl,
   SkinUploadError,
   startSkinEdit,
@@ -24,14 +26,16 @@ import {
 } from "../../lib/skins";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
-// Post-publish editing of what a skin looks like on the browse card: which
-// keymode fronts it, and what map cover sits behind the rendered playfields.
-// Both are decided at upload time and were stuck there afterwards.
+// Post-publish editing of what a skin looks like on the browse card and in its
+// gallery: which image fronts it, what map cover sits behind the rendered
+// playfields, and what the uploader's own screenshots are called. All of it is
+// decided at upload time and was stuck there afterwards.
 //
-// Changing the cover keymode is a pointer move on the backend (every keymode's
-// render is stored). Changing a backdrop is a re-render, so the modal pulls the
-// published .osk back down, parses it the way the upload modal does, and
-// re-uploads only the keymodes that were actually retargeted.
+// Moving the cover is a pointer move on the backend (every candidate image is
+// already stored), and so is renaming a screenshot. Changing a backdrop is a
+// re-render, so the modal pulls the published .osk back down, parses it the way
+// the upload modal does, and re-uploads only the keymodes that were actually
+// retargeted.
 
 interface RenderedPreview {
   blob: Blob;
@@ -63,13 +67,29 @@ export function SkinPreviewEditorModal({
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0, label: "" });
 
-  // The keymode whose preview is on screen, and the one that fronts the card.
+  // What fronts the card as published: one of the keymode renders, or one of
+  // the uploader's screenshots. Both can be null on a skin published before
+  // per-keymode previews existed, which carries a standalone cover image.
+  const publishedCoverShot = useMemo(() => {
+    const index = skin.screenshots.findIndex((shot) => shot.url === skin.previewUrl);
+    return index >= 0 ? index : null;
+  }, [skin.screenshots, skin.previewUrl]);
   const publishedCoverKeymode = useMemo(() => {
     const match = skin.previews.find((preview) => preview.url === skin.previewUrl);
-    return match?.keys ?? skin.previews[0]?.keys ?? null;
-  }, [skin.previews, skin.previewUrl]);
+    return match?.keys ?? (publishedCoverShot != null ? null : skin.previews[0]?.keys ?? null);
+  }, [skin.previews, skin.previewUrl, publishedCoverShot]);
   const [selectedKeymode, setSelectedKeymode] = useState(() => publishedCoverKeymode ?? skin.keymodes[0] ?? 4);
-  const [coverKeymode, setCoverKeymode] = useState<number | null>(publishedCoverKeymode);
+  // The keymode that would front the card, and the screenshot that outranks it
+  // when the uploader starred one.
+  const [coverKeymode, setCoverKeymode] = useState<number | null>(
+    publishedCoverKeymode ?? skin.previews[0]?.keys ?? null,
+  );
+  const [coverShot, setCoverShot] = useState<number | null>(publishedCoverShot);
+  // Renaming is per screenshot and saves with everything else, so the drafts
+  // sit here until the save.
+  const [labelDrafts, setLabelDrafts] = useState<string[]>(
+    () => skin.screenshots.map((shot) => shot.label ?? ""),
+  );
 
   // Retargeted keymodes only: a keymode with no entry here keeps the render it
   // was published with, so opening the editor and saving nothing changes
@@ -280,8 +300,14 @@ export function SkinPreviewEditorModal({
     renderedRef.current.clear();
   }, [releaseRenders]);
 
-  const coverChanged = coverKeymode != null && coverKeymode !== publishedCoverKeymode;
-  const dirty = renders.size > 0 || coverChanged;
+  // A starred screenshot outranks the keymode star, so the two are compared
+  // against what was published in that order.
+  const coverChanged = coverShot !== publishedCoverShot
+    || (coverShot == null && coverKeymode != null && coverKeymode !== publishedCoverKeymode);
+  const labelsChanged = labelDrafts.some(
+    (label, index) => index < skin.screenshots.length && label.trim() !== (skin.screenshots[index]?.label ?? ""),
+  );
+  const dirty = renders.size > 0 || coverChanged || labelsChanged;
   // A pick whose render has not landed yet (the archive may still be coming
   // down) holds the save button, so a pick is never silently dropped.
   const retargeted = useMemo(
@@ -323,8 +349,9 @@ export function SkinPreviewEditorModal({
             height: render.height,
             keys,
             // A re-rendered keymode that already fronts the card keeps fronting
-            // it on the backend, so the flag is only for a cover that moved.
-            cover: keys === coverKeymode,
+            // it on the backend, so the flag is only for a cover that moved -
+            // and not at all while a screenshot holds the card.
+            cover: coverShot == null && keys === coverKeymode,
             accent: keys === coverKeymode ? render.accent : undefined,
             onProgress: (sent) => setProgress({ done: doneBytes + sent, total: totalBytes, label }),
           });
@@ -333,12 +360,29 @@ export function SkinPreviewEditorModal({
         setProgress({ done: totalBytes, total: totalBytes, label: "Saving." });
         current = await finishSkinEdit(started.id, started.token);
       }
-      // A cover that moved to a keymode nobody re-rendered is just a pointer
-      // move; no image work involved.
-      if (coverChanged && coverKeymode != null && !renders.has(coverKeymode)) {
-        const result = await setSkinCoverKeymode({ data: { id: skin.id, keys: coverKeymode } });
+      // A cover the uploads did not already carry is just a pointer move; no
+      // image work involved. A starred screenshot is always one of those, and
+      // it has to be re-asserted after any upload: re-rendering the keymode
+      // that fronted the card drags the cover onto the new render server-side.
+      const coverCarriedByUpload = coverShot == null && coverKeymode != null && renders.has(coverKeymode);
+      if (!coverCarriedByUpload && (coverChanged || (coverShot != null && uploads.length > 0))) {
+        const target = coverShot != null ? { screenshot: coverShot } : coverKeymode != null ? { keys: coverKeymode } : null;
+        if (target) {
+          const result = await setSkinCover({ data: { id: skin.id, ...target } });
+          if (!result.ok) {
+            setError("The card cover could not be changed. Try again.");
+            setSaving(false);
+            return;
+          }
+          current = result.skin ?? current;
+        }
+      }
+      if (labelsChanged) {
+        const result = await setSkinScreenshotLabels({
+          data: { id: skin.id, labels: labelDrafts.slice(0, skin.screenshots.length).map((label) => label.trim()) },
+        });
         if (!result.ok) {
-          setError("The card cover could not be changed. Try again.");
+          setError("The screenshot names could not be saved. Try again.");
           setSaving(false);
           return;
         }
@@ -352,6 +396,7 @@ export function SkinPreviewEditorModal({
         ...skinEventProperties(current),
         skin_previews_rerendered: uploads.length,
         skin_cover_changed: coverChanged,
+        skin_screenshots_renamed: labelsChanged,
       });
       markSkinsListStale();
       revertPreviews();
@@ -364,7 +409,8 @@ export function SkinPreviewEditorModal({
         ? saveError.message
         : "The previews could not be updated. Try again.");
     }
-  }, [saving, dirty, renders, skin.id, coverKeymode, coverChanged, revertPreviews, onSaved, onClose]);
+  }, [saving, dirty, renders, skin.id, skin.screenshots.length, coverKeymode, coverShot, coverChanged,
+    labelsChanged, labelDrafts, revertPreviews, onSaved, onClose]);
 
   const handleDismiss = useCallback(() => {
     if (saving) return;
@@ -386,9 +432,11 @@ export function SkinPreviewEditorModal({
     setError(null);
     setScope("all");
     setNeedsSkinFile(false);
-    setCoverKeymode(publishedCoverKeymode);
+    setCoverKeymode(publishedCoverKeymode ?? skin.previews[0]?.keys ?? null);
+    setCoverShot(publishedCoverShot);
+    setLabelDrafts(skin.screenshots.map((shot) => shot.label ?? ""));
     setSelectedKeymode(publishedCoverKeymode ?? keymodes[0] ?? 4);
-  }, [open, revertPreviews, publishedCoverKeymode, keymodes]);
+  }, [open, revertPreviews, publishedCoverKeymode, publishedCoverShot, skin.previews, skin.screenshots, keymodes]);
 
   useEffect(() => {
     if (!open) return;
@@ -485,7 +533,7 @@ export function SkinPreviewEditorModal({
                   <span className="text-osu-f1">
                     Viewing <span className="font-bold text-osu-l2 tabular-nums">{selectedKeymode}K</span>
                   </span>
-                  {coverKeymode === selectedKeymode ? (
+                  {coverKeymode === selectedKeymode && coverShot == null ? (
                     <span className="flex items-center gap-1 font-bold text-osu-pink">
                       <Star size={11} aria-hidden="true" />
                       card cover
@@ -494,7 +542,12 @@ export function SkinPreviewEditorModal({
                     <button
                       type="button"
                       disabled={saving || (!publishedPreviewUrl(selectedKeymode) && !renders.has(selectedKeymode))}
-                      onClick={() => setCoverKeymode(selectedKeymode)}
+                      onClick={() => {
+                        setCoverKeymode(selectedKeymode);
+                        // Starring a keymode takes the card back off a
+                        // screenshot that was holding it.
+                        setCoverShot(null);
+                      }}
                       title={!publishedPreviewUrl(selectedKeymode) && !renders.has(selectedKeymode)
                         ? `This skin has no ${selectedKeymode}K preview yet; pick a backdrop for it first.`
                         : undefined}
@@ -532,7 +585,7 @@ export function SkinPreviewEditorModal({
                           selected ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"
                         }`}>
                           {keys}K
-                          {coverKeymode === keys && (
+                          {coverKeymode === keys && coverShot == null && (
                             <Star size={9} className={selected ? "text-white" : "text-osu-pink"} aria-label="card cover" />
                           )}
                           {renders.has(keys) && (
@@ -570,6 +623,30 @@ export function SkinPreviewEditorModal({
                   from real charts, one keymode at a time. Keymodes left alone keep the previews they were published
                   with.
                 </p>
+
+                {/* The screenshots this skin was published with: renaming one
+                    retitles it in the gallery, starring one puts it on the
+                    browse card in place of a rendered playfield. New ones are
+                    not accepted here - the .osk flow is where images arrive,
+                    which is why neither add nor remove is wired up. */}
+                {skin.screenshots.length > 0 && (
+                  <div className="mt-4">
+                    <SkinScreenshotFields
+                      screenshots={skin.screenshots.map((shot, index) => ({
+                        url: shot.url,
+                        label: labelDrafts[index] ?? "",
+                      }))}
+                      onRename={(index, label) => setLabelDrafts((previous) => {
+                        const next = skin.screenshots.map((_, i) => previous[i] ?? "");
+                        next[index] = label;
+                        return next;
+                      })}
+                      cover={coverShot}
+                      onCover={setCoverShot}
+                      disabled={saving}
+                    />
+                  </div>
+                )}
 
                 {error && <p className="mt-3 text-[12px] font-semibold text-osu-red-light">{error}</p>}
 

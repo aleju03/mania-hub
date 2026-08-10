@@ -46,11 +46,16 @@ export interface BulkPreparedScreenshot {
   blob: Blob;
   width: number;
   height: number;
+  // What the uploader called this shot; empty leaves it numbered.
+  label: string;
 }
 
 export interface BulkPreparedDetails {
   description: string;
   coverKeymode: number;
+  // A screenshot starred over the rendered playfields; null leaves the card to
+  // coverKeymode.
+  coverScreenshot?: number | null;
   renders: BulkPreparedRender[];
   screenshots: BulkPreparedScreenshot[];
 }
@@ -295,7 +300,7 @@ export async function publishBulkSkin(
       step();
     }
 
-    for (const shot of screenshots) {
+    for (const [index, shot] of screenshots.entries()) {
       stopIfCancelled();
       await context.pacer.take(paced);
       stopIfCancelled();
@@ -306,6 +311,10 @@ export async function publishBulkSkin(
         blob: shot.blob,
         width: shot.width,
         height: shot.height,
+        label: shot.label,
+        // Screenshots upload after the renders, so a starred one is the last
+        // word on what fronts the card.
+        cover: index === details?.coverScreenshot,
       }), { onWait: waited, cancelled: context.cancelled });
       step();
     }

@@ -18,16 +18,24 @@ export const SKIN_TOKEN_TTL_MS = 30 * 60_000;
 export const SKIN_NAME_MAX_LENGTH = 80;
 export const SKIN_AUTHOR_MAX_LENGTH = 64;
 export const SKIN_DESCRIPTION_MAX_LENGTH = 500;
+export const SKIN_SCREENSHOT_LABEL_MAX_LENGTH = 40;
 const SKIN_LIST_MAX_PAGE_SIZE = 50;
 
-export interface SkinScreenshot {
+// One stored image on a skin: where it lives, and what it measures.
+export interface SkinImage {
   key: string;
   url: string;
   width: number | null;
   height: number | null;
 }
 
-export interface SkinKeymodePreview extends SkinScreenshot {
+export interface SkinScreenshot extends SkinImage {
+  // What the uploader called this shot ("Score screen"). Null is unnamed, which
+  // the skin page numbers instead.
+  label: string | null;
+}
+
+export interface SkinKeymodePreview extends SkinImage {
   keys: number;
 }
 
@@ -111,7 +119,7 @@ export interface SkinSummary {
   previewWidth: number | null;
   previewHeight: number | null;
   previews: Array<{ keys: number; url: string; width: number | null; height: number | null }>;
-  screenshots: Array<{ url: string; width: number | null; height: number | null }>;
+  screenshots: Array<{ url: string; width: number | null; height: number | null; label: string | null }>;
   oskUrl: string | null;
   oskSizeBytes: number | null;
   oskSha256: string | null;
@@ -349,21 +357,60 @@ export type SetSkinCoverResult =
   | { ok: true; skin: SkinSummary }
   | { ok: false; error: "not_found" | "forbidden" | "no_preview" };
 
-// Repoints the card cover at an already-rendered keymode preview. No image
-// work: the previews are all stored, this only picks which one fronts the
-// skin. ownerUserId null is the admin path, which skips the ownership check.
-export async function setSkinCoverKeymode(
+// Which stored image fronts the browse card: a keymode's rendered playfield, or
+// one of the screenshots the uploader attached themselves.
+export type SkinCoverTarget =
+  | { kind: "keymode"; keys: number }
+  | { kind: "screenshot"; index: number };
+
+// Repoints the card cover at another stored image. No image work: every
+// candidate is already in storage, this only picks which one fronts the skin.
+// ownerUserId null is the admin path, which skips the ownership check.
+export async function setSkinCover(
   db: Db,
   id: string,
-  keys: number,
+  target: SkinCoverTarget,
   ownerUserId: number | null,
 ): Promise<SetSkinCoverResult> {
   const row = await getSkin(db, id);
   if (!row || row.status === "pending") return { ok: false, error: "not_found" };
   if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
-  const entry = row.previews.find((preview) => preview.keys === keys);
+  const entry: SkinImage | undefined = target.kind === "keymode"
+    ? row.previews.find((preview) => preview.keys === target.keys)
+    : row.screenshots[target.index];
   if (!entry) return { ok: false, error: "no_preview" };
   await attachSkinPreview(db, id, entry);
+  const updated = await getSkin(db, id);
+  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }) } : { ok: false, error: "not_found" };
+}
+
+export type SetSkinScreenshotLabelsResult =
+  | { ok: true; skin: SkinSummary }
+  | { ok: false; error: "not_found" | "forbidden" };
+
+// Renames the attached screenshots in place, by position: "Score screen" rather
+// than "Shot 2". An empty label puts a shot back to being numbered, and a list
+// shorter than the row's leaves the screenshots past its end alone.
+// ownerUserId null is the admin path, which skips the ownership check.
+export async function setSkinScreenshotLabels(
+  db: Db,
+  id: string,
+  labels: Array<string | null>,
+  ownerUserId: number | null,
+): Promise<SetSkinScreenshotLabelsResult> {
+  const row = await getSkin(db, id);
+  if (!row || row.status === "pending") return { ok: false, error: "not_found" };
+  if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
+  const next = row.screenshots.map((shot, index) => (
+    index < labels.length
+      ? { ...shot, label: cleanText(labels[index] ?? "", SKIN_SCREENSHOT_LABEL_MAX_LENGTH) || null }
+      : shot
+  ));
+  await exec(
+    db,
+    "update skins set screenshots_json = ?, updated_at = ? where id = ?",
+    [JSON.stringify(next), nowIso(), id],
+  );
   const updated = await getSkin(db, id);
   return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }) } : { ok: false, error: "not_found" };
 }
@@ -527,7 +574,8 @@ export async function appendSkinScreenshot(db: Db, id: string, entry: SkinScreen
   const row = await getSkin(db, id);
   if (!row) return { ok: false, error: "not_found" };
   if (row.screenshots.length >= SKIN_MAX_SCREENSHOTS) return { ok: false, error: "screenshot_limit" };
-  const next = [...row.screenshots, entry];
+  const label = cleanText(entry.label ?? "", SKIN_SCREENSHOT_LABEL_MAX_LENGTH) || null;
+  const next = [...row.screenshots, { ...entry, label }];
   await exec(
     db,
     "update skins set screenshots_json = ?, updated_at = ? where id = ?",
@@ -1026,7 +1074,7 @@ export async function listExpiredPendingSkins(db: Db, cutoffIso: string): Promis
 // so the redaction lives here rather than in each endpoint that serves a skin.
 export function toSkinSummary(row: SkinRow, options?: { asOwner?: boolean }): SkinSummary {
   const previews = row.previews.map(({ keys, url, width, height }) => ({ keys, url, width, height }));
-  const screenshots = row.screenshots.map(({ url, width, height }) => ({ url, width, height }));
+  const screenshots = row.screenshots.map(({ url, width, height, label }) => ({ url, width, height, label }));
   const summary: SkinSummary = {
     id: row.id,
     slug: row.slug,
@@ -1161,7 +1209,10 @@ function normalizeScreenshots(value: unknown): SkinScreenshot[] {
       const key = textOrNull(raw.key);
       const url = textOrNull(raw.url);
       if (!key || !url) return null;
-      return { key, url, width: numberOrNull(raw.width), height: numberOrNull(raw.height) };
+      const label = typeof raw.label === "string"
+        ? cleanText(raw.label, SKIN_SCREENSHOT_LABEL_MAX_LENGTH) || null
+        : null;
+      return { key, url, width: numberOrNull(raw.width), height: numberOrNull(raw.height), label };
     })
     .filter((entry): entry is SkinScreenshot => Boolean(entry));
 }

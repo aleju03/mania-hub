@@ -24,7 +24,8 @@ import {
   type SkinBackdropCandidate,
 } from "../../lib/skin-preview-backdrops";
 import { loadSkinPreviewBackgroundForSet, renderSkinPreview } from "../../lib/skin-preview-render";
-import { processScreenshot, type ProcessedScreenshot } from "../../lib/skin-screenshot-process";
+import { processScreenshot, type DraftScreenshot } from "../../lib/skin-screenshot-process";
+import { SkinScreenshotFields } from "./SkinScreenshotFields";
 import {
   type DuplicateSkinRef,
   finishSkinUpload,
@@ -266,7 +267,10 @@ export function SkinUploadModal({
   // Public puts the skin on /skins for anyone to download; private keeps it to
   // the uploader and lets it front their replays without leaving the server.
   const [visibility, setVisibility] = useState<SkinVisibility>("public");
-  const [screenshots, setScreenshots] = useState<ProcessedScreenshot[]>([]);
+  const [screenshots, setScreenshots] = useState<DraftScreenshot[]>([]);
+  // A screenshot the uploader would rather have on the browse card than any of
+  // the rendered playfields; null leaves the card to the cover keymode.
+  const [coverShot, setCoverShot] = useState<number | null>(null);
   const screenshotUrlsRef = useRef<string[]>([]);
 
   // What the archive ships, grouped by osu!'s known asset names; shown under
@@ -487,7 +491,6 @@ export function SkinUploadModal({
   const [bodyLockActive, setBodyLockActive] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const screenshotInputRef = useRef<HTMLInputElement>(null);
 
   const revokeAllUrls = useCallback(() => {
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -515,6 +518,7 @@ export function SkinUploadModal({
     setAuthor("");
     setDescription("");
     setScreenshots([]);
+    setCoverShot(null);
     setPublished(null);
     setAssetGroups(null);
     // Emptying the pool makes the next open draw a fresh one.
@@ -708,19 +712,22 @@ export function SkinUploadModal({
     setError(null);
     const room = SKIN_MAX_SCREENSHOTS - screenshots.length;
     const picked = [...files].slice(0, room);
-    const processed: ProcessedScreenshot[] = [];
+    const processed: DraftScreenshot[] = [];
     for (const shot of picked) {
       const result = await processScreenshot(shot).catch(() => null);
       if (result) {
-        processed.push(result);
+        processed.push({ ...result, label: "" });
         screenshotUrlsRef.current.push(result.url);
       } else {
         setError("A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB.");
       }
     }
     if (processed.length > 0) setScreenshots((previous) => [...previous, ...processed]);
-    if (screenshotInputRef.current) screenshotInputRef.current.value = "";
   }, [screenshots.length]);
+
+  const renameScreenshot = useCallback((index: number, label: string) => {
+    setScreenshots((previous) => previous.map((shot, i) => (i === index ? { ...shot, label } : shot)));
+  }, []);
 
   const removeScreenshot = useCallback((index: number) => {
     setScreenshots((previous) => {
@@ -731,6 +738,9 @@ export function SkinUploadModal({
       }
       return previous.filter((_, i) => i !== index);
     });
+    // The cover follows the shots it sits among: one removed above it shifts
+    // it up, and removing the cover itself hands the card back to a keymode.
+    setCoverShot((previous) => (previous == null || previous === index ? null : previous > index ? previous - 1 : previous));
   }, []);
 
   const publish = useCallback(async () => {
@@ -788,8 +798,8 @@ export function SkinUploadModal({
 
       for (let index = 0; index < screenshots.length; index += 1) {
         const shot = screenshots[index];
-        const label = `Uploading screenshot ${index + 1} of ${screenshots.length}.`;
-        report(label, 0);
+        const step = `Uploading screenshot ${index + 1} of ${screenshots.length}.`;
+        report(step, 0);
         await uploadSkinPart({
           id: ticket.id,
           token: ticket.token,
@@ -797,7 +807,11 @@ export function SkinUploadModal({
           blob: shot.blob,
           width: shot.width,
           height: shot.height,
-          onProgress: (sent) => report(label, sent),
+          label: shot.label,
+          // Screenshots upload after the renders, so a starred one is the last
+          // word on what fronts the card.
+          cover: index === coverShot,
+          onProgress: (sent) => report(step, sent),
         });
         doneBytes += shot.blob.size;
       }
@@ -836,7 +850,7 @@ export function SkinUploadModal({
       }
       setStep("form");
     }
-  }, [file, name, author, description, visibility, onPublished, previews, screenshots, coverKeymode]);
+  }, [file, name, author, description, visibility, onPublished, previews, screenshots, coverKeymode, coverShot]);
 
   const uploading = step === "uploading";
 
@@ -913,7 +927,12 @@ export function SkinUploadModal({
                     selectedKeymode={selectedKeymode}
                     setSelectedKeymode={setSelectedKeymode}
                     coverKeymode={coverKeymode}
-                    setCoverKeymode={setCoverKeymode}
+                    setCoverKeymode={(keys) => {
+                      setCoverKeymode(keys);
+                      // Starring a keymode is how the card goes back to a
+                      // rendered playfield after a screenshot took it.
+                      setCoverShot(null);
+                    }}
                     name={name}
                     setName={setName}
                     author={author}
@@ -923,9 +942,11 @@ export function SkinUploadModal({
                     visibility={visibility}
                     setVisibility={setVisibility}
                     screenshots={screenshots}
-                    screenshotInputRef={screenshotInputRef}
                     addScreenshots={addScreenshots}
+                    renameScreenshot={renameScreenshot}
                     removeScreenshot={removeScreenshot}
+                    coverShot={coverShot}
+                    setCoverShot={setCoverShot}
                     error={error}
                     duplicate={duplicate}
                     progress={progress}
@@ -1169,9 +1190,11 @@ function FormStep({
   visibility,
   setVisibility,
   screenshots,
-  screenshotInputRef,
   addScreenshots,
+  renameScreenshot,
   removeScreenshot,
+  coverShot,
+  setCoverShot,
   error,
   duplicate,
   progress,
@@ -1211,10 +1234,14 @@ function FormStep({
   setDescription: (description: string) => void;
   visibility: SkinVisibility;
   setVisibility: (visibility: SkinVisibility) => void;
-  screenshots: ProcessedScreenshot[];
-  screenshotInputRef: React.RefObject<HTMLInputElement | null>;
+  screenshots: DraftScreenshot[];
   addScreenshots: (files: FileList | null) => Promise<void>;
+  renameScreenshot: (index: number, label: string) => void;
   removeScreenshot: (index: number) => void;
+  // The screenshot that fronts the browse card, when the uploader picked one
+  // over the rendered playfields.
+  coverShot: number | null;
+  setCoverShot: (index: number | null) => void;
   error: string | null;
   // The already-published skin behind a duplicate error, linked from it.
   duplicate: DuplicateSkinRef | null;
@@ -1261,10 +1288,11 @@ function FormStep({
           )}
         </div>
         {/* Which keymode fronts the browse card is its own choice: clicking
-            through the previews only changes what is on screen. */}
+            through the previews only changes what is on screen. A starred
+            screenshot outranks all of them, so the star moves down there. */}
         <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
           <span className="text-osu-f1">Viewing <span className="font-bold text-osu-l2 tabular-nums">{selectedKeymode}K</span></span>
-          {selectedKeymode === coverKeymode ? (
+          {selectedKeymode === coverKeymode && coverShot == null ? (
             <span className="flex items-center gap-1 font-bold text-osu-pink">
               <Star size={11} aria-hidden="true" />
               card cover
@@ -1287,7 +1315,7 @@ function FormStep({
           {keymodes.map((keys) => {
             const preview = previews.get(keys);
             const selected = selectedKeymode === keys;
-            const isCover = coverKeymode === keys;
+            const isCover = coverKeymode === keys && coverShot == null;
             const missingNoteArt = keymodesWithoutNoteArt.has(keys);
             return (
               <button
@@ -1419,46 +1447,15 @@ function FormStep({
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-            Screenshots <span className="normal-case tracking-normal text-osu-f1/70">(optional, up to {SKIN_MAX_SCREENSHOTS})</span>
-          </span>
-          <div className="flex flex-wrap gap-2">
-            {screenshots.map((shot, index) => (
-              <div key={shot.url} className="relative h-14 w-[99px] overflow-hidden rounded-md border border-osu-b3/40">
-                <img src={shot.url} alt={`Screenshot ${index + 1}`} className="h-full w-full object-cover" />
-                {!uploading && (
-                  <button
-                    type="button"
-                    onClick={() => removeScreenshot(index)}
-                    aria-label={`Remove screenshot ${index + 1}`}
-                    className="absolute right-0.5 top-0.5 rounded bg-osu-b5/85 p-0.5 text-osu-l2 transition-colors cursor-pointer hover:text-white"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            ))}
-            {screenshots.length < SKIN_MAX_SCREENSHOTS && !uploading && (
-              <button
-                type="button"
-                onClick={() => screenshotInputRef.current?.click()}
-                className="flex h-14 w-[99px] items-center justify-center rounded-md border border-dashed border-osu-b3/60 text-[20px] font-light text-osu-f1 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-osu-l2"
-                aria-label="Add screenshots"
-              >
-                +
-              </button>
-            )}
-          </div>
-          <input
-            ref={screenshotInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            multiple
-            className="sr-only"
-            onChange={(event) => void addScreenshots(event.target.files)}
-          />
-        </div>
+        <SkinScreenshotFields
+          screenshots={screenshots}
+          onAdd={(files) => void addScreenshots(files)}
+          onRename={renameScreenshot}
+          onRemove={removeScreenshot}
+          cover={coverShot}
+          onCover={setCoverShot}
+          disabled={uploading}
+        />
 
         <div className="mt-auto flex flex-col gap-2.5 pt-1">
           {error && (

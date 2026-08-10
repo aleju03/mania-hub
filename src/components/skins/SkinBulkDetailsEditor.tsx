@@ -18,7 +18,8 @@ import {
   type SkinBackdropCandidate,
 } from "../../lib/skin-preview-backdrops";
 import { loadSkinPreviewBackgroundForSet, renderSkinPreview } from "../../lib/skin-preview-render";
-import { processScreenshot, type ProcessedScreenshot } from "../../lib/skin-screenshot-process";
+import { processScreenshot, type DraftScreenshot } from "../../lib/skin-screenshot-process";
+import { SkinScreenshotFields } from "./SkinScreenshotFields";
 import {
   formatSkinFileSize,
   SKIN_AUTHOR_MAX_LENGTH,
@@ -42,11 +43,14 @@ export interface BulkEditorRender extends BulkPreparedRender {
 export interface BulkItemDetails {
   description: string;
   coverKeymode: number;
+  // A screenshot starred over the rendered playfields; null leaves the card to
+  // coverKeymode.
+  coverScreenshot: number | null;
   backdrop: PreviewBackdrop;
   backdropOverrides: Array<[number, PreviewBackdrop]>;
   patterns: Array<[number, SkinPreviewChartSnippet | null]>;
   renders: BulkEditorRender[];
-  screenshots: ProcessedScreenshot[];
+  screenshots: DraftScreenshot[];
 }
 
 export interface BulkEditorResult {
@@ -82,9 +86,10 @@ export function SkinBulkDetailsEditor({
   const [name, setName] = useState(initialName);
   const [author, setAuthor] = useState(initialAuthor);
   const [description, setDescription] = useState(initialDetails?.description ?? "");
-  const [screenshots, setScreenshots] = useState<ProcessedScreenshot[]>(initialDetails?.screenshots ?? []);
+  const [screenshots, setScreenshots] = useState<DraftScreenshot[]>(initialDetails?.screenshots ?? []);
   const [selectedKeymode, setSelectedKeymode] = useState(initialDetails?.coverKeymode ?? 4);
   const [coverKeymode, setCoverKeymode] = useState(initialDetails?.coverKeymode ?? 4);
+  const [coverShot, setCoverShot] = useState<number | null>(initialDetails?.coverScreenshot ?? null);
 
   // A reopened row starts from its saved renders, so the editor shows the
   // previous session's previews immediately instead of a blank hero.
@@ -135,8 +140,6 @@ export function SkinBulkDetailsEditor({
   // transfers ownership of whatever went into the payload; unmount revokes
   // the rest.
   const ownedUrlsRef = useRef<Set<string>>(new Set());
-
-  const screenshotInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const owned = ownedUrlsRef.current;
@@ -383,19 +386,22 @@ export function SkinBulkDetailsEditor({
     setError(null);
     const room = SKIN_MAX_SCREENSHOTS - screenshots.length;
     const picked = [...files].slice(0, room);
-    const processed: ProcessedScreenshot[] = [];
+    const processed: DraftScreenshot[] = [];
     for (const shot of picked) {
       const result = await processScreenshot(shot).catch(() => null);
       if (result) {
-        processed.push(result);
+        processed.push({ ...result, label: "" });
         ownedUrlsRef.current.add(result.url);
       } else {
         setError("A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB.");
       }
     }
     if (processed.length > 0) setScreenshots((previous) => [...previous, ...processed]);
-    if (screenshotInputRef.current) screenshotInputRef.current.value = "";
   }, [screenshots.length]);
+
+  const renameScreenshot = useCallback((index: number, label: string) => {
+    setScreenshots((previous) => previous.map((shot, i) => (i === index ? { ...shot, label } : shot)));
+  }, []);
 
   const removeScreenshot = useCallback((index: number) => {
     setScreenshots((previous) => {
@@ -406,6 +412,9 @@ export function SkinBulkDetailsEditor({
       }
       return previous.filter((_, i) => i !== index);
     });
+    // The cover follows the shots it sits among, and removing it hands the card
+    // back to a keymode.
+    setCoverShot((previous) => (previous == null || previous === index ? null : previous > index ? previous - 1 : previous));
   }, []);
 
   const keymodes = imported?.summary.keymodes ?? [];
@@ -429,6 +438,7 @@ export function SkinBulkDetailsEditor({
     const details: BulkItemDetails = {
       description: description.trim(),
       coverKeymode: previews.has(coverKeymode) ? coverKeymode : renders[0].keys,
+      coverScreenshot: coverShot != null && coverShot < screenshots.length ? coverShot : null,
       backdrop,
       backdropOverrides: [...backdropOverrides.entries()],
       patterns: [...patterns.entries()],
@@ -444,7 +454,7 @@ export function SkinBulkDetailsEditor({
       author: author.trim().slice(0, SKIN_AUTHOR_MAX_LENGTH),
       details,
     });
-  }, [author, backdrop, backdropOverrides, canSave, coverKeymode, description, name, onSave, patterns, previews, screenshots]);
+  }, [author, backdrop, backdropOverrides, canSave, coverKeymode, coverShot, description, name, onSave, patterns, previews, screenshots]);
 
   if (typeof document === "undefined") return null;
 
@@ -525,7 +535,7 @@ export function SkinBulkDetailsEditor({
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
                   <span className="text-osu-f1">Viewing <span className="font-bold text-osu-l2 tabular-nums">{selectedKeymode}K</span></span>
-                  {selectedKeymode === coverKeymode ? (
+                  {selectedKeymode === coverKeymode && coverShot == null ? (
                     <span className="flex items-center gap-1 font-bold text-osu-pink">
                       <Star size={11} aria-hidden="true" />
                       card cover
@@ -533,7 +543,10 @@ export function SkinBulkDetailsEditor({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setCoverKeymode(selectedKeymode)}
+                      onClick={() => {
+                        setCoverKeymode(selectedKeymode);
+                        setCoverShot(null);
+                      }}
                       className="flex items-center gap-1 font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
                     >
                       <Star size={11} aria-hidden="true" />
@@ -545,7 +558,7 @@ export function SkinBulkDetailsEditor({
                   {keymodes.map((keys) => {
                     const preview = previews.get(keys);
                     const selected = selectedKeymode === keys;
-                    const isCover = coverKeymode === keys;
+                    const isCover = coverKeymode === keys && coverShot == null;
                     const missingNoteArt = keymodesWithoutNoteArt.has(keys);
                     return (
                       <button
@@ -643,44 +656,14 @@ export function SkinBulkDetailsEditor({
                     className="w-full resize-y rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] leading-relaxed text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
                   />
                 </label>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                    Screenshots <span className="normal-case tracking-normal text-osu-f1/70">(optional, up to {SKIN_MAX_SCREENSHOTS})</span>
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {screenshots.map((shot, index) => (
-                      <div key={shot.url} className="relative h-14 w-[99px] overflow-hidden rounded-md border border-osu-b3/40">
-                        <img src={shot.url} alt={`Screenshot ${index + 1}`} className="h-full w-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => removeScreenshot(index)}
-                          aria-label={`Remove screenshot ${index + 1}`}
-                          className="absolute right-0.5 top-0.5 rounded bg-osu-b5/85 p-0.5 text-osu-l2 transition-colors cursor-pointer hover:text-white"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                    {screenshots.length < SKIN_MAX_SCREENSHOTS && (
-                      <button
-                        type="button"
-                        onClick={() => screenshotInputRef.current?.click()}
-                        className="flex h-14 w-[99px] items-center justify-center rounded-md border border-dashed border-osu-b3/60 text-[20px] font-light text-osu-f1 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-osu-l2"
-                        aria-label="Add screenshots"
-                      >
-                        +
-                      </button>
-                    )}
-                  </div>
-                  <input
-                    ref={screenshotInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    multiple
-                    className="sr-only"
-                    onChange={(event) => void addScreenshots(event.target.files)}
-                  />
-                </div>
+                <SkinScreenshotFields
+                  screenshots={screenshots}
+                  onAdd={(files) => void addScreenshots(files)}
+                  onRename={renameScreenshot}
+                  onRemove={removeScreenshot}
+                  cover={coverShot}
+                  onCover={setCoverShot}
+                />
 
                 <div className="mt-auto flex flex-col gap-2.5 pt-1">
                   {error && <div className="text-[12px] font-semibold text-osu-red-light">{error}</div>}

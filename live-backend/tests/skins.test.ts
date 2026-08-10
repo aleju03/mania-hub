@@ -28,13 +28,15 @@ import {
   replaceSkinOsk,
   setSkinVisibility,
   setSkinAccent,
-  setSkinCoverKeymode,
+  setSkinCover,
   setSkinHidden,
+  setSkinScreenshotLabels,
   setSkinSpecialKeymodes,
   SKIN_DESCRIPTION_MAX_LENGTH,
   SKIN_MAX_PENDING_PER_USER,
   SKIN_MAX_PER_USER,
   SKIN_MAX_SCREENSHOTS,
+  SKIN_SCREENSHOT_LABEL_MAX_LENGTH,
   startSkinEdit,
   toSkinSummary,
   updateSkinDetails,
@@ -407,10 +409,12 @@ describe("skins feature", () => {
         url: `https://cdn.example/shot-${i}.webp`,
         width: 1920,
         height: 1080,
+        label: i === 0 ? "Score screen" : null,
       });
       expect(appended).toEqual({ ok: true, index: i });
     }
-    expect(await appendSkinScreenshot(db, created.id, { key: "skins/x/shot-4.webp", url: "https://cdn.example/shot-4.webp", width: null, height: null }))
+    expect((await getSkin(db, created.id))?.screenshots[0]?.label).toBe("Score screen");
+    expect(await appendSkinScreenshot(db, created.id, { key: "skins/x/shot-4.webp", url: "https://cdn.example/shot-4.webp", width: null, height: null, label: null }))
       .toEqual({ ok: false, error: "screenshot_limit" });
   });
 
@@ -502,7 +506,7 @@ describe("skins feature", () => {
 
   it("deletes a skin and returns its storage keys", async () => {
     const id = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Doomed" });
-    await appendSkinScreenshot(db, id, { key: `skins/${id}/shot-0.webp`, url: "https://cdn.example/shot-0.webp", width: null, height: null });
+    await appendSkinScreenshot(db, id, { key: `skins/${id}/shot-0.webp`, url: "https://cdn.example/shot-0.webp", width: null, height: null, label: null });
     const deleted = await deleteSkin(db, id);
     expect(deleted?.keys).toHaveLength(3);
     expect(deleted?.keys.every((key) => key.startsWith("skins/"))).toBe(true);
@@ -1101,15 +1105,72 @@ describe("editing a published skin's previews", () => {
     const id = await previewedSkin();
     expect((await getSkin(db, id))?.previewUrl).toContain("preview-4k");
 
-    const moved = await setSkinCoverKeymode(db, id, 7, OWNER.ownerUserId);
+    const moved = await setSkinCover(db, id, { kind: "keymode", keys: 7 }, OWNER.ownerUserId);
     expect(moved.ok).toBe(true);
     if (moved.ok) expect(moved.skin.previewUrl).toContain("preview-7k");
 
     // Keymodes the skin has no render for, and other people's skins, are out.
-    expect(await setSkinCoverKeymode(db, id, 5, OWNER.ownerUserId)).toEqual({ ok: false, error: "no_preview" });
-    expect(await setSkinCoverKeymode(db, id, 4, OWNER.ownerUserId + 1)).toEqual({ ok: false, error: "forbidden" });
+    expect(await setSkinCover(db, id, { kind: "keymode", keys: 5 }, OWNER.ownerUserId)).toEqual({ ok: false, error: "no_preview" });
+    expect(await setSkinCover(db, id, { kind: "keymode", keys: 4 }, OWNER.ownerUserId + 1)).toEqual({ ok: false, error: "forbidden" });
     // The admin path skips the ownership check.
-    expect((await setSkinCoverKeymode(db, id, 4, null)).ok).toBe(true);
+    expect((await setSkinCover(db, id, { kind: "keymode", keys: 4 }, null)).ok).toBe(true);
+  });
+
+  it("repoints the card cover at an uploaded screenshot", async () => {
+    const id = await previewedSkin();
+    await appendSkinScreenshot(db, id, {
+      key: `skins/${id}/shot-0.webp`,
+      url: `https://cdn.example/skins/${id}/shot-0.webp`,
+      width: 1920,
+      height: 1080,
+      label: "Score screen",
+    });
+
+    const moved = await setSkinCover(db, id, { kind: "screenshot", index: 0 }, OWNER.ownerUserId);
+    expect(moved.ok).toBe(true);
+    if (moved.ok) {
+      expect(moved.skin.previewUrl).toContain("shot-0");
+      expect(moved.skin.previewWidth).toBe(1920);
+    }
+    // The screenshot stays in the gallery while it fronts the card.
+    expect((await getSkin(db, id))?.screenshots).toHaveLength(1);
+
+    // A position the skin has no screenshot for is refused, and the cover stays.
+    expect(await setSkinCover(db, id, { kind: "screenshot", index: 3 }, OWNER.ownerUserId)).toEqual({ ok: false, error: "no_preview" });
+    expect((await getSkin(db, id))?.previewUrl).toContain("shot-0");
+
+    // Moving back to a keymode render leaves the screenshot where it was.
+    const back = await setSkinCover(db, id, { kind: "keymode", keys: 4 }, OWNER.ownerUserId);
+    expect(back.ok).toBe(true);
+    if (back.ok) expect(back.skin.screenshots).toHaveLength(1);
+  });
+
+  it("renames screenshots by position and puts an empty label back to unnamed", async () => {
+    const id = await previewedSkin();
+    for (let i = 0; i < 2; i += 1) {
+      await appendSkinScreenshot(db, id, {
+        key: `skins/${id}/shot-${i}.webp`,
+        url: `https://cdn.example/skins/${id}/shot-${i}.webp`,
+        width: 1920,
+        height: 1080,
+        label: null,
+      });
+    }
+
+    const named = await setSkinScreenshotLabels(db, id, ["  Score screen  "], OWNER.ownerUserId);
+    expect(named.ok).toBe(true);
+    // A list shorter than the row's leaves the shots past its end alone.
+    if (named.ok) expect(named.skin.screenshots.map((shot) => shot.label)).toEqual(["Score screen", null]);
+
+    // Over-long labels are cut, and an empty one goes back to being numbered.
+    const capped = await setSkinScreenshotLabels(db, id, ["x".repeat(200), "Gameplay"], OWNER.ownerUserId);
+    if (capped.ok) expect(capped.skin.screenshots[0]?.label).toHaveLength(SKIN_SCREENSHOT_LABEL_MAX_LENGTH);
+    const cleared = await setSkinScreenshotLabels(db, id, ["", "Gameplay"], OWNER.ownerUserId);
+    if (cleared.ok) expect(cleared.skin.screenshots.map((shot) => shot.label)).toEqual([null, "Gameplay"]);
+
+    // Someone else's skin is out; the admin path skips the ownership check.
+    expect(await setSkinScreenshotLabels(db, id, ["Mine now"], OWNER.ownerUserId + 1)).toEqual({ ok: false, error: "forbidden" });
+    expect((await setSkinScreenshotLabels(db, id, ["Moderated"], null)).ok).toBe(true);
   });
 
   it("mints an edit ticket that leaves the skin published", async () => {

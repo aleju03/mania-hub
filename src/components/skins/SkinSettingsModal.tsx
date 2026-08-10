@@ -313,7 +313,7 @@ export function SkinSettingsModal({
                         type="button"
                         onClick={onEditPreviews}
                         disabled={busy}
-                        title="Re-render the playfield previews or change the card cover"
+                        title="Re-render the playfield previews, name the screenshots, or change the card cover"
                         className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
                       >
                         <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />

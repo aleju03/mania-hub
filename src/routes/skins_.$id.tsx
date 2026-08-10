@@ -23,7 +23,7 @@ import {
   writeMyReplaySkinMemory,
 } from "../lib/replay-owner-skin";
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
-import { canModerateSkinKeymodes, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, readSkinsBrowseEntry, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
+import { canModerateSkinKeymodes, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, readSkinsBrowseEntry, skinDownloadUrl, skinOskFileUrl, skinScreenshotLabel, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -196,7 +196,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
       url: shot.url,
       width: shot.width,
       height: shot.height,
-      label: `Shot ${index + 1}`,
+      label: skinScreenshotLabel(shot, index),
       keys: null,
     }));
     return [...previews, ...screenshots];
@@ -310,6 +310,9 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                           onClick={() => setHeroIndex(index)}
                           aria-pressed={index === heroIndex}
                           aria-label={`Show ${item.label}`}
+                          // Uploader-typed names run longer than "4K" does, so
+                          // the strip truncates and the full one lives here.
+                          title={item.label}
                           className={`w-full overflow-hidden rounded-lg border text-left transition-colors duration-100 cursor-pointer ${
                             index === heroIndex ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
                           }`}
@@ -319,7 +322,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                             alt={item.label}
                             className="aspect-video w-full object-cover"
                           />
-                          <div className={`px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums ${
+                          <div className={`truncate px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums ${
                             index === heroIndex ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"
                           }`}>
                             {item.label}
