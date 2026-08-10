@@ -311,6 +311,13 @@ function NomineeRow({
             <Trash2 className="h-3 w-3" />
           </button>
         )}
+        {/* The raw tallies, outside each arrow, so the middle number stays the
+            net one the board sorts on. Fixed width and right/left aligned
+            against their arrow, so the cluster lines up down the list however
+            many digits a row carries. */}
+        <span className="w-6 text-right text-[9px] tabular-nums text-osu-f1/35" title={`${nominee.up} for`}>
+          ({nominee.up})
+        </span>
         <button
           type="button"
           disabled={disabled}
@@ -342,6 +349,9 @@ function NomineeRow({
         >
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
+        <span className="w-6 text-left text-[9px] tabular-nums text-osu-f1/35" title={`${nominee.down} against`}>
+          ({nominee.down})
+        </span>
       </span>
       )}
     </motion.li>
