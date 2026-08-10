@@ -21,6 +21,9 @@ export const REPLAY_SPECTATOR_NAME_STORAGE_KEY = "mania-hub-replay-spectator-nam
 // the stage in the same tab: "storage" only fires in the other ones.
 export const REPLAY_OWNER_SKIN_CHANGE_EVENT = "mania-hub:replay-owner-skin-change";
 export const REPLAY_SPECTATOR_NAME_CHANGE_EVENT = "mania-hub:replay-spectator-name-change";
+// Same reason for the volume: settings can be open over a playing map preview,
+// and both sides write the one stored default.
+export const REPLAY_VOLUME_CHANGE_EVENT = "mania-hub:replay-volume-change";
 export const DEFAULT_REPLAY_VOLUME = 0.5;
 export const DEFAULT_REPLAY_BG_DIM = 80;
 export const DEFAULT_REPLAY_HITSOUND_VOLUME = 0.1;
@@ -53,6 +56,9 @@ export function normalizeReplayInputColor(value: string | null): string {
   return normalizeEditableHex(value ?? "") ?? "#a855f7";
 }
 
+// The one audio volume the site keeps: the settings "Default volume", used by
+// the replay viewer and by every map preview (search cards, chart preview,
+// random card). The key name is historical.
 export function readReplayVolume(): number {
   if (typeof window === "undefined") return DEFAULT_REPLAY_VOLUME;
   return normalizeReplayVolume(window.localStorage.getItem(REPLAY_VOLUME_STORAGE_KEY));
@@ -60,7 +66,31 @@ export function readReplayVolume(): number {
 
 export function writeReplayVolume(volume: number): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(REPLAY_VOLUME_STORAGE_KEY, String(normalizeReplayVolume(volume)));
+  const normalized = normalizeReplayVolume(volume);
+  window.localStorage.setItem(REPLAY_VOLUME_STORAGE_KEY, String(normalized));
+  if (typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(new CustomEvent(REPLAY_VOLUME_CHANGE_EVENT, { detail: normalized }));
+  }
+}
+
+// Live volume changes, whoever made them: the settings slider in this tab, a
+// preview's own slider, or another tab ("storage" never fires in the tab that
+// wrote). Returns an unsubscribe.
+export function subscribeReplayVolume(listener: (volume: number) => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const onChange = (event: Event) => {
+    listener(normalizeReplayVolume((event as CustomEvent<number>).detail));
+  };
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== REPLAY_VOLUME_STORAGE_KEY) return;
+    listener(normalizeReplayVolume(event.newValue));
+  };
+  window.addEventListener(REPLAY_VOLUME_CHANGE_EVENT, onChange);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(REPLAY_VOLUME_CHANGE_EVENT, onChange);
+    window.removeEventListener("storage", onStorage);
+  };
 }
 
 export function readReplayBackgroundDim(): number {

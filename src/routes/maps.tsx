@@ -56,6 +56,12 @@ import { parseCountrySearchParam, withSearchParams } from "../lib/country-search
 import { getBeatmapAudioUrl, getPreviewAudioProxyUrl } from "../lib/audio-url";
 import { getPreviewAnalyser, releasePreviewAnalyser } from "../lib/preview-analyser";
 import {
+  DEFAULT_REPLAY_VOLUME,
+  readReplayVolume,
+  subscribeReplayVolume,
+  writeReplayVolume,
+} from "../lib/replay-preferences";
+import {
   RANDOM_REPLAY_PREVIEW_MS,
   buildAutoplayFrames,
   getBracketBpmBase,
@@ -3432,8 +3438,6 @@ function FavouriteCard({
 
 // ── Random card (hero-sized favourite card for the Random tab) ────────────
 
-const PREVIEW_VOLUME_STORAGE_KEY = "mania-hub-preview-volume-v1";
-const DEFAULT_PREVIEW_VOLUME = 0.3;
 // Mobile browsers can briefly report a low readyState while currentTime is
 // already moving; trust recent media-clock progress to avoid startup snaps.
 const REPLAY_AUDIO_CLOCK_PROGRESS_EPSILON_SECONDS = 0.003;
@@ -3477,19 +3481,6 @@ function hasRecentReplayAudioClockProgress(sampleRef: { current: ReplayAudioCloc
     : previous.advancingUntil;
   sampleRef.current = { seconds, advancingUntil };
   return now <= advancingUntil;
-}
-
-function readStoredPreviewVolume(): number {
-  if (typeof window === "undefined") return DEFAULT_PREVIEW_VOLUME;
-  try {
-    const raw = window.localStorage.getItem(PREVIEW_VOLUME_STORAGE_KEY);
-    if (raw == null) return DEFAULT_PREVIEW_VOLUME;
-    const parsed = Number.parseFloat(raw);
-    if (!Number.isFinite(parsed)) return DEFAULT_PREVIEW_VOLUME;
-    return Math.min(1, Math.max(0, parsed));
-  } catch {
-    return DEFAULT_PREVIEW_VOLUME;
-  }
 }
 
 function formatStars(bm: MapsFavouriteBeatmapset): string | null {
@@ -4116,8 +4107,10 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState<number>(readStoredPreviewVolume);
-  const lastNonZeroVolumeRef = useRef<number>(volume > 0 ? volume : DEFAULT_PREVIEW_VOLUME);
+  // The site's one "Default volume" (settings > viewer), shared with the
+  // replay viewer and the other map previews.
+  const [volume, setVolume] = useState<number>(readReplayVolume);
+  const lastNonZeroVolumeRef = useRef<number>(volume > 0 ? volume : DEFAULT_REPLAY_VOLUME);
   const rawPreviewUrl = typeof bm.previewUrl === "string" ? bm.previewUrl : "";
   const previewUrl = rawPreviewUrl.startsWith("//") ? `https:${rawPreviewUrl}` : rawPreviewUrl;
   // Prefer the live-backend preview proxy: it is the only CORS-clean source
@@ -4828,18 +4821,27 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     if (audioRef.current) audioRef.current.volume = clamped;
     if (replayAudioRef.current) replayAudioRef.current.volume = clamped;
     if (clamped > 0) lastNonZeroVolumeRef.current = clamped;
-    try {
-      window.localStorage.setItem(PREVIEW_VOLUME_STORAGE_KEY, String(clamped));
-    } catch {
-      /* ignore quota errors */
-    }
+    writeReplayVolume(clamped);
   }, []);
+
+  // Settings can be open over a running preview, and the slider there writes
+  // the same stored volume this one does.
+  useEffect(
+    () =>
+      subscribeReplayVolume((next) => {
+        setVolume(next);
+        if (next > 0) lastNonZeroVolumeRef.current = next;
+        if (audioRef.current) audioRef.current.volume = next;
+        if (replayAudioRef.current) replayAudioRef.current.volume = next;
+      }),
+    [],
+  );
 
   const toggleMute = useCallback(() => {
     if (volume > 0) {
       applyVolume(0);
     } else {
-      applyVolume(lastNonZeroVolumeRef.current || DEFAULT_PREVIEW_VOLUME);
+      applyVolume(lastNonZeroVolumeRef.current || DEFAULT_REPLAY_VOLUME);
     }
   }, [applyVolume, volume]);
 

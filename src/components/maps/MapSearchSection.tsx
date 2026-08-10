@@ -10,12 +10,12 @@ import { formatDuration, formatNumber } from "../../lib/format";
 import { Pagination } from "../ui/Pagination";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { MapDetailModal } from "./MapDetailModal";
-import { useMapPreviewAudio } from "./MapPreviewAudio";
+import { MapPreviewPlayerBar, useMapPreviewAudio } from "./MapPreviewAudio";
 import { PatternPicker, validPatternIds } from "./PatternPicker";
 import { playPatternHit } from "./patternSfx";
 import { RangeSlider } from "./RangeSlider";
 import { danScaleImage, danScaleLabel, type DanScaleContext } from "../../lib/dan-images";
-import { SearchCard } from "./SearchCard";
+import { SearchCard, toPreviewTrack } from "./SearchCard";
 import { DEFAULT_SEARCH_SORT, savedSearchSortToRestore } from "./searchSortPreference";
 import { StarRangePill } from "./StarRangePill";
 import {
@@ -952,6 +952,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   }, [requestKey, liveBackendEnabled, awaitingSavedSort]);
 
   const items = result?.items ?? lastResultRef.current?.items ?? [];
+  // Skip order for the preview player: the grid as shown.
+  const previewTracks = useMemo(() => items.map(toPreviewTrack), [items]);
   const total = result?.total ?? lastResultRef.current?.total ?? 0;
   // The backend stops counting at its cap; render the honest "5,000+".
   const totalCapped = (result ?? lastResultRef.current)?.totalCapped === true;
@@ -1188,6 +1190,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
         )}
       </div>
       <MapDetailModal entry={detail} onClose={() => setDetail(null)} />
+      <MapPreviewPlayerBar preview={preview} tracks={previewTracks} clearsStickyBar={totalPages > 1} />
     </div>
   );
 }

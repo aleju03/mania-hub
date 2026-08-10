@@ -3,7 +3,7 @@ import type { LiveMapSearchEntry } from "../../lib/live-backend";
 import { oszDownloadUrl } from "../../lib/beatmap-mirrors";
 import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
-import { MapPreviewButton, type MapPreviewAudio } from "./MapPreviewAudio";
+import { MapPreviewButton, type MapPreviewAudio, type MapPreviewTrack } from "./MapPreviewAudio";
 import { starRatingColor, starSpectrumGradient, StarRatingBadge } from "../ui/StarRating";
 
 // Shared presentation for a single chart-analyzed map across the global Search
@@ -80,6 +80,17 @@ export function mapCoverUrl(entry: Pick<LiveMapSearchEntry, "covers" | "beatmaps
     entry.covers?.cover ??
     `https://assets.ppy.sh/beatmaps/${entry.beatmapsetId}/covers/card@2x.jpg`
   );
+}
+
+// What the preview player bar shows and skips through, in grid order. The
+// list cover is enough: it renders at 36px.
+export function toPreviewTrack(entry: LiveMapSearchEntry): MapPreviewTrack {
+  return {
+    beatmapsetId: entry.beatmapsetId,
+    title: entry.title,
+    artist: entry.artist,
+    coverUrl: entry.covers?.["list@2x"] ?? entry.covers?.list ?? mapCoverUrl(entry),
+  };
 }
 
 export function osuBeatmapUrl(entry: Pick<LiveMapSearchEntry, "beatmapId" | "beatmapsetId">): string {

@@ -14,8 +14,8 @@ import { rememberMapsCollection } from "../../lib/analytics-maps";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
 import { danScaleImage, danScaleLabel, type DanScaleContext } from "../../lib/dan-images";
 import { MapDetailModal } from "./MapDetailModal";
-import { useMapPreviewAudio } from "./MapPreviewAudio";
-import { PATTERN_COLOR, SearchCard, patternLabel } from "./SearchCard";
+import { MapPreviewPlayerBar, useMapPreviewAudio } from "./MapPreviewAudio";
+import { PATTERN_COLOR, SearchCard, patternLabel, toPreviewTrack } from "./SearchCard";
 
 // Auto-rotating map packs grouped by pattern, keymode, and difficulty bucket.
 // Two difficulty axes cover both vocabularies players actually use: dan
@@ -380,6 +380,9 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
     };
   }, [id, liveBackendEnabled]);
 
+  // Skip order for the preview player: the pack as listed.
+  const previewTracks = useMemo(() => (detail?.items ?? []).map(toPreviewTrack), [detail]);
+
   const badge = detail ? bucketBadgeSrc(detail) : null;
   // Rotation newcomers are a header stat only: each rotation re-samples most of
   // the pack (40 from a pool that is often ~4x that), so a per-card "new" badge
@@ -434,6 +437,7 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
         </>
       )}
       <MapDetailModal entry={mapEntry} onClose={() => setMapEntry(null)} />
+      <MapPreviewPlayerBar preview={preview} tracks={previewTracks} />
     </div>
   );
 }

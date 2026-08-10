@@ -29,6 +29,7 @@ export const WIP: string[] = [
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-09", text: "Song previews on map search now open a player you can pause, skip, repeat and set the volume on, and they follow your default volume", to: "/maps" },
   { date: "2026-08-09", text: "Now you can choose the pattern to showcase on your skin thumbnails", to: "/skins" },
   { date: "2026-08-09", text: "Map search is much faster, and huge result counts show as 5,000+", to: "/maps" },
   { date: "2026-08-09", text: "The farm helper loads faster, and an empty board now explains why instead of showing nothing", to: "/farm-helper" },

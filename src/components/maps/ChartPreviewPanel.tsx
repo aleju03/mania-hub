@@ -22,9 +22,8 @@ import {
   shouldUseSetPreviewForReplayAudio,
 } from "../../lib/chart-preview";
 import { formatDuration } from "../../lib/format";
+import { DEFAULT_REPLAY_VOLUME, readReplayVolume, subscribeReplayVolume, writeReplayVolume } from "../../lib/replay-preferences";
 
-const PREVIEW_VOLUME_STORAGE_KEY = "mania-hub-preview-volume-v1";
-const DEFAULT_PREVIEW_VOLUME = 0.3;
 const SET_PREVIEW_WINDOW_MS = 40_000;
 const AUDIO_METADATA_TIMEOUT_MS = 1500;
 const SELECTED_AUDIO_METADATA_TIMEOUT_MS = 60_000;
@@ -95,8 +94,10 @@ export function ChartPreviewPanel({
   const mountedRef = useRef(true);
   const previewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [volume, setVolume] = useState(readStoredPreviewVolume);
-  const lastNonZeroVolumeRef = useRef(volume > 0 ? volume : DEFAULT_PREVIEW_VOLUME);
+  // The site's one "Default volume" (settings > viewer), shared with the
+  // replay viewer and the search-grid previews.
+  const [volume, setVolume] = useState(readReplayVolume);
+  const lastNonZeroVolumeRef = useRef(volume > 0 ? volume : DEFAULT_REPLAY_VOLUME);
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [scrollSpeedInput, setScrollSpeedInput] = useState(() => String(readReplayScrollSpeed()));
   const [editingScrollSpeed, setEditingScrollSpeed] = useState(false);
@@ -608,15 +609,23 @@ export function ChartPreviewPanel({
     setVolume(clamped);
     if (audioRef.current) audioRef.current.volume = clamped;
     if (clamped > 0) lastNonZeroVolumeRef.current = clamped;
-    try {
-      window.localStorage.setItem(PREVIEW_VOLUME_STORAGE_KEY, String(clamped));
-    } catch {
-      // Ignore quota errors.
-    }
+    writeReplayVolume(clamped);
   }, []);
 
+  // Settings can be open over a running preview, and the slider there writes
+  // the same stored volume this one does.
+  useEffect(
+    () =>
+      subscribeReplayVolume((next) => {
+        setVolume(next);
+        if (next > 0) lastNonZeroVolumeRef.current = next;
+        if (audioRef.current) audioRef.current.volume = next;
+      }),
+    [],
+  );
+
   const toggleMute = useCallback(() => {
-    applyVolume(volume > 0 ? 0 : lastNonZeroVolumeRef.current || DEFAULT_PREVIEW_VOLUME);
+    applyVolume(volume > 0 ? 0 : lastNonZeroVolumeRef.current || DEFAULT_REPLAY_VOLUME);
   }, [applyVolume, volume]);
 
   const applyScrollSpeed = useCallback((value: number) => {
@@ -1159,19 +1168,6 @@ function ChartPreviewRenderer({
       />
     </div>
   );
-}
-
-function readStoredPreviewVolume(): number {
-  if (typeof window === "undefined") return DEFAULT_PREVIEW_VOLUME;
-  try {
-    const raw = window.localStorage.getItem(PREVIEW_VOLUME_STORAGE_KEY);
-    if (raw == null) return DEFAULT_PREVIEW_VOLUME;
-    const parsed = Number.parseFloat(raw);
-    if (!Number.isFinite(parsed)) return DEFAULT_PREVIEW_VOLUME;
-    return Math.min(1, Math.max(0, parsed));
-  } catch {
-    return DEFAULT_PREVIEW_VOLUME;
-  }
 }
 
 function resetReplayAudioClockSample(sampleRef: { current: ReplayAudioClockSample | null }, seconds: number): void {
