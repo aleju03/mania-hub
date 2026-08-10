@@ -282,32 +282,40 @@ export async function recordPackPullEvents(
 
   // First-global means nobody, anywhere, holds or ever pulled this card: no
   // prior event and no other owner's collection row (the caller's own row may
-  // already exist when the wallet sync raced this call). Both facts are read
-  // set-based here so every write below can travel in one batch; `seenInPull`
-  // stands in for the read-after-write the old per-card loop got for free, so
-  // the same card twice in one pack is still only first-global once. Two
-  // owners racing over a brand-new card can still both read "first" — the
-  // reads sat outside any transaction before the batch too, and the flag is
-  // social flavor, never economy.
+  // already exist when the wallet sync raced this call). "This card" is the
+  // card key, not the player — a GOAT card is its own card, same as the serial
+  // registry — so when a circulating player joins the honorary roster, the
+  // first GOAT pull of them reads as a first even though their ordinary card
+  // has owners everywhere. The events table predates card keys and stores a
+  // tier instead, and GOAT-ness of the key is exactly `tier = 'goat'`, so the
+  // key is rebuilt from that. Both facts are read set-based here so every
+  // write below can travel in one batch; `seenInPull` stands in for the
+  // read-after-write the old per-card loop got for free, so the same card
+  // twice in one pack is still only first-global once. Two owners racing over
+  // a brand-new card can still both read "first" — the reads sat outside any
+  // transaction before the batch too, and the flag is social flavor, never
+  // economy.
   const cardUserIds = [...new Set(normalized.map((card) => card.userId))];
+  const pulledKeys = new Set(normalized.map((card) => packCardKey(card.userId, card.tier)));
   const withPriorEvents = new Set(
     (await exec(
       db,
-      `select distinct card_user_id from pack_pull_events
+      `select distinct card_user_id, case when tier = 'goat' then 1 else 0 end as goat
+       from pack_pull_events
        where card_user_id in (${cardUserIds.map(() => "?").join(", ")})`,
       cardUserIds as InValue[],
-    )).rows.map((row) => Number(row.card_user_id)),
+    )).rows.map((row) => packCardKey(Number(row.card_user_id), Number(row.goat) === 1 ? "goat" : null)),
   );
-  const unproven = cardUserIds.filter((id) => !withPriorEvents.has(id));
+  const anyUnproven = [...pulledKeys].some((key) => !withPriorEvents.has(key));
   const withOtherOwners = new Set(
-    unproven.length === 0
+    !anyUnproven
       ? []
       : (await exec(
           db,
-          `select distinct card_user_id from pack_collection_cards
-           where card_user_id in (${unproven.map(() => "?").join(", ")}) and owner_user_id != ?`,
-          [...unproven, ownerUserId] as InValue[],
-        )).rows.map((row) => Number(row.card_user_id)),
+          `select distinct card_key from pack_collection_cards
+           where card_user_id in (${cardUserIds.map(() => "?").join(", ")}) and owner_user_id != ?`,
+          [...cardUserIds, ownerUserId] as InValue[],
+        )).rows.map((row) => String(row.card_key)),
   );
 
   // Every insert goes down in one execBatch: a pull costs one write-lock
@@ -316,13 +324,13 @@ export async function recordPackPullEvents(
   // pull is logged wholly or not at all.
   const statements: DbStatement[] = [];
   const pending: { card: PackPullCardInput; cardKey: string; isFirstGlobal: boolean; eventIndex: number }[] = [];
-  const seenInPull = new Set<number>();
+  const seenInPull = new Set<string>();
   for (const card of normalized) {
-    const isFirstGlobal =
-      !withPriorEvents.has(card.userId) && !withOtherOwners.has(card.userId) && !seenInPull.has(card.userId);
-    seenInPull.add(card.userId);
-    const notable = isFirstGlobal || (card.tier !== null && NOTABLE_TIERS.has(card.tier));
     const cardKey = packCardKey(card.userId, card.tier);
+    const isFirstGlobal =
+      !withPriorEvents.has(cardKey) && !withOtherOwners.has(cardKey) && !seenInPull.has(cardKey);
+    seenInPull.add(cardKey);
+    const notable = isFirstGlobal || (card.tier !== null && NOTABLE_TIERS.has(card.tier));
     pending.push({ card, cardKey, isFirstGlobal, eventIndex: statements.length });
     statements.push({
       sql: `insert into pack_pull_events (

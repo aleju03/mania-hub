@@ -168,6 +168,31 @@ describe("recordPackPullEvents", () => {
     expect(result.mints.map((mint) => mint.mintedTotal)).toEqual([1, 1]);
   });
 
+  /* What happens when a circulating player joins the honorary roster: their
+     GOAT card is a new card key, so pulling it is a first even though their
+     ordinary card has prior events and owners everywhere. */
+  it("a player's first GOAT pull is first-global despite their ordinary card circulating", async () => {
+    await recordPackPullEvents(db, OTHER_OWNER_ID, "second", "standard", [pullCard(GOAT_CARD, "common")], 5_000);
+    await seedCollectionCard(OTHER_OWNER_ID, GOAT_CARD);
+    await recordPackPullEvents(db, OWNER_ID, "opener", "legend", [pullCard(GOAT_CARD, "goat")], 10_000);
+    const rows = (await exec(db, "select tier, is_first_global from pack_pull_events order by pulled_at asc")).rows;
+    expect(rows.map((row) => [row.tier, Number(row.is_first_global)])).toEqual([
+      ["common", 1],
+      ["goat", 1],
+    ]);
+    // And only the first GOAT pull: the key now has an event behind it.
+    await recordPackPullEvents(db, OTHER_OWNER_ID, "second", "legend", [pullCard(GOAT_CARD, "goat")], 20_000);
+    const later = (await exec(db, "select is_first_global from pack_pull_events where pulled_at = 20000")).rows[0];
+    expect(Number(later.is_first_global)).toBe(0);
+  });
+
+  it("a GOAT card in another owner's collection defeats the GOAT first even without events", async () => {
+    await seedCollectionCard(OTHER_OWNER_ID, GOAT_CARD, 1, "goat");
+    await recordPackPullEvents(db, OWNER_ID, "opener", "legend", [pullCard(GOAT_CARD, "goat")], 10_000);
+    const row = (await exec(db, "select is_first_global from pack_pull_events")).rows[0];
+    expect(Number(row.is_first_global)).toBe(0);
+  });
+
   it("a card already in another owner's collection is not first-global", async () => {
     await seedCollectionCard(OTHER_OWNER_ID, CARD_A);
     await recordPackPullEvents(db, OWNER_ID, "opener", "standard", [pullCard(CARD_A, "common")], 10_000);
