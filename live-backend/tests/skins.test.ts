@@ -25,7 +25,6 @@ import {
   listSkins,
   privateSkinSecretMatches,
   recordSkinDownload,
-  renameSkin,
   replaceSkinOsk,
   setSkinVisibility,
   setSkinAccent,
@@ -38,6 +37,7 @@ import {
   SKIN_MAX_SCREENSHOTS,
   startSkinEdit,
   toSkinSummary,
+  updateSkinDetails,
   upsertSkinKeymodePreview,
 } from "../src/features/skins.js";
 import { runRetention } from "../src/retention.js";
@@ -1169,7 +1169,7 @@ describe("editing a published skin's previews", () => {
     const slug = (await getSkin(db, id))?.slug;
     expect(slug).toBe("untitled-skin");
 
-    const renamed = await renameSkin(db, id, "  Aqua   Mania  ", OWNER.ownerUserId);
+    const renamed = await updateSkinDetails(db, id, { name: "  Aqua   Mania  " }, OWNER.ownerUserId);
     expect(renamed.ok).toBe(true);
     if (renamed.ok) expect(renamed.skin.name).toBe("Aqua Mania");
 
@@ -1187,16 +1187,52 @@ describe("editing a published skin's previews", () => {
   it("refuses a rename from a non-owner or with an empty name", async () => {
     const id = await createPublishedSkin({ ...OWNER, name: "Keep This" });
 
-    expect(await renameSkin(db, id, "Stolen", OWNER.ownerUserId + 1)).toEqual({ ok: false, error: "forbidden" });
-    expect(await renameSkin(db, id, "   ", OWNER.ownerUserId)).toEqual({ ok: false, error: "invalid_name" });
-    expect(await renameSkin(db, "no-such-skin", "Whatever", OWNER.ownerUserId)).toEqual({ ok: false, error: "not_found" });
+    expect(await updateSkinDetails(db, id, { name: "Stolen" }, OWNER.ownerUserId + 1)).toEqual({ ok: false, error: "forbidden" });
+    expect(await updateSkinDetails(db, id, { name: "   " }, OWNER.ownerUserId)).toEqual({ ok: false, error: "invalid_name" });
+    expect(await updateSkinDetails(db, "no-such-skin", { name: "Whatever" }, OWNER.ownerUserId)).toEqual({ ok: false, error: "not_found" });
     expect((await getSkin(db, id))?.name).toBe("Keep This");
 
     // The admin path skips the ownership check, and the name is trimmed to the
     // same cap the upload form enforces.
-    const long = await renameSkin(db, id, "z".repeat(200), null);
+    const long = await updateSkinDetails(db, id, { name: "z".repeat(200) }, null);
     expect(long.ok).toBe(true);
     if (long.ok) expect(long.skin.name).toHaveLength(80);
+  });
+
+  it("rewrites, keeps and clears the description behind the title", async () => {
+    const id = await createPublishedSkin({ ...OWNER, name: "Blurbed" });
+
+    const written = await updateSkinDetails(
+      db,
+      id,
+      { name: "Blurbed", description: "  Ships   4K\r\n\n\n and 7K.  " },
+      OWNER.ownerUserId,
+    );
+    expect(written.ok).toBe(true);
+    if (written.ok) expect(written.skin.description).toBe("Ships 4K\n\nand 7K.");
+
+    // A retitle that carries no description leaves the stored one standing.
+    const retitled = await updateSkinDetails(db, id, { name: "Blurbed Again" }, OWNER.ownerUserId);
+    expect(retitled.ok).toBe(true);
+    if (retitled.ok) expect(retitled.skin.description).toBe("Ships 4K\n\nand 7K.");
+
+    // An empty one clears it; a long one is cut to the upload form's cap.
+    const cleared = await updateSkinDetails(db, id, { name: "Blurbed Again", description: "   " }, OWNER.ownerUserId);
+    expect(cleared.ok).toBe(true);
+    if (cleared.ok) expect(cleared.skin.description).toBeNull();
+
+    const long = await updateSkinDetails(
+      db,
+      id,
+      { name: "Blurbed Again", description: "z".repeat(SKIN_DESCRIPTION_MAX_LENGTH + 50) },
+      OWNER.ownerUserId,
+    );
+    expect(long.ok).toBe(true);
+    if (long.ok) expect(long.skin.description).toHaveLength(SKIN_DESCRIPTION_MAX_LENGTH);
+
+    // A non-owner cannot rewrite the blurb either.
+    expect(await updateSkinDetails(db, id, { name: "Blurbed Again", description: "mine now" }, OWNER.ownerUserId + 1))
+      .toEqual({ ok: false, error: "forbidden" });
   });
 
   it("swaps the .osk of a published skin for a newer build", async () => {

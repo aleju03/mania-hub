@@ -542,14 +542,18 @@ export const setSkinSpecialKeymodes = createServerFn({ method: "POST" })
     }
   });
 
-// Retitles an already published skin. The URL slug is not rebuilt: it was
-// assigned at publish time and is what shared links point at.
-export const renameSkin = createServerFn({ method: "POST" })
-  .validator((data: { id?: unknown; name?: unknown }) => {
+// Retitles an already published skin and rewrites its description. The URL slug
+// is not rebuilt: it was assigned at publish time and is what shared links point
+// at. Leaving description out keeps the stored one; an empty string clears it.
+export const updateSkinDetails = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; name?: unknown; description?: unknown }) => {
     const id = typeof data.id === "string" ? data.id.trim() : "";
     const name = typeof data.name === "string" ? data.name.slice(0, SKIN_NAME_MAX_LENGTH).trim() : "";
-    if (!id || id.length > 64 || !name) throw new Error("Invalid rename request.");
-    return { id, name };
+    if (!id || id.length > 64 || !name) throw new Error("Invalid skin details request.");
+    const description = typeof data.description === "string"
+      ? data.description.slice(0, SKIN_DESCRIPTION_MAX_LENGTH)
+      : undefined;
+    return { id, name, description };
   })
   .handler(async ({ data }): Promise<{ ok: boolean; skin?: SkinSummary }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -557,10 +561,16 @@ export const renameSkin = createServerFn({ method: "POST" })
     const cfg = await resolveSkinsBackend();
     if (!cfg) return { ok: false };
     try {
-      const response = await fetch(`${cfg.base}/api/skins/rename`, {
+      const response = await fetch(`${cfg.base}/api/skins/details`, {
         method: "POST",
         headers: cfg.headers,
-        body: JSON.stringify({ userId: cfg.userId, id: data.id, name: data.name, asAdmin: cfg.isAdmin }),
+        body: JSON.stringify({
+          userId: cfg.userId,
+          id: data.id,
+          name: data.name,
+          description: data.description,
+          asAdmin: cfg.isAdmin,
+        }),
       });
       const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary } | null;
       if (!response.ok || !body?.ok || !body.skin) return { ok: false };

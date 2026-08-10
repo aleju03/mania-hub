@@ -409,30 +409,35 @@ export async function setSkinSpecialKeymodes(
     : { ok: false, error: "not_found" };
 }
 
-export type RenameSkinResult =
+export type UpdateSkinDetailsResult =
   | { ok: true; skin: SkinSummary }
   | { ok: false; error: "not_found" | "forbidden" | "invalid_name" };
 
-// Retitles a published skin. The slug deliberately stays as it was published:
-// it is what every shared link points at, and a rename must not 404 them. The
-// stored .osk keeps the filename it was uploaded under for the same reason -
-// its key is baked into osk_url, which browser and edge caches already hold.
+// Retitles a published skin and rewrites the blurb under its title. The slug
+// deliberately stays as it was published: it is what every shared link points
+// at, and a rename must not 404 them. The stored .osk keeps the filename it was
+// uploaded under for the same reason - its key is baked into osk_url, which
+// browser and edge caches already hold. An omitted description leaves the one
+// on the row alone; an empty one clears it.
 // ownerUserId null is the admin path, which skips the ownership check.
-export async function renameSkin(
+export async function updateSkinDetails(
   db: Db,
   id: string,
-  rawName: string,
+  input: { name: string; description?: string | null },
   ownerUserId: number | null,
-): Promise<RenameSkinResult> {
-  const name = cleanText(rawName, SKIN_NAME_MAX_LENGTH);
+): Promise<UpdateSkinDetailsResult> {
+  const name = cleanText(input.name, SKIN_NAME_MAX_LENGTH);
   if (!name) return { ok: false, error: "invalid_name" };
   const row = await getSkin(db, id);
   if (!row || row.status === "pending") return { ok: false, error: "not_found" };
   if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
+  const description = input.description === undefined
+    ? row.description
+    : cleanMultilineText(input.description ?? "", SKIN_DESCRIPTION_MAX_LENGTH) || null;
   await exec(
     db,
-    "update skins set name = ?, search_text = ?, updated_at = ? where id = ?",
-    [name, buildSearchText(name, row.ownerUsername, row.author), nowIso(), id],
+    "update skins set name = ?, description = ?, search_text = ?, updated_at = ? where id = ?",
+    [name, description, buildSearchText(name, row.ownerUsername, row.author), nowIso(), id],
   );
   const updated = await getSkin(db, id);
   return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }) } : { ok: false, error: "not_found" };

@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseJson } from "../../db.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, parseSkinsListSort, privateSkinSecretMatches, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview, type SkinRow } from "../../features/skins.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, parseSkinsListSort, privateSkinSecretMatches, recordSkinDownload, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, updateSkinDetails, upsertSkinKeymodePreview, type SkinRow } from "../../features/skins.js";
 import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../../features/user-replay-skins.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import { clientIp } from "../abuse-guard.js";
@@ -637,7 +637,7 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     sendJson(req, res, ctx, 400, { ok: false, error: "invalid_part" });
     return true;
   }
-  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/rename" || url.pathname === "/api/skins/visibility" || url.pathname === "/api/skins/special-keymodes") {
+  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/details" || url.pathname === "/api/skins/visibility" || url.pathname === "/api/skins/special-keymodes") {
     // Admin-token gated like /api/skins/delete: the frontend server fn forwards the
     // osu!-verified viewer id, and the ownership check below keeps a user off anyone
     // else's skin. asAdmin is set only by the server fn that verified a true admin;
@@ -656,7 +656,7 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; name?: unknown; asAdmin?: unknown; asKeymodeModerator?: unknown; scope?: unknown; visibility?: unknown; specialKeymodes?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; name?: unknown; description?: unknown; asAdmin?: unknown; asKeymodeModerator?: unknown; scope?: unknown; visibility?: unknown; specialKeymodes?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     const id = typeof body.id === "string" ? body.id : "";
     if (!Number.isInteger(userId) || userId <= 0 || !id) {
@@ -664,11 +664,16 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       return true;
     }
     const ownerUserId = body.asAdmin === true ? null : userId;
-    if (url.pathname === "/api/skins/rename") {
-      const result = await renameSkin(
+    if (url.pathname === "/api/skins/details") {
+      // A missing description is "leave it be", so a caller that only means to
+      // retitle never has to resend the blurb.
+      const result = await updateSkinDetails(
         ctx.serveWriteDb ?? ctx.db,
         id,
-        typeof body.name === "string" ? body.name : "",
+        {
+          name: typeof body.name === "string" ? body.name : "",
+          description: typeof body.description === "string" ? body.description : undefined,
+        },
         ownerUserId,
       );
       if (!result.ok) {
@@ -676,7 +681,7 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
         sendJson(req, res, ctx, status, { ok: false, error: result.error });
         return true;
       }
-      logInfo("skin_renamed", { id, by: ownerUserId == null ? "admin" : "owner" });
+      logInfo("skin_details_updated", { id, by: ownerUserId == null ? "admin" : "owner" });
       sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
       return true;
     }

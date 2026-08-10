@@ -9,16 +9,17 @@ import {
   keymodeLabel,
   markSkinsListStale,
   moderateSkin,
-  renameSkin,
   setMySkinVisibility,
   setSkinSpecialKeymodes,
+  SKIN_DESCRIPTION_MAX_LENGTH,
   SKIN_NAME_MAX_LENGTH,
+  updateSkinDetails,
   type SkinSummary,
   type SkinVisibility,
 } from "../../lib/skins";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
-// Every owner-side control on one surface: name, keymode labels, visibility,
+// Every owner-side control on one surface: name and description, keymode labels, visibility,
 // the file/preview edit entry points, and delete. The skin page used to line
 // these up as six standalone buttons, which read as clutter; the sidebar now
 // carries a single "Skin settings" button and this modal does the rest.
@@ -52,6 +53,7 @@ export function SkinSettingsModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState(skin.name);
+  const [descriptionDraft, setDescriptionDraft] = useState(skin.description ?? "");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [bodyLockActive, setBodyLockActive] = useState(false);
 
@@ -59,10 +61,11 @@ export function SkinSettingsModal({
   useEffect(() => {
     if (!open) return;
     setNameDraft(skin.name);
+    setDescriptionDraft(skin.description ?? "");
     setError(null);
     setConfirmingDelete(false);
-    // skin.name is deliberately not a dep: a rename saved from this very modal
-    // must not clobber a draft the user kept typing.
+    // skin.name and skin.description are deliberately not deps: an edit saved
+    // from this very modal must not clobber a draft the user kept typing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -106,10 +109,13 @@ export function SkinSettingsModal({
     onSaved(result.skin);
   }, [busy, onSaved]);
 
-  const submitRename = () => {
+  const submitDetails = () => {
     const name = nameDraft.trim();
-    if (!name || name === skin.name) return;
-    void run(() => renameSkin({ data: { id: skin.id, name } }), "The rename failed. Try again.");
+    if (!name || !detailsDirty) return;
+    void run(
+      () => updateSkinDetails({ data: { id: skin.id, name, description: descriptionDraft } }),
+      "Saving the name and description failed. Try again.",
+    );
   };
 
   const toggleSpecialKeymode = (keys: number) => {
@@ -149,7 +155,8 @@ export function SkinSettingsModal({
   };
 
   const relabelable = skin.keymodes.filter((keys) => keys >= 2);
-  const nameDirty = nameDraft.trim().length > 0 && nameDraft.trim() !== skin.name;
+  const detailsDirty = nameDraft.trim().length > 0
+    && (nameDraft.trim() !== skin.name || descriptionDraft.trim() !== (skin.description ?? ""));
 
   if (typeof document === "undefined") return null;
 
@@ -192,12 +199,12 @@ export function SkinSettingsModal({
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-5">
               {!keymodesOnly && (
-                <SettingsRow label="Name">
+                <SettingsRow label="Name and description">
                   <form
-                    className="flex items-center gap-2"
+                    className="flex flex-col gap-2"
                     onSubmit={(event) => {
                       event.preventDefault();
-                      submitRename();
+                      submitDetails();
                     }}
                   >
                     <input
@@ -207,13 +214,23 @@ export function SkinSettingsModal({
                       disabled={busy}
                       onChange={(event) => setNameDraft(event.target.value)}
                       aria-label="Skin name"
-                      className="min-w-0 flex-1 rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] text-osu-l1 transition-colors focus:border-osu-pink/50 focus:outline-none"
+                      className="min-w-0 rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] text-osu-l1 transition-colors focus:border-osu-pink/50 focus:outline-none"
                     />
-                    {nameDirty && (
+                    <textarea
+                      value={descriptionDraft}
+                      maxLength={SKIN_DESCRIPTION_MAX_LENGTH}
+                      rows={3}
+                      disabled={busy}
+                      onChange={(event) => setDescriptionDraft(event.target.value)}
+                      aria-label="Skin description"
+                      placeholder="A line about the skin"
+                      className="min-w-0 resize-y rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] leading-relaxed text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
+                    />
+                    {detailsDirty && (
                       <button
                         type="submit"
                         disabled={busy}
-                        className="rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:opacity-50"
+                        className="self-start rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:opacity-50"
                       >
                         Save
                       </button>
