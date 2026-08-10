@@ -6,7 +6,7 @@ import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { packCardKey } from "../src/features/pack-wallets.js";
+import { seedCollectionCard as seedCard } from "./helpers/pack-cards.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -82,24 +82,7 @@ async function seedCollectionCard(
   firstPulledAt = 1000,
   lastPulledAt = 2000,
 ): Promise<void> {
-  await exec(
-    db,
-    `insert into pack_collection_cards (
-       owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label, skills_json,
-       pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
-     ) values (?, ?, ?, ?, '', 'CR', ?, ?, null, 1000, 500, ?, 0, ?, ?, 2000)`,
-    [
-      ownerUserId,
-      cardUserId,
-      packCardKey(cardUserId, tier),
-      `player${cardUserId}`,
-      tier,
-      tier,
-      copies,
-      firstPulledAt,
-      lastPulledAt,
-    ],
-  );
+  await seedCard(db, ownerUserId, cardUserId, { copies, tier, firstPulledAt, lastPulledAt });
 }
 
 describe("recordPackPullEvents", () => {

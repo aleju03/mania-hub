@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
+import { seedCollectionCard } from "./helpers/pack-cards.js";
 import {
   backfillPackCardSerials,
   getPackCardSerials,
@@ -89,15 +90,14 @@ describe("pack card serials", () => {
   it("reports the owner's serial on the share payload", async () => {
     await pull(OTHER_OWNER, "rare");
     await pull(OWNER, "rare");
-    await exec(
-      db,
-      `insert into pack_collection_cards (
-         owner_user_id, card_user_id, card_key, username, avatar_url, country_code,
-         tier, tier_label, skills_json, pp, global_rank, copies, recycled_copies,
-         first_pulled_at, last_pulled_at, updated_at
-       ) values (?, ?, ?, 'player7', '', 'CR', 'rare', 'Rare', null, 1000, 500, 1, 0, 1, 1, 1)`,
-      [OWNER, CARD, String(CARD)],
-    );
+    await seedCollectionCard(db, OWNER, CARD, {
+      tier: "rare",
+      tierLabel: "Rare",
+      username: "player7",
+      firstPulledAt: 1,
+      lastPulledAt: 1,
+      updatedAt: 1,
+    });
 
     const shared = await getSharedPackCard(db, OWNER, CARD);
     expect(shared?.serial).toBe(2);
@@ -105,15 +105,14 @@ describe("pack card serials", () => {
   });
 
   it("leaves unlogged cards without a serial", async () => {
-    await exec(
-      db,
-      `insert into pack_collection_cards (
-         owner_user_id, card_user_id, card_key, username, avatar_url, country_code,
-         tier, tier_label, skills_json, pp, global_rank, copies, recycled_copies,
-         first_pulled_at, last_pulled_at, updated_at
-       ) values (?, ?, ?, 'player7', '', 'CR', 'rare', 'Rare', null, 1000, 500, 1, 0, 1, 1, 1)`,
-      [OWNER, CARD, String(CARD)],
-    );
+    await seedCollectionCard(db, OWNER, CARD, {
+      tier: "rare",
+      tierLabel: "Rare",
+      username: "player7",
+      firstPulledAt: 1,
+      lastPulledAt: 1,
+      updatedAt: 1,
+    });
 
     const shared = await getSharedPackCard(db, OWNER, CARD);
     expect(shared?.serial).toBeNull();
@@ -123,37 +122,24 @@ describe("pack card serials", () => {
 });
 
 describe("backfillPackCardSerials", () => {
-  async function seedCollectionCard(
+  async function seedOwnedCard(
     ownerUserId: number,
     cardUserId: number,
     firstPulledAt: number,
     tier: string | null = "rare",
   ) {
-    await exec(
-      db,
-      `insert into pack_collection_cards (
-         owner_user_id, card_user_id, card_key, username, avatar_url, country_code,
-         tier, tier_label, skills_json, pp, global_rank, copies, recycled_copies,
-         first_pulled_at, last_pulled_at, updated_at
-       ) values (?, ?, ?, ?, '', 'CR', ?, ?, null, 1000, 500, 1, 0, ?, ?, ?)`,
-      [
-        ownerUserId,
-        cardUserId,
-        tier === "goat" ? `${cardUserId}:goat` : String(cardUserId),
-        `player${cardUserId}`,
-        tier,
-        tier,
-        firstPulledAt,
-        firstPulledAt,
-        firstPulledAt,
-      ],
-    );
+    await seedCollectionCard(db, ownerUserId, cardUserId, {
+      tier,
+      firstPulledAt,
+      lastPulledAt: firstPulledAt,
+      updatedAt: firstPulledAt,
+    });
   }
 
   it("numbers existing collections in the order they were first pulled", async () => {
-    await seedCollectionCard(THIRD_OWNER, CARD, 3000);
-    await seedCollectionCard(OWNER, CARD, 1000);
-    await seedCollectionCard(OTHER_OWNER, CARD, 2000);
+    await seedOwnedCard(THIRD_OWNER, CARD, 3000);
+    await seedOwnedCard(OWNER, CARD, 1000);
+    await seedOwnedCard(OTHER_OWNER, CARD, 2000);
 
     expect(await backfillPackCardSerials(db)).toBe(3);
     const serials = await getPackCardSerials(db, OWNER, [String(CARD)]);
@@ -163,9 +149,9 @@ describe("backfillPackCardSerials", () => {
   });
 
   it("keeps a GOAT card on its own numbering", async () => {
-    await seedCollectionCard(OWNER, CARD, 1000, "worldClass");
-    await seedCollectionCard(OWNER, CARD, 2000, "goat");
-    await seedCollectionCard(OTHER_OWNER, CARD, 3000, "goat");
+    await seedOwnedCard(OWNER, CARD, 1000, "worldClass");
+    await seedOwnedCard(OWNER, CARD, 2000, "goat");
+    await seedOwnedCard(OTHER_OWNER, CARD, 3000, "goat");
 
     await backfillPackCardSerials(db);
     const mine = await getPackCardSerials(db, OWNER, [String(CARD), `${CARD}:goat`]);
@@ -175,8 +161,8 @@ describe("backfillPackCardSerials", () => {
   });
 
   it("writes nothing on a second run and never hands out a serial twice", async () => {
-    await seedCollectionCard(OWNER, CARD, 1000);
-    await seedCollectionCard(OTHER_OWNER, CARD, 2000);
+    await seedOwnedCard(OWNER, CARD, 1000);
+    await seedOwnedCard(OTHER_OWNER, CARD, 2000);
     await backfillPackCardSerials(db);
     expect(await backfillPackCardSerials(db)).toBe(0);
 
@@ -184,7 +170,7 @@ describe("backfillPackCardSerials", () => {
     // rerun leaves every existing number alone.
     const fresh = await recordPackPullEvents(db, THIRD_OWNER, "third", "standard", [card(CARD, "rare")], 4000);
     expect(fresh.mints[0].serial).toBe(3);
-    await seedCollectionCard(THIRD_OWNER, CARD, 4000);
+    await seedOwnedCard(THIRD_OWNER, CARD, 4000);
     expect(await backfillPackCardSerials(db)).toBe(0);
 
     const rows = (await exec(db, "select serial from pack_card_serials where card_key = ?", [String(CARD)])).rows;
@@ -193,7 +179,7 @@ describe("backfillPackCardSerials", () => {
   });
 
   it("skips cards the owner has fully recycled", async () => {
-    await seedCollectionCard(OWNER, CARD, 1000);
+    await seedOwnedCard(OWNER, CARD, 1000);
     await exec(db, "update pack_collection_cards set copies = 0 where owner_user_id = ?", [OWNER]);
     expect(await backfillPackCardSerials(db)).toBe(0);
   });

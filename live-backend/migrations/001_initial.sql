@@ -622,7 +622,10 @@ create table if not exists pack_wallets (
   user_id integer primary key,
   payload text not null,
   rev integer not null,
-  updated_at integer not null
+  updated_at integer not null,
+  -- The last username this wallet's pulls were recorded under: the durable
+  -- name fallback for collectors with no users row (pull events are pruned).
+  owner_username text
 );
 
 -- One row per card held, and a card is (player, GOAT-or-not) rather than just
@@ -631,16 +634,20 @@ create table if not exists pack_wallets (
 -- held both as the card the ranked pool dealt and as the GOAT the honorary slot
 -- dealt. card_key mirrors the browser wallet's key exactly ("<id>" or
 -- "<id>:goat"), so the two sides address the same card the same way.
+--
+-- The card's identity (name, avatar, country, tier label) is the same for
+-- every owner, so it lives once per variant in pack_cards. Its skills snapshot
+-- is not: it is frozen per owner at the pull that minted it, and only a better
+-- tier replaces it. There are two orders of magnitude fewer distinct snapshots
+-- than holdings, though, so the row points at an interned one in
+-- pack_card_skills rather than carrying its own copy of the JSON. pp and
+-- global_rank stay here because the wallet sync rewrites them in place.
 create table if not exists pack_collection_cards (
   owner_user_id integer not null,
   card_user_id integer not null,
   card_key text not null,
-  username text not null,
-  avatar_url text not null,
-  country_code text not null,
   tier text,
-  tier_label text,
-  skills_json text,
+  skills_id integer,
   pp real not null,
   global_rank integer not null,
   copies integer not null,
@@ -650,16 +657,39 @@ create table if not exists pack_collection_cards (
   updated_at integer not null,
   primary key(owner_user_id, card_key)
 );
-create index if not exists idx_pack_collection_owner_rank
-  on pack_collection_cards(owner_user_id, copies, global_rank);
 create index if not exists idx_pack_collection_owner_tier
   on pack_collection_cards(owner_user_id, tier, copies, pp desc);
-create index if not exists idx_pack_collection_owner_username
-  on pack_collection_cards(owner_user_id, username);
 -- The card side of the same table: ownership counts, "your card got pulled"
 -- stats and the collector list all read by card, oldest holding first.
 create index if not exists idx_pack_collection_card_pulled
   on pack_collection_cards(card_user_id, first_pulled_at);
+
+-- One row per card variant (card_key plus the tier it was minted at, where
+-- tier '' is an unrated card), shared by every owner. First write wins, so a
+-- later forged wallet sync cannot repaint a card every other collector already
+-- holds. These columns are the fallback for players with no users row
+-- (honoraries, deleted accounts). Reads overlay the live users row first,
+-- exactly as they always have.
+create table if not exists pack_cards (
+  card_key text not null,
+  tier text not null default '',
+  card_user_id integer not null,
+  username text not null default '',
+  avatar_url text not null default '',
+  country_code text not null default '',
+  tier_label text,
+  updated_at integer not null,
+  primary key(card_key, tier)
+);
+
+-- Interned skills snapshots. The same handful of numbers is minted for every
+-- collector who pulls a player around the same time, so the JSON is stored
+-- once and referenced by id. Rows are never rewritten (a snapshot is
+-- immutable), which is what makes sharing them safe.
+create table if not exists pack_card_skills (
+  id integer primary key autoincrement,
+  skills_json text not null unique
+);
 
 -- The showcase shelf: up to five cards a collector pins to their public
 -- profile. Keys reference pack_collection_cards by (owner, card_key). A pin

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { HONORARY_USER_IDS, recyclePackCollectionCards, savePackWallet } from "../src/features/pack-wallets.js";
 import { getHonoraryPullsReport, getSharedPackCard } from "../src/features/pack-pulls.js";
+import { seedCollectionCard } from "./helpers/pack-cards.js";
 
 // Collection cards are client-supplied and their tier is otherwise trusted.
 // GOAT recycles for 1000 shards, so a forged `tier: "goat"` would mint shards
@@ -276,14 +277,15 @@ describe("honorary pulls leaderboard", () => {
 describe("future pull stamps", () => {
   // The intake clamps these now, so a legacy row has to be planted directly.
   async function plantRow(owner: number, cardUserId: number, pulledAt: number, updatedAt: number) {
-    await exec(
-      db,
-      `insert into pack_collection_cards
-         (owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label,
-          skills_json, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at)
-       values (?, ?, ?, ?, '', 'KR', 'goat', 'GOAT', null, 1000, 1, 1, 0, ?, ?, ?)`,
-      [owner, cardUserId, `${cardUserId}:goat`, `player${cardUserId}`, pulledAt, pulledAt, updatedAt],
-    );
+    await seedCollectionCard(db, owner, cardUserId, {
+      tier: "goat",
+      tierLabel: "GOAT",
+      countryCode: "KR",
+      globalRank: 1,
+      firstPulledAt: pulledAt,
+      lastPulledAt: pulledAt,
+      updatedAt,
+    });
   }
 
   it("never lets a future stamp claim the latest pull", async () => {

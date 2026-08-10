@@ -322,6 +322,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateApiRateLimitReservations(target);
   await migratePlayerActivity(target);
   await migratePackCollectionCards(target);
+  await migratePackWalletOwnerUsername(target);
   await migratePackPullEvents(target);
   await migrateTrackerIndexes(target);
   await migrateSnipePersonalBests(target);
@@ -514,18 +515,18 @@ export async function dbHealth(db: Db): Promise<boolean> {
 }
 
 export function splitSql(sql: string): string[] {
-  // Strip whole-line `--` comments from inside each statement, not just chunks that begin with
-  // one: a comment block sitting directly above a `create table` (no `;` between) would otherwise
-  // make the chunk start with `--` and drop the table entirely, leaving its index to fail.
+  // Whole-line `--` comments go before the split, not after it. Stripping them per chunk meant a
+  // comment block sitting directly above a `create table` (no `;` between) made the chunk start
+  // with `--` and dropped the table entirely; stripping them first also means a `;` *inside* a
+  // comment can no longer cut the comment in half and paste its tail onto the next statement.
+  // Safe because the schema file has no `--` outside line-leading comments (no inline comments,
+  // none inside string literals), which `migration-sql.test.ts` holds to.
   return sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n")
     .split(";")
-    .map((statement) =>
-      statement
-        .split("\n")
-        .filter((line) => !line.trim().startsWith("--"))
-        .join("\n")
-        .trim(),
-    )
+    .map((statement) => statement.trim())
     .filter((statement) => statement.length > 0);
 }
 
@@ -1601,12 +1602,9 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
     create table if not exists pack_collection_cards (
       owner_user_id integer not null,
       card_user_id integer not null,
-      username text not null,
-      avatar_url text not null,
-      country_code text not null,
+      card_key text not null,
       tier text,
-      tier_label text,
-      skills_json text,
+      skills_id integer,
       pp real not null,
       global_rank integer not null,
       copies integer not null,
@@ -1614,21 +1612,47 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
       first_pulled_at integer not null,
       last_pulled_at integer not null,
       updated_at integer not null,
-      primary key(owner_user_id, card_user_id)
+      primary key(owner_user_id, card_key)
     )
-  `);
-  await db.execute(`
-    create index if not exists idx_pack_collection_owner_rank
-      on pack_collection_cards(owner_user_id, copies, global_rank)
   `);
   await db.execute(`
     create index if not exists idx_pack_collection_owner_tier
       on pack_collection_cards(owner_user_id, tier, copies, pp desc)
   `);
   await db.execute(`
-    create index if not exists idx_pack_collection_owner_username
-      on pack_collection_cards(owner_user_id, username)
+    create index if not exists idx_pack_collection_card_pulled
+      on pack_collection_cards(card_user_id, first_pulled_at)
   `);
+  await db.execute(`
+    create table if not exists pack_cards (
+      card_key text not null,
+      tier text not null default '',
+      card_user_id integer not null,
+      username text not null default '',
+      avatar_url text not null default '',
+      country_code text not null default '',
+      tier_label text,
+      updated_at integer not null,
+      primary key(card_key, tier)
+    )
+  `);
+  await db.execute(`
+    create table if not exists pack_card_skills (
+      id integer primary key autoincrement,
+      skills_json text not null unique
+    )
+  `);
+}
+
+// The last username a wallet's pulls were recorded under. Durable, unlike the
+// pull log it used to be read back out of: collector-name fallbacks (the
+// collectors list, the share card, the honorary report) need a name for owners
+// with no users row, and pull events are pruned on a short retention now.
+async function migratePackWalletOwnerUsername(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(pack_wallets)")).rows.map((row) => String(row.name));
+  if (!columns.includes("owner_username")) {
+    await db.execute("alter table pack_wallets add column owner_username text");
+  }
 }
 
 async function migratePackPullEvents(db: Db): Promise<void> {

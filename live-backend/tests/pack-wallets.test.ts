@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import {
   applyPackCollectionCardMint,
+  ensurePackCardCatalog,
   ensurePackCollectionCardKeys,
   getPackCollectionPoolProgress,
   getPackShowcase,
@@ -15,6 +16,7 @@ import {
   savePackWallet,
   setPackShowcase,
 } from "../src/features/pack-wallets.js";
+import { seedCollectionCard } from "./helpers/pack-cards.js";
 
 let dir = "";
 let db: Db;
@@ -402,6 +404,72 @@ describe("pack showcase", () => {
   });
 });
 
+/* Snapshots are shared between collections but owned by neither: two players
+   holding the same mint point at one row, and what one of them does to their
+   card must not reach through it to the other. */
+describe("interned skills snapshots", () => {
+  const walletWithSkills = (userId: number, skills: unknown, pp = 1000): string =>
+    JSON.stringify({
+      cards: {
+        [String(userId)]: {
+          userId,
+          username: `player${userId}`,
+          avatarUrl: "https://a.ppy.sh/1",
+          countryCode: "CR",
+          tier: "rare",
+          tierLabel: "Rare",
+          skills,
+          pp,
+          globalRank: 500,
+          copies: 1,
+          recycledCopies: 0,
+          firstPulledAt: 100,
+          lastPulledAt: 200,
+        },
+      },
+      shards: 0,
+      shardsSpent: 0,
+      charges: 5,
+      lastRefillAt: 0,
+      openedPacks: 0,
+      poolTotal: null,
+    });
+
+  it("stores one row for a snapshot two collectors share, and keeps differing ones apart", async () => {
+    const shared = { stream: 60, jack: 50 };
+    await savePackWallet(db, USER_ID, walletWithSkills(42, shared), 0, 1000);
+    await savePackWallet(db, USER_ID + 1, walletWithSkills(42, shared), 0, 1000);
+    await savePackWallet(db, USER_ID + 2, walletWithSkills(42, { stream: 71, jack: 44 }), 0, 1000);
+
+    expect((await exec(db, "select count(*) n from pack_card_skills")).rows[0].n).toBe(2);
+    const ids = (await exec(
+      db,
+      "select owner_user_id, skills_id from pack_collection_cards order by owner_user_id",
+    )).rows.map((row) => Number(row.skills_id));
+    expect(ids[0]).toBe(ids[1]);
+    expect(ids[2]).not.toBe(ids[0]);
+
+    // And each collector still reads back the numbers their own pull minted.
+    const read = async (owner: number) =>
+      (await listPackCollectionCards(db, owner, { page: 0, pageSize: 15 })).cards[0].skills;
+    expect(await read(USER_ID)).toEqual(shared);
+    expect(await read(USER_ID + 1)).toEqual(shared);
+    expect(await read(USER_ID + 2)).toEqual({ stream: 71, jack: 44 });
+  });
+
+  it("leaves a sharer's card alone when the other recycles theirs", async () => {
+    const shared = { stream: 60, jack: 50 };
+    await savePackWallet(db, USER_ID, walletWithSkills(42, shared), 0, 1000);
+    await savePackWallet(db, USER_ID + 1, walletWithSkills(42, shared), 0, 1000);
+
+    await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKeys: ["42"] });
+
+    const survivor = (await listPackCollectionCards(db, USER_ID + 1, { page: 0, pageSize: 15 })).cards[0];
+    expect(survivor.skills).toEqual(shared);
+    expect(survivor.copies).toBe(1);
+  });
+});
+
 /* Databases created before GOAT cards split off key pack_collection_cards by
    (owner, player). SQLite cannot alter a primary key, so the table is rebuilt
    once on boot; getting that wrong would drop every collection in prod. */
@@ -472,7 +540,9 @@ describe("pack collection rekey", () => {
   it("leaves a rebuilt table writable through the normal sync path", async () => {
     await createLegacyTable();
     await seedLegacyCard(42, "rare");
+    // Both rebuilds, in the order boot runs them.
     await ensurePackCollectionCardKeys(db);
+    await ensurePackCardCatalog(db);
 
     await savePackWallet(db, USER_ID, cardPayload(3), 0, 1000);
     const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
@@ -480,6 +550,109 @@ describe("pack collection rekey", () => {
     // Snapshot reconcile against the rebuilt row: 3 pulled ever, 1 already
     // recycled, so 2 held. The conflict target resolved, which is the point.
     expect(page.cards[0]).toMatchObject({ userId: 42, copies: 2, recycledCopies: 1 });
+  });
+
+  /* The catalog split moved each card's face (name, avatar, tier label, skills
+     snapshot, mint stats) off every ownership row and into one row per card
+     variant. The rebuild runs over every collection in prod, so losing a face
+     or an ownership row here is losing it there. */
+  describe("card catalog split", () => {
+    it("seeds one catalog row per variant and keeps every holding", async () => {
+      await createLegacyTable();
+      await seedLegacyCard(42, "rare");
+      await seedLegacyCard(7, "goat");
+      await ensurePackCollectionCardKeys(db);
+      // A second owner of the same card: the face is shared, the holdings are not.
+      await exec(
+        db,
+        `insert into pack_collection_cards
+           (owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label,
+            skills_json, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at)
+         values (?, 42, '42', 'player42', '', 'CR', 'rare', 'rare', null, 1000, 500, 5, 0, 100, 200, 300)`,
+        [USER_ID + 1],
+      );
+
+      expect(await ensurePackCardCatalog(db)).toBe(true);
+
+      const catalog = (await exec(db, "select * from pack_cards order by card_key")).rows;
+      expect(catalog).toHaveLength(2);
+      expect(catalog.map((row) => [String(row.card_key), String(row.tier)])).toEqual([
+        ["42", "rare"],
+        ["7:goat", "goat"],
+      ]);
+      expect(String(catalog[0].username)).toBe("player42");
+
+      const held = (await exec(
+        db,
+        "select owner_user_id, card_key, copies, recycled_copies from pack_collection_cards order by owner_user_id, card_key",
+      )).rows;
+      expect(held).toHaveLength(3);
+      expect(held.map((row) => [Number(row.owner_user_id), String(row.card_key), Number(row.copies)])).toEqual([
+        [USER_ID, "42", 2],
+        [USER_ID, "7:goat", 2],
+        [USER_ID + 1, "42", 5],
+      ]);
+      // The fat columns are gone, which is the point of the rebuild.
+      const columns = (await exec(db, "pragma table_info(pack_collection_cards)")).rows.map((row) => String(row.name));
+      expect(columns).not.toContain("username");
+      expect(columns).not.toContain("skills_json");
+    });
+
+    /* The snapshot is what each owner's pull froze, so two collectors of the
+       same card can hold different numbers. Interning has to keep both; the
+       whole point of not merging them into one card face. */
+    it("keeps each owner's own skills snapshot, storing each distinct one once", async () => {
+      await createLegacyTable();
+      await ensurePackCollectionCardKeys(db);
+      const insertFat = async (owner: number, skillsJson: string | null, pp: number) => {
+        await exec(
+          db,
+          `insert into pack_collection_cards
+             (owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label,
+              skills_json, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at)
+           values (?, 42, '42', 'player42', '', 'CR', 'rare', 'Rare', ?, ?, 500, 1, 0, 1, 1, 1)`,
+          [owner, skillsJson, pp],
+        );
+      };
+      await insertFat(USER_ID, '{"stream":60}', 1000);
+      await insertFat(USER_ID + 1, '{"stream":72}', 1100);
+      await insertFat(USER_ID + 2, '{"stream":60}', 1200);
+      await insertFat(USER_ID + 3, null, 1300);
+
+      await ensurePackCardCatalog(db);
+
+      // Three owners carried two distinct snapshots, so two rows are stored.
+      const snapshots = (await exec(db, "select id, skills_json from pack_card_skills order by id")).rows;
+      expect(snapshots.map((row) => String(row.skills_json))).toEqual(['{"stream":60}', '{"stream":72}']);
+
+      const held = (await exec(
+        db,
+        `select c.owner_user_id, c.pp, sk.skills_json
+         from pack_collection_cards c
+         left join pack_card_skills sk on sk.id = c.skills_id
+         order by c.owner_user_id`,
+      )).rows;
+      expect(held.map((row) => [Number(row.owner_user_id), Number(row.pp), row.skills_json ?? null])).toEqual([
+        [USER_ID, 1000, '{"stream":60}'],
+        [USER_ID + 1, 1100, '{"stream":72}'],
+        [USER_ID + 2, 1200, '{"stream":60}'],
+        [USER_ID + 3, 1300, null],
+      ]);
+      // The two owners on the same snapshot share one row rather than copying it.
+      const shared = (await exec(
+        db,
+        "select distinct skills_id from pack_collection_cards where owner_user_id in (?, ?)",
+        [USER_ID, USER_ID + 2],
+      )).rows;
+      expect(shared).toHaveLength(1);
+    });
+
+    it("is a no-op once the table is already split", async () => {
+      await savePackWallet(db, USER_ID, cardPayload(2), 0, 1000);
+      expect(await ensurePackCardCatalog(db)).toBe(false);
+      const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
+      expect(page.cards[0]).toMatchObject({ userId: 42, copies: 2 });
+    });
   });
 });
 
@@ -544,14 +717,19 @@ describe("collection card mints", () => {
   it("merges into the GOAT key when a tierless card mints as GOAT", async () => {
     await savePackWallet(db, USER_ID, legacyPayload(BOJII, null, 2), 0, 1000);
     // The owner already holds a GOAT of that player, pulled from the honorary slot.
-    await exec(
-      db,
-      `insert into pack_collection_cards
-       (owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label, skills_json,
-        pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at)
-       values (?, ?, ?, 'bojii', '', 'PH', 'goat', 'GOAT', null, 27107, 4, 1, 3, 50, 300, 1000)`,
-      [USER_ID, BOJII, `${BOJII}:goat`],
-    );
+    await seedCollectionCard(db, USER_ID, BOJII, {
+      tier: "goat",
+      tierLabel: "GOAT",
+      username: "bojii",
+      countryCode: "PH",
+      pp: 27107,
+      globalRank: 4,
+      copies: 1,
+      recycledCopies: 3,
+      firstPulledAt: 50,
+      lastPulledAt: 300,
+      updatedAt: 1000,
+    });
 
     const result = await applyPackCollectionCardMint(db, USER_ID, String(BOJII), { tier: "goat", tierLabel: "GOAT", skills });
 
@@ -644,7 +822,21 @@ describe("wallet card field bounds", () => {
   }
 
   async function storedCard(): Promise<Record<string, unknown>> {
-    return (await exec(db, "select * from pack_collection_cards where owner_user_id = ?", [USER_ID])).rows[0] as never;
+    // The card's face lives in the catalog now, so the assertions below read
+    // the ownership row joined to its variant.
+    return (await exec(
+      db,
+      `select pack_collection_cards.*,
+         pc.username as username, pc.avatar_url as avatar_url, pc.country_code as country_code,
+         pc.tier_label as tier_label, sk.skills_json as skills_json
+       from pack_collection_cards
+       left join pack_cards pc
+         on pc.card_key = pack_collection_cards.card_key
+         and pc.tier = coalesce(pack_collection_cards.tier, '')
+       left join pack_card_skills sk on sk.id = pack_collection_cards.skills_id
+       where pack_collection_cards.owner_user_id = ?`,
+      [USER_ID],
+    )).rows[0] as never;
   }
 
   it("keeps a non-https avatar out of the stored card", async () => {

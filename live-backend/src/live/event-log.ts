@@ -1,5 +1,6 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
+import { listPackPullsByIds } from "../features/pack-pulls.js";
 import { getTrackerScoreByIdentity } from "../features/tracker.js";
 import { logWarn } from "../logger.js";
 import { getScoreIdentity } from "../shared/score.js";
@@ -129,6 +130,10 @@ export class LiveEventLog {
 
   private async rowToLiveEvent(row: Record<string, unknown>): Promise<LiveEvent> {
     const event = rowToLiveEventWithPayload(row, parseJson(row.payload_json, null));
+    if (isStoredPackPullEvent(event.payload)) {
+      const entry = (await listPackPullsByIds(this.db, [event.payload.id]))[0];
+      return entry ? { ...event, payload: entry } : event;
+    }
     if (!isStoredTrackerScoreEvent(event.payload) || !event.country) return event;
     const liveScore = await getTrackerScoreByIdentity(this.db, event.country, event.payload.scoreIdentity);
     return liveScore ? { ...event, payload: liveScore.score } : event;
@@ -141,13 +146,45 @@ interface StoredTrackerScoreEvent {
   scoreIdentity: string;
 }
 
+interface StoredPackPullEvent {
+  schemaVersion: 1;
+  ref: "pack_pull";
+  id: number;
+}
+
 function compactLiveEventPayload(type: string, country: string | null, payload: unknown): unknown {
+  // Pack pulls: the durable pack_pull_events row (which outlives this log's
+  // retention) holds the whole feed entry, so the log only needs the id.
+  // Replay rehydrates through the same query that published the entry, live
+  // identity overlay included.
+  if (type === "pack_pull" && isPackPullFeedEntryPayload(payload)) {
+    return { schemaVersion: 1, ref: "pack_pull", id: payload.id } satisfies StoredPackPullEvent;
+  }
   if (type !== "tracker_score" || !country || !isLeanTrackerScorePayload(payload)) return payload;
   return {
     schemaVersion: 1,
     ref: "tracker_score",
     scoreIdentity: getScoreIdentity(payload),
   } satisfies StoredTrackerScoreEvent;
+}
+
+/* A published PackPullFeedEntry, recognized by the fields the ref needs; the
+   already-compacted shape has `ref` and stays as it is. */
+function isPackPullFeedEntryPayload(value: unknown): value is { id: number } {
+  const candidate = value as { id?: unknown; ref?: unknown; ownerUserId?: unknown } | null;
+  return !!candidate
+    && typeof candidate.id === "number"
+    && candidate.id > 0
+    && typeof candidate.ownerUserId === "number"
+    && candidate.ref === undefined;
+}
+
+function isStoredPackPullEvent(value: unknown): value is StoredPackPullEvent {
+  const candidate = value as Partial<StoredPackPullEvent> | null;
+  return !!candidate
+    && candidate.schemaVersion === 1
+    && candidate.ref === "pack_pull"
+    && typeof candidate.id === "number";
 }
 
 function isLeanTrackerScorePayload(value: unknown): value is LeanTrackerScore {

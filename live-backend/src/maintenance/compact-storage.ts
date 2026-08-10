@@ -200,7 +200,7 @@ async function compactLiveEventLog(batchSize: number): Promise<{ scanned: number
       db,
       `select sequence, type, country, payload_json
        from live_event_log
-       where type = 'tracker_score'
+       where type in ('tracker_score', 'pack_pull')
          and sequence > ?
        order by sequence asc
        limit ?`,

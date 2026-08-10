@@ -1,5 +1,5 @@
 import type { InValue } from "@libsql/client";
-import type { Db } from "../db.js";
+import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch, parseJson } from "../db.js";
 
 // Synced maniacard pack wallets now keep economy metadata in pack_wallets and
@@ -235,7 +235,30 @@ function liveUserFieldSql(field: "username" | "avatar_url" | "country_code"): st
   return `(select u.${field} from users u where u.user_id = pack_collection_cards.card_user_id)`;
 }
 
-const displayUsernameSql = `coalesce(nullif(${liveUserFieldSql("username")}, ''), username)`;
+/* One identity field for the variant an ownership row points at, as a
+   correlated subquery so it works in WHERE clauses as well as joined SELECTs. */
+function catalogFieldSql(field: "username" | "avatar_url" | "country_code" | "tier_label"): string {
+  return `(select pc.${field} from pack_cards pc
+     where pc.card_key = pack_collection_cards.card_key
+       and pc.tier = coalesce(pack_collection_cards.tier, ''))`;
+}
+
+/* The joined shape cardFromRow expects: the ownership row's own columns plus
+   the variant's identity and the interned snapshot, under the names they had
+   when every one of them sat on pack_collection_cards itself. */
+const CARD_SELECT_SQL = `select pack_collection_cards.*,
+       pc.username as username,
+       pc.avatar_url as avatar_url,
+       pc.country_code as country_code,
+       pc.tier_label as tier_label,
+       sk.skills_json as skills_json`;
+
+const CARD_CATALOG_JOIN_SQL = `left join pack_cards pc
+       on pc.card_key = pack_collection_cards.card_key
+       and pc.tier = coalesce(pack_collection_cards.tier, '')
+     left join pack_card_skills sk on sk.id = pack_collection_cards.skills_id`;
+
+const displayUsernameSql = `coalesce(nullif(${liveUserFieldSql("username")}, ''), ${catalogFieldSql("username")})`;
 
 /* The honorary roster, mirrored from src/lib/honorary-players.ts. Only these
    players can hold the GOAT tier.
@@ -421,18 +444,154 @@ async function importCardsFromPayload(
   const cards = Object.values(parsed.cards)
     .map((card) => normalizeCard(card, now))
     .filter((card): card is StoredPackCard => Boolean(card));
-  for (const card of cards) {
-    await upsertPackCard(db, userId, card, now, mode);
-  }
+  if (cards.length === 0) return;
+  // Interning happens first because the ownership rows need the ids it hands
+  // back; the rest goes down as one batch, so an import costs one write-lock
+  // acquisition instead of one per card.
+  const skillsIds = await internPackCardSkills(
+    db,
+    cards.filter((card) => card.skills != null).map((card) => JSON.stringify(card.skills)),
+  );
+  await execBatch(db, [
+    ...(await packCardIdentityStatements(db, cards, now)),
+    ...cards.map((card) => packOwnershipUpsertStatement(userId, card, now, mode, skillsIds)),
+  ]);
 }
 
-async function upsertPackCard(
-  db: Db,
+/* Maps each skills snapshot to its interned id, minting rows for snapshots
+   never seen before. Snapshots are immutable and shared, so an existing row is
+   always reused: the same numbers minted for a hundred collectors cost one
+   copy of the JSON, not a hundred. */
+async function internPackCardSkills(db: Db, rawPayloads: string[]): Promise<Map<string, number>> {
+  const ids = new Map<string, number>();
+  const payloads = [...new Set(rawPayloads)];
+  if (payloads.length === 0) return ids;
+  for (const batch of chunked(payloads)) {
+    const rows = (await exec(
+      db,
+      `select id, skills_json from pack_card_skills where skills_json in (${batch.map(() => "?").join(", ")})`,
+      batch as InValue[],
+    )).rows;
+    for (const row of rows) ids.set(String(row.skills_json), Number(row.id));
+  }
+  const missing = payloads.filter((payload) => !ids.has(payload));
+  if (missing.length === 0) return ids;
+  await execBatch(
+    db,
+    missing.map((payload) => ({
+      sql: "insert or ignore into pack_card_skills (skills_json) values (?)",
+      args: [payload] as InValue[],
+    })),
+  );
+  for (const batch of chunked(missing)) {
+    const rows = (await exec(
+      db,
+      `select id, skills_json from pack_card_skills where skills_json in (${batch.map(() => "?").join(", ")})`,
+      batch as InValue[],
+    )).rows;
+    for (const row of rows) ids.set(String(row.skills_json), Number(row.id));
+  }
+  return ids;
+}
+
+/* The interned id for one card's snapshot, or null when it carries none. */
+function skillsIdFor(card: StoredPackCard, skillsIds: Map<string, number>): number | null {
+  if (card.skills == null) return null;
+  return skillsIds.get(JSON.stringify(card.skills)) ?? null;
+}
+
+/* The variant slot a card occupies in pack_cards. The catalog's tier column is
+   part of its primary key, so an unrated card stores '' rather than null. */
+function packCardTierSlot(tier: string | null): string {
+  return tier ?? "";
+}
+
+const IN_CHUNK = 500;
+
+function chunked<T>(values: T[]): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < values.length; i += IN_CHUNK) chunks.push(values.slice(i, i + IN_CHUNK));
+  return chunks;
+}
+
+/* Catalog writes for a batch of client cards.
+
+   First write wins: a name and avatar reach the public share card and its OG
+   image, so a later forged wallet sync must not repaint a card every other
+   collector already holds. Identity comes from the users row when the backend
+   knows the player, so a first-writer only ever names players the server
+   cannot vouch for (honoraries and the like), exactly like the pull log.
+
+   Reads happen first, so a steady-state sync (every variant already known)
+   contributes nothing to the write batch at all. */
+async function packCardIdentityStatements(db: Db, cards: StoredPackCard[], now: number): Promise<DbStatement[]> {
+  const byVariant = new Map<string, StoredPackCard>();
+  for (const card of cards) {
+    byVariant.set(`${packCardKey(card.userId, card.tier)}|${packCardTierSlot(card.tier)}`, card);
+  }
+
+  const known = new Set<string>();
+  const cardKeys = [...new Set([...byVariant.values()].map((card) => packCardKey(card.userId, card.tier)))];
+  for (const keys of chunked(cardKeys)) {
+    const rows = (await exec(
+      db,
+      `select card_key, tier from pack_cards where card_key in (${keys.map(() => "?").join(", ")})`,
+      keys as InValue[],
+    )).rows;
+    for (const row of rows) known.add(`${String(row.card_key)}|${String(row.tier)}`);
+  }
+
+  const missing = [...byVariant.entries()].filter(([variant]) => !known.has(variant)).map(([, card]) => card);
+  if (missing.length === 0) return [];
+
+  const identities = new Map<number, { username: string; avatarUrl: string; countryCode: string }>();
+  const missingIds = [...new Set(missing.map((card) => card.userId))];
+  for (const ids of chunked(missingIds)) {
+    const rows = (await exec(
+      db,
+      `select user_id, username, avatar_url, country_code from users where user_id in (${ids.map(() => "?").join(", ")})`,
+      ids as InValue[],
+    )).rows;
+    for (const row of rows) {
+      identities.set(Number(row.user_id), {
+        username: String(row.username ?? "").slice(0, PACK_CARD_USERNAME_MAX_CHARS),
+        avatarUrl: String(row.avatar_url ?? "").slice(0, PACK_CARD_AVATAR_URL_MAX_CHARS),
+        countryCode: normalizeCountryCode(String(row.country_code ?? "")),
+      });
+    }
+  }
+
+  return missing.map((card) => {
+    const vouched = identities.get(card.userId);
+    return {
+      sql: `insert or ignore into pack_cards (
+         card_key, tier, card_user_id, username, avatar_url, country_code, tier_label, updated_at
+       ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        packCardKey(card.userId, card.tier),
+        packCardTierSlot(card.tier),
+        card.userId,
+        vouched?.username || card.username,
+        vouched?.avatarUrl || card.avatarUrl,
+        vouched?.countryCode || card.countryCode,
+        card.tierLabel,
+        now,
+      ] as InValue[],
+    };
+  });
+}
+
+/* This owner's ownership row for one card: copies, recycle balance, pull
+   stamps, current pp/rank, the tier they hold it at, and the snapshot their
+   mint froze. Only a better tier overwrites the tier or the snapshot, which is
+   the rule the fat row carried before the split. */
+function packOwnershipUpsertStatement(
   ownerUserId: number,
   card: StoredPackCard,
   now: number,
   mode: PackWalletCardImportMode,
-): Promise<void> {
+  skillsIds: Map<string, number>,
+): DbStatement {
   const copiesSql =
     mode === "delta"
       ? "max(0, pack_collection_cards.copies + excluded.copies)"
@@ -447,30 +606,21 @@ async function upsertPackCard(
     mode === "delta"
       ? "max(0, pack_collection_cards.recycled_copies + excluded.recycled_copies)"
       : "max(pack_collection_cards.recycled_copies, excluded.recycled_copies)";
-  await exec(
-    db,
-    `insert into pack_collection_cards (
-       owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label, skills_json,
-       pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
-     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  return {
+    sql: `insert into pack_collection_cards (
+       owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank,
+       copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
+     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(owner_user_id, card_key) do update set
-       username = excluded.username,
-       avatar_url = excluded.avatar_url,
-       country_code = excluded.country_code,
        tier = case
          when ${tierRankSql("pack_collection_cards.tier")} > ${tierRankSql("excluded.tier")}
          then pack_collection_cards.tier
          else excluded.tier
        end,
-       tier_label = case
+       skills_id = case
          when ${tierRankSql("pack_collection_cards.tier")} > ${tierRankSql("excluded.tier")}
-         then pack_collection_cards.tier_label
-         else excluded.tier_label
-       end,
-       skills_json = case
-         when ${tierRankSql("pack_collection_cards.tier")} > ${tierRankSql("excluded.tier")}
-         then coalesce(pack_collection_cards.skills_json, excluded.skills_json)
-         else coalesce(excluded.skills_json, pack_collection_cards.skills_json)
+         then coalesce(pack_collection_cards.skills_id, excluded.skills_id)
+         else coalesce(excluded.skills_id, pack_collection_cards.skills_id)
        end,
        pp = excluded.pp,
        global_rank = excluded.global_rank,
@@ -479,16 +629,12 @@ async function upsertPackCard(
        first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
        last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
        updated_at = excluded.updated_at`,
-    [
+    args: [
       ownerUserId,
       card.userId,
       packCardKey(card.userId, card.tier),
-      card.username,
-      card.avatarUrl,
-      card.countryCode,
       card.tier,
-      card.tierLabel,
-      card.skills ? JSON.stringify(card.skills) : null,
+      skillsIdFor(card, skillsIds),
       card.pp,
       card.globalRank,
       card.copies,
@@ -497,7 +643,7 @@ async function upsertPackCard(
       card.lastPulledAt,
       now,
     ],
-  );
+  };
 }
 
 function nonEmptyString(value: unknown): string | null {
@@ -619,7 +765,7 @@ export async function listPackCollectionCards(
   const totalRow = (await exec(db, `select count(*) as total from pack_collection_cards where ${whereSql}`, args)).rows[0];
   const rows = (await exec(
     db,
-    `select pack_collection_cards.*,
+    `${CARD_SELECT_SQL},
        ${liveUserFieldSql("username")} as live_username,
        ${liveUserFieldSql("avatar_url")} as live_avatar_url,
        ${liveUserFieldSql("country_code")} as live_country_code,
@@ -627,13 +773,15 @@ export async function listPackCollectionCards(
        (select max(other.serial) from pack_card_serials other
          where other.card_key = pack_collection_cards.card_key) as minted_total
      from pack_collection_cards
+     ${CARD_CATALOG_JOIN_SQL}
      left join pack_card_serials serials
        on serials.card_key = pack_collection_cards.card_key
        and serials.owner_user_id = pack_collection_cards.owner_user_id
      where ${whereSql}
      order by ${
        options.sort === "newest" ? "pack_collection_cards.first_pulled_at desc, " : ""
-     }${tierRankSql("tier")} desc, pp desc, global_rank asc, username collate nocase asc
+     }${tierRankSql("pack_collection_cards.tier")} desc, pack_collection_cards.pp desc,
+       pack_collection_cards.global_rank asc, pc.username collate nocase asc
      limit ? offset ?`,
     [...args, pageSize, page * pageSize],
   )).rows;
@@ -678,7 +826,7 @@ export async function getPackShowcase(db: Db, ownerUserId: number): Promise<Stor
   if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) return [];
   const rows = (await exec(
     db,
-    `select pack_collection_cards.*,
+    `${CARD_SELECT_SQL},
        ${liveUserFieldSql("username")} as live_username,
        ${liveUserFieldSql("avatar_url")} as live_avatar_url,
        ${liveUserFieldSql("country_code")} as live_country_code,
@@ -690,6 +838,7 @@ export async function getPackShowcase(db: Db, ownerUserId: number): Promise<Stor
        on pack_collection_cards.owner_user_id = pack_showcase_cards.owner_user_id
        and pack_collection_cards.card_key = pack_showcase_cards.card_key
        and pack_collection_cards.copies > 0
+     ${CARD_CATALOG_JOIN_SQL}
      left join pack_card_serials serials
        on serials.card_key = pack_collection_cards.card_key
        and serials.owner_user_id = pack_collection_cards.owner_user_id
@@ -763,7 +912,7 @@ export async function applyPackCollectionCardMint(
   if (!skills) return { applied: false, cardKey: null };
   const row = (await exec(
     db,
-    `select card_user_id, tier, skills_json, copies, recycled_copies, first_pulled_at, last_pulled_at
+    `select card_user_id, tier, skills_id, pp, global_rank
      from pack_collection_cards
      where owner_user_id = ? and card_key = ? and copies > 0`,
     [ownerUserId, cardKey],
@@ -776,52 +925,88 @@ export async function applyPackCollectionCardMint(
   // taken on trust, and GOAT recycles for 400 shards.
   const tier = claimedTier(mint, cardUserId);
   const currentTier = typeof row.tier === "string" ? row.tier : null;
-  if (row.skills_json != null && tierRank(currentTier) >= tierRank(tier)) return { applied: false, cardKey };
+  if (row.skills_id != null && tierRank(currentTier) >= tierRank(tier)) return { applied: false, cardKey };
   const tierLabel = tier === null ? null : (typeof mint.tierLabel === "string" ? mint.tierLabel.slice(0, 60) : null);
   const skillsJson = JSON.stringify(skills);
   if (skillsJson.length > PACK_CARD_SKILLS_MAX_CHARS) return { applied: false, cardKey };
 
   const nextKey = packCardKey(cardUserId, tier);
+  const tierSlot = packCardTierSlot(tier);
+  const skillsId = (await internPackCardSkills(db, [skillsJson])).get(skillsJson) ?? null;
+  const statements: DbStatement[] = [
+    // The variant this mint lands on, seeded if the catalog never saw it.
+    // Identity comes from the users row when there is one, else from whatever
+    // variant of this card the catalog already holds, since this route carries
+    // no identity of its own.
+    {
+      sql: `insert or ignore into pack_cards (
+              card_key, tier, card_user_id, username, avatar_url, country_code, tier_label, updated_at
+            )
+            select ?, ?, ?,
+              coalesce((select u.username from users u where u.user_id = ?),
+                (select pc.username from pack_cards pc where pc.card_user_id = ? and pc.username != '' limit 1), ''),
+              coalesce((select u.avatar_url from users u where u.user_id = ?),
+                (select pc.avatar_url from pack_cards pc where pc.card_user_id = ? and pc.avatar_url != '' limit 1), ''),
+              coalesce((select u.country_code from users u where u.user_id = ?),
+                (select pc.country_code from pack_cards pc where pc.card_user_id = ? and pc.country_code != '' limit 1), ''),
+              ?, ?`,
+      args: [
+        nextKey, tierSlot, cardUserId,
+        cardUserId, cardUserId,
+        cardUserId, cardUserId,
+        cardUserId, cardUserId,
+        tierLabel,
+        now,
+      ],
+    },
+    // A variant seeded before this mint may have no label yet; the mint's is
+    // the first one that describes it.
+    {
+      sql: "update pack_cards set tier_label = coalesce(tier_label, ?), updated_at = ? where card_key = ? and tier = ?",
+      args: [tierLabel, now, nextKey, tierSlot],
+    },
+  ];
+
   if (nextKey === cardKey) {
-    await exec(
-      db,
-      `update pack_collection_cards
-       set tier = ?, tier_label = ?, skills_json = ?, updated_at = ?
-       where owner_user_id = ? and card_key = ?`,
-      [tier, tierLabel, skillsJson, now, ownerUserId, cardKey],
-    );
+    statements.push({
+      sql: `update pack_collection_cards
+            set tier = ?, skills_id = ?, updated_at = ?
+            where owner_user_id = ? and card_key = ?`,
+      args: [tier, skillsId, now, ownerUserId, cardKey],
+    });
+    await execBatch(db, statements);
     return { applied: true, cardKey };
   }
 
   // Key move: fold this card's copies into the destination key, then drop the
   // old row. One batch so a crash can never leave the copies duplicated across
   // both keys (or lost from both).
-  await execBatch(db, [
+  statements.push(
     {
       sql: `insert into pack_collection_cards (
-              owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label, skills_json,
-              pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
+              owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank,
+              copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
             )
-            select owner_user_id, card_user_id, ?, username, avatar_url, country_code, ?, ?, ?,
-              pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, ?
+            select owner_user_id, card_user_id, ?, ?, ?, pp, global_rank, copies, recycled_copies,
+              first_pulled_at, last_pulled_at, ?
             from pack_collection_cards
             where owner_user_id = ? and card_key = ?
             on conflict(owner_user_id, card_key) do update set
               tier = excluded.tier,
-              tier_label = excluded.tier_label,
-              skills_json = excluded.skills_json,
+              skills_id = excluded.skills_id,
               copies = pack_collection_cards.copies + excluded.copies,
               recycled_copies = pack_collection_cards.recycled_copies + excluded.recycled_copies,
               first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
               last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
               updated_at = excluded.updated_at`,
-      args: [nextKey, tier, tierLabel, skillsJson, now, ownerUserId, cardKey],
+      args: [nextKey, tier, skillsId, now, ownerUserId, cardKey],
     },
     {
       sql: "delete from pack_collection_cards where owner_user_id = ? and card_key = ?",
       args: [ownerUserId, cardKey],
     },
-  ]);
+  );
+  await execBatch(db, statements);
   return { applied: true, cardKey: nextKey };
 }
 
@@ -912,6 +1097,92 @@ export async function ensurePackCollectionCardKeys(db: Db): Promise<boolean> {
   return true;
 }
 
+/* pack_collection_cards used to carry each card's name, avatar, country, tier
+   label and skills snapshot on every ownership row. At a million-plus rows
+   those columns were most of the table, and the identity ones were the same
+   string over and over for every owner of a card.
+
+   Identity moves to one row per variant in pack_cards. The snapshot does not
+   collapse that way - it is frozen per owner at the pull that minted it, and
+   owners who pulled the same player weeks apart genuinely hold different
+   numbers - so it is interned instead: one pack_card_skills row per distinct
+   snapshot, referenced by id. Every owner keeps exactly the snapshot they had,
+   which is the difference between this and merging them.
+
+   Guarded on the column rather than a marker, for the rekey's reason: a
+   restored or hand-repaired database can never skip a rebuild it needs. Runs
+   after ensurePackCollectionCardKeys, which guarantees card_key exists. */
+export async function ensurePackCardCatalog(db: Db): Promise<boolean> {
+  const columns = (await exec(db, "pragma table_info(pack_collection_cards)")).rows;
+  if (columns.length === 0) return false;
+  if (!columns.some((column) => String(column.name) === "username")) return false;
+
+  // Identity per variant: the most recently written row wins, so a rename or
+  // new avatar that reached any holding is the one the catalog keeps.
+  await exec(
+    db,
+    `insert or ignore into pack_cards (
+       card_key, tier, card_user_id, username, avatar_url, country_code, tier_label, updated_at
+     )
+     select card_key, coalesce(tier, ''), card_user_id, username, avatar_url, country_code,
+       tier_label, updated_at
+     from (
+       select *, row_number() over (
+         partition by card_key, coalesce(tier, '')
+         order by updated_at desc, owner_user_id asc
+       ) as rn
+       from pack_collection_cards
+     )
+     where rn = 1`,
+  );
+  await exec(
+    db,
+    `insert or ignore into pack_card_skills (skills_json)
+     select distinct skills_json from pack_collection_cards where skills_json is not null`,
+  );
+
+  await exec(db, "drop table if exists pack_collection_cards_slim");
+  await exec(
+    db,
+    `create table pack_collection_cards_slim (
+       owner_user_id integer not null,
+       card_user_id integer not null,
+       card_key text not null,
+       tier text,
+       skills_id integer,
+       pp real not null,
+       global_rank integer not null,
+       copies integer not null,
+       recycled_copies integer not null,
+       first_pulled_at integer not null,
+       last_pulled_at integer not null,
+       updated_at integer not null,
+       primary key(owner_user_id, card_key)
+     )`,
+  );
+  await exec(
+    db,
+    `insert into pack_collection_cards_slim
+       (owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank, copies,
+        recycled_copies, first_pulled_at, last_pulled_at, updated_at)
+     select c.owner_user_id, c.card_user_id, c.card_key, c.tier, sk.id, c.pp, c.global_rank, c.copies,
+       c.recycled_copies, c.first_pulled_at, c.last_pulled_at, c.updated_at
+     from pack_collection_cards c
+     left join pack_card_skills sk on sk.skills_json = c.skills_json`,
+  );
+  await exec(db, "drop table pack_collection_cards");
+  await exec(db, "alter table pack_collection_cards_slim rename to pack_collection_cards");
+  await exec(
+    db,
+    "create index if not exists idx_pack_collection_owner_tier on pack_collection_cards(owner_user_id, tier, copies, pp desc)",
+  );
+  await exec(
+    db,
+    "create index if not exists idx_pack_collection_card_pulled on pack_collection_cards(card_user_id, first_pulled_at)",
+  );
+  return true;
+}
+
 /* Which of these cards an account actually holds a copy of right now.
 
    Duels stake real cards, so a hand is no longer a claim the server takes on
@@ -968,8 +1239,9 @@ export async function transferPackCollectionCards(
   for (const cardKey of keys) {
     const row = (await exec(
       db,
-      `select card_user_id, username, avatar_url, country_code, tier, tier_label, skills_json, pp, global_rank,
-              copies, first_pulled_at, last_pulled_at
+      `select card_user_id, tier, copies, first_pulled_at, skills_id, pp, global_rank,
+              ${catalogFieldSql("username")} as username,
+              ${catalogFieldSql("tier_label")} as tier_label
        from pack_collection_cards
        where owner_user_id = ? and card_key = ?`,
       [fromUserId, cardKey],
@@ -997,29 +1269,35 @@ export async function transferPackCollectionCards(
     // Lost a race with a recycle: the shard fallback covers it next read.
     if (taken === 0) continue;
 
-    await upsertPackCard(
+    // Only the ownership row moves: the card's identity and its snapshot are
+    // already interned (the loser held it), so the winner's row points at the
+    // same rows rather than copying anything.
+    await exec(
       db,
-      toUserId,
-      {
-        userId: Number(row.card_user_id) || 0,
+      `insert into pack_collection_cards (
+         owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank,
+         copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
+       ) values (?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?)
+       on conflict(owner_user_id, card_key) do update set
+         copies = max(0, pack_collection_cards.copies + 1),
+         skills_id = coalesce(pack_collection_cards.skills_id, excluded.skills_id),
+         first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
+         last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
+         updated_at = excluded.updated_at`,
+      [
+        toUserId,
+        Number(row.card_user_id) || 0,
         cardKey,
-        username,
-        avatarUrl: String(row.avatar_url ?? ""),
-        countryCode: String(row.country_code ?? ""),
         tier,
-        tierLabel,
-        skills: row.skills_json ? parseJson<unknown | null>(String(row.skills_json), null) : null,
-        pp: Number(row.pp) || 0,
-        globalRank: Number(row.global_rank) || 0,
-        copies: 1,
-        recycledCopies: 0,
+        row.skills_id == null ? null : Number(row.skills_id),
+        Number(row.pp) || 0,
+        Number(row.global_rank) || 0,
         // A won card is new to this collection today, but it was first pulled
         // when the loser pulled it, and the album sorts on that.
-        firstPulledAt: Number(row.first_pulled_at) || now,
-        lastPulledAt: now,
-      },
-      now,
-      "delta",
+        Number(row.first_pulled_at) || now,
+        now,
+        now,
+      ],
     );
     moved.push({ cardKey, username, tier, tierLabel, shards: 0 });
   }

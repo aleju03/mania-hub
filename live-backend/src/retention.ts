@@ -151,9 +151,12 @@ function daysAgo(days: number): string {
 // not accumulate forever alongside the never-pruned active marks.
 export const RESOLVED_FARM_HELPER_FEEDBACK_RETENTION_DAYS = 180;
 
-// Ordinary pack pulls feed only short-window stats; notable ones back the
-// community feed and are rare enough to keep for a year.
-export const PACK_PULL_EVENT_RETENTION_DAYS = 60;
+// Ordinary pack pulls feed only short-window stats (the hourly pull cap, the
+// 7-day "got pulled" count, the recent-pulls ticker), and first-global checks
+// read the durable serial registry rather than this log, so two weeks covers
+// every reader with margin. Notable ones back the community feed and are rare
+// enough to keep for a year.
+export const PACK_PULL_EVENT_RETENTION_DAYS = 14;
 export const NOTABLE_PACK_PULL_EVENT_RETENTION_DAYS = 365;
 
 // Long enough that a suspicious board entry can still be checked against the

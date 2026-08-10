@@ -67,8 +67,13 @@ const USERNAME_MAX_LENGTH = 32;
      length, not just a 30-hour one.
    ========================================================================== */
 export const GOAT_POLL: { enabled: boolean; adminOnly: boolean; id: string; opensAt: string; closesAt: string } = {
-  enabled: true,
-  // Released: public board, anyone signed in can nominate and vote.
+  // Retired: the window closed, the winner is on the honorary roster, and the
+  // widget is off the packs page. The board itself is untouched in
+  // goat_poll_nominees / goat_poll_votes (neither table is pruned), so the
+  // result stays readable in the database. A rerun bumps `id` below and flips
+  // this back rather than clearing anything.
+  enabled: false,
+  // Released while it ran: public board, anyone signed in could nominate and vote.
   adminOnly: false,
   // The first real poll. 30 hours rather than 24 so the window covers every
   // timezone's waking hours at least once — a 24-hour poll opening at this

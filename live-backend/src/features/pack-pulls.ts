@@ -281,32 +281,32 @@ export async function recordPackPullEvents(
   }
 
   // First-global means nobody, anywhere, holds or ever pulled this card: no
-  // prior event and no other owner's collection row (the caller's own row may
-  // already exist when the wallet sync raced this call). "This card" is the
-  // card key, not the player — a GOAT card is its own card, same as the serial
-  // registry — so when a circulating player joins the honorary roster, the
-  // first GOAT pull of them reads as a first even though their ordinary card
-  // has owners everywhere. The events table predates card keys and stores a
-  // tier instead, and GOAT-ness of the key is exactly `tier = 'goat'`, so the
-  // key is rebuilt from that. Both facts are read set-based here so every
-  // write below can travel in one batch; `seenInPull` stands in for the
-  // read-after-write the old per-card loop got for free, so the same card
+  // serial ever minted and no other owner's collection row (the caller's own
+  // row may already exist when the wallet sync raced this call). "This card"
+  // is the card key, not the player — a GOAT card is its own card — so when a
+  // circulating player joins the honorary roster, the first GOAT pull of them
+  // reads as a first even though their ordinary card has owners everywhere.
+  // The serial registry is the durable record of every logged pull (and is
+  // seeded from collections at boot), so it answers this where the pull log
+  // cannot: pull events are pruned on a short retention now, and an event
+  // aging out must not resurrect "first". Both facts are read set-based here
+  // so every write below can travel in one batch; `seenInPull` stands in for
+  // the read-after-write the old per-card loop got for free, so the same card
   // twice in one pack is still only first-global once. Two owners racing over
   // a brand-new card can still both read "first" — the reads sat outside any
   // transaction before the batch too, and the flag is social flavor, never
   // economy.
   const cardUserIds = [...new Set(normalized.map((card) => card.userId))];
   const pulledKeys = new Set(normalized.map((card) => packCardKey(card.userId, card.tier)));
-  const withPriorEvents = new Set(
+  const withPriorSerials = new Set(
     (await exec(
       db,
-      `select distinct card_user_id, case when tier = 'goat' then 1 else 0 end as goat
-       from pack_pull_events
-       where card_user_id in (${cardUserIds.map(() => "?").join(", ")})`,
-      cardUserIds as InValue[],
-    )).rows.map((row) => packCardKey(Number(row.card_user_id), Number(row.goat) === 1 ? "goat" : null)),
+      `select distinct card_key from pack_card_serials
+       where card_key in (${[...pulledKeys].map(() => "?").join(", ")})`,
+      [...pulledKeys] as InValue[],
+    )).rows.map((row) => String(row.card_key)),
   );
-  const anyUnproven = [...pulledKeys].some((key) => !withPriorEvents.has(key));
+  const anyUnproven = [...pulledKeys].some((key) => !withPriorSerials.has(key));
   const withOtherOwners = new Set(
     !anyUnproven
       ? []
@@ -328,7 +328,7 @@ export async function recordPackPullEvents(
   for (const card of normalized) {
     const cardKey = packCardKey(card.userId, card.tier);
     const isFirstGlobal =
-      !withPriorEvents.has(cardKey) && !withOtherOwners.has(cardKey) && !seenInPull.has(cardKey);
+      !withPriorSerials.has(cardKey) && !withOtherOwners.has(cardKey) && !seenInPull.has(cardKey);
     seenInPull.add(cardKey);
     const notable = isFirstGlobal || (card.tier !== null && NOTABLE_TIERS.has(card.tier));
     pending.push({ card, cardKey, isFirstGlobal, eventIndex: statements.length });
@@ -356,6 +356,15 @@ export async function recordPackPullEvents(
     // unserialled until that browser logs in and pulls them again.
     statements.push(packCardSerialInsertStatement(cardKey, card.userId, ownerUserId, now));
   }
+  // Remember the name these pulls were recorded under on the wallet row, which
+  // is durable; the pull rows themselves are pruned, and the collector-name
+  // fallbacks read this column once they are gone. Update, not upsert: a pull
+  // from a browser that never synced a wallet just skips the stamp until it
+  // does, rather than planting a default wallet under the sync path's feet.
+  statements.push({
+    sql: "update pack_wallets set owner_username = ? where user_id = ?",
+    args: [ownerUsername.slice(0, 40), ownerUserId],
+  });
   const results = await execBatch(db, statements);
 
   const eventIds: number[] = [];
@@ -501,6 +510,7 @@ export async function getPackCardCollectors(
          where s.card_key = c.card_key and s.owner_user_id = c.owner_user_id) as serial,
        coalesce(
          (select u.username from users u where u.user_id = c.owner_user_id),
+         (select w.owner_username from pack_wallets w where w.user_id = c.owner_user_id),
          (select e.owner_username from pack_pull_events e
            where e.owner_user_id = c.owner_user_id order by e.pulled_at desc limit 1)
        ) as owner_username
@@ -600,27 +610,42 @@ export async function getSharedPackCard(
   const row = (await exec(
     db,
     `select pack_collection_cards.*,
+       pc.username as username,
+       pc.avatar_url as avatar_url,
+       pc.country_code as country_code,
+       pc.tier_label as tier_label,
+       sk.skills_json as skills_json,
        (select u.username from users u where u.user_id = pack_collection_cards.card_user_id) as live_username,
        (select u.avatar_url from users u where u.user_id = pack_collection_cards.card_user_id) as live_avatar_url,
        (select u.country_code from users u where u.user_id = pack_collection_cards.card_user_id) as live_country_code,
        (select u.username from users u where u.user_id = pack_collection_cards.owner_user_id) as live_owner_username
      from pack_collection_cards
-     where owner_user_id = ? and card_user_id = ? and copies > 0
-     order by ${tierRankSql("tier")} desc
+     left join pack_cards pc
+       on pc.card_key = pack_collection_cards.card_key
+       and pc.tier = coalesce(pack_collection_cards.tier, '')
+     left join pack_card_skills sk on sk.id = pack_collection_cards.skills_id
+     where pack_collection_cards.owner_user_id = ? and pack_collection_cards.card_user_id = ?
+       and pack_collection_cards.copies > 0
+     order by ${tierRankSql("pack_collection_cards.tier")} desc
      limit 1`,
     [ownerUserId, cardUserId],
   )).rows[0];
   if (!row) return null;
-  // The owner may not be a tracked player (no users row); the pull log then
-  // remembers the name their pulls were recorded under.
+  // The owner may not be a tracked player (no users row); the wallet then
+  // remembers the name their pulls were recorded under (durably), with the
+  // pull log as a last resort for wallets from before the stamp existed.
   let ownerUsername = nonEmptyString(row.live_owner_username);
   if (!ownerUsername) {
-    const eventRow = (await exec(
+    const fallbackRow = (await exec(
       db,
-      "select owner_username from pack_pull_events where owner_user_id = ? order by pulled_at desc limit 1",
-      [ownerUserId],
+      `select coalesce(
+         (select w.owner_username from pack_wallets w where w.user_id = ?),
+         (select e.owner_username from pack_pull_events e
+           where e.owner_user_id = ? order by e.pulled_at desc limit 1)
+       ) as owner_username`,
+      [ownerUserId, ownerUserId],
     )).rows[0];
-    ownerUsername = nonEmptyString(eventRow?.owner_username);
+    ownerUsername = nonEmptyString(fallbackRow?.owner_username);
   }
   const ownersRow = (await exec(
     db,
@@ -835,9 +860,12 @@ export async function getHonoraryPullsReport(
   const args = ids as InValue[];
   const rows = (await exec(
     db,
-    `select card_user_id, owner_user_id, copies, first_pulled_at, last_pulled_at, updated_at, username as card_username,
+    `select card_user_id, owner_user_id, copies, first_pulled_at, last_pulled_at, updated_at,
+       (select pc.username from pack_cards pc
+         where pc.card_key = c.card_key and pc.tier = 'goat') as card_username,
        coalesce(
          (select u.username from users u where u.user_id = c.owner_user_id),
+         (select w.owner_username from pack_wallets w where w.user_id = c.owner_user_id),
          (select e.owner_username from pack_pull_events e
            where e.owner_user_id = c.owner_user_id order by e.pulled_at desc limit 1)
        ) as owner_username

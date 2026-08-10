@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
+import { seedCardCatalogEntry } from "./helpers/pack-cards.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -83,24 +84,23 @@ const STAT_ORDER: TrumpStat[] = ["control", "speed", "precision", "stars"];
    can be staked. This is the pull that would have put it there. */
 async function grantCards(ownerUserId: number, cards: PackDuelCard[], copies = 1): Promise<void> {
   for (const card of cards) {
+    await seedCardCatalogEntry(db, card.userId, {
+      tier: card.tier,
+      tierLabel: card.tierLabel,
+      username: card.username,
+      avatarUrl: "",
+      pp: card.pp,
+      globalRank: card.globalRank,
+      updatedAt: 1,
+    });
     await exec(
       db,
       `insert into pack_collection_cards (
-         owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label,
-         skills_json, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
-       ) values (?, ?, ?, ?, '', 'CR', ?, ?, null, ?, ?, ?, 0, 1, 1, 1)
+         owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank,
+         copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
+       ) values (?, ?, ?, ?, null, ?, ?, ?, 0, 1, 1, 1)
        on conflict(owner_user_id, card_key) do update set copies = pack_collection_cards.copies + excluded.copies`,
-      [
-        ownerUserId,
-        card.userId,
-        String(card.userId),
-        card.username,
-        card.tier,
-        card.tierLabel,
-        card.pp,
-        card.globalRank,
-        copies,
-      ],
+      [ownerUserId, card.userId, String(card.userId), card.tier, card.pp, card.globalRank, copies],
     );
   }
 }

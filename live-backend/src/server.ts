@@ -24,7 +24,7 @@ import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
 import { backfillPackCardSerials } from "./features/pack-pulls.js";
 import { ensurePackDuelsSchema } from "./features/pack-duels.js";
-import { ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
+import { ensurePackCardCatalog, ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
 import { backfillSkinSlugs } from "./features/skins.js";
 import { isSkinStorageConfigured, readSkinObject, skinObjectDeletesEnabled } from "./skins/r2.js";
 import { backfillSkinSpecialKeymodes } from "./skins/special-backfill.js";
@@ -188,6 +188,11 @@ export async function createApp() {
     // rows are keyed (owner, card_key) now. Rebuilds the table once on a
     // database created before that; a no-op on every boot after.
     await bootWrite("rekey_pack_collection_cards", () => ensurePackCollectionCardKeys(db));
+    // Card faces (name, avatar, skills snapshot, mint stats) moved to one row
+    // per variant in pack_cards; ownership rows keep only copies, tier and
+    // stamps. Seeds the catalog and rebuilds the table slim once on a database
+    // from before the split; a no-op on every boot after.
+    await bootWrite("split_pack_card_catalog", () => ensurePackCardCatalog(db));
     // Card serials arrived after people had been collecting for months, so the
     // mint registry is seeded from the collections themselves (each row knows
     // when its owner first pulled the card). Only fills gaps, so every boot
