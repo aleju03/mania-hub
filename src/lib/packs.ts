@@ -9,7 +9,7 @@ import {
   warmLivePackPlayers,
   type LiveGlobalRankingEntry,
 } from "./live-backend";
-import { HONORARY_PACK_POOL, type HonoraryPlayer } from "./honorary-players";
+import { HONORARY_PACK_POOL, isHonoraryPlayer, type HonoraryPlayer } from "./honorary-players";
 import { getUserScoresBestWindow } from "./osu";
 import type { OsuScore } from "./types";
 
@@ -65,8 +65,9 @@ export interface PackTypeDef {
   /* Replaces owned pulls with unowned cards from the same slice when possible. */
   guaranteesNew?: boolean;
   /* Probability (0-1) that one slot in the pack is replaced by a random
-     honorary player. They are absent from the ranked pool by design (see
-     honorary-players.ts), so this is the only way to pull them. */
+     honorary player. The ranked pool is stripped of them on the way in (see
+     withoutHonoraryMembers), so this is the only way to pull them, and the
+     roster is drawn from uniformly here, so it is the same way for each. */
   honoraryChance: number;
   /* Probability (0-1) that a pack which already hit rolls *another* honorary
      into the slot before it, re-rolled after each one, so a hot pack can keep
@@ -283,6 +284,31 @@ function poolPageFetcherFor(keys?: 4 | 7): PoolPageFetcher {
       ...(keys ? { keys } : {}),
     });
     return { ranking: snapshot.ranking, total: snapshot.total };
+  };
+}
+
+/* Strips the honorary roster out of every pool page a draw reads.
+ *
+ * The honorary slot is meant to be the only way a GOAT is dealt, at a flat
+ * per-pack chance and then uniformly across the roster. But the tier is awarded
+ * by user id (see maniacard.ts), not by card power, so a roster member dealt by
+ * the ordinary pool mints as a GOAT just the same, and several of them are live
+ * ranked players sitting in the pool board. The two paths added up in favour of
+ * whoever ranks highest: the top of the roster was pulled roughly fourteen
+ * times as often as its deleted accounts, because a top-ranked player is inside
+ * every pack's rank slice while a deleted one is inside none.
+ *
+ * Filtering at the page level rather than at the pick catches all of it at once:
+ * the first pick, the owned and not-ready re-rolls, and the extra pages a re-roll
+ * loads, since they all read the pool through this fetcher. `total` is left
+ * alone so pool size, the rank slices and the collection denominators do not
+ * shift under an edit to the roster.
+ */
+function withoutHonoraryMembers(fetchPage: PoolPageFetcher): PoolPageFetcher {
+  return async (page) => {
+    const response = await fetchPage(page);
+    const ranking = response.ranking.filter((entry) => !isHonoraryPlayer(entry.user.id));
+    return ranking.length === response.ranking.length ? response : { ...response, ranking };
   };
 }
 
@@ -586,7 +612,7 @@ export async function drawPackPlayersFromPool(
   fetchPage?: PoolPageFetcher,
   options: PackDrawOptions = {},
 ): Promise<PackDraw> {
-  const fetchPoolPage = fetchPage ?? poolPageFetcherFor(options.keys);
+  const fetchPoolPage = withoutHonoraryMembers(fetchPage ?? poolPageFetcherFor(options.keys));
   const head = await fetchPoolPage(1);
   const total = Math.max(head.total, head.ranking.length);
   if (total < 100) throw new Error("Tracked player pool is too small for packs.");

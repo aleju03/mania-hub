@@ -35,7 +35,7 @@ import {
   LiveBackendRequestError,
 } from "./live-backend";
 import { getRankings, getUserScoresBestWindow } from "./osu";
-import { HONORARY_PACK_POOL } from "./honorary-players";
+import { HONORARY_PACK_POOL, HONORARY_PLAYERS } from "./honorary-players";
 
 vi.mock("./live-backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./live-backend")>()),
@@ -266,6 +266,48 @@ describe("tracked pool draws", () => {
         expect(player.user.id - 100_000).toBeLessThanOrEqual(rankToPage(topSlice) * RANKINGS_PAGE_SIZE);
       }
     }
+  });
+
+  /* The honorary slot is the only way a GOAT is dealt, so it has to be the only
+     way. Several roster members are live ranked players who sit in the pool
+     board, and the tier goes by user id, so an ordinary slot that dealt one
+     minted a GOAT all the same - a second path that only the highest-ranked
+     honorees had, since they are the ones inside every pack's rank slice. */
+  it("never deals a roster member off the ordinary pool, however high they rank", async () => {
+    // Planted at the very top, so a sliced pack draws over them constantly.
+    const planted = HONORARY_PLAYERS.slice(0, 6).map((player) => player.id);
+    const plantAtTop = (ids: number[]) => {
+      const { fetchPage } = makePoolFetcher(5853);
+      return async (page: number) => {
+        const response = await fetchPage(page);
+        if (page !== 1) return response;
+        return {
+          ...response,
+          ranking: response.ranking.map((entry, index) =>
+            index < ids.length ? { ...entry, user: { ...entry.user, id: ids[index] } } : entry,
+          ),
+        };
+      };
+    };
+
+    const dealt = new Set<number>();
+    for (let seed = 1; seed <= 60; seed += 1) {
+      // Legend's slice, which is where the planted ranks sit.
+      const { players } = await drawPackPlayersFromPool(mulberry32(seed), plantAtTop(planted), { topFraction: 0.02 });
+      expect(players).toHaveLength(PACK_SIZE);
+      for (const player of players) dealt.add(player.user.id);
+    }
+    for (const id of planted) expect(dealt.has(id)).toBe(false);
+
+    // Control, so the assertion above cannot pass because those ranks are never
+    // drawn at all: ordinary players planted in the same seats do come out.
+    const ordinary = planted.map((id) => id + 7_000_000);
+    const dealtOrdinary = new Set<number>();
+    for (let seed = 1; seed <= 60; seed += 1) {
+      const { players } = await drawPackPlayersFromPool(mulberry32(seed), plantAtTop(ordinary), { topFraction: 0.02 });
+      for (const player of players) dealtOrdinary.add(player.user.id);
+    }
+    expect(ordinary.some((id) => dealtOrdinary.has(id))).toBe(true);
   });
 
   it("refuses tiny pools so a misconfigured backend cannot produce junk packs", async () => {
