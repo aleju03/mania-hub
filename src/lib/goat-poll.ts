@@ -158,7 +158,7 @@ export const nominateGoatPollPlayer = createServerFn({ method: "POST" })
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     // The roster lives in one place (honorary-players.ts), so the "they are
-    // already a GOAT" check happens here rather than duplicating 23 ids into the
+    // already a GOAT" check happens here rather than duplicating 24 ids into the
     // backend. Three ways in, so all three are checked: the player search (an
     // id), the manual form (a name), and the archive proof — whose URL is where
     // a deleted honoree's id actually comes from, since the manual form never

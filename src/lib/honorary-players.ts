@@ -1,6 +1,6 @@
 /* The honorary roster: osu!mania's historical greats.
 
-   These twenty-three carry the GOAT tier by user id (see maniacard.ts) rather
+   These twenty-four carry the GOAT tier by user id (see maniacard.ts) rather
    than by card power, and they are the only source of that tier. Many of them
    stopped playing long before the current rating ladder existed, and the
    ranked pool can't represent them:
@@ -10,11 +10,16 @@
      (live-backend/seeds/archived-players);
    - seven more still exist but were wiped to 0pp and are unranked, so they are
      absent from the global rankings snapshot the pack pool draws from;
-   - the rest are still ranked, but a rank-ordered pool would bury the ones
-     whose peak is long behind them.
+   - the rest are still ranked, and some of them rank high enough to sit in
+     every pack's draw slice.
 
    So packs reach them through a dedicated honorary slot instead of the ranked
-   pool. Rank/pp here are archival - the peak each player reached, not a live
+   pool, and the pool is stripped of the whole roster on the way in
+   (withoutHonoraryMembers in packs.ts). Otherwise the two paths would add up
+   for exactly the members who need it least: the tier is awarded by id, so a
+   pool-dealt honoree mints as a GOAT too, and the top of the roster would be
+   pulled many times as often as a deleted account nobody can draw any other
+   way. Rank/pp here are archival - the peak each player reached, not a live
    figure - because for this roster the peak is the meaningful number.
 */
 
@@ -288,6 +293,16 @@ export const HONORARY_PLAYERS: readonly HonoraryPlayer[] = [
     avatarUrl: "https://a.ppy.sh/13601876?1769691318.png",
     peakRank: 139,
     peakPp: 16712.3,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 758406,
+    username: "dressurf",
+    countryCode: "KR",
+    avatarUrl: "https://a.ppy.sh/758406?1771319090.png",
+    peakRank: 1,
+    peakPp: 28450.6,
     archived: false,
     cardReady: true,
   },

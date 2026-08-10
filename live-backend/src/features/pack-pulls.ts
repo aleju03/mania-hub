@@ -127,7 +127,7 @@ function normalizePullCard(value: unknown): PackPullCardInput | null {
    is built from this table, so requiring a users row costs a real pull nothing
    and is the cheapest available proof that the player exists.
 
-   Honorary ids are allowlisted alongside: that roster is 23 hardcoded entries
+   Honorary ids are allowlisted alongside: that roster is 24 hardcoded entries
    of mostly retired accounts, some of which the ingest has no reason to hold,
    and being on the list is itself the proof. */
 async function resolvePullCardIdentities(
