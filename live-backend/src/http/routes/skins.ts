@@ -5,6 +5,7 @@ import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import { clientIp } from "../abuse-guard.js";
 import { readCachedSkinImage } from "../../skins/image-cache.js";
+import { drawPreviewPatterns } from "../../skins/preview-patterns.js";
 import { copySkinObject, deleteSkinObjects, getSkinObject, isPrivateSkinKey, isSkinStorageConfigured, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, privateSkinKey, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../../skins/r2.js";
 import { getReplaySkinBundle, replaySkinBundleVersion } from "../../skins/replay-bundle.js";
 import { sniffImage, validateOskBuffer } from "../../skins/validate-osk.js";
@@ -118,6 +119,40 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
         Number.isInteger(limit) ? limit : 6,
         Number.isInteger(keys) && keys >= 1 && keys <= 10 ? keys : null,
       ),
+    });
+    return true;
+  }
+  if (url.pathname === "/api/skins/preview-patterns") {
+    // The chart snippets a skin preview can be rendered from: cut out of the
+    // .osu files already cached here, so an uploader picks a real pattern from
+    // a real map instead of the one synthetic layout every skin used to share.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    // A draw is a handful of gunzips and parses, so it does not ride the plain
+    // public budget.
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    const keys = Number(url.searchParams.get("keys"));
+    if (!Number.isInteger(keys) || keys < 1 || keys > 18) {
+      sendJson(req, res, ctx, 400, { error: "invalid_keys" });
+      return true;
+    }
+    const count = Number(url.searchParams.get("count") ?? 8);
+    const exclude = (url.searchParams.get("exclude") ?? "")
+      .split(",")
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0)
+      .slice(0, 64);
+    // Every draw is a different set of charts, so caching one would hand the
+    // next uploader the previous one's shuffle.
+    res.setHeader("cache-control", "no-store");
+    sendJson(req, res, ctx, 200, {
+      patterns: await drawPreviewPatterns(ctx.db, {
+        keys,
+        count: Number.isFinite(count) ? count : 8,
+        exclude,
+      }),
     });
     return true;
   }

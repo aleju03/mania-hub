@@ -1,5 +1,6 @@
 import { importReplaySkinFromOsk } from "./replay-skin-import";
 import { BackdropDealer, drawSkinPreviewBackdrops, SKIN_BACKDROP_POOL_SIZE } from "./skin-preview-backdrops";
+import { PatternDealer } from "./skin-preview-patterns";
 import { loadSkinPreviewBackgroundForSet, renderSkinPreview } from "./skin-preview-render";
 import {
   finishSkinUpload,
@@ -180,6 +181,10 @@ export interface BulkUploadContext {
   // Deals each skin its own cover; see drawBulkBackdrops.
   dealer: BackdropDealer;
   backdrops: Map<number, HTMLImageElement | null>;
+  // Deals each keymode of each skin its own chart snippet, so a bulk run does
+  // not publish twenty cards showing the same notes. Optional: a run without
+  // one renders the built-in layout.
+  patterns?: PatternDealer;
   cancelled: () => boolean;
   // Shared across the whole run: the window is per IP, not per file.
   pacer: RequestPacer;
@@ -231,7 +236,9 @@ export async function publishBulkSkin(
       renders = [];
       for (const keys of keymodes) {
         stopIfCancelled();
-        const render = await renderSkinPreview(imported.settings, keys, { background });
+        const pattern = (await context.patterns?.next(keys)) ?? null;
+        stopIfCancelled();
+        const render = await renderSkinPreview(imported.settings, keys, { background, pattern });
         renders.push({ keys, blob: render.blob, width: render.width, height: render.height, accent: render.accent });
         onUpdate({ phase: "rendering", progress: renders.length / keymodes.length });
       }

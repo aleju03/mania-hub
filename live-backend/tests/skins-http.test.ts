@@ -7,7 +7,7 @@ import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import JSZip from "jszip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createDb, migrate, type Db } from "../src/db.js";
+import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -49,6 +49,8 @@ vi.mock("../src/skins/r2.js", async (importOriginal) => {
 
 import { copySkinObject, deleteSkinObjects, getSkinObject, readSkinObject, uploadSkinObject } from "../src/skins/r2.js";
 import { clearSkinImageCache } from "../src/skins/image-cache.js";
+import { resetPreviewPatternCaches } from "../src/skins/preview-patterns.js";
+import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { clearSimilarSkinsCache, clearSkinDownloadDedup } from "../src/features/skins.js";
 
 let dir = "";
@@ -71,6 +73,7 @@ beforeEach(async () => {
   // Process-level, so a fresh database per test has to drop them too.
   clearSimilarSkinsCache();
   clearSkinDownloadDedup();
+  resetPreviewPatternCaches();
 });
 
 afterEach(async () => {
@@ -208,6 +211,33 @@ async function startUpload(): Promise<{ id: string; token: string }> {
   ));
   expect(started.status).toBe(200);
   return { id: started.body.id as string, token: started.body.token as string };
+}
+
+// A catalog entry plus the cached .osu behind it, which is all the preview
+// pattern pool draws from.
+async function seedCachedChart(keys: number): Promise<void> {
+  await exec(
+    db,
+    `insert into maps_beatmapsets (beatmapset_id, title, artist, status, updated_at)
+     values (55500, 'Song', 'Artist', 'ranked', '2026-01-01T00:00:00.000Z')`,
+  );
+  await exec(
+    db,
+    `insert into maps_beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, version, updated_at)
+     values (55501, 55500, 'mania', 'ranked', ?, 6.4, ?, '2026-01-01T00:00:00.000Z')`,
+    [keys, `[${keys}K] Extra`],
+  );
+  const notes = Array.from({ length: 64 }, (_, index) => {
+    const column = index % keys;
+    const time = 1000 + index * 140;
+    return `${Math.floor(((column + 0.5) * 512) / keys)},192,${time},1,0,0:0:0:0:`;
+  }).join("\n");
+  await storeCachedBeatmapFile(
+    db,
+    55501,
+    `osu file format v14\n\n[General]\nAudioFilename: a.mp3\nMode: 3\n\n[Metadata]\nTitle: Song\nArtist: Artist\nVersion: ${keys}K\n\n[Difficulty]\nCircleSize:${keys}\nOverallDifficulty:8\n\n[TimingPoints]\n0,500,4,2,0,100,1,0\n\n[HitObjects]\n${notes}\n`,
+    { beatmapsetId: 55500, source: "test" },
+  );
 }
 
 describe("skins HTTP endpoints", () => {
@@ -596,6 +626,23 @@ describe("skins HTTP endpoints", () => {
 
     // A true admin may retitle someone else's skin.
     expect((await edit({ userId: 202, id, name: "Moderated", asAdmin: true }, ADMIN)).status).toBe(200);
+  });
+
+  it("deals chart snippets for the preview picker, per keymode", async () => {
+    await seedCachedChart(4);
+
+    const drawn = await call(mockReq("GET", "/api/skins/preview-patterns?keys=4&count=4"));
+    expect(drawn.status).toBe(200);
+    expect(drawn.headers["cache-control"]).toBe("no-store");
+    expect(drawn.body.patterns).toHaveLength(1);
+    expect(drawn.body.patterns[0]).toMatchObject({ beatmapId: 55501, keys: 4, label: "Artist - Song [[4K] Extra]" });
+    expect(drawn.body.patterns[0].notes.length).toBeGreaterThan(6);
+
+    // A keymode with no cached charts is an empty pool, not an error: the
+    // uploader keeps the synthetic pattern.
+    expect((await call(mockReq("GET", "/api/skins/preview-patterns?keys=7"))).body).toEqual({ patterns: [] });
+    expect((await call(mockReq("GET", "/api/skins/preview-patterns?keys=0"))).status).toBe(400);
+    expect((await call(mockReq("POST", "/api/skins/preview-patterns?keys=4"))).status).toBe(405);
   });
 
   it("rejects oversized osk uploads before buffering", async () => {

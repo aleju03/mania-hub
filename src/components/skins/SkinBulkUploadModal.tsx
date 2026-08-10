@@ -17,6 +17,7 @@ import {
   type BulkPhase,
   type BulkUploadUpdate,
 } from "../../lib/skin-bulk-upload";
+import { PatternDealer } from "../../lib/skin-preview-patterns";
 import {
   formatSkinFileSize,
   markSkinsListStale,
@@ -175,6 +176,9 @@ export function SkinBulkUploadModal({
       // Sized to the queue, so seventeen files get seventeen different covers.
       dealer: await drawBulkBackdrops(pending.length),
       backdrops: new Map<number, HTMLImageElement | null>(),
+      // Chart snippets are dealt per keymode as the run reaches them, so the
+      // notes differ from card to card the way the covers do.
+      patterns: new PatternDealer(),
       cancelled: () => cancelRef.current,
       // One window for the whole run: the backend counts per address.
       pacer: new RequestPacer(),

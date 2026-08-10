@@ -3,7 +3,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, RefreshCw, Star, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { SkinBackdropPicker, useSkinBackdropPool } from "./SkinBackdropPicker";
+import { useSkinBackdropPool } from "./SkinBackdropPicker";
+import { useSkinPatternPool } from "./SkinPatternPicker";
+import { SkinPreviewPickers } from "./SkinPreviewPickers";
 import { track } from "../../lib/analytics";
 import { skinEventProperties } from "../../lib/analytics-skins";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
@@ -13,6 +15,7 @@ import {
   type BackdropScope,
   type PreviewBackdrop,
 } from "../../lib/skin-preview-backdrops";
+import type { SkinPreviewChartSnippet } from "../../lib/skin-preview-patterns";
 import { renderSkinPreview } from "../../lib/skin-preview-render";
 import {
   type DuplicateSkinRef,
@@ -78,7 +81,8 @@ export function SkinUpdateModal({
   const [selectedKeymode, setSelectedKeymode] = useState(4);
   const [coverKeymode, setCoverKeymode] = useState(4);
   const renderUrlsRef = useRef<string[]>([]);
-  const renderedBackdropsRef = useRef<Map<number, PreviewBackdrop>>(new Map());
+  // Backdrop and notes both, so a pick only redraws what it changed.
+  const renderedRef = useRef<Map<number, string>>(new Map());
   const ticketRef = useRef<UploadTicket | null>(null);
 
   const [backdrop, setBackdrop] = useState<PreviewBackdrop>("flat");
@@ -87,6 +91,10 @@ export function SkinUpdateModal({
   // A pick made while the first pool draw is still out owns the choice.
   const backdropTouchedRef = useRef(false);
   const pool = useSkinBackdropPool(open);
+  // One chart per keymode; missing is "not dealt yet", null is the built-in
+  // layout picked on purpose.
+  const [patterns, setPatterns] = useState<Map<number, SkinPreviewChartSnippet | null>>(new Map());
+  const patternPool = useSkinPatternPool(open, selectedKeymode);
 
   const [bodyLockActive, setBodyLockActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -114,11 +122,12 @@ export function SkinUpdateModal({
     setError(null);
     setDuplicate(null);
     setRenders(new Map());
-    renderedBackdropsRef.current.clear();
+    renderedRef.current.clear();
     setBackdrop("flat");
     setBackdropOverrides(new Map());
     setScope("all");
     backdropTouchedRef.current = false;
+    setPatterns(new Map());
     ticketRef.current = null;
   }, [releaseRenders]);
 
@@ -150,6 +159,30 @@ export function SkinUpdateModal({
     setBackdropOverrides(next.overrides);
   }, [backdrop, backdropOverrides, scope, selectedKeymode]);
 
+  const pickPattern = useCallback((choice: SkinPreviewChartSnippet | null) => {
+    setPatterns((previous) => new Map(previous).set(selectedKeymode, choice));
+  }, [selectedKeymode]);
+
+  // A new build gets new notes: every keymode the archive declares is dealt a
+  // chart of its own, unless the uploader picked one for it already.
+  const patternEnsure = patternPool.ensure;
+  useEffect(() => {
+    if (!open || !imported) return;
+    let cancelled = false;
+    for (const keys of imported.summary.keymodes) {
+      void patternEnsure(keys).then((available) => {
+        if (cancelled || available.length === 0) return;
+        setPatterns((previous) => {
+          if (previous.has(keys)) return previous;
+          return new Map(previous).set(keys, available[Math.floor(Math.random() * available.length)]);
+        });
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [open, imported, patternEnsure]);
+
   const handleFiles = useCallback(async (files: FileList | null) => {
     const picked = files?.[0];
     if (!picked) return;
@@ -174,7 +207,8 @@ export function SkinUpdateModal({
       });
       releaseRenders();
       setRenders(new Map());
-      renderedBackdropsRef.current.clear();
+      renderedRef.current.clear();
+      setPatterns(new Map());
       setFile(picked);
       setImported(result);
       // The card keeps fronting the keymode it already did, as long as the new
@@ -199,8 +233,10 @@ export function SkinUpdateModal({
   const poolImage = pool.image;
   useEffect(() => {
     if (!imported) return;
+    const patternFor = (keys: number) => patterns.get(keys) ?? null;
+    const signatureFor = (keys: number) => `${backdropFor(keys)}|${patternFor(keys)?.beatmapId ?? "builtin"}`;
     const queue = imported.summary.keymodes
-      .filter((keys) => renderedBackdropsRef.current.get(keys) !== backdropFor(keys))
+      .filter((keys) => renderedRef.current.get(keys) !== signatureFor(keys))
       .sort((a, b) => (a === selectedKeymode ? -1 : b === selectedKeymode ? 1 : a - b));
     if (queue.length === 0) return;
     let cancelled = false;
@@ -208,10 +244,11 @@ export function SkinUpdateModal({
     (async () => {
       for (const keys of queue) {
         if (cancelled) return;
+        const signature = signatureFor(keys);
         const choice = backdropFor(keys);
         const background = choice === "flat" ? null : await poolImage(choice);
         if (cancelled) return;
-        const render = await renderSkinPreview(imported.settings, keys, { background });
+        const render = await renderSkinPreview(imported.settings, keys, { background, pattern: patternFor(keys) });
         if (cancelled) return;
         const url = URL.createObjectURL(render.blob);
         renderUrlsRef.current.push(url);
@@ -229,7 +266,7 @@ export function SkinUpdateModal({
             accent: render.accent,
           });
         });
-        renderedBackdropsRef.current.set(keys, choice);
+        renderedRef.current.set(keys, signature);
       }
     })()
       .catch(() => {
@@ -241,7 +278,7 @@ export function SkinUpdateModal({
     return () => {
       cancelled = true;
     };
-  }, [imported, backdropFor, selectedKeymode, poolImage]);
+  }, [imported, backdropFor, patterns, selectedKeymode, poolImage]);
 
   const save = useCallback(async () => {
     const previewEntries = [...renders.entries()].sort(([a], [b]) => a - b);
@@ -547,14 +584,21 @@ export function SkinUpdateModal({
                     </div>
 
                     {!uploading && (
-                      <SkinBackdropPicker
-                        pool={pool}
-                        selected={backdropFor(selectedKeymode)}
-                        onPick={pickBackdrop}
-                        scope={scope}
-                        onScopeChange={setScope}
-                        keymodeLabel={`${selectedKeymode}K`}
+                      <SkinPreviewPickers
                         disabled={rendering}
+                        backdrop={{
+                          pool,
+                          selected: backdropFor(selectedKeymode),
+                          onPick: pickBackdrop,
+                          scope,
+                          onScopeChange: setScope,
+                          keymodeLabel: `${selectedKeymode}K`,
+                        }}
+                        pattern={{
+                          pool: patternPool,
+                          selected: patterns.get(selectedKeymode) ?? null,
+                          onPick: pickPattern,
+                        }}
                       />
                     )}
 

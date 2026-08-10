@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   bodyTileRects,
+  buildChartPreviewPattern,
   buildSkinPreviewPattern,
   computeSkinPreviewLayout,
   lnTailArtEdgeFraction,
@@ -10,6 +11,7 @@ import {
   SKIN_PREVIEW_HEIGHT,
   SKIN_PREVIEW_WIDTH,
 } from "./skin-preview-render";
+import type { SkinPreviewChartSnippet } from "./skin-preview-patterns";
 
 describe("computeSkinPreviewLayout", () => {
   const profile = { columnWidth: 36, columnWidths: [], columnSpacing: 0, columnStart: null };
@@ -145,6 +147,115 @@ describe("buildSkinPreviewPattern", () => {
       expect(tap.y).toBeLessThanOrEqual(500);
     }
   });
+});
+
+describe("buildChartPreviewPattern", () => {
+  const hitLineY = SKIN_PREVIEW_HEIGHT * 0.9;
+
+  function snippet(notes: SkinPreviewChartSnippet["notes"], keys = 4): SkinPreviewChartSnippet {
+    return { beatmapId: 1, keys, label: "Artist - Title [4K]", stars: 6, notes };
+  }
+
+  function stream(count: number, stepMs: number, keys = 4): SkinPreviewChartSnippet["notes"] {
+    return Array.from({ length: count }, (_, index) => ({
+      column: index % keys,
+      time: index * stepMs,
+      endTime: index * stepMs,
+    }));
+  }
+
+  it("puts the note on the frozen instant on the line and the rest above it", () => {
+    const pattern = buildChartPreviewPattern(snippet(stream(20, 120)), { hitLineY, noteHeight: 40 });
+
+    expect(pattern.taps[pattern.taps.length - 1].y).toBe(hitLineY);
+    for (const tap of pattern.taps) expect(tap.y).toBeLessThanOrEqual(hitLineY);
+    // The note being hit is the one holding its receptor down.
+    expect(pattern.pressed).toEqual([0]);
+  });
+
+  it("scrolls faster for taller note art so a column never stacks", () => {
+    const notes = stream(40, 90);
+    const roomy = buildChartPreviewPattern(snippet(notes), { hitLineY, noteHeight: 30 });
+    const tall = buildChartPreviewPattern(snippet(notes), { hitLineY, noteHeight: 120 });
+
+    // Same chart, bigger notes: less of it fits, and nothing overlaps either way.
+    expect(tall.taps.length).toBeLessThan(roomy.taps.length);
+    expectNoStacking(roomy.taps, 30);
+    expectNoStacking(tall.taps, 120);
+  });
+
+  it("ignores a jack too far up the snippet to be on screen", () => {
+    const comfortable = stream(40, 45);
+    // A pair 40ms apart, well past the stretch this frame reaches, so it must
+    // not speed the visible part up.
+    const jack = [
+      { column: 0, time: 1400, endTime: 1400 },
+      { column: 0, time: 1440, endTime: 1440 },
+    ];
+    const withJack = buildChartPreviewPattern(snippet([...comfortable, ...jack]), { hitLineY, noteHeight: 40 });
+    const without = buildChartPreviewPattern(snippet(comfortable), { hitLineY, noteHeight: 40 });
+
+    expect(withJack.taps.length).toBe(without.taps.length);
+  });
+
+  it("holds a hold at the line while it is being held, and lets a long tail run off the top", () => {
+    const pattern = buildChartPreviewPattern(
+      snippet([
+        { column: 2, time: -400, endTime: 6000 },
+        ...stream(12, 150),
+      ]),
+      { hitLineY, noteHeight: 40 },
+    );
+
+    const held = pattern.longNotes.find((ln) => ln.column === 2);
+    expect(held?.headY).toBe(hitLineY);
+    expect(held?.tailY).toBeLessThan(0);
+    expect(pattern.pressed).toContain(2);
+  });
+
+  it("leaves out what has already passed the line and what is above the field", () => {
+    const pattern = buildChartPreviewPattern(
+      snippet([
+        { column: 0, time: -500, endTime: -500 },
+        { column: 1, time: -900, endTime: -100 },
+        ...stream(30, 100),
+      ]),
+      { hitLineY, noteHeight: 40 },
+    );
+
+    // A note that has scrolled past would land below the line; a hold that
+    // ended before the instant is simply gone.
+    for (const tap of pattern.taps) {
+      expect(tap.y).toBeGreaterThanOrEqual(0);
+      expect(tap.y).toBeLessThanOrEqual(hitLineY);
+    }
+    expect(pattern.longNotes).toHaveLength(0);
+    expect(pattern.pressed).toEqual([0]);
+  });
+
+  it("ignores notes outside the snippet's keymode", () => {
+    const pattern = buildChartPreviewPattern(
+      snippet([...stream(12, 150), { column: 6, time: 300, endTime: 300 }]),
+      { hitLineY, noteHeight: 40 },
+    );
+
+    expect(pattern.taps.every((tap) => tap.column < 4)).toBe(true);
+  });
+
+  function expectNoStacking(taps: Array<{ column: number; y: number }>, noteHeight: number): void {
+    const byColumn = new Map<number, number[]>();
+    for (const tap of taps) {
+      const list = byColumn.get(tap.column) ?? [];
+      list.push(tap.y);
+      byColumn.set(tap.column, list);
+    }
+    for (const ys of byColumn.values()) {
+      const sorted = [...ys].sort((a, b) => a - b);
+      for (let index = 1; index < sorted.length; index += 1) {
+        expect(sorted[index] - sorted[index - 1]).toBeGreaterThanOrEqual(noteHeight);
+      }
+    }
+  }
 });
 
 describe("longNoteGeometry", () => {

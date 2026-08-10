@@ -1,9 +1,13 @@
 import { motion } from "framer-motion";
-import { Shuffle, Star, X } from "lucide-react";
+import { Star, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
 import type { BulkPreparedRender } from "../../lib/skin-bulk-upload";
+import type { SkinBackdropRowPool } from "./SkinBackdropPicker";
+import { useSkinPatternPool } from "./SkinPatternPicker";
+import { SkinPreviewPickers } from "./SkinPreviewPickers";
+import type { SkinPreviewChartSnippet } from "../../lib/skin-preview-patterns";
 import {
   applyBackdropPick,
   backdropForKeymode,
@@ -13,11 +17,7 @@ import {
   replaceBackdrop,
   type SkinBackdropCandidate,
 } from "../../lib/skin-preview-backdrops";
-import {
-  loadSkinPreviewBackgroundForSet,
-  renderSkinPreview,
-  skinPreviewBackgroundThumbUrl,
-} from "../../lib/skin-preview-render";
+import { loadSkinPreviewBackgroundForSet, renderSkinPreview } from "../../lib/skin-preview-render";
 import { processScreenshot, type ProcessedScreenshot } from "../../lib/skin-screenshot-process";
 import {
   formatSkinFileSize,
@@ -36,14 +36,15 @@ export interface BulkEditorRender extends BulkPreparedRender {
   url: string;
 }
 
-// What a saved edit pins onto a queue row. The backdrop selection is kept
-// alongside the renders so reopening the editor starts from the same picks
-// instead of re-rolling them.
+// What a saved edit pins onto a queue row. The backdrop selection and the
+// chart each keymode's notes came from are kept alongside the renders so
+// reopening the editor starts from the same picks instead of re-rolling them.
 export interface BulkItemDetails {
   description: string;
   coverKeymode: number;
   backdrop: PreviewBackdrop;
   backdropOverrides: Array<[number, PreviewBackdrop]>;
+  patterns: Array<[number, SkinPreviewChartSnippet | null]>;
   renders: BulkEditorRender[];
   screenshots: ProcessedScreenshot[];
 }
@@ -106,14 +107,24 @@ export function SkinBulkDetailsEditor({
   const backgroundPromisesRef = useRef<Map<number, Promise<HTMLImageElement | null>>>(new Map());
   const backgroundImagesRef = useRef<Map<number, HTMLImageElement | null>>(new Map());
 
-  // What each keymode's image on screen was drawn against. Seeded from the
-  // saved selection, so an unchanged backdrop does not redraw a render that
-  // already matches it.
-  const [renderedBackdrops] = useState<Map<number, PreviewBackdrop>>(() => {
-    const seeded = new Map<number, PreviewBackdrop>();
+  // One chart per keymode, restored from the saved edit when there is one.
+  const [patterns, setPatterns] = useState<Map<number, SkinPreviewChartSnippet | null>>(
+    () => new Map(initialDetails?.patterns ?? []),
+  );
+  const patternPool = useSkinPatternPool(true, selectedKeymode);
+
+  // What each keymode's image on screen was drawn from, backdrop and notes
+  // both. Seeded from the saved selection, so an unchanged pick does not redraw
+  // a render that already matches it.
+  const [renderedSignatures] = useState<Map<number, string>>(() => {
+    const seeded = new Map<number, string>();
     if (initialDetails) {
       const selection = { shared: initialDetails.backdrop, overrides: new Map(initialDetails.backdropOverrides) };
-      for (const render of initialDetails.renders) seeded.set(render.keys, backdropForKeymode(selection, render.keys));
+      const saved = new Map(initialDetails.patterns ?? []);
+      for (const render of initialDetails.renders) {
+        const pattern = saved.get(render.keys) ?? null;
+        seeded.set(render.keys, `${backdropForKeymode(selection, render.keys)}|${pattern?.beatmapId ?? "builtin"}`);
+      }
     }
     return seeded;
   });
@@ -258,11 +269,45 @@ export function SkinBulkDetailsEditor({
     [backdrop, backdropOverrides],
   );
 
+  // The shape the shared picker row reads, out of the backdrop state this
+  // editor keeps itself.
+  const backdropRowPool = useMemo<SkinBackdropRowPool>(() => ({
+    candidates: backdropPool,
+    drawing: backdropDrawing,
+    shuffle: shuffleBackdrops,
+    drop: dropBackdropCandidate,
+    prefetch: prefetchBackdrop,
+  }), [backdropPool, backdropDrawing, shuffleBackdrops, dropBackdropCandidate, prefetchBackdrop]);
+
   useEffect(() => {
     for (const choice of [backdrop, ...backdropOverrides.values()]) {
       if (choice !== "flat") void ensureBackdropImage(choice);
     }
   }, [backdrop, backdropOverrides, ensureBackdropImage]);
+
+  const pickPattern = useCallback((choice: SkinPreviewChartSnippet | null) => {
+    setPatterns((previous) => new Map(previous).set(selectedKeymode, choice));
+  }, [selectedKeymode]);
+
+  // Deals a chart to every keymode that has none yet, which for a row opened
+  // straight from the queue is all of them.
+  const patternEnsure = patternPool.ensure;
+  useEffect(() => {
+    if (!imported) return;
+    let cancelled = false;
+    for (const keys of imported.summary.keymodes) {
+      void patternEnsure(keys).then((available) => {
+        if (cancelled || available.length === 0) return;
+        setPatterns((previous) => {
+          if (previous.has(keys)) return previous;
+          return new Map(previous).set(keys, available[Math.floor(Math.random() * available.length)]);
+        });
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [imported, patternEnsure]);
 
   // Same render loop as the single-upload form: 4K first, only the keymodes
   // whose backdrop actually moved, previews held on screen while a new cover
@@ -270,12 +315,14 @@ export function SkinBulkDetailsEditor({
   useEffect(() => {
     if (!imported) return;
     const keymodes = [...imported.summary.keymodes].sort((a, b) => (a === 4 ? -1 : b === 4 ? 1 : a - b));
-    const pending = keymodes.filter((keys) => renderedBackdrops.get(keys) !== backdropFor(keys));
+    const patternFor = (keys: number) => patterns.get(keys) ?? null;
+    const signatureFor = (keys: number) => `${backdropFor(keys)}|${patternFor(keys)?.beatmapId ?? "builtin"}`;
+    const pending = keymodes.filter((keys) => renderedSignatures.get(keys) !== signatureFor(keys));
     if (pending.length === 0) return;
     let cancelled = false;
     setPreviewBusy(true);
     const renderOne = async (keys: number, background: HTMLImageElement | null) => {
-      const render = await renderSkinPreview(imported.settings, keys, { background });
+      const render = await renderSkinPreview(imported.settings, keys, { background, pattern: patternFor(keys) });
       if (cancelled) return;
       const url = URL.createObjectURL(render.blob);
       ownedUrlsRef.current.add(url);
@@ -313,11 +360,11 @@ export function SkinBulkDetailsEditor({
       }
       for (const keys of pending) {
         if (cancelled) return;
-        const choice = backdropFor(keys);
-        const background = await backgroundFor(choice);
+        const signature = signatureFor(keys);
+        const background = await backgroundFor(backdropFor(keys));
         if (cancelled) return;
         await renderOne(keys, background);
-        renderedBackdrops.set(keys, choice);
+        renderedSignatures.set(keys, signature);
       }
     })()
       .catch(() => {
@@ -329,7 +376,7 @@ export function SkinBulkDetailsEditor({
     return () => {
       cancelled = true;
     };
-  }, [imported, backdropFor, ensureBackdropImage, renderedBackdrops]);
+  }, [imported, backdropFor, patterns, ensureBackdropImage, renderedSignatures]);
 
   const addScreenshots = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -384,6 +431,7 @@ export function SkinBulkDetailsEditor({
       coverKeymode: previews.has(coverKeymode) ? coverKeymode : renders[0].keys,
       backdrop,
       backdropOverrides: [...backdropOverrides.entries()],
+      patterns: [...patterns.entries()],
       renders,
       screenshots,
     };
@@ -396,7 +444,7 @@ export function SkinBulkDetailsEditor({
       author: author.trim().slice(0, SKIN_AUTHOR_MAX_LENGTH),
       details,
     });
-  }, [author, backdrop, backdropOverrides, canSave, coverKeymode, description, name, onSave, previews, screenshots]);
+  }, [author, backdrop, backdropOverrides, canSave, coverKeymode, description, name, onSave, patterns, previews, screenshots]);
 
   if (typeof document === "undefined") return null;
 
@@ -535,85 +583,27 @@ export function SkinBulkDetailsEditor({
                   </p>
                 )}
 
-                <div className="mt-3 flex flex-col gap-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Preview backdrop</span>
-                    <div className="flex overflow-hidden rounded border border-osu-b3/40">
-                      {(["all", "keymode"] as const).map((scope) => (
-                        <button
-                          key={scope}
-                          type="button"
-                          onClick={() => setBackdropScope(scope)}
-                          aria-pressed={backdropScope === scope}
-                          title={scope === "all"
-                            ? "Apply picks to every keymode preview"
-                            : `Apply picks to the ${selectedKeymode}K preview only`}
-                          className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors cursor-pointer ${
-                            backdropScope === scope ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2 hover:text-osu-l1"
-                          }`}
-                        >
-                          {scope === "all" ? "all keymodes" : `${selectedKeymode}K only`}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      disabled={previewBusy || backdropDrawing}
-                      onClick={shuffleBackdrops}
-                      title="Draw a different set of map covers"
-                      className="flex items-center gap-1 rounded border border-osu-b3/40 bg-osu-b5 px-1.5 py-0.5 text-[10px] font-bold text-osu-l2 transition-colors cursor-pointer hover:border-osu-f1/40 disabled:cursor-default disabled:opacity-50"
-                    >
-                      <Shuffle size={11} aria-hidden="true" />
-                      {backdropDrawing ? "drawing" : "shuffle"}
-                    </button>
-                    {backdropOverrides.size > 0 && (
+                <SkinPreviewPickers
+                  disabled={previewBusy}
+                  backdrop={{
+                    pool: backdropRowPool,
+                    selected: backdropFor(selectedKeymode),
+                    onPick: pickBackdrop,
+                    scope: backdropScope,
+                    onScopeChange: setBackdropScope,
+                    keymodeLabel: `${selectedKeymode}K`,
+                    hint: backdropOverrides.size > 0 ? (
                       <span className="text-[10px] text-osu-f1/55">
                         {[...backdropOverrides.keys()].sort((a, b) => a - b).map((keys) => `${keys}K`).join(", ")} on their own
                       </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      disabled={previewBusy}
-                      onClick={() => pickBackdrop("flat")}
-                      aria-pressed={backdropFor(selectedKeymode) === "flat"}
-                      title="Flat backdrop tinted with the skin's accent"
-                      className={`grid h-8 w-[52px] place-items-center rounded border text-[10px] font-bold text-osu-l2 transition-colors cursor-pointer disabled:cursor-default ${
-                        backdropFor(selectedKeymode) === "flat" ? "border-osu-pink bg-osu-b5" : "border-osu-b3/40 bg-osu-b5 hover:border-osu-f1/40"
-                      }`}
-                    >
-                      flat
-                    </button>
-                    {backdropPool.map((candidate) => (
-                      <button
-                        key={candidate.setId}
-                        type="button"
-                        disabled={previewBusy}
-                        onClick={() => pickBackdrop(candidate.setId)}
-                        onPointerEnter={() => prefetchBackdrop(candidate.setId)}
-                        onFocus={() => prefetchBackdrop(candidate.setId)}
-                        aria-pressed={backdropFor(selectedKeymode) === candidate.setId}
-                        aria-label={`Use ${candidate.label || `map cover ${candidate.setId}`} as the backdrop`}
-                        title={candidate.label || undefined}
-                        className={`h-8 w-[52px] overflow-hidden rounded border transition-colors cursor-pointer disabled:cursor-default ${
-                          backdropFor(selectedKeymode) === candidate.setId ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
-                        }`}
-                      >
-                        <img
-                          src={skinPreviewBackgroundThumbUrl(candidate.setId)}
-                          alt=""
-                          loading="lazy"
-                          onError={() => dropBackdropCandidate(candidate.setId)}
-                          className="h-full w-full object-cover"
-                        />
-                      </button>
-                    ))}
-                    {backdropPool.length === 0 && backdropDrawing && (
-                      <span className="text-[10px] text-osu-f1/50">drawing covers</span>
-                    )}
-                  </div>
-                </div>
+                    ) : null,
+                  }}
+                  pattern={{
+                    pool: patternPool,
+                    selected: patterns.get(selectedKeymode) ?? null,
+                    onPick: pickPattern,
+                  }}
+                />
               </div>
 
               <div className="flex min-w-0 flex-col gap-3.5">

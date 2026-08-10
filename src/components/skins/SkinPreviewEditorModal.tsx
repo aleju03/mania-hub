@@ -2,11 +2,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Star, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { SkinBackdropPicker, useSkinBackdropPool } from "./SkinBackdropPicker";
+import { useSkinBackdropPool } from "./SkinBackdropPicker";
+import { useSkinPatternPool } from "./SkinPatternPicker";
+import { SkinPreviewPickers } from "./SkinPreviewPickers";
 import { track } from "../../lib/analytics";
 import { skinEventProperties } from "../../lib/analytics-skins";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
 import type { BackdropScope, PreviewBackdrop } from "../../lib/skin-preview-backdrops";
+import type { SkinPreviewChartSnippet } from "../../lib/skin-preview-patterns";
 import { renderSkinPreview } from "../../lib/skin-preview-render";
 import {
   finishSkinEdit,
@@ -72,15 +75,22 @@ export function SkinPreviewEditorModal({
   // was published with, so opening the editor and saving nothing changes
   // nothing. Renders land in `renders` once they are drawn.
   const [pending, setPending] = useState<Map<number, PreviewBackdrop>>(new Map());
+  // The notes on the field, per keymode. Undefined is "not retargeted", null is
+  // "the built-in layout"; a snippet is a chart the uploader picked.
+  const [pendingPatterns, setPendingPatterns] = useState<Map<number, SkinPreviewChartSnippet | null>>(new Map());
   const [renders, setRenders] = useState<Map<number, RenderedPreview>>(new Map());
   const [rendering, setRendering] = useState(false);
-  // The .osk only comes down once a backdrop is actually picked: moving the
-  // cover to another keymode needs no re-render, and the archive runs to 50MB.
+  // The .osk only comes down once a backdrop or pattern is actually picked:
+  // moving the cover to another keymode needs no re-render, and the archive
+  // runs to 50MB.
   const [needsSkinFile, setNeedsSkinFile] = useState(false);
   const [scope, setScope] = useState<BackdropScope>("all");
-  const renderedBackdropsRef = useRef<Map<number, PreviewBackdrop>>(new Map());
+  // What each keymode's image was last drawn from, backdrop and notes both, so
+  // a second pick only redraws what actually changed.
+  const renderedRef = useRef<Map<number, string>>(new Map());
   const renderUrlsRef = useRef<string[]>([]);
   const pool = useSkinBackdropPool(open);
+  const patternPool = useSkinPatternPool(open, selectedKeymode);
 
   const [bodyLockActive, setBodyLockActive] = useState(false);
 
@@ -176,19 +186,24 @@ export function SkinPreviewEditorModal({
   // than the pool itself, which changes identity as covers are drawn.
   const poolImage = pool.image;
   useEffect(() => {
-    if (!imported || pending.size === 0) return;
-    const queue = [...pending.entries()]
-      .filter(([keys, choice]) => renderedBackdropsRef.current.get(keys) !== choice)
-      .sort(([a], [b]) => (a === selectedKeymode ? -1 : b === selectedKeymode ? 1 : a - b));
+    if (!imported) return;
+    const queue = [...new Set([...pending.keys(), ...pendingPatterns.keys()])]
+      .map((keys) => {
+        const backdrop = pending.get(keys) ?? "flat";
+        const pattern = pendingPatterns.get(keys) ?? null;
+        return { keys, backdrop, pattern, signature: `${backdrop}|${pattern?.beatmapId ?? "builtin"}` };
+      })
+      .filter((entry) => renderedRef.current.get(entry.keys) !== entry.signature)
+      .sort((a, b) => (a.keys === selectedKeymode ? -1 : b.keys === selectedKeymode ? 1 : a.keys - b.keys));
     if (queue.length === 0) return;
     let cancelled = false;
     setRendering(true);
     (async () => {
-      for (const [keys, choice] of queue) {
+      for (const { keys, backdrop, pattern, signature } of queue) {
         if (cancelled) return;
-        const background = choice === "flat" ? null : await poolImage(choice);
+        const background = backdrop === "flat" ? null : await poolImage(backdrop);
         if (cancelled) return;
-        const render = await renderSkinPreview(imported.settings, keys, { background });
+        const render = await renderSkinPreview(imported.settings, keys, { background, pattern });
         if (cancelled) return;
         const url = URL.createObjectURL(render.blob);
         renderUrlsRef.current.push(url);
@@ -209,7 +224,7 @@ export function SkinPreviewEditorModal({
         // A skin published before per-keymode previews existed has nothing but
         // a standalone cover image, so the first render here takes the card.
         setCoverKeymode((previous) => previous ?? keys);
-        renderedBackdropsRef.current.set(keys, choice);
+        renderedRef.current.set(keys, signature);
       }
     })()
       .catch(() => {
@@ -221,7 +236,7 @@ export function SkinPreviewEditorModal({
     return () => {
       cancelled = true;
     };
-  }, [imported, pending, selectedKeymode, poolImage]);
+  }, [imported, pending, pendingPatterns, selectedKeymode, poolImage]);
 
   // "All keymodes" retargets everything the skin ships, which is also how a
   // per-keymode pick is undone; "this keymode only" touches the one on screen.
@@ -232,6 +247,19 @@ export function SkinPreviewEditorModal({
       return new Map(previous).set(selectedKeymode, choice);
     });
   }, [scope, keymodes, selectedKeymode]);
+
+  // A snippet is cut from a chart of one keymode, so a pattern pick only ever
+  // touches the keymode on screen. It also pins a backdrop for that keymode if
+  // none was picked yet: the re-render needs one, and nothing records which
+  // cover the published image used.
+  const pickPattern = useCallback((choice: SkinPreviewChartSnippet | null) => {
+    setNeedsSkinFile(true);
+    setPending((previous) => {
+      if (previous.has(selectedKeymode)) return previous;
+      return new Map(previous).set(selectedKeymode, pool.candidates[0]?.setId ?? "flat");
+    });
+    setPendingPatterns((previous) => new Map(previous).set(selectedKeymode, choice));
+  }, [pool.candidates, selectedKeymode]);
 
   // One click for "draw this skin again with the renderer as it is now",
   // which is what a fix to the playfield renderer needs. Nothing records which
@@ -246,17 +274,22 @@ export function SkinPreviewEditorModal({
 
   const revertPreviews = useCallback(() => {
     setPending(new Map());
+    setPendingPatterns(new Map());
     releaseRenders();
     setRenders(new Map());
-    renderedBackdropsRef.current.clear();
+    renderedRef.current.clear();
   }, [releaseRenders]);
 
   const coverChanged = coverKeymode != null && coverKeymode !== publishedCoverKeymode;
   const dirty = renders.size > 0 || coverChanged;
   // A pick whose render has not landed yet (the archive may still be coming
   // down) holds the save button, so a pick is never silently dropped.
-  const awaitingRender = pending.size > 0
-    && (rendering || loading != null || [...pending.keys()].some((keys) => !renders.has(keys)));
+  const retargeted = useMemo(
+    () => [...new Set([...pending.keys(), ...pendingPatterns.keys()])],
+    [pending, pendingPatterns],
+  );
+  const awaitingRender = retargeted.length > 0
+    && (rendering || loading != null || retargeted.some((keys) => !renders.has(keys)));
 
   const save = useCallback(async () => {
     if (saving || !dirty) return;
@@ -511,23 +544,31 @@ export function SkinPreviewEditorModal({
                   })}
                 </div>
 
-                <SkinBackdropPicker
-                  pool={pool}
-                  selected={pending.get(selectedKeymode) ?? null}
-                  onPick={pickBackdrop}
-                  scope={scope}
-                  onScopeChange={setScope}
-                  keymodeLabel={`${selectedKeymode}K`}
+                <SkinPreviewPickers
                   disabled={busy}
-                  hint={changedKeymodes.length > 0 ? (
-                    <span className="text-[10px] text-osu-f1/55">
-                      {changedKeymodes.map((keys) => `${keys}K`).join(", ")} re-rendered
-                    </span>
-                  ) : null}
+                  backdrop={{
+                    pool,
+                    selected: pending.get(selectedKeymode) ?? null,
+                    onPick: pickBackdrop,
+                    scope,
+                    onScopeChange: setScope,
+                    keymodeLabel: `${selectedKeymode}K`,
+                    hint: changedKeymodes.length > 0 ? (
+                      <span className="text-[10px] text-osu-f1/55">
+                        {changedKeymodes.map((keys) => `${keys}K`).join(", ")} re-rendered
+                      </span>
+                    ) : null,
+                  }}
+                  pattern={{
+                    pool: patternPool,
+                    selected: pendingPatterns.get(selectedKeymode) ?? null,
+                    onPick: pickPattern,
+                  }}
                 />
                 <p className="mt-2 text-[11px] leading-relaxed text-osu-f1/70">
-                  Picking a backdrop re-renders that playfield from the uploaded .osk. Keymodes left alone keep the
-                  previews they were published with.
+                  Picking a backdrop or a pattern re-renders that playfield from the uploaded .osk. Patterns are cut
+                  from real charts, one keymode at a time. Keymodes left alone keep the previews they were published
+                  with.
                 </p>
 
                 {error && <p className="mt-3 text-[12px] font-semibold text-osu-red-light">{error}</p>}

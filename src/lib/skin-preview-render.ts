@@ -1,3 +1,4 @@
+import type { SkinPreviewChartNote, SkinPreviewChartSnippet } from "./skin-preview-patterns";
 import type { ReplaySkinKeymodeProfile, ReplaySkinSettings } from "./replay-skin";
 import {
   getReplaySkinProfile,
@@ -63,6 +64,10 @@ export interface SkinPreviewLongNote {
 export interface SkinPreviewPattern {
   taps: SkinPreviewTapNote[];
   longNotes: SkinPreviewLongNote[];
+  // Columns whose receptor is down at the frozen instant: a note landing on the
+  // line, or a hold being held through it. They get the pressed key image, the
+  // column light and the hit lighting.
+  pressed: number[];
 }
 
 export interface SkinPreviewPatternOptions {
@@ -164,7 +169,113 @@ export function buildSkinPreviewPattern(keyCount: number, options: SkinPreviewPa
     taps.push({ column, y });
   }
   taps.sort((a, b) => a.y - b.y);
-  return { taps, longNotes };
+  // Nothing lands on the line in the synthetic pattern, so one column is simply
+  // shown held; the second one, which every keymode from 2K up has.
+  return { taps, longNotes, pressed: [Math.min(1, keys - 1)] };
+}
+
+// The scroll speed to lay a snippet out at, as a multiple of the note's own
+// height between the tightest pair of notes in a column. Packing them as close
+// as they can go without touching fills the card wall to wall and buries the
+// note art; a couple of note heights of air is roughly what a playable scroll
+// speed looks like, and it leaves the skin visible between the notes.
+const CHART_PATTERN_TARGET_GAP = 2.2;
+// Two note heights of air is a lot of field when the notes are tall circles,
+// so the gap is also capped at a share of the playfield: however big the art,
+// a column still gets about this many notes rather than two and a gap.
+const CHART_PATTERN_TARGET_ROWS = 5;
+// The hard floor, whatever the art: closer than this and two notes read as one
+// smear.
+const CHART_PATTERN_MIN_GAP = 1.05;
+// The shortest stretch of chart a card will show. A snippet that jacks tighter
+// than the note art can render gets overlapping notes rather than a field with
+// four notes on it: the frame is a still, and an empty one says less about a
+// skin than a busy one.
+const CHART_PATTERN_MIN_WINDOW_MS = 320;
+
+// Lays a chart snippet out on the field. The scroll speed is chosen here rather
+// than baked into the snippet, because how much chart fits is a question about
+// the skin's note art: tall circle notes need more room per note than thin bars,
+// so the same snippet shows less of the chart under them. Within that limit the
+// field is filled as far as the snippet reaches.
+export function buildChartPreviewPattern(
+  snippet: SkinPreviewChartSnippet,
+  options: SkinPreviewPatternOptions = {},
+): SkinPreviewPattern {
+  const keys = Math.max(1, Math.floor(snippet.keys));
+  const canvasHeight = options.canvasHeight ?? SKIN_PREVIEW_HEIGHT;
+  const hitLineY = options.hitLineY ?? canvasHeight * HIT_LINE_FRACTION;
+  const noteHeight = Math.max(12, options.noteHeight ?? 40);
+  const usable = Math.max(1, hitLineY - canvasHeight * SCROLL_TOP_FRACTION);
+  const notes = snippet.notes.filter((note) => note.column >= 0 && note.column < keys);
+
+  const spanMs = Math.max(1, ...notes.map((note) => note.time));
+  const gapPx = Math.max(
+    noteHeight * CHART_PATTERN_MIN_GAP,
+    Math.min(noteHeight * CHART_PATTERN_TARGET_GAP, usable / CHART_PATTERN_TARGET_ROWS),
+  );
+  const pxPerMs = fitScrollSpeed(notes, { usable, gapPx, spanMs });
+  const windowMs = usable / pxPerMs;
+
+  const taps: SkinPreviewTapNote[] = [];
+  const longNotes: SkinPreviewLongNote[] = [];
+  const pressed = new Set<number>();
+  for (const note of notes) {
+    if (note.endTime > note.time) {
+      if (note.endTime <= 0 || note.time > windowMs) continue;
+      // A hold being held sticks to the judgement line while its body drains
+      // through it, exactly as the replay viewer draws one.
+      if (note.time <= 0) pressed.add(note.column);
+      longNotes.push({
+        column: note.column,
+        headY: hitLineY - Math.max(0, note.time) * pxPerMs,
+        // Tails past the top of the field are left off the canvas, so a long
+        // hold runs off the edge instead of growing a cap that is not there.
+        tailY: hitLineY - note.endTime * pxPerMs,
+      });
+      continue;
+    }
+    if (note.time < 0 || note.time > windowMs) continue;
+    // The note sitting on the line is the one being hit.
+    if (note.time === 0) pressed.add(note.column);
+    taps.push({ column: note.column, y: hitLineY - note.time * pxPerMs });
+  }
+  taps.sort((a, b) => a.y - b.y);
+  return { taps, longNotes, pressed: [...pressed].sort((a, b) => a - b) };
+}
+
+// Pixels per millisecond, which is the scroll speed and so how much of the
+// snippet the card shows.
+//
+// The tightest pair of notes in a column decides it, but only among the notes
+// that end up on screen: a snippet is a couple of seconds long and a single
+// jack a second and a half up would otherwise speed the whole frame up to
+// nothing. So the notes are walked in time order, each one tightening the
+// constraint and shortening the window, and the walk stops at the first note
+// the window no longer reaches. A note counted on the way is never drawn closer
+// than the gap it asked for, which is what keeps a column from smearing.
+function fitScrollSpeed(
+  notes: SkinPreviewChartNote[],
+  { usable, gapPx, spanMs }: { usable: number; gapPx: number; spanMs: number },
+): number {
+  const slowest = usable / spanMs;
+  const fastest = usable / CHART_PATTERN_MIN_WINDOW_MS;
+  // Where each column is next free: a hold occupies through its tail, so the
+  // note after it is measured from there rather than from the head.
+  const freeAt = new Map<number, number>();
+  let tightest = Number.POSITIVE_INFINITY;
+  let pxPerMs = Math.min(fastest, slowest);
+  for (const note of [...notes].sort((a, b) => a.time - b.time)) {
+    if (note.time > usable / pxPerMs) break;
+    const previous = freeAt.get(note.column);
+    // Two notes stacked on the same instant in a column happen in the wild and
+    // there is no scroll speed that separates them, so the pair is passed over
+    // rather than pinning the whole frame to a gap of zero.
+    if (previous != null && note.time > previous) tightest = Math.min(tightest, note.time - previous);
+    freeAt.set(note.column, Math.max(note.time, note.endTime));
+    if (Number.isFinite(tightest)) pxPerMs = Math.min(fastest, Math.max(slowest, gapPx / tightest));
+  }
+  return pxPerMs;
 }
 
 export interface SkinPreviewRenderResult {
@@ -182,6 +293,10 @@ export interface SkinPreviewRenderOptions {
   // drawn cover-fit and dimmed behind the stage. Without one the backdrop
   // falls back to flat accent-tinted triangles.
   background?: HTMLImageElement | null;
+  // The chart snippet to freeze on the field. Null or absent renders the
+  // synthetic pattern, which is what every preview drawn before the picker
+  // existed used. A snippet for the wrong keymode is ignored.
+  pattern?: SkinPreviewChartSnippet | null;
 }
 
 // Real ranked mania sets whose covers back the preview like in-game map art.
@@ -265,11 +380,15 @@ export async function renderSkinPreview(
     return image ? noteAssetHeight(image) : fallbackNoteHeight(layout.laneWidths[col]);
   });
   const patternNoteHeight = Math.min(Math.max(...tapHeights), SKIN_PREVIEW_HEIGHT * 0.24);
-  const pattern = buildSkinPreviewPattern(keys, {
+  const patternOptions = {
     canvasHeight: SKIN_PREVIEW_HEIGHT,
     hitLineY: judgmentY,
     noteHeight: patternNoteHeight,
-  });
+  };
+  const snippet = options.pattern && options.pattern.keys === keys ? options.pattern : null;
+  const pattern = snippet
+    ? buildChartPreviewPattern(snippet, patternOptions)
+    : buildSkinPreviewPattern(keys, patternOptions);
 
   // Map background behind the field, dimmed like in game; the flat triangle
   // backdrop stands in when no cover was loaded.
@@ -319,7 +438,11 @@ export async function renderSkinPreview(
     const nativeHeight = (asset?.height && asset.height > 0 ? asset.height : image.naturalHeight || 1) / assetScale;
     return Math.max(1, nativeHeight * (480 / 768) * layout.scale);
   };
-  const pressedColumn = Math.min(1, keys - 1);
+  // Whatever the pattern says is being held right now. A chart snippet often
+  // presses several columns at once (a chord landing, a hold running through
+  // the line); the synthetic pattern names one.
+  const pressedColumns = pattern.pressed.filter((column) => column >= 0 && column < keys);
+  const isPressed = (column: number) => pressedColumns.includes(column);
   const judgmentLineY = mapY(judgmentY);
 
   const lightAsset = stage.light;
@@ -330,17 +453,19 @@ export async function renderSkinPreview(
     // default 413 sits 11 units below the default hit line, and O2Jam-style
     // decks rely on the light overlapping their key tops. Anchored relative
     // to the (possibly clamped) judgement line so the declared gap survives
-    // the card's clamping; only the one pressed column shows it here.
+    // the card's clamping; only the pressed columns show it.
     const height = stageScale(lightAsset, lightImage);
     const hitUnits = Math.max(0, Math.min(768, getReplaySkinStagePosition(profile, settings, "hitPosition"))) * (480 / 768);
     const lightUnits = 480 - (profile.lightPosition ?? OSU_MANIA_DEFAULT_LIGHT_POSITION);
     const lightShift = (hitUnits - lightUnits) * layout.scale;
-    const tint = stage.lightColors[pressedColumn] || "";
-    const art = tint ? tintedImage(lightImage, tint) : lightImage;
-    const laneX = layout.laneXs[pressedColumn];
-    const laneWidth = layout.laneWidths[pressedColumn];
-    if (upscroll) drawImageFlippedY(ctx, art, laneX, judgmentLineY - lightShift, laneWidth, height);
-    else ctx.drawImage(art, laneX, judgmentLineY + lightShift - height, laneWidth, height);
+    for (const column of pressedColumns) {
+      const tint = stage.lightColors[column] || "";
+      const art = tint ? tintedImage(lightImage, tint) : lightImage;
+      const laneX = layout.laneXs[column];
+      const laneWidth = layout.laneWidths[column];
+      if (upscroll) drawImageFlippedY(ctx, art, laneX, judgmentLineY - lightShift, laneWidth, height);
+      else ctx.drawImage(art, laneX, judgmentLineY + lightShift - height, laneWidth, height);
+    }
   }
 
   const hintAsset = stage.hint;
@@ -360,7 +485,7 @@ export async function renderSkinPreview(
   // its bottom on the hit line. One column renders pressed for life.
   for (let col = 0; col < keys; col += 1) {
     const assets = profile.assets.columns[col] ?? {};
-    const asset = col === pressedColumn ? assets.receptorPressed ?? assets.receptor : assets.receptor;
+    const asset = isPressed(col) ? assets.receptorPressed ?? assets.receptor : assets.receptor;
     const image = asset ? images.get(asset.src) : undefined;
     const laneX = layout.laneXs[col];
     const laneWidth = layout.laneWidths[col];
@@ -380,7 +505,7 @@ export async function renderSkinPreview(
     } else {
       const height = Math.max(6, SKIN_PREVIEW_HEIGHT * 0.012);
       const top = upscroll ? judgmentLineY - height - 2 : judgmentLineY + 2;
-      ctx.fillStyle = col === pressedColumn ? accent : "rgba(255, 255, 255, 0.25)";
+      ctx.fillStyle = isPressed(col) ? accent : "rgba(255, 255, 255, 0.25)";
       fillRoundedRect(ctx, laneX + 2, top, laneWidth - 4, height, 2);
     }
   }
@@ -438,15 +563,17 @@ export async function renderSkinPreview(
   if (lightingImage) {
     // Hit lighting is additive in game, and LightingNWidth overrides the art's
     // own width per column.
-    const declaredWidth = stage.lightingWidths[pressedColumn];
     const assetScale = lightingAsset?.scale && lightingAsset.scale > 0 ? lightingAsset.scale : 1;
     const nativeWidth = (lightingAsset?.width && lightingAsset.width > 0 ? lightingAsset.width : lightingImage.naturalWidth || 1) / assetScale;
-    const width = Math.max(1, (declaredWidth && declaredWidth > 0 ? declaredWidth : nativeWidth * (480 / 768)) * layout.scale);
-    const height = Math.max(1, width * ((lightingImage.naturalHeight || 1) / (lightingImage.naturalWidth || 1)));
-    const centerX = layout.laneXs[pressedColumn] + layout.laneWidths[pressedColumn] / 2;
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    ctx.drawImage(lightingImage, centerX - width / 2, judgmentLineY - height / 2, width, height);
+    for (const column of pressedColumns) {
+      const declaredWidth = stage.lightingWidths[column];
+      const width = Math.max(1, (declaredWidth && declaredWidth > 0 ? declaredWidth : nativeWidth * (480 / 768)) * layout.scale);
+      const height = Math.max(1, width * ((lightingImage.naturalHeight || 1) / (lightingImage.naturalWidth || 1)));
+      const centerX = layout.laneXs[column] + layout.laneWidths[column] / 2;
+      ctx.drawImage(lightingImage, centerX - width / 2, judgmentLineY - height / 2, width, height);
+    }
     ctx.restore();
   }
 

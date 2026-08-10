@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import JSZip from "jszip";
-import { Check, Copy, Shuffle, Star, Upload, X } from "lucide-react";
+import { Check, ChevronDown, Copy, Star, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { skinEventProperties } from "../../lib/analytics-skins";
@@ -10,6 +10,10 @@ import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/
 import { buildSkinAssetGroups, type SkinAssetGroup } from "../../lib/skin-asset-explorer";
 import { SkinAssetTiles } from "./SkinAssetExplorer";
 import { SkinCard } from "./SkinCard";
+import type { SkinBackdropRowPool } from "./SkinBackdropPicker";
+import { useSkinPatternPool, type SkinPatternPool } from "./SkinPatternPicker";
+import { SkinPreviewPickers } from "./SkinPreviewPickers";
+import type { SkinPreviewChartSnippet } from "../../lib/skin-preview-patterns";
 import {
   applyBackdropPick,
   backdropForKeymode,
@@ -19,11 +23,7 @@ import {
   replaceBackdrop,
   type SkinBackdropCandidate,
 } from "../../lib/skin-preview-backdrops";
-import {
-  loadSkinPreviewBackgroundForSet,
-  renderSkinPreview,
-  skinPreviewBackgroundThumbUrl,
-} from "../../lib/skin-preview-render";
+import { loadSkinPreviewBackgroundForSet, renderSkinPreview } from "../../lib/skin-preview-render";
 import { processScreenshot, type ProcessedScreenshot } from "../../lib/skin-screenshot-process";
 import {
   type DuplicateSkinRef,
@@ -308,9 +308,9 @@ export function SkinUploadModal({
   // render pass: it is there so a slow cover never leaves the form blank, and
   // it must not fire once there is something to look at.
   const hasRenderedRef = useRef(false);
-  // What each keymode's image was last drawn against, so a backdrop change
-  // only re-renders the keymodes it actually touches.
-  const renderedBackdropsRef = useRef<Map<number, PreviewBackdrop>>(new Map());
+  // What each keymode's image was last drawn from, backdrop and notes both, so
+  // a change only re-renders the keymodes it actually touches.
+  const renderedRef = useRef<Map<number, string>>(new Map());
   // The backdrop behind the rendered previews: one of the map covers on offer
   // or the flat triangle fallback. The offer itself is drawn fresh from the
   // map catalog each upload session (and again on every shuffle), so skins
@@ -425,10 +425,52 @@ export function SkinUploadModal({
     setBackdropOverrides(next.overrides);
   }, [backdrop, backdropOverrides]);
 
+  // The shape the shared picker row reads, out of the backdrop state this
+  // modal keeps itself.
+  const backdropRowPool = useMemo<SkinBackdropRowPool>(() => ({
+    candidates: backdropPool,
+    drawing: backdropDrawing,
+    shuffle: shuffleBackdrops,
+    drop: dropBackdropCandidate,
+    prefetch: prefetchBackdrop,
+  }), [backdropPool, backdropDrawing, shuffleBackdrops, dropBackdropCandidate, prefetchBackdrop]);
+
   const backdropFor = useCallback(
     (keys: number): PreviewBackdrop => backdropForKeymode({ shared: backdrop, overrides: backdropOverrides }, keys),
     [backdrop, backdropOverrides],
   );
+
+  // The notes on each keymode's field. A snippet only fits the keymode it was
+  // cut from, so there is no shared pick here: every keymode is dealt its own
+  // chart as soon as its pool lands, and a manual pick replaces it. An entry
+  // set to null is the built-in layout, chosen on purpose.
+  const [patterns, setPatterns] = useState<Map<number, SkinPreviewChartSnippet | null>>(new Map());
+  const patternPool = useSkinPatternPool(open, selectedKeymode);
+  const patternEnsure = patternPool.ensure;
+
+  const pickPattern = useCallback((choice: SkinPreviewChartSnippet | null) => {
+    setPatterns((previous) => new Map(previous).set(selectedKeymode, choice));
+  }, [selectedKeymode]);
+
+  // Deals every keymode the .osk ships a chart of its own, which is what stops
+  // a page of browse cards being the same notes over and over. Keymodes the
+  // uploader already picked for are left alone.
+  useEffect(() => {
+    if (!open || !imported) return;
+    let cancelled = false;
+    for (const keys of imported.summary.keymodes) {
+      void patternEnsure(keys).then((pool) => {
+        if (cancelled || pool.length === 0) return;
+        setPatterns((previous) => {
+          if (previous.has(keys)) return previous;
+          return new Map(previous).set(keys, pool[Math.floor(Math.random() * pool.length)]);
+        });
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [open, imported, patternEnsure]);
 
   // Warm the chosen covers as soon as they are picked: picking and parsing the
   // .osk takes a while, which hides the download so the first render rarely
@@ -467,7 +509,8 @@ export function SkinUploadModal({
     setDuplicate(null);
     setPreviews(new Map());
     hasRenderedRef.current = false;
-    renderedBackdropsRef.current.clear();
+    renderedRef.current.clear();
+    setPatterns(new Map());
     setName("");
     setAuthor("");
     setDescription("");
@@ -562,7 +605,10 @@ export function SkinUploadModal({
       previewUrlsRef.current = [];
       setPreviews(new Map());
       hasRenderedRef.current = false;
-      renderedBackdropsRef.current.clear();
+      renderedRef.current.clear();
+      // A different .osk is a different set of keymodes, so its patterns are
+      // dealt afresh rather than inherited from the file just dropped.
+      setPatterns(new Map());
       ticketRef.current = null;
       setStep("form");
       // Asset detection reads only the zip's central directory plus name
@@ -597,12 +643,14 @@ export function SkinUploadModal({
   useEffect(() => {
     if (!imported) return;
     const keymodes = [...imported.summary.keymodes].sort((a, b) => (a === 4 ? -1 : b === 4 ? 1 : a - b));
-    const pending = keymodes.filter((keys) => renderedBackdropsRef.current.get(keys) !== backdropFor(keys));
+    const patternFor = (keys: number) => patterns.get(keys) ?? null;
+    const signatureFor = (keys: number) => `${backdropFor(keys)}|${patternFor(keys)?.beatmapId ?? "builtin"}`;
+    const pending = keymodes.filter((keys) => renderedRef.current.get(keys) !== signatureFor(keys));
     if (pending.length === 0) return;
     let cancelled = false;
     setPreviewBusy(true);
     const renderOne = async (keys: number, background: HTMLImageElement | null) => {
-      const render = await renderSkinPreview(imported.settings, keys, { background });
+      const render = await renderSkinPreview(imported.settings, keys, { background, pattern: patternFor(keys) });
       if (cancelled) return;
       const url = URL.createObjectURL(render.blob);
       previewUrlsRef.current.push(url);
@@ -637,11 +685,11 @@ export function SkinUploadModal({
       }
       for (const keys of pending) {
         if (cancelled) return;
-        const choice = backdropFor(keys);
-        const background = await backgroundFor(choice);
+        const signature = signatureFor(keys);
+        const background = await backgroundFor(backdropFor(keys));
         if (cancelled) return;
         await renderOne(keys, background);
-        renderedBackdropsRef.current.set(keys, choice);
+        renderedRef.current.set(keys, signature);
       }
     })()
       .catch(() => {
@@ -653,7 +701,7 @@ export function SkinUploadModal({
     return () => {
       cancelled = true;
     };
-  }, [imported, backdropFor, ensureBackdropImage]);
+  }, [imported, backdropFor, patterns, ensureBackdropImage]);
 
   const addScreenshots = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -856,11 +904,10 @@ export function SkinUploadModal({
                     backdropScope={backdropScope}
                     setBackdropScope={setBackdropScope}
                     overriddenKeymodes={backdropOverrides}
-                    backdropPool={backdropPool}
-                    backdropDrawing={backdropDrawing}
-                    shuffleBackdrops={shuffleBackdrops}
-                    dropBackdropCandidate={dropBackdropCandidate}
-                    prefetchBackdrop={prefetchBackdrop}
+                    backdropPool={backdropRowPool}
+                    patternPool={patternPool}
+                    pattern={patterns.get(selectedKeymode) ?? null}
+                    pickPattern={pickPattern}
                     assetGroups={assetGroups}
                     resolveAssetUrl={resolveAssetUrl}
                     selectedKeymode={selectedKeymode}
@@ -1104,10 +1151,9 @@ function FormStep({
   setBackdropScope,
   overriddenKeymodes,
   backdropPool,
-  backdropDrawing,
-  shuffleBackdrops,
-  dropBackdropCandidate,
-  prefetchBackdrop,
+  patternPool,
+  pattern,
+  pickPattern,
   assetGroups,
   resolveAssetUrl,
   selectedKeymode,
@@ -1145,12 +1191,12 @@ function FormStep({
   backdropScope: BackdropScope;
   setBackdropScope: (scope: BackdropScope) => void;
   overriddenKeymodes: Map<number, PreviewBackdrop>;
-  backdropPool: SkinBackdropCandidate[];
-  backdropDrawing: boolean;
-  shuffleBackdrops: () => void;
-  dropBackdropCandidate: (setId: number) => void;
-  // Warms a cover on hover so picking it usually renders straight away.
-  prefetchBackdrop: (setId: number) => void;
+  backdropPool: SkinBackdropRowPool;
+  patternPool: SkinPatternPool;
+  // The chart the keymode on screen renders its notes from; null is the
+  // built-in layout.
+  pattern: SkinPreviewChartSnippet | null;
+  pickPattern: (pattern: SkinPreviewChartSnippet | null) => void;
   assetGroups: SkinAssetGroup[] | null;
   resolveAssetUrl: (path: string) => Promise<string | null>;
   selectedKeymode: number;
@@ -1282,89 +1328,27 @@ function FormStep({
           </p>
         )}
 
-        <div className="mt-3 flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Preview backdrop</span>
-            {/* Scope of a pick: every keymode, or just the one on screen.
-                Picking on "all" also clears the per-keymode choices, so it is
-                the way back to a single shared backdrop. */}
-            <div className="flex overflow-hidden rounded border border-osu-b3/40">
-              {(["all", "keymode"] as const).map((scope) => (
-                <button
-                  key={scope}
-                  type="button"
-                  disabled={uploading}
-                  onClick={() => setBackdropScope(scope)}
-                  aria-pressed={backdropScope === scope}
-                  title={scope === "all"
-                    ? "Apply picks to every keymode preview"
-                    : `Apply picks to the ${selectedKeymode}K preview only`}
-                  className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors cursor-pointer disabled:cursor-default ${
-                    backdropScope === scope ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2 hover:text-osu-l1"
-                  }`}
-                >
-                  {scope === "all" ? "all keymodes" : `${selectedKeymode}K only`}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              disabled={uploading || previewBusy || backdropDrawing}
-              onClick={shuffleBackdrops}
-              title="Draw a different set of map covers"
-              className="flex items-center gap-1 rounded border border-osu-b3/40 bg-osu-b5 px-1.5 py-0.5 text-[10px] font-bold text-osu-l2 transition-colors cursor-pointer hover:border-osu-f1/40 disabled:cursor-default disabled:opacity-50"
-            >
-              <Shuffle size={11} aria-hidden="true" />
-              {backdropDrawing ? "drawing" : "shuffle"}
-            </button>
-            {overriddenKeymodes.size > 0 && (
+        {/* The backdrop behind the field, and the notes on it: a pattern is cut
+            from a real chart of this keymode, and each keymode is dealt its
+            own so the previews of one upload are not the same frame three
+            times. */}
+        <SkinPreviewPickers
+          disabled={uploading || previewBusy}
+          backdrop={{
+            pool: backdropPool,
+            selected: backdrop,
+            onPick: pickBackdrop,
+            scope: backdropScope,
+            onScopeChange: setBackdropScope,
+            keymodeLabel: `${selectedKeymode}K`,
+            hint: overriddenKeymodes.size > 0 ? (
               <span className="text-[10px] text-osu-f1/55">
                 {[...overriddenKeymodes.keys()].sort((a, b) => a - b).map((keys) => `${keys}K`).join(", ")} on their own
               </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              disabled={uploading || previewBusy}
-              onClick={() => pickBackdrop("flat")}
-              aria-pressed={backdrop === "flat"}
-              title="Flat backdrop tinted with the skin's accent"
-              className={`grid h-8 w-[52px] place-items-center rounded border text-[10px] font-bold text-osu-l2 transition-colors cursor-pointer disabled:cursor-default ${
-                backdrop === "flat" ? "border-osu-pink bg-osu-b5" : "border-osu-b3/40 bg-osu-b5 hover:border-osu-f1/40"
-              }`}
-            >
-              flat
-            </button>
-            {backdropPool.map((candidate) => (
-              <button
-                key={candidate.setId}
-                type="button"
-                disabled={uploading || previewBusy}
-                onClick={() => pickBackdrop(candidate.setId)}
-                onPointerEnter={() => prefetchBackdrop(candidate.setId)}
-                onFocus={() => prefetchBackdrop(candidate.setId)}
-                aria-pressed={backdrop === candidate.setId}
-                aria-label={`Use ${candidate.label || `map cover ${candidate.setId}`} as the backdrop`}
-                title={candidate.label || undefined}
-                className={`h-8 w-[52px] overflow-hidden rounded border transition-colors cursor-pointer disabled:cursor-default ${
-                  backdrop === candidate.setId ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
-                }`}
-              >
-                <img
-                  src={skinPreviewBackgroundThumbUrl(candidate.setId)}
-                  alt=""
-                  loading="lazy"
-                  onError={() => dropBackdropCandidate(candidate.setId)}
-                  className="h-full w-full object-cover"
-                />
-              </button>
-            ))}
-            {backdropPool.length === 0 && backdropDrawing && (
-              <span className="text-[10px] text-osu-f1/50">drawing covers</span>
-            )}
-          </div>
-        </div>
+            ) : null,
+          }}
+          pattern={{ pool: patternPool, selected: pattern, onPick: pickPattern }}
+        />
 
         {assetGroups && assetGroups.length > 0 && (
           <DetectedAssets groups={assetGroups} resolve={resolveAssetUrl} />
@@ -1412,7 +1396,7 @@ function FormStep({
           />
         </label>
         <div className="flex flex-col gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Who gets it</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Visibility</span>
           <div className="flex gap-2">
             {VISIBILITY_CHOICES.map((choice) => (
               <button
@@ -1532,9 +1516,10 @@ function FormStep({
   );
 }
 
-// Chip-per-group summary of the archive; clicking a chip expands it into the
-// same asset tiles the skin page explorer renders, so uploaders can inspect
-// everything before publishing.
+// What the archive holds, as one line most uploaders can skip past. Opening it
+// lists a chip per group, and a chip expands into the same asset tiles the skin
+// page explorer renders, so anyone who wants to can inspect every file before
+// publishing.
 function DetectedAssets({
   groups,
   resolve,
@@ -1542,31 +1527,49 @@ function DetectedAssets({
   groups: SkinAssetGroup[];
   resolve: (path: string) => Promise<string | null>;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const open = groups.find((group) => group.key === openGroup) ?? null;
+  const files = groups.reduce((total, group) => total + group.entries.length, 0);
 
   return (
     <div className="mt-3 flex flex-col gap-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Detected in the .osk</span>
-      <div className="flex flex-wrap gap-1.5" title="Grouped by osu!'s known asset names; click a group to see its files">
-        {groups.map((group) => {
-          const selected = group.key === openGroup;
-          return (
-            <button
-              key={group.key}
-              type="button"
-              onClick={() => setOpenGroup(selected ? null : group.key)}
-              aria-pressed={selected}
-              className={`rounded px-2 py-0.5 text-[11px] transition-colors cursor-pointer ${
-                selected ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2 hover:text-white"
-              }`}
-            >
-              {group.title.toLowerCase()}{" "}
-              <span className={`font-bold tabular-nums ${selected ? "text-white" : "text-osu-l1"}`}>{group.entries.length}</span>
-            </button>
-          );
-        })}
-      </div>
+      <button
+        type="button"
+        onClick={() => {
+          setExpanded(!expanded);
+          setOpenGroup(null);
+        }}
+        aria-expanded={expanded}
+        className="flex items-center gap-1.5 self-start text-osu-f1/55 transition-colors cursor-pointer hover:text-osu-l2"
+      >
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em]">Detected in the .osk</span>
+        <span className="text-[11px] tabular-nums">
+          {files} files in {groups.length} groups
+        </span>
+        <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
+      </button>
+      {expanded && (
+        <div className="flex flex-wrap gap-1.5" title="Grouped by osu!'s known asset names; click a group to see its files">
+          {groups.map((group) => {
+            const selected = group.key === openGroup;
+            return (
+              <button
+                key={group.key}
+                type="button"
+                onClick={() => setOpenGroup(selected ? null : group.key)}
+                aria-pressed={selected}
+                className={`rounded px-2 py-0.5 text-[11px] transition-colors cursor-pointer ${
+                  selected ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2 hover:text-white"
+                }`}
+              >
+                {group.title.toLowerCase()}{" "}
+                <span className={`font-bold tabular-nums ${selected ? "text-white" : "text-osu-l1"}`}>{group.entries.length}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       {open && (
         <SkinAssetTiles
           entries={open.entries}
