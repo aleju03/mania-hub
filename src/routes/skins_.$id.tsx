@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
-import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags } from "../components/skins/SkinCard";
+import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags, SkinPreviewImage } from "../components/skins/SkinCard";
 import { SkinAssetExplorer } from "../components/skins/SkinAssetExplorer";
 import { SimilarSkins } from "../components/skins/SimilarSkins";
 import { SkinPreviewEditorModal } from "../components/skins/SkinPreviewEditorModal";
@@ -262,11 +262,17 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                 <div className="min-w-0">
                   <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
                     {hero ? (
-                      <img
+                      // Keyed on the url so a gallery click remounts it: the
+                      // thumbnail strip has already decoded that image, so the
+                      // fade only ever plays on the first load, and swapping
+                      // previews stays instant.
+                      <SkinPreviewImage
+                        key={hero.url}
                         src={hero.url}
                         alt={`${skin.name} ${hero.label}`}
                         width={hero.width ?? 1280}
                         height={hero.height ?? 720}
+                        loading="eager"
                         className="aspect-video w-full object-cover"
                       />
                     ) : (
@@ -308,10 +314,9 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                             index === heroIndex ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
                           }`}
                         >
-                          <img
+                          <SkinPreviewImage
                             src={item.url}
                             alt={item.label}
-                            loading="lazy"
                             className="aspect-video w-full object-cover"
                           />
                           <div className={`px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums ${

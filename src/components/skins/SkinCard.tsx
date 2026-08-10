@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Download, Lock } from "lucide-react";
-import type { CSSProperties } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 import { rememberSkinName, skinEventProperties } from "../../lib/analytics-skins";
 import { track } from "../../lib/analytics";
 import { formatTimeAgo } from "../../lib/format";
@@ -28,6 +28,38 @@ export function SkinKeymodeTags({ keymodes, specialKeymodes, overlay = false, ma
       ))}
       {rest > 0 && <span className={pill}>+{rest}</span>}
     </div>
+  );
+}
+
+// Previews are lazy-loaded and land one at a time well after the markup around
+// them: fading them in stops the grid from snapping. Mount the img with a key
+// on its url so swapping which preview is shown starts the fade over. The ref
+// check is for an already-decoded image (a back-navigation, a re-render): its
+// load event fires before React attaches onLoad, so without it the preview
+// would sit at zero opacity forever.
+export function SkinPreviewImage({
+  src,
+  alt,
+  width,
+  height,
+  className,
+  loading = "lazy",
+}: { src: string; alt: string; width?: number; height?: number; className: string; loading?: "lazy" | "eager" }) {
+  const [loaded, setLoaded] = useState(false);
+  const markLoaded = useCallback((node: HTMLImageElement | null) => {
+    if (node?.complete) setLoaded(true);
+  }, []);
+  return (
+    <img
+      src={src}
+      alt={alt}
+      width={width}
+      height={height}
+      loading={loading}
+      ref={markLoaded}
+      onLoad={() => setLoaded(true)}
+      className={`${className} transition-[opacity,filter] duration-150 ${loaded ? "opacity-100" : "opacity-0"}`}
+    />
   );
 }
 
@@ -71,13 +103,13 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
       >
         <div className="relative aspect-video w-full bg-osu-b5">
           {preview.url ? (
-            <img
+            <SkinPreviewImage
+              key={preview.url}
               src={preview.url}
               alt={`${skin.name} preview`}
               width={preview.width ?? 1280}
               height={preview.height ?? 720}
-              loading="lazy"
-              className="h-full w-full object-cover transition-[filter] duration-150 group-hover:brightness-110"
+              className="h-full w-full object-cover group-hover:brightness-110"
             />
           ) : null}
           <div className="absolute right-1.5 top-1.5">
