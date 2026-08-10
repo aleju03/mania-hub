@@ -354,7 +354,9 @@ export async function upsertSkinKeymodePreview(
 }
 
 export type SetSkinCoverResult =
-  | { ok: true; skin: SkinSummary }
+  // staleKey is the object the cover just moved off when nothing else on the
+  // row lists it, for the caller to delete from storage.
+  | { ok: true; skin: SkinSummary; staleKey: string | null }
   | { ok: false; error: "not_found" | "forbidden" | "no_preview" };
 
 // Which stored image fronts the browse card: a keymode's rendered playfield, or
@@ -379,9 +381,20 @@ export async function setSkinCover(
     ? row.previews.find((preview) => preview.keys === target.keys)
     : row.screenshots[target.index];
   if (!entry) return { ok: false, error: "no_preview" };
+  // Every candidate is listed on the row except one: the standalone preview of
+  // a skin published before per-keymode renders existed, which only the cover
+  // columns ever pointed at. Moving the card off that orphans it.
+  const referenced = new Set([
+    ...row.previews.map((preview) => preview.key),
+    ...row.screenshots.map((shot) => shot.key),
+    entry.key,
+  ]);
+  const staleKey = row.previewKey && !referenced.has(row.previewKey) ? row.previewKey : null;
   await attachSkinPreview(db, id, entry);
   const updated = await getSkin(db, id);
-  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }) } : { ok: false, error: "not_found" };
+  return updated
+    ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }), staleKey }
+    : { ok: false, error: "not_found" };
 }
 
 export type SetSkinScreenshotLabelsResult =

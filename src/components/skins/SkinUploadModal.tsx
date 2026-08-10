@@ -307,6 +307,13 @@ export function SkinUploadModal({
   }, []);
 
   const ticketRef = useRef<UploadTicket | null>(null);
+  // Screenshots the current ticket already carries, by object URL, and which
+  // of them claimed the card. Retries reuse the ticket, and screenshots append
+  // rather than replace, so without this a retry after a later failure (the
+  // 50MB .osk is the usual one) would put a second copy of every shot in the
+  // gallery. Both are cleared with the ticket.
+  const uploadedShotsRef = useRef<Set<string>>(new Set());
+  const coverShotUrlRef = useRef<string | null>(null);
   const oskHashRef = useRef<{ file: File; hash: Promise<string | null> } | null>(null);
   // Whether the current file has previews on screen. Gates the flat-first
   // render pass: it is there so a slow cover never leaves the form blank, and
@@ -529,6 +536,8 @@ export function SkinUploadModal({
     setBackdropScope("all");
     backdropTouchedRef.current = false;
     ticketRef.current = null;
+    uploadedShotsRef.current.clear();
+    coverShotUrlRef.current = null;
     assetZipRef.current = null;
   }, [revokeAllUrls]);
 
@@ -772,8 +781,16 @@ export function SkinUploadModal({
         ticketRef.current = { id: started.id, token: started.token };
       }
       const ticket = ticketRef.current;
+      // A shot the ticket already carries is not sent again, and not counted.
+      // The exception is a shot starred since the last attempt: a pending row's
+      // cover only moves by an upload claiming it, so that one goes up again.
+      const starredUrl = coverShot != null ? screenshots[coverShot]?.url ?? null : null;
+      const pendingShots = screenshots.filter((shot) => (
+        !uploadedShotsRef.current.has(shot.url)
+        || (shot.url === starredUrl && coverShotUrlRef.current !== starredUrl)
+      ));
       const totalBytes = previewEntries.reduce((sum, [, preview]) => sum + preview.blob.size, 0)
-        + screenshots.reduce((sum, shot) => sum + shot.blob.size, 0)
+        + pendingShots.reduce((sum, shot) => sum + shot.blob.size, 0)
         + file.size;
       let doneBytes = 0;
       const report = (label: string, sent: number) => setProgress({ done: doneBytes + sent, total: totalBytes, label });
@@ -789,16 +806,19 @@ export function SkinUploadModal({
           width: preview.width,
           height: preview.height,
           keys,
-          cover: keys === coverKeymode,
+          // A starred screenshot is the cover, and it says so itself when it
+          // uploads below. Claiming it here too would hand the card back to a
+          // render on a retry that skips the screenshot it already sent.
+          cover: coverShot == null && keys === coverKeymode,
           accent: keys === coverKeymode ? preview.accent : undefined,
           onProgress: (sent) => report(label, sent),
         });
         doneBytes += preview.blob.size;
       }
 
-      for (let index = 0; index < screenshots.length; index += 1) {
-        const shot = screenshots[index];
-        const step = `Uploading screenshot ${index + 1} of ${screenshots.length}.`;
+      for (let index = 0; index < pendingShots.length; index += 1) {
+        const shot = pendingShots[index];
+        const step = `Uploading screenshot ${index + 1} of ${pendingShots.length}.`;
         report(step, 0);
         await uploadSkinPart({
           id: ticket.id,
@@ -810,9 +830,11 @@ export function SkinUploadModal({
           label: shot.label,
           // Screenshots upload after the renders, so a starred one is the last
           // word on what fronts the card.
-          cover: index === coverShot,
+          cover: shot.url === starredUrl,
           onProgress: (sent) => report(step, sent),
         });
+        uploadedShotsRef.current.add(shot.url);
+        if (shot.url === starredUrl) coverShotUrlRef.current = starredUrl;
         doneBytes += shot.blob.size;
       }
 
@@ -842,7 +864,13 @@ export function SkinUploadModal({
         skin_upload_error: uploadError instanceof SkinUploadError ? uploadError.code : "unexpected",
       });
       if (uploadError instanceof SkinUploadError) {
-        if (uploadError.code === "invalid_ticket") ticketRef.current = null;
+        // A dead ticket means a fresh row next time, which carries none of the
+        // screenshots the old one did.
+        if (uploadError.code === "invalid_ticket") {
+          ticketRef.current = null;
+          uploadedShotsRef.current.clear();
+          coverShotUrlRef.current = null;
+        }
         if (uploadError.code === "duplicate") setDuplicate(uploadError.duplicate ?? null);
         setError(uploadError.message);
       } else {

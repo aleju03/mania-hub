@@ -798,6 +798,13 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
         sendJson(req, res, ctx, result.error === "forbidden" ? 403 : 404, { ok: false, error: result.error });
         return true;
       }
+      // The pre-keymode standalone cover the card just left, which nothing on
+      // the row points at any more.
+      if (result.staleKey) {
+        await deleteSkinObjects(ctx.config, [result.staleKey]).catch((error) => {
+          logWarn("skin_preview_stale_cleanup_failed", { id, ...errorContext(error) });
+        });
+      }
       logInfo("skin_cover_changed", { id, ...target, by: ownerUserId == null ? "admin" : "owner" });
       sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
       return true;

@@ -1139,10 +1139,31 @@ describe("editing a published skin's previews", () => {
     expect(await setSkinCover(db, id, { kind: "screenshot", index: 3 }, OWNER.ownerUserId)).toEqual({ ok: false, error: "no_preview" });
     expect((await getSkin(db, id))?.previewUrl).toContain("shot-0");
 
-    // Moving back to a keymode render leaves the screenshot where it was.
+    // Moving back to a keymode render leaves the screenshot where it was, and
+    // nothing is orphaned in either direction: both objects stay on the row.
     const back = await setSkinCover(db, id, { kind: "keymode", keys: 4 }, OWNER.ownerUserId);
     expect(back.ok).toBe(true);
-    if (back.ok) expect(back.skin.screenshots).toHaveLength(1);
+    if (back.ok) {
+      expect(back.skin.screenshots).toHaveLength(1);
+      expect(back.staleKey).toBeNull();
+    }
+  });
+
+  it("reports the standalone cover of a pre-keymode skin as orphaned when the card leaves it", async () => {
+    const id = await previewedSkin();
+    // What a skin published before per-keymode renders carries: a cover object
+    // nothing else on the row lists.
+    const standalone = `skins/${id}/preview.png`;
+    await attachSkinPreview(db, id, { key: standalone, url: `https://cdn.example/${standalone}`, width: 1280, height: 720 });
+
+    const moved = await setSkinCover(db, id, { kind: "keymode", keys: 7 }, OWNER.ownerUserId);
+    expect(moved.ok).toBe(true);
+    // Nothing points at it any more, so the caller deletes it from storage.
+    if (moved.ok) expect(moved.staleKey).toBe(standalone);
+
+    // A keymode render, by contrast, stays listed in previews_json.
+    const again = await setSkinCover(db, id, { kind: "keymode", keys: 4 }, OWNER.ownerUserId);
+    if (again.ok) expect(again.staleKey).toBeNull();
   });
 
   it("renames screenshots by position and puts an empty label back to unnamed", async () => {
