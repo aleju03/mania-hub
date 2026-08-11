@@ -24,6 +24,17 @@ import {
 export const SKIN_PREVIEW_WIDTH = 1280;
 export const SKIN_PREVIEW_HEIGHT = 720;
 const PREVIEW_BACKGROUND = "#16121d";
+// Flat backdrop triangles: base side length before per-triangle jitter, the
+// grid they are dealt onto, the darkest shade of the accent any of them take,
+// and an equilateral triangle's height per unit of side. The grid is dense
+// enough (126 triangles once the off-canvas ring is counted) that the field
+// covers the canvas about three times over, the way osu!'s own triangle
+// texture leaves no background showing.
+const BACKDROP_TRIANGLE_SIDE = 215;
+const BACKDROP_COLUMNS = 12;
+const BACKDROP_ROWS = 7;
+const BACKDROP_TONE_FLOOR = 0.085;
+const BACKDROP_EQUILATERAL = 0.866;
 // The playfield a mania skin is authored against: opaque, not a dim over the
 // map art. skin.ini Colour{n} overrides it per column when the skin sets one.
 const PLAYFIELD_BACKGROUND = "#040308";
@@ -682,34 +693,73 @@ function drawCoverFit(ctx: CanvasRenderingContext2D, image: HTMLImageElement): v
 }
 
 function drawPreviewBackdrop(ctx: CanvasRenderingContext2D, accent: string): void {
-  // Accent-tinted base so the whole backdrop carries the skin's hue.
-  ctx.fillStyle = PREVIEW_BACKGROUND;
-  ctx.fillRect(0, 0, SKIN_PREVIEW_WIDTH, SKIN_PREVIEW_HEIGHT);
-  ctx.globalAlpha = 0.14;
-  ctx.fillStyle = accent;
+  // The same field the upload modal's drop zone drifts, and the same one
+  // lazer scatters behind its menus: every triangle equilateral and pointing
+  // up, sizes clustered around one base, each filled opaque with a shade of
+  // the accent. What made the old backdrop read as a pile of shards was the
+  // opposite of all three - a dozen triangles, up and down, from half to a
+  // full canvas height, stacked with alpha so every overlap became another
+  // seam.
+  const tint = hexChannels(accent) ?? [255, 102, 171];
+  const base = hexChannels(PREVIEW_BACKGROUND) ?? [22, 18, 29];
+  const shade = (amount: number) => {
+    const channel = (index: number) => Math.round(base[index] + (tint[index] - base[index]) * amount);
+    return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
+  };
+
+  // Only ever seen through the gaps, since the field covers the canvas three
+  // times over; the darkest shade, so a sliver reads as part of it.
+  ctx.fillStyle = shade(BACKDROP_TONE_FLOOR);
   ctx.fillRect(0, 0, SKIN_PREVIEW_WIDTH, SKIN_PREVIEW_HEIGHT);
 
   const random = mulberry32(0x5eed);
-  for (let i = 0; i < 12; i += 1) {
-    // Large flat-shaded triangles spread across the width; overlaps read as
-    // interlocking shapes once the alphas stack. A few lighter ones give the
-    // tonal variety of dimmed artwork.
-    const size = SKIN_PREVIEW_HEIGHT * (0.45 + random() * 0.6);
-    const centerX = SKIN_PREVIEW_WIDTH * ((i + random() * 0.9) / 12);
-    const centerY = SKIN_PREVIEW_HEIGHT * (0.05 + random() * 0.9);
-    const up = random() > 0.4;
-    const light = random() > 0.7;
-    const half = size / 2;
-    ctx.globalAlpha = light ? 0.05 + random() * 0.05 : 0.08 + random() * 0.1;
-    ctx.fillStyle = light ? "#ffffff" : accent;
+  // Box-Muller off the seeded stream: sizes cluster around the base with a
+  // tail each way, so the field gets its handful of dominant triangles and its
+  // scattering of small ones instead of one uniform size.
+  const normal = () => Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random());
+  const cellWidth = SKIN_PREVIEW_WIDTH / BACKDROP_COLUMNS;
+  const cellHeight = SKIN_PREVIEW_HEIGHT / BACKDROP_ROWS;
+  const field: { x: number; y: number; side: number; tone: number }[] = [];
+  // One triangle per cell of a jittered grid, carried a ring past every edge
+  // so the border is never bare. Purely random placement clumps in one corner
+  // and leaves holes in another; the jitter is wide enough that no row or
+  // column shows through.
+  for (let row = -1; row <= BACKDROP_ROWS; row += 1) {
+    for (let col = -1; col <= BACKDROP_COLUMNS; col += 1) {
+      // Odd rows sit half a cell over, packing the field like a honeycomb.
+      const stagger = Math.abs(row % 2) === 1 ? cellWidth / 2 : 0;
+      const scale = Math.min(2.6, Math.max(0.26, 1 + 0.42 * normal()));
+      field.push({
+        x: (col + 0.5) * cellWidth + stagger + (random() - 0.5) * cellWidth * 0.8,
+        y: (row + 0.5) * cellHeight + (random() - 0.5) * cellHeight * 0.8,
+        side: BACKDROP_TRIANGLE_SIDE * scale,
+        tone: random(),
+      });
+    }
+  }
+  // Large behind, small in front, lazer's draw order.
+  field.sort((a, b) => b.side - a.side);
+  for (const triangle of field) {
+    const height = triangle.side * BACKDROP_EQUILATERAL;
+    // A narrow band of shades: wide contrast turns every overlap into an edge
+    // that competes with the stage.
+    ctx.fillStyle = shade(BACKDROP_TONE_FLOOR + triangle.tone * 0.16);
     ctx.beginPath();
-    ctx.moveTo(centerX, up ? centerY - half : centerY + half);
-    ctx.lineTo(centerX - half, up ? centerY + half : centerY - half);
-    ctx.lineTo(centerX + half, up ? centerY + half : centerY - half);
+    ctx.moveTo(triangle.x, triangle.y - height / 2);
+    ctx.lineTo(triangle.x - triangle.side / 2, triangle.y + height / 2);
+    ctx.lineTo(triangle.x + triangle.side / 2, triangle.y + height / 2);
     ctx.closePath();
     ctx.fill();
   }
-  ctx.globalAlpha = 1;
+}
+
+// Channels of a #rrggbb colour; null for anything else, so a caller can fall
+// back rather than draw with NaN.
+function hexChannels(color: string): [number, number, number] | null {
+  const match = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  if (!match) return null;
+  const value = parseInt(match[1], 16);
+  return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
 }
 
 // Draws an image mirrored vertically inside its target rect; stable flips
