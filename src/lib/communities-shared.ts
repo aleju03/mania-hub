@@ -26,8 +26,8 @@ export const COMMUNITY_EARLY_ACCESS_USER_IDS: readonly number[] = [
   // localhost and ninja.mania-tracker.com, and "I can see it" should hold on
   // the real site too.
   7095193,
-  // Early tester, merlin69420. Uncomment to let them in.
-  // 15801489,
+  // Early tester, merlin69420.
+  15801489,
 ];
 
 /*
@@ -42,10 +42,11 @@ export const COMMUNITY_EARLY_ACCESS_USER_IDS: readonly number[] = [
  */
 export const COMMUNITY_MODERATOR_USER_IDS: readonly number[] = [
   7095193,
-  // merlin69420. Uncomment alongside the early-access entry above. Being on
-  // this list is enough to see the directory on its own, so leaving it here
-  // would have kept them in the beta.
-  // 15801489,
+  // merlin69420, also on the early-access list above. Being on this one is
+  // enough to see the directory on its own, so the entry there is what keeps
+  // the two answers separate: dropping them as a moderator would leave the
+  // access they were given as a tester.
+  15801489,
 ];
 
 export function canUseCommunities(auth: AuthState | undefined | null): boolean {
