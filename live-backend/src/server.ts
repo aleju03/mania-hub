@@ -42,6 +42,7 @@ import { OsuApiClient } from "./osu/client.js";
 import { SqliteSharedRateLimiter } from "./osu/shared-rate-limiter.js";
 import { enqueueRosterRefreshes } from "./rosters/country-rosters.js";
 import { assertMigrationDiskHeadroom, startRetentionScheduler } from "./retention.js";
+import { startCommunityInviteScheduler } from "./communities/refresh.js";
 import { readProcessMemory } from "./shared/process-memory.js";
 import { packGlobalBoard } from "./features/global-rankings.js";
 import { startWalCheckpointer } from "./wal-checkpointer.js";
@@ -420,6 +421,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       startPlayerSkillsDripScheduler(app.db, app.queue);
     }
     startRetentionScheduler(app.db, app.config);
+    // /communities invite health: pure Discord lookups, no osu! API budget, so
+    // it sits with retention rather than behind the scheduled-refresh gate.
+    startCommunityInviteScheduler(app.db, app.config);
     // Skill percentile baseline: pure DB/CPU (approximate SSRs over stored top
     // plays), so it runs whenever workers do, like retention.
     if (app.config.enableWorkers) {

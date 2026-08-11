@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BbcodeRouteImport } from './routes/bbcode'
+import { Route as CommunitiesRouteImport } from './routes/communities'
 import { Route as DiscordRouteImport } from './routes/discord'
 import { Route as FarmHelperRouteImport } from './routes/farm-helper'
 import { Route as GoalsRouteImport } from './routes/goals'
@@ -47,10 +48,13 @@ import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiOszRouteImport } from './routes/api/osz'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
+import { Route as CommunitiesIdRouteImport } from './routes/communities_.$id'
+import { Route as CommunitiesReviewRouteImport } from './routes/communities_.review'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
 import { Route as DuelDuelIdRouteImport } from './routes/duel/$duelId'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
+import { Route as ApiAuthDiscordRouteImport } from './routes/api/auth/discord'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
 import { Route as FarmHelperMapBeatmapIdRouteImport } from './routes/farm-helper/map/$beatmapId'
@@ -61,6 +65,7 @@ import { Route as PlayerUsernameRecentRouteImport } from './routes/player/$usern
 import { Route as PlayerUsernameSkillsRouteImport } from './routes/player/$username/skills'
 import { Route as PullOwnerIdCardIdRouteImport } from './routes/pull/$ownerId/$cardId'
 import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
+import { Route as ApiAuthDiscordCallbackRouteImport } from './routes/api/auth/discord/callback'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
 
 const IndexRoute = IndexRouteImport.update({
@@ -71,6 +76,11 @@ const IndexRoute = IndexRouteImport.update({
 const BbcodeRoute = BbcodeRouteImport.update({
   id: '/bbcode',
   path: '/bbcode',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunitiesRoute = CommunitiesRouteImport.update({
+  id: '/communities',
+  path: '/communities',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DiscordRoute = DiscordRouteImport.update({
@@ -253,6 +263,16 @@ const ApiSyncRoute = ApiSyncRouteImport.update({
   path: '/api/sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CommunitiesIdRoute = CommunitiesIdRouteImport.update({
+  id: '/communities_/$id',
+  path: '/communities/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunitiesReviewRoute = CommunitiesReviewRouteImport.update({
+  id: '/communities_/review',
+  path: '/communities/review',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
   id: '/dev/opt-in-preview',
   path: '/dev/opt-in-preview',
@@ -271,6 +291,11 @@ const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
 const SkinsIdRoute = SkinsIdRouteImport.update({
   id: '/skins_/$id',
   path: '/skins/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthDiscordRoute = ApiAuthDiscordRouteImport.update({
+  id: '/api/auth/discord',
+  path: '/api/auth/discord',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthLogoutRoute = ApiAuthLogoutRouteImport.update({
@@ -323,6 +348,11 @@ const VideosIdFilenameRoute = VideosIdFilenameRouteImport.update({
   path: '/videos/$id/$filename',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthDiscordCallbackRoute = ApiAuthDiscordCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => ApiAuthDiscordRoute,
+} as any)
 const ApiAuthOsuCallbackRoute = ApiAuthOsuCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
@@ -332,6 +362,7 @@ const ApiAuthOsuCallbackRoute = ApiAuthOsuCallbackRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/bbcode': typeof BbcodeRoute
+  '/communities': typeof CommunitiesRoute
   '/discord': typeof DiscordRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/goals': typeof GoalsRoute
@@ -368,10 +399,13 @@ export interface FileRoutesByFullPath {
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sync': typeof ApiSyncRoute
+  '/communities/$id': typeof CommunitiesIdRoute
+  '/communities/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/duel/$duelId': typeof DuelDuelIdRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins/$id': typeof SkinsIdRoute
+  '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
@@ -382,11 +416,13 @@ export interface FileRoutesByFullPath {
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
+  '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/bbcode': typeof BbcodeRoute
+  '/communities': typeof CommunitiesRoute
   '/discord': typeof DiscordRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/goals': typeof GoalsRoute
@@ -423,10 +459,13 @@ export interface FileRoutesByTo {
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sync': typeof ApiSyncRoute
+  '/communities/$id': typeof CommunitiesIdRoute
+  '/communities/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/duel/$duelId': typeof DuelDuelIdRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins/$id': typeof SkinsIdRoute
+  '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
@@ -437,12 +476,14 @@ export interface FileRoutesByTo {
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
+  '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/bbcode': typeof BbcodeRoute
+  '/communities': typeof CommunitiesRoute
   '/discord': typeof DiscordRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/goals': typeof GoalsRoute
@@ -479,10 +520,13 @@ export interface FileRoutesById {
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sync': typeof ApiSyncRoute
+  '/communities_/$id': typeof CommunitiesIdRoute
+  '/communities_/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/duel/$duelId': typeof DuelDuelIdRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins_/$id': typeof SkinsIdRoute
+  '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
@@ -493,6 +537,7 @@ export interface FileRoutesById {
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
+  '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
 export interface FileRouteTypes {
@@ -500,6 +545,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/bbcode'
+    | '/communities'
     | '/discord'
     | '/farm-helper'
     | '/goals'
@@ -536,10 +582,13 @@ export interface FileRouteTypes {
     | '/api/osz'
     | '/api/replay-upload'
     | '/api/sync'
+    | '/communities/$id'
+    | '/communities/review'
     | '/dev/opt-in-preview'
     | '/duel/$duelId'
     | '/player/$username'
     | '/skins/$id'
+    | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
     | '/farm-helper/map/$beatmapId'
@@ -550,11 +599,13 @@ export interface FileRouteTypes {
     | '/player/$username/skills'
     | '/pull/$ownerId/$cardId'
     | '/videos/$id/$filename'
+    | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/bbcode'
+    | '/communities'
     | '/discord'
     | '/farm-helper'
     | '/goals'
@@ -591,10 +642,13 @@ export interface FileRouteTypes {
     | '/api/osz'
     | '/api/replay-upload'
     | '/api/sync'
+    | '/communities/$id'
+    | '/communities/review'
     | '/dev/opt-in-preview'
     | '/duel/$duelId'
     | '/player/$username'
     | '/skins/$id'
+    | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
     | '/farm-helper/map/$beatmapId'
@@ -605,11 +659,13 @@ export interface FileRouteTypes {
     | '/player/$username/skills'
     | '/pull/$ownerId/$cardId'
     | '/videos/$id/$filename'
+    | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
   id:
     | '__root__'
     | '/'
     | '/bbcode'
+    | '/communities'
     | '/discord'
     | '/farm-helper'
     | '/goals'
@@ -646,10 +702,13 @@ export interface FileRouteTypes {
     | '/api/osz'
     | '/api/replay-upload'
     | '/api/sync'
+    | '/communities_/$id'
+    | '/communities_/review'
     | '/dev/opt-in-preview'
     | '/duel/$duelId'
     | '/player/$username'
     | '/skins_/$id'
+    | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
     | '/farm-helper/map/$beatmapId'
@@ -660,12 +719,14 @@ export interface FileRouteTypes {
     | '/player/$username/skills'
     | '/pull/$ownerId/$cardId'
     | '/videos/$id/$filename'
+    | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BbcodeRoute: typeof BbcodeRoute
+  CommunitiesRoute: typeof CommunitiesRoute
   DiscordRoute: typeof DiscordRoute
   FarmHelperRoute: typeof FarmHelperRouteWithChildren
   GoalsRoute: typeof GoalsRoute
@@ -702,10 +763,13 @@ export interface RootRouteChildren {
   ApiOszRoute: typeof ApiOszRoute
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSyncRoute: typeof ApiSyncRoute
+  CommunitiesIdRoute: typeof CommunitiesIdRoute
+  CommunitiesReviewRoute: typeof CommunitiesReviewRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
   DuelDuelIdRoute: typeof DuelDuelIdRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
   SkinsIdRoute: typeof SkinsIdRoute
+  ApiAuthDiscordRoute: typeof ApiAuthDiscordRouteWithChildren
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthOsuRoute: typeof ApiAuthOsuRouteWithChildren
   PullOwnerIdCardIdRoute: typeof PullOwnerIdCardIdRoute
@@ -726,6 +790,13 @@ declare module '@tanstack/react-router' {
       path: '/bbcode'
       fullPath: '/bbcode'
       preLoaderRoute: typeof BbcodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/communities': {
+      id: '/communities'
+      path: '/communities'
+      fullPath: '/communities'
+      preLoaderRoute: typeof CommunitiesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/discord': {
@@ -980,6 +1051,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/communities_/$id': {
+      id: '/communities_/$id'
+      path: '/communities/$id'
+      fullPath: '/communities/$id'
+      preLoaderRoute: typeof CommunitiesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/communities_/review': {
+      id: '/communities_/review'
+      path: '/communities/review'
+      fullPath: '/communities/review'
+      preLoaderRoute: typeof CommunitiesReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dev/opt-in-preview': {
       id: '/dev/opt-in-preview'
       path: '/dev/opt-in-preview'
@@ -1006,6 +1091,13 @@ declare module '@tanstack/react-router' {
       path: '/skins/$id'
       fullPath: '/skins/$id'
       preLoaderRoute: typeof SkinsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/discord': {
+      id: '/api/auth/discord'
+      path: '/api/auth/discord'
+      fullPath: '/api/auth/discord'
+      preLoaderRoute: typeof ApiAuthDiscordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/logout': {
@@ -1078,6 +1170,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VideosIdFilenameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/discord/callback': {
+      id: '/api/auth/discord/callback'
+      path: '/callback'
+      fullPath: '/api/auth/discord/callback'
+      preLoaderRoute: typeof ApiAuthDiscordCallbackRouteImport
+      parentRoute: typeof ApiAuthDiscordRoute
+    }
     '/api/auth/osu/callback': {
       id: '/api/auth/osu/callback'
       path: '/callback'
@@ -1120,6 +1219,18 @@ const PlayerUsernameRouteWithChildren = PlayerUsernameRoute._addFileChildren(
   PlayerUsernameRouteChildren,
 )
 
+interface ApiAuthDiscordRouteChildren {
+  ApiAuthDiscordCallbackRoute: typeof ApiAuthDiscordCallbackRoute
+}
+
+const ApiAuthDiscordRouteChildren: ApiAuthDiscordRouteChildren = {
+  ApiAuthDiscordCallbackRoute: ApiAuthDiscordCallbackRoute,
+}
+
+const ApiAuthDiscordRouteWithChildren = ApiAuthDiscordRoute._addFileChildren(
+  ApiAuthDiscordRouteChildren,
+)
+
 interface ApiAuthOsuRouteChildren {
   ApiAuthOsuCallbackRoute: typeof ApiAuthOsuCallbackRoute
 }
@@ -1135,6 +1246,7 @@ const ApiAuthOsuRouteWithChildren = ApiAuthOsuRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BbcodeRoute: BbcodeRoute,
+  CommunitiesRoute: CommunitiesRoute,
   DiscordRoute: DiscordRoute,
   FarmHelperRoute: FarmHelperRouteWithChildren,
   GoalsRoute: GoalsRoute,
@@ -1171,10 +1283,13 @@ const rootRouteChildren: RootRouteChildren = {
   ApiOszRoute: ApiOszRoute,
   ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSyncRoute: ApiSyncRoute,
+  CommunitiesIdRoute: CommunitiesIdRoute,
+  CommunitiesReviewRoute: CommunitiesReviewRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
   DuelDuelIdRoute: DuelDuelIdRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
   SkinsIdRoute: SkinsIdRoute,
+  ApiAuthDiscordRoute: ApiAuthDiscordRouteWithChildren,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthOsuRoute: ApiAuthOsuRouteWithChildren,
   PullOwnerIdCardIdRoute: PullOwnerIdCardIdRoute,

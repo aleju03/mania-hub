@@ -152,13 +152,16 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-async function signJson(value: unknown): Promise<string> {
+/* Exported for the Discord OAuth connection in discord-auth-server.ts, which
+   needs the same signed-cookie plumbing without this module growing a second
+   identity provider. Everything osu!-specific stays here. */
+export async function signJson(value: unknown): Promise<string> {
   const payload = base64UrlEncode(JSON.stringify(value));
   const signature = await hmac(payload);
   return `${payload}.${signature}`;
 }
 
-async function verifySignedJson<T>(raw: string | undefined): Promise<T | null> {
+export async function verifySignedJson<T>(raw: string | undefined): Promise<T | null> {
   if (!raw) return null;
   const [payload, signature, extra] = raw.split(".");
   if (!payload || !signature || extra != null) return null;
@@ -263,7 +266,7 @@ export async function requireTrueAdminAccess(action: string): Promise<void> {
   }
 }
 
-function serializeCookie(name: string, value: string, options: CookieOptions): string {
+export function serializeCookie(name: string, value: string, options: CookieOptions): string {
   const parts = [`${name}=${encodeURIComponent(value)}`];
   if (options.maxAge != null) parts.push(`Max-Age=${Math.max(0, Math.floor(options.maxAge))}`);
   if (options.expires) parts.push(`Expires=${options.expires.toUTCString()}`);
@@ -285,7 +288,7 @@ function shouldUseSecureCookie(request: Request): boolean {
   }
 }
 
-function authCookieOptions(request: Request, maxAge: number): CookieOptions {
+export function authCookieOptions(request: Request, maxAge: number): CookieOptions {
   return {
     httpOnly: true,
     secure: shouldUseSecureCookie(request),

@@ -96,6 +96,18 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     packPullEventsNotable: await deleteInBatches(db, "pack_pull_events", "notable = 1 and pulled_at < ?", [packPullNotableCutoffMs]),
     streakRunsSwept,
     streakRuns: await deleteInBatches(db, "pack_streak_runs", "status = 'ended' and updated_at < ?", [streakRunCutoffMs]),
+    // A /communities submission nobody ever reviewed. Approved, rejected and
+    // hidden listings are durable: rejected rows are the record of a decision,
+    // and their owner can edit one back into the queue.
+    communitiesPending: await deleteInBatches(db, "discord_communities", "status = 'pending' and created_at < ?", [daysAgo(COMMUNITY_PENDING_RETENTION_DAYS)]),
+    // A report whose listing is gone. Deleting a listing takes its reports with
+    // it; this is for the rows the sweep above leaves behind, which is the only
+    // path that removes a listing without going through deleteCommunity.
+    communityReportsOrphaned: await deleteInBatches(
+      db,
+      "discord_community_reports",
+      "community_id not in (select id from discord_communities)",
+    ),
     // Slow self-healing refresh: a pruned accent recomputes the next time the
     // avatar shows up in a payload. Also bounds churn from avatar changes.
     avatarAccents: await pruneAvatarAccents(db),
@@ -150,6 +162,10 @@ function daysAgo(days: number): string {
 // feedback list for a couple of seasons, short enough that resolved rows do
 // not accumulate forever alongside the never-pruned active marks.
 export const RESOLVED_FARM_HELPER_FEEDBACK_RETENTION_DAYS = 180;
+
+// A /communities listing that has sat unreviewed for a month is one nobody is
+// coming back for. Long enough that a quiet month for the admin loses nothing.
+export const COMMUNITY_PENDING_RETENTION_DAYS = 30;
 
 // Ordinary pack pulls feed only short-window stats (the hourly pull cap, the
 // 7-day "got pulled" count, the recent-pulls ticker), and first-global checks

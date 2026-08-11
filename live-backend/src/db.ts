@@ -332,6 +332,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateMapSearchIndex(target);
   await migrateMapCollections(target);
   await migrateSkins(target);
+  await migrateDiscordCommunities(target);
   await migrateUserReplaySkins(target);
   await migrateAdminTodos(target);
   await migrateDanBenchmark(target);
@@ -2019,6 +2020,175 @@ async function migrateSkins(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_skins_osk_sha256
       on skins(osk_sha256) where osk_sha256 is not null
+  `);
+}
+
+async function migrateDiscordCommunities(db: Db): Promise<void> {
+  // The /communities directory: osu!mania Discord servers posted by the people
+  // who run them. A row is written 'pending' and only an admin's approval makes
+  // it public, so status is the whole publish axis here (skins, which publish on
+  // upload, need a second visibility axis; this table does not).
+  //
+  // The server's identity - name, icon, banner, member counts - is whatever
+  // Discord's invite endpoint reported, never what the form said, and the
+  // refresh sweep keeps rewriting it. Only the pitch and the tags come from the
+  // submitter. guild_id is unique, so one Discord server is one listing however
+  // many people try to post it.
+  //
+  // Timestamps are ISO text (matching skins). Durable: retention only sweeps
+  // pending rows nobody ever reviewed.
+  await db.execute(`
+    create table if not exists discord_communities (
+      id text primary key,
+      guild_id text not null,
+      invite_code text not null,
+      name text not null,
+      icon_hash text,
+      banner_hash text,
+      member_count integer not null default 0,
+      online_count integer not null default 0,
+      pitch text not null default '',
+      country_code text,
+      language text,
+      tags_json text not null default '[]',
+      search_text text not null default '',
+      owner_user_id integer not null,
+      owner_username text not null,
+      discord_user_id text not null,
+      discord_username text not null,
+      is_guild_owner integer not null default 0,
+      status text not null default 'pending',
+      reject_reason text,
+      edited_since_review integer not null default 0,
+      reviewed_at text,
+      approved_at text,
+      invite_ok integer not null default 1,
+      invite_fail_count integer not null default 0,
+      invite_checked_at text,
+      invite_expires_at text,
+      created_at text not null,
+      updated_at text not null
+    )
+  `);
+  // Keymode and purpose tags were dropped before the directory ever opened: a
+  // list of Discord servers has no business asking about keys. Nothing reads
+  // these, so they go rather than linger as columns nobody can explain. Guarded
+  // for databases created during the day they existed; neither is indexed, so
+  // the drop is safe.
+  const communityColumns = (await db.execute("pragma table_info(discord_communities)")).rows.map((row) => String(row.name));
+  if (communityColumns.includes("keymodes_json")) {
+    await db.execute("alter table discord_communities drop column keymodes_json");
+  }
+  if (communityColumns.includes("purposes_json")) {
+    await db.execute("alter table discord_communities drop column purposes_json");
+  }
+  // Tags came back, but owner-typed rather than picked from a vocabulary: the
+  // fixed lists above were the part that read wrong, not the idea of tagging. A
+  // JSON array of already-normalized strings, read with json_each for the facet
+  // row on the directory, so the filters are only ever what people actually
+  // typed. Added after the table existed, hence the guard.
+  if (!communityColumns.includes("tags_json")) {
+    await db.execute("alter table discord_communities add column tags_json text not null default '[]'");
+  }
+  // When the listed invite stops working, or null for a permanent one. An
+  // expiring invite used to be refused outright; it is allowed now, warned
+  // about, and remembered here so the owner and the review page can see it
+  // coming rather than only finding out when the sweep hides the listing.
+  if (!communityColumns.includes("invite_expires_at")) {
+    await db.execute("alter table discord_communities add column invite_expires_at text");
+  }
+  // What Discord itself knows about the server, for its listing page: the
+  // server's own description (not the submitter's pitch), how many boosts it is
+  // carrying, and flags like PARTNERED or COMMUNITY. All three ride the invite
+  // response, so they cost no extra call and are rewritten by the same refresh
+  // sweep. Rows listed before this fill in on their next sweep.
+  if (!communityColumns.includes("guild_description")) {
+    await db.execute("alter table discord_communities add column guild_description text");
+  }
+  if (!communityColumns.includes("boost_count")) {
+    await db.execute("alter table discord_communities add column boost_count integer not null default 0");
+  }
+  if (!communityColumns.includes("features_json")) {
+    await db.execute("alter table discord_communities add column features_json text not null default '[]'");
+  }
+  // Who the server is for: a JSON array of scope codes, mixing plain country
+  // codes with the R- region codes from regions.ts, and empty meaning everyone.
+  // access_hidden is the owner's second choice - whether someone outside those
+  // places sees the listing without a way in, or does not see it at all.
+  //
+  // Note this filters, it does not enforce. The invite is withheld from a
+  // viewer who does not match, but anyone already inside can paste it anywhere;
+  // a real wall is Discord-side membership screening.
+  if (!communityColumns.includes("access_scopes_json")) {
+    await db.execute("alter table discord_communities add column access_scopes_json text not null default '[]'");
+  }
+  if (!communityColumns.includes("access_hidden")) {
+    await db.execute("alter table discord_communities add column access_hidden integer not null default 0");
+  }
+  // One Discord server is one listing. Enforced here rather than in the feature
+  // module because two people who both run the server can submit concurrently.
+  await db.execute(`
+    create unique index if not exists idx_discord_communities_guild
+      on discord_communities(guild_id)
+  `);
+  // The default browse order: approved rows, biggest first.
+  await db.execute(`
+    create index if not exists idx_discord_communities_status_members
+      on discord_communities(status, member_count desc)
+  `);
+  // "My listings" on the page, and the per-account cap on submit.
+  await db.execute(`
+    create index if not exists idx_discord_communities_owner
+      on discord_communities(owner_user_id, created_at desc)
+  `);
+  // The admin queue reads pending rows and approved-but-edited rows together;
+  // both are covered by leading with status.
+  await db.execute(`
+    create index if not exists idx_discord_communities_review
+      on discord_communities(status, edited_since_review, created_at desc)
+  `);
+  // The refresh sweep claims the approved rows checked longest ago. Nulls sort
+  // first in SQLite, so a never-checked row is picked up before any other.
+  await db.execute(`
+    create index if not exists idx_discord_communities_checked
+      on discord_communities(status, invite_checked_at)
+  `);
+
+  /*
+   * What someone browsing the directory flagged about a listing.
+   *
+   * Read only by the review page, never by the listing's owner: a report is a
+   * message to a moderator, and showing an owner who complained about them
+   * would make it something else. status goes open -> resolved, and every
+   * review decision on the listing resolves its open reports, because the
+   * decision is the answer to them.
+   */
+  await db.execute(`
+    create table if not exists discord_community_reports (
+      id text primary key,
+      community_id text not null,
+      reporter_user_id integer not null,
+      reporter_username text not null default '',
+      reason text not null default 'other',
+      details text not null default '',
+      status text not null default 'open',
+      resolved_at text,
+      resolved_by integer,
+      created_at text not null,
+      updated_at text not null
+    )
+  `);
+  // One person, one report per listing. Reporting again rewrites their own row
+  // rather than adding to a pile, so ten clicks are still one voice, and a
+  // listing that was already dealt with can be flagged again afterwards.
+  await db.execute(`
+    create unique index if not exists idx_discord_community_reports_one
+      on discord_community_reports(community_id, reporter_user_id)
+  `);
+  // The review page reads the open ones, oldest first.
+  await db.execute(`
+    create index if not exists idx_discord_community_reports_open
+      on discord_community_reports(status, created_at)
   `);
 }
 

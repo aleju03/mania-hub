@@ -121,6 +121,13 @@ export interface Config {
   replayVideoUploadMaxBytes: number;
   skinOskMaxBytes: number;
   skinImageMaxBytes: number;
+  // /communities invite health. The sweep re-resolves each approved listing's
+  // invite to keep member counts honest and to notice a dead link; a listing
+  // only leaves the directory after failing this many checks in a row, so one
+  // Discord blip never takes a live server off the page.
+  communityRefreshIntervalMs: number;
+  communityInviteFailLimit: number;
+  communityRefreshBatchSize: number;
   // Memory budgets for the audio surfaces. The serving process only holds
   // prepared audio, hitsound bundles and preview clips while there is no R2
   // public base URL to redirect browsers to, so 0 (disable the cache) is a
@@ -360,6 +367,9 @@ export function readConfig(): Config {
     replayVideoUploadMaxBytes: readInt("REPLAY_VIDEO_UPLOAD_MAX_BYTES", 600 * 1024 * 1024),
     skinOskMaxBytes: readInt("SKIN_OSK_MAX_BYTES", 50 * 1024 * 1024),
     skinImageMaxBytes: readInt("SKIN_IMAGE_MAX_BYTES", 4 * 1024 * 1024),
+    communityRefreshIntervalMs: readInt("COMMUNITY_REFRESH_INTERVAL_MS", 6 * 60 * 60 * 1000),
+    communityInviteFailLimit: readInt("COMMUNITY_INVITE_FAIL_LIMIT", 3),
+    communityRefreshBatchSize: readInt("COMMUNITY_REFRESH_BATCH_SIZE", 100),
     audioCacheTtlMs: readNonNegativeInt("AUDIO_CACHE_TTL_MS", 15 * 60 * 1000),
     audioCacheMaxEntries: readNonNegativeInt("AUDIO_CACHE_MAX_ENTRIES", 12),
     audioCacheMaxBytes: readNonNegativeInt("AUDIO_CACHE_MAX_BYTES", 180 * 1024 * 1024),

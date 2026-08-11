@@ -16,6 +16,7 @@ import { readCountryFromSearchStr } from "../../lib/country-search";
 import { getCountryFlagGradient, getCountryFlagLargeUrl, getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { isRegionScope } from "../../lib/regions";
 import { isLiveBackendConfigured } from "../../lib/live-backend";
+import { canUseCommunities } from "../../lib/communities-shared";
 import { showPlayerCountryFlagState } from "../../lib/player-profile-navigation";
 import { getCachedCountryTier, useCountryWarming } from "../../lib/use-country-warming";
 import { useDynamicFavicon } from "../../lib/favicon";
@@ -35,6 +36,7 @@ const NAV_LEAVES = {
   replay: { id: "replay", to: "/replay", label: "watch replays" },
   bbcode: { id: "bbcode", to: "/bbcode", label: "BBCode editor" },
   discord: { id: "discord", to: "/discord", label: "Discord bot" },
+  communities: { id: "communities", to: "/communities", label: "Discord servers" },
 } as const;
 
 type NavLeafId = keyof typeof NAV_LEAVES;
@@ -52,7 +54,12 @@ const NAV_TOP: NavTop[] = [
   { kind: "link", id: "packs" },
   { kind: "link", id: "skins" },
   { kind: "link", id: "snipes" },
-  { kind: "group", id: "tools", label: "tools", items: ["farm-helper", "replay", "bbcode", "discord"] },
+  /* Everything that is not one of the data surfaces above. Called "more" rather
+     than "tools" because it stopped being one: the replay viewer and the BBCode
+     editor are tools, but the Discord bot page is a pitch and the server
+     directory is a place. A deliberately broad label so the next thing added
+     here does not restart the argument. */
+  { kind: "group", id: "more", label: "more", items: ["farm-helper", "replay", "bbcode", "discord", "communities"] },
 ];
 
 // Each leaf maps to its top-level item id so the active-link bar can sit under
@@ -156,6 +163,10 @@ export function Nav() {
     // Discord bot is dev-gated for now: visible in local dev and on the dev
     // preview host, hidden in production.
     if (leaf.id === "discord") return devMode;
+    // The Discord server directory is behind its own early-access allowlist
+    // while it is being tried out, so the link follows the same gate the route
+    // does rather than dev mode.
+    if (leaf.id === "communities") return canUseCommunities(auth);
     if (leaf.id === "snipes") return showSnipesLink;
     return true;
   };
