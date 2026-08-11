@@ -615,6 +615,15 @@ create index if not exists idx_jobs_ready on jobs(status, run_after, priority de
 -- write connection, where idx_jobs_ready alone left a rowid lookup per candidate.
 create index if not exists idx_jobs_status_type on jobs(status, type, run_after);
 create index if not exists idx_live_event_country_sequence on live_event_log(country, sequence);
+-- Retention prunes this table by created_at, and no index covered that predicate:
+-- the hourly pass full-scanned all ~2.2M rows to find the ~2.3k it deletes, and
+-- because that scan runs inside a DELETE it held the write lock for the whole
+-- thing. Measured at 32.5s on prod (the rows are scattered by constant insert
+-- and delete churn, so the scan is random I/O), which is long enough that every
+-- concurrent writer burned its full SQLITE_BUSY_RETRY_MS budget and reopened its
+-- connection -- the hourly site-wide stall of 2026-08-10. Covering the prune
+-- predicate turns it into a range seek over index pages only.
+create index if not exists idx_live_event_log_created_at on live_event_log(created_at);
 create index if not exists idx_api_call_log_provider_time on api_call_log(provider, started_at desc);
 create index if not exists idx_api_rate_limit_reservations_provider_time on api_rate_limit_reservations(provider, started_at_ms);
 
