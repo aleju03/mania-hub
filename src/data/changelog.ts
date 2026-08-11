@@ -29,7 +29,7 @@ export const WIP: string[] = [
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
-  //{ date: "2026-08-11", text: "New feature: find and publish Discord communities" },
+  { date: "2026-08-11", text: "New page: osu!mania Discord servers. Find one to join, or post your own", to: "/communities" },
   { date: "2026-08-11", text: "New GOATs album on the card albums shelf", to: "/packs" },
   { date: "2026-08-10", text: "When uploading a skin, you can now rename screenshots. You can also make a screenshot be the skin's thumbnail cover", to: "/skins" },
   { date: "2026-08-10", text: "Reduced free pack recharge time from 30s to 20s", to: "/packs" },

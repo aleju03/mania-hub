@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { readCurrentAuth } from "#/lib/auth-server";
-import { canUseCommunities } from "#/lib/communities-shared";
 
 /*
  * A /communities listing's icon or banner, served by us instead of by Discord.
@@ -17,8 +16,9 @@ import { canUseCommunities } from "#/lib/communities-shared";
  * but the bytes. Unrestricted listings still hotlink Discord directly; the
  * backend's toCommunitySummary picks between the two.
  *
- * Not a public image host: the same gate as the directory itself sits in front,
- * and the backend re-checks that this viewer may see this listing at all.
+ * Not an open image host either: the backend re-checks that this viewer may see
+ * this listing at all, with the same country the page was drawn for, so a
+ * listing nobody may see has no pictures to fetch here.
  */
 
 // Discord serves png/webp/gif here. Checked so a wrong answer from anywhere in
@@ -51,7 +51,6 @@ export const Route = createFileRoute("/api/community-image")({
         if (!/^[A-Za-z0-9-]{1,64}$/.test(id)) return notFound();
 
         const auth = await readCurrentAuth();
-        if (!auth.viewer || !canUseCommunities(auth)) return notFound();
 
         const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
         if (!base) return notFound();
@@ -60,9 +59,14 @@ export const Route = createFileRoute("/api/community-image")({
 
         // Who is asking, off the osu!-verified viewer and never off the request:
         // the country is what decides whether this listing is even visible, so
-        // it is read here the same way the directory's own reads read it.
-        const query = new URLSearchParams({ id, kind, viewerUserId: String(auth.viewer.id) });
-        if (auth.viewer.countryCode) query.set("viewerCountry", auth.viewer.countryCode);
+        // it is read here the same way the directory's own reads read it. A
+        // signed-out reader forwards neither, which is what the backend already
+        // treats as a stranger.
+        const query = new URLSearchParams({ id, kind });
+        if (auth.viewer) {
+          query.set("viewerUserId", String(auth.viewer.id));
+          if (auth.viewer.countryCode) query.set("viewerCountry", auth.viewer.countryCode);
+        }
 
         let source: string;
         try {

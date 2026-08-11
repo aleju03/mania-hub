@@ -4,31 +4,17 @@ import { getCountryName } from "./country";
 import { getRegionDef } from "./regions";
 
 /*
- * Shared vocabulary and the access gates for the /communities directory.
+ * Shared vocabulary and the moderator list for the /communities directory.
  *
- * Isomorphic on purpose: the route, the nav and the server functions all need
- * the same answer to "can this person see communities" and "can they review
- * one". The backend re-validates everything it is sent
- * (live-backend/src/features/communities.ts); these lists are what the UI draws.
- */
-
-/*
- * The directory ships hidden. Only the people listed here and the moderators
- * below reach /communities at all, until it is opened up deliberately.
+ * Isomorphic on purpose: the route, the review page and the server functions
+ * all need the same answer to "can this person review a listing". The backend
+ * re-validates everything it is sent
+ * (live-backend/src/features/communities.ts); this list is what the UI draws.
  *
- * Deliberately not canUseDevFeatures, which is only honoured on localhost and
- * ninja.mania-tracker.com and would force an early tester onto the dev host.
- * This is checked against the signed-in osu! id, so it works on the real site,
- * and it grants exactly this feature rather than every dev-gated page.
+ * The directory itself is open: reading it asks nothing, signed in or not.
+ * Posting a server needs an osu! login and a Discord connection, and those are
+ * checked where they are used rather than by a gate in front of the page.
  */
-export const COMMUNITY_EARLY_ACCESS_USER_IDS: readonly number[] = [
-  // The site owner. Already an admin, but admin-ness is only honoured on
-  // localhost and ninja.mania-tracker.com, and "I can see it" should hold on
-  // the real site too.
-  7095193,
-  // Early tester, merlin69420.
-  15801489,
-];
 
 /*
  * Who may review submitted servers: a hand-kept list, the same shape as
@@ -41,34 +27,11 @@ export const COMMUNITY_EARLY_ACCESS_USER_IDS: readonly number[] = [
  * than living in an env var, so the change is reviewable in the diff.
  */
 export const COMMUNITY_MODERATOR_USER_IDS: readonly number[] = [
+  // The site owner.
   7095193,
-  // merlin69420, also on the early-access list above. Being on this one is
-  // enough to see the directory on its own, so the entry there is what keeps
-  // the two answers separate: dropping them as a moderator would leave the
-  // access they were given as a tester.
+  // merlin69420.
   15801489,
 ];
-
-export function canUseCommunities(auth: AuthState | undefined | null): boolean {
-  if (canUseAdminFeatures(auth)) return true;
-  const viewerId = auth?.viewer?.id;
-  if (typeof viewerId !== "number") return false;
-  return COMMUNITY_EARLY_ACCESS_USER_IDS.includes(viewerId) || COMMUNITY_MODERATOR_USER_IDS.includes(viewerId);
-}
-
-/*
- * The same gate for callers that only have an osu! id, not a full AuthState:
- * the OAuth entry route runs outside the server-function context, so it cannot
- * build one. Deliberately without the canUseAdminFeatures branch, which means a
- * locally signed-in account that is not on either list can open the page but not
- * start a Discord connection. That asymmetry only exists in local dev, and it
- * errs toward not showing anyone an authorise-Mania-Hub screen they have no use
- * for.
- */
-export function communityAccessAllowsUserId(userId: number | null | undefined): boolean {
-  if (typeof userId !== "number") return false;
-  return COMMUNITY_EARLY_ACCESS_USER_IDS.includes(userId) || COMMUNITY_MODERATOR_USER_IDS.includes(userId);
-}
 
 export function canModerateCommunities(auth: AuthState | undefined | null): boolean {
   // Local dev and a true admin pass so the queue is reachable while working on
@@ -301,7 +264,7 @@ export const COMMUNITY_ERROR_MESSAGES: Record<string, string> = {
   forbidden: "That listing is not yours.",
   not_found: "That listing no longer exists.",
   no_discord: "Connect your Discord account first.",
-  no_access: "This page is not open yet.",
+  no_access: "Log in with osu! first.",
   own_listing: "That is your own listing.",
   too_many_reports: "You have a few reports waiting to be read already. Give a moderator a chance to catch up.",
 };

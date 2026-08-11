@@ -16,7 +16,6 @@ import { readCountryFromSearchStr } from "../../lib/country-search";
 import { getCountryFlagGradient, getCountryFlagLargeUrl, getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { isRegionScope } from "../../lib/regions";
 import { isLiveBackendConfigured } from "../../lib/live-backend";
-import { canUseCommunities } from "../../lib/communities-shared";
 import { showPlayerCountryFlagState } from "../../lib/player-profile-navigation";
 import { getCachedCountryTier, useCountryWarming } from "../../lib/use-country-warming";
 import { useDynamicFavicon } from "../../lib/favicon";
@@ -163,10 +162,6 @@ export function Nav() {
     // Discord bot is dev-gated for now: visible in local dev and on the dev
     // preview host, hidden in production.
     if (leaf.id === "discord") return devMode;
-    // The Discord server directory is behind its own early-access allowlist
-    // while it is being tried out, so the link follows the same gate the route
-    // does rather than dev mode.
-    if (leaf.id === "communities") return canUseCommunities(auth);
     if (leaf.id === "snipes") return showSnipesLink;
     return true;
   };

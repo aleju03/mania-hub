@@ -39,14 +39,6 @@ export const Route = createFileRoute("/api/auth/discord")({
         if (!viewer) {
           return redirectResponse(new URL(`${next}${next.includes("?") ? "&" : "?"}discord=signin`, request.url));
         }
-        // The directory is gated, and so is the way into it. Without this a
-        // signed-in stranger who found this URL would be shown a real "authorise
-        // Mania Hub" screen for a feature they cannot reach, which is a
-        // confusing thing to put someone's Discord account in front of.
-        const { communityAccessAllowsUserId } = await import("#/lib/communities-shared");
-        if (!communityAccessAllowsUserId(viewer.id)) {
-          return new Response(null, { status: 404 });
-        }
 
         const clientId = (process.env.DISCORD_CLIENT_ID || process.env.DISCORD_APPLICATION_ID) as string;
         const redirectUri = getDiscordRedirectUri(request);

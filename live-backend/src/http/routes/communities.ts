@@ -33,12 +33,13 @@ import { sendJson } from "../respond.js";
 /*
  * /communities routes.
  *
- * Every one of these is admin-token gated, including the reads, because the
- * directory ships hidden behind an early-access allowlist: the frontend server
- * functions are the only callers, and they forward the osu!-verified viewer id
+ * Every one of these is admin-token gated, including the reads, even though the
+ * directory itself is open to anyone: the frontend server functions are the
+ * only callers, and they forward the osu!-verified viewer id and country
  * alongside the shared token (the same bridge skins and goat-poll writes use).
- * When the feature opens to everyone, the list route gets an anonymous branch
- * with the usual public cache headers and browsers can fetch it directly.
+ * That is what keeps the country deciding a restricted listing's invite off the
+ * browser, where it would just be a querystring anyone could type. A signed-out
+ * reader is forwarded as no id and no country, which reads here as a stranger.
  *
  * The shared token cannot tell "a moderator reviewing" from "a user's own
  * mutation forwarded by the frontend", so scope comes from fields the frontend
@@ -113,8 +114,9 @@ export async function handleCommunitiesRoutes(
     if (req.method !== "GET") return methodNotAllowed(req, res, ctx);
     const scope = communityScope(req, ctx, url);
     if (!scope.tokened) return unauthorized(req, res, ctx);
-    // Owner-scoped and admin reads must never land in a shared cache; while the
-    // directory is gated nothing here is public anyway.
+    // Every answer here is scoped to whoever asked - their own listings, and
+    // which restricted ones they may join - so none of it may land in a shared
+    // cache and be handed to the next reader.
     res.setHeader("cache-control", "private, no-store");
     const page = Number(url.searchParams.get("page") ?? 0);
     const list = await listCommunities(ctx.db, {

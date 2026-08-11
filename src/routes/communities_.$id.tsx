@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, Flag, Link2, Lock, Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -16,7 +16,6 @@ import { getCountryName } from "../lib/country";
 import { formatTimeAgo } from "../lib/format";
 import {
   COMMUNITY_INTERNATIONAL,
-  canUseCommunities,
   clearCommunitiesCache,
   communitiesListCacheKey,
   communityFeatureLabels,
@@ -47,9 +46,6 @@ import { pageSeo } from "../lib/seo";
  */
 
 export const Route = createFileRoute("/communities_/$id")({
-  beforeLoad: ({ context }) => {
-    if (!canUseCommunities(context.auth)) throw notFound();
-  },
   loader: async ({ params }) => {
     try {
       return await fetchCommunity({ data: { id: params.id } });
@@ -66,8 +62,10 @@ export const Route = createFileRoute("/communities_/$id")({
         : "An osu!mania Discord server.",
       path: `/communities/${match.params.id}`,
       origin: match.context.origin,
-      // The directory is not open yet, so nothing here should be indexed.
-      noindex: true,
+      // Nothing came back: a listing that was taken down, or one still waiting
+      // for its first decision. The page says so rather than erroring, and this
+      // keeps that answer out of a search index.
+      noindex: community == null,
     });
   },
   component: CommunityDetailPage,
@@ -485,12 +483,14 @@ function CommunityDetailPage() {
                       </div>
                     )}
 
-                    {/* Anyone reading can flag the listing. A directory of
+                    {/* Anyone signed in can flag the listing. A directory of
                         servers people post about themselves is only as honest
                         as the people reading it, and after approval nobody is
                         watching a listing except them. Quiet, at the bottom,
-                        because it is the last thing a page is for. */}
-                    {!isOwner && (
+                        because it is the last thing a page is for. A report is
+                        one per account, so a signed-out reader is offered
+                        nothing rather than a button that would refuse. */}
+                    {!isOwner && auth.viewer && (
                       /* Right-aligned, where every value in this column sits.
                          On the left it read as another label with nothing
                          against it. */

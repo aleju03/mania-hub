@@ -17,48 +17,90 @@ import {
  * Client-side access to the /communities directory.
  *
  * Everything here is a server function rather than a direct fetch at the live
- * backend, which is what skins does for its public reads. That is the early
- * access gate: the directory is not open yet, so there is no anonymous read
- * path at all, and the backend routes stay entirely behind the admin-token
- * bridge. Opening the feature up later means adding a public list route and a
- * fetchCommunitiesListDirect beside it.
+ * backend, which is what skins does for its public reads. The directory is
+ * open to everyone, but what is in it is not the same for everyone: which
+ * restricted listings a viewer is shown, and whether an invite comes with them,
+ * both depend on the osu!-verified country. Keeping the reads server-side is
+ * what lets that country be read from the session instead of taken from the
+ * browser, so the backend routes stay behind the admin-token bridge.
  *
  * The client never asserts who it is. Every handler re-reads the osu!-verified
- * viewer, re-checks the access gate, and forwards the id itself.
+ * viewer and forwards the id itself, or forwards nobody when there is no
+ * session: a signed-out read is a stranger's read, which is the whole public
+ * directory minus the listings that named the places they are for.
  */
 
 export * from "./communities-shared";
 
+/** Who is acting, for everything that writes or reads only your own rows. */
 interface CommunitiesBackend {
   base: string;
   headers: HeadersInit;
   userId: number;
   username: string;
+}
+
+/*
+ * Resolves the backend plus the verified viewer, or null if either is missing.
+ * Posting, editing, flagging and the Discord side all need somebody signed in,
+ * so a missing session is the same refusal as a missing backend here.
+ */
+async function resolveCommunitiesBackend(): Promise<CommunitiesBackend | null> {
+  const { readCurrentAuth } = await import("./auth-server");
+  const auth = await readCurrentAuth();
+  if (!auth.viewer) return null;
+  const base = resolveBackendBase();
+  if (!base) return null;
+  return {
+    base,
+    headers: backendHeaders(),
+    userId: auth.viewer.id,
+    username: auth.viewer.username,
+  };
+}
+
+/** What a read forwards about whoever is asking, when anyone is. */
+interface CommunitiesReadScope {
+  base: string;
+  headers: HeadersInit;
+  viewerUserId: number | null;
   // Where the viewer is, off their osu! profile. It decides which restricted
   // listings they are shown and which invites they are handed, so it is read
   // here from the verified viewer and never accepted from the browser.
-  countryCode: string | null;
-  isAdmin: boolean;
+  viewerCountry: string | null;
+  isModerator: boolean;
 }
 
-/** Resolves the backend plus the verified viewer, or null if either is missing. */
-async function resolveCommunitiesBackend(): Promise<CommunitiesBackend | null> {
+/*
+ * The read variant, for the two routes anyone may open. A signed-out reader is
+ * not an error here, only a reader the backend knows nothing about: no id and
+ * no country, so a listing that named the places it is for withholds its invite
+ * and a hidden one is not in the page at all.
+ */
+async function resolveCommunitiesRead(): Promise<CommunitiesReadScope | null> {
   const { readCurrentAuth } = await import("./auth-server");
-  const { canUseCommunities } = await import("./communities-shared");
+  const { canModerateCommunities } = await import("./communities-shared");
   const auth = await readCurrentAuth();
-  if (!auth.viewer || !canUseCommunities(auth)) return null;
-  const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
+  const base = resolveBackendBase();
   if (!base) return null;
-  const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
   return {
     base,
-    headers,
-    userId: auth.viewer.id,
-    username: auth.viewer.username,
-    countryCode: auth.viewer.countryCode,
-    isAdmin: auth.isAdmin === true,
+    headers: backendHeaders(),
+    viewerUserId: auth.viewer?.id ?? null,
+    viewerCountry: auth.viewer?.countryCode ?? null,
+    isModerator: canModerateCommunities(auth),
   };
+}
+
+function resolveBackendBase(): string | null {
+  const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
+  return base || null;
+}
+
+function backendHeaders(): HeadersInit {
+  const headers: HeadersInit = { "content-type": "application/json" };
+  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  return headers;
 }
 
 /*
@@ -72,17 +114,13 @@ async function resolveModeratorBackend(): Promise<CommunitiesBackend | null> {
   const { canModerateCommunities } = await import("./communities-shared");
   const auth = await readCurrentAuth();
   if (!auth.viewer || !canModerateCommunities(auth)) return null;
-  const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
+  const base = resolveBackendBase();
   if (!base) return null;
-  const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
   return {
     base,
-    headers,
+    headers: backendHeaders(),
     userId: auth.viewer.id,
     username: auth.viewer.username,
-    countryCode: auth.viewer.countryCode,
-    isAdmin: auth.isAdmin === true,
   };
 }
 
@@ -121,7 +159,7 @@ export const fetchCommunities = createServerFn({ method: "GET" })
   }))
   .handler(async ({ data }): Promise<CommunitiesListResult> => {
     await noStore();
-    const cfg = await resolveCommunitiesBackend();
+    const cfg = await resolveCommunitiesRead();
     if (!cfg) return EMPTY_LIST;
     const query = new URLSearchParams();
     if (data.q) query.set("q", data.q);
@@ -130,8 +168,8 @@ export const fetchCommunities = createServerFn({ method: "GET" })
     if (data.country) query.set("country", data.country);
     if (data.lang) query.set("lang", data.lang);
     if (data.tag) query.set("tag", data.tag);
-    query.set("viewerUserId", String(cfg.userId));
-    if (cfg.countryCode) query.set("viewerCountry", cfg.countryCode);
+    if (cfg.viewerUserId != null) query.set("viewerUserId", String(cfg.viewerUserId));
+    if (cfg.viewerCountry) query.set("viewerCountry", cfg.viewerCountry);
     try {
       const response = await fetch(`${cfg.base}/api/communities/list?${query.toString()}`, { headers: cfg.headers });
       if (!response.ok) return EMPTY_LIST;
@@ -151,13 +189,12 @@ export const fetchCommunity = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<CommunitySummary | null> => {
     await noStore();
     if (!data.id) return null;
-    const cfg = await resolveCommunitiesBackend();
+    const cfg = await resolveCommunitiesRead();
     if (!cfg) return null;
-    const { canModerateCommunities } = await import("./communities-shared");
-    const { readCurrentAuth } = await import("./auth-server");
-    const query = new URLSearchParams({ id: data.id, viewerUserId: String(cfg.userId) });
-    if (cfg.countryCode) query.set("viewerCountry", cfg.countryCode);
-    if (canModerateCommunities(await readCurrentAuth())) query.set("asAdmin", "1");
+    const query = new URLSearchParams({ id: data.id });
+    if (cfg.viewerUserId != null) query.set("viewerUserId", String(cfg.viewerUserId));
+    if (cfg.viewerCountry) query.set("viewerCountry", cfg.viewerCountry);
+    if (cfg.isModerator) query.set("asAdmin", "1");
     try {
       const response = await fetch(`${cfg.base}/api/communities/get?${query.toString()}`, { headers: cfg.headers });
       if (!response.ok) return null;

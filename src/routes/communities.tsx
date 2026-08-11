@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { ClipboardCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -17,7 +17,6 @@ import {
   COMMUNITIES_PAGE_SIZE,
   COMMUNITY_INTERNATIONAL,
   COMMUNITY_LANGUAGES,
-  canUseCommunities,
   canModerateCommunities,
   clearCommunitiesCache,
   communitiesListCacheKey,
@@ -40,9 +39,11 @@ import { pageSeo } from "../lib/seo";
 /*
  * The Discord server directory.
  *
- * Gated: only an admin and the early-access allowlist reach it while it is
- * being tried out (canUseCommunities). The gate is enforced again inside every
- * server function, so this beforeLoad is the courtesy, not the lock.
+ * Open to anyone, signed in or not: reading it asks nothing. Posting a server
+ * needs an osu! login and a Discord connection, and the header says so instead
+ * of the page hiding itself. Which restricted listings a reader is shown still
+ * depends on their osu!-verified country, which the server functions read from
+ * the session rather than from the browser.
  */
 
 // All fields optional at the type level so a plain <Link to="/communities">
@@ -97,16 +98,11 @@ export function parseCommunitiesSearch(search: Record<string, unknown>): Communi
 }
 
 export const Route = createFileRoute("/communities")({
-  beforeLoad: ({ context }) => {
-    if (!canUseCommunities(context.auth)) throw notFound();
-  },
   head: ({ match }) => pageSeo({
     title: "osu!mania Discord servers",
     description: "Find an osu!mania Discord server to join, or post your own.",
     path: "/communities",
     origin: match.context.origin,
-    // Not open yet, so nothing here should be indexed.
-    noindex: true,
   }),
   search: {
     middlewares: [stripSearchParams(DEFAULT_COMMUNITIES_SEARCH)],
