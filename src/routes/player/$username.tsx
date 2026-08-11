@@ -2552,8 +2552,10 @@ export function PlayerProfilePage({
               onChangeSort={handleBestSortChange}
             />
           )}
+          {/* Wraps before it scrolls: a player with many keymodes gets the strip on
+              its own line, where the pills still fit at phone width. */}
           {tab === "recent" && (
-            <div className={`mt-3 flex items-center gap-2 lg:hidden ${
+            <div className={`mt-3 flex flex-wrap items-center gap-2 lg:hidden ${
               availableKeyModes.length > 1 ? "justify-between" : "justify-end"
             }`}>
               <RecentOsuSourceButton
@@ -4639,12 +4641,15 @@ function KeyModeControl({
   onChangeKeyFilter: (keyFilter: KeyFilter) => void;
 }) {
   return (
-    <div className="inline-flex shrink-0 items-center gap-0.5 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1">
+    // Someone who plays every keymode makes this strip wider than a phone, so it
+    // scrolls inside its own box rather than running off the screen. Desktop keeps
+    // it at full width and lets the tab rail beside it take the squeeze instead.
+    <div className="inline-flex max-w-full items-center gap-0.5 overflow-x-auto scrollbar-hide rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1 lg:shrink-0">
       {[["all", "All"] as const, ...availableKeyModes.map((k) => [k, k.toUpperCase()] as const)].map(([value, label]) => (
         <button
           key={value}
           onClick={() => onChangeKeyFilter(value)}
-          className={`px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${keyFilter === value
+          className={`shrink-0 px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${keyFilter === value
               ? "bg-osu-pink/15 text-osu-pink-light"
               : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
             }`}
