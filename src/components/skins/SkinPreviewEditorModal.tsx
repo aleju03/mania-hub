@@ -50,6 +50,20 @@ interface LoadingState {
   percent: number | null;
 }
 
+// Long enough for a restarting backend to be listening again, short enough
+// that the retry still reads as part of the same click.
+const AUTO_RETRY_DELAY_MS = 1500;
+
+function skinFileFailureMessage(phase: "download" | "parse", status: number | null): string {
+  if (phase === "parse") return "The skin file could not be read, so its previews cannot be re-rendered.";
+  if (status === 429) return "Too many requests right now, so the skin file did not come down.";
+  // The gallery images on this page come straight off the skin row and can be
+  // served by a different host than the .osk, so "the previews are right
+  // there" is no evidence the archive is reachable.
+  if (status === 404) return "The skin file is not in storage, so its previews cannot be re-rendered.";
+  return "The skin file could not be downloaded, so its previews cannot be re-rendered.";
+}
+
 export function SkinPreviewEditorModal({
   skin,
   open,
@@ -104,6 +118,15 @@ export function SkinPreviewEditorModal({
   // moving the cover to another keymode needs no re-render, and the archive
   // runs to 50MB.
   const [needsSkinFile, setNeedsSkinFile] = useState(false);
+  // A download this size fails on things that have nothing to do with the file
+  // - a backend restart mid-stream, a phone changing networks - and used to
+  // dead-end the editor: none of the download effect's deps changed after the
+  // catch, so no later pick tried again and only closing the modal did.
+  // Bumping the attempt is what re-runs it.
+  const [downloadAttempt, setDownloadAttempt] = useState(0);
+  const [downloadFailed, setDownloadFailed] = useState(false);
+  const autoRetriedRef = useRef(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scope, setScope] = useState<BackdropScope>("all");
   // What each keymode's image was last drawn from, backdrop and notes both, so
   // a second pick only redraws what actually changed.
@@ -141,11 +164,21 @@ export function SkinPreviewEditorModal({
       return;
     }
     let cancelled = false;
+    // Which half failed. A download that never arrived says nothing about the
+    // archive, and telling an uploader their file is unreadable when the
+    // connection dropped sends them off to re-upload a skin that was fine.
+    let phase: "download" | "parse" = "download";
+    let status: number | null = null;
+    let retrying = false;
     setError(null);
+    setDownloadFailed(false);
     setLoading({ label: "Downloading the skin file", percent: null });
     (async () => {
       const response = await fetch(oskUrl, { credentials: "omit" });
-      if (!response.ok) throw new Error(`Server ${response.status}`);
+      if (!response.ok) {
+        status = response.status;
+        throw new Error(`Server ${response.status}`);
+      }
       const total = Number(response.headers.get("content-length")) || skin.oskSizeBytes || 0;
       const reader = response.body?.getReader();
       let blob: Blob;
@@ -177,6 +210,7 @@ export function SkinPreviewEditorModal({
       if (cancelled) return;
       const file = new File([blob], `${skin.name || "skin"}.osk`);
       let lastPercent = -1;
+      phase = "parse";
       const result = await importReplaySkinFromOsk(file, {
         targetKeyCount: 4,
         onProgress: (done, steps) => {
@@ -191,15 +225,41 @@ export function SkinPreviewEditorModal({
       setImported(result);
     })()
       .catch(() => {
-        if (!cancelled) setError("The skin file could not be read, so its previews cannot be re-rendered.");
+        if (cancelled) return;
+        // The first failure is usually a connection that dropped and comes
+        // back, so it goes again under the same progress strip instead of
+        // flashing a message the retry would erase a second later. A 404 is
+        // the exception: the object is not there, and a second ask says so
+        // just as fast.
+        if (!autoRetriedRef.current && status !== 404) {
+          autoRetriedRef.current = true;
+          retrying = true;
+          setLoading({ label: "Downloading the skin file", percent: null });
+          retryTimerRef.current = setTimeout(() => setDownloadAttempt((attempt) => attempt + 1), AUTO_RETRY_DELAY_MS);
+          return;
+        }
+        setError(skinFileFailureMessage(phase, status));
+        setDownloadFailed(true);
       })
       .finally(() => {
-        if (!cancelled) setLoading(null);
+        if (!cancelled && !retrying) setLoading(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [open, needsSkinFile, imported, skin]);
+  }, [open, needsSkinFile, imported, skin, downloadAttempt]);
+
+  const retryDownload = useCallback(() => {
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    setDownloadAttempt((attempt) => attempt + 1);
+  }, []);
+
+  useEffect(() => () => {
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+  }, []);
 
   // Draws every retargeted keymode, skipping the ones already drawn against
   // the backdrop they are pointed at. Depends on the pool's decoder rather
@@ -422,6 +482,8 @@ export function SkinPreviewEditorModal({
   useEffect(() => {
     setImported(null);
     setNeedsSkinFile(false);
+    setDownloadFailed(false);
+    autoRetriedRef.current = false;
   }, [skin.oskUrl]);
 
   // Everything but the parsed .osk resets between openings: the parse is the
@@ -432,6 +494,8 @@ export function SkinPreviewEditorModal({
     setError(null);
     setScope("all");
     setNeedsSkinFile(false);
+    setDownloadFailed(false);
+    autoRetriedRef.current = false;
     setCoverKeymode(publishedCoverKeymode ?? skin.previews[0]?.keys ?? null);
     setCoverShot(publishedCoverShot);
     setLabelDrafts(skin.screenshots.map((shot) => shot.label ?? ""));
@@ -648,7 +712,20 @@ export function SkinPreviewEditorModal({
                   </div>
                 )}
 
-                {error && <p className="mt-3 text-[12px] font-semibold text-osu-red-light">{error}</p>}
+                {error && (
+                  <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-semibold text-osu-red-light">
+                    {error}
+                    {downloadFailed && loading == null && (
+                      <button
+                        type="button"
+                        onClick={retryDownload}
+                        className="font-semibold text-osu-l2 underline underline-offset-2 transition-colors cursor-pointer hover:text-white"
+                      >
+                        Try again
+                      </button>
+                    )}
+                  </p>
+                )}
 
                 <div className="mt-4 flex flex-col gap-2.5">
                   {saving ? (
