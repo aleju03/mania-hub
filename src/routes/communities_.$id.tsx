@@ -11,6 +11,8 @@ import { CommunityStatusNote } from "../components/communities/CommunityStatusNo
 import { Avatar } from "../components/ui/Avatar";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { DiscordLogo, DISCORD_BLURPLE } from "../components/ui/DiscordLogo";
+import { track } from "../lib/analytics";
+import { communityEventProperties, rememberCommunityName } from "../lib/analytics-communities";
 import { useAuth } from "../lib/auth-context";
 import { getCountryName } from "../lib/country";
 import { formatTimeAgo } from "../lib/format";
@@ -214,6 +216,14 @@ function CommunityDetailPage() {
   // The icon, blown up, the way a profile page shows an avatar.
   const [iconOpen, setIconOpen] = useState(false);
 
+  // A card stashes the name on its way here, but a shared link arrives with
+  // nothing stashed and the pageview would only have the uuid to go on. This
+  // effect runs before the root provider's pageview effect (children commit
+  // first), so the name is there in time either way.
+  useEffect(() => {
+    if (row) rememberCommunityName(row.id, row.name);
+  }, [row]);
+
   useEffect(() => {
     if (!iconOpen) return;
     const onKey = (event: KeyboardEvent) => {
@@ -351,6 +361,7 @@ function CommunityDetailPage() {
                           href={row.inviteUrl}
                           target="_blank"
                           rel="noreferrer"
+                          onClick={() => track("community_join", communityEventProperties(row))}
                           className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-[13px] font-bold text-white transition cursor-pointer hover:brightness-110"
                           style={{ backgroundColor: DISCORD_BLURPLE }}
                         >
@@ -462,6 +473,7 @@ function CommunityDetailPage() {
                             href={row.inviteUrl}
                             target="_blank"
                             rel="noreferrer"
+                            onClick={() => track("community_join", communityEventProperties(row))}
                             className="inline-flex items-center gap-1.5 transition-colors cursor-pointer hover:text-white"
                           >
                             <Link2 className="h-3.5 w-3.5 shrink-0 text-osu-f1" aria-hidden="true" />

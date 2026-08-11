@@ -45,6 +45,14 @@ export interface AnalyticsRecentEventRow {
   skinName: string | null;
   skinKeymodes: string | null;
   skinUploadError: string | null;
+  communitiesQuery: string | null;
+  communitiesCountry: string | null;
+  communitiesLanguage: string | null;
+  communitiesTag: string | null;
+  communitiesSort: string | null;
+  communitiesPage: string | null;
+  communityId: string | null;
+  communityName: string | null;
   viewerUsername: string | null;
   referrer: string | null;
 }
@@ -59,6 +67,7 @@ export type AnalyticsActivityKind =
   | "farm"
   | "pack"
   | "skin"
+  | "community"
   | "error";
 
 export const ANALYTICS_ACTIVITY_KINDS: AnalyticsActivityKind[] = [
@@ -69,6 +78,7 @@ export const ANALYTICS_ACTIVITY_KINDS: AnalyticsActivityKind[] = [
   "farm",
   "pack",
   "skin",
+  "community",
   "error",
 ];
 
@@ -222,6 +232,38 @@ function describeSkinsList(row: AnalyticsRecentEventRow): AnalyticsActivity {
   return { kind: "skin", verb: "browsed", subject: "Skins", detail: facets };
 }
 
+function describeCommunitiesList(row: AnalyticsRecentEventRow): AnalyticsActivity {
+  const facets = joinDetail([
+    row.communitiesCountry,
+    row.communitiesLanguage,
+    row.communitiesTag,
+    row.communitiesSort ? `sort: ${row.communitiesSort}` : null,
+    row.communitiesPage ? `page ${row.communitiesPage}` : null,
+  ]);
+  if (row.communitiesQuery) {
+    return {
+      kind: "search",
+      verb: "searched",
+      subject: `"${row.communitiesQuery}"`,
+      detail: joinDetail(["in Discord servers", facets]),
+    };
+  }
+  return { kind: "community", verb: "browsed", subject: "Discord servers", detail: facets };
+}
+
+// A listing is identified by a uuid, so the name the card stashed is the whole
+// difference between a readable line and one nobody can place. Without it the
+// short id is offered as context rather than shown as a title.
+function describeCommunity(row: AnalyticsRecentEventRow, verb: string, id: string | null): AnalyticsActivity {
+  const shortId = id ? id.slice(0, 8) : null;
+  return {
+    kind: "community",
+    verb,
+    subject: row.communityName || "a Discord server",
+    detail: row.communityName ? null : shortId ? `#${shortId}` : null,
+  };
+}
+
 /* One captured row as a sentence the admin can skim: verb, subject, context. */
 export function describeAnalyticsEvent(
   row: AnalyticsRecentEventRow,
@@ -246,6 +288,10 @@ export function describeAnalyticsEvent(
       return { kind: "skin", verb: "edited previews on", subject: row.skinName || row.skinRef || "a skin", detail: null };
     case "skin_file_updated":
       return { kind: "skin", verb: "shipped a new build of", subject: row.skinName || row.skinRef || "a skin", detail: row.skinKeymodes };
+    // The invite is a link out, so this is the click and not a confirmed join:
+    // what happens on Discord's side is not ours to see.
+    case "community_join":
+      return describeCommunity(row, "opened the invite for", row.communityId);
     case "skin_upload_failed":
       return { kind: "error", verb: "failed", subject: "a skin upload", detail: row.skinUploadError };
     case "pack_open": {
@@ -285,6 +331,14 @@ export function describeAnalyticsEvent(
       subject: row.skinName || row.skinRef || decodeURIComponent(path.slice("/skins/".length)) || "a skin",
       detail: row.skinKeymodes,
     };
+  }
+  if (path === "/communities") return describeCommunitiesList(row);
+  if (path === "/communities/review") {
+    return { kind: "community", verb: "opened", subject: "the server review queue", detail: null };
+  }
+  if (path.startsWith("/communities/")) {
+    const id = row.communityId || decodeURIComponent(path.slice("/communities/".length).split("/")[0] ?? "");
+    return describeCommunity(row, "opened", id || null);
   }
   if (path.startsWith("/player/")) {
     const username = row.profileUsername || decodeURIComponent(path.slice("/player/".length));

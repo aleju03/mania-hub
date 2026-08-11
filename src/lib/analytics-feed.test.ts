@@ -50,6 +50,14 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     skinName: null,
     skinKeymodes: null,
     skinUploadError: null,
+    communitiesQuery: null,
+    communitiesCountry: null,
+    communitiesLanguage: null,
+    communitiesTag: null,
+    communitiesSort: null,
+    communitiesPage: null,
+    communityId: null,
+    communityName: null,
     viewerUsername: null,
     referrer: null,
     ...overrides,
@@ -141,6 +149,58 @@ describe("describeAnalyticsEvent", () => {
       verb: "shipped a new build of",
       subject: "Freedom Dive",
       detail: "4K/7K",
+    });
+  });
+
+  it("describes the Discord server directory", () => {
+    expect(describeAnalyticsEvent(row({ path: "/communities" }))).toMatchObject({
+      kind: "community",
+      verb: "browsed",
+      subject: "Discord servers",
+      detail: null,
+    });
+    expect(
+      describeAnalyticsEvent(row({ path: "/communities", communitiesCountry: "France", communitiesTag: "7k" })),
+    ).toMatchObject({
+      kind: "community",
+      subject: "Discord servers",
+      detail: "France · 7k",
+    });
+    expect(
+      describeAnalyticsEvent(row({ path: "/communities", communitiesQuery: "vsrg", communitiesLanguage: "French" })),
+    ).toMatchObject({
+      kind: "search",
+      verb: "searched",
+      subject: '"vsrg"',
+      detail: "in Discord servers · French",
+    });
+    expect(describeAnalyticsEvent(row({ path: "/communities/review" }))).toMatchObject({
+      kind: "community",
+      subject: "the server review queue",
+    });
+  });
+
+  it("names the server a detail page or an invite click is about", () => {
+    expect(
+      describeAnalyticsEvent(row({ path: "/communities/abc-123", communityId: "abc-123", communityName: "7K VSRG FR" })),
+    ).toMatchObject({
+      kind: "community",
+      verb: "opened",
+      subject: "7K VSRG FR",
+      detail: null,
+    });
+    // A shared link with nothing stashed: the uuid is context, not a title.
+    expect(describeAnalyticsEvent(row({ path: "/communities/2b0f1c8e-9a1d-4f2b" }))).toMatchObject({
+      kind: "community",
+      subject: "a Discord server",
+      detail: "#2b0f1c8e",
+    });
+    expect(
+      describeAnalyticsEvent(row({ event: "community_join", communityId: "abc-123", communityName: "7K GLOBAL" })),
+    ).toMatchObject({
+      kind: "community",
+      verb: "opened the invite for",
+      subject: "7K GLOBAL",
     });
   });
 

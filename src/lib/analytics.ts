@@ -1,3 +1,7 @@
+import {
+  getCommunitiesPageviewProperties,
+  getCommunityDetailPageviewProperties,
+} from "./analytics-communities";
 import { getMapsPageviewProperties } from "./analytics-maps";
 import { getSkinDetailPageviewProperties, getSkinsPageviewProperties } from "./analytics-skins";
 
@@ -205,6 +209,12 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
     Object.assign(props, getSkinsPageviewProperties(params));
   } else if (pathname.startsWith("/skins/")) {
     Object.assign(props, getSkinDetailPageviewProperties(pathname));
+  } else if (pathname === "/communities") {
+    // Which slice of the directory was on screen: the search text and the
+    // country, language and tag filters behind it.
+    Object.assign(props, getCommunitiesPageviewProperties(params));
+  } else if (pathname.startsWith("/communities/")) {
+    Object.assign(props, getCommunityDetailPageviewProperties(pathname));
   } else if (pathname === "/rankings") {
     const page = params.get("page");
     if (page) props.rankings_page = page;

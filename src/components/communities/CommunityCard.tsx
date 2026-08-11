@@ -1,5 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Lock, Pencil, Users } from "lucide-react";
+import { track } from "../../lib/analytics";
+import { communityEventProperties, rememberCommunityName } from "../../lib/analytics-communities";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
 import {
@@ -47,6 +49,9 @@ export function CommunityCard({
           to="/communities/$id"
           params={{ id: community.id }}
           aria-label={community.name}
+          // The detail pageview only sees a uuid, so the card hands the real
+          // name forward for the activity feed.
+          onClick={() => rememberCommunityName(community.id, community.name)}
           className="absolute inset-0 z-0"
         />
       )}
@@ -171,6 +176,7 @@ export function CommunityCard({
               href={community.inviteUrl}
               target="_blank"
               rel="noreferrer"
+              onClick={() => track("community_join", communityEventProperties(community))}
               className="relative z-10 inline-flex items-center justify-center rounded-full bg-osu-pink px-4 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110"
             >
               Join

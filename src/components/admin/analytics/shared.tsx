@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Eye, Monitor, Package, Palette, Play, Search, Smartphone, Sprout, TriangleAlert, User, type LucideIcon } from "lucide-react";
+import { Check, ChevronDown, Eye, MessagesSquare, Monitor, Package, Palette, Play, Search, Smartphone, Sprout, TriangleAlert, User, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CountryFlag } from "../../ui/CountryFlag";
 import { getCountryName } from "../../../lib/country";
@@ -23,6 +23,9 @@ export const ACTIVITY_KIND_STYLES: Record<AnalyticsActivityKind, {
   farm: { label: "Farm", icon: Sprout, text: "text-osu-green-light", bg: "bg-osu-green/12", ring: "ring-osu-green/30", bar: "bg-osu-green-light" },
   pack: { label: "Packs", icon: Package, text: "text-osu-orange", bg: "bg-osu-orange/12", ring: "ring-osu-orange/30", bar: "bg-osu-orange" },
   skin: { label: "Skins", icon: Palette, text: "text-osu-c2", bg: "bg-osu-c2/10", ring: "ring-osu-c2/25", bar: "bg-osu-c2" },
+  // Discord's own blurple rather than a theme colour, because that is what the
+  // rest of the directory is coloured with.
+  community: { label: "Servers", icon: MessagesSquare, text: "text-indigo-300", bg: "bg-indigo-400/12", ring: "ring-indigo-400/30", bar: "bg-indigo-400" },
   error: { label: "Errors", icon: TriangleAlert, text: "text-osu-red-light", bg: "bg-osu-red/12", ring: "ring-osu-red/30", bar: "bg-osu-red-light" },
 };
 

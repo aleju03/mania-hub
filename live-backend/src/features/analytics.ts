@@ -127,6 +127,14 @@ export interface AnalyticsFeedEvent {
   skinName: string | null;
   skinKeymodes: string | null;
   skinUploadError: string | null;
+  communitiesQuery: string | null;
+  communitiesCountry: string | null;
+  communitiesLanguage: string | null;
+  communitiesTag: string | null;
+  communitiesSort: string | null;
+  communitiesPage: string | null;
+  communityId: string | null;
+  communityName: string | null;
   viewerUsername: string | null;
   referrer: string | null;
 }
@@ -820,6 +828,14 @@ export function buildMonitorFeedEvent(displayTimeZone: string, record: Analytics
     skinName: str("skin_name"),
     skinKeymodes: str("skin_keymodes"),
     skinUploadError: str("skin_upload_error"),
+    communitiesQuery: str("communities_query"),
+    communitiesCountry: str("communities_country"),
+    communitiesLanguage: str("communities_language"),
+    communitiesTag: str("communities_tag"),
+    communitiesSort: str("communities_sort"),
+    communitiesPage: str("communities_page"),
+    communityId: str("community_id"),
+    communityName: str("community_name"),
     viewerUsername: record.viewerUsername,
     referrer: record.referringDomain,
   };
