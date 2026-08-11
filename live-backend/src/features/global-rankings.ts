@@ -329,16 +329,24 @@ const packPoolBuildByDb = new WeakMap<Db, Promise<GlobalBoardCache>>();
 
 /* Manual opt-in members who never made a ranked roster slot anywhere. The
    ranked-slot exclusion keeps a player who is manual in one country but ranked
-   in another from appearing twice; pp is required because a pool entry without
-   pp can neither be placed in the merge nor drawn into a slice honestly (the
-   opt-in's enrich_user fills it within minutes).
+   in another from appearing twice.
+
+   pp has to be above zero, not merely present. Opting in is self-serve, so an
+   account with no ranked mania play at all can put itself on this list, and pp
+   is the cheapest proof it has one: with no plays there is nothing for
+   computeManiaSkills to weigh, it returns null, and the card mints as the
+   renderer's empty state - a blank face that still deals, still takes a serial
+   and still sits in every collection that drew it. Zero also cannot be placed
+   in the merge or drawn into a slice honestly. (The opt-in's enrich_user fills
+   real pp within minutes, so a genuine player waits, rather than being kept
+   out.)
 
    Roster-driven on purpose: country_rosters has no standalone user_id index,
    so a users-driven correlated EXISTS scans the whole roster once per
    pp-carrying user - ~7s of synchronous CPU on the serving connection. Driving
    from the small manual set (one roster scan, then PK lookups) returns the
    same rows in milliseconds. */
-async function readManualPoolEntries(db: Db): Promise<GlobalRankingEntry[]> {
+export async function readManualPoolEntries(db: Db): Promise<GlobalRankingEntry[]> {
   const rows = (await exec(
     db,
     `select
@@ -356,7 +364,7 @@ async function readManualPoolEntries(db: Db): Promise<GlobalRankingEntry[]> {
        where m.is_tracked = 1 and m.source = 'manual' and m.rank is null
      ) manual
      join users u on u.user_id = manual.user_id
-     where u.pp is not null
+     where u.pp > 0
        and coalesce(u.is_active, 1) = 1
        and not exists (
          select 1 from country_rosters ranked
