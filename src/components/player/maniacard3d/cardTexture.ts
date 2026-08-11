@@ -1,9 +1,10 @@
 import { CanvasTexture, LinearFilter, SRGBColorSpace } from "three";
-import { CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH } from "./layout";
+import { CARD_CORNER_RADIUS, CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH } from "./layout";
 import { buildFaceLayout } from "./textureLayout";
 import type { FaceLayout } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
-import type { ManiaCardTier } from "#/lib/maniacard";
+import { COSMIC_TIERS } from "#/lib/maniacard-cosmic";
+import type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
 const FONT = "Torus, Arial, sans-serif";
 /* Every weight the faces below draw with.
@@ -19,85 +20,14 @@ const FONT_WEIGHTS = [800, 900];
 /* Draw in the fallback rather than hang the card on a stalled font request,
    which is what happened on every draw before the wait existed. */
 const FONT_LOAD_TIMEOUT_MS = 3000;
-const CARD_CORNER_RADIUS = 58;
 const TRIANGLE_HEIGHT_RATIO = 1.18;
 const MANIA_GLYPH_D =
   "M500 48q-21 0-35 15t-15 35v504q0 21 15 36t35 14 36-14 14-36v-504q0-21-14-35t-36-15z m-110 192v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m320 0v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m-210 500q-106 0-197-53-88-52-140-140-53-91-53-197t53-197q52-88 140-140 91-53 197-53t197 53q88 52 140 140 53 91 53 197t-53 197q-52 88-140 140-91 53-197 53z m0 80q97 0 182-36t150-102q64-62 101-148t37-184-36-182-102-150q-62-64-148-101t-184-37-182 36-150 102q-64 62-101 149t-37 183 37 182 101 150q62 64 149 101t183 37v0z";
 
-// Tiers at the top of the ladder drop the tier gradient and triangle flecks for
-// a dark starfield front. One palette entry per tier drives the background
-// wash, the star colors, and the foil rim.
-export interface CosmicTierPalette {
-  base: Array<[number, string]>;
-  foilA: [string, string];
-  foilB: [string, string];
-  aurora: [string, string, string, string, string];
-  stars: string[];
-  // Star-core color and holo rainbow amount for the overlay shader (0-1 rgb).
-  starTint: [number, number, number];
-  rainbow: number;
-  rim: Array<[number, string]>;
-  rimGlow: string;
-  glint: string;
-  // Draws a large faint laurel + star behind the avatar, echoing the card back.
-  laurelWatermark?: boolean;
-}
-
-const COSMIC_TIERS: Partial<Record<ManiaCardTier, CosmicTierPalette>> = {
-  worldClass: {
-    base: [[0, "#010409"], [0.38, "#020617"], [0.72, "#030712"], [1, "#000000"]],
-    foilA: ["rgba(74, 222, 128, 0.26)", "rgba(16, 185, 129, 0.14)"],
-    foilB: ["rgba(45, 212, 191, 0.16)", "rgba(22, 163, 74, 0.1)"],
-    aurora: [
-      "rgba(20, 83, 45, 0)",
-      "rgba(34, 197, 94, 0.13)",
-      "rgba(6, 182, 212, 0.08)",
-      "rgba(21, 128, 61, 0.1)",
-      "rgba(20, 83, 45, 0)",
-    ],
-    stars: ["255, 255, 255", "187, 247, 208", "153, 246, 228", "209, 250, 229"],
-    starTint: [0.78, 1.0, 0.9],
-    rainbow: 1,
-    rim: [
-      [0, "rgba(236,253,245,0.72)"],
-      [0.18, "rgba(34,197,94,0.88)"],
-      [0.5, "rgba(6,182,212,0.26)"],
-      [0.78, "rgba(34,197,94,0.72)"],
-      [1, "rgba(236,253,245,0.62)"],
-    ],
-    rimGlow: "rgba(34,197,94,0.52)",
-    glint: "rgba(220,252,231,0.88)",
-  },
-  goat: {
-    base: [[0, "#0c0a09"], [0.38, "#1a1006"], [0.72, "#120a03"], [1, "#000000"]],
-    foilA: ["rgba(251, 191, 36, 0.30)", "rgba(217, 119, 6, 0.14)"],
-    foilB: ["rgba(253, 230, 138, 0.16)", "rgba(180, 83, 9, 0.1)"],
-    aurora: [
-      "rgba(120, 53, 15, 0)",
-      "rgba(245, 158, 11, 0.12)",
-      "rgba(253, 224, 71, 0.07)",
-      "rgba(146, 64, 14, 0.1)",
-      "rgba(120, 53, 15, 0)",
-    ],
-    stars: ["253, 230, 138", "251, 191, 36", "254, 243, 199", "252, 211, 77"],
-    starTint: [1.0, 0.9, 0.62],
-    rainbow: 0.3,
-    rim: [
-      [0, "rgba(254,243,199,0.72)"],
-      [0.18, "rgba(245,158,11,0.9)"],
-      [0.5, "rgba(253,224,71,0.28)"],
-      [0.78, "rgba(217,119,6,0.75)"],
-      [1, "rgba(254,243,199,0.62)"],
-    ],
-    rimGlow: "rgba(245,158,11,0.52)",
-    glint: "rgba(254,243,199,0.9)",
-    laurelWatermark: true,
-  },
-};
-
-export function getCosmicTierPalette(tier: ManiaCardTier) {
-  return COSMIC_TIERS[tier] ?? null;
-}
+/* The cosmic palettes live in lib so the OG endpoint can paint the same
+   starfield without importing this three.js module. */
+export { getCosmicTierPalette } from "#/lib/maniacard-cosmic";
+export type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
 export interface CardTextureSet {
   frontTexture: CanvasTexture;

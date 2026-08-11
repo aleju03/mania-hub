@@ -8,9 +8,10 @@ export const SITE_FAVICON_HREF = `${SITE_FAVICON_URL}?v=${SITE_FAVICON_VERSION}`
 export const DEFAULT_DESCRIPTION =
   "See what's happening in osu!mania with live scores, country rankings, top plays, map stats, player profiles, and replays.";
 
-// 40: maniacard rebalance (polish + apex bonus terms) changed tiers/power on
-// thousands of player and maniacard OG images.
-export const OG_IMAGE_VERSION = "40";
+// 42: World Class and GOAT cards render their cosmic starfield front instead
+// of the flat tier gradient, the pull footer drops the site name, and the card
+// packs card drops its pack-size subtitle and rarity labels.
+export const OG_IMAGE_VERSION = "42";
 
 /* Builds the og:image URL. The image itself only needs title + country —
    the description stays in the HTML `<meta>` for social-card body text

@@ -1,5 +1,6 @@
 export const CARD_TEXTURE_WIDTH = 1000;
 export const CARD_TEXTURE_HEIGHT = 1400;
+export const CARD_CORNER_RADIUS = 58;
 export const CARD_ASPECT = CARD_TEXTURE_WIDTH / CARD_TEXTURE_HEIGHT;
 
 export type StarSegment = "full" | "half" | "empty";

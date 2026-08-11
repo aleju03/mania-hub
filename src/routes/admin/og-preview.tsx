@@ -2,6 +2,8 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { COUNTRY_OPTIONS } from "../../lib/country";
 import { canUseDevFeatures } from "../../lib/auth-shared";
+import { fetchLivePackRecentPulls, type LivePackPullFeedEntry } from "../../lib/live-backend";
+import { MANIA_CARD_TIER_THRESHOLDS, MANIA_TIER_STYLES, type ManiaCardTier } from "../../lib/maniacard";
 import { getScore } from "../../lib/osu";
 import { buildReplaySeoTitle } from "../../lib/replay-seo";
 
@@ -18,7 +20,8 @@ type PresetKind =
   | "skins"
   | "bbcode"
   | "discord"
-  | "replay";
+  | "replay"
+  | "pull";
 
 /* Kinds that render one fixed card with no inputs. The preview just
    requests `?kind=X`; title/subtitle only affect the embed mocks. */
@@ -188,12 +191,38 @@ const PRESETS: Preset[] = [
     scoreId: 7202465428,
     noindex: true,
   },
+  {
+    key: "pull",
+    label: "Pull permalink",
+    kind: "pull",
+    /* Mirrors the head() of /pull/$ownerId/$cardId. */
+    title: "Maniacard pull",
+    subtitle: "A maniacard pulled from a booster pack. Open your own packs and build a collection.",
+    path: "/pull/{ownerId}/{cardId}",
+  },
 ];
 
 // Mirror the endpoint's limits so the counter warns before truncation kicks in.
 const MAX_TITLE = 38;
 const MAX_SUBTITLE = 150;
 const SITE_NAME = "Mania Tracker";
+
+/* Every card is 1200x630 except the maniacard-shaped ones, which the endpoint
+   renders portrait (720x1008 card + 72px "pulled by" footer). The mockups need
+   the real ratio: a portrait card is not framed the same way in an embed. */
+const DEFAULT_OG_SIZE = { width: 1200, height: 630 };
+const OG_SIZES: Partial<Record<PresetKind, { width: number; height: number }>> = {
+  pull: { width: 720, height: 1080 },
+};
+
+/* Rarities in ladder order for the pull preset's tier override. The threshold
+   table skips both ends: common is the floor, GOAT is honorary rather than
+   earned by card power. */
+const TIER_ORDER: ManiaCardTier[] = [
+  "common",
+  ...MANIA_CARD_TIER_THRESHOLDS.map(({ tier }) => tier),
+  "goat",
+];
 
 export const Route = createFileRoute("/admin/og-preview")({
   head: () => ({
@@ -223,6 +252,12 @@ function OgPreviewPage() {
   const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState(false);
   const [replayMockTitle, setReplayMockTitle] = useState("");
+  const [pullOwnerId, setPullOwnerId] = useState("");
+  const [pullCardId, setPullCardId] = useState("");
+  const [recentPulls, setRecentPulls] = useState<LivePackPullFeedEntry[]>([]);
+  const [pullsError, setPullsError] = useState("");
+  /* Empty = render the card at the rarity it was actually minted at. */
+  const [pullTier, setPullTier] = useState<ManiaCardTier | "">("");
 
   const currentPreset = useMemo(
     () => PRESETS.find((p) => p.key === presetKey) ?? PRESETS[0],
@@ -263,6 +298,30 @@ function OgPreviewPage() {
     };
   }, [kind, scoreId]);
 
+  /* A pull permalink is two ids nobody remembers, so the preset seeds itself
+     from the live pull feed and offers the rest as chips. Only real pulls
+     render — the endpoint has no synthetic card to fall back on. */
+  useEffect(() => {
+    if (kind !== "pull" || recentPulls.length > 0) return;
+    let cancelled = false;
+    fetchLivePackRecentPulls(12, { includeAll: true })
+      .then((pulls) => {
+        if (cancelled) return;
+        setRecentPulls(pulls);
+        setPullsError(pulls.length === 0 ? "the live pull feed is empty" : "");
+        const first = pulls[0];
+        if (!first) return;
+        setPullOwnerId((prev) => prev || String(first.ownerUserId));
+        setPullCardId((prev) => prev || String(first.cardUserId));
+      })
+      .catch(() => {
+        if (!cancelled) setPullsError("could not reach the live backend");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, recentPulls.length]);
+
   const ogPath = useMemo(() => {
     if (kind === "player") {
       const params = new URLSearchParams({
@@ -278,6 +337,16 @@ function OgPreviewPage() {
         scoreId,
         t: String(cacheBuster),
       });
+      return `/api/og?${params.toString()}`;
+    }
+    if (kind === "pull") {
+      const params = new URLSearchParams({
+        kind: "pull",
+        owner: pullOwnerId,
+        card: pullCardId,
+        t: String(cacheBuster),
+      });
+      if (pullTier) params.set("tier", pullTier);
       return `/api/og?${params.toString()}`;
     }
     if (kind === "maps") {
@@ -312,7 +381,7 @@ function OgPreviewPage() {
     if (subtitle) params.set("subtitle", subtitle);
     if (countryAware) params.set("country", country);
     return `/api/og?${params.toString()}`;
-  }, [kind, username, scoreId, title, subtitle, countryAware, country, cacheBuster]);
+  }, [kind, username, scoreId, pullOwnerId, pullCardId, pullTier, title, subtitle, countryAware, country, cacheBuster]);
 
   const absoluteImage = origin ? `${origin}${ogPath}` : ogPath;
   const numericMockScoreId = Number(scoreId);
@@ -332,6 +401,12 @@ function OgPreviewPage() {
       ? ""
       : subtitle;
   const domain = origin ? new URL(origin).host : "localhost:3000";
+  const ogSize = OG_SIZES[kind] ?? DEFAULT_OG_SIZE;
+  const ogAspect = ogSize.width / ogSize.height;
+  const pullIdsValid = [pullOwnerId, pullCardId].every((raw) => {
+    const value = Number(raw);
+    return Number.isInteger(value) && value > 0;
+  });
 
   const applyPreset = (p: Preset) => {
     setPresetKey(p.key);
@@ -384,6 +459,50 @@ function OgPreviewPage() {
             />
             <div className="flex items-end text-[11px] text-osu-f1/80 leading-relaxed">
               Replay layout ignores title/subtitle/country. Cover, grade, pp, acc and mods come from the score itself.
+            </div>
+          </div>
+        ) : kind === "pull" ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <TextField
+                label="Owner user id"
+                hint="the collector who pulled it — first path segment of /pull/{owner}/{card}"
+                value={pullOwnerId}
+                max={16}
+                onChange={setPullOwnerId}
+              />
+              <TextField
+                label="Card user id"
+                hint="the player on the card — second path segment"
+                value={pullCardId}
+                max={16}
+                onChange={setPullCardId}
+              />
+            </div>
+            <RecentPullChips
+              pulls={recentPulls}
+              error={pullsError}
+              ownerId={pullOwnerId}
+              cardId={pullCardId}
+              onSelect={(pull) => {
+                setPullOwnerId(String(pull.ownerUserId));
+                setPullCardId(String(pull.cardUserId));
+              }}
+            />
+            <TierChips selected={pullTier} onSelect={setPullTier} />
+            <div className="text-[11px] text-osu-f1/80 leading-relaxed">
+              Portrait 720x1080: the minted card art at its stored tier plus a
+              "pulled by" footer. Title/subtitle are fixed by the route and only
+              feed the embed mocks. The endpoint renders the owner's minted
+              skills snapshot, so a card the owner never pulled falls back to the
+              default branded card instead. The rarity override is dev-only and
+              uncached: what the site itself embeds is always the minted tier.
+              {pullIdsValid ? null : (
+                <span className="text-osu-red-light">
+                  {" "}Both ids must be positive integers — the preview below is
+                  the fallback card until they are.
+                </span>
+              )}
             </div>
           </div>
         ) : kind === "maps" ? (
@@ -480,14 +599,16 @@ function OgPreviewPage() {
           <code className="text-osu-f1 font-mono text-[10px] break-all">{ogPath}</code>
         </div>
 
-        <SectionCard title={`Raw image - 1200 x 630`}>
+        <SectionCard title={`Raw image - ${ogSize.width} x ${ogSize.height}`}>
           <div className="p-5 flex items-center justify-center bg-osu-b5/80">
             <img
               src={ogPath}
-              width={1200}
-              height={630}
+              width={ogSize.width}
+              height={ogSize.height}
               alt="OG preview"
-              className="w-full max-w-[900px] rounded border border-osu-b3/30 shadow-lg"
+              className={`w-full rounded border border-osu-b3/30 shadow-lg ${
+                ogAspect < 1 ? "max-w-[380px]" : "max-w-[900px]"
+              }`}
             />
           </div>
         </SectionCard>
@@ -501,16 +622,24 @@ function OgPreviewPage() {
 
           <SectionCard title="Discord">
             <div className="p-5 bg-[#313338] flex items-center justify-center">
-              <DiscordMockup imageUrl={ogPath} title={mockTitle} subtitle={mockSubtitle} domain={domain} />
+              <DiscordMockup imageUrl={ogPath} title={mockTitle} subtitle={mockSubtitle} domain={domain} aspect={ogAspect} />
             </div>
           </SectionCard>
 
           <SectionCard title="iMessage / WhatsApp">
             <div className="p-5 bg-[#0b141a] flex items-center justify-center">
-              <IMessageMockup imageUrl={ogPath} title={mockTitle} subtitle={mockSubtitle} domain={domain} />
+              <IMessageMockup imageUrl={ogPath} title={mockTitle} subtitle={mockSubtitle} domain={domain} aspect={ogAspect} />
             </div>
           </SectionCard>
         </div>
+
+        {ogAspect < 1 ? (
+          <div className="text-[10px] text-osu-f1/70 leading-relaxed max-w-2xl">
+            Portrait card: X keeps its fixed 1.91:1 frame and centre-crops, so
+            check that the card's top and bottom bands are expendable there.
+            Discord and iMessage scale the whole card down instead.
+          </div>
+        ) : null}
 
         <div className="text-[10px] text-osu-f1/70 leading-relaxed max-w-2xl">
           The mockups are approximations - real platforms tweak their card chrome
@@ -578,6 +707,92 @@ function PresetChips({
               {p.noindex ? (
                 <span className="ml-1.5 text-[9px] opacity-60">noindex</span>
               ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RecentPullChips({
+  pulls,
+  error,
+  ownerId,
+  cardId,
+  onSelect,
+}: {
+  pulls: LivePackPullFeedEntry[];
+  error: string;
+  ownerId: string;
+  cardId: string;
+  onSelect: (pull: LivePackPullFeedEntry) => void;
+}) {
+  if (error) {
+    return <div className="text-[10px] text-osu-f1/70">Recent pulls unavailable: {error}.</div>;
+  }
+  if (pulls.length === 0) {
+    return <div className="text-[10px] text-osu-f1/70">Loading recent pulls...</div>;
+  }
+  return (
+    <div className="space-y-2">
+      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
+        Recent pulls
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {pulls.map((pull) => {
+          const active = String(pull.ownerUserId) === ownerId && String(pull.cardUserId) === cardId;
+          return (
+            <button
+              key={pull.id}
+              onClick={() => onSelect(pull)}
+              className={`px-2.5 py-1 rounded-md text-[11px] transition-colors duration-[120ms] cursor-pointer ${
+                active
+                  ? "bg-osu-pink/20 border border-osu-pink/40 text-white"
+                  : "bg-osu-b4/40 border border-osu-b3/30 text-osu-l2 hover:bg-osu-b3/40 hover:text-white"
+              }`}
+            >
+              <span className="font-medium">{pull.cardUsername}</span>
+              <span className="opacity-60"> by {pull.ownerUsername}</span>
+              {pull.tier ? <span className="ml-1.5 text-[9px] opacity-60">{pull.tier}</span> : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TierChips({
+  selected,
+  onSelect,
+}: {
+  selected: ManiaCardTier | "";
+  onSelect: (tier: ManiaCardTier | "") => void;
+}) {
+  const options: Array<{ value: ManiaCardTier | ""; label: string }> = [
+    { value: "", label: "Minted tier" },
+    ...TIER_ORDER.map((tier) => ({ value: tier, label: MANIA_TIER_STYLES[tier].label })),
+  ];
+  return (
+    <div className="space-y-2">
+      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
+        Rarity
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const active = option.value === selected;
+          return (
+            <button
+              key={option.value || "minted"}
+              onClick={() => onSelect(option.value)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors duration-[120ms] cursor-pointer ${
+                active
+                  ? "bg-osu-pink/20 border border-osu-pink/40 text-white"
+                  : "bg-osu-b4/40 border border-osu-b3/30 text-osu-l2 hover:bg-osu-b3/40 hover:text-white"
+              }`}
+            >
+              {option.label}
             </button>
           );
         })}
@@ -683,12 +898,17 @@ function DiscordMockup({
   title,
   subtitle,
   domain,
+  aspect,
 }: {
   imageUrl: string;
   title: string;
   subtitle: string;
   domain: string;
+  aspect: number;
 }) {
+  /* Discord fits a large embed image inside roughly 400x300, keeping its ratio
+     — a landscape card fills the width, a portrait one is bounded by height. */
+  const width = Math.min(400, 300 * aspect);
   return (
     <div className="w-full max-w-[432px] bg-[#2b2d31] rounded overflow-hidden flex text-[14px]">
       <div className="w-1 bg-[#ff66aa] flex-shrink-0" />
@@ -700,8 +920,8 @@ function DiscordMockup({
         <div className="text-[#dbdee1] mt-2 leading-snug line-clamp-4 whitespace-pre-wrap break-words text-[14px]">
           {subtitle}
         </div>
-        <div className="mt-3 rounded overflow-hidden max-w-[400px]">
-          <div className="aspect-[1.91/1] bg-black">
+        <div className="mt-3 rounded overflow-hidden" style={{ width: `${width}px` }}>
+          <div className="bg-black" style={{ aspectRatio: String(aspect) }}>
             <img src={imageUrl} alt="" className="w-full h-full object-cover" />
           </div>
         </div>
@@ -715,15 +935,17 @@ function IMessageMockup({
   title,
   subtitle,
   domain,
+  aspect,
 }: {
   imageUrl: string;
   title: string;
   subtitle: string;
   domain: string;
+  aspect: number;
 }) {
   return (
     <div className="w-full max-w-[280px] bg-[#1c1c1e] rounded-[18px] overflow-hidden border border-[#3a3a3c] text-white">
-      <div className="aspect-[1.91/1] bg-black">
+      <div className="bg-black" style={{ aspectRatio: String(aspect) }}>
         <img src={imageUrl} alt="" className="w-full h-full object-cover" />
       </div>
       <div className="px-3 py-2.5 border-t border-[#3a3a3c]">

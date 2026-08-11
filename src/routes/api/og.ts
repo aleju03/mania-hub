@@ -17,10 +17,18 @@ import {
   getManiaJudgementCounts,
   getModAcronyms,
 } from "../../lib/score";
+import { readCurrentAuth } from "../../lib/auth-server";
 import { getCachedOgImage, putOgImage } from "../../lib/r2-cache";
 import { OG_IMAGE_VERSION } from "../../lib/seo";
 import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../lib/maniacard";
 import type { ManiaCardTier } from "../../lib/maniacard";
+import { getCosmicTierPalette } from "../../lib/maniacard-cosmic";
+import type { CosmicTierPalette } from "../../lib/maniacard-cosmic";
+import {
+  CARD_CORNER_RADIUS,
+  CARD_TEXTURE_HEIGHT,
+  CARD_TEXTURE_WIDTH,
+} from "../../components/player/maniacard3d/layout";
 import type { OsuCovers, OsuScore, OsuUser } from "../../lib/types";
 
 const WIDTH = 1200;
@@ -104,6 +112,19 @@ async function serveOg(cacheKey: string, render: () => Promise<Response>): Promi
   const buffer = Buffer.from(await response.arrayBuffer());
   scheduleOgStore(cacheKey, buffer);
   return ogImageResponse(buffer);
+}
+
+/* The `tier` query param, honoured only for dev users. Anyone else gets the
+   card's own minted rarity, so a shared OG URL always tells the truth. */
+async function readDevTierOverride(url: URL): Promise<ManiaCardTier | null> {
+  const raw = url.searchParams.get("tier");
+  if (!raw || !(raw in MANIA_TIER_STYLES)) return null;
+  try {
+    const auth = await readCurrentAuth();
+    return auth.canUseDevFeatures ? (raw as ManiaCardTier) : null;
+  } catch {
+    return null;
+  }
 }
 
 class OgFallbackError extends Error {
@@ -1502,9 +1523,10 @@ async function renderManiacardOg(request: Request, rawUsername: string): Promise
 
   const tier = getManiaCardTier(skills.cardPower);
   const avatarUrl = ogAvatarUrl(request, user.avatar_url, user.id);
+  const laurelUrl = await cosmicLaurelDataUrl(request, tier);
 
   const response = new ImageResponse(
-    maniaTierCardElement({ username: user.username || "Unknown", avatarUrl, tier, skills }),
+    maniaTierCardElement({ username: user.username || "Unknown", avatarUrl, tier, skills, laurelUrl }),
     {
       width: MANIACARD_W,
       height: MANIACARD_H,
@@ -1516,6 +1538,148 @@ async function renderManiacardOg(request: Request, rawUsername: string): Promise
   return response;
 }
 
+/* World Class and GOAT do not use the flat tier gradient: the in-app card
+   paints a near-black base under two radial foil blooms, an aurora sweep, a
+   seeded starfield, sparkle glints, and a foil rim. Satori has no canvas, so
+   the whole front goes out as one SVG on the card texture's own 1000x1400
+   viewBox (same aspect as the OG card, so the <img> just scales it). Every
+   coordinate, stop, and seed below is the one drawCosmicBackground /
+   drawCosmicStarfield / drawCosmicFoilAccents use in cardTexture.ts. */
+function svgColorParts(color: string): { fill: string; opacity: string } {
+  const match = color.match(/^rgba\(([^)]+)\)$/i);
+  if (!match) return { fill: color, opacity: "1" };
+  const parts = match[1].split(",").map((part) => part.trim());
+  return { fill: `rgb(${parts.slice(0, 3).join(",")})`, opacity: parts[3] ?? "1" };
+}
+
+function svgGradientStops(stops: Array<[number, string]>): string {
+  return stops
+    .map(([offset, color]) => {
+      const { fill, opacity } = svgColorParts(color);
+      return `<stop offset="${offset}" stop-color="${fill}" stop-opacity="${opacity}"/>`;
+    })
+    .join("");
+}
+
+function cosmicBackgroundDataUrl(palette: CosmicTierPalette): string {
+  const W = CARD_TEXTURE_WIDTH;
+  const H = CARD_TEXTURE_HEIGHT;
+  const rand = (value: number) => {
+    const v = Math.sin(value) * 43758.5453123;
+    return v - Math.floor(v);
+  };
+  // Same 18px margin test as the canvas starfield, so no star lands on the
+  // rounded corner the real card cuts away.
+  const inside = (x: number, y: number) => {
+    const r = CARD_CORNER_RADIUS;
+    if (x < 18 || x > W - 18 || y < 18 || y > H - 18) return false;
+    const cornerX = x < r ? r : x > W - r ? W - r : null;
+    const cornerY = y < r ? r : y > H - r ? H - r : null;
+    if (cornerX !== null && cornerY !== null && Math.hypot(x - cornerX, y - cornerY) > r - 18) return false;
+    return true;
+  };
+
+  let stars = "";
+  for (let index = 0; index < 130; index += 1) {
+    const x = rand(index * 19.43 + 2.1) * W;
+    const y = rand(index * 31.77 + 8.4) * H;
+    if (!inside(x, y)) continue;
+    const radius = 0.8 + rand(index * 7.91 + 4.6) * 2.4;
+    const alpha = 0.14 + rand(index * 11.23 + 1.9) * 0.46;
+    const color = palette.stars[Math.floor(rand(index * 5.37 + 3.3) * palette.stars.length) % palette.stars.length];
+    // Every 16th star carries a soft halo, so the field reads as depth
+    // rather than uniform noise.
+    if (index % 16 === 5) {
+      stars +=
+        `<radialGradient id="h${index}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(radius * 7).toFixed(1)}" gradientUnits="userSpaceOnUse">` +
+        `<stop offset="0" stop-color="rgb(${color})" stop-opacity="${(alpha * 0.5).toFixed(3)}"/>` +
+        `<stop offset="1" stop-color="rgb(${color})" stop-opacity="0"/>` +
+        `</radialGradient>` +
+        `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(radius * 7).toFixed(1)}" fill="url(#h${index})"/>`;
+    }
+    stars +=
+      `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${radius.toFixed(2)}" fill="rgb(${color})" fill-opacity="${alpha.toFixed(3)}"/>`;
+  }
+
+  const glint = svgColorParts(palette.glint);
+  const glints = ([
+    [152, 130, 42, 0.7],
+    [832, 178, 26, 0.46],
+    [808, 1010, 36, 0.42],
+    [214, 1140, 22, 0.36],
+  ] as Array<[number, number, number, number]>)
+    .map(([x, y, size, opacity]) => {
+      const d =
+        `M${x} ${y - size} L${x + size * 0.22} ${y - size * 0.22} L${x + size} ${y} ` +
+        `L${x + size * 0.22} ${y + size * 0.22} L${x} ${y + size} L${x - size * 0.22} ${y + size * 0.22} ` +
+        `L${x - size} ${y} L${x - size * 0.22} ${y - size * 0.22} Z`;
+      return `<path d="${d}" fill="${glint.fill}" fill-opacity="${(Number(glint.opacity) * opacity).toFixed(3)}"/>`;
+    })
+    .join("");
+
+  const rimGlow = svgColorParts(palette.rimGlow);
+  const svg =
+    // preserveAspectRatio="none": the pack fan's mini cards are a hair wider
+    // than the texture's ratio, and a stretch of ~1% beats letterboxed bars.
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">` +
+    `<defs>` +
+    `<linearGradient id="base" x1="0" y1="0" x2="${W}" y2="${H}" gradientUnits="userSpaceOnUse">${svgGradientStops(palette.base)}</linearGradient>` +
+    `<radialGradient id="foilA" cx="250" cy="210" r="560" gradientUnits="userSpaceOnUse">${svgGradientStops([
+      [0, palette.foilA[0]],
+      [0.2, palette.foilA[1]],
+      [0.62, "rgba(0,0,0,0)"],
+    ])}</radialGradient>` +
+    `<radialGradient id="foilB" cx="800" cy="1110" r="520" gradientUnits="userSpaceOnUse">${svgGradientStops([
+      [0, palette.foilB[0]],
+      [0.26, palette.foilB[1]],
+      [0.76, "rgba(0,0,0,0)"],
+    ])}</radialGradient>` +
+    `<linearGradient id="aurora" x1="0" y1="180" x2="${W}" y2="880" gradientUnits="userSpaceOnUse">${svgGradientStops([
+      [0, palette.aurora[0]],
+      [0.34, palette.aurora[1]],
+      [0.46, palette.aurora[2]],
+      [0.66, palette.aurora[3]],
+      [1, palette.aurora[4]],
+    ])}</linearGradient>` +
+    `<linearGradient id="rim" x1="0" y1="0" x2="${W}" y2="${H}" gradientUnits="userSpaceOnUse">${svgGradientStops(palette.rim)}</linearGradient>` +
+    `</defs>` +
+    `<rect width="${W}" height="${H}" fill="url(#base)"/>` +
+    `<rect width="${W}" height="${H}" fill="url(#foilA)"/>` +
+    `<rect width="${W}" height="${H}" fill="url(#foilB)"/>` +
+    `<rect width="${W}" height="${H}" fill="url(#aurora)"/>` +
+    stars +
+    glints +
+    // The canvas rim leans on a shadow blur for its bloom; resvg filters are a
+    // gamble, so a wide soft pass under the crisp stroke stands in for it.
+    `<rect x="10" y="10" width="${W - 20}" height="${H - 20}" rx="${CARD_CORNER_RADIUS - 6}" fill="none" stroke="${rimGlow.fill}" stroke-opacity="${(Number(rimGlow.opacity) * 0.5).toFixed(3)}" stroke-width="18"/>` +
+    `<rect x="10" y="10" width="${W - 20}" height="${H - 20}" rx="${CARD_CORNER_RADIUS - 6}" fill="none" stroke="url(#rim)" stroke-width="6"/>` +
+    `</svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
+/* GOAT's laurel watermark: the card back's wreath, tinted to the tier glow and
+   dropped behind the avatar at 13%. The asset paints every leaf in one green,
+   so recolouring is a straight swap of that fill. Null when the asset cannot be
+   fetched — the card just loses the watermark rather than the render. */
+let laurelSvgCache: Promise<string | null> | undefined;
+
+async function cosmicLaurelDataUrl(request: Request, tier: ManiaCardTier): Promise<string | null> {
+  if (!getCosmicTierPalette(tier)?.laurelWatermark) return null;
+  if (!laurelSvgCache) {
+    laurelSvgCache = (async () => {
+      const url = new URL("/images/maniacard/laurel-wreath.svg", getAssetOrigin(request)).toString();
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`laurel ${response.status}`);
+      return response.text();
+    })().catch(() => null);
+  }
+  const svg = await laurelSvgCache;
+  if (!svg) return null;
+  const tint = svgColorParts(MANIA_TIER_STYLES[tier].glowColor).fill;
+  const tinted = svg.replaceAll('fill="#6D9D30"', `fill="${tint}"`);
+  return `data:image/svg+xml;base64,${Buffer.from(tinted).toString("base64")}`;
+}
+
 // The card art shared by the maniacard and pull OGs: everything the portrait
 // needs, decoupled from where the numbers came from (live top plays vs the
 // minted skills snapshot stored on a collection card).
@@ -1524,6 +1688,7 @@ interface ManiaTierCardArt {
   avatarUrl: string;
   tier: ManiaCardTier;
   skills: { fingerControl: number; speed: number; accuracy: number; starAvg: number };
+  laurelUrl?: string | null;
 }
 
 const MANIACARD_W = 720;
@@ -1533,6 +1698,7 @@ const MANIACARD_FOOTER_H = 72;
 function maniaTierCardElement(art: ManiaTierCardArt) {
   const { skills, tier, avatarUrl } = art;
   const style = MANIA_TIER_STYLES[tier];
+  const cosmic = getCosmicTierPalette(tier);
   const statRows: Array<[string, number]> = [
     ["Control", skills.fingerControl],
     ["Speed", skills.speed],
@@ -1560,18 +1726,36 @@ function maniaTierCardElement(art: ManiaTierCardArt) {
           position: "relative",
           display: "flex",
           overflow: "hidden",
-          background: style.badgeGradient,
+          background: cosmic ? "#000000" : style.badgeGradient,
           fontFamily: '"Torus OG"',
           color: "#ffffff",
         },
       },
       [
-        // osu triangle texture over the tier gradient.
+        // Cosmic tiers get the starfield front in place of the tier gradient
+        // and its triangle flecks, the same swap the in-app card makes.
         h("img", {
           key: "tris",
-          src: triangleOverlayDataUrl(CARD_W, CARD_H),
+          src: cosmic ? cosmicBackgroundDataUrl(cosmic) : triangleOverlayDataUrl(CARD_W, CARD_H),
           style: { position: "absolute", top: "0", left: "0", width: "100%", height: "100%" },
         }),
+        // GOAT's laurel, behind everything the card puts over it.
+        art.laurelUrl
+          ? h("img", {
+              key: "laurel",
+              src: art.laurelUrl,
+              // Texture-space 740px tall, centred on (500, 600), at the SVG's
+              // own ~1.145 aspect; scaled by this card's 0.72 of the texture.
+              style: {
+                position: "absolute",
+                left: `${(500 - (740 * 1.145) / 2) * 0.72}px`,
+                top: `${(600 - 740 / 2) * 0.72}px`,
+                width: `${740 * 1.145 * 0.72}px`,
+                height: `${740 * 0.72}px`,
+                opacity: 0.13,
+              },
+            })
+          : null,
         // Mode badge (top-left).
         h(
           "div",
@@ -1756,7 +1940,14 @@ interface SharedPackCardPayload {
   };
 }
 
-async function renderPulledCardOg(request: Request, ownerId: number, cardId: number): Promise<Response> {
+async function renderPulledCardOg(
+  request: Request,
+  ownerId: number,
+  cardId: number,
+  /* Dev-only: render this pull's art at another rarity so the admin OG preview
+     can show every tier without hunting for a real pull of each one. */
+  tierOverride?: ManiaCardTier,
+): Promise<Response> {
   const base = getServerLiveBackendUrl();
   if (!base) throw new OgFallbackError("live backend not configured");
 
@@ -1778,9 +1969,10 @@ async function renderPulledCardOg(request: Request, ownerId: number, cardId: num
   }
 
   const tier: ManiaCardTier =
-    card.tier && card.tier in MANIA_TIER_STYLES
+    tierOverride ??
+    (card.tier && card.tier in MANIA_TIER_STYLES
       ? (card.tier as ManiaCardTier)
-      : getManiaCardTier(Number(skills.cardPower) || 0);
+      : getManiaCardTier(Number(skills.cardPower) || 0));
   const style = MANIA_TIER_STYLES[tier];
   const art: ManiaTierCardArt = {
     username: card.username || "Unknown",
@@ -1792,6 +1984,7 @@ async function renderPulledCardOg(request: Request, ownerId: number, cardId: num
       accuracy: Number(skills.accuracy),
       starAvg: Number(skills.starAvg),
     },
+    laurelUrl: await cosmicLaurelDataUrl(request, tier),
   };
   const ownerName = payload.owner?.username || "a collector";
 
@@ -1827,8 +2020,6 @@ async function renderPulledCardOg(request: Request, ownerId: number, cardId: num
           [
             h("div", { key: "by", style: { display: "flex", fontSize: "27px", color: "rgba(255,255,255,0.55)" } }, "Pulled by"),
             h("div", { key: "owner", style: { display: "flex", fontSize: "30px", fontWeight: 900, color: "#ffffff", marginLeft: "12px" } }, ownerName),
-            h("div", { key: "dot", style: { display: "flex", fontSize: "27px", color: "rgba(255,255,255,0.35)", margin: "0 14px" } }, "·"),
-            h("div", { key: "site", style: { display: "flex", fontSize: "25px", fontWeight: 700, color: "rgba(255,102,170,0.9)" } }, "mania-tracker.com"),
           ],
         ),
       ],
@@ -4091,11 +4282,11 @@ function packCard(props: {
   rotate: number;
   top: number;
   left: number;
-  showLabel?: boolean;
   key: string;
 }) {
-  const { tier, rotate, top, left, showLabel = false, key } = props;
+  const { tier, rotate, top, left, key } = props;
   const style = MANIA_TIER_STYLES[tier];
+  const cosmic = getCosmicTierPalette(tier);
   const W = 220;
   const H = 312;
   // Keep images as direct children of the rotated card. Nested images drift
@@ -4114,16 +4305,18 @@ function packCard(props: {
         borderRadius: "16px",
         border: "3px solid rgba(255,255,255,0.30)",
         boxSizing: "border-box",
-        background: style.badgeGradient,
+        background: cosmic ? "#000000" : style.badgeGradient,
         overflow: "hidden",
         transform: `rotate(${rotate}deg)`,
         boxShadow: `0 0 34px ${style.glowColor}`,
       },
     },
     [
+      // Same swap the full card makes: the cosmic tiers get their starfield
+      // front instead of the tier gradient and its triangle flecks.
       h("img", {
         key: "tris",
-        src: triangleOverlayDataUrl(W, H),
+        src: cosmic ? cosmicBackgroundDataUrl(cosmic) : triangleOverlayDataUrl(W, H),
         style: { position: "absolute", top: "0", left: "0", width: `${W}px`, height: `${H}px` },
       }),
       // Mini mode badge + blank name plate, echoing the full card's header.
@@ -4166,30 +4359,9 @@ function packCard(props: {
           "?",
         ),
       ),
-      // Tier label only on the fully visible top card — on the covered
-      // cards the fan would chop the text mid-word, so the rarity ramp
-      // is carried by the colours (and the sticker legend).
-      showLabel
-        ? h(
-            "div",
-            {
-              key: "tier",
-              style: {
-                position: "absolute",
-                top: "248px",
-                left: "0",
-                width: "100%",
-                display: "flex",
-                justifyContent: "center",
-                fontSize: "26px",
-                fontWeight: 900,
-                color: "#ffffff",
-                textShadow: `0 0 16px ${style.glowColor}, 0 2px 4px rgba(0,0,0,0.5)`,
-              },
-            },
-            style.label,
-          )
-        : null,
+      // No tier labels: naming the top card gives away a rarity the packs
+      // page never spoils before you open one. The ramp is carried by the
+      // colours alone.
     ],
   );
 }
@@ -4198,17 +4370,16 @@ async function renderPacksOg(request: Request): Promise<Response> {
   const [regularFont, heavyFont] = await loadOgFonts(request);
 
   // Rarity ramp fanned left to right (five of the nine tiers, in
-  // order); world class — the top of the ladder — lands on top (Satori
-  // stacks by DOM order) and is the only card with a readable label.
-  // Tilts stay within ~7deg: Satori offsets images inside rotated
-  // subtrees proportionally to the angle, so steeper fans smear the
-  // badge art off the cards.
-  const fan: Array<{ tier: ManiaCardTier; rotate: number; top: number; left: number; showLabel?: boolean }> = [
+  // order), unlabelled: the colours carry the ramp and nothing names the
+  // rarity on top. Tilts stay within ~7deg: Satori offsets images inside
+  // rotated subtrees proportionally to the angle, so steeper fans smear
+  // the badge art off the cards.
+  const fan: Array<{ tier: ManiaCardTier; rotate: number; top: number; left: number }> = [
     { tier: "common", rotate: -7, top: 200, left: 548 },
     { tier: "rare", rotate: -3.5, top: 176, left: 654 },
     { tier: "legendary", rotate: 0, top: 164, left: 760 },
     { tier: "ascendant", rotate: 3.5, top: 176, left: 866 },
-    { tier: "worldClass", rotate: 7, top: 200, left: 950, showLabel: true },
+    { tier: "worldClass", rotate: 7, top: 200, left: 950 },
   ];
 
   const response = new ImageResponse(
@@ -4234,36 +4405,24 @@ async function renderPacksOg(request: Request): Promise<Response> {
             rotate: slot.rotate,
             top: slot.top,
             left: slot.left,
-            showLabel: slot.showLabel,
           }),
         ),
 
+        // Pack sizes differ per pack type, so the sticker stays a title:
+        // no count, and no rarity legend under it.
         sticker({
           key: "title",
           text: "card packs",
-          subText: "FIVE MANIACARDS PER PACK",
           fontSize: 72,
           background: "#ff66aa",
           color: "#1a1317",
           paddingX: 30,
           paddingY: 22,
           rotate: -2,
-          top: 236,
+          // Dropping the subtitle shortens the sticker by 24px; half that
+          // keeps the title on the centre line it sat on before.
+          top: 248,
           left: 70,
-        }),
-
-        // Rarity-ramp legend for the fan's colour run.
-        sticker({
-          key: "ramp",
-          text: "common to world class",
-          fontSize: 24,
-          background: "#f3ece4",
-          color: "#1a1317",
-          paddingX: 14,
-          paddingY: 10,
-          rotate: 2,
-          top: 404,
-          left: 96,
         }),
 
         sticker({
@@ -4505,11 +4664,84 @@ async function renderSkinsOg(request: Request): Promise<Response> {
   return response;
 }
 
-/* BBCode editor layout: the editor's split view as two cards — a dark
-   code pane with highlighted BBCode markup on the left, and a paper
-   preview pane showing the rendered result on the right. The two small
-   corner stickers spell out the relationship. */
-function bbcodeLine(key: string, tokens: Array<{ text: string; color: string; bold?: boolean }>) {
+/* BBCode editor layout: the tool is a visual editor, not a text field
+   you type tags into, so the card leads with the editor window — a
+   formatting toolbar over a paper page of already-styled content — and
+   keeps the markup off to the side as dimmed output under a Copy
+   button. The two corner stickers name which half is yours. */
+const BB_ICON_STROKE = "#d9d3e2";
+
+function bbIconUrl(inner: string): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" ` +
+    `stroke="${BB_ICON_STROKE}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
+const BB_LINK_ICON = bbIconUrl(
+  `<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>` +
+    `<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>`,
+);
+const BB_IMAGE_ICON = bbIconUrl(
+  `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/>` +
+    `<path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>`,
+);
+
+/* Toolbar key: a 36px square with either a letter glyph or an icon in it. */
+function bbToolButton(key: string, child: ReactNode) {
+  return h(
+    "div",
+    {
+      key,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "36px",
+        height: "36px",
+        borderRadius: "8px",
+        background: "rgba(255,255,255,0.06)",
+        flexShrink: 0,
+      },
+    },
+    child,
+  );
+}
+
+function bbGlyphButton(key: string, glyph: string, extra: Record<string, string> = {}) {
+  return bbToolButton(
+    key,
+    h(
+      "div",
+      {
+        key: "g",
+        style: {
+          fontSize: "20px",
+          fontWeight: 900,
+          color: "#e8e3ec",
+          lineHeight: "1.0",
+          ...extra,
+        },
+      },
+      glyph,
+    ),
+  );
+}
+
+function bbIconButton(key: string, src: string) {
+  return bbToolButton(key, h("img", { key: "i", src, style: { width: "20px", height: "20px" } }));
+}
+
+function bbToolDivider(key: string) {
+  return h("div", {
+    key,
+    style: { display: "flex", width: "1px", height: "22px", background: "rgba(255,255,255,0.16)", flexShrink: 0 },
+  });
+}
+
+/* One line of generated markup in the output strip. Dimmed on purpose:
+   it's what the editor hands you, not something you sit and type. */
+function bbcodeLine(key: string, tokens: Array<{ text: string; muted?: boolean }>) {
   return h(
     "div",
     { key, style: { display: "flex", flexDirection: "row" } },
@@ -4519,9 +4751,9 @@ function bbcodeLine(key: string, tokens: Array<{ text: string; color: string; bo
         {
           key: `t-${i}`,
           style: {
-            fontSize: "24px",
-            fontWeight: token.bold ? 900 : 400,
-            color: token.color,
+            fontSize: "18px",
+            fontWeight: token.muted ? 400 : 900,
+            color: token.muted ? "#736d80" : "#b7b1c2",
             lineHeight: "1.0",
             whiteSpace: "pre",
           },
@@ -4535,10 +4767,9 @@ function bbcodeLine(key: string, tokens: Array<{ text: string; color: string; bo
 async function renderBBCodeOg(request: Request): Promise<Response> {
   const [regularFont, heavyFont] = await loadOgFonts(request);
 
-  const TAG = "#66ccff";
-  const ATTR = "#ffcc22";
-  const TEXT = "#e8e3ec";
   const PINK = "#ff66aa";
+  const PAPER = "#f3ece4";
+  const INK = "#1a1317";
 
   const response = new ImageResponse(
     h(
@@ -4556,138 +4787,242 @@ async function renderBBCodeOg(request: Request): Promise<Response> {
         },
       },
       [
-        // Code pane.
+        // Editor window: toolbar over the page you're styling.
         h(
           "div",
           {
-            key: "code",
+            key: "editor",
             style: {
               position: "absolute",
-              top: "224px",
-              left: "90px",
+              top: "208px",
+              left: "76px",
               display: "flex",
               flexDirection: "column",
-              width: "480px",
-              height: "320px",
-              padding: "34px 30px",
+              width: "630px",
+              height: "340px",
               background: PHOTO_BG_COLOR,
               border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: "10px",
+              borderRadius: "12px",
               boxSizing: "border-box",
+              overflow: "hidden",
               transform: "rotate(-1.4deg)",
-              gap: "26px",
+            },
+          },
+          [
+            // Formatting toolbar: the buttons are the whole point.
+            h(
+              "div",
+              {
+                key: "toolbar",
+                style: {
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "13px 16px",
+                  borderBottom: "1px solid rgba(255,255,255,0.10)",
+                },
+              },
+              [
+                bbGlyphButton("b", "B"),
+                bbGlyphButton("i", "I", { fontStyle: "italic", transform: "skewX(-12deg)" }),
+                bbGlyphButton("u", "U", { textDecoration: "underline" }),
+                bbGlyphButton("s", "S", { textDecoration: "line-through" }),
+                bbToolDivider("d1"),
+                bbToolButton(
+                  "color",
+                  h("div", {
+                    key: "swatch",
+                    style: { display: "flex", width: "18px", height: "18px", borderRadius: "9px", background: PINK },
+                  }),
+                ),
+                bbIconButton("link", BB_LINK_ICON),
+                bbIconButton("image", BB_IMAGE_ICON),
+                bbToolDivider("d2"),
+                bbGlyphButton("h", "H"),
+                // Mode toggle, sitting where it sits in the real editor.
+                h(
+                  "div",
+                  {
+                    key: "modes",
+                    style: { display: "flex", flexDirection: "row", alignItems: "center", gap: "6px", marginLeft: "auto" },
+                  },
+                  [
+                    h(
+                      "div",
+                      {
+                        key: "visual",
+                        style: {
+                          display: "flex",
+                          padding: "7px 12px",
+                          borderRadius: "7px",
+                          background: PINK,
+                          color: INK,
+                          fontSize: "15px",
+                          fontWeight: 900,
+                          lineHeight: "1.0",
+                          letterSpacing: "0.04em",
+                        },
+                      },
+                      "VISUAL",
+                    ),
+                    h(
+                      "div",
+                      {
+                        key: "source",
+                        style: {
+                          display: "flex",
+                          padding: "7px 12px",
+                          borderRadius: "7px",
+                          color: "rgba(255,255,255,0.42)",
+                          fontSize: "15px",
+                          fontWeight: 900,
+                          lineHeight: "1.0",
+                          letterSpacing: "0.04em",
+                        },
+                      },
+                      "BBCODE",
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            // The page itself: already styled, no tags in sight.
+            h(
+              "div",
+              {
+                key: "page",
+                style: {
+                  display: "flex",
+                  flexDirection: "column",
+                  flex: "1",
+                  background: PAPER,
+                  padding: "26px 28px",
+                  gap: "18px",
+                },
+              },
+              [
+                h(
+                  "div",
+                  { key: "p1", style: { fontSize: "30px", fontWeight: 900, color: INK, lineHeight: "1.0" } },
+                  "about me",
+                ),
+                // Body copy as bars: the card is about the tool, not about
+                // whatever sentence a profile happens to have on it.
+                h("div", {
+                  key: "p2",
+                  style: { display: "flex", width: "420px", height: "12px", borderRadius: "6px", background: "#d6cabb" },
+                }),
+                h("div", {
+                  key: "p3",
+                  style: { display: "flex", width: "300px", height: "12px", borderRadius: "6px", background: "#d6cabb" },
+                }),
+                // Image placeholder standing in for a maniacard, centred the
+                // way a profile image usually is.
+                h("div", {
+                  key: "p4",
+                  style: {
+                    display: "flex",
+                    alignSelf: "center",
+                    width: "250px",
+                    height: "74px",
+                    borderRadius: "6px",
+                    background: "#cfc4b8",
+                  },
+                }),
+                h("div", {
+                  key: "p5",
+                  style: { display: "flex", width: "360px", height: "12px", borderRadius: "6px", background: "#d6cabb" },
+                }),
+              ],
+            ),
+          ],
+        ),
+
+        // Output strip: the markup the editor produced, plus the copy button.
+        h(
+          "div",
+          {
+            key: "output",
+            style: {
+              position: "absolute",
+              top: "244px",
+              left: "744px",
+              display: "flex",
+              flexDirection: "column",
+              width: "382px",
+              height: "270px",
+              padding: "26px 24px",
+              background: PHOTO_BG_COLOR,
+              border: "1px solid rgba(255,255,255,0.10)",
+              borderRadius: "12px",
+              boxSizing: "border-box",
+              transform: "rotate(1.4deg)",
+              gap: "18px",
             },
           },
           [
             bbcodeLine("l1", [
-              { text: "[b]", color: TAG },
-              { text: "new top play!", color: TEXT, bold: true },
-              { text: "[/b]", color: TAG },
+              { text: "[b]", muted: true },
+              { text: "about me" },
+              { text: "[/b]", muted: true },
             ]),
-            bbcodeLine("l2", [
-              { text: "[color=", color: TAG },
-              { text: "#ff66aa", color: ATTR },
-              { text: "]", color: TAG },
-              { text: "mania time", color: PINK },
-              { text: "[/color]", color: TAG },
-            ]),
+            bbcodeLine("l2", [{ text: "[centre]", muted: true }]),
             bbcodeLine("l3", [
-              { text: "[img]", color: TAG },
-              { text: "maniacard.png", color: ATTR },
-              { text: "[/img]", color: TAG },
+              { text: "  [img]", muted: true },
+              { text: "maniacard.png" },
+              { text: "[/img]", muted: true },
             ]),
-            bbcodeLine("l4", [
-              { text: "[url]", color: TAG },
-              { text: "mania-tracker.com", color: ATTR },
-              { text: "[/url]", color: TAG },
-            ]),
-          ],
-        ),
-
-        // Preview pane: the same content, rendered.
-        h(
-          "div",
-          {
-            key: "preview",
-            style: {
-              position: "absolute",
-              top: "236px",
-              left: "664px",
-              display: "flex",
-              flexDirection: "column",
-              width: "440px",
-              height: "320px",
-              padding: "34px 32px",
-              background: "#f3ece4",
-              boxSizing: "border-box",
-              transform: "rotate(1.2deg)",
-              gap: "20px",
-            },
-          },
-          [
-            h(
-              "div",
-              { key: "p1", style: { fontSize: "28px", fontWeight: 900, color: "#1a1317", lineHeight: "1.0" } },
-              "new top play!",
-            ),
-            h(
-              "div",
-              { key: "p2", style: { fontSize: "26px", fontWeight: 900, color: PINK, lineHeight: "1.0" } },
-              "mania time",
-            ),
-            // Image placeholder standing in for maniacard.png.
-            h("div", {
-              key: "p3",
-              style: { display: "flex", width: "220px", height: "84px", borderRadius: "6px", background: "#cfc4b8" },
-            }),
+            bbcodeLine("l4", [{ text: "[/centre]", muted: true }]),
             h(
               "div",
               {
-                key: "p4",
-                style: { fontSize: "22px", fontWeight: 900, color: PINK, lineHeight: "1.0", textDecoration: "underline" },
+                key: "copy",
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginTop: "auto",
+                  padding: "13px 18px",
+                  borderRadius: "9px",
+                  background: PINK,
+                  color: INK,
+                  fontSize: "22px",
+                  fontWeight: 900,
+                  lineHeight: "1.0",
+                },
               },
-              "mania-tracker.com",
+              "Copy BBCode",
             ),
           ],
         ),
 
-        // Corner labels tying the panes together.
+        // One label, on the half you never touch.
         sticker({
-          key: "write",
-          text: "you write",
-          fontSize: 22,
-          background: "#f3ece4",
-          color: "#1a1317",
-          paddingX: 12,
-          paddingY: 8,
-          rotate: -3,
-          top: 196,
-          left: 112,
-        }),
-        sticker({
-          key: "shows",
-          text: "your profile shows",
+          key: "tags",
+          text: "paste into your me! page",
           fontSize: 22,
           background: "#ff99cc",
-          color: "#1a1317",
+          color: INK,
           paddingX: 12,
           paddingY: 8,
           rotate: 2,
-          top: 208,
-          left: 686,
+          top: 212,
+          left: 762,
         }),
 
         sticker({
           key: "title",
           text: "bbcode editor",
-          subText: "WRITE / PREVIEW / COPY",
+          subText: "OSU! PROFILE EDITOR",
           fontSize: 64,
-          background: "#ff66aa",
-          color: "#1a1317",
+          background: PINK,
+          color: INK,
           paddingX: 28,
           paddingY: 20,
           rotate: -3,
-          top: 52,
+          top: 42,
           left: 60,
         }),
 
@@ -4695,12 +5030,12 @@ async function renderBBCodeOg(request: Request): Promise<Response> {
           key: "brand",
           text: "Mania Tracker",
           fontSize: 16,
-          background: "#f3ece4",
-          color: "#1a1317",
+          background: PAPER,
+          color: INK,
           paddingX: 10,
           paddingY: 6,
           rotate: 2,
-          top: 566,
+          top: 570,
           left: 1006,
         }),
       ],
@@ -5136,6 +5471,15 @@ export const Route = createFileRoute("/api/og")({
           const cardId = Number(url.searchParams.get("card"));
           if (Number.isInteger(ownerId) && ownerId > 0 && Number.isInteger(cardId) && cardId > 0) {
             try {
+              // `tier` re-skins a real pull at another rarity for the admin OG
+              // preview. Dev-only so nobody can pass a common pull off as a
+              // GOAT, and never cached — nothing on the site links to it.
+              const tierOverride = await readDevTierOverride(url);
+              if (tierOverride) {
+                const preview = await renderPulledCardOg(request, ownerId, cardId, tierOverride);
+                preview.headers.set("Cache-Control", "private, no-store");
+                return preview;
+              }
               return await serveOg(
                 `pull:${ownerId}:${cardId}:v${version}`,
                 () => renderPulledCardOg(request, ownerId, cardId),
