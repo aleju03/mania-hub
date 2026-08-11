@@ -121,8 +121,13 @@ function largeIconUrl(url: string): string {
  * screen of nothing beside a full column of facts. Two of them, side by side,
  * is about what it takes to reach the bottom of that column - a second row
  * would overshoot it by as much as the hole it was filling.
+ *
+ * It is a cell of that grid instead of a child of the left column so that the
+ * one-column stack can put it after the facts, which is where somewhere else
+ * to look belongs: on a phone the left column is the whole width, and reading
+ * it as written meant this shelf came between the pitch and the counts.
  */
-function OtherServers({ community }: { community: CommunitySummary }) {
+function OtherServers({ community, className }: { community: CommunitySummary; className?: string }) {
   const [rows, setRows] = useState<CommunitySummary[] | null>(null);
   const [scoped, setScoped] = useState(false);
 
@@ -176,7 +181,7 @@ function OtherServers({ community }: { community: CommunitySummary }) {
     : "More servers";
 
   return (
-    <div className="pt-1">
+    <div className={`pt-1 ${className ?? ""}`}>
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <h2 className="text-[13px] font-bold text-white">{where}</h2>
         <Link
@@ -363,7 +368,7 @@ function CommunityDetailPage() {
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-                  <div className="flex min-w-0 flex-col gap-4">
+                  <div className="flex min-w-0 flex-col gap-4 lg:col-start-1 lg:row-start-1">
                     <CommunityStatusNote community={row} />
 
                     <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-4 sm:p-5">
@@ -411,13 +416,9 @@ function CommunityDetailPage() {
                       </div>
                     </div>
 
-                    {/* In this column, not under the page: what runs out first
-                        is the room beside the facts, and a shelf of servers is
-                        what there is to put in it. */}
-                    <OtherServers community={row} />
                   </div>
 
-                  <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-4 sm:p-5">
+                  <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-4 sm:p-5 lg:col-start-2 lg:row-start-1">
                     {/* Counts are Discord's own approximations, refreshed with
                         the invite every few hours. */}
                     <div className="grid grid-cols-2 gap-4">
@@ -510,6 +511,11 @@ function CommunityDetailPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Under the pitch on a wide screen, where the room beside
+                      the facts runs out first, and under the facts when there
+                      is only one column to stack into. */}
+                  <OtherServers community={row} className="lg:col-start-1 lg:row-start-2" />
                 </div>
               </>
             )}
