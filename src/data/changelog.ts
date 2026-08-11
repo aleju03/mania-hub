@@ -25,11 +25,12 @@ export interface ChangelogUpdate {
 /** Short list of what is being worked on now. Keep it to three or four.
     Leave it empty to hide the section entirely. */
 export const WIP: string[] = [
-  "Fixing skins that don't render correctly",
+  "Skin-related features",
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-08-10", text: "You can now rename and select screenshots as the skin's cover", to: "/skins" },
+  //{ date: "2026-08-11", text: "New feature: find and publish Discord communities" },
+  { date: "2026-08-10", text: "When uploading a skin, you can now rename screenshots. You can also make a screenshot be the skin's thumbnail cover", to: "/skins" },
   { date: "2026-08-10", text: "Reduced free pack recharge time from 30s to 20s", to: "/packs" },
   { date: "2026-08-09", text: "Song previews on map search now open a player, and use your default volume", to: "/maps" },
   { date: "2026-08-09", text: "Now you can choose the pattern to showcase on your skin thumbnails", to: "/skins" },
