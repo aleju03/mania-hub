@@ -525,18 +525,19 @@ describe("who a server is for", () => {
    * Discord answers /guilds/<id>/widget.json to anyone, and for a server with
    * its widget on that response carries an invite. So the id is a way past the
    * lock for some servers, and it is in the icon and banner URLs as well as the
-   * field.
+   * field - which is why a locked card keeps its art but stops hotlinking it.
    */
-  it("keeps the guild id, and the pictures with it in the path, off a locked card", async () => {
+  it("keeps the guild id off a locked card, and the CDN links that carry it", async () => {
     guildForCode.art = "839021274176618506";
     guildArt.art = "abc123";
     const created = await submit({ guildId: "839021274176618506", invite: "art", accessScopes: ["FR"] });
-    await approve(created.body.community.id);
+    const id = created.body.community.id as string;
+    await approve(id);
 
     const outside = (await browse("CR")).body.communities[0];
     expect(outside.guildId).toBeUndefined();
-    expect(outside.iconUrl).toBeNull();
-    expect(outside.bannerUrl).toBeNull();
+    expect(outside.iconUrl).toBe(`/api/community-image?id=${id}&kind=icon`);
+    expect(outside.bannerUrl).toBe(`/api/community-image?id=${id}&kind=banner`);
     // The one thing the page wanted the id for survives as its own field.
     expect(outside.guildCreatedAt).toBe("2021-05-04T06:11:00.025Z");
 
@@ -544,6 +545,77 @@ describe("who a server is for", () => {
     expect(inside.guildId).toBe("839021274176618506");
     expect(inside.iconUrl).toContain("839021274176618506");
     expect(inside.bannerUrl).toContain("839021274176618506");
+  });
+
+  it("draws no picture for a server that has none, locked or not", async () => {
+    const id = await listFor(["FR"]);
+    for (const country of ["FR", "CR"]) {
+      const card = (await browse(country)).body.communities[0];
+      expect(card.id).toBe(id);
+      expect(card.iconUrl).toBeNull();
+      expect(card.bannerUrl).toBeNull();
+    }
+  });
+
+  /*
+   * The picture behind a locked card, which the frontend route fetches with the
+   * admin token and pipes to the browser. It resolves the guild id here rather
+   * than sending it out, so the check in front of it is the whole point.
+   */
+  describe("resolving one card's picture", () => {
+    function imageUrl(id: string, kind: string, viewerUserId = OTHER, viewerCountry = "CR") {
+      return call(mockReq(
+        "GET",
+        `/api/communities/image-url?id=${id}&kind=${kind}&viewerUserId=${viewerUserId}&viewerCountry=${viewerCountry}`,
+        ADMIN,
+      ));
+    }
+
+    async function listWithArt(overrides: Record<string, unknown> = {}) {
+      guildForCode.art = "839021274176618506";
+      guildArt.art = "abc123";
+      const created = await submit({ guildId: "839021274176618506", invite: "art", ...overrides });
+      return created.body.community.id as string;
+    }
+
+    it("hands back the CDN link for a listing the viewer may see", async () => {
+      const id = await listWithArt({ accessScopes: ["FR"] });
+      await approve(id);
+      const icon = await imageUrl(id, "icon");
+      expect(icon.status).toBe(200);
+      expect(icon.body.url).toBe("https://cdn.discordapp.com/icons/839021274176618506/abc123.png?size=128");
+      const banner = await imageUrl(id, "banner");
+      expect(banner.body.url).toBe("https://cdn.discordapp.com/banners/839021274176618506/abc123.png?size=512");
+    });
+
+    it("refuses a listing the viewer could not see the page of", async () => {
+      // Hidden outside its places: not on the directory, no page, no picture.
+      const hidden = await listWithArt({ accessScopes: ["FR"], accessHidden: true });
+      await approve(hidden);
+      expect((await imageUrl(hidden, "icon")).status).toBe(404);
+      expect((await imageUrl(hidden, "icon", OTHER, "FR")).status).toBe(200);
+      // Its owner sees their own from anywhere, as they do the listing.
+      expect((await imageUrl(hidden, "icon", OWNER)).status).toBe(200);
+    });
+
+    it("refuses a pending listing, and a stranger, and an id that is nothing", async () => {
+      const pending = await listWithArt({ accessScopes: ["FR"] });
+      expect((await imageUrl(pending, "icon")).status).toBe(404);
+      expect((await imageUrl(pending, "icon", OWNER)).status).toBe(200);
+      expect((await imageUrl("not-a-listing", "icon", OWNER)).status).toBe(404);
+    });
+
+    it("refuses a listing with no art of that kind", async () => {
+      const id = await listFor(["FR"]);
+      expect((await imageUrl(id, "icon", OWNER)).status).toBe(404);
+    });
+
+    it("takes nobody's word for it without the token", async () => {
+      const id = await listWithArt();
+      await approve(id);
+      const open = await call(mockReq("GET", `/api/communities/image-url?id=${id}&kind=icon&viewerUserId=${OTHER}`));
+      expect(open.status).toBe(401);
+    });
   });
 
   it("keeps the hidden flag off a card that is not the owner's", async () => {

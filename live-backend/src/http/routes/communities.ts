@@ -2,8 +2,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseJson } from "../../db.js";
 import {
   communityAllowsCountry,
+  communityImageHash,
   createCommunity,
   deleteCommunity,
+  discordGuildImageUrl,
   getCommunityById,
   getCommunityByGuild,
   communityHasOpenReports,
@@ -18,7 +20,9 @@ import {
   reviewCommunity,
   toCommunitySummary,
   updateCommunity,
+  type CommunityImageKind,
   type CommunityReviewAction,
+  type CommunityRow,
 } from "../../features/communities.js";
 import { fetchWidgetInviteCode, resolveDiscordInvite } from "../../discord/invites.js";
 import { logInfo } from "../../logger.js";
@@ -56,6 +60,30 @@ interface CommunityScope {
   // and which invites they are given. Same trust as viewerUserId: it comes off
   // the osu!-verified profile on the frontend, never from the browser.
   viewerCountry: string | null;
+}
+
+/*
+ * Whether this listing exists as far as this viewer is concerned.
+ *
+ * Approved and resolving is what a stranger may read. Its owner reads theirs in
+ * any state (that is how a pending listing has a page at all), and a moderator
+ * reads anyone's, which is what the review page's links open. A listing that
+ * hides itself outside its own places is nothing to everyone else, or its page
+ * would be the way around being left off the directory - the locked-but-visible
+ * kind is a different thing, and toCommunitySummary is what decides how much of
+ * it a viewer gets.
+ *
+ * Shared by the page and its pictures so the two cannot drift into disagreeing
+ * about who may see the listing.
+ */
+function communityVisibleTo(
+  row: CommunityRow,
+  isOwner: boolean,
+  scope: Pick<CommunityScope, "asAdmin" | "viewerCountry">,
+): boolean {
+  if (isOwner || scope.asAdmin) return true;
+  if (row.status !== "approved" || !row.inviteOk) return false;
+  return !row.accessHidden || communityAllowsCountry(row.accessScopes, scope.viewerCountry);
 }
 
 function communityScope(req: IncomingMessage, ctx: HttpContext, url: URL, body?: Record<string, unknown>): CommunityScope {
@@ -103,13 +131,40 @@ export async function handleCommunitiesRoutes(
   }
 
   /*
-   * One listing, for its own page.
+   * Where one listing's icon or banner actually lives, for the frontend route
+   * that serves it (src/routes/api/community-image.ts).
    *
-   * Approved and resolving is what a stranger may read. Its owner reads theirs
-   * in any state (that is how a pending listing has a page at all), and a
-   * moderator reads anyone's, which is what the review page's links open. Every
-   * other case answers 404 rather than 403: whether a listing exists at all is
-   * not something to confirm to someone who cannot see it.
+   * Only the CDN link comes back, not the bytes: the caller holds the admin
+   * token, so it is the site itself rather than a browser, and it is going to
+   * fetch and pipe the picture anyway. What this route is for is the check in
+   * front of it - the same visibility the page gets, so a listing nobody may see
+   * has no pictures either, and the guild id inside the link never reaches a
+   * browser that was not going to be given it.
+   *
+   * 404 for a listing this viewer cannot see, for one with no art of that kind,
+   * and for a bad id alike: none of them are worth telling apart out here.
+   */
+  if (url.pathname === "/api/communities/image-url") {
+    if (req.method !== "GET") return methodNotAllowed(req, res, ctx);
+    const scope = communityScope(req, ctx, url);
+    if (!scope.tokened) return unauthorized(req, res, ctx);
+    res.setHeader("cache-control", "private, no-store");
+    const kind: CommunityImageKind = url.searchParams.get("kind") === "banner" ? "banner" : "icon";
+    const row = await getCommunityById(ctx.db, url.searchParams.get("id") ?? "");
+    const isOwner = row != null && scope.viewerUserId != null && row.ownerUserId === scope.viewerUserId;
+    const hash = row == null ? null : communityImageHash(row, kind);
+    if (row == null || hash == null || hash === "" || !communityVisibleTo(row, isOwner, scope)) {
+      sendJson(req, res, ctx, 404, { ok: false, error: "not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, url: discordGuildImageUrl(row.guildId, kind, hash) });
+    return true;
+  }
+
+  /*
+   * One listing, for its own page. Every case communityVisibleTo turns down
+   * answers 404 rather than 403: whether a listing exists at all is not
+   * something to confirm to someone who cannot see it.
    */
   if (url.pathname === "/api/communities/get") {
     if (req.method !== "GET") return methodNotAllowed(req, res, ctx);
@@ -118,14 +173,7 @@ export async function handleCommunitiesRoutes(
     res.setHeader("cache-control", "private, no-store");
     const row = await getCommunityById(ctx.db, url.searchParams.get("id") ?? "");
     const isOwner = row != null && scope.viewerUserId != null && row.ownerUserId === scope.viewerUserId;
-    // A listing that hides itself outside its own places 404s here too, or its
-    // page would be the way around being left off the directory. The
-    // locked-but-visible kind has a page for everyone; it just has no invite on
-    // it, which toCommunitySummary is what decides.
-    const outOfPlace = row != null && row.accessHidden && !communityAllowsCountry(row.accessScopes, scope.viewerCountry);
-    const visible =
-      row != null && ((row.status === "approved" && row.inviteOk && !outOfPlace) || isOwner || scope.asAdmin);
-    if (!row || !visible) {
+    if (!row || !communityVisibleTo(row, isOwner, scope)) {
       sendJson(req, res, ctx, 404, { ok: false, error: "not_found" });
       return true;
     }

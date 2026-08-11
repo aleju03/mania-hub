@@ -186,8 +186,7 @@ export interface CommunitySummary {
    * Absent for a server you are not one of the places for. Not sensitive in
    * itself, but Discord answers /guilds/<id>/widget.json to anyone, and for a
    * server with its widget on that carries an invite - so for those servers the
-   * id is the restriction, worked around. The icon and banner URLs have it in
-   * their path too, which is why a locked card draws without them.
+   * id is the restriction, worked around.
    */
   guildId?: string;
   /** When the server was made. The backend reads it out of the guild id. */
@@ -197,6 +196,12 @@ export interface CommunitySummary {
   // of the response entirely rather than trusting the page to hide it, so a
   // restricted invite is not in the markup or on a hover either.
   inviteUrl: string | null;
+  /*
+   * The server's own art whenever it has any, even on a card you cannot join.
+   * A cdn.discordapp.com link when you can, and a /api/community-image path when
+   * you cannot, since the CDN one carries the guild id above. Both are just an
+   * <img src> to the page.
+   */
   iconUrl: string | null;
   bannerUrl: string | null;
   memberCount: number;

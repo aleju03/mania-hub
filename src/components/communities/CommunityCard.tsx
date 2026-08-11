@@ -11,8 +11,10 @@ import {
 import { CommunityStatusNote } from "./CommunityStatusNote";
 
 /* One Discord server on the directory. The banner and icon are Discord's own,
-   hotlinked from their CDN: these are plain <img> tags with no canvas involved,
-   so none of the reasons /api/avatar exists apply here. */
+   either hotlinked from their CDN or, for a listing this viewer cannot join,
+   served through /api/community-image so the guild id stays server-side. Either
+   way these are plain <img> tags with no canvas involved, so none of the reasons
+   /api/avatar exists apply here. */
 
 function memberLabel(count: number): string {
   return count === 1 ? "1 member" : `${count.toLocaleString()} members`;

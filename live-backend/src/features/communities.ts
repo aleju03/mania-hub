@@ -131,6 +131,54 @@ export function guildCreatedAtIso(guildId: string): string | null {
   return new Date(millis).toISOString();
 }
 
+/* ------------------------------------------------------------- the pictures
+ *
+ * A server's icon and banner live on Discord's CDN under its guild id, which is
+ * the one thing a restricted listing withholds. So there are two ways to send a
+ * picture, and mayJoin below picks between them: the CDN link for anyone the
+ * server is for, and a path back at this site for everyone else, which serves
+ * the same bytes without the id in them.
+ */
+export type CommunityImageKind = "icon" | "banner";
+
+/**
+ * Discord's CDN, in one place, so an image size is one edit.
+ *
+ * An animated icon arrives as an `a_`-prefixed hash and `.png` is deliberate for
+ * it: Discord renders the still frame at that extension, and a card wants a
+ * picture rather than a loop.
+ */
+export function discordGuildImageUrl(guildId: string, kind: CommunityImageKind, hash: string): string {
+  return kind === "banner"
+    ? `https://cdn.discordapp.com/banners/${guildId}/${hash}.png?size=512`
+    : `https://cdn.discordapp.com/icons/${guildId}/${hash}.png?size=128`;
+}
+
+export function communityImageHash(row: CommunityRow, kind: CommunityImageKind): string | null {
+  return kind === "banner" ? row.bannerHash : row.iconHash;
+}
+
+/*
+ * The same picture, fetched through the site instead.
+ *
+ * The frontend route behind this (src/routes/api/community-image.ts) asks this
+ * backend for the CDN link, checks it may, and pipes back only the bytes - so a
+ * locked card keeps the art its server chose while the guild id stays here.
+ * Relative on purpose: it is the same origin as the page, whichever host that
+ * is, and these summaries are read by browsers rather than by anything that has
+ * to resolve them itself.
+ */
+function communityImageProxyPath(id: string, kind: CommunityImageKind): string {
+  return `/api/community-image?id=${encodeURIComponent(id)}&kind=${kind}`;
+}
+
+function communityImageUrl(row: CommunityRow, kind: CommunityImageKind, direct: boolean): string | null {
+  const hash = communityImageHash(row, kind);
+  // A server with no banner of its own has none either way.
+  if (hash == null || hash === "") return null;
+  return direct ? discordGuildImageUrl(row.guildId, kind, hash) : communityImageProxyPath(row.id, kind);
+}
+
 export interface CommunityRow {
   id: string;
   guildId: string;
@@ -174,8 +222,7 @@ export interface CommunityRow {
 export interface CommunitySummary {
   id: string;
   /*
-   * Withheld from anyone this server is not for, along with the two image URLs
-   * that spell it out anyway.
+   * Withheld from anyone this server is not for.
    *
    * A guild id is not a way in by itself, but Discord answers
    * /guilds/<id>/widget.json to nobody in particular, and for a server with its
@@ -192,6 +239,9 @@ export interface CommunitySummary {
   // here rather than hidden by the page, so a restricted invite is not in the
   // response at all: not in the markup, not on a hover, not in a network tab.
   inviteUrl: string | null;
+  // Always the server's real art when it has any. A CDN link for the people it
+  // is for, and this site's own path for everyone else, since the CDN one has
+  // the guild id in it and the field above is busy withholding that.
   iconUrl: string | null;
   bannerUrl: string | null;
   memberCount: number;
@@ -267,18 +317,13 @@ export function toCommunitySummary(
     guildCreatedAt: guildCreatedAtIso(row.guildId),
     name: row.name,
     inviteUrl: mayJoin ? `https://discord.gg/${row.inviteCode}` : null,
-    // Both of these have the guild id in the path, so a locked listing loses
-    // its art rather than spelling out through a picture what the field above
-    // is withholding. Only servers that named their places are ever plain, and
-    // only to the people they are not for.
-    iconUrl:
-      mayJoin && row.iconHash
-        ? `https://cdn.discordapp.com/icons/${row.guildId}/${row.iconHash}.png?size=128`
-        : null,
-    bannerUrl:
-      mayJoin && row.bannerHash
-        ? `https://cdn.discordapp.com/banners/${row.guildId}/${row.bannerHash}.png?size=512`
-        : null,
+    // Hotlinked from Discord for anyone this server is for, and served by us for
+    // everyone else: the CDN path has the guild id in it, and the id is a way
+    // past the lock for any server with its widget on. A locked card is meant to
+    // say who the server is and that you cannot get in, so it keeps the picture
+    // and loses only the link.
+    iconUrl: communityImageUrl(row, "icon", mayJoin),
+    bannerUrl: communityImageUrl(row, "banner", mayJoin),
     memberCount: row.memberCount,
     onlineCount: row.onlineCount,
     guildDescription: row.guildDescription,
@@ -1146,8 +1191,10 @@ export function invitePreview(invite: ResolvedInvite) {
     guildId: invite.guildId,
     name: invite.name,
     inviteUrl: `https://discord.gg/${invite.code}`,
-    iconUrl: invite.iconHash ? `https://cdn.discordapp.com/icons/${invite.guildId}/${invite.iconHash}.png?size=128` : null,
-    bannerUrl: invite.bannerHash ? `https://cdn.discordapp.com/banners/${invite.guildId}/${invite.bannerHash}.png?size=512` : null,
+    // Straight from the CDN, always: this is somebody looking at the server they
+    // just proved they run, before there is a listing to restrict.
+    iconUrl: invite.iconHash ? discordGuildImageUrl(invite.guildId, "icon", invite.iconHash) : null,
+    bannerUrl: invite.bannerHash ? discordGuildImageUrl(invite.guildId, "banner", invite.bannerHash) : null,
     memberCount: invite.memberCount,
     onlineCount: invite.onlineCount,
     expiresAt: invite.expiresAt,
