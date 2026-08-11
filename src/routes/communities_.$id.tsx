@@ -1,4 +1,5 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, Flag, Link2, Lock, Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -16,12 +17,16 @@ import { formatTimeAgo } from "../lib/format";
 import {
   COMMUNITY_INTERNATIONAL,
   canUseCommunities,
+  clearCommunitiesCache,
+  communitiesListCacheKey,
   communityFeatureLabels,
   communityLanguageLabel,
   describeAccessScopes,
   discordSnowflakeDate,
   fetchCommunities,
   fetchCommunity,
+  readCachedCommunities,
+  writeCachedCommunities,
   type CommunitySummary,
 } from "../lib/communities";
 import { pageSeo } from "../lib/seo";
@@ -95,6 +100,19 @@ function monthYear(date: Date): string {
 }
 
 /*
+ * The same icon at the size the modal draws it.
+ *
+ * Listings carry a 128px icon, which is right for a card and half of what a
+ * blown-up copy wants. Discord's CDN serves any power of two off the same path,
+ * so the big one is that URL with a bigger size on it. A locked server's icon
+ * comes through our own proxy instead, which has no size to ask for and stays
+ * exactly as it is.
+ */
+function largeIconUrl(url: string): string {
+  return url.startsWith("https://cdn.discordapp.com/") ? url.replace(/([?&]size=)\d+/, "$1512") : url;
+}
+
+/*
  * Three other servers, from the same country when there are any and from the
  * whole list when there are not. The page of a small server is mostly empty
  * without this, and "here is somewhere else to look" is a better use of that
@@ -109,7 +127,18 @@ function OtherServers({ community }: { community: CommunitySummary }) {
     const take = (result: { communities: CommunitySummary[] }) =>
       result.communities.filter((row) => row.id !== community.id).slice(0, 3);
     const country = community.countryCode ?? "";
-    fetchCommunities({ data: { country } })
+    // The same pages the directory keeps: a shelf drawn from one it already has
+    // is on screen with the rest of the page instead of a moment after it.
+    const load = (query: { country?: string }) => {
+      const cacheKey = communitiesListCacheKey(query);
+      const cached = readCachedCommunities(cacheKey);
+      if (cached) return Promise.resolve(cached);
+      return fetchCommunities({ data: query }).then((result) => {
+        writeCachedCommunities(cacheKey, result);
+        return result;
+      });
+    };
+    load({ country })
       .then((result) => {
         if (cancelled) return;
         const near = take(result);
@@ -120,7 +149,7 @@ function OtherServers({ community }: { community: CommunitySummary }) {
         }
         // Nothing else from that country yet, so widen rather than print an
         // empty shelf.
-        return fetchCommunities({ data: {} }).then((all) => {
+        return load({}).then((all) => {
           if (cancelled) return;
           setScoped(false);
           setRows(take(all));
@@ -170,6 +199,17 @@ function CommunityDetailPage() {
   const [editing, setEditing] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [justReported, setJustReported] = useState(false);
+  // The icon, blown up, the way a profile page shows an avatar.
+  const [iconOpen, setIconOpen] = useState(false);
+
+  useEffect(() => {
+    if (!iconOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIconOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [iconOpen]);
 
   const isOwner = row != null && row.ownerUserId === auth.viewer?.id;
   // The backend says whether this person already has one open, so the state
@@ -241,15 +281,22 @@ function CommunityDetailPage() {
                         which is where a Discord server's own icon sits. */}
                     <div className="flex min-w-0 flex-1 basis-72 items-center gap-4">
                       {row.iconUrl ? (
-                        <img
-                          src={row.iconUrl}
-                          alt=""
-                          width={80}
-                          height={80}
-                          className={`h-20 w-20 shrink-0 rounded-3xl bg-osu-b3/40 object-cover ${
-                            row.bannerUrl ? "-mt-12 ring-4 ring-osu-b4" : ""
+                        <button
+                          type="button"
+                          onClick={() => setIconOpen(true)}
+                          aria-label={`View ${row.name}'s icon`}
+                          className={`h-20 w-20 shrink-0 overflow-hidden rounded-3xl bg-osu-b3/40 transition duration-150 cursor-pointer hover:ring-osu-pink/70 ${
+                            row.bannerUrl ? "-mt-12 ring-4 ring-osu-b4" : "ring-2 ring-transparent"
                           }`}
-                        />
+                        >
+                          <img
+                            src={row.iconUrl}
+                            alt=""
+                            width={80}
+                            height={80}
+                            className="h-full w-full object-cover"
+                          />
+                        </button>
                       ) : (
                         <div
                           className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-osu-b3/40 text-[28px] font-bold text-osu-l2 ${
@@ -458,6 +505,40 @@ function CommunityDetailPage() {
         </div>
       </div>
 
+      <AnimatePresence>
+        {iconOpen && row?.iconUrl && (
+          <motion.div
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm cursor-pointer"
+            onClick={() => setIconOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <motion.img
+              src={largeIconUrl(row.iconUrl)}
+              alt={`${row.name} icon`}
+              className="h-[300px] w-[300px] rounded-3xl object-cover shadow-[0_12px_60px_rgba(0,0,0,0.7)]"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={{ type: "spring", damping: 30, stiffness: 500 }}
+            />
+            <motion.span
+              className="mt-4 max-w-[320px] break-words px-4 text-center text-lg font-bold text-white [overflow-wrap:anywhere]"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.15, delay: 0.05 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              {row.name}
+            </motion.span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {reporting && row && (
         <CommunityReportModal
           community={row}
@@ -469,8 +550,16 @@ function CommunityDetailPage() {
       {editing && row && (
         <CommunityEditModal
           community={row}
-          onChanged={(updated) => setRow(updated)}
-          onRemoved={() => void navigate({ to: "/communities" })}
+          onChanged={(updated) => {
+            // The directory holds pages of its own, and this row is in some of
+            // them; dropping them means the grid is not showing the old copy.
+            clearCommunitiesCache();
+            setRow(updated);
+          }}
+          onRemoved={() => {
+            clearCommunitiesCache();
+            void navigate({ to: "/communities" });
+          }}
           onClose={() => setEditing(false)}
         />
       )}

@@ -6,8 +6,10 @@ import { formatTimeAgo } from "../lib/format";
 import {
   COMMUNITY_INTERNATIONAL,
   canModerateCommunities,
+  clearCommunitiesCache,
   communityInviteExpiryLabel,
   communityReportReasonLabel,
+  countCommunityQueue,
   describeAccessScopes,
   communityLanguageLabel,
   fetchCommunityQueue,
@@ -316,6 +318,9 @@ function CommunityReviewPage() {
         setNote("That did not go through.");
         return;
       }
+      // An approval or a takedown changes what the directory lists, so the
+      // pages it is holding go too rather than repainting the old grid.
+      clearCommunitiesCache();
       // Whatever the decision, the listing leaves every queue, and the reports
       // against it go with it: the backend resolved them on the same call.
       setQueue((prev) => {
@@ -340,6 +345,9 @@ function CommunityReviewPage() {
     setNote(null);
     try {
       const result = await refreshCommunityInvites();
+      // The sweep drops dead invites and moves the counts, so the directory's
+      // held pages are out of date either way.
+      if (result.ok) clearCommunitiesCache();
       setNote(result.ok
         ? `Checked ${result.checked ?? 0} listings, ${result.hidden ?? 0} dropped off.`
         : "Could not run the check.");
@@ -350,7 +358,9 @@ function CommunityReviewPage() {
     }
   };
 
-  const empty = queue.pending.length === 0 && queue.edited.length === 0 && queue.reported.length === 0;
+  // The same count the directory's Review button carries, so "nothing waiting"
+  // here and no badge there are one answer rather than two.
+  const empty = countCommunityQueue(queue) === 0;
 
   return (
     <div className="mx-auto w-full max-w-[900px] px-4 py-6 sm:px-5">

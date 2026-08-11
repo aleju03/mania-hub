@@ -19,10 +19,17 @@ import {
   COMMUNITY_LANGUAGES,
   canUseCommunities,
   canModerateCommunities,
+  clearCommunitiesCache,
+  communitiesListCacheKey,
   communityLanguageLabel,
   normalizeCommunityTag,
   fetchCommunities,
+  fetchCommunityQueueCount,
   fetchMyCommunities,
+  readCachedCommunities,
+  readCachedMyCommunities,
+  writeCachedCommunities,
+  writeCachedMyCommunities,
   type CommunitiesListResult,
   type CommunityFacet,
   type CommunitySort,
@@ -259,17 +266,23 @@ function CommunitiesPage() {
   const location = useLocation();
   const auth = useAuth();
 
-  const [data, setData] = useState<CommunitiesListResult | null>(null);
+  // Seeded from the in-memory list, so walking back from a server's page paints
+  // the grid it left rather than a screen of skeletons.
+  const [data, setData] = useState<CommunitiesListResult | null>(
+    () => readCachedCommunities(communitiesListCacheKey({ q, page, sort, country, lang, tag })),
+  );
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [searchInput, setSearchInput] = useState(q);
-  const [mine, setMine] = useState<CommunitySummary[]>([]);
+  const [mine, setMine] = useState<CommunitySummary[]>(() => readCachedMyCommunities() ?? []);
   const [discordUsername, setDiscordUsername] = useState<string | null>(null);
   const [discordAvatarUrl, setDiscordAvatarUrl] = useState<string | null>(null);
   const [showSubmit, setShowSubmit] = useState(false);
   const [editing, setEditing] = useState<CommunitySummary | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const [queueCount, setQueueCount] = useState(0);
+  const moderator = canModerateCommunities(auth);
 
   const applySearch = useCallback(
     (next: Partial<CommunitiesSearch>) => {
@@ -298,15 +311,24 @@ function CommunitiesPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const cacheKey = communitiesListCacheKey({ q, page, sort, country, lang, tag });
+    // A page already in hand shows straight away and the fetch behind it only
+    // swaps the rows in; without one this is a cold load and the skeletons are
+    // honest. After a change of your own the cache is gone, but the rows on
+    // screen stay put, so that refresh is quiet too.
+    const cached = readCachedCommunities(cacheKey);
+    if (cached) setData(cached);
     setLoading(true);
     setFailed(false);
     fetchCommunities({ data: { q, page, sort, country, lang, tag } })
       .then((result) => {
+        writeCachedCommunities(cacheKey, result);
         if (cancelled) return;
         setData(result);
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        // With a cached page on screen, a failed revalidation stays silent.
+        if (!cancelled && !cached) setFailed(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -322,6 +344,9 @@ function CommunitiesPage() {
     let cancelled = false;
     fetchMyCommunities()
       .then((result) => {
+        // Your own listings are merged into the grid, so they are cached with
+        // it: without that the cards only you can see pop in a beat later.
+        writeCachedMyCommunities(result.communities);
         if (cancelled) return;
         setMine(result.communities);
         setDiscordUsername(result.discordUsername);
@@ -334,6 +359,24 @@ function CommunitiesPage() {
       cancelled = true;
     };
   }, [auth.viewer, reloadTick]);
+
+  // How much is waiting on the review page, for the count on its button. Posting
+  // or editing a listing puts one there too, so it rides reloadTick with the
+  // rest: a moderator who just posted their own server sees the queue it joined.
+  useEffect(() => {
+    if (!moderator) return;
+    let cancelled = false;
+    fetchCommunityQueueCount()
+      .then((count) => {
+        if (!cancelled) setQueueCount(count);
+      })
+      .catch(() => {
+        // No count is better than a wrong one; the button still opens the page.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [moderator, reloadTick]);
 
   // Coming back from the Discord connection, open the modal straight away
   // rather than making someone click Post again, and say what went wrong when
@@ -386,19 +429,28 @@ function CommunitiesPage() {
   const countryFacets = data?.facets.countries ?? [];
   const languageFacets = data?.facets.languages ?? [];
   const tagFacets = data?.facets.tags ?? [];
-  const moderator = canModerateCommunities(auth);
 
   const headerAction = auth.viewer ? (
     <div className="flex w-full items-center gap-2 sm:w-auto">
       {/* The review queue lives on the directory rather than under /admin:
-          moderating servers is its own hand-kept list and implies nothing else. */}
+          moderating servers is its own hand-kept list and implies nothing else.
+          The count on the button is so a listing waiting on a decision is not
+          something you have to open the page to find out about. */}
       {moderator && (
         <Link
           to="/communities/review"
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-osu-b4 px-3.5 py-1.5 text-[12.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3"
+          className="relative inline-flex items-center justify-center gap-2 rounded-full bg-osu-b4 px-3.5 py-1.5 text-[12.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3"
         >
           <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
           Review
+          {queueCount > 0 && (
+            <span
+              aria-label={`${queueCount} waiting`}
+              className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full bg-osu-red px-1 text-center text-[10px] font-bold leading-[18px] text-white tabular-nums"
+            >
+              {queueCount > 99 ? "99+" : queueCount}
+            </span>
+          )}
         </Link>
       )}
       <button
@@ -583,10 +635,12 @@ function CommunitiesPage() {
         <CommunityEditModal
           community={editing}
           onChanged={(updated) => {
+            clearCommunitiesCache();
             setMine((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
             setReloadTick((tick) => tick + 1);
           }}
           onRemoved={(id) => {
+            clearCommunitiesCache();
             setMine((rows) => rows.filter((row) => row.id !== id));
             setReloadTick((tick) => tick + 1);
           }}
@@ -609,6 +663,7 @@ function CommunitiesPage() {
             setDiscordAvatarUrl(null);
           }}
           onSubmitted={(community) => {
+            clearCommunitiesCache();
             setMine((rows) => [community, ...rows]);
             // The connection is revoked and dropped on a successful submit, so
             // posting a second server starts from Connect again.

@@ -200,6 +200,84 @@ export const fetchMyCommunities = createServerFn({ method: "GET" })
     }
   });
 
+/*
+ * What the directory last showed, kept for the tab's lifetime.
+ *
+ * Opening a server's page and coming back remounts /communities, which refires
+ * the list fetch, so the grid fell back to a screen of skeletons even though
+ * the same page had been on it a second earlier. A cached page paints at once
+ * and the fetch behind it only swaps the rows in.
+ *
+ * Browser only, on purpose. A listing is viewer-scoped - which restricted
+ * servers you are shown, and whether an invite comes with them, both depend on
+ * who is asking - so a map living in the SSR process would be one viewer's
+ * answers handed to the next. Signing in or out is a full page load, which is
+ * what clears it.
+ */
+const COMMUNITIES_LIST_TTL_MS = 5 * 60 * 1000;
+const COMMUNITIES_LIST_MAX = 12;
+const communitiesListMemory = new Map<string, { at: number; result: CommunitiesListResult }>();
+let myCommunitiesMemory: { at: number; communities: CommunitySummary[] } | null = null;
+
+export function communitiesListCacheKey(query: CommunitiesQuery = {}): string {
+  return [
+    query.q?.trim() ?? "",
+    query.page ?? 0,
+    query.sort ?? "members",
+    query.country ?? "",
+    query.lang ?? "",
+    query.tag ?? "",
+  ].join("|");
+}
+
+export function readCachedCommunities(key: string): CommunitiesListResult | null {
+  if (typeof window === "undefined") return null;
+  const entry = communitiesListMemory.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.at > COMMUNITIES_LIST_TTL_MS) {
+    communitiesListMemory.delete(key);
+    return null;
+  }
+  return entry.result;
+}
+
+export function writeCachedCommunities(key: string, result: CommunitiesListResult): void {
+  if (typeof window === "undefined") return;
+  communitiesListMemory.set(key, { at: Date.now(), result });
+  // Oldest insertion first, so the map stays bounded across a long browse.
+  while (communitiesListMemory.size > COMMUNITIES_LIST_MAX) {
+    const oldest = communitiesListMemory.keys().next();
+    if (oldest.done) break;
+    communitiesListMemory.delete(oldest.value);
+  }
+}
+
+export function readCachedMyCommunities(): CommunitySummary[] | null {
+  if (typeof window === "undefined") return null;
+  if (!myCommunitiesMemory) return null;
+  if (Date.now() - myCommunitiesMemory.at > COMMUNITIES_LIST_TTL_MS) {
+    myCommunitiesMemory = null;
+    return null;
+  }
+  return myCommunitiesMemory.communities;
+}
+
+export function writeCachedMyCommunities(communities: CommunitySummary[]): void {
+  if (typeof window === "undefined") return;
+  myCommunitiesMemory = { at: Date.now(), communities };
+}
+
+/**
+ * Dropped whenever a listing is posted, edited, taken down or reviewed: a page
+ * held from before the change would repaint the old rows for the moment before
+ * the refetch lands, which is exactly where a just-deleted server would flash
+ * back onto the grid.
+ */
+export function clearCommunitiesCache(): void {
+  communitiesListMemory.clear();
+  myCommunitiesMemory = null;
+}
+
 /**
  * The servers the connected Discord account owns or manages. Fetched live from
  * Discord on every call rather than stored, so the cookie stays small and the
@@ -492,6 +570,15 @@ export interface CommunityQueue {
 
 const EMPTY_QUEUE: CommunityQueue = { pending: [], edited: [], reported: [], reports: {} };
 
+/**
+ * Everything the review page has waiting, as one number. The three lists are
+ * disjoint - a flagged listing that is also pending rides in `pending` only -
+ * so they add up without deduping.
+ */
+export function countCommunityQueue(queue: Partial<CommunityQueue>): number {
+  return (queue.pending?.length ?? 0) + (queue.edited?.length ?? 0) + (queue.reported?.length ?? 0);
+}
+
 export const fetchCommunityQueue = createServerFn({ method: "GET" })
   .handler(async (): Promise<CommunityQueue> => {
     await noStore();
@@ -509,6 +596,28 @@ export const fetchCommunityQueue = createServerFn({ method: "GET" })
       };
     } catch {
       return EMPTY_QUEUE;
+    }
+  });
+
+/**
+ * The same queue, counted, for the badge on the directory's Review button: a
+ * server waiting on a decision should be visible from /communities rather than
+ * only to whoever thinks to open the review page. It goes through the queue
+ * endpoint rather than a count route of its own - the queue is a handful of
+ * rows, and one source means the badge cannot disagree with the page it opens -
+ * but only the number crosses to the browser.
+ */
+export const fetchCommunityQueueCount = createServerFn({ method: "GET" })
+  .handler(async (): Promise<number> => {
+    await noStore();
+    const cfg = await resolveModeratorBackend();
+    if (!cfg) return 0;
+    try {
+      const response = await fetch(`${cfg.base}/api/communities/queue`, { headers: cfg.headers });
+      if (!response.ok) return 0;
+      return countCommunityQueue((await response.json()) as Partial<CommunityQueue>);
+    } catch {
+      return 0;
     }
   });
 
