@@ -1,9 +1,11 @@
 import { collectedCardTier, type CollectedCard } from "#/lib/pack-collection";
 import {
+  fetchPackCardThumbnailBaseUrl,
   fetchR2PackCardThumbnails,
   fetchR2PackCardThumbnail,
   uploadR2PackCardThumbnail,
 } from "#/lib/pack-card-thumbnails";
+import { buildPackThumbnailStorageKey } from "#/lib/pack-thumbnail-shared";
 import { buildManiaCardRenderDataFromSkills } from "../player/maniacard3d/renderData";
 import type { ManiaCardReadyData } from "../player/maniacard3d/types";
 
@@ -100,21 +102,138 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-async function uploadThumbnailToR2(key: string, blob: Blob): Promise<void> {
-  if (pendingRemoteUploads.has(key)) return;
-  pendingRemoteUploads.add(key);
+/* Which keys the pool is already known to hold, so a reveal of a card someone
+   has posted before costs nothing at all. Persisted because the waste this
+   avoids is mostly the same browser re-rendering the same cards on later
+   visits; the in-memory mirror keeps the hot path off localStorage. Keys are
+   content-addressed, so "present" cannot go stale in the wrong direction --
+   only a lifecycle expiry can falsify it, which the <img> 404 path catches and
+   corrects through markThumbnailMissing. */
+const PRESENT_KEYS_STORAGE = "mania-hub-maniacard-present-v1";
+const MAX_PRESENT_KEYS = 3000;
+const knownPresentKeys = new Set<string>(loadPresentKeys());
+const knownMissingKeys = new Set<string>();
+
+function loadPresentKeys(): string[] {
+  if (typeof window === "undefined") return [];
   try {
+    const raw = window.localStorage.getItem(PRESENT_KEYS_STORAGE);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+let presentKeysWriteTimer: number | null = null;
+
+function markThumbnailPresent(key: string): void {
+  knownMissingKeys.delete(key);
+  if (knownPresentKeys.has(key)) return;
+  knownPresentKeys.add(key);
+  while (knownPresentKeys.size > MAX_PRESENT_KEYS) {
+    const oldest = knownPresentKeys.values().next().value as string | undefined;
+    if (!oldest) break;
+    knownPresentKeys.delete(oldest);
+  }
+  if (typeof window === "undefined") return;
+  // Reveals arrive in bursts; one write per burst is enough.
+  if (presentKeysWriteTimer != null) return;
+  presentKeysWriteTimer = window.setTimeout(() => {
+    presentKeysWriteTimer = null;
+    try {
+      window.localStorage.setItem(PRESENT_KEYS_STORAGE, JSON.stringify([...knownPresentKeys]));
+    } catch {
+      // Quota or private mode: the in-memory set still covers this session.
+    }
+  }, 1000);
+}
+
+/* Called when a pool URL 404s, so the upload that follows can skip its probe
+   and tell the server the object is genuinely gone. */
+export function markThumbnailMissing(key: string): void {
+  knownPresentKeys.delete(key);
+  knownMissingKeys.add(key);
+}
+
+let baseUrlPromise: Promise<string | null> | null = null;
+
+function getPoolBaseUrl(): Promise<string | null> {
+  if (!baseUrlPromise) {
+    baseUrlPromise = fetchPackCardThumbnailBaseUrl()
+      .then((result) => result.baseUrl)
+      .catch(() => null);
+  }
+  return baseUrlPromise;
+}
+
+async function poolUrlForKey(key: string): Promise<string | null> {
+  const baseUrl = await getPoolBaseUrl();
+  if (!baseUrl || typeof crypto === "undefined" || !crypto.subtle) return null;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${baseUrl}/${buildPackThumbnailStorageKey(key, hex)}`;
+}
+
+const PROBE_TIMEOUT_MS = 6000;
+
+/* Asks the CDN whether the pool already holds this object. A hit is served
+   from the edge (or the browser's own cache) and costs no R2 operation, which
+   is the whole point: the server-side Head this replaces cost one every time.
+   "unknown" means we could not tell, and the caller must let the server decide
+   rather than force a blind write. */
+function probePoolObject(url: string): Promise<"present" | "missing" | "unknown"> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    let settled = false;
+    const finish = (value: "present" | "missing" | "unknown") => {
+      if (settled) return;
+      settled = true;
+      image.onload = null;
+      image.onerror = null;
+      resolve(value);
+    };
+    image.onload = () => finish("present");
+    image.onerror = () => finish("missing");
+    window.setTimeout(() => finish("unknown"), PROBE_TIMEOUT_MS);
+    image.src = url;
+  });
+}
+
+async function uploadThumbnailToR2(key: string, blob: Blob): Promise<void> {
+  if (pendingRemoteUploads.has(key) || knownPresentKeys.has(key)) return;
+  pendingRemoteUploads.add(key);
+  // Only a run that actually took a slot may hand one back, or a probe that
+  // ended in a skip would release a slot it never held and let the queue run
+  // more than MAX_R2_UPLOADS uploads at once.
+  let holdsUploadSlot = false;
+  try {
+    let probedMissing = knownMissingKeys.has(key);
+    if (!probedMissing) {
+      const url = await poolUrlForKey(key);
+      const verdict = url ? await probePoolObject(url) : "unknown";
+      if (verdict === "present") {
+        markThumbnailPresent(key);
+        return;
+      }
+      probedMissing = verdict === "missing";
+    }
+
     if (activeRemoteUploads >= MAX_R2_UPLOADS) {
       await new Promise<void>((resolve) => remoteUploadQueue.push(resolve));
     }
     activeRemoteUploads += 1;
-    await uploadR2PackCardThumbnail({ data: { key, dataUrl: await blobToDataUrl(blob) } });
+    holdsUploadSlot = true;
+    await uploadR2PackCardThumbnail({ data: { key, dataUrl: await blobToDataUrl(blob), probedMissing } });
+    markThumbnailPresent(key);
   } catch {
     // Best-effort: local caches still cover this browser.
   } finally {
-    activeRemoteUploads = Math.max(0, activeRemoteUploads - 1);
     pendingRemoteUploads.delete(key);
-    remoteUploadQueue.shift()?.();
+    if (holdsUploadSlot) {
+      activeRemoteUploads = Math.max(0, activeRemoteUploads - 1);
+      remoteUploadQueue.shift()?.();
+    }
   }
 }
 
@@ -212,6 +331,9 @@ export function getMemoryCardThumbnail(key: string | null): string | null {
    one render-and-reupload attempt per session so a render failure cannot
    loop. */
 export function forgetRemoteCardThumbnail(key: string): void {
+  // The object is gone from the pool, so the re-upload that follows can skip
+  // its existence probe.
+  markThumbnailMissing(key);
   const url = memoryCache.get(key);
   // Object and data URLs came from a local render and cannot 404.
   if (!url || isObjectUrl(url) || !/^https?:/.test(url)) return;

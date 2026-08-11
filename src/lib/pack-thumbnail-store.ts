@@ -23,23 +23,13 @@ import {
   getPublicBucketClient,
   getPublicBucketName,
 } from "./public-image-store";
+import { buildPackThumbnailStorageKey } from "./pack-thumbnail-shared";
 
-const THUMBNAIL_PREFIX = "maniacards/";
 const THUMBNAIL_CONTENT_TYPE = "image/webp";
-const THUMBNAIL_KEY_PATTERN = /^(v\d+)-w\d+-u(\d+)-[a-f0-9]{16}$/;
 
 export function getPackCardThumbnailStorageKey(cacheKey: string): string {
-  const match = THUMBNAIL_KEY_PATTERN.exec(cacheKey);
-  if (!match) throw new Error("Invalid maniacard thumbnail cache key.");
-  const version = match[1]!;
-  const userId = match[2]!;
-  const hash = crypto.createHash("sha256").update(cacheKey).digest("hex").slice(0, 40);
-  // The layout mirrors what the replay-cache bucket used (minus its
-  // replay-cache/ root), so the one-off backfill copy was a key-preserving
-  // move: v1 objects predate the inspectable hierarchy and stay flat, every
-  // newer renderer writes into its own removable namespace.
-  if (version === "v1") return `${THUMBNAIL_PREFIX}${hash}.webp`;
-  return `${THUMBNAIL_PREFIX}${version}/${userId}/${hash}.webp`;
+  const hash = crypto.createHash("sha256").update(cacheKey).digest("hex");
+  return buildPackThumbnailStorageKey(cacheKey, hash);
 }
 
 /**
@@ -56,22 +46,38 @@ export function getPackCardThumbnailUrl(cacheKey: string): string | null {
  * Stores a thumbnail and returns its public URL.
  *
  * Every pack reveal re-posts the thumbnails it rendered, so most arrivals
- * already exist. The key is content-addressed (CACHE_VERSION plus the render
- * inputs), which makes an existing object byte-equivalent to this upload:
- * answer with a Head instead of rewriting it, keeping the write (and its
- * lifecycle clock) untouched.
+ * already exist and the write has to be skipped: the key is content-addressed
+ * (CACHE_VERSION plus the render inputs), so an existing object is
+ * byte-equivalent to this upload and rewriting it would only reset its
+ * lifecycle clock.
+ *
+ * Who decides that matters more than it looks. Answering it here with a Head
+ * cost one Class B op per reveal - ~190k/day against ~3k/day of genuinely new
+ * thumbnails, i.e. 98% of the Heads finding an object that was already there.
+ * So the client checks instead, by loading the object's public URL, which the
+ * CDN answers from its edge cache for free (cardThumbnailCache.ts). It only
+ * calls this at all when that probe came back missing, and says so with
+ * `probedMissing`, which lets the write go straight through. Callers that
+ * cannot probe (no CDN configured, probe timed out) leave the flag off and get
+ * the old Head-guarded behaviour.
  */
-export async function putPackCardThumbnail(cacheKey: string, buffer: Buffer): Promise<string | null> {
+export async function putPackCardThumbnail(
+  cacheKey: string,
+  buffer: Buffer,
+  options: { probedMissing?: boolean } = {},
+): Promise<string | null> {
   const s3 = getPublicBucketClient();
   const bucket = getPublicBucketName();
   const baseUrl = getPublicBucketBaseUrl();
   if (!s3 || !bucket || !baseUrl || buffer.length === 0) return null;
 
   const storageKey = getPackCardThumbnailStorageKey(cacheKey);
-  const exists = await s3.send(new HeadObjectCommand({
-    Bucket: bucket,
-    Key: storageKey,
-  })).then(() => true, () => false);
+  const exists = options.probedMissing
+    ? false
+    : await s3.send(new HeadObjectCommand({
+      Bucket: bucket,
+      Key: storageKey,
+    })).then(() => true, () => false);
 
   if (!exists) {
     await s3.send(new PutObjectCommand({

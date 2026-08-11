@@ -54,18 +54,31 @@ export const fetchR2PackCardThumbnails = createServerFn({ method: "GET" })
     return { urls };
   });
 
+// The CDN origin the thumbnail pool is served from, so the browser can build an
+// object's URL itself and check whether it is already stored without spending
+// an R2 operation. Static for the life of the deploy, so clients fetch it once.
+export const fetchPackCardThumbnailBaseUrl = createServerFn({ method: "GET" })
+  .handler(async (): Promise<{ baseUrl: string | null }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "public, max-age=3600");
+    const { getPublicBucketBaseUrl } = await import("./public-image-store");
+    return { baseUrl: getPublicBucketBaseUrl() };
+  });
+
 export const uploadR2PackCardThumbnail = createServerFn({ method: "POST" })
-  .validator((input: { key?: unknown; dataUrl?: unknown }) => {
+  .validator((input: { key?: unknown; dataUrl?: unknown; probedMissing?: unknown }) => {
     const key = normalizeThumbnailKey(input?.key);
     const dataUrl = typeof input?.dataUrl === "string" ? input.dataUrl : "";
     if (dataUrl.length > MAX_THUMBNAIL_BYTES * 2) throw new Error("Invalid card thumbnail payload.");
-    return { key, dataUrl };
+    return { key, dataUrl, probedMissing: input?.probedMissing === true };
   })
   .handler(async ({ data }): Promise<{ url: string | null }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const { putPackCardThumbnail } = await import("./pack-thumbnail-store");
     return {
-      url: await putPackCardThumbnail(data.key, decodeWebpDataUrl(data.dataUrl)),
+      url: await putPackCardThumbnail(data.key, decodeWebpDataUrl(data.dataUrl), {
+        probedMissing: data.probedMissing,
+      }),
     };
   });
