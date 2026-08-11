@@ -6,6 +6,7 @@ import {
   isAllowedBeatmapAudioFilename,
   type PreparedBeatmapAudio,
 } from "./beatmap-audio.js";
+import { appendVary } from "../http/respond.js";
 import { HITSOUND_BUNDLE_MIME_TYPE, getPreparedHitsoundBundle } from "./hitsound-bundle.js";
 import { STORYBOARD_BUNDLE_MIME_TYPE, getPreparedStoryboardBundle } from "./storyboard-bundle.js";
 
@@ -390,9 +391,13 @@ function sendAudioText(req: IncomingMessage, res: ServerResponse, config: Config
 
 function sendAudioCors(req: IncomingMessage, res: ServerResponse, config: Config): void {
   const origin = req.headers.origin;
+  // Declared even without an Origin to answer, same reason as sendCors: these
+  // tracks and bundles are cached for a day and are reached both by elements
+  // that send no Origin (<audio src>) and by fetch, so a response that omits
+  // the header would leave one cache entry that fails every later CORS read.
+  appendVary(res, "origin");
   if (origin && (config.allowedOrigins.includes("*") || config.allowedOrigins.includes(origin))) {
     res.setHeader("access-control-allow-origin", origin);
-    res.setHeader("vary", "origin");
     res.setHeader("access-control-allow-methods", "GET,HEAD,POST,OPTIONS");
     res.setHeader("access-control-allow-headers", "content-type,authorization,range");
     res.setHeader(

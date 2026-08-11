@@ -16,6 +16,7 @@ import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { getGlobalRankingsSnapshot } from "../src/features/global-rankings.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed } from "../src/features/my-data.js";
 import { createMapsResponseCache, mapsResponseCacheSet, pruneMapsResponseCache, routeHttp, sendJson, type MapsResponseCacheEntry } from "../src/http/snapshots.js";
+import { sendCors } from "../src/http/respond.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
 import { cancelOscCountryCatchup, enqueueOscCountryCatchup, OscBackfill } from "../src/osc/backfill.js";
@@ -6759,9 +6760,26 @@ describe("live backend", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(headers.vary).toBe("accept-encoding");
+    expect(headers.vary).toBe("origin, accept-encoding");
     expect(headers["content-encoding"]).toBeUndefined();
     expect(JSON.parse(writes.join("")).data).toHaveLength(2000);
+  });
+
+  it("varies on origin even when there was no origin to answer", () => {
+    const withOrigin = mockRes();
+    sendCors(mockReq("GET", "/api/test", { origin: "http://localhost:3000" }), withOrigin.res, { config: baseConfig() } as never);
+    expect(withOrigin.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+    expect(withOrigin.headers.vary).toBe("origin");
+
+    // The case the header exists for: a skin's .osk is fetched cross-origin by
+    // the preview editor and downloaded by an <a href> that sends no Origin,
+    // and the objects are served `immutable, max-age=86400`. Without the vary
+    // the browser keeps one cache entry for both, and whichever request cached
+    // it first decides whether the other one passes the CORS check.
+    const withoutOrigin = mockRes();
+    sendCors(mockReq("GET", "/api/test"), withoutOrigin.res, { config: baseConfig() } as never);
+    expect(withoutOrigin.headers["access-control-allow-origin"]).toBeUndefined();
+    expect(withoutOrigin.headers.vary).toBe("origin");
   });
 
   it("rejects disallowed browser origins before public API work", async () => {

@@ -174,7 +174,16 @@ export function SkinPreviewEditorModal({
     setDownloadFailed(false);
     setLoading({ label: "Downloading the skin file", percent: null });
     (async () => {
-      const response = await fetch(oskUrl, { credentials: "omit" });
+      // A retry goes past the HTTP cache. The stored copy is often the reason
+      // the first attempt failed: the same .osk is reachable by the download
+      // button, an <a href> that sends no Origin and so is answered without an
+      // allow-origin header, and browsers that cached that answer before the
+      // backend started varying on Origin hand it back to this fetch, which
+      // then fails the CORS check for the day the object stays fresh.
+      const response = await fetch(oskUrl, {
+        credentials: "omit",
+        cache: downloadAttempt > 0 ? "reload" : "default",
+      });
       if (!response.ok) {
         status = response.status;
         throw new Error(`Server ${response.status}`);

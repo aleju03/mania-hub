@@ -132,6 +132,25 @@ describe("SkinPreviewEditorModal download failures", () => {
     await waitFor(() => expect(screen.queryByText(/could not be downloaded/i)).toBeNull());
   });
 
+  it("goes past the HTTP cache on the second try, since the stored copy is a suspect", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    vi.stubGlobal("fetch", fetchMock);
+    renderEditor();
+
+    await pickBackdrop();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: "default" });
+
+    // A cached answer to the download button's Origin-less request carries no
+    // allow-origin header, and a browser holding one fails this fetch before
+    // it reaches the network. The retry must not be handed the same copy.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ cache: "reload" });
+  });
+
   it("says the file is unreadable only when the parse is what failed", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(archiveResponse()));

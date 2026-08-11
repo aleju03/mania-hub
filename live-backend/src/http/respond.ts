@@ -170,7 +170,7 @@ export function negotiateEncoding(req: IncomingMessage): "br" | "gzip" | null {
   return null;
 }
 
-function appendVary(res: ServerResponse, field: string): void {
+export function appendVary(res: ServerResponse, field: string): void {
   const existing = res.getHeader("vary");
   if (existing == null) {
     res.setHeader("vary", field);
@@ -183,9 +183,16 @@ function appendVary(res: ServerResponse, field: string): void {
 
 export function sendCors(req: IncomingMessage, res: ServerResponse, ctx: Pick<HttpContext, "config">): void {
   const origin = req.headers.origin;
+  // Varying on origin is declared even when the request carried none, which is
+  // the case that actually bites: a skin's .osk is reachable both by an <a
+  // href> download (no Origin, so no allow-origin on the way back) and by the
+  // preview editor's fetch, and it is served `immutable, max-age=86400`. Skip
+  // the header on the origin-less answer and the browser keeps one cache entry
+  // for the URL with no allow-origin on it, which every later cross-origin
+  // fetch reuses and then fails the CORS check against.
+  appendVary(res, "origin");
   if (origin && (ctx.config.allowedOrigins.includes("*") || ctx.config.allowedOrigins.includes(origin))) {
     res.setHeader("access-control-allow-origin", origin);
-    res.setHeader("vary", "origin");
     res.setHeader("access-control-allow-methods", "GET,HEAD,POST,OPTIONS");
     res.setHeader("access-control-allow-headers", "content-type,authorization,range");
     // retry-after must be exposed or cross-origin clients cannot see how long
