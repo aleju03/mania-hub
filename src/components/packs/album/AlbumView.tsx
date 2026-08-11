@@ -34,6 +34,7 @@ import {
   getMemoryCardThumbnail,
   loadPersistedCardThumbnail,
   loadR2CardThumbnails,
+  noteCardThumbnailStored,
   rememberCardThumbnailBlob,
 } from "../cardThumbnailCache";
 import { playPageTurn, warmPackAudio } from "../packSfx";
@@ -808,6 +809,7 @@ const AlbumSlot = memo(function AlbumSlot({
               alt={`${card.username} maniacard`}
               className="absolute inset-0 h-full w-full object-cover"
               draggable={false}
+              onLoad={(event) => noteCardThumbnailStored(card, event.currentTarget.src)}
               onError={(event) => {
                 /* Only a remote pool URL can 404 (skeletons and local renders
                    are data/blob URLs); fall back to rendering this card. */

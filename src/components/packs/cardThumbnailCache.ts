@@ -105,24 +105,72 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 /* Which keys the pool is already known to hold, so a reveal of a card someone
    has posted before costs nothing at all. Persisted because the waste this
    avoids is mostly the same browser re-rendering the same cards on later
-   visits; the in-memory mirror keeps the hot path off localStorage. Keys are
-   content-addressed, so "present" cannot go stale in the wrong direction --
-   only a lifecycle expiry can falsify it, which the <img> 404 path catches and
-   corrects through markThumbnailMissing. */
-const PRESENT_KEYS_STORAGE = "mania-hub-maniacard-present-v1";
+   visits. Keys are content-addressed, so "present" cannot go stale in the
+   wrong direction -- only a lifecycle expiry can falsify it, which the <img>
+   404 path catches and corrects through markThumbnailMissing.
+
+   It lives in CacheStorage, beside the thumbnail blobs, and deliberately not
+   in localStorage: this list runs to ~100KB, localStorage is a ~5MB budget
+   this app already crowds (see the quota-eviction handling in store.ts), and
+   overflowing it would not drop this list, it would drop the write the store
+   was making at the time. CacheStorage draws on the origin's much larger
+   storage pool instead, and losing it to browser eviction only costs a probe.
+   Its own cache name keeps it clear of prunePersistedThumbnails' LRU. */
+const PRESENT_KEYS_CACHE_NAME = "mania-hub-maniacard-present-v1";
+const PRESENT_KEYS_ROUTE = `${CACHE_ROUTE}present-keys.json`;
+// Where the same list lived before it moved off localStorage. Read once so a
+// returning browser keeps what it learned, then deleted to hand back the quota.
+const PRESENT_KEYS_LEGACY_STORAGE = "mania-hub-maniacard-present-v1";
 const MAX_PRESENT_KEYS = 3000;
-const knownPresentKeys = new Set<string>(loadPresentKeys());
+const knownPresentKeys = new Set<string>();
 const knownMissingKeys = new Set<string>();
 
-function loadPresentKeys(): string[] {
-  if (typeof window === "undefined") return [];
+function presentKeysRequest(): Request {
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://mania-hub.local";
+  return new Request(`${origin}${PRESENT_KEYS_ROUTE}`, { method: "GET", credentials: "same-origin" });
+}
+
+function drainLegacyPresentKeys(): void {
+  if (typeof window === "undefined") return;
   try {
-    const raw = window.localStorage.getItem(PRESENT_KEYS_STORAGE);
-    const parsed = raw ? JSON.parse(raw) : null;
-    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === "string") : [];
+    const raw = window.localStorage.getItem(PRESENT_KEYS_LEGACY_STORAGE);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      for (const entry of parsed) if (typeof entry === "string") knownPresentKeys.add(entry);
+    }
+    window.localStorage.removeItem(PRESENT_KEYS_LEGACY_STORAGE);
   } catch {
-    return [];
+    // Unparseable or blocked: drop it rather than keep paying for it.
+    try {
+      window.localStorage.removeItem(PRESENT_KEYS_LEGACY_STORAGE);
+    } catch {
+      // Nothing else to try.
+    }
   }
+}
+
+let presentKeysReady: Promise<void> | null = null;
+
+function ensurePresentKeysLoaded(): Promise<void> {
+  if (!presentKeysReady) {
+    presentKeysReady = (async () => {
+      drainLegacyPresentKeys();
+      if (!canUseCacheStorage()) return;
+      try {
+        const cache = await caches.open(PRESENT_KEYS_CACHE_NAME);
+        const response = await cache.match(presentKeysRequest());
+        if (!response) return;
+        const parsed = await response.json();
+        if (Array.isArray(parsed)) {
+          for (const entry of parsed) if (typeof entry === "string") knownPresentKeys.add(entry);
+        }
+      } catch {
+        // A fresh set just means probing again.
+      }
+    })();
+  }
+  return presentKeysReady;
 }
 
 let presentKeysWriteTimer: number | null = null;
@@ -136,16 +184,28 @@ function markThumbnailPresent(key: string): void {
     if (!oldest) break;
     knownPresentKeys.delete(oldest);
   }
-  if (typeof window === "undefined") return;
-  // Reveals arrive in bursts; one write per burst is enough.
+  if (typeof window === "undefined" || !canUseCacheStorage()) return;
+  // Browsing a page marks a screenful at once; one write per burst is enough.
   if (presentKeysWriteTimer != null) return;
   presentKeysWriteTimer = window.setTimeout(() => {
     presentKeysWriteTimer = null;
-    try {
-      window.localStorage.setItem(PRESENT_KEYS_STORAGE, JSON.stringify([...knownPresentKeys]));
-    } catch {
-      // Quota or private mode: the in-memory set still covers this session.
-    }
+    void (async () => {
+      try {
+        // Merge with what is already stored first. Browsing marks keys before
+        // anything has read the list back, and writing then would replace an
+        // earlier session's knowledge with just this screenful.
+        await ensurePresentKeysLoaded();
+        const cache = await caches.open(PRESENT_KEYS_CACHE_NAME);
+        await cache.put(
+          presentKeysRequest(),
+          new Response(JSON.stringify([...knownPresentKeys]), {
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      } catch {
+        // Quota or private mode: the in-memory set still covers this session.
+      }
+    })();
   }, 1000);
 }
 
@@ -154,6 +214,17 @@ function markThumbnailPresent(key: string): void {
 export function markThumbnailMissing(key: string): void {
   knownPresentKeys.delete(key);
   knownMissingKeys.add(key);
+}
+
+/* Called when a card's pool image loads: the object provably exists, so a
+   later local render of the same card (a duplicate pull is the common one)
+   can skip its probe entirely instead of spending a CDN request to learn what
+   this load already proved. Only a pool URL counts - a blob or data URL is a
+   local render and says nothing about the pool. */
+export function noteCardThumbnailStored(card: CollectedCard, displayedUrl: string): void {
+  if (!/^https?:/.test(displayedUrl)) return;
+  const key = cardThumbnailKeyForCollectionCard(card);
+  if (key) markThumbnailPresent(key);
 }
 
 let baseUrlPromise: Promise<string | null> | null = null;
@@ -208,6 +279,11 @@ async function uploadThumbnailToR2(key: string, blob: Blob): Promise<void> {
   // more than MAX_R2_UPLOADS uploads at once.
   let holdsUploadSlot = false;
   try {
+    // The persisted set is read lazily, so the cheap synchronous check above
+    // can miss on the first upload of a session. Settle it before probing.
+    await ensurePresentKeysLoaded();
+    if (knownPresentKeys.has(key)) return;
+
     let probedMissing = knownMissingKeys.has(key);
     if (!probedMissing) {
       const url = await poolUrlForKey(key);

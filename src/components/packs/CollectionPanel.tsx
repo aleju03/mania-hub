@@ -40,6 +40,7 @@ import {
   getMemoryCardThumbnail,
   loadPersistedCardThumbnail,
   loadR2CardThumbnails,
+  noteCardThumbnailStored,
   rememberCardThumbnailBlob,
 } from "./cardThumbnailCache";
 import { playRecycleClink } from "./packSfx";
@@ -489,6 +490,7 @@ function CollectionCardTile({
           animate={{ opacity: 1 }}
           transition={animateThumbnail ? { duration: 0.14, ease: "easeOut" } : { duration: 0 }}
           draggable={false}
+          onLoad={(event) => noteCardThumbnailStored(card, event.currentTarget.src)}
           onError={(event) => {
             /* Only a remote pool URL can 404 (local renders are blob/data
                URLs); fall back to rendering this card locally. */
