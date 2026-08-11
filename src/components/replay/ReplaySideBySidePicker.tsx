@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeftRight, LoaderCircle, Plus, Search, X } from "lucide-react";
+import { LoaderCircle, Plus, Search, Swords, X } from "lucide-react";
 
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { CountryFlag } from "#/components/ui/CountryFlag";
@@ -214,7 +214,7 @@ function MatchupBadge() {
   return (
     <div className="flex items-center justify-center sm:px-1">
       <div className="relative flex h-11 w-11 rotate-45 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-osu-pink/30 to-osu-blue/30">
-        <ArrowLeftRight className="h-4 w-4 -rotate-45 text-white/85" aria-hidden="true" />
+        <Swords className="h-4 w-4 -rotate-45 text-white/85" aria-hidden="true" />
       </div>
     </div>
   );
