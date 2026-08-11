@@ -10,11 +10,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AlbumShelf,
   CoverTriangles,
+  GoatSlot,
   albumCountText,
   albumSubtitle,
   useFramePulse,
 } from "./AlbumView";
-import { buildAlbumSections } from "./albumModel";
+import { buildAlbumSections, GOAT_ALBUM_ROSTER } from "./albumModel";
 
 /* The three drift layers, in the order CoverTriangles renders them. */
 const LAYER_DURATIONS = [26, 40, 58];
@@ -166,7 +167,101 @@ describe("cover captions", () => {
 
   it("labels the Global album by its cap", () => {
     expect(albumSubtitle("GLOBAL")).toBe("Top 100 players");
+    expect(albumSubtitle("GOAT")).toBe("Honorary roster");
     expect(albumSubtitle("CR")).toBe("Card collection");
+  });
+});
+
+/* The point of the GOATs album: a member you have not pulled gives nothing
+   away. Anything that leaks a name, a face or a profile link out of an
+   uncollected slot defeats it. */
+describe("GoatSlot", () => {
+  const player = GOAT_ALBUM_ROSTER[0];
+  const noop = () => {};
+
+  it("keeps an uncollected member face-down", () => {
+    const { container } = render(
+      <GoatSlot
+        player={player}
+        card={null}
+        owned={false}
+        thumbnail={null}
+        lifted={false}
+        onSpotlight={noop}
+        onThumbnailError={noop}
+      />,
+    );
+    expect(container.textContent).toBe("");
+    expect(container.innerHTML).not.toContain(player.username);
+    expect(container.innerHTML).not.toContain(player.avatarUrl);
+    expect(container.querySelector("button")).toBeNull();
+  });
+
+  it("names a member the reader already holds", () => {
+    const { container, getByText } = render(
+      <GoatSlot
+        player={player}
+        card={null}
+        owned
+        thumbnail={null}
+        lifted={false}
+        onSpotlight={noop}
+        onThumbnailError={noop}
+      />,
+    );
+    expect(getByText(player.cardName ?? player.username)).toBeTruthy();
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(player.avatarUrl);
+  });
+
+  const card = {
+    userId: player.id,
+    username: player.username,
+    avatarUrl: player.avatarUrl,
+    countryCode: player.countryCode,
+    tier: "goat" as const,
+    tierLabel: "GOAT",
+    skills: null,
+    pp: player.peakPp,
+    globalRank: player.peakRank ?? 0,
+    copies: 2,
+    recycledCopies: 0,
+    firstPulledAt: 0,
+    lastPulledAt: 0,
+  };
+
+  it("opens the card itself once its art has loaded", () => {
+    const onSpotlight = vi.fn();
+    const { getByTitle, getByText } = render(
+      <GoatSlot
+        player={player}
+        card={card}
+        owned
+        thumbnail="blob:card"
+        lifted={false}
+        onSpotlight={onSpotlight}
+        onThumbnailError={noop}
+      />,
+    );
+    expect(getByText("x2")).toBeTruthy();
+    fireEvent.click(getByTitle(player.username));
+    expect(onSpotlight).toHaveBeenCalledWith(card, "blob:card", expect.anything());
+  });
+
+  /* The spotlight flies the card out of its slot and back again, so a slot
+     still drawing its card would put the same card on screen twice. */
+  it("holds its place empty while the card is up in the spotlight", () => {
+    const { container } = render(
+      <GoatSlot
+        player={player}
+        card={card}
+        owned
+        thumbnail="blob:card"
+        lifted
+        onSpotlight={noop}
+        onThumbnailError={noop}
+      />,
+    );
+    expect((container.firstElementChild as HTMLElement).style.visibility).toBe("hidden");
   });
 });
 
@@ -190,11 +285,11 @@ describe("AlbumShelf", () => {
     const { getByLabelText, getByText, queryByLabelText } = render(
       <AlbumShelf sections={sections} counts={counts} onOpen={() => {}} />,
     );
-    fireEvent.change(getByLabelText("Find a country album"), { target: { value: "costa" } });
-    expect(getByText("1 of 4 albums")).toBeTruthy();
+    fireEvent.change(getByLabelText("Find an album"), { target: { value: "costa" } });
+    expect(getByText("1 of 5 albums")).toBeTruthy();
     expect(queryByLabelText("Open the United States album")).toBeNull();
 
-    fireEvent.change(getByLabelText("Find a country album"), { target: { value: "zzz" } });
+    fireEvent.change(getByLabelText("Find an album"), { target: { value: "zzz" } });
     expect(getByText('No album matches "zzz".')).toBeTruthy();
   });
 
@@ -202,8 +297,8 @@ describe("AlbumShelf", () => {
     const { getByLabelText, getByText } = render(
       <AlbumShelf sections={sections} counts={counts} onOpen={() => {}} />,
     );
-    fireEvent.change(getByLabelText("Find a country album"), { target: { value: "jp" } });
-    expect(getByText("1 of 4 albums")).toBeTruthy();
+    fireEvent.change(getByLabelText("Find an album"), { target: { value: "jp" } });
+    expect(getByText("1 of 5 albums")).toBeTruthy();
     expect(getByLabelText("Open the Japan album")).toBeTruthy();
   });
 
@@ -226,6 +321,7 @@ describe("AlbumShelf", () => {
     );
     expect(shelfOrder(container)).toEqual([
       "Open the Global album",
+      "Open the GOATs album",
       "Open the Costa Rica album",
       "Open the Japan album",
       "Open the United States album",
@@ -234,13 +330,14 @@ describe("AlbumShelf", () => {
     fireEvent.click(getByRole("button", { name: "Most cards" }));
     expect(shelfOrder(container)).toEqual([
       "Open the Global album",
+      "Open the GOATs album",
       "Open the United States album",
       "Open the Costa Rica album",
       "Open the Japan album",
     ]);
 
     fireEvent.click(getByRole("button", { name: "A-Z" }));
-    expect(shelfOrder(container)[1]).toBe("Open the Costa Rica album");
+    expect(shelfOrder(container)[2]).toBe("Open the Costa Rica album");
   });
 
   it("remembers the chosen sort for the next visit", () => {
@@ -271,10 +368,10 @@ describe("AlbumShelf", () => {
       );
     }
     const { getByLabelText, getByRole } = render(<Host />);
-    fireEvent.change(getByLabelText("Find a country album"), { target: { value: "costa" } });
+    fireEvent.change(getByLabelText("Find an album"), { target: { value: "costa" } });
     act(() => {
       fireEvent.click(getByRole("button", { name: /bump/ }));
     });
-    expect((getByLabelText("Find a country album") as HTMLInputElement).value).toBe("costa");
+    expect((getByLabelText("Find an album") as HTMLInputElement).value).toBe("costa");
   });
 });

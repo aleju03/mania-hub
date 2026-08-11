@@ -1,9 +1,17 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Globe, Info } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crown, Globe, Info } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { ManiaCardTier } from "#/lib/maniacard";
-import { collectedCardTier, ownedCards, parsePackCardKey, type CollectedCard, type PackWallet } from "#/lib/pack-collection";
+import type { HonoraryPlayer } from "#/lib/honorary-players";
+import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
+import {
+  collectedCardTier,
+  ownedCards,
+  packCardKeyOf,
+  parsePackCardKey,
+  type CollectedCard,
+  type PackWallet,
+} from "#/lib/pack-collection";
 import {
   fetchServerPackCollectionOwnedKeys,
   fetchServerPackCollectionPage,
@@ -37,6 +45,7 @@ import {
   noteCardThumbnailStored,
   rememberCardThumbnailBlob,
 } from "../cardThumbnailCache";
+import { getCachedCardBackDataUrl } from "../packArt";
 import { playPageTurn, warmPackAudio } from "../packSfx";
 import {
   ALBUM_SLOTS_PER_PAGE,
@@ -45,6 +54,10 @@ import {
   buildAlbumSections,
   chunkForSlot,
   GLOBAL_ALBUM_CAP,
+  GOAT_ALBUM_CODE,
+  GOAT_ALBUM_ROSTER,
+  isGoatAlbum,
+  isPinnedAlbum,
   orderShelfSections,
   ROSTER_CHUNK_SIZE,
   slotOffsetForPage,
@@ -389,16 +402,25 @@ function stickerTilt(code: string): number {
    die-cut border, slapped onto the board at that country's tilt. flagcdn
    carries the large raster (osu!'s own flags are 70x47); the osu! flag
    stays as the fallback. The Global album has no flag, so its sticker is
-   the pink globe the flag component uses for that scope. */
+   the pink globe the flag component uses for that scope, and the GOATs album
+   wears the gold of the tier badge its cards carry. */
 function FlagSticker({ code, width }: { code: string; width: number }) {
   const global = isGlobalScope(code);
+  const goat = isGoatAlbum(code);
   return (
     <div
       className="album-flag-sticker rounded-[10px] bg-white p-[7px] shadow-[0_14px_30px_rgba(0,0,0,0.55)]"
       style={{ width, "--sticker-tilt": `${stickerTilt(code)}deg` } as CSSProperties}
     >
       <div className="relative w-full overflow-hidden rounded-[4px]" style={{ aspectRatio: "3 / 2" }}>
-        {global ? (
+        {goat ? (
+          <span
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ background: MANIA_TIER_STYLES.goat.badgeGradient }}
+          >
+            <Crown className="h-3/5 w-3/5 text-white" strokeWidth={1.5} aria-hidden="true" />
+          </span>
+        ) : global ? (
           <span className="absolute inset-0 flex items-center justify-center bg-osu-pink">
             <Globe className="h-3/5 w-3/5 text-white" strokeWidth={1.5} aria-hidden="true" />
           </span>
@@ -436,6 +458,10 @@ function AlbumCoverFace({
   subtitle: string;
 }) {
   const global = isGlobalScope(section.code);
+  const goat = isGoatAlbum(section.code);
+  /* Both wordmark albums print their name instead of a country code, so they
+     share the smaller size and skip the country line under it. */
+  const wordmark = global || goat;
   return (
     <div className="relative h-full w-full overflow-hidden" style={{ background: COVER_BOARD_BACKGROUND }}>
       <CoverTriangles />
@@ -452,14 +478,14 @@ function AlbumCoverFace({
         </div>
       </div>
       <div className="absolute inset-x-5 bottom-[76px] top-[64px] z-[3] flex flex-col items-center justify-center">
-        <FlagSticker code={section.code} width={global ? 176 : 208} />
+        <FlagSticker code={section.code} width={wordmark ? 176 : 208} />
         <div
-          className="mt-8 font-black italic leading-none text-osu-pink"
-          style={{ fontSize: global ? 60 : 88, letterSpacing: "-0.02em" }}
+          className={`mt-8 font-black italic leading-none ${goat ? "" : "text-osu-pink"}`}
+          style={{ fontSize: wordmark ? 60 : 88, letterSpacing: "-0.02em", color: goat ? GOLD : undefined }}
         >
-          {global ? "GLOBAL" : section.code}
+          {global ? "GLOBAL" : goat ? "GOATS" : section.code}
         </div>
-        {!global && (
+        {!wordmark && (
           <div className="mt-2 text-center text-[18px] font-extrabold uppercase leading-[1.15] tracking-[0.06em] text-white">
             {section.name}
           </div>
@@ -546,7 +572,23 @@ export function albumCountText(counts: ReadonlyMap<string, number>, code: string
 }
 
 export function albumSubtitle(code: string): string {
-  return isGlobalScope(code) ? `Top ${GLOBAL_ALBUM_CAP} players` : "Card collection";
+  if (isGlobalScope(code)) return `Top ${GLOBAL_ALBUM_CAP} players`;
+  if (isGoatAlbum(code)) return "Honorary roster";
+  return "Card collection";
+}
+
+/* The little mark beside an album's name. Every album but the GOATs one is a
+   scope the flag component already knows how to draw. */
+function AlbumMark({ code }: { code: string }) {
+  if (!isGoatAlbum(code)) return <CountryFlag code={code} size="sm" decorative />;
+  return (
+    <span
+      className="inline-flex h-[12px] w-[18px] shrink-0 items-center justify-center rounded-[1px] align-middle"
+      style={{ background: "rgba(232, 197, 106, 0.22)", color: GOLD }}
+    >
+      <Crown className="h-[10px] w-[10px]" strokeWidth={2.4} aria-hidden="true" />
+    </span>
+  );
 }
 
 /* Memoized, and it owns its search box and sort choice. The shelf stays
@@ -618,8 +660,8 @@ export const AlbumShelf = memo(function AlbumShelf({
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="find a country"
-          aria-label="Find a country album"
+          placeholder="find an album"
+          aria-label="Find an album"
           className="h-7 w-[180px] select-text rounded-full border border-osu-b3/40 bg-osu-b4/40 px-3 text-[12px] text-white outline-none placeholder:text-osu-f1/70 focus:border-osu-pink/50"
         />
       </div>
@@ -768,6 +810,53 @@ function PlayerPeek({ target, onClose }: { target: PlayerPeekTarget | null; onCl
   );
 }
 
+/* The collected card filling a slot: its thumbnail (or the tier skeleton
+   until one resolves) opening the spotlight. Shared by the country and GOAT
+   slots, which differ only in what they put around it. */
+function CollectedCardFace({
+  card,
+  thumbnail,
+  onSpotlight,
+  onThumbnailError,
+}: {
+  card: CollectedCard;
+  thumbnail: string | null;
+  onSpotlight: (card: CollectedCard, thumbnail: string | null, rect: DOMRect) => void;
+  onThumbnailError: (card: CollectedCard) => void;
+}) {
+  const skeleton = thumbnail ? null : tierSkeletonThumb(cardTier(card));
+  return (
+    <button
+      type="button"
+      className="absolute inset-0 cursor-pointer overflow-hidden rounded-[7px]"
+      onClick={(event) => onSpotlight(card, thumbnail, event.currentTarget.getBoundingClientRect())}
+      title={card.username}
+    >
+      {(thumbnail ?? skeleton) ? (
+        <img
+          src={thumbnail ?? skeleton ?? undefined}
+          alt={`${card.username} maniacard`}
+          className="absolute inset-0 h-full w-full object-cover"
+          draggable={false}
+          onLoad={(event) => noteCardThumbnailStored(card, event.currentTarget.src)}
+          onError={(event) => {
+            /* Only a remote pool URL can 404 (skeletons and local renders
+               are data/blob URLs); fall back to rendering this card. */
+            if (/^https?:/.test(event.currentTarget.src)) onThumbnailError(card);
+          }}
+        />
+      ) : (
+        <span className="absolute inset-0 bg-osu-b3" />
+      )}
+      {card.copies > 1 && (
+        <span className="absolute right-1 top-1 rounded bg-black/70 px-1 py-px text-[9px] font-bold text-white tabular-nums">
+          x{card.copies}
+        </span>
+      )}
+    </button>
+  );
+}
+
 /* Memoized: every album page re-renders on any AlbumView state change
    (page turns, roster chunks, thumbnail arrivals), and a big country is
    ~500 slots. All props are identity-stable, so slots only re-render when
@@ -777,6 +866,7 @@ const AlbumSlot = memo(function AlbumSlot({
   card,
   serverOwned,
   thumbnail,
+  lifted,
   onSpotlight,
   onPeek,
   onThumbnailError,
@@ -785,6 +875,9 @@ const AlbumSlot = memo(function AlbumSlot({
   card: CollectedCard | null;
   serverOwned: boolean;
   thumbnail: string | null;
+  /* This slot's card is the one currently up in the spotlight, so the slot
+     holds its place empty until the card flies back into it. */
+  lifted: boolean;
   onSpotlight: (card: CollectedCard, thumbnail: string | null, rect: DOMRect) => void;
   onPeek: (entry: LiveGlobalRankingEntry, owned: boolean) => void;
   onThumbnailError: (card: CollectedCard) => void;
@@ -794,37 +887,17 @@ const AlbumSlot = memo(function AlbumSlot({
   }
 
   if (card) {
-    const skeleton = thumbnail ? null : tierSkeletonThumb(cardTier(card));
     return (
-      <div className="relative w-full" style={{ aspectRatio: "5 / 7" }}>
-        <button
-          type="button"
-          className="absolute inset-0 cursor-pointer overflow-hidden rounded-[7px]"
-          onClick={(event) => onSpotlight(card, thumbnail, event.currentTarget.getBoundingClientRect())}
-          title={card.username}
-        >
-          {(thumbnail ?? skeleton) ? (
-            <img
-              src={thumbnail ?? skeleton ?? undefined}
-              alt={`${card.username} maniacard`}
-              className="absolute inset-0 h-full w-full object-cover"
-              draggable={false}
-              onLoad={(event) => noteCardThumbnailStored(card, event.currentTarget.src)}
-              onError={(event) => {
-                /* Only a remote pool URL can 404 (skeletons and local renders
-                   are data/blob URLs); fall back to rendering this card. */
-                if (/^https?:/.test(event.currentTarget.src)) onThumbnailError(card);
-              }}
-            />
-          ) : (
-            <span className="absolute inset-0 bg-osu-b3" />
-          )}
-          {card.copies > 1 && (
-            <span className="absolute right-1 top-1 rounded bg-black/70 px-1 py-px text-[9px] font-bold text-white tabular-nums">
-              x{card.copies}
-            </span>
-          )}
-        </button>
+      <div
+        className="relative w-full"
+        style={{ aspectRatio: "5 / 7", visibility: lifted ? "hidden" : undefined }}
+      >
+        <CollectedCardFace
+          card={card}
+          thumbnail={thumbnail}
+          onSpotlight={onSpotlight}
+          onThumbnailError={onThumbnailError}
+        />
         {/* The card click shows the card; this keeps the scouting modal
             reachable for collected players too. Bottom-right: the card art
             wears the mania logo in its top-left corner. */}
@@ -889,6 +962,97 @@ const AlbumSlot = memo(function AlbumSlot({
   );
 });
 
+/* The same face-down back the shuffle and the reveal stack deal, drawn once
+   per session. Canvas-less environments (SSR, jsdom) get the plain slot. */
+let cardBackUrl: string | null | undefined;
+function goatSlotBack(): string | null {
+  if (cardBackUrl === undefined) {
+    try {
+      cardBackUrl = getCachedCardBackDataUrl();
+    } catch {
+      cardBackUrl = null;
+    }
+  }
+  return cardBackUrl;
+}
+
+/* A GOATs album slot. The honorary roster is the one thing in the game you
+   are meant to meet by pulling it, so a member you have not pulled stays
+   face-down: the album says how many are still out there and nothing about
+   who they are. Names, faces and the card itself arrive with the pull.
+
+   Members already held show even before the collection finishes loading (the
+   owned-keys set lands first), on the roster's own name and avatar - it is
+   the reader's own card, so there is nothing left to keep from them. */
+export const GoatSlot = memo(function GoatSlot({
+  player,
+  card,
+  owned,
+  thumbnail,
+  lifted,
+  onSpotlight,
+  onThumbnailError,
+}: {
+  player: HonoraryPlayer;
+  card: CollectedCard | null;
+  owned: boolean;
+  thumbnail: string | null;
+  lifted: boolean;
+  onSpotlight: (card: CollectedCard, thumbnail: string | null, rect: DOMRect) => void;
+  onThumbnailError: (card: CollectedCard) => void;
+}) {
+  if (card) {
+    return (
+      <div
+        className="relative w-full"
+        style={{ aspectRatio: "5 / 7", visibility: lifted ? "hidden" : undefined }}
+      >
+        <CollectedCardFace
+          card={card}
+          thumbnail={thumbnail}
+          onSpotlight={onSpotlight}
+          onThumbnailError={onThumbnailError}
+        />
+      </div>
+    );
+  }
+
+  const name = player.cardName ?? player.username;
+  if (owned) {
+    return (
+      <div
+        className="relative flex w-full flex-col items-center justify-center overflow-hidden rounded-[7px] border border-white/20 bg-osu-b4/70 px-1"
+        style={{ aspectRatio: "5 / 7" }}
+        title={name}
+      >
+        <img
+          src={player.avatarUrl}
+          alt=""
+          className="h-1/2 w-auto rounded-full object-cover"
+          loading="lazy"
+          draggable={false}
+        />
+        <span className="mt-1.5 w-full truncate text-center text-[9px] font-semibold text-white">{name}</span>
+      </div>
+    );
+  }
+
+  const back = goatSlotBack();
+  return (
+    <div
+      className="overflow-hidden rounded-[7px] bg-osu-b5"
+      style={{ aspectRatio: "5 / 7" }}
+      role="img"
+      aria-label="Uncollected GOAT"
+      title="Not in your collection"
+    >
+      {back && (
+        <img src={back} alt="" className="h-full w-full object-cover opacity-80" draggable={false} />
+      )}
+    </div>
+  );
+});
+
 export function AlbumView({
   wallet,
   syncStatus,
@@ -918,6 +1082,7 @@ export function AlbumView({
   const lastFlipAtRef = useRef(0);
   const bumpThumbnails = useFramePulse();
   const [serverOwned, setServerOwned] = useState<Set<number> | null>(null);
+  const [serverOwnedGoats, setServerOwnedGoats] = useState<Set<number> | null>(null);
   /* A still-fresh session cache seeds the very first render, so remounting
      the album (tab away and back, route re-entry) never flashes the
      zero-count alphabetical shelf. Client-only: the cache can only be
@@ -931,6 +1096,12 @@ export function AlbumView({
      lands. */
   const [seededShelfCounts] = useState(() => readShelfCountCache(viewerId));
   const [spotlight, setSpotlight] = useState<CardSpotlightTarget | null>(null);
+  /* The slot whose card is up in the spotlight. It stays hidden past close
+     (spotlight becoming null) until the return flight lands, so the card is
+     never on screen twice. Keyed by wallet card key, not player: a GOAT and
+     an ordinary card of the same player are two cards, and in the GOATs
+     album the slot holding one must not blank the other. */
+  const [liftedCardKey, setLiftedCardKey] = useState<string | null>(null);
   const [peek, setPeek] = useState<PlayerPeekTarget | null>(null);
   const apiRef = useRef<FlipBookApi | null>(null);
 
@@ -943,6 +1114,21 @@ export function AlbumView({
     return map;
   }, [wallet, serverCards]);
 
+  /* The GOATs album collects the GOAT card specifically, not its player: a
+     roster member who is still ranked can also be held as the ordinary card
+     the pool dealt before they joined the roster, and that card is not the
+     one this album is about. Same layering as above, local over server. */
+  const goatCards = useMemo(() => {
+    const map = new Map<number, CollectedCard>();
+    for (const card of serverCards ?? []) {
+      if (collectedCardTier(card) === "goat") map.set(card.userId, card);
+    }
+    for (const card of ownedCards(wallet)) {
+      if (collectedCardTier(card) === "goat") map.set(card.userId, card);
+    }
+    return map;
+  }, [wallet, serverCards]);
+
   const walletCountByCode = useMemo(() => {
     const counts = new Map<string, number>();
     let total = 0;
@@ -952,6 +1138,7 @@ export function AlbumView({
       total += 1;
     }
     counts.set(GLOBAL_SCOPE_CODE, total);
+    counts.set(GOAT_ALBUM_CODE, goatCards.size);
     /* While the server collection is still loading, the live counts only
        see this session's local pulls; fill in the last-known counts (max
        per album: local pulls may not be in the persisted snapshot yet). */
@@ -961,7 +1148,7 @@ export function AlbumView({
       }
     }
     return counts;
-  }, [collectedById, serverCards, seededShelfCounts]);
+  }, [collectedById, goatCards, serverCards, seededShelfCounts]);
 
   /* Warm the flip engine chunk while the shelf is browsed, so opening an
      album doesn't wait on a dynamic import. */
@@ -994,11 +1181,13 @@ export function AlbumView({
     let cancelled = false;
     void fetchServerPackCollectionOwnedKeys()
       .then((keys) => {
-        // The album has one page per player, so a GOAT and an ordinary card of
-        // the same player both just mean "owned".
-        if (!cancelled && keys) {
-          setServerOwned(new Set(keys.map(parsePackCardKey).filter(Boolean).map((parsed) => parsed!.userId)));
-        }
+        if (cancelled || !keys) return;
+        const parsed = keys.map(parsePackCardKey).filter((entry) => entry !== null);
+        // A country album has one page per player, so a GOAT and an ordinary
+        // card of the same player both just mean "owned" there. The GOATs
+        // album only counts the GOAT itself, so it keeps its own set.
+        setServerOwned(new Set(parsed.map((entry) => entry.userId)));
+        setServerOwnedGoats(new Set(parsed.filter((entry) => entry.goat).map((entry) => entry.userId)));
       })
       .catch(() => {});
     void loadFullServerCollection()
@@ -1043,9 +1232,10 @@ export function AlbumView({
   }, [openSection, peek, spotlight]);
 
   /* Load roster chunks for the open spread and its neighbors; the first
-     chunk also reveals the roster size, which fixes the page count. */
+     chunk also reveals the roster size, which fixes the page count. The
+     GOATs album has its roster checked in, so it needs none of this. */
   useEffect(() => {
-    if (!openCode || !isLiveBackendConfigured()) return;
+    if (!openCode || isGoatAlbum(openCode) || !isLiveBackendConfigured()) return;
     const data = rosters[openCode];
     const wantedChunks = new Set<number>();
     if (!data || data.total === null) {
@@ -1113,13 +1303,16 @@ export function AlbumView({
 
   /* Resolve card art for the loaded roster's collected cards: persisted
      cache, then the shared R2 pool, then a local render. */
+  const goatOpen = isGoatAlbum(openCode);
   const openData = openCode ? rosters[openCode] : undefined;
   const spreadCards = useMemo(() => {
+    // The whole GOATs album is two dozen slots, so its cards resolve as one set.
+    if (goatOpen) return [...goatCards.values()].filter((card) => card.skills);
     if (!openData) return [] as CollectedCard[];
     return Object.values(openData.entries)
       .map((entry) => collectedById.get(entry.user.id))
       .filter((card): card is CollectedCard => Boolean(card?.skills));
-  }, [openData, collectedById]);
+  }, [goatOpen, goatCards, openData, collectedById]);
 
   const spreadSignature = spreadCards.map((card) => cardThumbnailKeyForCollectionCard(card)).join("|");
 
@@ -1191,6 +1384,7 @@ export function AlbumView({
       thumbnail,
       rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
     });
+    setLiftedCardKey(packCardKeyOf(card));
   }, []);
   const openPeek = useCallback((entry: LiveGlobalRankingEntry, owned: boolean) => {
     setPeek({ entry, owned });
@@ -1209,7 +1403,13 @@ export function AlbumView({
     setBookReady(false);
   }, []);
 
-  if (!isLiveBackendConfigured() || !trackedCountries || sections.length <= 1) {
+  /* Nothing tracked means the shelf would be the two pinned albums and no
+     country at all, which is the backend still waking up rather than a shelf. */
+  if (
+    !isLiveBackendConfigured() ||
+    !trackedCountries ||
+    !sections.some((section) => !isPinnedAlbum(section.code))
+  ) {
     return (
       <div className="py-10 text-center text-[12px] text-osu-f1">
         The album is unavailable right now. Try again in a bit.
@@ -1234,7 +1434,14 @@ export function AlbumView({
 
   const renderOpenAlbum = (openSection: AlbumSection) => {
   const global = isGlobalScope(openSection.code);
-  const limit = openData?.total != null ? albumRosterLimit(openSection.code, openData.total) : null;
+  const goat = isGoatAlbum(openSection.code);
+  /* The GOATs roster is checked in, so its size is known before the book
+     mounts and nothing about this album can fail to load. */
+  const limit = goat
+    ? GOAT_ALBUM_ROSTER.length
+    : openData?.total != null
+      ? albumRosterLimit(openSection.code, openData.total)
+      : null;
   const slotPages = limit != null ? slotPagesForRoster(limit) : 2;
   const walletCount = walletCountByCode.get(openSection.code) ?? 0;
   const collectedShown = limit != null ? Math.min(walletCount, limit) : walletCount;
@@ -1244,7 +1451,7 @@ export function AlbumView({
   const coverText = albumCountText(walletCountByCode, openSection.code);
   const coverSubtitle = albumSubtitle(openSection.code);
   const headerRight = global ? `Top ${GLOBAL_ALBUM_CAP}` : limit != null ? `${collectedShown}/${limit}` : "";
-  const rosterFailed = Boolean(openData?.error && openData.total === null);
+  const rosterFailed = !goat && Boolean(openData?.error && openData.total === null);
 
   const albumPage = (pageIndex: number) => {
     const offset = slotOffsetForPage(pageIndex);
@@ -1256,7 +1463,7 @@ export function AlbumView({
       >
         <div className="flex h-full flex-col px-3 pb-3 pt-2.5">
           <div className="mb-2 flex items-center gap-1.5">
-            <CountryFlag code={openSection.code} size="sm" decorative />
+            <AlbumMark code={openSection.code} />
             <span className="truncate text-[12px] font-bold text-white">{openSection.name}</span>
             <span className="ml-auto text-[10px] text-osu-f1 tabular-nums">{headerRight}</span>
           </div>
@@ -1266,6 +1473,24 @@ export function AlbumView({
               if (limit != null && slotIndex >= limit) {
                 return (
                   <div key={position} className="rounded-[7px] bg-osu-b4/25" style={{ aspectRatio: "5 / 7" }} />
+                );
+              }
+              if (goat) {
+                const player = GOAT_ALBUM_ROSTER[slotIndex];
+                const goatCard = goatCards.get(player.id) ?? null;
+                return (
+                  <GoatSlot
+                    key={position}
+                    player={player}
+                    card={goatCard}
+                    owned={Boolean(goatCard) || Boolean(serverOwnedGoats?.has(player.id))}
+                    thumbnail={getMemoryCardThumbnail(
+                      goatCard ? cardThumbnailKeyForCollectionCard(goatCard) : null,
+                    )}
+                    lifted={goatCard != null && packCardKeyOf(goatCard) === liftedCardKey}
+                    onSpotlight={openSpotlight}
+                    onThumbnailError={onThumbnailError}
+                  />
                 );
               }
               const entry = openData?.entries[slotIndex] ?? null;
@@ -1287,6 +1512,7 @@ export function AlbumView({
                   card={card}
                   serverOwned={Boolean(serverOwned?.has(entry.user.id))}
                   thumbnail={getMemoryCardThumbnail(key)}
+                  lifted={card != null && packCardKeyOf(card) === liftedCardKey}
                   onSpotlight={openSpotlight}
                   onPeek={openPeek}
                   onThumbnailError={onThumbnailError}
@@ -1324,7 +1550,7 @@ export function AlbumView({
           Albums
         </button>
         <span className="flex items-center gap-1.5 text-[12px] font-bold text-white">
-          <CountryFlag code={openSection.code} size="sm" decorative />
+          <AlbumMark code={openSection.code} />
           {openSection.name}
         </span>
       </div>
@@ -1455,7 +1681,9 @@ export function AlbumView({
       {!global && limit !== 0 && (
         <div className={`mx-auto mt-4 w-[min(60%,320px)]${limit == null ? " invisible" : ""}`}>
           <div className="mb-1.5 flex items-baseline justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#e8c56a]">{limit ?? 0} players</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#e8c56a]">
+              {limit ?? 0} {goat ? "goats" : "players"}
+            </span>
             <span className="text-[11px] font-bold text-white/80 tabular-nums">{collectedShown}/{limit ?? 0} collected</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-[3px] bg-white/10">
@@ -1482,7 +1710,11 @@ export function AlbumView({
       {shelfView}
       {openSection && renderOpenAlbum(openSection)}
       <PlayerPeek target={peek} onClose={() => setPeek(null)} />
-      <CardSpotlight target={spotlight} onClose={() => setSpotlight(null)} />
+      <CardSpotlight
+        target={spotlight}
+        onClose={() => setSpotlight(null)}
+        onExitComplete={() => setLiftedCardKey(null)}
+      />
     </section>
   );
 }
