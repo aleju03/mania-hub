@@ -82,14 +82,13 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-// Label over value, the same way a stat reads, because these sit in a row
-// across the page rather than down a column: a label and its value on one line
-// only line up against the ones above and below them.
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="min-w-0">
-      <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-osu-f1/55">{label}</div>
-      <div className="mt-0.5 truncate text-[13px] text-osu-l2">{children}</div>
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-osu-f1/55">
+        {label}
+      </span>
+      <span className="min-w-0 truncate text-right text-[12.5px] text-osu-l2">{children}</span>
     </div>
   );
 }
@@ -114,10 +113,16 @@ function largeIconUrl(url: string): string {
 }
 
 /*
- * Three other servers, from the same country when there are any and from the
+ * Two other servers, from the same country when there are any and from the
  * whole list when there are not. The page of a small server is mostly empty
  * without this, and "here is somewhere else to look" is a better use of that
  * space than a wider description column.
+ *
+ * It sits in the left column rather than under the whole page, because that
+ * column is the one that runs out first: a one-line pitch left a third of a
+ * screen of nothing beside a full column of facts. Two of them, side by side,
+ * is about what it takes to reach the bottom of that column - a second row
+ * would overshoot it by as much as the hole it was filling.
  */
 function OtherServers({ community }: { community: CommunitySummary }) {
   const [rows, setRows] = useState<CommunitySummary[] | null>(null);
@@ -126,7 +131,7 @@ function OtherServers({ community }: { community: CommunitySummary }) {
   useEffect(() => {
     let cancelled = false;
     const take = (result: { communities: CommunitySummary[] }) =>
-      result.communities.filter((row) => row.id !== community.id).slice(0, 3);
+      result.communities.filter((row) => row.id !== community.id).slice(0, 2);
     const country = community.countryCode ?? "";
     // The same pages the directory keeps: a shelf drawn from one it already has
     // is on screen with the rest of the page instead of a moment after it.
@@ -183,7 +188,10 @@ function OtherServers({ community }: { community: CommunitySummary }) {
           browse all
         </Link>
       </div>
-      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Two wide, not three: this grid lives in a column the facts have taken
+          300px out of, and a third of what is left is too narrow for a card
+          whose header carries an icon, a name and two counts on one line. */}
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
         {rows.map((row) => (
           <CommunityCard key={row.id} community={row} />
         ))}
@@ -356,27 +364,75 @@ function CommunityDetailPage() {
                   </div>
                 </div>
 
-                {/* Bands across the page, not a column of facts beside the
-                    pitch. Two columns only line up when they happen to run the
-                    same length, and a one-line pitch against a full column of
-                    numbers left a third of a screen of nothing next to it.
-                    Wide and short, each band ends where its own content does
-                    and nothing is waiting on what the other one holds. */}
-                <div className="mt-4 flex flex-col gap-4">
-                  <CommunityStatusNote community={row} />
+                <div className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+                  <div className="flex min-w-0 flex-col gap-4">
+                    <CommunityStatusNote community={row} />
+
+                    <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-4 sm:p-5">
+                      <h2 className="text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
+                        What it is for
+                      </h2>
+                      <p className="mt-2 whitespace-pre-line break-words text-[13.5px] leading-relaxed text-osu-l2 [overflow-wrap:anywhere]">
+                        {row.pitch}
+                      </p>
+
+                      {/* Every chip is the filter it stands for, so a page is a
+                          way back into the list rather than a dead end. */}
+                      <div className="mt-4 flex flex-wrap gap-1.5">
+                        {row.countryCode && (
+                          <Link
+                            to="/communities"
+                            search={{ country: row.countryCode }}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-osu-b3/45 px-2.5 py-1 text-[11.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3/70"
+                          >
+                            {showFlag && <CountryFlag code={row.countryCode} size="sm" decorative />}
+                            {row.countryCode === COMMUNITY_INTERNATIONAL
+                              ? "international"
+                              : getCountryName(row.countryCode)}
+                          </Link>
+                        )}
+                        {language && (
+                          <Link
+                            to="/communities"
+                            search={{ lang: row.language ?? "" }}
+                            className="rounded-full bg-osu-b3/45 px-2.5 py-1 text-[11.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3/70"
+                          >
+                            {language}
+                          </Link>
+                        )}
+                        {row.tags.map((tag) => (
+                          <Link
+                            key={tag}
+                            to="/communities"
+                            search={{ tag }}
+                            className="rounded-full bg-osu-b3/45 px-2.5 py-1 text-[11.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3/70"
+                          >
+                            {tag}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* In this column, not under the page: what runs out first
+                        is the room beside the facts, and a shelf of servers is
+                        what there is to put in it. */}
+                    <OtherServers community={row} />
+                  </div>
 
                   <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-4 sm:p-5">
-                    <div className="flex flex-wrap items-center gap-x-9 gap-y-5">
-                      {/* Counts are Discord's own approximations, refreshed with
-                          the invite every few hours. */}
+                    {/* Counts are Discord's own approximations, refreshed with
+                        the invite every few hours. */}
+                    <div className="grid grid-cols-2 gap-4">
                       <Stat label="members" value={row.memberCount.toLocaleString()} />
                       <Stat label="online" value={row.onlineCount.toLocaleString()} />
                       {typeof row.boostCount === "number" && row.boostCount > 0 && (
                         <Stat label="boosts" value={row.boostCount.toLocaleString()} />
                       )}
+                    </div>
 
-                      <div className="hidden h-9 w-px bg-osu-b3/30 sm:block" aria-hidden="true" />
-
+                    <div className="mt-4 space-y-2 border-t border-osu-b3/20 pt-4">
+                      {/* A month and a year rather than a number, so it reads as
+                          a line here instead of wrapping across a stat. */}
                       {created && <Fact label="server made">{monthYear(created)}</Fact>}
                       <Fact label="posted by">
                         <Link
@@ -414,90 +470,46 @@ function CommunityDetailPage() {
                           </a>
                         </Fact>
                       )}
-
-                      {badges.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {badges.map((badge) => (
-                            <span
-                              key={badge}
-                              className="rounded-full bg-osu-b3/25 px-2.5 py-1 text-[11px] font-semibold text-osu-f1"
-                            >
-                              {badge}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Anyone reading can flag the listing. A directory of
-                          servers people post about themselves is only as honest
-                          as the people reading it, and after approval nobody is
-                          watching a listing except them. Quiet, at the end of
-                          the row, because it is the last thing a page is for. */}
-                      {!isOwner && (
-                        <div className="ml-auto">
-                          {reported ? (
-                            <p className="text-[11.5px] text-osu-f1/70">Report sent</p>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setReporting(true)}
-                              className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light"
-                            >
-                              <Flag className="h-3 w-3" aria-hidden="true" />
-                              report this server
-                            </button>
-                          )}
-                        </div>
-                      )}
                     </div>
+
+                    {badges.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-1.5 border-t border-osu-b3/20 pt-4">
+                        {badges.map((badge) => (
+                          <span
+                            key={badge}
+                            className="rounded-full bg-osu-b3/25 px-2.5 py-1 text-[11px] font-semibold text-osu-f1"
+                          >
+                            {badge}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Anyone reading can flag the listing. A directory of
+                        servers people post about themselves is only as honest
+                        as the people reading it, and after approval nobody is
+                        watching a listing except them. Quiet, at the bottom,
+                        because it is the last thing a page is for. */}
+                    {!isOwner && (
+                      /* Right-aligned, where every value in this column sits.
+                         On the left it read as another label with nothing
+                         against it. */
+                      <div className="mt-4 flex justify-end border-t border-osu-b3/20 pt-3">
+                        {reported ? (
+                          <p className="text-[11.5px] text-osu-f1/70">Report sent</p>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setReporting(true)}
+                            className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light"
+                          >
+                            <Flag className="h-3 w-3" aria-hidden="true" />
+                            report this server
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
-
-                  <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-4 sm:p-5">
-                    <h2 className="text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                      What it is for
-                    </h2>
-                    <p className="mt-2 whitespace-pre-line break-words text-[13.5px] leading-relaxed text-osu-l2 [overflow-wrap:anywhere]">
-                      {row.pitch}
-                    </p>
-
-                    {/* Every chip is the filter it stands for, so a page is a
-                        way back into the list rather than a dead end. */}
-                    <div className="mt-4 flex flex-wrap gap-1.5">
-                      {row.countryCode && (
-                        <Link
-                          to="/communities"
-                          search={{ country: row.countryCode }}
-                          className="inline-flex items-center gap-1.5 rounded-full bg-osu-b3/45 px-2.5 py-1 text-[11.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3/70"
-                        >
-                          {showFlag && <CountryFlag code={row.countryCode} size="sm" decorative />}
-                          {row.countryCode === COMMUNITY_INTERNATIONAL
-                            ? "international"
-                            : getCountryName(row.countryCode)}
-                        </Link>
-                      )}
-                      {language && (
-                        <Link
-                          to="/communities"
-                          search={{ lang: row.language ?? "" }}
-                          className="rounded-full bg-osu-b3/45 px-2.5 py-1 text-[11.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3/70"
-                        >
-                          {language}
-                        </Link>
-                      )}
-                      {row.tags.map((tag) => (
-                        <Link
-                          key={tag}
-                          to="/communities"
-                          search={{ tag }}
-                          className="rounded-full bg-osu-b3/45 px-2.5 py-1 text-[11.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3/70"
-                        >
-                          {tag}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-
-                  <OtherServers community={row} />
                 </div>
               </>
             )}
