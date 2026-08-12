@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateReplacementPpGain, getBeatmapKeyCount, getBeatmapKeymodeLabel, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getEffectiveManiaKeyCount, getManiaJudgementCounts, getManiaKeyModCount, getModDisplayList, getScoreDisplayValues, getStableScaleManiaAccuracy, hasCustomRateMod, isLazerScore } from "./score";
+import { calculateReplacementPpGain, getBeatmapKeyCount, getBeatmapKeymodeLabel, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getEffectiveManiaKeyCount, getManiaJudgementCounts, getManiaKeyModCount, getModDisplayList, getScoreDisplayValues, getStableScaleManiaAccuracy, getManiaAccuracyFromCounts, hasCustomRateMod, isLazerScore, scoreUsesLazerScoring, withModRate, FIRST_LAZER_REPLAY_VERSION } from "./score";
 import type { OsuScore } from "./types";
 
 function createScore(overrides: Partial<OsuScore>): OsuScore {
@@ -330,6 +330,57 @@ describe("hasCustomRateMod", () => {
     expect(hasCustomRateMod([{ acronym: "NC" }])).toBe(false);
     expect(hasCustomRateMod([{ acronym: "NC", settings: { speed_change: 1.5 } }])).toBe(false);
     expect(hasCustomRateMod([{ acronym: "HD", settings: { speed_change: 1.4 } }])).toBe(false);
+  });
+});
+
+describe("scoreUsesLazerScoring", () => {
+  // Regression: an uploaded lazer .osr has no API score, and reading that as
+  // "stable" labelled obviously-lazer plays Stable and judged them on stable
+  // windows. The version stamp is the same cutoff osu!'s own decoder uses.
+  it("falls back to the replay's own version stamp when there is no API score", () => {
+    expect(scoreUsesLazerScoring(null, 30_000_019)).toBe(true);
+    expect(scoreUsesLazerScoring(null, FIRST_LAZER_REPLAY_VERSION)).toBe(true);
+    expect(scoreUsesLazerScoring(null, 20_231_019)).toBe(false); // stable stamps a date
+    expect(scoreUsesLazerScoring(null, undefined)).toBe(false);
+    expect(scoreUsesLazerScoring(undefined)).toBe(false);
+  });
+
+  it("trusts the API score over the version when both are known", () => {
+    const legacy = createScore({ id: 1, legacy_score_id: 5 });
+    const lazer = createScore({ id: 2 });
+    expect(scoreUsesLazerScoring(legacy, 30_000_019)).toBe(false);
+    expect(scoreUsesLazerScoring(lazer, 20_231_019)).toBe(true);
+  });
+});
+
+describe("getManiaAccuracyFromCounts", () => {
+  // The same play measured both ways: lazer's MAX is worth 305 of 305, stable's
+  // is worth 300 of 300, so a play carrying anything below MAX reads lower on
+  // lazer. Counts are from uploadId 5UjidMiPv4-vOCoph4o9.
+  it("measures the same counts on each client's scale", () => {
+    const counts = { count_geki: 2978, count_300: 1681, count_katu: 300, count_100: 19, count_50: 7, count_miss: 11 };
+    expect(getManiaAccuracyFromCounts(counts, true)).toBeCloseTo(0.96788, 5);
+    expect(getManiaAccuracyFromCounts(counts, false)).toBeCloseTo(0.97408, 5);
+  });
+
+  it("agrees on an all-MAX play and on an empty one", () => {
+    expect(getManiaAccuracyFromCounts({ count_geki: 100 }, true)).toBe(1);
+    expect(getManiaAccuracyFromCounts({ count_geki: 100 }, false)).toBe(1);
+    expect(getManiaAccuracyFromCounts({}, true)).toBe(0);
+  });
+});
+
+describe("withModRate", () => {
+  it("puts a stored rate back on the mod that owns it", () => {
+    expect(withModRate(["HD", "DT"], 1.1)).toEqual([{ acronym: "HD" }, { acronym: "DT", rate: 1.1 }]);
+    expect(withModRate(["DC"], 0.85)).toEqual([{ acronym: "DC", rate: 0.85 }]);
+  });
+
+  it("leaves the list alone when there is no rate to restore", () => {
+    expect(withModRate(["DT", "HR"], undefined)).toEqual([{ acronym: "DT" }, { acronym: "HR" }]);
+    expect(withModRate(["DT"], null)).toEqual([{ acronym: "DT" }]);
+    expect(withModRate(["DT"], 0)).toEqual([{ acronym: "DT" }]);
+    expect(withModRate(["HD"], 1.1)).toEqual([{ acronym: "HD" }]);
   });
 });
 

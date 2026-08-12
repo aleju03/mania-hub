@@ -5,7 +5,7 @@ import { StarRatingBadge } from "#/components/maps/SearchCard";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { formatDate } from "#/lib/format";
-import { beatmapStatusAwardsPp, getDisplayedAccuracy, getModDisplayList, getScoreRate, getScoreTimestamp, isLazerScore, scoreUsesLazerScoring } from "#/lib/score";
+import { beatmapStatusAwardsPp, getDisplayedAccuracy, getManiaAccuracyFromCounts, getModDisplayList, getScoreRate, getScoreTimestamp, scoreUsesLazerScoring } from "#/lib/score";
 import { computeManiaRulesetWhatIf } from "#/lib/replay-what-if";
 import type { ManiaBeatmap } from "#/lib/beatmap-parser";
 import type { ServerReplay } from "#/lib/replay-types";
@@ -41,18 +41,24 @@ interface ReplayInfoProps {
 
 export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, playerProfile, judgeAsLazer, onSelectClient, onClear }: ReplayInfoProps) {
   const h = replay.header;
-  const totalHits = h.countGeki + h.count300 + h.countKatu + h.count100 + h.count50;
+  // An upload has no API score, so the client comes from the .osr's own version
+  // stamp; both the label and everything judged below follow from it.
+  const sourceIsLazer = scoreUsesLazerScoring(score, h.gameVersion);
   const accuracy = score
     ? getDisplayedAccuracy(score) * 100
-    : totalHits + h.countMiss > 0
-      ? ((h.countGeki * 6 + h.count300 * 6 + h.countKatu * 4 + h.count100 * 2 + h.count50) / ((totalHits + h.countMiss) * 6) * 100)
-      : 0;
+    : getManiaAccuracyFromCounts({
+      count_geki: h.countGeki,
+      count_300: h.count300,
+      count_katu: h.countKatu,
+      count_100: h.count100,
+      count_50: h.count50,
+      count_miss: h.countMiss,
+    }, sourceIsLazer) * 100;
   const beatmapsetId = score?.beatmapset?.id ?? fallbackBeatmapsetId;
   const beatmapId = score?.beatmap?.id;
   const mapUrl = beatmapsetId ? `https://osu.ppy.sh/beatmapsets/${beatmapsetId}${beatmapId ? `#mania/${beatmapId}` : ""}` : null;
-  const clientLabel = score
-    ? (isLazerScore(score) ? "Lazer" : "Stable")
-    : getReplayHeaderClientLabel(h.gameVersion);
+  // Nothing to claim when there is neither a score nor a version stamp.
+  const clientLabel = score || h.gameVersion ? (sourceIsLazer ? "Lazer" : "Stable") : null;
   const playedAt = score ? getScoreTimestamp(score) : "";
   const playedDate = playedAt ? formatDate(playedAt) : null;
   const displayName = playerProfile?.username?.trim() || h.playerName;
@@ -84,7 +90,6 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
   // Client what-if: flipping the Client stat re-judges the same keypresses
   // under the other ruleset. The stats below mirror what the viewer is now
   // playing; score and combo can't be simulated and stay from the real play.
-  const sourceIsLazer = scoreUsesLazerScoring(score);
   const canToggleClient = Boolean(onSelectClient && beatmap && beatmap.notes.length > 0 && replay.frames.length > 0);
   const judgingIsLazer = canToggleClient ? judgeAsLazer ?? sourceIsLazer : sourceIsLazer;
   const simActive = canToggleClient && judgingIsLazer !== sourceIsLazer;
@@ -455,11 +460,6 @@ function PlayerAvatar({ src, name, size }: { src?: string; name: string; size: n
       {name.trim().charAt(0).toUpperCase() || "?"}
     </div>
   );
-}
-
-function getReplayHeaderClientLabel(gameVersion: number | undefined): "Lazer" | "Stable" | null {
-  if (!gameVersion) return null;
-  return gameVersion >= 30_000_000 ? "Lazer" : "Stable";
 }
 
 // On desktop this sits over the map's cover art, where muted grey on a bright

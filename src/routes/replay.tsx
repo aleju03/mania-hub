@@ -808,7 +808,10 @@ function ReplayPage() {
   // "What if this was played on the other client?": the info bar's Client
   // stat can flip the judging ruleset, which re-simulates both the info bar
   // stats and the playback itself. Null means "judge as the actual client".
-  const sourceIsLazer = useMemo(() => scoreUsesLazerScoring(scoreInfo), [scoreInfo]);
+  const sourceIsLazer = useMemo(
+    () => scoreUsesLazerScoring(scoreInfo, replay?.header?.gameVersion),
+    [scoreInfo, replay],
+  );
   const [clientJudgeAsLazer, setClientJudgeAsLazer] = useState<boolean | null>(null);
   useEffect(() => {
     setClientJudgeAsLazer(null);
@@ -2069,9 +2072,13 @@ function ReplayViewer({
   // so the counter falls back to the raw simulation there.
   const rendererRealTotalScore = useMemo(() => {
     if (judgeAsLazer !== sourceIsLazer) return null;
-    if (judgeAsLazer) return scoreInfo?.total_score ?? null;
-    const stableTotal = scoreInfo?.legacy_total_score ?? scoreInfo?.score ?? replay.header?.totalScore;
-    return stableTotal != null && stableTotal > 0 ? stableTotal : null;
+    // Without an API score the .osr header total is the play's real total, and
+    // it is on whichever scale that client scores by - which is the one being
+    // judged, since this branch only runs when the two agree.
+    const total = judgeAsLazer
+      ? scoreInfo?.total_score ?? replay.header?.totalScore
+      : scoreInfo?.legacy_total_score ?? scoreInfo?.score ?? replay.header?.totalScore;
+    return total != null && total > 0 ? total : null;
   }, [judgeAsLazer, sourceIsLazer, scoreInfo, replay]);
   const keypressHeatmap = useMemo(() => {
     const frames = replay.frames;

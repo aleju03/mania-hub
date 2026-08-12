@@ -154,6 +154,18 @@ export function hasCustomRateMod(mods: OsuMod[] | undefined): boolean {
   return false;
 }
 
+/** Rebuilds a display list from acronyms that were stored without their
+ *  settings, putting a custom rate back on whichever mod owns it. For records
+ *  that keep the rate as one separate number rather than a full mod list. */
+export function withModRate(acronyms: string[], rate: number | null | undefined): ModDisplay[] {
+  const custom = Number(rate);
+  return acronyms.map((acronym) => (
+    Number.isFinite(custom) && custom > 0 && MOD_RATE_DEFAULTS[acronym] !== undefined
+      ? { acronym, rate: custom }
+      : { acronym }
+  ));
+}
+
 /** Like `getModAcronyms`, but preserves lazer custom rate settings so the UI
  *  can render e.g. "0.9x" instead of the plain DC icon. */
 export function getModDisplayList(mods: OsuMod[] | undefined, excludeCl = true): ModDisplay[] {
@@ -233,11 +245,21 @@ export function isLazerScore(score: ScoreLike): boolean {
   return !isLegacySubmittedScore(score);
 }
 
+// Every .osr records the client that wrote it: stable stamps a yyyymmdd date,
+// lazer everything from here up. This is the cutoff osu!'s own decoder uses to
+// set IsLegacyScore (LegacyScoreEncoder.FIRST_LAZER_VERSION).
+export const FIRST_LAZER_REPLAY_VERSION = 30_000_000;
+
 // The replay viewer's judging flag: whether the play was scored by lazer's
-// ruleset. Uploaded replays without an API score are treated as stable, which
-// matches how the viewer simulates them.
-export function scoreUsesLazerScoring(score: ScoreLike | null | undefined): boolean {
-  return score != null && isLazerScore(score);
+// ruleset. An uploaded .osr has no API score to ask, so it falls back to the
+// version its own header carries - without which every lazer upload rendered
+// as a stable play, judged on stable windows and labelled "Stable".
+export function scoreUsesLazerScoring(
+  score: ScoreLike | null | undefined,
+  replayGameVersion?: number | null,
+): boolean {
+  if (score != null) return isLazerScore(score);
+  return (replayGameVersion ?? 0) >= FIRST_LAZER_REPLAY_VERSION;
 }
 
 // Only ranked and approved maps award pp; loved, qualified, and graveyard
@@ -302,6 +324,14 @@ function calculateStableAccuracy(stats: OsuScoreStatistics): number {
   const total = countMax + count300 + count200 + count100 + count50 + countMiss;
   if (total === 0) return 0;
   return (countMax * 300 + count300 * 300 + count200 * 200 + count100 * 100 + count50 * 50) / (total * 300);
+}
+
+/** Mania accuracy on the scale the play was judged on, from raw counts rather
+ *  than a score object. For an uploaded .osr, whose header counts are the only
+ *  statistics there are: lazer writes its own judgements into the same legacy
+ *  fields, so the counts are right either way and only the scale differs. */
+export function getManiaAccuracyFromCounts(stats: OsuScoreStatistics, isLazer: boolean): number {
+  return isLazer ? calculateLazerAccuracy(stats) : calculateStableAccuracy(stats);
 }
 
 function getPreferredTotalScore(score: ScoreLike, isLazer: boolean): number | null {

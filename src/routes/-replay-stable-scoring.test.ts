@@ -9,8 +9,10 @@ describe("replay stable scoring", () => {
     // The legacy checks live in scoreUsesLazerScoring (src/lib/score.ts, via
     // isLegacySubmittedScore); the viewer must judge with that flag (plus the
     // client what-if override) rather than the display flavor of the API
-    // score shape.
-    expect(source).toContain("const sourceIsLazer = useMemo(() => scoreUsesLazerScoring(scoreInfo)");
+    // score shape. An upload has no API score, so the flag falls back to the
+    // client version stamped in the .osr rather than assuming stable.
+    expect(source).toContain("const sourceIsLazer = useMemo(");
+    expect(source).toContain("scoreUsesLazerScoring(scoreInfo, replay?.header?.gameVersion)");
     expect(source).toContain("const judgeAsLazer = clientJudgeAsLazer ?? sourceIsLazer;");
     expect(source).toContain("isLazer: judgeAsLazer");
     expect(source).not.toContain("isLazer: displayScoreValues?.isLazer ?? false");

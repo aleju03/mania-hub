@@ -46,6 +46,7 @@
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
     "lucide-react": "^0.545.0",
+    "lzma-js-simple-v2": "^1.2.3",
     "lzma-purejs": "^0.9.3",
     "mediabunny": "^1.50.6",
     "nitro": "^3.0.260311-beta",

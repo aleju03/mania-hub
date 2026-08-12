@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { extractReplayScoreIdFromFilename, scoreMatchesUploadedReplay, stableModBitmaskToMods } from "./replay-upload";
+import { describe, expect, it, vi } from "vitest";
+
+const { readLazerReplayMods } = vi.hoisted(() => ({ readLazerReplayMods: vi.fn() }));
+vi.mock("./replay-lazer-score", () => ({ readLazerReplayMods }));
+
+import { extractReplayScoreIdFromFilename, readUploadedReplayMods, scoreMatchesUploadedReplay, stableModBitmaskToMods } from "./replay-upload";
 
 describe("replay upload helpers", () => {
   it("maps the mania-relevant stable mod bits", () => {
@@ -15,6 +19,28 @@ describe("replay upload helpers", () => {
     expect(acronyms((1 << 15) | (1 << 30))).toEqual(["4K", "MR"]);
   });
 
+
+  // Regression for uploadId 5UjidMiPv4-vOCoph4o9: a lazer play at DT 1.1x with
+  // DA. The header bitfield says 64 (plain DT), so reading it alone ran the
+  // chart at 1.5x and lost DA entirely.
+  it("prefers a lazer replay's own mod list over the legacy bitfield", async () => {
+    const lazerMods = [
+      { acronym: "DT", settings: { speed_change: 1.1 } },
+      { acronym: "DA", settings: { overall_difficulty: 9 } },
+    ];
+    readLazerReplayMods.mockResolvedValueOnce(lazerMods);
+
+    expect(await readUploadedReplayMods(new ArrayBuffer(0), 1 << 6)).toEqual(lazerMods);
+  });
+
+  it("falls back to the bitfield for a stable replay, which carries no mod list", async () => {
+    readLazerReplayMods.mockResolvedValueOnce(null);
+
+    expect(await readUploadedReplayMods(new ArrayBuffer(0), (1 << 6) | (1 << 3))).toEqual([
+      { acronym: "HD" },
+      { acronym: "DT" },
+    ]);
+  });
 
   it("extracts the score id from lazer exported replay filenames", () => {
     expect(extractReplayScoreIdFromFilename("solo-replay-mania_4001513_6708716952.osr")).toBe(6708716952);

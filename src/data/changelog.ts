@@ -29,6 +29,8 @@ export const WIP: string[] = [
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-12", text: "Fixed a bug where custom rate mods on uploaded replays played at base rate instead (e.g. 1.5x instead of 1.1x)", to: "/replay" },
+  { date: "2026-08-12", text: "Uploaded replays now detect lazer/stable correctly", to: "/replay" },
   { date: "2026-08-11", text: "Images in the BBCode editor now show at the size they will be on your osu! profile", to: "/bbcode" },
   { date: "2026-08-11", text: "Drag the corner of an image in the BBCode editor to resize it", to: "/bbcode" },
   { date: "2026-08-11", text: "Right-click an image in the BBCode editor to make an imagemap, then drag its clickable areas", to: "/bbcode" },

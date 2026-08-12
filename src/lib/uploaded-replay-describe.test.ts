@@ -4,13 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // the caching/refresh logic around describeUploadedReplayById is exercised,
 // not the KV/R2 stores or the replay parser. vi.hoisted keeps these defined
 // before the hoisted vi.mock factories run.
-const { getPersistentCacheEntry, setPersistentCache, osuFetch, readUploadedReplay, getJsonArtifact, putJsonArtifact } = vi.hoisted(() => ({
+const { getPersistentCacheEntry, setPersistentCache, osuFetch, readUploadedReplay, getJsonArtifact, putJsonArtifact, parseUploadedReplayBuffer } = vi.hoisted(() => ({
   getPersistentCacheEntry: vi.fn(),
   setPersistentCache: vi.fn(async () => {}),
   osuFetch: vi.fn(),
   readUploadedReplay: vi.fn(),
   getJsonArtifact: vi.fn(async () => null),
   putJsonArtifact: vi.fn(async () => true),
+  parseUploadedReplayBuffer: vi.fn(),
 }));
 
 vi.mock("./api", () => ({
@@ -26,20 +27,26 @@ vi.mock("./r2-cache", async (importActual) => {
   const actual = await importActual<typeof import("./r2-cache")>();
   return { ...actual, getJsonArtifact, putJsonArtifact };
 });
+vi.mock("./replay-upload", async (importActual) => {
+  const actual = await importActual<typeof import("./replay-upload")>();
+  return { ...actual, parseUploadedReplayBuffer };
+});
 
+import type { OsuMod } from "./types";
 import type { UploadedReplayParseResult } from "./replay-upload";
-import { describeUploadedReplayById, persistUploadedReplayDescription, type UploadedReplayDescription } from "./uploaded-replay-describe";
+import { DESCRIPTION_VERSION, describeUploadedReplayById, persistUploadedReplayDescription, type UploadedReplayDescription } from "./uploaded-replay-describe";
 
 const VALID_ID = "abcdefghijklmnop"; // 16 chars, matches the id pattern
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function fakeParsed(beatmapHash: string): UploadedReplayParseResult {
+function fakeParsed(beatmapHash: string, mods: OsuMod[] = [], gameVersion?: number): UploadedReplayParseResult {
   return {
     replay: {
       keyCount: 4,
       header: {
         playerName: "someone",
         beatmapHash,
+        gameVersion,
         countGeki: 100,
         count300: 50,
         countKatu: 10,
@@ -51,7 +58,7 @@ function fakeParsed(beatmapHash: string): UploadedReplayParseResult {
       },
       frames: [],
     },
-    mods: [],
+    mods,
     scoreId: null,
   } as unknown as UploadedReplayParseResult;
 }
@@ -72,6 +79,7 @@ function unresolvedStored(overrides: Partial<UploadedReplayDescription> = {}): U
     beatmap: null,
     beatmapHash: "c".repeat(32),
     computedAt: Date.now(),
+    version: DESCRIPTION_VERSION,
     ...overrides,
   };
 }
@@ -154,6 +162,38 @@ describe("describeUploadedReplayById caching", () => {
     const [, written] = putJsonArtifact.mock.calls[0] as unknown as [string, UploadedReplayDescription];
     expect(written.computedAt).toBeGreaterThan(oldComputedAt);
   });
+
+  // Artifacts written before mods came from the lazer block would otherwise
+  // serve their bitfield-derived mods forever.
+  it("re-derives an artifact written by an older build", async () => {
+    getPersistentCacheEntry.mockResolvedValue({ hit: false });
+    getJsonArtifact.mockResolvedValue(unresolvedStored({ version: undefined, mods: ["DT"] }) as never);
+    readUploadedReplay.mockResolvedValue({ buffer: Buffer.from([0]), originalFilename: null });
+    parseUploadedReplayBuffer.mockResolvedValue(
+      fakeParsed("c".repeat(32), [{ acronym: "DT", settings: { speed_change: 1.1 } }]),
+    );
+    osuFetch.mockRejectedValue(new Error("404"));
+
+    const result = await describeUploadedReplayById(VALID_ID);
+
+    expect(result?.modRate).toBe(1.1);
+    expect(result?.version).toBe(DESCRIPTION_VERSION);
+    const [, written] = putJsonArtifact.mock.calls[0] as unknown as [string, UploadedReplayDescription];
+    expect(written.modRate).toBe(1.1);
+  });
+
+  it("keeps serving an old artifact when its .osr can no longer be read", async () => {
+    getPersistentCacheEntry.mockResolvedValue({ hit: false });
+    const stored = unresolvedStored({ version: undefined, beatmap: { beatmapId: 9 } as never });
+    getJsonArtifact.mockResolvedValue(stored as never);
+    readUploadedReplay.mockResolvedValue(null);
+
+    const result = await describeUploadedReplayById(VALID_ID);
+
+    expect(readUploadedReplay).toHaveBeenCalledWith(VALID_ID);
+    expect(result).toEqual(stored);
+    expect(putJsonArtifact).not.toHaveBeenCalled();
+  });
 });
 
 describe("persistUploadedReplayDescription", () => {
@@ -179,5 +219,50 @@ describe("persistUploadedReplayDescription", () => {
       beatmapHash: "d".repeat(32),
     });
     expect(written.computedAt).toBeGreaterThan(0);
+  });
+
+  // The stored mods are acronyms, so a lazer custom rate needs its own field or
+  // the community list renders a 1.1x DT as the default 1.5x one.
+  it("keeps a lazer custom rate alongside the acronym list", async () => {
+    osuFetch.mockRejectedValue(new Error("404"));
+
+    await persistUploadedReplayDescription(
+      VALID_ID,
+      fakeParsed("d".repeat(32), [{ acronym: "DT", settings: { speed_change: 1.1 } }, { acronym: "DA" }]),
+      null,
+    );
+
+    const [, written] = putJsonArtifact.mock.calls[0] as unknown as [string, UploadedReplayDescription];
+    expect(written.mods).toEqual(["DT", "DA"]);
+    expect(written.modRate).toBe(1.1);
+  });
+
+  // The counts are identical either way; lazer just measures them against 305
+  // per note instead of 300, which is what lazer itself shows the player.
+  it("measures accuracy on the scale of the client that recorded the play", async () => {
+    osuFetch.mockRejectedValue(new Error("404"));
+
+    await persistUploadedReplayDescription(VALID_ID, fakeParsed("d".repeat(32), [], 30_000_019), null);
+    const [, lazer] = putJsonArtifact.mock.calls[0] as unknown as [string, UploadedReplayDescription];
+
+    await persistUploadedReplayDescription(VALID_ID, fakeParsed("d".repeat(32), [], 20_231_019), null);
+    const [, stable] = putJsonArtifact.mock.calls[1] as unknown as [string, UploadedReplayDescription];
+
+    expect(lazer.judgements).toEqual(stable.judgements);
+    expect(lazer.accuracy).toBeLessThan(stable.accuracy);
+  });
+
+  it("stores no rate for a play at the mod's own default speed", async () => {
+    osuFetch.mockRejectedValue(new Error("404"));
+
+    await persistUploadedReplayDescription(
+      VALID_ID,
+      fakeParsed("d".repeat(32), [{ acronym: "DT", settings: { speed_change: 1.5 } }]),
+      null,
+    );
+
+    const [, written] = putJsonArtifact.mock.calls[0] as unknown as [string, UploadedReplayDescription];
+    expect(written.mods).toEqual(["DT"]);
+    expect(written.modRate).toBeUndefined();
   });
 });

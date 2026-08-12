@@ -2,6 +2,7 @@ import type { BeatmapChecksumLookupResult } from "./osu/replay";
 import { getPersistentCacheEntry, osuFetch, setPersistentCache } from "./api";
 import { parseUploadedReplayBuffer, type UploadedReplayParseResult } from "./replay-upload";
 import { getJsonArtifact, getUploadedReplayDescStorageKey, getUploadedReplayStorageKey, putJsonArtifact } from "./r2-cache";
+import { getManiaAccuracyFromCounts, getModDisplayList, scoreUsesLazerScoring } from "./score";
 import { normalizeUploadedReplayId, normalizeUploadedReplayFilename, readUploadedReplay } from "./uploaded-replay-store";
 
 // Uploaded replays are content-addressed by a random id, so a parsed description
@@ -13,6 +14,13 @@ import { normalizeUploadedReplayId, normalizeUploadedReplayFilename, readUploade
 const DESCRIPTION_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 const DESCRIPTION_UNRESOLVED_CACHE_TTL = 24 * 60 * 60 * 1000;
 const UNRESOLVED_BEATMAP_RETRY_MS = 24 * 60 * 60 * 1000;
+// A stored description otherwise lives forever, so bump this whenever the
+// derived fields change shape and each artifact re-parses its .osr once.
+// v2: mods come from a lazer replay's own list, so they carry a custom rate and
+// drop CL, where before they were whatever the legacy bitfield could express;
+// accuracy and grade follow the client that recorded the play instead of always
+// being measured on stable's scale.
+export const DESCRIPTION_VERSION = 2;
 
 // Uploaded replays are stored anonymously and content-addressed by a random id,
 // so there is no stored record of who uploaded them or which score they are.
@@ -47,18 +55,23 @@ export type UploadedReplayDescription = {
   totalScore: number;
   maxCombo: number;
   keyCount: number;
-  accuracy: number; // 0..1, stable 300-weighted scale
+  accuracy: number; // 0..1, on the scale the play's own client judges by
   grade: string;
   judgements: UploadedReplayJudgements;
   scoreId: number | null;
   originalFilename: string | null;
   beatmap: UploadedReplayBeatmap | null;
+  // A lazer custom rate, since `mods` is acronyms only and a 1.1x DT must not
+  // read back as the default 1.5x. Absent for every play at a default rate.
+  modRate?: number;
   // Both optional: artifacts written before these fields existed lack them
   // (those are always resolved, so neither field is ever needed for them).
   // The hash lets an unresolved description retry its beatmap lookup without
   // re-reading the .osr; computedAt is when that lookup last ran.
   beatmapHash?: string;
   computedAt?: number;
+  /** DESCRIPTION_VERSION at write time; absent means the original shape. */
+  version?: number;
 };
 
 // Node Buffers can be a view over a larger pooled ArrayBuffer, so copy out the
@@ -67,17 +80,24 @@ function toArrayBuffer(buffer: Buffer): ArrayBuffer {
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
 }
 
-// Stable osu!mania accuracy (300-weighted, MAX counts as 300), matching
-// calculateStableAccuracy() in score.ts.
-function stableManiaAccuracy(j: UploadedReplayJudgements): number {
-  const total = j.max + j.count300 + j.count200 + j.count100 + j.count50 + j.miss;
-  if (total <= 0) return 0;
-  return (j.max * 300 + j.count300 * 300 + j.count200 * 200 + j.count100 * 100 + j.count50 * 50) / (total * 300);
+// The .osr header counts are all the statistics an upload has, and lazer writes
+// its own judgements into those same legacy fields - so the counts are right for
+// either client and only the accuracy scale differs.
+function maniaAccuracy(j: UploadedReplayJudgements, isLazer: boolean): number {
+  return getManiaAccuracyFromCounts({
+    count_geki: j.max,
+    count_300: j.count300,
+    count_katu: j.count200,
+    count_100: j.count100,
+    count_50: j.count50,
+    count_miss: j.miss,
+  }, isLazer);
 }
 
-// Grade off the stable accuracy; silver ranks when a hidden-family mod is on.
-// Uploaded replays are completed plays, so this only derives the pass grade.
-function stableManiaGrade(accuracy: number, mods: string[]): string {
+// Grade off that accuracy; both clients use the same brackets, and silver ranks
+// when a hidden-family mod is on. Uploaded replays are completed plays, so this
+// only derives the pass grade.
+function maniaGrade(accuracy: number, mods: string[]): string {
   const silver = mods.some((mod) => mod === "HD" || mod === "FI" || mod === "FL");
   if (accuracy >= 1) return silver ? "XH" : "X";
   if (accuracy > 0.95) return silver ? "SH" : "S";
@@ -114,7 +134,7 @@ async function lookupUploadedReplayBeatmap(checksum: string): Promise<UploadedRe
 }
 
 function descriptionCacheKey(normalized: string): string {
-  return `uploaded-replay-desc:v1:${normalized}`;
+  return `uploaded-replay-desc:v${DESCRIPTION_VERSION}:${normalized}`;
 }
 
 // Memory tier + cross-instance R2 artifact, for resolved and unresolved
@@ -123,6 +143,20 @@ async function persistDescription(normalized: string, description: UploadedRepla
   const ttl = description.beatmap ? DESCRIPTION_CACHE_TTL : DESCRIPTION_UNRESOLVED_CACHE_TTL;
   await setPersistentCache(descriptionCacheKey(normalized), description, ttl);
   await putJsonArtifact(getUploadedReplayDescStorageKey(normalized), description);
+}
+
+// A description written by an older build: re-derive it from the .osr once and
+// overwrite in place, since the derived fields have changed shape since. An
+// unreadable or deleted file leaves the old artifact serving as-is.
+async function upgradeStoredDescription(
+  normalized: string,
+  stored: UploadedReplayDescription,
+): Promise<UploadedReplayDescription> {
+  if ((stored.version ?? 1) >= DESCRIPTION_VERSION) return refreshStoredDescription(normalized, stored);
+  const recomputed = await computeUploadedReplayDescription(normalized);
+  if (!recomputed) return refreshStoredDescription(normalized, stored);
+  await putJsonArtifact(getUploadedReplayDescStorageKey(normalized), recomputed);
+  return recomputed;
 }
 
 // An unresolved stored description: retry just the beatmap lookup once the
@@ -154,7 +188,7 @@ export async function describeUploadedReplayById(id: string): Promise<UploadedRe
 
   const stored = await getJsonArtifact<UploadedReplayDescription>(getUploadedReplayDescStorageKey(normalized));
   if (stored) {
-    const description = await refreshStoredDescription(normalized, stored);
+    const description = await upgradeStoredDescription(normalized, stored);
     const ttl = description.beatmap ? DESCRIPTION_CACHE_TTL : DESCRIPTION_UNRESOLVED_CACHE_TTL;
     await setPersistentCache(cacheKey, description, ttl);
     return description;
@@ -216,8 +250,11 @@ async function buildUploadedReplayDescription(
     count50: header.count50,
     miss: header.countMiss,
   };
-  const mods = parsed.mods.map((mod) => mod.acronym);
-  const accuracy = stableManiaAccuracy(judgements);
+  const modDisplay = getModDisplayList(parsed.mods);
+  const mods = modDisplay.map((mod) => mod.acronym);
+  const modRate = modDisplay.find((mod) => mod.rate != null)?.rate;
+  const isLazer = scoreUsesLazerScoring(null, header.gameVersion);
+  const accuracy = maniaAccuracy(judgements, isLazer);
 
   return {
     id: normalized,
@@ -227,13 +264,15 @@ async function buildUploadedReplayDescription(
     maxCombo: header.maxCombo,
     keyCount: parsed.replay.keyCount,
     accuracy,
-    grade: stableManiaGrade(accuracy, mods),
+    grade: maniaGrade(accuracy, mods),
     judgements,
     scoreId: parsed.scoreId,
     originalFilename,
+    ...(modRate != null ? { modRate } : {}),
     beatmap: await lookupUploadedReplayBeatmap(header.beatmapHash ?? ""),
     beatmapHash: header.beatmapHash ?? "",
     computedAt: Date.now(),
+    version: DESCRIPTION_VERSION,
   };
 }
 

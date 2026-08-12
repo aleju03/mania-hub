@@ -11,7 +11,7 @@ import { ReplayRecentlyViewed } from "#/components/replay/ReplayRecentlyViewed";
 import { ReplaySideBySidePicker } from "#/components/replay/ReplaySideBySidePicker";
 import { getCountryName } from "#/lib/country";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "#/lib/format";
-import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp, scoreHasReplay } from "#/lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp, scoreHasReplay, withModRate } from "#/lib/score";
 import { getReplayScoreAvailability } from "#/lib/replay-score-availability";
 import { searchBeatmaps, getUserBeatmapScores } from "#/lib/osu";
 import { filterBeatmapSearchResults } from "#/lib/beatmap-search";
@@ -258,7 +258,7 @@ function communityUploadToRecentEntry(upload: CommunityUploadEntry): RecentRepla
       : undefined,
     grade: upload.grade,
     accuracy: upload.accuracy,
-    mods: upload.mods.map((acronym) => ({ acronym })),
+    mods: withModRate(upload.mods, upload.modRate),
     viewedAt: upload.uploadedAt,
   };
 }

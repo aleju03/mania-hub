@@ -1,6 +1,7 @@
 import type { OsuMod } from "./types";
 import type { ServerReplay } from "./replay-types";
 import { decodeStableManiaReplayFrames, getStableManiaReplayScrollSpeedScale } from "./replay-frames";
+import { readLazerReplayMods } from "./replay-lazer-score";
 
 const MANIA_RULESET_ID = 3;
 
@@ -41,6 +42,14 @@ export interface UploadedReplayParseResult {
   replay: ServerReplay;
   mods: OsuMod[];
   scoreId: number | null;
+}
+
+// A lazer replay records its mods twice: the legacy bitfield in the header, and
+// the real list (with settings) in the trailing score info block. Prefer the
+// list - the bitfield flattens a custom rate into plain DT and drops anything
+// stable had no bit for. Stable replays have no block and keep the bitfield.
+export async function readUploadedReplayMods(buffer: ArrayBuffer, modsUsed: number): Promise<OsuMod[]> {
+  return (await readLazerReplayMods(buffer)) ?? stableModBitmaskToMods(modsUsed);
 }
 
 export function stableModBitmaskToMods(modsUsed: number): OsuMod[] {
@@ -151,7 +160,7 @@ export async function parseUploadedReplayBuffer(buffer: ArrayBuffer): Promise<Up
   const scoreId = Number(info?.id ?? 0);
   return {
     replay,
-    mods: stableModBitmaskToMods(modsUsed),
+    mods: await readUploadedReplayMods(buffer, modsUsed),
     scoreId: Number.isSafeInteger(scoreId) && scoreId > 0 ? scoreId : null,
   };
 }
