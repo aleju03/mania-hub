@@ -30,3 +30,19 @@ export function columnFitScale(paneWidth: number): number {
   if (!Number.isFinite(paneWidth) || paneWidth <= 0) return 1;
   return Math.min(1, paneWidth / needed);
 }
+
+/** Below this share of osu!'s size its 14px text drops under 10px on screen. */
+const READABLE_FIT_SCALE = 0.7;
+
+/**
+ * Whether a pane is too narrow to fit a profile into and still be read, so the
+ * editor should open it at osu!'s own size and scroll sideways instead.
+ *
+ * A phone fits the column at around 0.4, where every line is a few pixels tall.
+ * Scrolling a full-size column shows less of the page at once but keeps it
+ * exactly as wide as osu! draws it, which is the more useful half of the deal.
+ * A narrow desktop window stays fitted.
+ */
+export function shouldOpenAtActualSize(paneWidth: number): boolean {
+  return columnFitScale(paneWidth) < READABLE_FIT_SCALE;
+}

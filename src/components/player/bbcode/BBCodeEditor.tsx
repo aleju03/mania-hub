@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
   type ChangeEvent as ReactChangeEvent,
   type ClipboardEvent as ReactClipboardEvent,
   type DragEvent as ReactDragEvent,
@@ -16,6 +17,8 @@ import {
 import {
   ALargeSmall,
   AlignCenter,
+  AlignLeft,
+  AlignRight,
   Bold,
   Braces,
   Check,
@@ -53,22 +56,35 @@ import {
   X,
   Youtube,
 } from "lucide-react";
-import { buildGradientBBCode, containsBBCode, gradientCharColors, normalizeHexColor, parseYoutubeInput, shiftHexHue, type BBSourceSpan } from "../../../lib/bbcode";
+import { buildGradientBBCode, containsBBCode, gradientCharColors, normalizeHexColor, parseYoutubeInput, shiftHexHue, type BBAlign, type BBSourceSpan } from "../../../lib/bbcode";
 import {
+  ALIGN_SELECTOR,
   applyColorSequence,
   bbcodeToEditableHtml,
   captureColorSequence,
   cssColorToBB,
   distributeInlineWrap,
   editableWrapMarkup,
+  elementAlign,
   escapeBBHtml,
   serializeBBCodeDom,
   type EditableWrapKind,
 } from "../../../lib/bbcode-dom";
 import { getUser, searchUsers } from "../../../lib/osu";
-import { fetchImageBlobViaProxy, isUploadableImage, uploadImageToCatbox } from "../../../lib/catbox-upload";
-import { resizeImageBlobToWidth } from "../../../lib/image-resize";
-import { OSU_PROFILE_COLUMN_WIDTH, columnFitScale } from "../../../lib/bbcode-layout";
+import {
+  fetchImageBlobViaProxy,
+  isUploadableImage,
+  MAX_IMAGE_UPLOAD_BYTES,
+  uploadImageToCatbox,
+} from "../../../lib/catbox-upload";
+import {
+  encodeImageAtDisplayWidth,
+  measureImageContent,
+  type EncodePlan,
+  type ImageAlign,
+  type ImageContentRect,
+} from "../../../lib/image-resize";
+import { OSU_PROFILE_COLUMN_WIDTH, columnFitScale, shouldOpenAtActualSize } from "../../../lib/bbcode-layout";
 import { pendingBlobUrls, stripPendingImages } from "../../../lib/bbcode-pending-images";
 import { SearchInput } from "../../ui/SearchInput";
 import { BBCodePreview } from "./BBCodePreview";
@@ -76,6 +92,9 @@ import { BBCodeContextMenu, type ContextMenuItem, type ContextMenuState } from "
 import { ImageEditorModal, type ImageEditorSource } from "./ImageEditorModal";
 
 const DRAFT_KEY_PREFIX = "mania-hub-bbcode-draft-v1:";
+// Fit-the-pane or osu!'s own size, kept out of the draft so it survives a reset
+// and follows the device rather than the page being written.
+const COLUMN_ZOOM_KEY = "mania-hub-bbcode-zoom-v1";
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
 const VISUAL_SYNC_DEBOUNCE_MS = 300;
 // How long a resize may run before it is worth saying so. Below this it reads
@@ -226,7 +245,16 @@ function climbForValue<T>(node: Node | null, root: HTMLElement, read: (el: HTMLE
 // from anything serialized/persisted so a stray token never reaches output.
 // editableWrapMarkup kinds that render as block elements (their open/close can
 // legitimately contain block lines); everything else is an inline wrap.
-const BLOCK_WRAP_KINDS = new Set<EditableWrapKind>(["heading", "centre", "notice", "quote", "codeblock", "box"]);
+const BLOCK_WRAP_KINDS = new Set<EditableWrapKind>([
+  "heading", "centre", "left", "right", "notice", "quote", "codeblock", "box",
+]);
+
+/** The three toolbar wraps that set alignment, in EditableWrapKind terms. */
+const ALIGN_WRAP_KINDS: Partial<Record<EditableWrapKind, BBAlign>> = {
+  centre: "centre",
+  left: "left",
+  right: "right",
+};
 
 const UPLOAD_TOKEN_PATTERN = /\[uploading image #up-\d+\]/g;
 function stripUploadTokens(value: string): string {
@@ -237,7 +265,7 @@ function stripUploadTokens(value: string): string {
 // uploaded and swapped for real URLs. Blob URLs are session-only, so they're
 // stripped from the saved draft (a reloaded blob URL points at nothing).
 
-function readDraft(key: string): string | null {
+function readStored(key: string): string | null {
   if (typeof window === "undefined") return null;
   try {
     return window.localStorage.getItem(key);
@@ -246,7 +274,7 @@ function readDraft(key: string): string | null {
   }
 }
 
-function writeDraft(key: string, value: string) {
+function writeStored(key: string, value: string) {
   try {
     window.localStorage.setItem(key, value);
   } catch {
@@ -254,7 +282,7 @@ function writeDraft(key: string, value: string) {
   }
 }
 
-function clearDraft(key: string) {
+function clearStored(key: string) {
   try {
     window.localStorage.removeItem(key);
   } catch {
@@ -336,6 +364,80 @@ function addImagemapHandles(areaEl: HTMLElement) {
   }
 }
 
+/** What a resized image was cut from, and what the file on screen is made of. */
+interface ImageOrigin {
+  /** The bytes a re-cut goes back to, at their own resolution. */
+  blob: Blob;
+  /** Width of the picture inside those bytes, margins excluded. */
+  naturalWidth: number;
+  /** Where the picture sits inside `blob`, when that file has margins of its own. */
+  sourceRect?: ImageContentRect;
+  /** Geometry of the file currently at this src, when it carries margins. */
+  layout?: EncodePlan;
+}
+
+/**
+ * Share of an image's box the picture fills.
+ *
+ * All of it, unless the file was padded to place a smaller picture in the
+ * column - then the margins are part of the box and nothing on screen should be
+ * measured against its edges.
+ */
+function contentRatios(layout: EncodePlan | undefined): { left: number; width: number } {
+  if (!layout?.padded || layout.fileWidth <= 0) return { left: 0, width: 1 };
+  return { left: layout.contentLeft / layout.fileWidth, width: layout.contentWidth / layout.fileWidth };
+}
+
+/**
+ * True when nothing else sits on the image's line.
+ *
+ * Padding takes an image's box out to the full column, so it is only safe where
+ * nothing shares the row: a line of badges or an image set in a sentence would
+ * be pushed apart by margins that are invisible but still take up space.
+ */
+/**
+ * Whether an element opens a line of its own on the editable surface.
+ *
+ * Read off the rendered box rather than a tag list, so a [centre] (a <center>),
+ * a [notice] (a styled div) and a contentEditable line div all count without
+ * having to be enumerated.
+ */
+function isBlockLevel(el: Element): boolean {
+  const display = window.getComputedStyle(el).display;
+  return display !== "inline" && display !== "inline-block" && display !== "contents";
+}
+
+function isAloneOnItsLine(node: HTMLElement): boolean {
+  const scan = (key: "previousSibling" | "nextSibling"): boolean => {
+    for (let sibling = node[key]; sibling; sibling = sibling[key]) {
+      if (sibling.nodeType === Node.TEXT_NODE) {
+        if ((sibling.textContent ?? "").trim() !== "") return false;
+        continue;
+      }
+      if (sibling.nodeType !== Node.ELEMENT_NODE) continue;
+      return (sibling as HTMLElement).tagName === "BR";
+    }
+    return true;
+  };
+  return scan("previousSibling") && scan("nextSibling");
+}
+
+/** Which side a padded file's own margins already hold its picture to. */
+function marginAlign(layout: EncodePlan): ImageAlign {
+  const margin = layout.fileWidth - layout.contentWidth;
+  if (layout.contentLeft <= 0) return "left";
+  if (layout.contentLeft >= margin) return "right";
+  return "center";
+}
+
+/** Which side of the column the picture is held to, so margins go on the other. */
+function effectiveAlign(node: HTMLElement): ImageAlign {
+  const align = window.getComputedStyle(node.parentElement ?? node).textAlign;
+  if (align === "center") return "center";
+  if (align === "right" || align === "end") return "right";
+  return "left";
+}
+
 /**
  * Hands layout back to the image's own pixels after a drag.
  *
@@ -370,7 +472,7 @@ async function preloadImage(src: string): Promise<void> {
 
 function removeImageResizeHandle(frame: HTMLElement | null) {
   frame
-    ?.querySelectorAll(".bbcode-image-resize-handle, .bbcode-image-resize-readout")
+    ?.querySelectorAll(".bbcode-image-resize-handle, .bbcode-image-resize-readout, .bbcode-image-outline")
     .forEach((node) => node.remove());
 }
 
@@ -476,6 +578,51 @@ function ToolButton({
   );
 }
 
+/**
+ * Where the pane is looking, when the column is wider than the pane.
+ *
+ * At osu!'s own size on a phone the pane is a window onto a page nearly three
+ * times as wide, and a page that is centred in its column leaves the two edges
+ * off screen with nothing to say they are there. This is that "there is more
+ * either way, and you are here" - a plain scrollbar, since the browser only
+ * flashes its own while a touch scroll is actually moving.
+ */
+function ColumnScrollPosition({ frameRef }: { frameRef: RefObject<HTMLDivElement | null> }) {
+  const [overflows, setOverflows] = useState(false);
+  const thumbRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const update = () => {
+      const hidden = frame.scrollWidth - frame.clientWidth;
+      setOverflows((prev) => (prev === hidden > 1 ? prev : hidden > 1));
+      const thumb = thumbRef.current;
+      if (!thumb || hidden <= 1) return;
+      thumb.style.width = `${(frame.clientWidth / frame.scrollWidth) * 100}%`;
+      thumb.style.left = `${(frame.scrollLeft / frame.scrollWidth) * 100}%`;
+    };
+    update();
+    frame.addEventListener("scroll", update, { passive: true });
+    // The frame keeps its size when the column's zoom changes, so watch the
+    // column itself as well or the thumb would keep a stale width.
+    const observer = new ResizeObserver(update);
+    observer.observe(frame);
+    if (frame.firstElementChild) observer.observe(frame.firstElementChild);
+    return () => {
+      frame.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, [frameRef, overflows]);
+
+  if (!overflows) return null;
+  return (
+    <div className="relative h-[3px] mx-3 mb-1 rounded-full bg-osu-b3/40">
+      <div ref={thumbRef} className="absolute inset-y-0 rounded-full bg-osu-f1/60" />
+    </div>
+  );
+}
+
 function ToolDivider() {
   return <div className="w-px h-5 bg-osu-b3/60 mx-1 shrink-0" />;
 }
@@ -520,11 +667,23 @@ export function BBCodeEditor({
   const [editMode, setEditMode] = useState<EditMode>("visual");
   const [dialog, setDialog] = useState<ToolDialog | null>(null);
   const [mobilePane, setMobilePane] = useState<"write" | "preview">("write");
+  // "fit" shrinks osu!'s 890px column into the pane, which on a phone leaves it
+  // too small to read; "full" shows the column at osu!'s size and scrolls.
+  const [columnZoom, setColumnZoom] = useState<"fit" | "full">("fit");
+  // How far the column has to shrink to fit. Below 1 the pane is narrower than
+  // a profile, which is the only time the zoom is worth a control.
+  const [fitScale, setFitScale] = useState(1);
+  // Set once the zoom is settled, by a stored choice or by the pane being too
+  // narrow to read, so measuring the pane again never overrides it.
+  const zoomChosenRef = useRef(false);
   const [copied, setCopied] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [loadingUserPage, setLoadingUserPage] = useState(false);
   const [loadStatus, setLoadStatus] = useState<{ kind: "loaded" | "empty" | "error"; name?: string } | null>(null);
   const [inlineStates, setInlineStates] = useState({ bold: false, italic: false, underline: false, strike: false });
+  // Alignment of the text under the caret. Nothing around it means left, which
+  // is what the page does anyway, so the left button lights up for plain text.
+  const [selectionAlign, setSelectionAlign] = useState<BBAlign>("left");
   const [imagemapSelection, setImagemapSelection] = useState<ImagemapSelection | null>(null);
   const [linkSelection, setLinkSelection] = useState<LinkSelection | null>(null);
   const [imageSelection, setImageSelection] = useState<ImageSelection | null>(null);
@@ -558,13 +717,19 @@ export function BBCodeEditor({
   const previewFrameRef = useRef<HTMLDivElement | null>(null);
   const resizeHandleRef = useRef<HTMLSpanElement | null>(null);
   const resizeReadoutRef = useRef<HTMLSpanElement | null>(null);
+  const resizeOutlineRef = useRef<HTMLSpanElement | null>(null);
+  const realignPaddedImageRef = useRef<((img: HTMLImageElement) => void) | null>(null);
   const resizeStatusTimerRef = useRef<number | null>(null);
   const imageResizeRef = useRef<{
     img: HTMLImageElement;
     startX: number;
+    /** Width of the picture itself, which is what the drag is sizing. */
     startWidth: number;
+    width: number;
     minWidth: number;
     maxWidth: number;
+    /** Share of the image box the picture fills, so a padded file previews right. */
+    contentRatio: number;
     /** Pointer px per column px, so a scaled-down column still tracks the pointer 1:1. */
     scale: number;
   } | null>(null);
@@ -572,7 +737,7 @@ export function BBCodeEditor({
   // these rather than to whatever is on screen, so dragging an image small and
   // then large again re-cuts from the full-resolution original instead of
   // upscaling a thumbnail - and repeated nudges cost no quality.
-  const resizeOriginsRef = useRef<Map<string, { blob: Blob; naturalWidth: number }>>(new globalThis.Map());
+  const resizeOriginsRef = useRef<Map<string, ImageOrigin>>(new globalThis.Map());
   const imageEditorTargetRef = useRef<HTMLImageElement | null>(null);
   const replaceTargetRef = useRef<HTMLImageElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -617,7 +782,7 @@ export function BBCodeEditor({
   useEffect(() => {
     if (draftRestoredRef.current) return;
     draftRestoredRef.current = true;
-    const draft = readDraft(draftKey);
+    const draft = readStored(draftKey);
     if (draft == null || draft === baseSource) return;
     setRestoredDraft(true);
     updateSource(draft);
@@ -786,9 +951,15 @@ export function BBCodeEditor({
   }, []);
 
   // After a wrap replaces a selected image node, re-point to the fresh element.
+  // A wrap can also be [centre], which an image sized by margins cannot answer
+  // without re-cutting them, so the realign below is part of finishing the wrap.
   const resyncImageAfterWrap = useCallback(() => {
     const stale = imageElementRef.current;
-    if (!stale || stale.isConnected) return;
+    if (!stale) return;
+    if (stale.isConnected) {
+      realignPaddedImageRef.current?.(stale);
+      return;
+    }
     const fresh = visualRef.current?.querySelector<HTMLImageElement>("img.is-selected");
     if (!fresh) {
       clearImageSelection();
@@ -799,6 +970,7 @@ export function BBCodeEditor({
       src: fresh.getAttribute("src") ?? "",
       href: fresh.closest<HTMLAnchorElement>('a[data-bb="url"]')?.getAttribute("href") ?? "",
     });
+    realignPaddedImageRef.current?.(fresh);
   }, [clearImageSelection]);
 
   const selectImagemapArea = useCallback((areaEl: HTMLElement) => {
@@ -1055,7 +1227,7 @@ export function BBCodeEditor({
   }, [clearImagemapSelection, flushVisual]);
 
   useEffect(() => {
-    const handle = window.setTimeout(() => writeDraft(draftKey, stripPendingImages(stripUploadTokens(source))), DRAFT_SAVE_DEBOUNCE_MS);
+    const handle = window.setTimeout(() => writeStored(draftKey, stripPendingImages(stripUploadTokens(source))), DRAFT_SAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(handle);
   }, [draftKey, source]);
 
@@ -1103,6 +1275,8 @@ export function BBCodeEditor({
       selectionSizeRef.current = size;
       setSelectionColor((prev) => (prev === color ? prev : color));
       setSelectionSize((prev) => (prev === size ? prev : size));
+      const align = climbForValue(node, el, elementAlign) ?? "left";
+      setSelectionAlign((prev) => (prev === align ? prev : align));
       // Show the link under the caret in the inspector (without stealing clicks).
       const anchor = climbForValue<HTMLAnchorElement>(node, el, (cur) =>
         cur.tagName === "A" && cur.getAttribute("data-bb") === "url" ? (cur as HTMLAnchorElement) : null,
@@ -1152,6 +1326,39 @@ export function BBCodeEditor({
       selection.addRange(range);
     }
   }, []);
+
+  /** The innermost element around the caret matching `selector`, if any. */
+  const closestAtCaret = useCallback((selector: string): Element | null => {
+    const surface = visualRef.current;
+    if (!surface) return null;
+    const node = window.getSelection()?.focusNode ?? null;
+    const from = node instanceof Element ? node : node?.parentElement ?? null;
+    if (!from || !surface.contains(from)) return null;
+    return from.closest(selector);
+  }, []);
+
+  /** How the text around the caret is aligned; nothing around it means left. */
+  const alignAtCaret = useCallback((): BBAlign => {
+    const el = closestAtCaret(ALIGN_SELECTOR);
+    return (el && elementAlign(el)) || "left";
+  }, [closestAtCaret]);
+
+  /**
+   * Wraps that would not change anything on the page, so they are skipped
+   * rather than written into the source.
+   *
+   * osu! reads each of its tags with one pass, so a [centre] inside a [centre]
+   * is not a tag there - it prints as its literal text (NESTABLE_TAGS in
+   * lib/bbcode.ts). Aligning text to the alignment it already has is that case,
+   * and so is a [heading] inside a heading. Alignments differing from each
+   * other still nest: [left] inside [centre] is how a stretch comes back left.
+   */
+  const isRedundantWrap = useCallback((kind: EditableWrapKind): boolean => {
+    const align = ALIGN_WRAP_KINDS[kind];
+    if (align) return alignAtCaret() === align;
+    if (kind === "heading") return closestAtCaret("h1,h2,h3,h4,h5,h6") !== null;
+    return false;
+  }, [alignAtCaret, closestAtCaret]);
 
   const restoreVisualRange = useCallback(() => {
     const el = visualRef.current;
@@ -1266,21 +1473,107 @@ export function BBCodeEditor({
     selection.addRange(range);
   }, []);
 
+  /**
+   * Grows the selection to the whole lines it touches, for block wraps.
+   *
+   * [centre] and the rest are divs on the profile: they take whole lines, they
+   * cannot hold three words out of a sentence. Chrome agrees in its own way -
+   * insertHTML given a block for a part-of-a-line selection silently flattens
+   * it into a styled span, which used to lose the tag and leave a stray colour
+   * behind. Rounding out to the line boundaries (a <br>, or the edge of the
+   * block the line sits in) is what the wrap means anyway.
+   */
+  const expandSelectionOverLines = useCallback(() => {
+    const el = visualRef.current;
+    const selection = window.getSelection();
+    if (!el || !selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (!el.contains(range.commonAncestorContainer)) return;
+
+    // The line runs between <br>s inside whichever block holds the caret, so
+    // never step out of that block: a line of a [notice] stays in the notice.
+    const blockOf = (node: Node): Element => {
+      let cur: Node | null = node.nodeType === 3 ? node.parentElement : node;
+      while (cur && cur !== el && !isBlockLevel(cur as Element)) cur = cur.parentElement;
+      return (cur as Element) ?? el;
+    };
+    const startBlock = blockOf(range.startContainer);
+    const endBlock = blockOf(range.endContainer);
+    // A selection crossing block edges is already whole lines; leave it be.
+    if (startBlock !== endBlock) return;
+
+    const children = startBlock.childNodes;
+    /** Which child of the block a range boundary falls in, walking `dir`. */
+    const childAt = (container: Node, offset: number, dir: -1 | 1): number => {
+      if (container === startBlock) {
+        // The boundary sits between children; take the one on the side walked.
+        return dir < 0 ? offset - 1 : Math.min(offset, children.length - 1);
+      }
+      let node: Node = container;
+      while (node.parentNode && node.parentNode !== startBlock) node = node.parentNode;
+      return Array.prototype.indexOf.call(children, node);
+    };
+
+    let start = 0;
+    for (let i = childAt(range.startContainer, range.startOffset, -1); i >= 0; i -= 1) {
+      if (children[i]?.nodeName === "BR") { start = i + 1; break; }
+    }
+    let end = children.length;
+    for (let i = childAt(range.endContainer, range.endOffset, 1); i >= 0 && i < children.length; i += 1) {
+      if (children[i]?.nodeName === "BR") { end = i; break; }
+    }
+    range.setStart(startBlock, start);
+    range.setEnd(startBlock, Math.max(start, end));
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, []);
+
+  /**
+   * When the line being aligned is all there is inside an alignment block, the
+   * selection is grown to that block so the new one replaces it, instead of
+   * leaving [left] wrapped around a [right] every time the button changes.
+   * Returns the block whose contents the caller should re-wrap.
+   */
+  const alignedBlockToReplace = useCallback((): Element | null => {
+    const surface = visualRef.current;
+    const selection = window.getSelection();
+    if (!surface || !selection || selection.rangeCount === 0) return null;
+    const wrapper = closestAtCaret(ALIGN_SELECTOR);
+    if (!wrapper || !surface.contains(wrapper)) return null;
+    const cover = document.createRange();
+    cover.selectNodeContents(wrapper);
+    if (cover.toString() !== selection.getRangeAt(0).toString()) return null;
+    const whole = document.createRange();
+    whole.selectNode(wrapper);
+    selection.removeAllRanges();
+    selection.addRange(whole);
+    return wrapper;
+  }, [closestAtCaret]);
+
   const wrapVisual = useCallback((kind: EditableWrapKind, param: string | undefined, placeholder: string) => {
     // A selected image has no text range, so target its DOM node directly;
     // otherwise the wrap would drop `placeholder` at a stray caret.
     const onImage = selectImageRange();
     ensureVisualSelection();
-    expandSelectionOverInlineWrappers();
-    const inner = visualSelectionHtml() || escapeBBHtml(placeholder);
+    if (isRedundantWrap(kind)) {
+      // Nothing moved, but a selected image still owns the handle and needs it
+      // put back where it was before selectImageRange took the selection.
+      if (onImage) resyncImageAfterWrap();
+      return;
+    }
+    const isBlock = BLOCK_WRAP_KINDS.has(kind);
+    if (isBlock && !onImage) expandSelectionOverLines();
+    else expandSelectionOverInlineWrappers();
+    const replacing = ALIGN_WRAP_KINDS[kind] ? alignedBlockToReplace() : null;
+    const inner = replacing ? replacing.innerHTML : (visualSelectionHtml() || escapeBBHtml(placeholder));
     const { open, close } = editableWrapMarkup(kind, param);
     // Block wraps ([centre]/[quote]/[box]/...) legitimately contain block lines;
     // inline wraps ([size]/[spoiler]/[c]) must push into each line instead, or a
     // multi-line selection gets wiped by execCommand("insertHTML").
-    const html = BLOCK_WRAP_KINDS.has(kind) ? open + inner + close : distributeInlineWrap(inner, open, close);
+    const html = isBlock ? open + inner + close : distributeInlineWrap(inner, open, close);
     insertVisualHtml(html);
     if (onImage) resyncImageAfterWrap();
-  }, [ensureVisualSelection, expandSelectionOverInlineWrappers, insertVisualHtml, resyncImageAfterWrap, selectImageRange, visualSelectionHtml]);
+  }, [alignedBlockToReplace, ensureVisualSelection, expandSelectionOverInlineWrappers, expandSelectionOverLines, insertVisualHtml, isRedundantWrap, resyncImageAfterWrap, selectImageRange, visualSelectionHtml]);
 
   const execVisual = useCallback((command: string) => {
     selectImageRange();
@@ -1575,7 +1868,7 @@ export function BBCodeEditor({
     setConfirmReset(false);
     setRestoredDraft(false);
     updateSource(baseSource);
-    clearDraft(draftKey);
+    clearStored(draftKey);
     setVisualEpoch((epoch) => epoch + 1);
   }, [baseSource, confirmReset, draftKey, updateSource]);
 
@@ -1602,7 +1895,7 @@ export function BBCodeEditor({
       setRestoredDraft(false);
       setConfirmReset(false);
       updateSource(raw);
-      clearDraft(draftKey);
+      clearStored(draftKey);
       setVisualEpoch((epoch) => epoch + 1);
       const name = fetched.username || picked.username;
       setLoadStatus(raw.trim() ? { kind: "loaded", name } : { kind: "empty", name });
@@ -1696,7 +1989,8 @@ export function BBCodeEditor({
   }, []);
 
   // The handle lives in the frame, which is the scroller and is not zoomed, so
-  // its coordinates are plain pointer-space pixels.
+  // its coordinates are plain pointer-space pixels. A padded file's box runs
+  // wider than the picture in it, so everything here is drawn to the picture.
   const positionResizeHandle = useCallback(() => {
     const frame = visualFrameRef.current;
     const img = imageElementRef.current;
@@ -1704,14 +1998,27 @@ export function BBCodeEditor({
     if (!frame || !img || !handle || !img.isConnected) return;
     const frameRect = frame.getBoundingClientRect();
     const imgRect = img.getBoundingClientRect();
-    const left = imgRect.right - frameRect.left - frame.clientLeft + frame.scrollLeft;
-    const top = imgRect.bottom - frameRect.top - frame.clientTop + frame.scrollTop;
-    handle.style.left = `${left}px`;
-    handle.style.top = `${top}px`;
+    // The file behind the image is the same one all through a drag, so its
+    // margins keep their share of the box however wide the box is stretched.
+    const ratios = contentRatios(resizeOriginsRef.current.get(img.getAttribute("src") ?? "")?.layout);
+    const offsetLeft = frameRect.left + frame.clientLeft - frame.scrollLeft;
+    const offsetTop = frameRect.top + frame.clientTop - frame.scrollTop;
+    const contentLeft = imgRect.left + imgRect.width * ratios.left - offsetLeft;
+    const contentRight = contentLeft + imgRect.width * ratios.width;
+    const bottom = imgRect.bottom - offsetTop;
+    handle.style.left = `${contentRight}px`;
+    handle.style.top = `${bottom}px`;
     const readout = resizeReadoutRef.current;
     if (readout) {
-      readout.style.left = `${left}px`;
-      readout.style.top = `${top}px`;
+      readout.style.left = `${contentRight}px`;
+      readout.style.top = `${bottom}px`;
+    }
+    const outline = resizeOutlineRef.current;
+    if (outline) {
+      outline.style.left = `${contentLeft}px`;
+      outline.style.top = `${imgRect.top - offsetTop}px`;
+      outline.style.width = `${imgRect.width * ratios.width}px`;
+      outline.style.height = `${imgRect.height}px`;
     }
   }, []);
 
@@ -1722,7 +2029,10 @@ export function BBCodeEditor({
     // scaled down to fit the pane, so convert before applying the delta.
     const delta = (event.clientX - drag.startX) / drag.scale;
     const next = Math.round(Math.max(drag.minWidth, Math.min(drag.maxWidth, drag.startWidth + delta)));
-    drag.img.style.width = `${next}px`;
+    drag.width = next;
+    // The box is what CSS can be given, and on a padded file the picture is only
+    // part of it, so the box is stretched by however much margin it carries.
+    drag.img.style.width = `${next / drag.contentRatio}px`;
     drag.img.style.height = "auto";
     positionResizeHandle();
     const readout = resizeReadoutRef.current;
@@ -1740,9 +2050,10 @@ export function BBCodeEditor({
     if (readout) readout.style.display = "none";
     if (!drag) return;
     const img = drag.img;
-    // offsetWidth is the column-space width; getBoundingClientRect would be the
-    // scaled-to-fit one, which is not the number of pixels we want to encode.
-    const targetWidth = img.offsetWidth;
+    // The drag sizes the picture, in column px. That is not the image box on a
+    // padded file, and not the box on screen either, which may be scaled to fit
+    // the pane, so it is tracked through the drag rather than measured here.
+    const targetWidth = drag.width;
     const currentSrc = img.getAttribute("src") ?? "";
     // A click that didn't really drag shouldn't re-encode (and downscale) the image.
     if (!currentSrc || targetWidth < 1 || Math.abs(targetWidth - drag.startWidth) < 2) {
@@ -1750,6 +2061,11 @@ export function BBCodeEditor({
       window.requestAnimationFrame(positionResizeHandle);
       return;
     }
+    // Margins can only be added where nothing else sits on the image's line,
+    // and they go opposite whichever side the column holds the picture to.
+    const node = img.closest<HTMLElement>('a[data-bb="url"]') ?? img;
+    const pad = isAloneOnItsLine(node) && !img.closest(".imagemap");
+    const align = effectiveAlign(node);
     // The dragged size stays pinned on screen until the re-encoded file has
     // decoded in its place. Releasing it here instead would put the old, larger
     // image back for however long the re-encode takes, and then snap.
@@ -1766,20 +2082,38 @@ export function BBCodeEditor({
         // be read back through our origin, because a canvas cannot read the
         // pixels of a cross-origin image without being tainted by them. This
         // downloads the file; nothing is uploaded until Copy BBCode.
-        const source = origin?.blob
-          ?? pendingUploadsRef.current.get(currentSrc)
-          ?? await fetchImageBlobViaProxy(currentSrc).catch(() => {
-            throw new Error("Couldn't read the original image to resize it. Its host didn't answer.");
-          });
-        const resized = await resizeImageBlobToWidth(source, targetWidth);
-        const blobUrl = registerPendingImage(resized);
+        const staged = origin?.blob ?? pendingUploadsRef.current.get(currentSrc);
+        const source = staged ?? await fetchImageBlobViaProxy(currentSrc).catch(() => {
+          throw new Error("Couldn't read the original image to resize it. Its host didn't answer.");
+        });
+        // A file read back off a host may be one of ours, already carrying
+        // margins. The drag then sized its box, and the picture inside only
+        // ever filled the share of that box the margins leave over.
+        let sourceRect = origin?.sourceRect;
+        let displayWidth = targetWidth;
+        if (!staged) {
+          const measured = await measureImageContent(source);
+          if (measured.content.width > 0 && measured.content.width < measured.width) {
+            sourceRect = measured.content;
+            displayWidth = Math.max(1, Math.round(targetWidth * (measured.content.width / measured.width)));
+          }
+        }
+        let encoded = await encodeImageAtDisplayWidth(source, displayWidth, { align, pad, sourceRect });
+        // Transparent margins cost a PNG almost nothing, but a padded photo can
+        // still come out past the upload cap; then the smaller file is the one
+        // that can be posted at all.
+        if (encoded.padded && encoded.blob.size > MAX_IMAGE_UPLOAD_BYTES) {
+          encoded = await encodeImageAtDisplayWidth(source, displayWidth, { align, pad: false, sourceRect });
+        }
+        const blobUrl = registerPendingImage(encoded.blob);
         // Carry the original bytes over to the new blob URL so the next drag
-        // still cuts from full resolution instead of from this smaller copy.
-        // naturalWidth has to be read before the swap, while it still describes
-        // the file this image was cut from.
-        resizeOriginsRef.current.set(blobUrl, origin ?? {
-          blob: source,
-          naturalWidth: img.naturalWidth || targetWidth,
+        // still cuts from full resolution instead of from this smaller copy,
+        // along with what the file that is going on screen is made of.
+        resizeOriginsRef.current.set(blobUrl, {
+          blob: origin?.blob ?? source,
+          naturalWidth: origin?.naturalWidth || sourceRect?.width || img.naturalWidth || targetWidth,
+          sourceRect,
+          layout: encoded.padded ? encoded : undefined,
         });
         await preloadImage(blobUrl);
         if (!img.isConnected) {
@@ -1787,8 +2121,9 @@ export function BBCodeEditor({
           return;
         }
         // Swap and release together, with the new pixels already decoded. The
-        // file is exactly targetWidth px wide, so handing layout back to its
-        // natural size is invisible: the image never leaves the dragged size.
+        // file lands the picture at exactly the dragged width once the column
+        // has fit it, so handing layout back to the file's own size is
+        // invisible: the image never leaves the size it was dragged to.
         img.setAttribute("src", blobUrl);
         endResizePreview(img);
         // Only now is the old blob safe to revoke - doing it while it was still
@@ -1821,25 +2156,30 @@ export function BBCodeEditor({
     event.stopPropagation(); // keep the surface's pointerdown from re-selecting/clearing
     const img = imageElementRef.current;
     if (!img) return;
-    // Everything below is in column pixels - the pixels the encoder will write
-    // and osu! will lay out - not in whatever the pane is currently scaled to.
-    const startWidth = img.offsetWidth;
+    // Everything below is in column pixels - the width osu! will lay the picture
+    // out at - not in whatever the pane is currently scaled to, and not in the
+    // image box either, which on a padded file is wider than the picture.
+    const origin = resizeOriginsRef.current.get(img.getAttribute("src") ?? "");
+    const ratios = contentRatios(origin?.layout);
+    const boxWidth = img.offsetWidth;
+    const startWidth = Math.max(1, Math.round(boxWidth * ratios.width));
     const rect = img.getBoundingClientRect();
-    const scale = startWidth > 0 ? rect.width / startWidth : 1;
+    const scale = boxWidth > 0 ? rect.width / boxWidth : 1;
     // Don't upscale past the source's own pixels (that only adds blur), and
     // don't offer a width past the column, where osu! would clip it anyway.
-    const origin = resizeOriginsRef.current.get(img.getAttribute("src") ?? "");
     const sourcePixels = origin?.naturalWidth || img.naturalWidth || OSU_PROFILE_COLUMN_WIDTH;
     imageResizeRef.current = {
       img,
       startX: event.clientX,
       startWidth,
+      width: startWidth,
       minWidth: 40,
       maxWidth: Math.max(40, Math.min(OSU_PROFILE_COLUMN_WIDTH, sourcePixels)),
+      contentRatio: ratios.width,
       scale: scale > 0 ? scale : 1,
     };
     img.classList.add("is-resizing");
-    img.style.width = `${startWidth}px`;
+    img.style.width = `${boxWidth}px`;
     const readout = resizeReadoutRef.current;
     if (readout) {
       readout.textContent = `${startWidth} px`;
@@ -1849,6 +2189,54 @@ export function BBCodeEditor({
     document.addEventListener("pointerup", stopImageResize);
     document.addEventListener("pointercancel", stopImageResize);
   }, [handleImageResizeMove, stopImageResize]);
+
+  /**
+   * Re-cuts a padded image's margins onto the side its alignment now asks for.
+   *
+   * A picture sized by margins sits in a file that fills the column, so
+   * [centre] and friends have nothing left to move: where the picture lands is
+   * decided by which side those margins are on. Re-encoding from the original
+   * bytes is what makes the wrap show, and it costs no quality.
+   */
+  const realignPaddedImage = useCallback((img: HTMLImageElement) => {
+    const currentSrc = img.getAttribute("src") ?? "";
+    const origin = resizeOriginsRef.current.get(currentSrc);
+    const layout = origin?.layout;
+    if (!origin || !layout?.padded) return;
+    const node = img.closest<HTMLElement>('a[data-bb="url"]') ?? img;
+    const align = effectiveAlign(node);
+    if (align === marginAlign(layout)) return;
+    void (async () => {
+      try {
+        const encoded = await encodeImageAtDisplayWidth(origin.blob, layout.displayWidth, {
+          align,
+          sourceRect: origin.sourceRect,
+        });
+        const blobUrl = registerPendingImage(encoded.blob);
+        resizeOriginsRef.current.set(blobUrl, {
+          ...origin,
+          layout: encoded.padded ? encoded : undefined,
+        });
+        await preloadImage(blobUrl);
+        if (!img.isConnected) {
+          releasePendingImage(blobUrl);
+          return;
+        }
+        img.setAttribute("src", blobUrl);
+        releasePendingImage(currentSrc);
+        setImageSelection((sel) => (sel ? { ...sel, src: blobUrl } : sel));
+        flushVisual();
+        window.requestAnimationFrame(positionResizeHandle);
+      } catch {
+        // The picture stays where it was; the wrap itself is still in the source.
+      }
+    })();
+  }, [flushVisual, positionResizeHandle, registerPendingImage, releasePendingImage]);
+
+  // Wraps are applied from further up the file than this, so they reach it here.
+  useEffect(() => {
+    realignPaddedImageRef.current = realignPaddedImage;
+  }, [realignPaddedImage]);
 
   const showResizeHandle = useCallback(() => {
     const frame = visualFrameRef.current;
@@ -1867,7 +2255,14 @@ export function BBCodeEditor({
     readout.setAttribute("aria-hidden", "true");
     readout.style.display = "none";
     resizeReadoutRef.current = readout;
-    frame.append(handle, readout);
+    // The selection is drawn here rather than as an outline on the element,
+    // because a padded file's box runs out to the column and outlining that
+    // would ring empty space instead of the picture.
+    const outline = document.createElement("span");
+    outline.className = "bbcode-image-outline";
+    outline.setAttribute("aria-hidden", "true");
+    resizeOutlineRef.current = outline;
+    frame.append(outline, handle, readout);
     positionResizeHandle();
   }, [positionResizeHandle, startImageResize]);
 
@@ -1875,14 +2270,24 @@ export function BBCodeEditor({
     removeImageResizeHandle(visualFrameRef.current);
     resizeHandleRef.current = null;
     resizeReadoutRef.current = null;
+    resizeOutlineRef.current = null;
   }, []);
 
   // Show the resize handle whenever an image is selected; reposition it when the
-  // selection changes (e.g. after a resize swaps the image).
+  // selection changes (e.g. after a resize swaps the image). The chrome is drawn
+  // in the frame rather than on the image, so editing text above a selected
+  // image has to move it along with everything else.
   useEffect(() => {
-    if (imageSelection) showResizeHandle();
-    else hideResizeHandle();
-  }, [imageSelection, showResizeHandle, hideResizeHandle]);
+    if (!imageSelection) {
+      hideResizeHandle();
+      return;
+    }
+    showResizeHandle();
+    const surface = visualRef.current;
+    const reposition = () => positionResizeHandle();
+    surface?.addEventListener("input", reposition);
+    return () => surface?.removeEventListener("input", reposition);
+  }, [imageSelection, showResizeHandle, hideResizeHandle, positionResizeHandle]);
 
   // Keep the osu!-width column scaled to whatever the pane happens to be. It
   // shrinks as one piece rather than reflowing, so an image that fills the
@@ -1893,16 +2298,48 @@ export function BBCodeEditor({
     );
     if (frames.length === 0) return;
     const fit = (frame: HTMLDivElement) => {
-      frame.style.setProperty("--bbcode-fit", `${columnFitScale(frame.clientWidth)}`);
+      const scale = columnFitScale(frame.clientWidth);
+      setFitScale((prev) => (Math.abs(prev - scale) < 0.001 ? prev : scale));
+      if (!zoomChosenRef.current && shouldOpenAtActualSize(frame.clientWidth)) {
+        zoomChosenRef.current = true;
+        setColumnZoom("full");
+        return; // The state change re-runs this effect with the new zoom.
+      }
+      frame.style.setProperty("--bbcode-fit", `${columnZoom === "full" ? 1 : scale}`);
     };
     frames.forEach(fit);
+    positionResizeHandle();
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) fit(entry.target as HTMLDivElement);
       positionResizeHandle();
     });
     frames.forEach((frame) => observer.observe(frame));
     return () => observer.disconnect();
-  }, [editMode, mobilePane, positionResizeHandle]);
+  }, [columnZoom, editMode, mobilePane, positionResizeHandle]);
+
+  // A profile is written down the middle of its column, so a pane too narrow to
+  // hold the column starts looking at the middle of it rather than the gutter.
+  useEffect(() => {
+    for (const frame of [visualFrameRef.current, previewFrameRef.current]) {
+      if (!frame) continue;
+      frame.scrollLeft = columnZoom === "full" ? Math.max(0, (frame.scrollWidth - frame.clientWidth) / 2) : 0;
+    }
+  }, [columnZoom, editMode, mobilePane]);
+
+  // Restore the zoom after hydration, so SSR markup matches on first paint. A
+  // stored choice is the user's and outranks the width-based one above.
+  useEffect(() => {
+    const stored = readStored(COLUMN_ZOOM_KEY);
+    if (stored !== "fit" && stored !== "full") return;
+    zoomChosenRef.current = true;
+    setColumnZoom(stored);
+  }, []);
+
+  const chooseColumnZoom = useCallback((next: "fit" | "full") => {
+    zoomChosenRef.current = true;
+    setColumnZoom(next);
+    writeStored(COLUMN_ZOOM_KEY, next);
+  }, []);
 
   /** Wraps/updates/unwraps the [url] around the selected image. */
   const mutateImageLinkDom = useCallback((value: string) => {
@@ -2956,7 +3393,9 @@ export function BBCodeEditor({
         <ToolButton label="Profile link" active={dialog === "profile"} onClick={() => openDialog("profile")}><UserRound size={15} /></ToolButton>
         <ToolDivider />
         <ToolButton label="Heading" onClick={() => applyWrap("heading", undefined, "[heading]", "[/heading]", "Heading")}><Heading1 size={15} /></ToolButton>
-        <ToolButton label="Center" onClick={() => applyWrap("centre", undefined, "[centre]", "[/centre]", "text")}><AlignCenter size={15} /></ToolButton>
+        <ToolButton label="Align left" active={editMode === "visual" && selectionAlign === "left"} onClick={() => applyWrap("left", undefined, "[left]", "[/left]", "text")}><AlignLeft size={15} /></ToolButton>
+        <ToolButton label="Center" active={editMode === "visual" && selectionAlign === "centre"} onClick={() => applyWrap("centre", undefined, "[centre]", "[/centre]", "text")}><AlignCenter size={15} /></ToolButton>
+        <ToolButton label="Align right" active={editMode === "visual" && selectionAlign === "right"} onClick={() => applyWrap("right", undefined, "[right]", "[/right]", "text")}><AlignRight size={15} /></ToolButton>
         <ToolButton label="Quote" onClick={() => applyWrap("quote", undefined, "[quote]", "[/quote]", "quote")}><TextQuote size={15} /></ToolButton>
         <ToolButton label="Notice" onClick={() => applyWrap("notice", undefined, "[notice]\n", "\n[/notice]", "important")}><Megaphone size={15} /></ToolButton>
         <ToolButton label="Collapsible box" active={dialog === "box"} onClick={() => openDialog("box")}><ChevronsDownUp size={15} /></ToolButton>
@@ -2993,7 +3432,7 @@ export function BBCodeEditor({
             onClick={() => {
               setRestoredDraft(false);
               updateSource(baseSource);
-              clearDraft(draftKey);
+              clearStored(draftKey);
               setVisualEpoch((epoch) => epoch + 1);
             }}
             className="underline text-osu-l2 hover:text-osu-c1 cursor-pointer"
@@ -3080,7 +3519,9 @@ export function BBCodeEditor({
             className="bbcode-content bbcode-editor-surface py-3 text-sm text-osu-l2 focus:outline-none"
           />
         </div>
-      ) : (
+      ) : null}
+      {editMode === "visual" ? <ColumnScrollPosition frameRef={visualFrameRef} /> : null}
+      {editMode === "visual" ? null : (
         <>
           {/* Mobile pane switch */}
           <div className="flex lg:hidden border-b border-osu-b3/30">
@@ -3131,6 +3572,7 @@ export function BBCodeEditor({
                   />
                 </div>
               </div>
+              <ColumnScrollPosition frameRef={previewFrameRef} />
             </div>
           </div>
         </>
@@ -3148,6 +3590,25 @@ export function BBCodeEditor({
         ) : null}
         {hasCapturedFormat ? (
           <span className="hidden sm:inline text-osu-c1">formatting copied - right-click text to paste</span>
+        ) : null}
+        {/* Only worth offering while the pane is too narrow for a profile. */}
+        {fitScale < 0.999 ? (
+          <div className="flex items-center gap-0.5">
+            {([["fit", "Fit"], ["full", "Actual size"]] as const).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => chooseColumnZoom(mode)}
+                className={`px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                  columnZoom === mode
+                    ? "bg-osu-h1/20 text-osu-c1 border border-osu-h1/40"
+                    : "border border-transparent hover:text-osu-l2"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         ) : null}
         <button
           type="button"

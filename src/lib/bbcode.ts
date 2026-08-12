@@ -8,6 +8,13 @@
 export type BBInlineStyleTag = "b" | "i" | "u" | "s" | "spoiler";
 
 /**
+ * osu!'s three alignment tags ([centre], [left], [right]), which it renders as
+ * one div each. They are separate tags to osu!, so a [left] inside a [centre]
+ * is what pulls that stretch back to the left.
+ */
+export type BBAlign = "centre" | "left" | "right";
+
+/**
  * Which boundary newlines the parser trimmed around a block tag. osu! (and
  * this parser) swallow one newline after a block's open tag, before its close
  * tag, and after its close tag so blocks don't render stray blank lines. The
@@ -38,7 +45,7 @@ export type BBNode = (
   | { type: "audio"; src: string }
   | { type: "heading"; children: BBNode[]; spacing?: BBBlockSpacing }
   | { type: "notice"; children: BBNode[]; spacing?: BBBlockSpacing }
-  | { type: "centre"; children: BBNode[]; spacing?: BBBlockSpacing }
+  | { type: "align"; align: BBAlign; children: BBNode[]; spacing?: BBBlockSpacing }
   | { type: "quote"; author: string | null; children: BBNode[]; spacing?: BBBlockSpacing }
   /** title is null for [spoilerbox] ("SPOILER" label) and "" for [box=]. */
   | { type: "box"; title: string | null; children: BBNode[]; spacing?: BBBlockSpacing }
@@ -76,15 +83,27 @@ const VERBATIM_TAGS = new Set(["code", "c", "img", "youtube", "audio", "imagemap
 
 const CONTAINER_TAGS = new Set([
   "b", "i", "u", "s", "strike", "spoiler", "color", "size", "url", "email",
-  "profile", "heading", "notice", "centre", "center", "quote", "box",
-  "spoilerbox", "list",
+  "profile", "heading", "notice", "centre", "center", "left", "right",
+  "quote", "box", "spoilerbox", "list",
 ]);
 
 /** Tags rendered as blocks; surrounding newlines get trimmed like osu does. */
 const BLOCK_TAGS = new Set([
-  "heading", "notice", "centre", "center", "quote", "box", "spoilerbox",
-  "list", "code", "imagemap",
+  "heading", "notice", "centre", "center", "left", "right", "quote", "box",
+  "spoilerbox", "list", "code", "imagemap",
 ]);
+
+/**
+ * The only tags osu! lets hold one of their own.
+ *
+ * osu! pairs most tags with a single non-greedy regex per tag name (one pass
+ * for [centre], one for [b], one for [color]...), so an opener takes the very
+ * next closer whatever sits between them. A second [centre] inside an open one
+ * is not a tag there at all - it prints as its literal text, and the [/centre]
+ * written for it closes the outer block instead. Only these four are paired by
+ * counting openers against closers, which is what lets them nest.
+ */
+const NESTABLE_TAGS = new Set(["box", "spoilerbox", "quote", "list"]);
 
 export function isBlockBBTag(tag: string): boolean {
   return BLOCK_TAGS.has(tag);
@@ -175,7 +194,7 @@ function parseImagemap(content: string): BBNode {
 /** Attaches recorded boundary-newline flags to nodes that can carry them. */
 function attachSpacing(node: BBNode, spacing: BBBlockSpacing) {
   if (
-    node.type === "heading" || node.type === "notice" || node.type === "centre" ||
+    node.type === "heading" || node.type === "notice" || node.type === "align" ||
     node.type === "quote" || node.type === "box" || node.type === "list" ||
     node.type === "imagemap" || (node.type === "code" && !node.inline)
   ) {
@@ -234,7 +253,7 @@ function openContainer(tag: string, param: string | null, openSource: string, op
   switch (tag) {
     case "b": case "i": case "u": case "s": case "strike": case "spoiler":
     case "heading": case "notice": case "centre": case "center":
-    case "spoilerbox":
+    case "left": case "right": case "spoilerbox":
       return { tag, param: null, children: [], openSource, openStart };
     case "color":
       if (!param || !isValidBBColor(param.trim())) return null;
@@ -285,7 +304,9 @@ function closeContainer(frame: ContainerFrame): BBNode | null {
     case "notice":
       return { type: "notice", children: frame.children };
     case "centre": case "center":
-      return { type: "centre", children: frame.children };
+      return { type: "align", align: "centre", children: frame.children };
+    case "left": case "right":
+      return { type: "align", align: frame.tag, children: frame.children };
     case "quote":
       return { type: "quote", author: frame.param?.replace(/^"|"$/g, "") || null, children: frame.children };
     case "box":
@@ -328,6 +349,14 @@ function closeAliases(name: string): string[] {
   if (name === "centre" || name === "center") return ["centre", "center"];
   if (name === "s" || name === "strike") return ["s", "strike"];
   return [name];
+}
+
+/** Innermost open frame carrying any of `aliases`, or -1 when none is open. */
+function findOpenFrame(stack: ContainerFrame[], aliases: string[]): number {
+  for (let i = stack.length - 1; i >= 1; i--) {
+    if (aliases.includes(stack[i].tag)) return i;
+  }
+  return -1;
 }
 
 function canonicalCloseKey(name: string): string {
@@ -437,6 +466,11 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
     if (!CONTAINER_TAGS.has(name)) { emitLiteral(); continue; }
 
     if (!isClose) {
+      // A tag that cannot nest is only a tag while none of its own is open.
+      if (!NESTABLE_TAGS.has(name) && findOpenFrame(stack, closeAliases(name)) !== -1) {
+        emitLiteral();
+        continue;
+      }
       const frame = openContainer(name, rawParam ?? null, tagSource, match.index);
       if (!frame) { emitLiteral(); continue; }
       let openEnd = TAG_PATTERN.lastIndex;
@@ -464,11 +498,7 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
 
     // Closing tag: find the matching open frame (centre/center and s/strike
     // alias each other).
-    const aliases = closeAliases(name);
-    let openIndex = -1;
-    for (let i = stack.length - 1; i >= 1; i--) {
-      if (aliases.includes(stack[i].tag)) { openIndex = i; break; }
-    }
+    const openIndex = findOpenFrame(stack, closeAliases(name));
     if (openIndex === -1) {
       const skipKey = canonicalCloseKey(name);
       const skipCount = skippedCloseCounts.get(skipKey) ?? 0;

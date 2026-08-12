@@ -575,10 +575,16 @@ html[data-custom-cursor="true"] * {
   box-shadow: 0 0 0 1px rgba(255, 102, 170, 0.5);
 }
 .bbcode-editor-surface img { cursor: pointer; }
-.bbcode-editor-surface img.is-selected {
+/* A selected image is ringed by .bbcode-image-outline in the frame, not by an
+   outline on the element: an image sized by padding has a box that runs out to
+   the whole column, and outlining that would ring transparent margins. */
+.bbcode-image-outline {
+  position: absolute;
   outline: 2px solid var(--color-osu-pink);
   outline-offset: 1px;
   border-radius: 0.15rem;
+  pointer-events: none;
+  z-index: 14;
 }
 /* While dragging, the inline width drives the image and max-width must not
    fight it - the pointer can ask for a width wider than the column, and the
@@ -601,7 +607,7 @@ html[data-custom-cursor="true"] * {
   touch-action: none;
   user-select: none;
 }
-/* The width the file will actually be encoded at, shown while dragging. */
+/* The width the picture will occupy in the column, shown while dragging. */
 .bbcode-image-resize-readout {
   position: absolute;
   transform: translate(-100%, 6px);

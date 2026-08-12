@@ -189,8 +189,12 @@ function renderNodeContent(node: BBNode, key: string, ctx: HighlightCtx): ReactN
       return <h2 key={key}>{renderNodes(node.children, key, ctx)}</h2>;
     case "notice":
       return <div key={key} className="well">{renderNodes(node.children, key, ctx)}</div>;
-    case "centre":
-      return <center key={key}>{renderNodes(node.children, key, ctx)}</center>;
+    case "align":
+      return node.align === "centre" ? (
+        <center key={key}>{renderNodes(node.children, key, ctx)}</center>
+      ) : (
+        <div key={key} className={`bbcode__align-${node.align}`}>{renderNodes(node.children, key, ctx)}</div>
+      );
     case "quote":
       return (
         <blockquote key={key}>
@@ -260,7 +264,7 @@ function renderNodes(nodes: BBNode[], keyPrefix: string, ctx: HighlightCtx): Rea
 }
 
 const HIGHLIGHT_BLOCK_TYPES = new Set<BBNode["type"]>([
-  "heading", "notice", "centre", "quote", "box", "list", "imagemap", "youtube",
+  "heading", "notice", "align", "quote", "box", "list", "imagemap", "youtube",
 ]);
 
 /**

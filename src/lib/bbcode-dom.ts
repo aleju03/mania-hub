@@ -7,7 +7,7 @@
 //
 // Client-only: the serializer walks live DOM nodes.
 
-import { clampBBSizePercent, parseBBCode, type BBBlockSpacing, type BBNode } from "./bbcode";
+import { clampBBSizePercent, parseBBCode, type BBAlign, type BBBlockSpacing, type BBNode } from "./bbcode";
 
 export function escapeBBHtml(value: string): string {
   return value
@@ -29,7 +29,32 @@ function nlString(spacing: BBBlockSpacing | undefined): string {
 
 export type EditableWrapKind =
   | "spoiler" | "color" | "size" | "url"
-  | "heading" | "centre" | "notice" | "quote" | "codeblock" | "c" | "box";
+  | "heading" | "centre" | "left" | "right" | "notice" | "quote" | "codeblock" | "c" | "box";
+
+/**
+ * The markup an alignment tag becomes on the editable surface.
+ *
+ * [centre] keeps the <center> the renderer has always used; the other two get
+ * osu!'s own class names, which .bbcode-content already styles. Both carry
+ * data-bb so the serializer names the tag from the element rather than from a
+ * text-align style a browser command may have left behind.
+ */
+const ALIGN_ELEMENTS: Record<BBAlign, { open: string; close: string }> = {
+  centre: { open: "<center", close: "</center>" },
+  left: { open: '<div data-bb="align" data-param="left" class="bbcode__align-left"', close: "</div>" },
+  right: { open: '<div data-bb="align" data-param="right" class="bbcode__align-right"', close: "</div>" },
+};
+
+/** The alignment an editable element stands for, or null when it is not one. */
+export function elementAlign(el: Element): BBAlign | null {
+  if (el.tagName === "CENTER") return "centre";
+  if (el.getAttribute("data-bb") !== "align") return null;
+  const param = el.getAttribute("data-param");
+  return param === "left" || param === "right" ? param : null;
+}
+
+/** Selector matching every element `elementAlign` recognizes. */
+export const ALIGN_SELECTOR = 'center,[data-bb="align"]';
 
 function editableSizeValue(param: string | undefined): number {
   const value = Number(param);
@@ -56,8 +81,10 @@ export function editableWrapMarkup(kind: EditableWrapKind, param?: string): { op
       return { open: `<a href="${escapeBBAttr(param ?? "")}" data-bb="url">`, close: "</a>" };
     case "heading":
       return { open: '<h2 data-nl="a">', close: "</h2>" };
-    case "centre":
-      return { open: '<center data-nl="a">', close: "</center>" };
+    case "centre": case "left": case "right": {
+      const { open, close } = ALIGN_ELEMENTS[kind];
+      return { open: `${open} data-nl="a">`, close };
+    }
     case "notice":
       return { open: '<div class="well" data-nl="oca">', close: "</div>" };
     case "quote":
@@ -132,8 +159,10 @@ function renderNode(node: BBNode): string {
       return `<h2 data-nl="${nlString(node.spacing)}">${renderChildren(node.children)}</h2>`;
     case "notice":
       return `<div class="well" data-nl="${nlString(node.spacing)}">${renderChildren(node.children)}</div>`;
-    case "centre":
-      return `<center data-nl="${nlString(node.spacing)}">${renderChildren(node.children)}</center>`;
+    case "align": {
+      const { open, close } = ALIGN_ELEMENTS[node.align];
+      return `${open} data-nl="${nlString(node.spacing)}">${renderChildren(node.children)}${close}`;
+    }
     case "quote":
       return `<blockquote data-bb="quote"${node.author ? ` data-param="${escapeBBAttr(node.author)}"` : ""} data-nl="${nlString(node.spacing)}">`
         + (node.author ? `<h4 contenteditable="false" data-bb-skip="1">${escapeBBHtml(node.author)} wrote:</h4>` : "")
@@ -290,6 +319,18 @@ function readNlFlags(el: Element, fallback: string): NlFlags {
   };
 }
 
+/**
+ * Flattens a line break out of content that has to stay on one line.
+ *
+ * osu! matches [heading] and [c] without DOTALL, so a newline anywhere inside
+ * one stops the match and prints the tags themselves on the page. Nothing can
+ * be done to carry the break over, and dropping the tag would be worse, so the
+ * lines are joined.
+ */
+function oneLine(value: string): string {
+  return value.replace(/\n+/g, " ").trim();
+}
+
 function wrapBlock(el: Element, open: string, close: string, fallback: string, inner?: string): string {
   const flags = readNlFlags(el, fallback);
   const content = inner ?? serializeChildren(el);
@@ -373,6 +414,11 @@ function serializeNode(node: Node, prior: string): string {
   if (tag === "BR") return "\n";
 
   switch (el.getAttribute("data-bb")) {
+    case "align": {
+      const align = elementAlign(el);
+      if (align) return wrapBlock(el, `[${align}]`, `[/${align}]`, "a");
+      break;
+    }
     case "youtube":
       return `[youtube]${el.getAttribute("data-param") ?? ""}[/youtube]`;
     case "audio":
@@ -427,8 +473,12 @@ function serializeNode(node: Node, prior: string): string {
       return `[audio]${el.getAttribute("src") ?? ""}[/audio]`;
     case "IFRAME":
       return "";
-    case "H1": case "H2": case "H3": case "H4": case "H5": case "H6":
-      return wrapBlock(el, "[heading]", "[/heading]", "a");
+    case "H1": case "H2": case "H3": case "H4": case "H5": case "H6": {
+      // Not wrapBlock: a heading is the one block whose own boundary newlines
+      // cannot be written back, since osu! would then print its tags as text.
+      const trailing = readNlFlags(el, "a").afterClose ? "\n" : "";
+      return `[heading]${oneLine(serializeChildren(el))}[/heading]${trailing}`;
+    }
     case "CENTER":
       return wrapBlock(el, "[centre]", "[/centre]", "a");
     case "BLOCKQUOTE":
@@ -436,7 +486,7 @@ function serializeNode(node: Node, prior: string): string {
     case "PRE":
       return wrapBlock(el, "[code]", "[/code]", "oca");
     case "CODE":
-      return `[c]${el.textContent ?? ""}[/c]`;
+      return `[c]${oneLine(el.textContent ?? "")}[/c]`;
     case "UL": case "OL":
       return serializeList(el);
     case "LI":
@@ -447,7 +497,10 @@ function serializeNode(node: Node, prior: string): string {
     case "DIV": case "P": {
       if (el.classList.contains("well")) return wrapBlock(el, "[notice]", "[/notice]", "oca");
       if (el.classList.contains("js-spoilerbox")) return serializeBox(el);
+      // Pasted markup can carry its alignment as a style instead of one of our
+      // elements. Left is the default, so only these two are worth a tag.
       if (el.style.textAlign === "center") return wrapBlock(el, "[centre]", "[/centre]", "a");
+      if (el.style.textAlign === "right") return wrapBlock(el, "[right]", "[/right]", "a");
       // contentEditable line container: each div is one visual line.
       const lineBreak = prior && !prior.endsWith("\n") ? "\n" : "";
       return lineBreak + serializeChildren(el);

@@ -124,7 +124,7 @@ describe("parseBBCode", () => {
   it("parses heading / notice / centre blocks, with centre-center aliasing", () => {
     expect(single("[heading]Title[/heading]")).toMatchObject({ type: "heading" });
     expect(single("[notice]note[/notice]")).toMatchObject({ type: "notice" });
-    expect(single("[centre]mid[/center]")).toMatchObject({ type: "centre" });
+    expect(single("[centre]mid[/center]")).toMatchObject({ type: "align", align: "centre" });
   });
 
   it("parses quotes with and without author", () => {
@@ -157,7 +157,8 @@ describe("parseBBCode", () => {
       spacing: { afterOpen: true, beforeClose: true, afterClose: true },
     });
     expect(single("[centre]inline[/centre]")).toMatchObject({
-      type: "centre",
+      type: "align",
+      align: "centre",
       spacing: { afterOpen: false, beforeClose: false, afterClose: false },
     });
   });
@@ -214,13 +215,83 @@ describe("parseBBCode", () => {
   it("repairs crossed tags when the delayed inner close exists", () => {
     expect(single("[notice][centre]x[/notice][/centre]")).toMatchObject({
       type: "notice",
-      children: [{ type: "centre", children: [{ type: "text", text: "x" }] }],
+      children: [{ type: "align", align: "centre", children: [{ type: "text", text: "x" }] }],
     });
     expect(single("[size=150][color=#FFFFFF]x[/size][/color]")).toMatchObject({
       type: "size",
       size: 150,
       children: [{ type: "color", color: "#FFFFFF", children: [{ type: "text", text: "x" }] }],
     });
+  });
+
+  it("keeps a repeated opener literal, since osu! takes the first closer", () => {
+    expect(parseBBCode("[b]a[b]b[/b]c[/b]")).toEqual([
+      { type: "style", tag: "b", children: [{ type: "text", text: "a[b]b" }] },
+      { type: "text", text: "c[/b]" },
+    ]);
+    expect(single("[color=red]a[color=blue]b[/color]")).toMatchObject({
+      type: "color",
+      color: "red",
+      children: [{ type: "text", text: "a[color=blue]b" }],
+    });
+  });
+
+  it("parses [left] and [right], which nest inside a [centre]", () => {
+    expect(single("[left]x[/left]")).toMatchObject({ type: "align", align: "left" });
+    expect(single("[right]x[/right]")).toMatchObject({ type: "align", align: "right" });
+    // Different tags to osu!, so this pairs up the way it reads.
+    expect(single("[centre]a[left]b[/left]c[/centre]")).toMatchObject({
+      type: "align",
+      align: "centre",
+      children: [
+        { type: "text", text: "a" },
+        { type: "align", align: "left", children: [{ type: "text", text: "b" }] },
+        { type: "text", text: "c" },
+      ],
+    });
+    // Same tag twice over is the case osu! cannot pair.
+    expect(single("[left]a[left]b[/left]")).toMatchObject({
+      type: "align",
+      align: "left",
+      children: [{ type: "text", text: "a[left]b" }],
+    });
+  });
+
+  it("still nests the tags osu! pairs by counting", () => {
+    expect(single("[box=outer][box=inner]x[/box][/box]")).toMatchObject({
+      type: "box",
+      title: "outer",
+      children: [{ type: "box", title: "inner", children: [{ type: "text", text: "x" }] }],
+    });
+    expect(single("[quote][quote]x[/quote][/quote]")).toMatchObject({
+      type: "quote",
+      children: [{ type: "quote", children: [{ type: "text", text: "x" }] }],
+    });
+  });
+
+  it("closes an outer [centre] at the [centre] nested inside it", () => {
+    // Straight off a real "me!" page: osu! pairs the opening [centre] with the
+    // first [/centre] anywhere after it, so the inner opener is text, the page
+    // is centred down to that closer, and everything past it is left aligned.
+    const source = [
+      "[centre][img]https://a.io/x.png[/img]",
+      "",
+      "[notice]links",
+      "[centre]",
+      "Y los mapas de:",
+      "[/centre][/notice]",
+      "",
+      "ggs",
+    ].join("\n");
+
+    const nodes = parseBBCode(source);
+    expect(nodes.map((n) => n.type)).toEqual(["align", "text"]);
+    const centre = nodes[0];
+    expect(centre).toMatchObject({ type: "align", align: "centre" });
+    if (centre.type !== "align") return;
+    expect(centre.children.map((n) => n.type)).toEqual(["img", "text", "notice"]);
+    expect(collectPlainText(centre.children)).toContain("[centre]\nY los mapas de:");
+    expect(collectPlainText(nodes.slice(1)).trim()).toBe("ggs");
   });
 
   it("is case-insensitive on tag names", () => {
@@ -254,7 +325,7 @@ describe("parseBBCode", () => {
 
     const nodes = parseBBCode(source);
     const types = nodes.filter((n) => n.type !== "text").map((n) => n.type);
-    expect(types).toEqual(["heading", "notice", "centre", "box"]);
+    expect(types).toEqual(["heading", "notice", "align", "box"]);
     expect(collectPlainText(nodes)).toContain("ggs");
     expect(collectPlainText(nodes)).toContain("O2jam-1");
 
@@ -295,7 +366,7 @@ describe("findBBNodePathAtOffset", () => {
     const source = "[centre][color=#FF0000]hi[/color][/centre]after";
     const nodes = parseBBCode(source, { spans: true });
     const path = findBBNodePathAtOffset(nodes, source.indexOf("hi") + 1);
-    expect(path.map((n) => n.type)).toEqual(["centre", "color", "text"]);
+    expect(path.map((n) => n.type)).toEqual(["align", "color", "text"]);
     expect(findBBNodePathAtOffset(nodes, source.indexOf("after") + 1).map((n) => n.type)).toEqual(["text"]);
   });
 

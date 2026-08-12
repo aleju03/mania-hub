@@ -134,6 +134,33 @@ describe("bbcode editable DOM round-trip", () => {
     expectIdentity("[quote]plain[/quote]");
   });
 
+  it("keeps all three alignments, including one inside another", () => {
+    expectIdentity("[left]back left[/left]");
+    expectIdentity("[right]\nover here\n[/right]");
+    // The case the toolbar's align buttons produce: pulling one stretch of a
+    // centred block back to the left. osu! reads these as separate tags, so
+    // unlike [centre] in [centre] this nests and renders on the profile.
+    expectIdentity("[centre]top\n[left]aside[/left]\nbottom[/centre]");
+  });
+
+  it("never writes a newline into a [heading] or a [c]", () => {
+    // osu! matches these two without DOTALL: one newline inside and the tags
+    // print as text on the profile instead of making a heading.
+    expectIdentity("[heading][left]Title[/left][/heading]");
+    expect(roundTrip("[heading][left]Title[/left]\n[/heading]")).toBe("[heading][left]Title[/left][/heading]");
+    expect(serialize("<h2>two<br>lines</h2>")).toBe("[heading]two lines[/heading]\n");
+    expect(roundTrip("[heading]\nTitle\n[/heading]")).toBe("[heading]Title[/heading]");
+    expect(serialize("<code>x = 1\ny = 2</code>")).toBe("[c]x = 1 y = 2[/c]");
+  });
+
+  it("reads alignment off pasted markup that carries it as a style", () => {
+    // The trailing newline is the line the pasted div was: block, then break.
+    expect(serialize('<div style="text-align: right">x</div>')).toBe("[right]x[/right]\n");
+    expect(serialize('<div style="text-align: center">x</div>')).toBe("[centre]x[/centre]\n");
+    // Left is what the page does anyway, so it stays an untagged line.
+    expect(serialize('<div style="text-align: left">x</div>')).toBe("x");
+  });
+
   it("keeps boxes, spoilerboxes and empty-title boxes", () => {
     expectIdentity("[box=my title]\ncontent\n[/box]");
     expectIdentity("[spoilerbox]\nsecret\n[/spoilerbox]");
