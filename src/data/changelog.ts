@@ -24,9 +24,7 @@ export interface ChangelogUpdate {
 
 /** Short list of what is being worked on now. Keep it to three or four.
     Leave it empty to hide the section entirely. */
-export const WIP: string[] = [
-  "Skin-related features",
-];
+export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
   { date: "2026-08-12", text: "See who is still missing from your collection: tap the count under your collection progress", to: "/packs" },
