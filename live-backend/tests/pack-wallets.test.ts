@@ -11,6 +11,7 @@ import {
   getPackShowcase,
   getPackWallet,
   listPackCollectionCards,
+  listPackCollectionMissingPlayers,
   listPackCollectionOwnedCardKeys,
   recyclePackCollectionCards,
   savePackWallet,
@@ -334,6 +335,65 @@ describe("pack collection pool progress", () => {
       total: 1,
     });
     expect(progress).toEqual({ poolTotal: 1, poolOwnedCount: 1, retiredOwnedCount: 0, offPoolUserIds: [] });
+  });
+
+  /* The complement of that ratio: the pullable players with no card in this
+     collection, which is what the "N missing" list on /packs shows. */
+  describe("missing players", () => {
+    function poolEntry(userId: number, rank: number) {
+      return {
+        rank,
+        user: {
+          id: userId,
+          username: `player${userId}`,
+          avatar_url: `https://a.ppy.sh/${userId}`,
+          country_code: "CR",
+        },
+        pp: 10_000 - rank,
+        global_rank: rank,
+      };
+    }
+
+    it("lists the pool players this collection has no card of, in pool order", async () => {
+      await savePackWallet(db, USER_ID, progressPayload({ "43": progressCard(43, "rare") }), 0, 1000);
+
+      const missing = await listPackCollectionMissingPlayers(
+        db,
+        USER_ID,
+        [poolEntry(42, 1), poolEntry(43, 2), poolEntry(44, 3)],
+        { page: 0, pageSize: 15 },
+      );
+      expect(missing.total).toBe(2);
+      expect(missing.players.map((player) => player.userId)).toEqual([42, 44]);
+      expect(missing.players[0]).toMatchObject({ username: "player42", poolRank: 1, globalRank: 1 });
+    });
+
+    it("fills a player's slot from their GOAT card, like the progress ratio does", async () => {
+      await savePackWallet(db, USER_ID, progressPayload({ [`${BOJII}:goat`]: progressCard(BOJII, "goat") }), 0, 1000);
+
+      const missing = await listPackCollectionMissingPlayers(db, USER_ID, [poolEntry(BOJII, 1), poolEntry(42, 2)], {
+        page: 0,
+        pageSize: 15,
+      });
+      expect(missing.players.map((player) => player.userId)).toEqual([42]);
+    });
+
+    it("searches by username and pages the matches", async () => {
+      await savePackWallet(db, USER_ID, progressPayload({}), 0, 1000);
+      const pool = [poolEntry(42, 1), poolEntry(430, 2), poolEntry(431, 3)];
+
+      const searched = await listPackCollectionMissingPlayers(db, USER_ID, pool, {
+        page: 0,
+        pageSize: 15,
+        query: "PLAYER43",
+      });
+      expect(searched.total).toBe(2);
+      expect(searched.players.map((player) => player.userId)).toEqual([430, 431]);
+
+      const secondPage = await listPackCollectionMissingPlayers(db, USER_ID, pool, { page: 1, pageSize: 2 });
+      expect(secondPage.total).toBe(3);
+      expect(secondPage.players.map((player) => player.userId)).toEqual([431]);
+    });
   });
 });
 

@@ -55,6 +55,24 @@ export interface ServerPackCollectionPage {
   poolProgress: ServerPackCollectionPoolProgress | null;
 }
 
+/* One pullable player the viewer does not hold yet. Not a card: it has no
+   tier and no skills, because nothing has been minted for this collector -
+   the rarity only exists once the pack deals them. */
+export interface ServerPackCollectionMissingPlayer {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  countryCode: string;
+  pp: number;
+  globalRank: number | null;
+  poolRank: number;
+}
+
+export interface ServerPackCollectionMissingPage {
+  players: ServerPackCollectionMissingPlayer[];
+  total: number;
+}
+
 export type PushPackWalletResult =
   | { ok: true; rev: number }
   | { ok: false; conflict: { payload: string; rev: number } };
@@ -183,6 +201,35 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
       duplicateShardTotal: Number(body.duplicateShardTotal) || 0,
       filteredShardTotal: Number(body.filteredShardTotal) || 0,
       poolProgress,
+    };
+  });
+
+/* The players still missing from the collection: the draw pool minus what the
+   viewer holds, in pool order. Synced collections only, since the server is
+   the one that knows both halves. */
+export const fetchServerPackCollectionMissing = createServerFn({ method: "GET" })
+  .validator((input: { page?: unknown; pageSize?: unknown; query?: unknown }) => {
+    const page = Math.max(0, Math.floor(Number(input?.page) || 0));
+    const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(Number(input?.pageSize) || 15)));
+    const query = typeof input?.query === "string" ? input.query : "";
+    return { page, pageSize, query };
+  })
+  .handler(async ({ data }): Promise<ServerPackCollectionMissingPage | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const target = await getSyncTarget();
+    if (!target) return null;
+    const url = new URL(target.url.replace("/api/pack-wallet/", "/api/pack-collection/"));
+    url.searchParams.set("missing", "1");
+    url.searchParams.set("page", String(data.page));
+    url.searchParams.set("pageSize", String(data.pageSize));
+    if (data.query) url.searchParams.set("q", data.query);
+    const response = await fetch(url, { headers: target.headers });
+    if (!response.ok) throw new Error(`Pack collection missing fetch failed (${response.status}).`);
+    const body = (await response.json()) as { players?: unknown; total?: unknown };
+    return {
+      players: Array.isArray(body.players) ? (body.players as ServerPackCollectionMissingPlayer[]) : [],
+      total: Number(body.total) || 0,
     };
   });
 

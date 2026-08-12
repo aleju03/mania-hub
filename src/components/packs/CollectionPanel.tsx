@@ -19,9 +19,12 @@ import {
 import { HONORARY_PLAYERS } from "#/lib/honorary-players";
 import {
   fetchOwnPackShowcase,
+  fetchServerPackCollectionMissing,
   fetchServerPackCollectionPage,
   PACK_SHOWCASE_MAX_CARDS,
   saveOwnPackShowcase,
+  type ServerPackCollectionMissingPage,
+  type ServerPackCollectionMissingPlayer,
   type ServerPackCollectionPage,
 } from "#/lib/pack-wallet-sync";
 import { fetchPackPlayerScores } from "#/lib/packs";
@@ -29,6 +32,7 @@ import {
   buildManiaCardRenderData,
   buildManiaCardRenderDataFromSkills,
 } from "../player/maniacard3d/renderData";
+import { CountryFlag } from "../ui/CountryFlag";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnapshot";
 import {
@@ -260,6 +264,7 @@ function CollectionPager({
   pageStart,
   pageEnd,
   total,
+  noun = "cards",
   onPageChange,
 }: {
   page: number;
@@ -267,6 +272,8 @@ function CollectionPager({
   pageStart: number;
   pageEnd: number;
   total: number;
+  /* What the total counts. The missing list pages players, not cards. */
+  noun?: "cards" | "players";
   onPageChange: (page: number) => void;
 }) {
   const [jumpOpen, setJumpOpen] = useState(false);
@@ -341,8 +348,8 @@ function CollectionPager({
           title="Jump to a page"
         >
           {total === 0
-            ? "No cards"
-            : `${pageStart + 1}–${pageEnd} of ${total.toLocaleString("en-US")} cards`}
+            ? `No ${noun}`
+            : `${pageStart + 1}–${pageEnd} of ${total.toLocaleString("en-US")} ${noun}`}
         </button>
       )}
       <button
@@ -537,6 +544,41 @@ function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card?: Coll
     >
       <div className="absolute inset-0 bg-black/12" />
     </div>
+  );
+}
+
+/* A pool player the collection has no card of. Deliberately not a card face:
+   nothing has been minted for this collector yet, so there is no rarity to
+   draw. Same empty-slot look the album gives an uncollected roster spot, and
+   it carries the flag so the album that holds them is obvious. */
+function MissingPlayerTile({ player }: { player: ServerPackCollectionMissingPlayer }) {
+  return (
+    <Link
+      to="/player/$username"
+      params={{ username: player.username }}
+      className="relative flex flex-col items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-white/12 bg-black/20 px-1.5 transition-colors hover:border-white/25 hover:bg-black/30"
+      style={{ aspectRatio: "5 / 7" }}
+    >
+      <span className="absolute left-1.5 top-1.5 text-[10px] text-osu-f1/60 tabular-nums">#{player.poolRank}</span>
+      <CountryFlag code={player.countryCode} size="xs" decorative className="absolute right-1.5 top-2" />
+      <img
+        src={player.avatarUrl}
+        alt=""
+        className="h-1/2 w-auto rounded-full object-cover opacity-30 grayscale"
+        loading="lazy"
+        draggable={false}
+      />
+      <span className="mt-2 w-full truncate text-center text-[11px] text-osu-f1">{player.username}</span>
+    </Link>
+  );
+}
+
+function MissingPlayerPlaceholder() {
+  return (
+    <div
+      className="rounded-[10px] border border-dashed border-white/8 bg-black/15"
+      style={{ aspectRatio: "5 / 7" }}
+    />
   );
 }
 
@@ -852,6 +894,24 @@ export function CollectionPanel({
   const serverPoolProgress = useServerCollection
     ? serverMetaPage?.poolProgress ?? serverPage?.page.poolProgress ?? null
     : null;
+  /* The other side of the progress line: pool players this collection has no
+     card of. The count comes from the same pool numbers the header divides,
+     so "12,158 / 12,162 players" and "4 missing" can never disagree. The list
+     itself is a separate read, since it is the pool minus the collection
+     rather than anything the collection page carries. */
+  const missingCount = serverPoolProgress
+    ? Math.max(0, serverPoolProgress.poolTotal - serverPoolProgress.poolOwnedCount)
+    : 0;
+  const [showMissing, setShowMissing] = useState(false);
+  const missingOpen = showMissing && useServerCollection;
+  const [missingPageIndex, setMissingPageIndex] = useState(0);
+  // Tagged with the page and search it answered, so a stale page never gets
+  // rendered as the answer to a newer one.
+  const [missingPage, setMissingPage] = useState<{ key: string; page: ServerPackCollectionMissingPage } | null>(null);
+  const [missingFailed, setMissingFailed] = useState(false);
+  // Lets the card-page read tell "the filter moved" from "the collection
+  // itself changed" when it decides whether to run behind the missing list.
+  const lastServerRefreshRef = useRef(0);
   // The chip this filter lives on disappears when its count reaches zero
   // (recycled away, or the players came back); don't strand the view there.
   useEffect(() => {
@@ -924,6 +984,26 @@ export function CollectionPanel({
   const pageEnd = Math.min(filteredTotal, pageStart + COLLECTION_PAGE_SIZE);
   const pageCards = useServerCollection ? cards : visibleCards.slice(pageStart, pageEnd);
   const currentPageSignature = pageSignature(pageCards);
+  /* The missing list pages on its own index and shares the search box. Its
+     last known total keeps the pager on screen while the next page loads,
+     the same way the collection's counts do. */
+  const missingRequestKey = `${missingPageIndex}:${trimmedQuery}`;
+  const activeMissingPage = missingPage?.key === missingRequestKey ? missingPage.page : null;
+  /* Falls back to the header's own count before any page has landed, so the
+     pager is already in its final state in the frame the list opens rather
+     than appearing a round trip later and nudging the grid down. */
+  const missingTotal = activeMissingPage?.total ?? missingPage?.page.total ?? missingCount;
+  const missingTotalPages = Math.max(1, Math.ceil(missingTotal / COLLECTION_PAGE_SIZE));
+  const missingCurrentPage = Math.min(missingPageIndex, missingTotalPages - 1);
+  const missingPageStart = missingCurrentPage * COLLECTION_PAGE_SIZE;
+  const missingPageEnd = Math.min(missingTotal, missingPageStart + COLLECTION_PAGE_SIZE);
+  /* How many slots the list holds while a page is in flight. Since the count
+     above is known before the first page is even asked for, the list opens at
+     the height it will settle at: all the movement happens in the click's own
+     frame and nothing shifts afterwards. A spinner box here instead collapsed
+     the panel and shoved the whole page around, twice, in the time one fetch
+     took. */
+  const pendingMissingTileCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, missingTotal - missingPageStart));
   const serverPagePending = useServerCollection && !activeServerPage && serverMissingKey !== serverCacheKey;
   const showPagePlaceholders = serverPagePending || (serverLoading && pageCards.length === 0);
   // On the very first sync nothing has loaded yet, so we don't know the
@@ -974,6 +1054,7 @@ export function CollectionPanel({
 
   useEffect(() => {
     setCollectionPage(0);
+    setMissingPageIndex(0);
     setSelected(new Set());
     setSelectionScope("manual");
     setConfirmBulk(false);
@@ -989,6 +1070,13 @@ export function CollectionPanel({
     setCollectionPage(Math.max(0, totalPages - 1));
   }, [collectionPage, totalPages]);
 
+  // Pulling the last players off a page while the list is open shrinks it
+  // under the reader's feet; land them on the new last page instead.
+  useEffect(() => {
+    if (!missingOpen || missingPageIndex <= missingTotalPages - 1) return;
+    setMissingPageIndex(Math.max(0, missingTotalPages - 1));
+  }, [missingOpen, missingPageIndex, missingTotalPages]);
+
   useEffect(() => {
     if (!walletReady || !useServerCollection) {
       setServerPage(null);
@@ -996,6 +1084,16 @@ export function CollectionPanel({
       setServerMissingKey(null);
       return;
     }
+    /* The missing list owns the grid and the search box while it is open, so
+       the card pages behind it stop chasing the query: typing would otherwise
+       cost two round trips per keystroke and re-render card thumbnails nobody
+       is looking at. What still gets through is a wallet push landing, since
+       that is the one thing that moves the header's own counts, and a header
+       that disagreed with the list under it would read as a bug. Closing the
+       list re-runs this with whatever filter is current. */
+    const refreshed = lastServerRefreshRef.current !== serverRefreshKey;
+    lastServerRefreshRef.current = serverRefreshKey;
+    if (missingOpen && !refreshed) return;
     let cancelled = false;
     const cachedPage = serverCollectionPageCache.get(serverCacheKey) ?? null;
     setServerMissingKey((key) => (key === serverCacheKey ? null : key));
@@ -1031,7 +1129,31 @@ export function CollectionPanel({
     return () => {
       cancelled = true;
     };
-  }, [walletReady, useServerCollection, collectionPage, tierFilter, trimmedQuery, sortMode, serverCacheKey, serverFilterKey, serverRefreshKey]);
+  }, [walletReady, useServerCollection, missingOpen, collectionPage, tierFilter, trimmedQuery, sortMode, serverCacheKey, serverFilterKey, serverRefreshKey]);
+
+  /* The missing list, read only while it is on screen. Not cached across
+     opens like the collection pages are: the point of the list is which
+     players are still out there, and a pack pulled a minute ago has already
+     changed the answer. */
+  useEffect(() => {
+    if (!missingOpen) return;
+    let cancelled = false;
+    setMissingFailed(false);
+    void fetchServerPackCollectionMissing({
+      data: { page: missingPageIndex, pageSize: COLLECTION_PAGE_SIZE, query: trimmedQuery },
+    })
+      .then((page) => {
+        if (cancelled) return;
+        if (page) setMissingPage({ key: missingRequestKey, page });
+        else setMissingFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setMissingFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [missingOpen, missingPageIndex, trimmedQuery, missingRequestKey, serverRefreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1126,6 +1248,26 @@ export function CollectionPanel({
               <span className="text-[10px] text-osu-f1 tabular-nums">
                 {progressPercent.toFixed(1)}%
               </span>
+              {/* The one place a collector asks "who am I still missing?", so
+                  the answer hangs off the number that raised the question.
+                  translate="no" for the same reason the count above carries
+                  it: this label rewrites as wallet pushes land. */}
+              {useServerCollection && (missingCount > 0 || missingOpen) && (
+                <button
+                  translate="no"
+                  type="button"
+                  onClick={() => {
+                    setShowMissing((open) => !open);
+                    exitSelecting();
+                  }}
+                  aria-pressed={missingOpen}
+                  className={`text-[10px] font-semibold transition-colors cursor-pointer ${
+                    missingOpen ? "text-white" : "text-osu-pink-light hover:text-white"
+                  }`}
+                >
+                  {missingOpen ? "back to collection" : `${missingCount.toLocaleString()} missing`}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1144,7 +1286,7 @@ export function CollectionPanel({
             </motion.span>
             shards
           </span>
-          {recyclable > 0 && !selecting && (
+          {recyclable > 0 && !selecting && !missingOpen && (
             <button
               type="button"
               onClick={(event) => runRecycle(() => onRecycleAll(), event.currentTarget)}
@@ -1153,7 +1295,9 @@ export function CollectionPanel({
               Recycle duplicates +{recyclable}
             </button>
           )}
-          {collectionTotal > 0 && (
+          {/* Selecting and recycling act on held cards; the missing list has
+              none, so both controls step aside while it is open. */}
+          {collectionTotal > 0 && !missingOpen && (
             <button
               type="button"
               onClick={() => (selecting ? exitSelecting() : setSelecting(true))}
@@ -1201,11 +1345,13 @@ export function CollectionPanel({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="find a card..."
+              placeholder={missingOpen ? "find a missing player..." : "find a card..."}
               className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4/40 py-1.5 pl-8 pr-3 text-[12px] text-white placeholder:text-osu-f1/70 outline-none transition-colors focus:border-osu-pink/40"
             />
           </div>
-          {ownedTiers.length > 1 && (
+          {/* Rarity is a property of a minted card, so the chips have nothing
+              to say about players nobody has dealt this collector yet. */}
+          {ownedTiers.length > 1 && !missingOpen && (
             <div className="flex flex-wrap items-center gap-1.5">
               {(["all", ...ownedTiers] as Array<ManiaCardTier | "all" | null>).map((tier) => {
                 const value = tier === null ? "unrated" : tier;
@@ -1290,41 +1436,85 @@ export function CollectionPanel({
             than pills, like the /maps and /skins listings, so a sort never
             reads as one more filter. */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-x-5 gap-y-2" data-select-keep="">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Sort by</span>
-            {COLLECTION_SORTS.map((option) => {
-              const isActive = sortMode === option.id;
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => applySortMode(option.id)}
-                  aria-pressed={isActive}
-                  title={option.hint}
-                  className={`text-[12.5px] font-semibold transition-colors cursor-pointer ${
-                    isActive ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-          {totalPages > 1 && (
-            <CollectionPager
-              page={currentPage}
-              totalPages={totalPages}
-              pageStart={pageStart}
-              pageEnd={pageEnd}
-              total={filteredTotal}
-              onPageChange={setCollectionPage}
-            />
+          {missingOpen ? (
+            // The list runs in pool order, so there is nothing to sort by; the
+            // label says what the grid below holds instead.
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
+              Still missing
+            </span>
+          ) : (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Sort by</span>
+              {COLLECTION_SORTS.map((option) => {
+                const isActive = sortMode === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => applySortMode(option.id)}
+                    aria-pressed={isActive}
+                    title={option.hint}
+                    className={`text-[12.5px] font-semibold transition-colors cursor-pointer ${
+                      isActive ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
           )}
+          {missingOpen
+            ? missingTotalPages > 1 && (
+                <CollectionPager
+                  page={missingCurrentPage}
+                  totalPages={missingTotalPages}
+                  pageStart={missingPageStart}
+                  pageEnd={missingPageEnd}
+                  total={missingTotal}
+                  noun="players"
+                  onPageChange={setMissingPageIndex}
+                />
+              )
+            : totalPages > 1 && (
+                <CollectionPager
+                  page={currentPage}
+                  totalPages={totalPages}
+                  pageStart={pageStart}
+                  pageEnd={pageEnd}
+                  total={filteredTotal}
+                  onPageChange={setCollectionPage}
+                />
+              )}
         </div>
         </>
       )}
 
-      {collectionTotal === 0 && !serverLoading && !serverPagePending ? (
+      {missingOpen ? (
+        missingFailed && !activeMissingPage ? (
+          <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
+            The draw pool could not be read just now. Try again in a moment.
+          </div>
+        ) : activeMissingPage && activeMissingPage.total === 0 ? (
+          <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
+            {trimmedQuery
+              ? `No missing player matches "${activeQuery.trim()}".`
+              : "Nothing missing. Every player in the pool is in your collection."}
+          </div>
+        ) : (
+          // translate="no" like the streak board's rows: usernames and pool
+          // ranks, redrawn on every page turn.
+          <div translate="no" className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5">
+            {activeMissingPage
+              ? activeMissingPage.players.map((player) => (
+                  <MissingPlayerTile key={player.userId} player={player} />
+                ))
+              : Array.from({ length: pendingMissingTileCount }, (_, index) => (
+                  <MissingPlayerPlaceholder key={`missing-placeholder-${index}`} />
+                ))}
+          </div>
+        )
+      ) : collectionTotal === 0 && !serverLoading && !serverPagePending ? (
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
           No cards yet. Open a pack to start your collection.
         </div>
@@ -1461,21 +1651,38 @@ export function CollectionPanel({
         </div>
       )}
 
-      {totalPages > 1 && filteredTotal > 0 && (
-        <div className="mt-5 flex justify-center" data-select-keep="">
-          <CollectionPager
-            page={currentPage}
-            totalPages={totalPages}
-            pageStart={pageStart}
-            pageEnd={pageEnd}
-            total={filteredTotal}
-            onPageChange={(page) => {
-              setCollectionPage(page);
-              collectionControlsRef.current?.scrollIntoView({ block: "start" });
-            }}
-          />
-        </div>
-      )}
+      {missingOpen
+        ? missingTotalPages > 1 && missingTotal > 0 && (
+            <div className="mt-5 flex justify-center" data-select-keep="">
+              <CollectionPager
+                page={missingCurrentPage}
+                totalPages={missingTotalPages}
+                pageStart={missingPageStart}
+                pageEnd={missingPageEnd}
+                total={missingTotal}
+                noun="players"
+                onPageChange={(page) => {
+                  setMissingPageIndex(page);
+                  collectionControlsRef.current?.scrollIntoView({ block: "start" });
+                }}
+              />
+            </div>
+          )
+        : totalPages > 1 && filteredTotal > 0 && (
+            <div className="mt-5 flex justify-center" data-select-keep="">
+              <CollectionPager
+                page={currentPage}
+                totalPages={totalPages}
+                pageStart={pageStart}
+                pageEnd={pageEnd}
+                total={filteredTotal}
+                onPageChange={(page) => {
+                  setCollectionPage(page);
+                  collectionControlsRef.current?.scrollIntoView({ block: "start" });
+                }}
+              />
+            </div>
+          )}
 
       {selecting && (
         <div className="pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center px-4">

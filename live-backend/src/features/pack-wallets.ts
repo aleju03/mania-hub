@@ -84,6 +84,84 @@ export async function getPackCollectionPoolProgress(
   return { poolTotal: pool.total, poolOwnedCount, retiredOwnedCount: offPoolUserIds.length, offPoolUserIds };
 }
 
+/* One pullable player as the pool board holds them. Structural rather than
+   imported from global-rankings, like the membership set above: this module
+   knows collections, the caller knows where a pool comes from. */
+export interface PackPoolRosterEntry {
+  rank: number;
+  user: { id: number; username: string; avatar_url: string; country_code: string };
+  pp: number;
+  global_rank: number | null;
+}
+
+export interface PackCollectionMissingPlayer {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  countryCode: string;
+  pp: number;
+  globalRank: number | null;
+  poolRank: number;
+}
+
+export interface PackCollectionMissingPage {
+  players: PackCollectionMissingPlayer[];
+  total: number;
+}
+
+/* The other side of the progress header: which pullable players this
+   collection does not hold yet. Owned means the player, not the card key - a
+   GOAT of someone still ranked already fills their pool slot, exactly as
+   getPackCollectionPoolProgress counts it, so the missing count and the
+   header's "owned / pool" always agree.
+
+   Paged in JS over the pool board rather than in SQL: the pool is a cached
+   in-memory list a few thousand entries long, and it carries the live names
+   and pool ranks that a collection row (which only knows the players you
+   pulled) cannot. */
+export async function listPackCollectionMissingPlayers(
+  db: Db,
+  userId: number,
+  poolEntries: readonly PackPoolRosterEntry[],
+  options: { page: number; pageSize: number; query?: string | null },
+): Promise<PackCollectionMissingPage> {
+  const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(options.pageSize)));
+  const page = Math.max(0, Math.floor(options.page));
+  const ownedRows = (await exec(
+    db,
+    "select distinct card_user_id from pack_collection_cards where owner_user_id = ? and copies > 0",
+    [userId],
+  )).rows;
+  const owned = new Set(ownedRows.map((row) => Number(row.card_user_id)));
+  // Same ceiling the recycle path puts on a client-sent query: nothing here
+  // is injectable, but a name to match is a name-sized string.
+  const query = options.query?.trim().toLowerCase().slice(0, 120) ?? "";
+  const start = page * pageSize;
+  const end = start + pageSize;
+  // Pool entries already run in pool order, so one pass in that order counts
+  // the whole set and materializes only the page being asked for; a collector
+  // at the start of the game is missing thousands of players.
+  const players: PackCollectionMissingPlayer[] = [];
+  let total = 0;
+  for (const entry of poolEntries) {
+    if (owned.has(entry.user.id)) continue;
+    if (query && !entry.user.username.toLowerCase().includes(query)) continue;
+    const index = total;
+    total += 1;
+    if (index < start || index >= end) continue;
+    players.push({
+      userId: entry.user.id,
+      username: entry.user.username,
+      avatarUrl: entry.user.avatar_url,
+      countryCode: entry.user.country_code,
+      pp: entry.pp,
+      globalRank: entry.global_rank,
+      poolRank: entry.rank,
+    });
+  }
+  return { players, total };
+}
+
 /* Restricts a card query to specific players. The ids are validated integers
    inlined into the SQL (not bound parameters) so a large retired set can never
    trip the parameter limit; an empty restriction matches nothing. */

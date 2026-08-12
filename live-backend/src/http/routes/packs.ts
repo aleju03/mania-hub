@@ -4,8 +4,8 @@ import { createPackDuel, getPackDuel, joinPackDuel, pickPackDuelStat, redactDuel
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
 import { getPackCardCollectors, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
-import { applyPackCollectionCardMint, getPackCollectionPoolProgress, getPackShowcase, getPackWallet, listPackCollectionCards, listPackCollectionOwnedCardKeys, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet, setPackShowcase } from "../../features/pack-wallets.js";
-import { getPackPoolMembership } from "../../features/global-rankings.js";
+import { applyPackCollectionCardMint, getPackCollectionPoolProgress, getPackShowcase, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet, setPackShowcase } from "../../features/pack-wallets.js";
+import { getPackPoolMembership, getPackPoolRoster } from "../../features/global-rankings.js";
 import { getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, selectReadyPackCardUserIds, warmProfileSnapshots } from "../../features/player-profiles.js";
 import type { HttpContext } from "../context.js";
 import { DEFAULT_BODY_LIMIT_BYTES, isAdmin, readBody, readBodyBuffer } from "../request.js";
@@ -633,6 +633,24 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     const tier = url.searchParams.get("tier");
     const query = url.searchParams.get("q");
     const sort = url.searchParams.get("sort") === "newest" ? ("newest" as const) : null;
+    // The missing list is the pool minus the collection, so a pool that
+    // cannot be read has no honest answer: better to say so than to serve an
+    // empty page that reads as "you have them all".
+    if (url.searchParams.get("missing") === "1") {
+      const roster = await getPackPoolRoster(ctx.db).catch(() => null);
+      if (!roster) {
+        sendJson(req, res, ctx, 503, { error: "pool_unavailable" });
+        return true;
+      }
+      sendJson(
+        req,
+        res,
+        ctx,
+        200,
+        await listPackCollectionMissingPlayers(ctx.db, walletUserId, roster, { page, pageSize, query }),
+      );
+      return true;
+    }
     // Progress is a garnish on the header; a pool board that cannot build
     // right now must not take the collection page down with it.
     const progress = await getPackPoolMembership(ctx.db)

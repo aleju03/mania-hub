@@ -435,6 +435,13 @@ export async function getPackPoolMembership(db: Db): Promise<{ userIds: Set<numb
   return { userIds: new Set(board.entries.map((entry) => entry.user.id)), total: board.entries.length };
 }
 
+/* The pool roster itself, for the collection's "missing" list: the same
+   merged entries the membership set is built from, in pool order. Shared with
+   the pool cache, so callers read and never mutate. */
+export async function getPackPoolRoster(db: Db): Promise<readonly GlobalRankingEntry[]> {
+  return (await getPackPoolBoard(db)).entries;
+}
+
 // The keymode packs ("main 4K players only") are the pack pool narrowed to one
 // main keymode and renumbered. Unlike the manual-member merge above, a failed
 // build must NOT degrade to the unfiltered pool: a 4K pack dealing a 7K main

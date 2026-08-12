@@ -29,6 +29,7 @@ export const WIP: string[] = [
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-12", text: "See who is still missing from your collection: tap the count under your collection progress", to: "/packs" },
   { date: "2026-08-12", text: "New align left and align right buttons in the BBCode editor, next to center", to: "/bbcode" },
   { date: "2026-08-12", text: "Fixed a bug where custom rate mods on uploaded replays played at base rate instead (e.g. 1.5x instead of 1.1x)", to: "/replay" },
   { date: "2026-08-12", text: "Uploaded replays now detect lazer/stable correctly", to: "/replay" },
