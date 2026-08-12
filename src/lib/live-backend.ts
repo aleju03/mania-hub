@@ -3,7 +3,6 @@ import { requireAdminAccess, requireTrueAdminAccess } from "./auth";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import { buildRandomDrawQuery } from "./maps-random-draw-params";
 import type { LiveMapsRandomDrawParams } from "./maps-random-draw-params";
-import type { ManiaSkills } from "./maniacard";
 import type { MyDataSkillBreakdown } from "./my-data";
 import type { ReplaySpectatorTicket } from "./replay-spectator";
 import { CrossTabEventSource, supportsCrossTabEventSource } from "./cross-tab-event-source";
@@ -2335,96 +2334,6 @@ export interface LiveSharedPackCard {
    permalink page. Throws on 404 (card recycled away or never synced). */
 export async function fetchLivePackSharedCard(ownerId: number, cardId: number): Promise<LiveSharedPackCard> {
   return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${Math.floor(cardId)}`);
-}
-
-/* The four numbers a duel round can be decided on, all of them printed on the
-   card front. */
-export type LiveTrumpStat = "control" | "speed" | "precision" | "stars";
-
-export interface LivePackDuelCard {
-  userId: number;
-  username: string;
-  countryCode: string;
-  avatarUrl: string;
-  tier: string | null;
-  tierLabel: string | null;
-  cardPower: number;
-  stats: Record<LiveTrumpStat, number>;
-  globalRank: number;
-  pp: number;
-  /* The mint's skills snapshot, so a duel page can redraw the real card front
-     without refetching anyone's plays. */
-  skills: ManiaSkills | null;
-}
-
-export interface LivePackDuelSide {
-  userId: number | null;
-  username: string | null;
-  /* Your own hand in full; of theirs, only the cards already played. */
-  cards: LivePackDuelCard[];
-  /* Rounds this side's attacks have won. */
-  score: number;
-  /* Truthful even while the cards themselves are hidden. */
-  cardCount: number;
-  /* Shards this side was paid when the duel resolved, after the arcade's
-     daily allowance was applied. Zero until then. */
-  shards: number;
-  /* The server is holding part of this hand back from the current reader. */
-  hidden?: boolean;
-}
-
-export interface LivePackDuelRound {
-  round: number;
-  /* Null while the round is still being played and the pick is not yours. */
-  challengerStat: LiveTrumpStat | null;
-  opponentStat: LiveTrumpStat | null;
-  challengerPicked: boolean;
-  opponentPicked: boolean;
-  challengerPoint: boolean;
-  opponentPoint: boolean;
-  resolved: boolean;
-}
-
-export interface LivePackCardTransfer {
-  cardKey: string;
-  username: string;
-  tier: string | null;
-  tierLabel: string | null;
-  /* Set when the loser had recycled the card by the time the duel ended, so
-     it moved as its shard value instead of as a card. */
-  shards: number;
-}
-
-export interface LivePackDuelSpoils {
-  winner: "challenger" | "opponent";
-  cards: LivePackCardTransfer[];
-  shards: number;
-}
-
-export interface LivePackDuel {
-  id: string;
-  kind: "trumps";
-  packType: string;
-  status: "open" | "resolved";
-  challenger: LivePackDuelSide;
-  opponent: LivePackDuelSide;
-  rounds: LivePackDuelRound[];
-  /* Rounds this duel plays once both hands are in; zero while it waits. */
-  roundCount: number;
-  currentRound: number;
-  winner: "challenger" | "opponent" | "tie" | null;
-  /* What the winner took out of the loser's collection. Null on a tie. */
-  spoils: LivePackDuelSpoils | null;
-  createdAt: number;
-  updatedAt: number;
-  resolvedAt: number | null;
-}
-
-/* A duel by link, read anonymously: every card still face down is hidden. A
-   signed-in player reads their own hand through viewPackDuel instead. Throws
-   on 404. */
-export async function fetchLivePackDuel(duelId: string): Promise<LivePackDuel> {
-  return fetchLiveJson(`/api/packs/duels/${encodeURIComponent(duelId)}`);
 }
 
 /* The public pull feed: notable-only by default (high mints and first-ever

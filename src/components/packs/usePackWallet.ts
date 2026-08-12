@@ -12,6 +12,7 @@ import {
   recordPull,
   recycleAllCopies,
   recycleAllDuplicates,
+  recycleCopies,
   recycleDuplicates,
   sanitizeWallet,
   settleCharges,
@@ -50,6 +51,11 @@ export interface PackWalletApi {
   recycleWhole: (cardKey: string) => number | Promise<number>;
   /* Whole-recycles a batch of cards in one server round-trip. */
   recycleWholeMany: (cardKeys: string[]) => number | Promise<number>;
+  /* Hands back a set number of copies per card, keeping the rest. The pull
+     summary recycles a freshly opened pack this way: a card the pack was the
+     first copy of leaves the collection, a duplicate gives up only the copy
+     the pack added. */
+  recycleCopies: (entries: Array<{ cardKey: string; copies: number }>) => number | Promise<number>;
   recycleWholeMatching: (filter: { tier: ManiaCardTier | "all" | "unrated" | "untracked"; query: string }) => number | Promise<number>;
   recycleAll: () => number | Promise<number>;
   /* Backfills a recomputed mint (skills snapshot + tier) onto an owned
@@ -271,10 +277,18 @@ export function usePackWallet(): PackWalletApi {
   };
 
   const recycleOnServer = async (
-    mode: "duplicates" | "whole" | "all_duplicates" | "whole_matching",
+    mode: "duplicates" | "whole" | "all_duplicates" | "whole_matching" | "copies",
     cardKey?: string,
     cardKeys?: string[],
     filter?: { tier: ManiaCardTier | "all" | "unrated" | "untracked"; query: string },
+    cardCopies?: Array<{ cardKey: string; copies: number }>,
+    /* Walks the wallet through syncing on the way out. The collection panel
+       re-reads its page whenever a sync lands, so a recycle that happened
+       somewhere else on the page (the pull summary) announces itself this
+       way; the panel's own recycles already refresh themselves and would
+       only pay for a second read. Set after the pending push is flushed, or
+       the push's own landing would eat the transition. */
+    announce = false,
   ) => {
     const sync = syncRef.current;
     if (!sync.enabled) return null;
@@ -287,19 +301,25 @@ export function usePackWallet(): PackWalletApi {
         await sync.pushPromise;
       }
       if (Object.keys(walletRef.current?.cards ?? {}).length > 0) return null;
+      if (announce) setSyncStatus("syncing");
       const result = await recycleServerPackCollection({
         data: {
           mode,
           cardKey,
           cardKeys,
+          cardCopies,
           tier: filter?.tier,
           query: filter?.query,
         },
       });
-      if (!result) return null;
+      if (!result) {
+        if (announce) setSyncStatus("synced");
+        return null;
+      }
       commitServerWallet(result.payload, result.rev);
       return result.gained;
     } catch {
+      if (announce) setSyncStatus("synced");
       return null;
     }
   };
@@ -473,6 +493,27 @@ export function usePackWallet(): PackWalletApi {
         })();
       }
       return recycleManyLocally();
+    },
+    recycleCopies: (entries) => {
+      const recycleCopiesLocally = () => {
+        let working = walletRef.current;
+        if (!working) return 0;
+        let gained = 0;
+        for (const entry of entries) {
+          const result = recycleCopies(working, entry.cardKey, entry.copies);
+          gained += result.gained;
+          working = result.wallet;
+        }
+        if (gained > 0) commit(working);
+        return gained;
+      };
+      if (syncRef.current.enabled) {
+        return (async () => {
+          const gained = await recycleOnServer("copies", undefined, undefined, undefined, entries, true);
+          return gained !== null ? gained : recycleCopiesLocally();
+        })();
+      }
+      return recycleCopiesLocally();
     },
     recycleWholeMatching: (filter) => {
       const recycleMatchingLocally = () => {

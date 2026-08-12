@@ -33,6 +33,7 @@ import {
   buildManiaCardRenderDataFromSkills,
 } from "../player/maniacard3d/renderData";
 import { CountryFlag } from "../ui/CountryFlag";
+import { GOAT_ALBUM_CODE } from "./album/albumModel";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnapshot";
 import {
@@ -1004,6 +1005,11 @@ export function CollectionPanel({
      the panel and shoved the whole page around, twice, in the time one fetch
      took. */
   const pendingMissingTileCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, missingTotal - missingPageStart));
+  /* GOAT cards are counted, never listed: most of the honorary roster is not
+     in the draw pool at all, and the ones that are already have their pool
+     slot filled by the ordinary card, so neither the header ratio nor the
+     list above can account for one. Held across page turns like the total. */
+  const goatMissing = activeMissingPage?.goatMissing ?? missingPage?.page.goatMissing ?? 0;
   const serverPagePending = useServerCollection && !activeServerPage && serverMissingKey !== serverCacheKey;
   const showPagePlaceholders = serverPagePending || (serverLoading && pageCards.length === 0);
   // On the very first sync nothing has loaded yet, so we don't know the
@@ -1491,29 +1497,48 @@ export function CollectionPanel({
       )}
 
       {missingOpen ? (
-        missingFailed && !activeMissingPage ? (
-          <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
-            The draw pool could not be read just now. Try again in a moment.
-          </div>
-        ) : activeMissingPage && activeMissingPage.total === 0 ? (
-          <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
-            {trimmedQuery
-              ? `No missing player matches "${activeQuery.trim()}".`
-              : "Nothing missing. Every player in the pool is in your collection."}
-          </div>
-        ) : (
-          // translate="no" like the streak board's rows: usernames and pool
-          // ranks, redrawn on every page turn.
-          <div translate="no" className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5">
-            {activeMissingPage
-              ? activeMissingPage.players.map((player) => (
-                  <MissingPlayerTile key={player.userId} player={player} />
-                ))
-              : Array.from({ length: pendingMissingTileCount }, (_, index) => (
-                  <MissingPlayerPlaceholder key={`missing-placeholder-${index}`} />
-                ))}
-          </div>
-        )
+        <>
+          {missingFailed && !activeMissingPage ? (
+            <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
+              The draw pool could not be read just now. Try again in a moment.
+            </div>
+          ) : activeMissingPage && activeMissingPage.total === 0 ? (
+            <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
+              {trimmedQuery
+                ? `No missing player matches "${activeQuery.trim()}".`
+                : "Nothing missing. Every player in the pool is in your collection."}
+            </div>
+          ) : (
+            // translate="no" like the streak board's rows: usernames and pool
+            // ranks, redrawn on every page turn.
+            <div translate="no" className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5">
+              {activeMissingPage
+                ? activeMissingPage.players.map((player) => (
+                    <MissingPlayerTile key={player.userId} player={player} />
+                  ))
+                : Array.from({ length: pendingMissingTileCount }, (_, index) => (
+                    <MissingPlayerPlaceholder key={`missing-placeholder-${index}`} />
+                  ))}
+            </div>
+          )}
+          {/* The list above is players, so the cards that are not a pool slot
+              get a line of their own rather than a tile. Hidden while a search
+              is on: a count of everything does not answer a filtered list. */}
+          {goatMissing > 0 && !trimmedQuery && (
+            <Link
+              to="/packs"
+              search={{ album: GOAT_ALBUM_CODE.toLowerCase() }}
+              /* The album is another section of this same page, further down
+                 it. Jumping to the top first would land the reader on the
+                 pack opener; the album view scrolls itself into frame. */
+              resetScroll={false}
+              translate="no"
+              className="mt-4 block text-center text-[11px] text-osu-f1 transition-colors hover:text-white"
+            >
+              plus {goatMissing.toLocaleString()} GOAT card{goatMissing === 1 ? "" : "s"} still missing
+            </Link>
+          )}
+        </>
       ) : collectionTotal === 0 && !serverLoading && !serverPagePending ? (
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
           No cards yet. Open a pack to start your collection.

@@ -5,10 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import {
   applyPackCollectionCardMint,
+  countMissingGoatCards,
   ensurePackCardCatalog,
   ensurePackCollectionCardKeys,
   getPackCollectionPoolProgress,
   getPackShowcase,
+  HONORARY_USER_IDS,
   getPackWallet,
   listPackCollectionCards,
   listPackCollectionMissingPlayers,
@@ -164,6 +166,33 @@ describe("pack wallets", () => {
     const result = await recyclePackCollectionCards(db, USER_ID, { mode: "whole_matching", query: "renamed" }, 3000);
     // Two rare copies: the kept one at full value, the duplicate at half.
     expect(result.gained).toBe(2 + 1);
+    expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).total).toBe(0);
+  });
+
+  it("recycles only the copies named, leaving the rest of the holding alone", async () => {
+    await savePackWallet(db, USER_ID, cardPayload(3), 0, 1000);
+
+    // What the pull summary hands a pack back with: one copy of a card the
+    // collector already had, priced as the duplicate it is.
+    const one = await recyclePackCollectionCards(
+      db,
+      USER_ID,
+      { mode: "copies", cardCopies: [{ cardKey: "42", copies: 1 }] },
+      2000,
+    );
+    expect(one.gained).toBe(1);
+    const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
+    expect(page.cards[0]).toMatchObject({ copies: 2, recycledCopies: 1 });
+
+    // Asking for more copies than are held takes the card out of the
+    // collection and pays exactly what whole-recycling it would.
+    const rest = await recyclePackCollectionCards(
+      db,
+      USER_ID,
+      { mode: "copies", cardCopies: [{ cardKey: "42", copies: 5 }] },
+      3000,
+    );
+    expect(rest.gained).toBe(2 + 1);
     expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).total).toBe(0);
   });
 
@@ -393,6 +422,25 @@ describe("pack collection pool progress", () => {
       const secondPage = await listPackCollectionMissingPlayers(db, USER_ID, pool, { page: 1, pageSize: 2 });
       expect(secondPage.total).toBe(3);
       expect(secondPage.players.map((player) => player.userId)).toEqual([431]);
+    });
+
+    it("counts missing GOAT cards separately, and an ordinary card is not one", async () => {
+      await savePackWallet(db, USER_ID, progressPayload({}), 0, 1000);
+      expect(await countMissingGoatCards(db, USER_ID)).toBe(HONORARY_USER_IDS.size);
+
+      // BOJII is on the honorary roster and in the ranked pool, so his plain
+      // card fills his pool slot while his GOAT slot stays empty.
+      await savePackWallet(db, USER_ID, progressPayload({ [String(BOJII)]: progressCard(BOJII, "worldClass") }), 1, 1000);
+      expect(await countMissingGoatCards(db, USER_ID)).toBe(HONORARY_USER_IDS.size);
+
+      await savePackWallet(
+        db,
+        USER_ID,
+        progressPayload({ [String(BOJII)]: progressCard(BOJII, "worldClass"), [`${BOJII}:goat`]: progressCard(BOJII, "goat") }),
+        2,
+        1000,
+      );
+      expect(await countMissingGoatCards(db, USER_ID)).toBe(HONORARY_USER_IDS.size - 1);
     });
   });
 });

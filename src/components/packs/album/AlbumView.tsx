@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Crown, Globe, Info } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -1053,19 +1053,46 @@ export const GoatSlot = memo(function GoatSlot({
   );
 });
 
+/* Runs a router navigation after the next paint. Opening or closing an album
+   swaps a large subtree, and navigate() re-matches the route and re-renders it
+   synchronously: called straight from the handler, React batches the swap into
+   that long task and the paint waits for both. rAF lands just before the
+   paint, the timeout just after. Same shape, and the same reason, as the
+   Grid/Album swap in routes/packs.tsx. */
+function deferUrl(run: () => void) {
+  window.requestAnimationFrame(() => {
+    window.setTimeout(run, 0);
+  });
+}
+
 export function AlbumView({
   wallet,
   syncStatus,
   trackedCountries,
   viewerId,
+  openAlbumCode = null,
 }: {
   wallet: PackWallet;
   syncStatus: "local" | "syncing" | "synced";
   trackedCountries: string[] | null;
   viewerId: number | null;
+  /** Album the URL asks for, so one can be linked to rather than only reached
+      by tapping the shelf. Null is the shelf. */
+  openAlbumCode?: string | null;
 }) {
   const sections = useMemo(() => buildAlbumSections(trackedCountries ?? []), [trackedCountries]);
-  const [openCode, setOpenCode] = useState<string | null>(null);
+  const linkedCode = openAlbumCode && sections.some((section) => section.code === openAlbumCode) ? openAlbumCode : null;
+  /* Seeded from the URL when the shelf already knows the album, which is the
+     warm case: no frame of shelf before the book. A cold bootstrap has no
+     tracked countries yet, so the effect below opens it once they land. */
+  const [openCode, setOpenCode] = useState<string | null>(linkedCode);
+  const navigate = useNavigate();
+  /* The album code this component last agreed with the URL about, in either
+     direction. Not state: it only ever guards the sync effect below. */
+  const urlAlbumRef = useRef<string | null>(openCode);
+  /* Set only by the two URL-driven opens, never by a tap on the shelf: a
+     reader who tapped is already looking at the right part of the page. */
+  const scrollToAlbumRef = useRef(Boolean(linkedCode));
   const rootRef = useRef<HTMLElement | null>(null);
   const [rosters, setRosters] = useState<Record<string, RosterData>>(() => {
     const seeded: Record<string, RosterData> = {};
@@ -1398,10 +1425,47 @@ export function AlbumView({
        engine's animation-end callback -- and still under a user gesture, so
        autoplay policy is satisfied. */
     warmPackAudio();
+    urlAlbumRef.current = code;
     setOpenCode(code);
     setCurrentPage(0);
     setBookReady(false);
-  }, []);
+    /* The book opens in the tap's own render; the address bar catches up
+       after, which is all it has to do to make the album linkable. An open
+       album is its own view, so it drops `view` rather than carrying both. */
+    deferUrl(() => navigate({
+      to: "/packs",
+      search: (prev) => ({ ...prev, view: undefined, album: code.toLowerCase() }),
+      replace: true,
+      resetScroll: false,
+    }));
+  }, [navigate]);
+
+  /* A link arriving at an already-mounted album view, and the cold bootstrap
+     the seed above could not cover. Keyed off the last code this component
+     put in the URL (or took from it) so a shelf rebuild, which is a new
+     `sections` identity, cannot reopen an album the reader just closed. */
+  useEffect(() => {
+    if (!openAlbumCode || urlAlbumRef.current === openAlbumCode) return;
+    if (!sections.some((section) => section.code === openAlbumCode)) return;
+    urlAlbumRef.current = openAlbumCode;
+    scrollToAlbumRef.current = true;
+    setOpenCode(openAlbumCode);
+    setCurrentPage(0);
+    setBookReady(false);
+  }, [openAlbumCode, sections]);
+
+  /* The album sits well below the pack opener, so a link to one has to bring
+     it into frame or it lands the reader at the top of the page with nothing
+     of what they clicked for on screen. One frame later, once the book has
+     laid out and the section is its full height. */
+  useEffect(() => {
+    if (!openCode || !scrollToAlbumRef.current) return;
+    scrollToAlbumRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      rootRef.current?.scrollIntoView({ block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [openCode]);
 
   /* Nothing tracked means the shelf would be the two pinned albums and no
      country at all, which is the backend still waking up rather than a shelf. */
@@ -1418,6 +1482,13 @@ export function AlbumView({
   }
 
   const closeAlbum = () => {
+    urlAlbumRef.current = null;
+    deferUrl(() => navigate({
+      to: "/packs",
+      search: (prev) => ({ ...prev, view: "album", album: undefined }),
+      replace: true,
+      resetScroll: false,
+    }));
     setOpenCode(null);
     setPeek(null);
     setSpotlight(null);

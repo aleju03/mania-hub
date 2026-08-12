@@ -757,57 +757,10 @@ create index if not exists idx_pack_card_serials_card
 create index if not exists idx_pack_card_serials_owner
   on pack_card_serials(owner_user_id, minted_at desc);
 
--- Pack duels: two collectors' hands played against each other for keeps, one
--- card per side per round, both attacking with a stat of their choice. Both
--- sides stake the hand they play with (checked against pack_collection_cards
--- when the duel opens and when it is answered, since losing moves those copies
--- to the winner), while card stats stay client-reported the same way the pull
--- log is. The pick log is the part that is server-held, so neither side can
--- wait to see what the other attacked with, and no card is readable by the
--- other player until the round it was played in is over.
-create table if not exists pack_duels (
-  id text primary key,
-  kind text not null,
-  pack_type text not null,
-  status text not null,
-  challenger_user_id integer not null,
-  challenger_username text not null,
-  challenger_cards_json text,
-  challenger_score real not null default 0,
-  opponent_user_id integer,
-  opponent_username text,
-  opponent_cards_json text,
-  opponent_score real not null default 0,
-  -- What each side was paid when the duel resolved, so a player who comes back
-  -- to the link still sees what they earned.
-  challenger_shards integer not null default 0,
-  opponent_shards integer not null default 0,
-  -- Which of the loser's cards the winner took, written once when the duel
-  -- settles. Cards actually move between collections, so this is the receipt.
-  spoils_json text,
-  -- Every attack either side has made, in the round it was made.
-  picks_json text,
-  -- Mirrors picks_json's length so a pick can guard on it: both sides pick at
-  -- once, and only the one that matched the count it read gets to land.
-  picks_count integer not null default 0,
-  winner text,
-  created_at integer not null,
-  updated_at integer not null,
-  resolved_at integer
-);
-create index if not exists idx_pack_duels_created
-  on pack_duels(created_at desc);
-create index if not exists idx_pack_duels_challenger
-  on pack_duels(challenger_user_id, created_at desc);
-create index if not exists idx_pack_duels_opponent
-  on pack_duels(opponent_user_id, created_at desc);
-create index if not exists idx_pack_duels_resolved
-  on pack_duels(resolved_at desc) where status = 'resolved';
-
--- What the pack arcade (duels, the higher-or-lower streak game) has paid an
--- account today, which is the only thing standing between a scripted client
--- and free shards: both games are scored off data the client can read for
--- itself, so the daily allowance is the protection rather than the scoring.
+-- What the pack arcade (the higher-or-lower streak game) has paid an account
+-- today, which is the only thing standing between a scripted client and free
+-- shards: a casual run is scored off data the client can read for itself, so
+-- the daily allowance is the protection rather than the scoring.
 -- One row per account per day per game, and the cap reads their sum.
 create table if not exists pack_game_rewards (
   user_id integer not null,

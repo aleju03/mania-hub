@@ -1,10 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseJson } from "../../db.js";
-import { createPackDuel, getPackDuel, joinPackDuel, pickPackDuelStat, redactDuelFor } from "../../features/pack-duels.js";
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
 import { getPackCardCollectors, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
-import { applyPackCollectionCardMint, getPackCollectionPoolProgress, getPackShowcase, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet, setPackShowcase } from "../../features/pack-wallets.js";
+import { applyPackCollectionCardMint, countMissingGoatCards, getPackCollectionPoolProgress, getPackShowcase, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet, setPackShowcase } from "../../features/pack-wallets.js";
 import { getPackPoolMembership, getPackPoolRoster } from "../../features/global-rankings.js";
 import { getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, selectReadyPackCardUserIds, warmProfileSnapshots } from "../../features/player-profiles.js";
 import type { HttpContext } from "../context.js";
@@ -260,79 +259,6 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     sendJson(req, res, ctx, 200, { pulls: await listRecentPackPulls(ctx.db, limit, notableOnly) });
     return true;
   }
-  if (url.pathname === "/api/packs/duels" && req.method === "POST") {
-    // Opening a duel. Server-to-server like the pull log: the frontend's
-    // server function authenticates the osu! cookie and forwards the verified
-    // viewer, so a duel can only ever be opened as yourself.
-    if (!isAdmin(req, ctx)) {
-      sendJson(req, res, ctx, 401, { error: "unauthorized" });
-      return true;
-    }
-    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
-    const userId = Math.floor(Number(body.userId) || 0);
-    const username = typeof body.username === "string" ? body.username : "";
-    if (userId <= 0 || !username) {
-      sendJson(req, res, ctx, 400, { error: "invalid_duel_challenger" });
-      return true;
-    }
-    const created = await createPackDuel(ctx.serveWriteDb ?? ctx.db, userId, username, {
-      packType: body.packType,
-      cards: body.cards,
-    });
-    if (!created.ok) {
-      sendJson(req, res, ctx, created.error === "rate_limited" ? 429 : 400, { error: created.error });
-      return true;
-    }
-    sendJson(req, res, ctx, 201, created.duel);
-    return true;
-  }
-  const packDuelActionMatch = url.pathname.match(/^\/api\/packs\/duels\/([a-z0-9]{6,16})\/(join|pick|view)$/);
-  if (packDuelActionMatch) {
-    if (!isAdmin(req, ctx)) {
-      sendJson(req, res, ctx, 401, { error: "unauthorized" });
-      return true;
-    }
-    if (req.method !== "POST") {
-      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
-      return true;
-    }
-    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
-    const userId = Math.floor(Number(body.userId) || 0);
-    const username = typeof body.username === "string" ? body.username : "";
-    if (userId <= 0 || !username) {
-      sendJson(req, res, ctx, 400, { error: "invalid_duel_player" });
-      return true;
-    }
-    const duelId = packDuelActionMatch[1];
-    const writeDb = ctx.serveWriteDb ?? ctx.db;
-    // Dev-only: one osu! account is enough to play both sides locally. Never
-    // granted in production, where duelling yourself stays refused.
-    const allowSelfDuel = ctx.config.nodeEnv !== "production";
-    const action = packDuelActionMatch[2];
-    if (action === "view") {
-      // The signed-in read: your own hand is visible to you, and of theirs
-      // only the cards already played.
-      const duel = await getPackDuel(ctx.db, duelId);
-      if (!duel) {
-        sendJson(req, res, ctx, 404, { error: "duel_not_found" });
-        return true;
-      }
-      sendJson(req, res, ctx, 200, redactDuelFor(duel, userId));
-      return true;
-    }
-    const result = action === "pick"
-      ? await pickPackDuelStat(writeDb, duelId, userId, body.round, body.stat)
-      : await joinPackDuel(writeDb, duelId, userId, username, body.cards, Date.now(), { allowSelfDuel });
-    if (!result.ok) {
-      const status = result.error === "not_found" ? 404 : 409;
-      sendJson(req, res, ctx, status, { error: result.error });
-      return true;
-    }
-    // The player who just moved sees their own hand; the rest of the other
-    // side stays face down until it is played.
-    sendJson(req, res, ctx, 200, redactDuelFor(result.duel, userId));
-    return true;
-  }
   if (url.pathname === "/api/packs/games/streak/board") {
     // The blitz board. Public, like every other leaderboard on the site: it
     // is a list of usernames and the streak they reached. `me` is whose rank
@@ -450,23 +376,6 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     sendJson(req, res, ctx, 200, result);
     return true;
   }
-  const packDuelMatch = url.pathname.match(/^\/api\/packs\/duels\/([a-z0-9]{6,16})$/);
-  if (packDuelMatch) {
-    // Public read: a duel link is meant to be opened by whoever it was sent
-    // to, and the page shows nothing but two hands of cards.
-    if (req.method !== "GET") {
-      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
-      return true;
-    }
-    if (!checkRate(req, res, ctx, "publicApi")) return true;
-    const duel = await getPackDuel(ctx.db, packDuelMatch[1]);
-    if (!duel) {
-      sendJson(req, res, ctx, 404, { error: "duel_not_found" });
-      return true;
-    }
-    sendJson(req, res, ctx, 200, redactDuelFor(duel, null));
-    return true;
-  }
   const packWalletMatch = url.pathname.match(/^\/api\/pack-wallet\/(\d+)$/);
   if (packWalletMatch) {
     // Server-to-server only: the frontend's server functions authenticate
@@ -578,7 +487,8 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         body.mode === "duplicates" ||
         body.mode === "whole" ||
         body.mode === "all_duplicates" ||
-        body.mode === "whole_matching"
+        body.mode === "whole_matching" ||
+        body.mode === "copies"
         ? body.mode
         : null;
       // Cards are addressed by wallet key ("<id>" or "<id>:goat"), so a GOAT
@@ -591,7 +501,24 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
             .filter((key): key is string => key !== null)
         : null;
       const hasBulkKeys = cardKeys !== null && cardKeys.length > 0;
-      if (!mode || (mode !== "all_duplicates" && mode !== "whole_matching" && !hasBulkKeys && !cardKey)) {
+      /* Per-card copy counts, capped at a hand's worth: this mode exists for
+         handing back the pack you just opened, not for walking a collection. */
+      const cardCopies = mode === "copies" && Array.isArray(body.cardCopies)
+        ? body.cardCopies
+            .slice(0, 50)
+            .map((entry) => {
+              const key = normalizePackCardKey((entry as { cardKey?: unknown })?.cardKey);
+              const copies = Math.floor(Number((entry as { copies?: unknown })?.copies) || 0);
+              return key && copies > 0 ? { cardKey: key, copies: Math.min(copies, 100) } : null;
+            })
+            .filter((entry): entry is { cardKey: string; copies: number } => entry !== null)
+        : null;
+      const hasCopyEntries = cardCopies !== null && cardCopies.length > 0;
+      if (
+        !mode ||
+        (mode === "copies" && !hasCopyEntries) ||
+        (mode !== "all_duplicates" && mode !== "whole_matching" && mode !== "copies" && !hasBulkKeys && !cardKey)
+      ) {
         sendJson(req, res, ctx, 400, { error: "invalid_recycle_request" });
         return true;
       }
@@ -610,6 +537,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         mode,
         cardKey: cardKey ?? undefined,
         cardKeys: hasBulkKeys ? cardKeys : undefined,
+        cardCopies: hasCopyEntries ? cardCopies : undefined,
         tier: recycleUntracked ? "all" : recycleTier,
         query: typeof body.query === "string" ? body.query.slice(0, 120) : "",
         restrictToCardUserIds: untrackedIds,
@@ -642,13 +570,11 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         sendJson(req, res, ctx, 503, { error: "pool_unavailable" });
         return true;
       }
-      sendJson(
-        req,
-        res,
-        ctx,
-        200,
-        await listPackCollectionMissingPlayers(ctx.db, walletUserId, roster, { page, pageSize, query }),
-      );
+      const [missing, goatMissing] = await Promise.all([
+        listPackCollectionMissingPlayers(ctx.db, walletUserId, roster, { page, pageSize, query }),
+        countMissingGoatCards(ctx.db, walletUserId),
+      ]);
+      sendJson(req, res, ctx, 200, { ...missing, goatMissing });
       return true;
     }
     // Progress is a garnish on the header; a pool board that cannot build

@@ -23,7 +23,6 @@ import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
 import { backfillPackCardSerials } from "./features/pack-pulls.js";
-import { ensurePackDuelsSchema } from "./features/pack-duels.js";
 import { ensurePackCardCatalog, ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
 import { backfillSkinSlugs } from "./features/skins.js";
 import { isSkinStorageConfigured, readSkinObject, skinObjectDeletesEnabled } from "./skins/r2.js";
@@ -199,10 +198,13 @@ export async function createApp() {
     // when its owner first pulled the card). Only fills gaps, so every boot
     // after the first writes nothing.
     await bootWrite("backfill_pack_card_serials", () => backfillPackCardSerials(db));
-    // Pack duels are still a prototype, and its table predates the pick log on
-    // any database that saw an earlier mode. Adds the missing columns and
-    // clears out rows nothing can read any more; a no-op everywhere else.
-    await bootWrite("ensure_pack_duels_schema", () => ensurePackDuelsSchema(db));
+    // Pack duels were dropped as a mode, so the prototype's table and its share
+    // of the arcade ledger go with it. A no-op on every boot after the first,
+    // and on any database created since the schema stopped declaring it.
+    await bootWrite("drop_pack_duels", async () => {
+      await exec(db, "drop table if exists pack_duels");
+      await exec(db, "delete from pack_game_rewards where source = 'duel'");
+    });
     // Seeds the checked-in archived-player profiles (deleted osu! accounts we
     // reconstructed from the Wayback Machine). Content-addressed, so this is a
     // no-op on every boot after the first that sees a given file.

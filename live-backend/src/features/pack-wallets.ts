@@ -162,6 +162,24 @@ export async function listPackCollectionMissingPlayers(
   return { players, total };
 }
 
+/* How many GOAT cards this collection still lacks. Separate from the list
+   above because a GOAT is not a pool slot: most of the honorary roster sits
+   outside the draw pool entirely (banned or deleted accounts have no roster
+   row), and the ones still ranked have their pool slot filled by the ordinary
+   card. So a missing GOAT shows up in neither the header's owned/pool ratio
+   nor the missing list, and the album is where it gets looked at. */
+export async function countMissingGoatCards(db: Db, userId: number): Promise<number> {
+  const honorary = [...HONORARY_USER_IDS].join(",");
+  const row = (await exec(
+    db,
+    `select count(distinct card_user_id) as owned from pack_collection_cards
+     where owner_user_id = ? and copies > 0 and card_key like '%:goat'
+       and card_user_id in (${honorary})`,
+    [userId],
+  )).rows[0];
+  return Math.max(0, HONORARY_USER_IDS.size - Number(row?.owned ?? 0));
+}
+
 /* Restricts a card query to specific players. The ids are validated integers
    inlined into the SQL (not bound parameters) so a large retired set can never
    trip the parameter limit; an empty restriction matches nothing. */
@@ -176,7 +194,7 @@ function cardUserIdRestrictionSql(userIds: readonly number[]): string {
    hundred bytes each, so a wide page is still a small response. */
 export const PACK_COLLECTION_MAX_PAGE_SIZE = 250;
 
-export type PackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching";
+export type PackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching" | "copies";
 export type PackWalletCardImportMode = "snapshot" | "delta";
 
 export interface PackRecycleResult {
@@ -489,8 +507,8 @@ async function getOrCreatePackWallet(db: Db, userId: number, now: number): Promi
   return (await getPackWallet(db, userId)) ?? { payload: defaultWalletPayload(now), rev: 1, updatedAt: now };
 }
 
-/* Exported for the arcade, which pays shards for a duel win or a streak run
-   and needs the same single writer every other grant goes through. */
+/* Exported for the arcade, which pays shards for a streak run and needs the
+   same single writer every other grant goes through. */
 export async function addWalletShards(db: Db, userId: number, gained: number, now: number): Promise<StoredPackWallet> {
   const wallet = await getOrCreatePackWallet(db, userId, now);
   if (gained <= 0) return wallet;
@@ -1261,129 +1279,6 @@ export async function ensurePackCardCatalog(db: Db): Promise<boolean> {
   return true;
 }
 
-/* Which of these cards an account actually holds a copy of right now.
-
-   Duels stake real cards, so a hand is no longer a claim the server takes on
-   trust the way the pull log is: what you put up has to be in your collection
-   when you put it up. */
-export async function heldPackCollectionCardKeys(
-  db: Db,
-  ownerUserId: number,
-  cardKeys: readonly string[],
-): Promise<Set<string>> {
-  const keys = [...new Set(cardKeys.map(normalizePackCardKey).filter((key): key is string => key !== null))];
-  if (keys.length === 0 || !Number.isInteger(ownerUserId) || ownerUserId <= 0) return new Set();
-  const rows = (await exec(
-    db,
-    `select card_key from pack_collection_cards
-     where owner_user_id = ? and copies > 0 and card_key in (${keys.map(() => "?").join(", ")})`,
-    [ownerUserId, ...keys],
-  )).rows;
-  return new Set(rows.map((row) => String(row.card_key)));
-}
-
-export interface PackCardTransfer {
-  cardKey: string;
-  username: string;
-  tier: string | null;
-  tierLabel: string | null;
-  /* A card the loser no longer holds (recycled since they staked it) moves as
-     its shard value instead, so getting rid of your stake mid-duel is not a
-     way to keep it. */
-  shards: number;
-}
-
-/* Moves one copy of each card from one collection to another.
-
-   Serials deliberately do not travel: `pack_card_serials` records who pulled a
-   card first, and a card you won is not a card you pulled. The loser keeps the
-   serial they earned even after the copy leaves them, exactly as it survives
-   recycling. */
-export async function transferPackCollectionCards(
-  db: Db,
-  fromUserId: number,
-  toUserId: number,
-  cardKeys: readonly string[],
-  now = Date.now(),
-): Promise<{ moved: PackCardTransfer[]; shards: number }> {
-  const keys = [...new Set(cardKeys.map(normalizePackCardKey).filter((key): key is string => key !== null))];
-  const moved: PackCardTransfer[] = [];
-  let shards = 0;
-  if (keys.length === 0 || fromUserId === toUserId) return { moved, shards };
-  if (!Number.isInteger(fromUserId) || fromUserId <= 0 || !Number.isInteger(toUserId) || toUserId <= 0) {
-    return { moved, shards };
-  }
-
-  for (const cardKey of keys) {
-    const row = (await exec(
-      db,
-      `select card_user_id, tier, copies, first_pulled_at, skills_id, pp, global_rank,
-              ${catalogFieldSql("username")} as username,
-              ${catalogFieldSql("tier_label")} as tier_label
-       from pack_collection_cards
-       where owner_user_id = ? and card_key = ?`,
-      [fromUserId, cardKey],
-    )).rows[0];
-    if (!row) continue;
-    const tier = typeof row.tier === "string" ? row.tier : null;
-    const username = String(row.username ?? "");
-    const tierLabel = typeof row.tier_label === "string" ? row.tier_label : null;
-    // Staked and then recycled: the copy is gone, so the winner is paid what
-    // the loser got for it.
-    if ((Number(row.copies) || 0) <= 0) {
-      const value = shardValueForStoredTier(tier);
-      shards += value;
-      moved.push({ cardKey, username, tier, tierLabel, shards: value });
-      continue;
-    }
-
-    const taken = (await exec(
-      db,
-      `update pack_collection_cards
-       set copies = copies - 1, updated_at = ?
-       where owner_user_id = ? and card_key = ? and copies > 0`,
-      [now, fromUserId, cardKey],
-    )).rowsAffected;
-    // Lost a race with a recycle: the shard fallback covers it next read.
-    if (taken === 0) continue;
-
-    // Only the ownership row moves: the card's identity and its snapshot are
-    // already interned (the loser held it), so the winner's row points at the
-    // same rows rather than copying anything.
-    await exec(
-      db,
-      `insert into pack_collection_cards (
-         owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank,
-         copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
-       ) values (?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?)
-       on conflict(owner_user_id, card_key) do update set
-         copies = max(0, pack_collection_cards.copies + 1),
-         skills_id = coalesce(pack_collection_cards.skills_id, excluded.skills_id),
-         first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
-         last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
-         updated_at = excluded.updated_at`,
-      [
-        toUserId,
-        Number(row.card_user_id) || 0,
-        cardKey,
-        tier,
-        row.skills_id == null ? null : Number(row.skills_id),
-        Number(row.pp) || 0,
-        Number(row.global_rank) || 0,
-        // A won card is new to this collection today, but it was first pulled
-        // when the loser pulled it, and the album sorts on that.
-        Number(row.first_pulled_at) || now,
-        now,
-        now,
-      ],
-    );
-    moved.push({ cardKey, username, tier, tierLabel, shards: 0 });
-  }
-
-  if (shards > 0) await addWalletShards(db, toUserId, shards, now);
-  return { moved, shards };
-}
-
 export function shardValueForStoredTier(tier: string | null): number {
   const key = tier ?? "unrated";
   // Own-property check for the same reason tierRank uses one: an inherited key
@@ -1409,6 +1304,10 @@ export async function recyclePackCollectionCards(
     mode: PackRecycleMode;
     cardKey?: string;
     cardKeys?: string[];
+    /* For "copies": how many copies of each card to hand back, rather than
+       all of them. The pull summary recycles a pack this way, so a duplicate
+       gives up the copy that pack added and nothing collected before it. */
+    cardCopies?: Array<{ cardKey: string; copies: number }>;
     tier?: string | null;
     query?: string | null;
     /* Same restriction listPackCollectionCards takes, so "recycle everything
@@ -1486,6 +1385,52 @@ export async function recyclePackCollectionCards(
         [now, userId, ...keys],
       );
     }
+    return { gained, wallet: await addWalletShards(db, userId, gained, now) };
+  }
+
+  if (options.mode === "copies") {
+    /* How many copies of each card to hand back. Repeats add up rather than
+       overwrite: one pack can deal the same card twice. */
+    const wanted = new Map<string, number>();
+    for (const entry of options.cardCopies ?? []) {
+      const key = normalizePackCardKey(entry?.cardKey);
+      const copies = Math.max(0, Math.floor(Number(entry?.copies) || 0));
+      if (!key || copies <= 0) continue;
+      wanted.set(key, (wanted.get(key) ?? 0) + copies);
+    }
+    const keys = [...wanted.keys()];
+    if (keys.length === 0) return { gained: 0, wallet: await getOrCreatePackWallet(db, userId, now) };
+    const placeholders = keys.map(() => "?").join(", ");
+    const rows = (await exec(
+      db,
+      `select card_key, copies, tier from pack_collection_cards
+       where owner_user_id = ? and card_key in (${placeholders}) and copies > 0`,
+      [userId, ...keys],
+    )).rows;
+    const updates: DbStatement[] = [];
+    for (const row of rows) {
+      const key = typeof row.card_key === "string" ? row.card_key : String(row.card_key ?? "");
+      const held = Math.max(0, Math.floor(Number(row.copies) || 0));
+      const taken = Math.min(wanted.get(key) ?? 0, held);
+      if (taken <= 0) continue;
+      const tier = typeof row.tier === "string" ? row.tier : null;
+      const duplicateValue = duplicateShardValueForStoredTier(tier);
+      // The last copy to leave is worth the full tier value and every copy
+      // above it the duplicate rate, which is how whole-recycling prices the
+      // same cards: giving a card up a copy at a time cannot pay more.
+      gained += taken >= held
+        ? shardValueForStoredTier(tier) + (taken - 1) * duplicateValue
+        : taken * duplicateValue;
+      updates.push({
+        sql: `update pack_collection_cards
+              set recycled_copies = recycled_copies + ?,
+                  copies = copies - ?,
+                  updated_at = ?
+              where owner_user_id = ? and card_key = ? and copies >= ?`,
+        args: [taken, taken, now, userId, key, taken],
+      });
+    }
+    if (updates.length > 0) await execBatch(db, updates);
     return { gained, wallet: await addWalletShards(db, userId, gained, now) };
   }
 

@@ -4,15 +4,15 @@ import { unpackJson } from "../shared/compressed-json.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { addWalletShards } from "./pack-wallets.js";
 
-// What the arcade pays. Both games hand out shards, and both are capped by the
-// same daily allowance rather than by trusting the client.
+// What the arcade pays. Shards are handed out per run and capped by a daily
+// allowance rather than by trusting the client.
 //
-// The cap is the whole security model, deliberately. A streak run is scored in
-// the browser off data that is public either way (a script could read the
-// rankings and answer every round correctly), and a duel is two accounts who
-// could simply agree to trade wins, so no amount of server-side game state
-// would make either unfarmable. What does work is making farming pointless: a
-// day's play is worth the same allowance whether it was earned or scripted.
+// The cap is the whole security model, deliberately. A casual streak run is
+// scored in the browser off data that is public either way (a script could
+// read the rankings and answer every round correctly), so no amount of
+// server-side game state would make it unfarmable. What does work is making
+// farming pointless: a day's play is worth the same allowance whether it was
+// earned or scripted.
 //
 // Where the allowance sits is set by what the rest of the economy already
 // pays, not by how nervous the client-reported scoring makes anyone. A pack
@@ -21,9 +21,9 @@ import { addWalletShards } from "./pack-wallets.js";
 // recycled, and nothing caps that: an account left open all day earns several
 // thousand for doing nothing. The arcade is capped, so the cap has to be worth
 // sitting down for. A day's allowance is about five hours of idling, which a
-// player reaches in one long streak run (sixty correct caps it) or a
-// couple of dozen duels, and is still a fraction of what the idle loop next
-// to it pays over the same day. Farming it is possible and pointless.
+// player reaches in one long streak run (sixty correct caps it), and is still
+// a fraction of what the idle loop next to it pays over the same day. Farming
+// it is possible and pointless.
 
 export const GAME_SHARD_DAILY_CAP = 1200;
 
@@ -44,15 +44,10 @@ export const STREAK_SHARDS_PER_CORRECT = 8;
 export const STREAK_MILESTONE = 5;
 export const STREAK_MILESTONE_BONUS = 10;
 
-/* A duel is worth a good streak run: it costs a hand of mints to answer, four
-   rounds of decisions to play, and a second human to exist. The loser is paid
-   too, because a game that pays nothing for losing is one nobody answers
-   twice. */
-export const DUEL_WIN_SHARDS = 25;
-export const DUEL_TIE_SHARDS = 15;
-export const DUEL_LOSS_SHARDS = 8;
-
-export type PackGameSource = "streak" | "duel";
+/* The ledger is keyed by which game paid, so the cap can read one sum across
+   all of them. Only the streak game is left, and the column stays because the
+   next mode should not need a schema change to be capped with it. */
+export type PackGameSource = "streak";
 
 export interface PackGameRewardResult {
   /* What actually landed in the wallet, which is the ask trimmed to whatever

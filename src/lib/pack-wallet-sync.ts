@@ -71,6 +71,9 @@ export interface ServerPackCollectionMissingPlayer {
 export interface ServerPackCollectionMissingPage {
   players: ServerPackCollectionMissingPlayer[];
   total: number;
+  /** GOAT cards this collection lacks. Not pool players, so they are counted
+      rather than listed: the album is where the empty slots are. */
+  goatMissing: number;
 }
 
 export type PushPackWalletResult =
@@ -226,10 +229,11 @@ export const fetchServerPackCollectionMissing = createServerFn({ method: "GET" }
     if (data.query) url.searchParams.set("q", data.query);
     const response = await fetch(url, { headers: target.headers });
     if (!response.ok) throw new Error(`Pack collection missing fetch failed (${response.status}).`);
-    const body = (await response.json()) as { players?: unknown; total?: unknown };
+    const body = (await response.json()) as { players?: unknown; total?: unknown; goatMissing?: unknown };
     return {
       players: Array.isArray(body.players) ? (body.players as ServerPackCollectionMissingPlayer[]) : [],
       total: Number(body.total) || 0,
+      goatMissing: Number(body.goatMissing) || 0,
     };
   });
 
@@ -443,9 +447,8 @@ export interface ServerPackCardCollectors {
    card; the public endpoint beside it stays a count. Null when signed out or
    with no backend configured.
 
-   Admin-gated while it is being tried out, the same way pack duels are: the
-   trigger on /packs is behind canUseAdminFeatures and this refuses anyone
-   else regardless. */
+   Admin-gated while it is being tried out: the trigger on /packs is behind
+   canUseAdminFeatures and this refuses anyone else regardless. */
 export const fetchServerPackCardCollectors = createServerFn({ method: "GET" }).handler(
   async (): Promise<ServerPackCardCollectors | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -491,15 +494,23 @@ export const fetchServerPackCardCollectors = createServerFn({ method: "GET" }).h
   },
 );
 
-export type ServerPackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching";
+export type ServerPackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching" | "copies";
 
 export const recycleServerPackCollection = createServerFn({ method: "POST" })
-  .validator((input: { mode?: unknown; cardKey?: unknown; cardKeys?: unknown; tier?: unknown; query?: unknown }) => {
+  .validator((input: {
+    mode?: unknown;
+    cardKey?: unknown;
+    cardKeys?: unknown;
+    cardCopies?: unknown;
+    tier?: unknown;
+    query?: unknown;
+  }) => {
     const mode =
       input?.mode === "duplicates" ||
       input?.mode === "whole" ||
       input?.mode === "all_duplicates" ||
-      input?.mode === "whole_matching"
+      input?.mode === "whole_matching" ||
+      input?.mode === "copies"
       ? input.mode
       : null;
     // Cards are addressed by wallet key ("<id>" or "<id>:goat"), so a GOAT and
@@ -512,7 +523,27 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
           .filter((key): key is string => key !== null)
       : null;
     const hasBulkKeys = cardKeys !== null && cardKeys.length > 0;
-    if (!mode || (mode !== "all_duplicates" && mode !== "whole_matching" && !hasBulkKeys && !cardKey)) {
+    /* Per-card copy counts, capped at a hand's worth: this mode hands back a
+       pack that was just opened, so a duplicate gives up only the copy that
+       pack added. */
+    const cardCopies = mode === "copies" && Array.isArray(input?.cardCopies)
+      ? input.cardCopies
+          .slice(0, 50)
+          .map((entry) => {
+            const key = typeof (entry as { cardKey?: unknown })?.cardKey === "string"
+              ? sanitizeCardKey((entry as { cardKey: string }).cardKey)
+              : null;
+            const copies = Math.floor(Number((entry as { copies?: unknown })?.copies) || 0);
+            return key && copies > 0 ? { cardKey: key, copies: Math.min(copies, 100) } : null;
+          })
+          .filter((entry): entry is { cardKey: string; copies: number } => entry !== null)
+      : null;
+    const hasCopyEntries = cardCopies !== null && cardCopies.length > 0;
+    if (
+      !mode ||
+      (mode === "copies" && !hasCopyEntries) ||
+      (mode !== "all_duplicates" && mode !== "whole_matching" && mode !== "copies" && !hasBulkKeys && !cardKey)
+    ) {
       throw new Error("Invalid recycle request.");
     }
     const tier = typeof input?.tier === "string" ? input.tier : "all";
@@ -521,6 +552,7 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
       mode,
       cardKey: cardKey ?? undefined,
       cardKeys: hasBulkKeys ? cardKeys : undefined,
+      cardCopies: hasCopyEntries ? cardCopies : undefined,
       tier,
       query,
     };

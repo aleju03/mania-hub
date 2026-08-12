@@ -26,7 +26,6 @@ import {
 import { ShuffleStage } from "../components/packs/ShuffleStage";
 import { usePackWallet } from "../components/packs/usePackWallet";
 import { useAuth } from "../lib/auth-context";
-import { canUseAdminFeatures } from "../lib/auth-shared";
 import {
   MAX_PACK_CHARGES,
   msUntilNextCharge,
@@ -35,7 +34,7 @@ import {
   parsePackCardKey,
   type PackWallet,
 } from "../lib/pack-collection";
-import { fetchLivePackDuel, isLiveBackendConfigured, warmLivePackPlayers, type LivePackDuel } from "../lib/live-backend";
+import { isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
 import {
   clearPendingPack,
   consumePendingPackCard,
@@ -43,8 +42,6 @@ import {
   writePendingPack,
 } from "../lib/pack-pending";
 import { fetchServerPackCollectionOwnedKeys, recordServerPackPulls } from "../lib/pack-wallet-sync";
-import { duelCardsFromRevealed } from "../components/packs/duelMint";
-import { createPackDuel, duelErrorMessage, joinPackDuel } from "../lib/pack-duels";
 import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
@@ -59,13 +56,18 @@ import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
 
 export const Route = createFileRoute("/packs")({
-  validateSearch: (search: Record<string, unknown>): { view?: "album" | "streak"; duel?: string } => {
+  validateSearch: (search: Record<string, unknown>): { view?: "album" | "streak"; album?: string } => {
     const view = search.view === "album" || search.view === "streak" ? search.view : undefined;
-    // Answering a duel is opening a pack, so the duel travels as a search
-    // param and the summary hands the pulled cards straight to it.
-    const duel =
-      typeof search.duel === "string" && /^[a-z0-9]{6,16}$/.test(search.duel) ? search.duel : undefined;
-    return { ...(view ? { view } : {}), ...(duel ? { duel } : {}) };
+    /* Which album is open on the shelf, so one can be linked to. Album codes
+       are country codes plus the two pinned ones (GLOBAL, GOAT); anything
+       that is not shaped like one is dropped and the shelf opens instead.
+       Read in either case and written in lower ("?album=goat"), since the
+       link is a thing people read; the shelf's own codes are upper. */
+    const album =
+      typeof search.album === "string" && /^[A-Za-z]{2,8}$/.test(search.album)
+        ? search.album.toUpperCase()
+        : undefined;
+    return { ...(view ? { view } : {}), ...(album ? { album } : {}) };
   },
   head: ({ match }) => pageSeo({
     title: "Card Packs",
@@ -365,7 +367,7 @@ function PackTypeSelector({
 function PacksPage() {
   const reducedMotion = useReducedMotion();
   const auth = useAuth();
-  const { view, duel: answeringDuelId } = Route.useSearch();
+  const { view, album: openAlbumCode } = Route.useSearch();
   /* Local first, URL second: mounting the game must land in the click's own
      render. Waiting for the router to rematch the whole packs route let idle
      foil/card-back canvas work run ahead of the interaction for hundreds of
@@ -394,16 +396,11 @@ function PacksPage() {
     string,
     { serial: number; mintedTotal: number; isFirstGlobal: boolean }
   > | null>(null);
-  const [duelBusy, setDuelBusy] = useState(false);
-  const [duelError, setDuelError] = useState<string | null>(null);
   const preparedPackKeyRef = useRef<string | null>(null);
   /* Armed by the deal effect with the draw for the current selection; the
      pack's first grab pulls it. Null while no deal is owed (already dealt,
      already started, or nothing selected). */
   const dealTriggerRef = useRef<(() => void) | null>(null);
-  /* The duel this pack is being opened to answer, if any. Loaded from the
-     link so the page knows which pack type to force and who is waiting. */
-  const [answering, setAnswering] = useState<LivePackDuel | null>(null);
   const [collectionPanelReady, setCollectionPanelReady] = useState(!streakOpen);
   const [collectionPanelMounted, setCollectionPanelMounted] = useState(!streakOpen);
   // Holds the last wallet the visible collection rendered. Spending a pack
@@ -416,15 +413,18 @@ function PacksPage() {
      tab switch visibly lag. */
   /* The game takes over the page's middle; everything around it (the ticker,
      the wallet strip, the header) stays exactly where it was. */
-  const [albumOpen, setAlbumOpen] = useState(view === "album");
+  /* A link to one album (`?album=goat`) is a link to the album tab, so it
+     opens the tab on its own rather than needing `view=album` beside it. */
+  const albumRequested = view === "album" || Boolean(openAlbumCode);
+  const [albumOpen, setAlbumOpen] = useState(albumRequested);
   /* Once visited, the album stays mounted (hidden) so switching back keeps
      its shelf, open book, and loaded rosters. */
-  const [albumMounted, setAlbumMounted] = useState(view === "album");
+  const [albumMounted, setAlbumMounted] = useState(albumRequested);
   useEffect(() => {
     setStreakOpen(view === "streak");
-    setAlbumOpen(view === "album");
-    if (view === "album") setAlbumMounted(true);
-  }, [view]);
+    setAlbumOpen(albumRequested);
+    if (albumRequested) setAlbumMounted(true);
+  }, [view, albumRequested]);
 
   const showStreakView = (open: boolean) => {
     setStreakOpen(open);
@@ -612,88 +612,10 @@ function PacksPage() {
     }, reducedMotion);
   }, [phase, reducedMotion, streakOpen]);
 
-  /* Duelling is an unfinished prototype, so every entry point is admin-only
-     for now. The server functions refuse a non-admin caller regardless. The
-     higher-or-lower game next to it is deliberately NOT behind this: it is
-     open to everyone, signed in or not. */
-  const canDuel = canUseAdminFeatures(auth) && Boolean(auth.viewer) && isLiveBackendConfigured();
-
-  useEffect(() => {
-    // Gated with the rest of duelling: without this a non-admin following a
-    // duel link would be told to open a pack and play it for the stake, and
-    // then find no button to do it with.
-    if (!answeringDuelId || !canDuel || !isLiveBackendConfigured()) {
-      setAnswering(null);
-      return;
-    }
-    let cancelled = false;
-    void fetchLivePackDuel(answeringDuelId)
-      .then((duel) => {
-        if (cancelled) return;
-        // Already answered: nothing here to match, so it reads as an ordinary
-        // visit to the packs page rather than a broken banner.
-        setAnswering(duel.opponent.userId ? null : duel);
-      })
-      .catch(() => {
-        if (!cancelled) setAnswering(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [answeringDuelId, canDuel]);
-
-  /* An answer has to match the challenge: same pack type, same size of stake. */
-  useEffect(() => {
-    if (answering) setPackTypeId(answering.packType as PackTypeId);
-  }, [answering]);
-
-  /* Puts the pack that was just opened up against the challenge. The cards are
-     already in the collection by now (the wallet push is what put them there),
-     which is what the backend checks before it will take the stake. */
-  const answerDuel = () => {
-    if (!answering || duelBusy) return;
-    const cards = duelCardsFromRevealed(revealed);
-    if (cards.length === 0) {
-      setDuelError("None of these cards minted, so there is nothing to stake.");
-      return;
-    }
-    setDuelBusy(true);
-    setDuelError(null);
-    void joinPackDuel({ data: { duelId: answering.id, cards } })
-      .then((result) => {
-        if (result.ok) void navigate({ to: "/duel/$duelId", params: { duelId: answering.id } });
-        else setDuelError(duelErrorMessage(result.error));
-      })
-      .catch(() => setDuelError("Could not answer that duel."))
-      .finally(() => setDuelBusy(false));
-  };
-
-  /* Freezes the hand just revealed into a duel link. Whoever opens it answers
-     with their own pack of the same type, and the two hands play five rounds
-     out on the duel page; nothing here touches either collection. */
-  const startDuel = () => {
-    if (!auth.viewer || duelBusy) return;
-    const cards = duelCardsFromRevealed(revealed);
-    if (cards.length === 0) {
-      setDuelError("None of these cards minted, so there is nothing to duel with.");
-      return;
-    }
-    setDuelBusy(true);
-    setDuelError(null);
-    void createPackDuel({ data: { packType: selectedType.id, cards } })
-      .then((result) => {
-        if (result.ok) void navigate({ to: "/duel/$duelId", params: { duelId: result.duel.id } });
-        else setDuelError(duelErrorMessage(result.error));
-      })
-      .catch(() => setDuelError("Could not open that duel."))
-      .finally(() => setDuelBusy(false));
-  };
-
   const openAnother = () => {
     setRevealed([]);
     setSummaryFlyFrom(null);
     setSerials(null);
-    setDuelError(null);
     autoOpenRef.current = false;
     // Keep the chosen pack type across packs while it stays affordable.
     if (!canAffordPack(walletApi.wallet, packTypeById(packTypeId))) setPackTypeId("standard");
@@ -709,7 +631,6 @@ function PacksPage() {
     setRevealed([]);
     setSummaryFlyFrom(null);
     setSerials(null);
-    setDuelError(null);
     autoOpenRef.current = true;
     setPhase("reveal");
     setPackId((id) => id + 1);
@@ -808,21 +729,6 @@ function PacksPage() {
                 </button>
               </div>
             )}
-            {answering && phase !== "reveal" && (
-              <div className="mb-6 text-center text-[12px]">
-                <span className="font-bold text-white">
-                  {answering.challenger.username ?? "Someone"} has {answering.challenger.cardCount} cards on the line.
-                </span>{" "}
-                <span className="text-osu-f1">
-                  Open a {packTypeById(answering.packType as PackTypeId).name} pack and play them for it. The winner
-                  keeps both hands.
-                </span>
-              </div>
-            )}
-            {duelError && phase !== "reveal" && (
-              <div className="mb-6 text-center text-[12px] text-osu-pink-light">{duelError}</div>
-            )}
-
             {/* Temporary GOAT vote. It owns its own placement (RAIL_LAYOUT in
                 GoatPoll.tsx): once the viewport has room for a rail beside the
                 centred 960px column it floats out of flow into the right
@@ -934,9 +840,7 @@ function PacksPage() {
                           selectedType.cost.kind === "shards" ? selectedType.cost.amount : null
                         }
                         serials={serials}
-                        onChallenge={canDuel ? (answering ? answerDuel : startDuel) : undefined}
-                        challengeBusy={duelBusy}
-                        answeringUsername={answering?.challenger.username ?? null}
+                        onRecycleCopies={walletApi.recycleCopies}
                       />
                     ) : cards ? (
                       <RevealStage
@@ -1051,6 +955,7 @@ function PacksPage() {
                       syncStatus={walletApi.syncStatus}
                       trackedCountries={trackedCountries}
                       viewerId={auth.viewer?.id ?? null}
+                      openAlbumCode={openAlbumCode ?? null}
                     />
                   </div>
                 )}

@@ -54,7 +54,6 @@ import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as CommunitiesIdRouteImport } from './routes/communities_.$id'
 import { Route as CommunitiesReviewRouteImport } from './routes/communities_.review'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
-import { Route as DuelDuelIdRouteImport } from './routes/duel/$duelId'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
 import { Route as ApiAuthDiscordRouteImport } from './routes/api/auth/discord'
@@ -296,11 +295,6 @@ const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
   path: '/dev/opt-in-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DuelDuelIdRoute = DuelDuelIdRouteImport.update({
-  id: '/duel/$duelId',
-  path: '/duel/$duelId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
   id: '/player/$username',
   path: '/player/$username',
@@ -423,7 +417,6 @@ export interface FileRoutesByFullPath {
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
-  '/duel/$duelId': typeof DuelDuelIdRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins/$id': typeof SkinsIdRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
@@ -486,7 +479,6 @@ export interface FileRoutesByTo {
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
-  '/duel/$duelId': typeof DuelDuelIdRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins/$id': typeof SkinsIdRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
@@ -550,7 +542,6 @@ export interface FileRoutesById {
   '/communities_/$id': typeof CommunitiesIdRoute
   '/communities_/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
-  '/duel/$duelId': typeof DuelDuelIdRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins_/$id': typeof SkinsIdRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
@@ -615,7 +606,6 @@ export interface FileRouteTypes {
     | '/communities/$id'
     | '/communities/review'
     | '/dev/opt-in-preview'
-    | '/duel/$duelId'
     | '/player/$username'
     | '/skins/$id'
     | '/api/auth/discord'
@@ -678,7 +668,6 @@ export interface FileRouteTypes {
     | '/communities/$id'
     | '/communities/review'
     | '/dev/opt-in-preview'
-    | '/duel/$duelId'
     | '/player/$username'
     | '/skins/$id'
     | '/api/auth/discord'
@@ -741,7 +730,6 @@ export interface FileRouteTypes {
     | '/communities_/$id'
     | '/communities_/review'
     | '/dev/opt-in-preview'
-    | '/duel/$duelId'
     | '/player/$username'
     | '/skins_/$id'
     | '/api/auth/discord'
@@ -805,7 +793,6 @@ export interface RootRouteChildren {
   CommunitiesIdRoute: typeof CommunitiesIdRoute
   CommunitiesReviewRoute: typeof CommunitiesReviewRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
-  DuelDuelIdRoute: typeof DuelDuelIdRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
   SkinsIdRoute: typeof SkinsIdRoute
   ApiAuthDiscordRoute: typeof ApiAuthDiscordRouteWithChildren
@@ -1132,13 +1119,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevOptInPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/duel/$duelId': {
-      id: '/duel/$duelId'
-      path: '/duel/$duelId'
-      fullPath: '/duel/$duelId'
-      preLoaderRoute: typeof DuelDuelIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/player/$username': {
       id: '/player/$username'
       path: '/player/$username'
@@ -1349,7 +1329,6 @@ const rootRouteChildren: RootRouteChildren = {
   CommunitiesIdRoute: CommunitiesIdRoute,
   CommunitiesReviewRoute: CommunitiesReviewRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
-  DuelDuelIdRoute: DuelDuelIdRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
   SkinsIdRoute: SkinsIdRoute,
   ApiAuthDiscordRoute: ApiAuthDiscordRouteWithChildren,

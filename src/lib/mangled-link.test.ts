@@ -59,7 +59,6 @@ describe("salvageMangledPath", () => {
     expect(salvageMangledPath("/api/status")).toBeNull();
     expect(salvageMangledPath("/api/og")).toBeNull();
     expect(salvageMangledPath("/admin/live-backend")).toBeNull();
-    expect(salvageMangledPath("/duel/abc")).toBeNull();
     expect(salvageMangledPath("/videos/1/x.mp4")).toBeNull();
   });
 

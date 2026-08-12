@@ -16,6 +16,7 @@ import {
   recordPull,
   recycleAllCopies,
   recycleAllDuplicates,
+  recycleCopies,
   recycleDuplicates,
   sanitizeWallet,
   settleCharges,
@@ -183,6 +184,39 @@ describe("pulls and recycling", () => {
     const dupesFirst = recycleDuplicates(wallet, "7");
     const thenTheRest = recycleAllCopies(dupesFirst.wallet, "7");
     expect(dupesFirst.gained + thenTheRest.gained).toBe(wholeGo.gained);
+  });
+
+  it("hands a pack's own copies back without touching the ones held before it", () => {
+    // What the pull summary's recycle does: the copy this pack added goes at
+    // the duplicate rate and the collection keeps the card.
+    let wallet = createEmptyWallet(T0);
+    for (let i = 0; i < 3; i += 1) wallet = recordPull(wallet, pull(7, "elite"), T0 + i).wallet;
+
+    const oneCopy = recycleCopies(wallet, "7", 1);
+    expect(oneCopy.gained).toBe(duplicateShardValueForTier("elite"));
+    expect(oneCopy.wallet.cards["7"].copies).toBe(2);
+    expect(oneCopy.wallet.cards["7"].recycledCopies).toBe(1);
+
+    // Asking for more copies than are held takes the card out entirely, and
+    // pays the same as recycling the whole card in one go.
+    const everything = recycleCopies(oneCopy.wallet, "7", 9);
+    expect(everything.gained).toBe(wholeCardShardValue(oneCopy.wallet.cards["7"]));
+    expect(ownedCards(everything.wallet)).toHaveLength(0);
+  });
+
+  it("pays no more for a card given up a copy at a time", () => {
+    let wallet = createEmptyWallet(T0);
+    for (let i = 0; i < 3; i += 1) wallet = recordPull(wallet, pull(7, "rare"), T0 + i).wallet;
+
+    let piecemeal = wallet;
+    let gained = 0;
+    for (let i = 0; i < 3; i += 1) {
+      const step = recycleCopies(piecemeal, "7", 1);
+      gained += step.gained;
+      piecemeal = step.wallet;
+    }
+    expect(gained).toBe(recycleAllCopies(wallet, "7").gained);
+    expect(ownedCards(piecemeal)).toHaveLength(0);
   });
 
   it("keeps fully recycled cards gone after reconciling with a stale device", () => {

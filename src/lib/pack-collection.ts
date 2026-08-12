@@ -369,6 +369,52 @@ export function recycleAllCopies(
   };
 }
 
+/* What handing back `copies` copies pays when the collector holds
+   `heldCopies` of that card: the last copy to leave is worth the full tier
+   value, every copy above it the duplicate rate. That is the same split
+   recycleAllCopies uses, so cashing a card in one copy at a time can never
+   pay more than cashing it in at once. */
+export function copiesShardValue(
+  tier: ManiaCardTier | null,
+  copies: number,
+  heldCopies: number,
+): number {
+  const held = Math.max(0, Math.floor(heldCopies));
+  const taken = Math.min(Math.max(0, Math.floor(copies)), held);
+  if (taken <= 0) return 0;
+  const duplicateValue = duplicateShardValueForTier(tier);
+  return taken >= held
+    ? shardValueForTier(tier) + (taken - 1) * duplicateValue
+    : taken * duplicateValue;
+}
+
+/* Recycles a set number of copies, keeping the rest. What the pull summary
+   hands a freshly opened pack back with: a card the pack was the first copy
+   of leaves the collection, while a duplicate gives up only the copy this
+   pack added and the copies collected before it stay put. */
+export function recycleCopies(
+  wallet: PackWallet,
+  key: string,
+  copies: number,
+): { wallet: PackWallet; gained: number } {
+  const card = wallet.cards[key];
+  if (!card || card.copies <= 0) return { wallet, gained: 0 };
+  const taken = Math.min(Math.max(0, Math.floor(copies)), card.copies);
+  if (taken <= 0) return { wallet, gained: 0 };
+  const gained = copiesShardValue(card.tier, taken, card.copies);
+  return {
+    wallet: {
+      ...wallet,
+      shards: wallet.shards + gained,
+      cards: {
+        ...wallet.cards,
+        [key]: { ...card, copies: card.copies - taken, recycledCopies: card.recycledCopies + taken },
+      },
+    },
+    gained,
+  };
+}
+
 export function recycleAllDuplicates(wallet: PackWallet): { wallet: PackWallet; gained: number } {
   let gained = 0;
   const cards: Record<string, CollectedCard> = {};

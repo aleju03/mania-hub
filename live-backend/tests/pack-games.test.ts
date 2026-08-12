@@ -93,13 +93,13 @@ describe("the daily allowance", () => {
     await grantPackGameShards(db, PLAYER, "streak", GAME_SHARD_DAILY_CAP - 2);
     // Asking for more than remains is not refused, it is trimmed: a good run
     // should still bank whatever was left.
-    expect((await grantPackGameShards(db, PLAYER, "duel", 5)).granted).toBe(2);
+    expect((await grantPackGameShards(db, PLAYER, "streak", 5)).granted).toBe(2);
     expect((await grantPackGameShards(db, PLAYER, "streak", 5)).granted).toBe(0);
     expect(await walletShards(PLAYER)).toBe(GAME_SHARD_DAILY_CAP);
   });
 
-  it("shares one allowance across both games", async () => {
-    await grantPackGameShards(db, PLAYER, "duel", 12);
+  it("counts a payout against the same day's allowance", async () => {
+    await grantPackGameShards(db, PLAYER, "streak", 12);
     expect((await getPackGameAllowance(db, PLAYER)).remainingToday).toBe(GAME_SHARD_DAILY_CAP - 12);
   });
 
