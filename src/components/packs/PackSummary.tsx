@@ -534,8 +534,12 @@ export function PackSummary({
               >
                 <div
                   data-pull-index={position}
-                  className={`relative overflow-hidden rounded-[10px] transition-all duration-300 ${
-                    isRecycled ? "scale-[0.94]" : "hover:-translate-y-1"
+                  /* Never transition-all here: the flight hides a tile with
+                     visibility on the button above, visibility inherits, and a
+                     transition on it keeps the tile painted for the whole
+                     duration - so the card lands on a copy of itself. */
+                  className={`relative overflow-hidden rounded-[10px] transition-[transform,box-shadow] ${
+                    isRecycled ? "scale-[0.94] duration-300" : "hover:-translate-y-1 duration-150"
                   }`}
                   style={{
                     aspectRatio: "5 / 7",
@@ -555,14 +559,14 @@ export function PackSummary({
                     <img
                       src={card.thumbnail}
                       alt={`${card.player.user.username} maniacard`}
-                      className={`h-full w-full object-cover transition-all duration-500 ${
+                      className={`h-full w-full object-cover transition-[opacity,filter] duration-500 ${
                         isRecycled ? "opacity-20 grayscale" : ""
                       }`}
                       draggable={false}
                     />
                   ) : (
                     <div
-                      className={`grid h-full w-full place-items-center bg-osu-b4/70 px-3 text-center transition-all duration-500 ${
+                      className={`grid h-full w-full place-items-center bg-osu-b4/70 px-3 text-center transition-[opacity,filter] duration-500 ${
                         isRecycled ? "opacity-25 grayscale" : ""
                       }`}
                     >
