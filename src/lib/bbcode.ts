@@ -406,7 +406,12 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
   const root: ContainerFrame = { tag: "", param: null, children: [], openSource: "", openStart: 0 };
   const stack: ContainerFrame[] = [root];
   const top = () => stack[stack.length - 1];
-  const skippedCloseCounts = new Map<string, number>();
+  // Delayed closers left over from crossed tags (see the unwind loop below),
+  // queued per canonical tag name. The value is the node whose own closer the
+  // serializer emits last at that spot, so a newline trimmed after the delayed
+  // closer gets recorded there instead of being dropped. Null when the crossing
+  // fell back to literal recovery and there is no node to record on.
+  const skippedCloses = new Map<string, (BBNode | null)[]>();
 
   let cursor = 0;
   TAG_PATTERN.lastIndex = 0;
@@ -501,14 +506,18 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
     const openIndex = findOpenFrame(stack, closeAliases(name));
     if (openIndex === -1) {
       const skipKey = canonicalCloseKey(name);
-      const skipCount = skippedCloseCounts.get(skipKey) ?? 0;
-      if (skipCount > 0) {
-        if (skipCount === 1) skippedCloseCounts.delete(skipKey);
-        else skippedCloseCounts.set(skipKey, skipCount - 1);
+      const pending = skippedCloses.get(skipKey);
+      if (pending && pending.length > 0) {
+        const owner = pending.shift()!;
+        if (pending.length === 0) skippedCloses.delete(skipKey);
         pushText(top().children, normalized.slice(cursor, match.index), cursor);
         cursor = TAG_PATTERN.lastIndex;
         if (BLOCK_TAGS.has(name)) {
-          cursor = trimLeadingNewline(normalized, cursor);
+          const trimmed = trimLeadingNewline(normalized, cursor);
+          if (trimmed !== cursor && owner && "spacing" in owner && owner.spacing) {
+            owner.spacing.afterClose = true;
+          }
+          cursor = trimmed;
         }
         TAG_PATTERN.lastIndex = cursor;
       } else {
@@ -532,6 +541,7 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
     // when the delayed inner closer still appears later, so close those frames
     // here and skip their future closer. If no delayed closer exists, keep the
     // old literal-preserving recovery for truly dangling tags.
+    const delayedKeys: string[] = [];
     while (stack.length - 1 > openIndex) {
       const dangling = stack.pop()!;
       const parent = top();
@@ -544,8 +554,7 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
         });
         node.span = { start: dangling.openStart, end: match.index };
         parent.children.push(node);
-        const skipKey = canonicalCloseKey(dangling.tag);
-        skippedCloseCounts.set(skipKey, (skippedCloseCounts.get(skipKey) ?? 0) + 1);
+        delayedKeys.push(canonicalCloseKey(dangling.tag));
       } else {
         pushText(parent.children, dangling.openSource, dangling.openStart);
         pushNodes(parent.children, dangling.children);
@@ -569,6 +578,13 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
       pushText(parent.children, frame.openSource, frame.openStart);
       pushNodes(parent.children, frame.children);
       pushText(parent.children, tagSource, match.index);
+    }
+    // This frame's closer is the last one the serializer writes for the crossed
+    // group, so it owns whatever the delayed closers trim after themselves.
+    for (const key of delayedKeys) {
+      const queue = skippedCloses.get(key);
+      if (queue) queue.push(node);
+      else skippedCloses.set(key, [node]);
     }
   }
 

@@ -110,6 +110,15 @@ describe("bbcode editable DOM round-trip", () => {
     expect(container.textContent).not.toContain("[/notice]");
   });
 
+  it("keeps the blank line after a crossed group's delayed closer", () => {
+    // Only the close order is rewritten (to the well-nested form osu! renders);
+    // the newline trimmed after the delayed [/notice] has to survive the trip.
+    expect(roundTrip("[centre]a\n[notice]b\n[/centre][/notice]\n\nc"))
+      .toBe("[centre]a\n[notice]b\n[/notice][/centre]\n\nc");
+    expect(roundTrip("[centre]a\n[notice]b\n[/centre][/notice]\nc"))
+      .toBe("[centre]a\n[notice]b\n[/notice][/centre]\nc");
+  });
+
   it("keeps links in both forms, emails and profiles", () => {
     expectIdentity("[url=https://example.com]text[/url]");
     expectIdentity("[url]https://example.com[/url]");
