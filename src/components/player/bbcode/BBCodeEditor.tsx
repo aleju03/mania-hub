@@ -68,6 +68,8 @@ import {
 import { getUser, searchUsers } from "../../../lib/osu";
 import { fetchImageBlobViaProxy, isUploadableImage, uploadImageToCatbox } from "../../../lib/catbox-upload";
 import { resizeImageBlobToWidth } from "../../../lib/image-resize";
+import { OSU_PROFILE_COLUMN_WIDTH, columnFitScale } from "../../../lib/bbcode-layout";
+import { pendingBlobUrls, stripPendingImages } from "../../../lib/bbcode-pending-images";
 import { SearchInput } from "../../ui/SearchInput";
 import { BBCodePreview } from "./BBCodePreview";
 import { BBCodeContextMenu, type ContextMenuItem, type ContextMenuState } from "./BBCodeContextMenu";
@@ -76,6 +78,9 @@ import { ImageEditorModal, type ImageEditorSource } from "./ImageEditorModal";
 const DRAFT_KEY_PREFIX = "mania-hub-bbcode-draft-v1:";
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
 const VISUAL_SYNC_DEBOUNCE_MS = 300;
+// How long a resize may run before it is worth saying so. Below this it reads
+// as instant, and the status row would only make the docked inspector jump.
+const RESIZE_STATUS_DELAY_MS = 250;
 
 const COLOR_SWATCHES = [
   "#FFFFFF", "#FF66AA", "#B14DE8", "#66A4FF", "#5EE08A",
@@ -231,10 +236,6 @@ function stripUploadTokens(value: string): string {
 // Pasted/dropped images are held as local blob: URLs until the user copies, then
 // uploaded and swapped for real URLs. Blob URLs are session-only, so they're
 // stripped from the saved draft (a reloaded blob URL points at nothing).
-const PENDING_IMG_PATTERN = /\[img\](blob:[^\[\]]+)\[\/img\]/g;
-function stripPendingImages(value: string): string {
-  return value.replace(PENDING_IMG_PATTERN, "");
-}
 
 function readDraft(key: string): string | null {
   if (typeof window === "undefined") return null;
@@ -335,8 +336,42 @@ function addImagemapHandles(areaEl: HTMLElement) {
   }
 }
 
-function removeImageResizeHandle(surface: HTMLElement | null) {
-  surface?.querySelectorAll(".bbcode-image-resize-handle").forEach((handle) => handle.remove());
+/**
+ * Hands layout back to the image's own pixels after a drag.
+ *
+ * Only safe once the re-encoded file is in place, since until then the natural
+ * size is still the pre-resize one.
+ */
+function endResizePreview(img: HTMLImageElement) {
+  img.classList.remove("is-resizing");
+  img.style.removeProperty("width");
+  img.style.removeProperty("height");
+}
+
+/**
+ * Decodes `src` in a detached image before anything on screen points at it.
+ *
+ * Assigning a src the browser has not decoded yet empties the element until it
+ * has, so warming it here is what makes the swap a single frame instead of a
+ * blink through nothing.
+ */
+async function preloadImage(src: string): Promise<void> {
+  try {
+    // globalThis.Image: the lucide `Image` icon import shadows the constructor
+    // here, the same way it does for Map.
+    const loader = new globalThis.Image();
+    loader.src = src;
+    await loader.decode();
+  } catch {
+    // decode() is absent on older browsers and rejects on a broken image; the
+    // swap still happens, it just is not guaranteed to be seamless.
+  }
+}
+
+function removeImageResizeHandle(frame: HTMLElement | null) {
+  frame
+    ?.querySelectorAll(".bbcode-image-resize-handle, .bbcode-image-resize-readout")
+    .forEach((node) => node.remove());
 }
 
 function updateImagemapRaw(mapEl: HTMLElement) {
@@ -496,7 +531,10 @@ export function BBCodeEditor({
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [imageEditorState, setImageEditorState] = useState<{ source: ImageEditorSource } | null>(null);
   const [imageEditorBusy, setImageEditorBusy] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<{ kind: "uploading" | "error"; message?: string } | null>(null);
+  // "resizing" is not an upload: re-cutting an image only re-reads the original
+  // bytes and stages the result locally. Nothing leaves the browser until Copy
+  // BBCode, so saying "uploading" here would be a lie about where the file is.
+  const [uploadStatus, setUploadStatus] = useState<{ kind: "uploading" | "resizing" | "error"; message?: string } | null>(null);
   // Color/size of the current visual selection, for toolbar state + dialog prefill.
   const [selectionColor, setSelectionColor] = useState<string | null>(null);
   const [selectionSize, setSelectionSize] = useState<number | null>(null);
@@ -516,8 +554,25 @@ export function BBCodeEditor({
   const imagemapDragRef = useRef<ImagemapDragState | null>(null);
   const linkElementRef = useRef<HTMLAnchorElement | null>(null);
   const imageElementRef = useRef<HTMLImageElement | null>(null);
+  const visualFrameRef = useRef<HTMLDivElement | null>(null);
+  const previewFrameRef = useRef<HTMLDivElement | null>(null);
   const resizeHandleRef = useRef<HTMLSpanElement | null>(null);
-  const imageResizeRef = useRef<{ img: HTMLImageElement; startX: number; startWidth: number; maxWidth: number } | null>(null);
+  const resizeReadoutRef = useRef<HTMLSpanElement | null>(null);
+  const resizeStatusTimerRef = useRef<number | null>(null);
+  const imageResizeRef = useRef<{
+    img: HTMLImageElement;
+    startX: number;
+    startWidth: number;
+    minWidth: number;
+    maxWidth: number;
+    /** Pointer px per column px, so a scaled-down column still tracks the pointer 1:1. */
+    scale: number;
+  } | null>(null);
+  // The bytes a resized image was last cut from. Re-encoding always goes back to
+  // these rather than to whatever is on screen, so dragging an image small and
+  // then large again re-cuts from the full-resolution original instead of
+  // upscaling a thumbnail - and repeated nudges cost no quality.
+  const resizeOriginsRef = useRef<Map<string, { blob: Blob; naturalWidth: number }>>(new globalThis.Map());
   const imageEditorTargetRef = useRef<HTMLImageElement | null>(null);
   const replaceTargetRef = useRef<HTMLImageElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -948,6 +1003,57 @@ export function BBCodeEditor({
     else selectImagemapArea(nextAreas[Math.min(imagemapSelection.areaIndex, nextAreas.length - 1)]);
   }, [clearImagemapSelection, imagemapSelection, scheduleVisualSync, selectImagemapArea]);
 
+  /**
+   * Turns an existing image into an imagemap around the same file.
+   *
+   * [imagemap] is not something you add to an image, it replaces it: the tag
+   * carries its own image URL and its clickable areas, and osu! renders no
+   * [img] inside it. So the only way this reads as one action is to swap the
+   * element for a map of the same picture, seeded with one area to drag.
+   */
+  const convertImageToImagemap = useCallback((img: HTMLImageElement) => {
+    const src = img.getAttribute("src") ?? "";
+    if (!src || !visualRef.current?.contains(img)) return;
+    // A linked image already has the destination the first area should carry.
+    const anchor = img.closest<HTMLAnchorElement>('a[data-bb="url"]');
+    const href = anchor?.getAttribute("href")?.trim();
+    const holder = document.createElement("div");
+    holder.innerHTML = bbcodeToEditableHtml(
+      `[imagemap]\n${src}\n25 25 50 50 ${href || "#"}\n[/imagemap]`,
+    );
+    const mapEl = holder.querySelector<HTMLElement>('.imagemap[data-bb="imagemap"]');
+    if (!mapEl) return;
+    clearImageSelection();
+    (anchor ?? img).replaceWith(mapEl);
+    const area = getImagemapAreas(mapEl)[0];
+    flushVisual();
+    if (area) selectImagemapArea(area);
+    mapEl.scrollIntoView({ block: "nearest" });
+  }, [clearImageSelection, flushVisual, selectImagemapArea]);
+
+  /** The way back out: an imagemap becomes the plain [img] it was drawn on. */
+  const convertImagemapToImage = useCallback((mapEl: HTMLElement) => {
+    const src = mapEl.getAttribute("data-src")
+      ?? mapEl.querySelector<HTMLImageElement>(".imagemap__image")?.getAttribute("src")
+      ?? "";
+    if (!src || !visualRef.current?.contains(mapEl)) return;
+    const holder = document.createElement("div");
+    holder.innerHTML = bbcodeToEditableHtml(`[img]${src}[/img]`);
+    const img = holder.querySelector("img");
+    if (!img) return;
+    clearImagemapSelection();
+    mapEl.replaceWith(img);
+    flushVisual();
+    selectImage(img);
+  }, [clearImagemapSelection, flushVisual, selectImage]);
+
+  const deleteImagemap = useCallback((mapEl: HTMLElement) => {
+    if (!visualRef.current?.contains(mapEl)) return;
+    clearImagemapSelection();
+    mapEl.remove();
+    flushVisual();
+  }, [clearImagemapSelection, flushVisual]);
+
   useEffect(() => {
     const handle = window.setTimeout(() => writeDraft(draftKey, stripPendingImages(stripUploadTokens(source))), DRAFT_SAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(handle);
@@ -1309,6 +1415,28 @@ export function BBCodeEditor({
     else insertSnippet(snippet);
   }, [editMode, insertSnippet, insertVisualHtml]);
 
+  /**
+   * The imagemap tool acts on the image you picked. Inserting the tag's
+   * skeleton at the caret instead (what this used to do) pointed at
+   * example.com, which in the visual pane is a broken image somewhere off
+   * screen: the button looked like it did nothing.
+   */
+  const applyImagemapTool = useCallback(() => {
+    if (editMode !== "visual") {
+      insertBBCode(IMAGEMAP_TEMPLATE);
+      return;
+    }
+    const img = imageElementRef.current;
+    if (img?.isConnected) {
+      convertImageToImagemap(img);
+      return;
+    }
+    setUploadStatus({
+      kind: "error",
+      message: "Click an image first. Imagemap turns that image into clickable areas.",
+    });
+  }, [convertImageToImagemap, editMode, insertBBCode]);
+
   const insertList = useCallback((ordered: boolean) => {
     if (editMode === "visual") {
       execVisual(ordered ? "insertOrderedList" : "insertUnorderedList");
@@ -1393,9 +1521,7 @@ export function BBCodeEditor({
     // Upload every image that was pasted/dropped but deferred until now, and
     // swap its blob: URL for the real hosted URL. Bail without copying if any
     // upload fails, so a dead blob URL can never reach the clipboard.
-    const blobUrls = Array.from(
-      new Set(Array.from(value.matchAll(PENDING_IMG_PATTERN), (match) => match[1])),
-    );
+    const blobUrls = pendingBlobUrls(value);
     if (blobUrls.length > 0) {
       setUploadStatus({ kind: "uploading" });
       try {
@@ -1403,10 +1529,26 @@ export function BBCodeEditor({
           const blob = pendingUploadsRef.current.get(blobUrl);
           if (!blob) continue; // Staged in a prior session (blob gone); leave as-is.
           const uploadedUrl = await uploadImageToCatbox(blob);
-          value = value.split(`[img]${blobUrl}[/img]`).join(`[img]${uploadedUrl}[/img]`);
+          // Swapping the bare URL covers [img] and an imagemap's source line
+          // alike; a blob URL is a unique token, so nothing else can match it.
+          value = value.split(blobUrl).join(uploadedUrl);
           visualRef.current
             ?.querySelectorAll<HTMLImageElement>("img")
             .forEach((img) => { if (img.getAttribute("src") === blobUrl) img.setAttribute("src", uploadedUrl); });
+          visualRef.current
+            ?.querySelectorAll<HTMLElement>('.imagemap[data-bb="imagemap"]')
+            .forEach((mapEl) => {
+              if (mapEl.getAttribute("data-src") !== blobUrl) return;
+              mapEl.setAttribute("data-src", uploadedUrl);
+              updateImagemapRaw(mapEl);
+            });
+          // Follow the resize original over to the hosted URL, so an image can
+          // still be dragged back up to full resolution after it is copied.
+          const origin = resizeOriginsRef.current.get(blobUrl);
+          if (origin) {
+            resizeOriginsRef.current.delete(blobUrl);
+            resizeOriginsRef.current.set(uploadedUrl, origin);
+          }
           pendingUploadsRef.current.delete(blobUrl);
           URL.revokeObjectURL(blobUrl);
         }
@@ -1496,7 +1638,9 @@ export function BBCodeEditor({
   // Frees a staged blob URL if the given src was one (e.g. a crop/replace
   // discards the pre-edit image); no-op for already-uploaded URLs.
   const releasePendingImage = useCallback((url: string | null) => {
-    if (url && pendingUploadsRef.current.delete(url)) URL.revokeObjectURL(url);
+    if (!url) return;
+    resizeOriginsRef.current.delete(url);
+    if (pendingUploadsRef.current.delete(url)) URL.revokeObjectURL(url);
   }, []);
 
   /**
@@ -1528,28 +1672,61 @@ export function BBCodeEditor({
   }, []);
 
   // ---- images: drag-to-resize ----------------------------------------------
-  // The handle lives in the surface's scrolling content coordinates, so it
-  // rides along with the image as you scroll.
+
+  /** Announces a resize only if it is still running once the delay is up. */
+  const showResizeStatusSoon = useCallback(() => {
+    if (resizeStatusTimerRef.current != null) window.clearTimeout(resizeStatusTimerRef.current);
+    resizeStatusTimerRef.current = window.setTimeout(() => {
+      resizeStatusTimerRef.current = null;
+      setUploadStatus({ kind: "resizing" });
+    }, RESIZE_STATUS_DELAY_MS);
+  }, []);
+
+  /** Ends a resize's status, cancelling the announcement if it never fired. */
+  const settleResizeStatus = useCallback((status: { kind: "error"; message: string } | null) => {
+    if (resizeStatusTimerRef.current != null) {
+      window.clearTimeout(resizeStatusTimerRef.current);
+      resizeStatusTimerRef.current = null;
+    }
+    setUploadStatus(status);
+  }, []);
+
+  useEffect(() => () => {
+    if (resizeStatusTimerRef.current != null) window.clearTimeout(resizeStatusTimerRef.current);
+  }, []);
+
+  // The handle lives in the frame, which is the scroller and is not zoomed, so
+  // its coordinates are plain pointer-space pixels.
   const positionResizeHandle = useCallback(() => {
-    const surface = visualRef.current;
+    const frame = visualFrameRef.current;
     const img = imageElementRef.current;
     const handle = resizeHandleRef.current;
-    if (!surface || !img || !handle || !img.isConnected) return;
-    const surfaceRect = surface.getBoundingClientRect();
+    if (!frame || !img || !handle || !img.isConnected) return;
+    const frameRect = frame.getBoundingClientRect();
     const imgRect = img.getBoundingClientRect();
-    handle.style.left = `${imgRect.right - surfaceRect.left + surface.scrollLeft}px`;
-    handle.style.top = `${imgRect.bottom - surfaceRect.top + surface.scrollTop}px`;
+    const left = imgRect.right - frameRect.left - frame.clientLeft + frame.scrollLeft;
+    const top = imgRect.bottom - frameRect.top - frame.clientTop + frame.scrollTop;
+    handle.style.left = `${left}px`;
+    handle.style.top = `${top}px`;
+    const readout = resizeReadoutRef.current;
+    if (readout) {
+      readout.style.left = `${left}px`;
+      readout.style.top = `${top}px`;
+    }
   }, []);
 
   const handleImageResizeMove = useCallback((event: PointerEvent) => {
     const drag = imageResizeRef.current;
     if (!drag) return;
-    const next = Math.max(40, Math.min(drag.maxWidth, drag.startWidth + (event.clientX - drag.startX)));
-    // Inline width needs !important to beat the surface's `width: auto !important`.
-    drag.img.style.setProperty("width", `${Math.round(next)}px`, "important");
-    drag.img.style.maxWidth = "none";
+    // The pointer moves in screen px; the column it is resizing inside may be
+    // scaled down to fit the pane, so convert before applying the delta.
+    const delta = (event.clientX - drag.startX) / drag.scale;
+    const next = Math.round(Math.max(drag.minWidth, Math.min(drag.maxWidth, drag.startWidth + delta)));
+    drag.img.style.width = `${next}px`;
     drag.img.style.height = "auto";
     positionResizeHandle();
+    const readout = resizeReadoutRef.current;
+    if (readout) readout.textContent = `${next} px`;
   }, [positionResizeHandle]);
 
   const stopImageResize = useCallback((event: PointerEvent) => {
@@ -1559,80 +1736,145 @@ export function BBCodeEditor({
     document.removeEventListener("pointermove", handleImageResizeMove);
     document.removeEventListener("pointerup", stopImageResize);
     document.removeEventListener("pointercancel", stopImageResize);
+    const readout = resizeReadoutRef.current;
+    if (readout) readout.style.display = "none";
     if (!drag) return;
     const img = drag.img;
-    const targetWidth = Math.round(img.getBoundingClientRect().width);
-    // Drop the live-preview overrides; the re-encoded file itself carries the size.
-    img.classList.remove("is-resizing");
-    img.style.removeProperty("width");
-    img.style.removeProperty("max-width");
-    img.style.removeProperty("height");
+    // offsetWidth is the column-space width; getBoundingClientRect would be the
+    // scaled-to-fit one, which is not the number of pixels we want to encode.
+    const targetWidth = img.offsetWidth;
     const currentSrc = img.getAttribute("src") ?? "";
     // A click that didn't really drag shouldn't re-encode (and downscale) the image.
     if (!currentSrc || targetWidth < 1 || Math.abs(targetWidth - drag.startWidth) < 2) {
+      endResizePreview(img);
       window.requestAnimationFrame(positionResizeHandle);
       return;
     }
-    setUploadStatus({ kind: "uploading" });
+    // The dragged size stays pinned on screen until the re-encoded file has
+    // decoded in its place. Releasing it here instead would put the old, larger
+    // image back for however long the re-encode takes, and then snap.
+    //
+    // Only announce a resize slow enough to be worth announcing. The status
+    // renders as an extra row in the bottom-docked inspector, so showing it for
+    // a re-cut that finishes inside a frame just makes that panel jump up and
+    // back. Re-reading a hosted original is the case that actually waits.
+    showResizeStatusSoon();
     void (async () => {
       try {
-        const source = pendingUploadsRef.current.get(currentSrc) ?? await fetchImageBlobViaProxy(currentSrc);
+        const origin = resizeOriginsRef.current.get(currentSrc);
+        // A staged image is already in hand. One that is already hosted has to
+        // be read back through our origin, because a canvas cannot read the
+        // pixels of a cross-origin image without being tainted by them. This
+        // downloads the file; nothing is uploaded until Copy BBCode.
+        const source = origin?.blob
+          ?? pendingUploadsRef.current.get(currentSrc)
+          ?? await fetchImageBlobViaProxy(currentSrc).catch(() => {
+            throw new Error("Couldn't read the original image to resize it. Its host didn't answer.");
+          });
         const resized = await resizeImageBlobToWidth(source, targetWidth);
-        if (!img.isConnected) return;
-        releasePendingImage(currentSrc); // free the pre-resize blob if it was staged
         const blobUrl = registerPendingImage(resized);
+        // Carry the original bytes over to the new blob URL so the next drag
+        // still cuts from full resolution instead of from this smaller copy.
+        // naturalWidth has to be read before the swap, while it still describes
+        // the file this image was cut from.
+        resizeOriginsRef.current.set(blobUrl, origin ?? {
+          blob: source,
+          naturalWidth: img.naturalWidth || targetWidth,
+        });
+        await preloadImage(blobUrl);
+        if (!img.isConnected) {
+          settleResizeStatus(null);
+          return;
+        }
+        // Swap and release together, with the new pixels already decoded. The
+        // file is exactly targetWidth px wide, so handing layout back to its
+        // natural size is invisible: the image never leaves the dragged size.
         img.setAttribute("src", blobUrl);
+        endResizePreview(img);
+        // Only now is the old blob safe to revoke - doing it while it was still
+        // this element's src is a way to blank the very frame being protected.
+        releasePendingImage(currentSrc);
         setImageSelection((sel) => (sel ? { ...sel, src: blobUrl } : sel));
         flushVisual();
-        setUploadStatus(null);
+        settleResizeStatus(null);
         window.requestAnimationFrame(positionResizeHandle);
       } catch (error) {
-        setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : "Could not resize the image." });
+        endResizePreview(img);
+        settleResizeStatus({
+          kind: "error",
+          message: error instanceof Error ? error.message : "Could not resize the image.",
+        });
       }
     })();
-  }, [flushVisual, handleImageResizeMove, positionResizeHandle, registerPendingImage, releasePendingImage]);
+  }, [
+    flushVisual,
+    handleImageResizeMove,
+    positionResizeHandle,
+    registerPendingImage,
+    releasePendingImage,
+    settleResizeStatus,
+    showResizeStatusSoon,
+  ]);
 
   const startImageResize = useCallback((event: PointerEvent) => {
     event.preventDefault();
     event.stopPropagation(); // keep the surface's pointerdown from re-selecting/clearing
     const img = imageElementRef.current;
     if (!img) return;
-    const surface = visualRef.current;
+    // Everything below is in column pixels - the pixels the encoder will write
+    // and osu! will lay out - not in whatever the pane is currently scaled to.
+    const startWidth = img.offsetWidth;
     const rect = img.getBoundingClientRect();
-    const maxBySurface = surface ? surface.clientWidth - 32 : rect.width; // leave the px-4 gutters
+    const scale = startWidth > 0 ? rect.width / startWidth : 1;
+    // Don't upscale past the source's own pixels (that only adds blur), and
+    // don't offer a width past the column, where osu! would clip it anyway.
+    const origin = resizeOriginsRef.current.get(img.getAttribute("src") ?? "");
+    const sourcePixels = origin?.naturalWidth || img.naturalWidth || OSU_PROFILE_COLUMN_WIDTH;
     imageResizeRef.current = {
       img,
       startX: event.clientX,
-      startWidth: rect.width,
-      // Don't upscale past the source's own pixels (that only adds blur).
-      maxWidth: Math.max(40, Math.min(maxBySurface, img.naturalWidth || maxBySurface)),
+      startWidth,
+      minWidth: 40,
+      maxWidth: Math.max(40, Math.min(OSU_PROFILE_COLUMN_WIDTH, sourcePixels)),
+      scale: scale > 0 ? scale : 1,
     };
     img.classList.add("is-resizing");
+    img.style.width = `${startWidth}px`;
+    const readout = resizeReadoutRef.current;
+    if (readout) {
+      readout.textContent = `${startWidth} px`;
+      readout.style.display = "block";
+    }
     document.addEventListener("pointermove", handleImageResizeMove);
     document.addEventListener("pointerup", stopImageResize);
     document.addEventListener("pointercancel", stopImageResize);
   }, [handleImageResizeMove, stopImageResize]);
 
   const showResizeHandle = useCallback(() => {
-    const surface = visualRef.current;
+    const frame = visualFrameRef.current;
     const img = imageElementRef.current;
-    if (!surface || !img) return;
-    removeImageResizeHandle(surface);
+    if (!frame || !img) return;
+    removeImageResizeHandle(frame);
     const handle = document.createElement("span");
     handle.className = "bbcode-image-resize-handle";
-    handle.setAttribute("data-bb-skip", "1");
-    handle.setAttribute("contenteditable", "false");
     handle.setAttribute("aria-hidden", "true");
     handle.title = "Drag to resize";
     handle.addEventListener("pointerdown", startImageResize);
     resizeHandleRef.current = handle;
-    surface.appendChild(handle);
+    // Dragging is the only way to learn what an image's width will be, so say it.
+    const readout = document.createElement("span");
+    readout.className = "bbcode-image-resize-readout";
+    readout.setAttribute("aria-hidden", "true");
+    readout.style.display = "none";
+    resizeReadoutRef.current = readout;
+    frame.append(handle, readout);
     positionResizeHandle();
   }, [positionResizeHandle, startImageResize]);
 
   const hideResizeHandle = useCallback(() => {
-    removeImageResizeHandle(visualRef.current);
+    removeImageResizeHandle(visualFrameRef.current);
     resizeHandleRef.current = null;
+    resizeReadoutRef.current = null;
   }, []);
 
   // Show the resize handle whenever an image is selected; reposition it when the
@@ -1641,6 +1883,26 @@ export function BBCodeEditor({
     if (imageSelection) showResizeHandle();
     else hideResizeHandle();
   }, [imageSelection, showResizeHandle, hideResizeHandle]);
+
+  // Keep the osu!-width column scaled to whatever the pane happens to be. It
+  // shrinks as one piece rather than reflowing, so an image that fills the
+  // column here fills it on the profile too.
+  useEffect(() => {
+    const frames = [visualFrameRef.current, previewFrameRef.current].filter(
+      (frame): frame is HTMLDivElement => frame !== null,
+    );
+    if (frames.length === 0) return;
+    const fit = (frame: HTMLDivElement) => {
+      frame.style.setProperty("--bbcode-fit", `${columnFitScale(frame.clientWidth)}`);
+    };
+    frames.forEach(fit);
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) fit(entry.target as HTMLDivElement);
+      positionResizeHandle();
+    });
+    frames.forEach((frame) => observer.observe(frame));
+    return () => observer.disconnect();
+  }, [editMode, mobilePane, positionResizeHandle]);
 
   /** Wraps/updates/unwraps the [url] around the selected image. */
   const mutateImageLinkDom = useCallback((value: string) => {
@@ -1853,6 +2115,7 @@ export function BBCodeEditor({
         icon: anchor ? <Pencil size={14} /> : <Link size={14} />,
         onSelect: () => { selectImage(img); setFocusImageLinkTick((tick) => tick + 1); },
       },
+      { label: "Make imagemap", icon: <Map size={14} />, onSelect: () => convertImageToImagemap(img) },
     ];
     if (anchor) {
       items.push({ label: "Remove link", icon: <Unlink size={14} />, onSelect: () => { selectImage(img); updateImageLink(""); } });
@@ -1865,7 +2128,31 @@ export function BBCodeEditor({
       { label: "Delete image", icon: <Trash2 size={14} />, danger: true, onSelect: () => { selectImage(img); deleteSelectedImage(); } },
     );
     return items;
-  }, [deleteSelectedImage, openImageEditor, selectImage, triggerReplaceImage, updateImageLink]);
+  }, [convertImageToImagemap, deleteSelectedImage, openImageEditor, selectImage, triggerReplaceImage, updateImageLink]);
+
+  const buildImagemapMenuItems = useCallback(
+    (mapEl: HTMLElement, clientX: number, clientY: number): ContextMenuItem[] => {
+      // Right-click doesn't go through the pointerdown selection path, so the
+      // area under the cursor is picked here and becomes what these items act on.
+      const areaEl = pickImagemapAreaAtPoint(mapEl, clientX, clientY);
+      if (areaEl) selectImagemapArea(areaEl);
+      else imagemapElementRef.current = mapEl;
+      const items: ContextMenuItem[] = [
+        { label: "Add area", icon: <Plus size={14} />, onSelect: addImagemapArea },
+      ];
+      if (areaEl) {
+        items.push({ label: "Delete area", icon: <Trash2 size={14} />, danger: true, onSelect: deleteImagemapArea });
+      }
+      items.push(
+        { separator: true },
+        { label: "Back to plain image", icon: <Image size={14} />, onSelect: () => convertImagemapToImage(mapEl) },
+        { separator: true },
+        { label: "Delete imagemap", icon: <Trash2 size={14} />, danger: true, onSelect: () => deleteImagemap(mapEl) },
+      );
+      return items;
+    },
+    [addImagemapArea, convertImagemapToImage, deleteImagemap, deleteImagemapArea, pickImagemapAreaAtPoint, selectImagemapArea],
+  );
 
   const buildLinkMenuItems = useCallback((anchor: HTMLAnchorElement): ContextMenuItem[] => {
     const href = anchor.getAttribute("href") ?? "";
@@ -1919,7 +2206,9 @@ export function BBCodeEditor({
     const img = target.closest<HTMLImageElement>("img");
     const anchor = target.closest<HTMLAnchorElement>('a[data-bb="url"]');
     let items: ContextMenuItem[];
-    if (img && root.contains(img) && !img.closest(".bbcode-editor-embed") && !mapEl) {
+    if (mapEl && root.contains(mapEl)) {
+      items = buildImagemapMenuItems(mapEl, event.clientX, event.clientY);
+    } else if (img && root.contains(img) && !img.closest(".bbcode-editor-embed")) {
       selectImage(img);
       items = buildImageMenuItems(img);
     } else if (anchor && root.contains(anchor)) {
@@ -1928,7 +2217,7 @@ export function BBCodeEditor({
       items = buildTextMenuItems();
     }
     setContextMenu({ x: event.clientX, y: event.clientY, items });
-  }, [buildImageMenuItems, buildLinkMenuItems, buildTextMenuItems, selectImage]);
+  }, [buildImageMenuItems, buildImagemapMenuItems, buildLinkMenuItems, buildTextMenuItems, selectImage]);
 
   // Focus the image-link field when the context menu asks to edit it.
   useEffect(() => {
@@ -1971,7 +2260,9 @@ export function BBCodeEditor({
   useEffect(() => {
     if (!overlayHeight) return;
     const surface = visualRef.current;
-    if (!surface) return;
+    // The frame is the scroller, and its box is the part of the column on screen.
+    const frame = visualFrameRef.current;
+    if (!surface || !frame) return;
     const el = imageSelection
       ? imageElementRef.current
       : imagemapSelection
@@ -1980,19 +2271,16 @@ export function BBCodeEditor({
           ? linkElementRef.current
           : null;
     if (!el || !surface.contains(el)) return;
-    const surfaceRect = surface.getBoundingClientRect();
+    const frameRect = frame.getBoundingClientRect();
     const rect = el.getBoundingClientRect();
-    const visibleBottom = surfaceRect.bottom - overlayHeight;
+    const visibleBottom = frameRect.bottom - overlayHeight;
     if (rect.bottom <= visibleBottom) return;
-    const delta = Math.min(rect.bottom - visibleBottom + 12, Math.max(0, rect.top - surfaceRect.top));
-    if (delta > 0) surface.scrollTop += delta;
+    const delta = Math.min(rect.bottom - visibleBottom + 12, Math.max(0, rect.top - frameRect.top));
+    if (delta > 0) frame.scrollTop += delta;
   }, [overlayHeight, imageSelection, imagemapSelection, linkSelection]);
 
   const charCount = source.length;
-  const pendingImageCount = useMemo(
-    () => Array.from(deferredSource.matchAll(PENDING_IMG_PATTERN)).length,
-    [deferredSource],
-  );
+  const pendingImageCount = useMemo(() => pendingBlobUrls(deferredSource).length, [deferredSource]);
 
   const renderImageInspector = (): ReactNode => {
     if (!imageSelection) return null;
@@ -2581,7 +2869,9 @@ export function BBCodeEditor({
           <button
             type="button"
             onClick={copyBBCode}
-            disabled={uploadStatus?.kind === "uploading"}
+            // Also while resizing: that swaps an image's src when it lands, and
+            // copying mid-swap would put the pre-resize file on the clipboard.
+            disabled={uploadStatus?.kind === "uploading" || uploadStatus?.kind === "resizing"}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait ${
               copied
                 ? "bg-osu-green/20 border border-osu-green/40 text-osu-green"
@@ -2674,7 +2964,7 @@ export function BBCodeEditor({
         <ToolButton label="Code block" onClick={() => applyWrap("codeblock", undefined, "[code]\n", "\n[/code]", "code")}><Code size={15} /></ToolButton>
         <ToolButton label="Bullet list" onClick={() => insertList(false)}><List size={15} /></ToolButton>
         <ToolButton label="Numbered list" onClick={() => insertList(true)}><ListOrdered size={15} /></ToolButton>
-        <ToolButton label="Imagemap (image with clickable areas)" onClick={() => insertBBCode(IMAGEMAP_TEMPLATE)}>
+        <ToolButton label="Imagemap (clickable areas on an image)" onClick={applyImagemapTool}>
           <Map size={15} />
         </ToolButton>
         <div className="ml-auto pl-2 flex items-center gap-0.5 shrink-0">
@@ -2738,10 +3028,10 @@ export function BBCodeEditor({
                   uploadStatus.kind === "error" ? "text-osu-red" : "text-osu-l2"
                 }`}
               >
-                {uploadStatus.kind === "uploading" ? (
+                {uploadStatus.kind === "uploading" || uploadStatus.kind === "resizing" ? (
                   <>
                     <span className="h-3.5 w-3.5 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
-                    Uploading image...
+                    {uploadStatus.kind === "resizing" ? "Resizing image..." : "Uploading image..."}
                   </>
                 ) : (
                   <>
@@ -2767,22 +3057,29 @@ export function BBCodeEditor({
 
       {editMode === "visual" ? (
         <div
-          ref={visualRef}
-          contentEditable
-          suppressContentEditableWarning
-          spellCheck={false}
-          onPointerDown={handleVisualPointerDown}
-          onContextMenu={handleVisualContextMenu}
-          onKeyDown={handleVisualKeyDown}
-          onPaste={handlePaste}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onInput={scheduleVisualSync}
-          onBlur={() => flushVisual()}
-          data-placeholder="Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."
+          ref={visualFrameRef}
+          // The docked inspector overlays the bottom of the pane; pad the
+          // scroller (not the zoomed column) so the gap is real screen pixels.
           style={{ paddingBottom: surfacePadBottom, scrollPaddingBottom: surfacePadBottom }}
-          className={`${paneHeightClass} bbcode-content bbcode-editor-surface overflow-y-auto px-4 py-3 text-sm text-osu-l2 focus:outline-none`}
-        />
+          className={`${paneHeightClass} bbcode-editor-frame`}
+        >
+          <div
+            ref={visualRef}
+            contentEditable
+            suppressContentEditableWarning
+            spellCheck={false}
+            onPointerDown={handleVisualPointerDown}
+            onContextMenu={handleVisualContextMenu}
+            onKeyDown={handleVisualKeyDown}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onInput={scheduleVisualSync}
+            onBlur={() => flushVisual()}
+            data-placeholder="Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."
+            className="bbcode-content bbcode-editor-surface py-3 text-sm text-osu-l2 focus:outline-none"
+          />
+        </div>
       ) : (
         <>
           {/* Mobile pane switch */}
@@ -2822,14 +3119,17 @@ export function BBCodeEditor({
             </div>
             <div className={`${mobilePane === "preview" ? "block" : "hidden"} lg:block bg-osu-b5/40`}>
               <div
+                ref={previewFrameRef}
                 style={{ paddingBottom: surfacePadBottom }}
-                className={`${paneHeightClass} bbcode-content bbcode-preview-surface overflow-y-auto px-4 py-3 text-sm text-osu-l2`}
+                className={`${paneHeightClass} bbcode-editor-frame`}
               >
-                <BBCodePreview
-                  source={deferredSource}
-                  highlightOffset={deferredCaretOffset}
-                  onSelectSourceSpan={selectSourceSpan}
-                />
+                <div className="bbcode-content bbcode-preview-surface py-3 text-sm text-osu-l2">
+                  <BBCodePreview
+                    source={deferredSource}
+                    highlightOffset={deferredCaretOffset}
+                    onSelectSourceSpan={selectSourceSpan}
+                  />
+                </div>
               </div>
             </div>
           </div>

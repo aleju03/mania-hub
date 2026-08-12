@@ -172,6 +172,21 @@ describe("bbcode editable DOM round-trip", () => {
     expect(area.dataset.title).toBe("tooltip here");
   });
 
+  // What the editor's "Make imagemap" writes: the picture the image already
+  // pointed at, plus one area in the middle to drag. It has to survive the
+  // trip both ways or converting an image loses it.
+  it("round-trips the seed an image conversion produces", () => {
+    const seed = "[imagemap]\nblob:http://localhost:3000/staged\n25 25 50 50 #\n[/imagemap]";
+    expectIdentity(seed);
+    const container = document.createElement("div");
+    container.innerHTML = bbcodeToEditableHtml(seed);
+    const areas = container.querySelectorAll<HTMLElement>('[data-bb-imagemap-area="1"]');
+    expect(areas).toHaveLength(1);
+    expect(areas[0].dataset.href).toBe("");
+    expect(container.querySelector<HTMLElement>('[data-bb="imagemap"]')?.dataset.src)
+      .toBe("blob:http://localhost:3000/staged");
+  });
+
   it("serializes updated imagemap raw metadata", () => {
     const container = document.createElement("div");
     container.innerHTML = bbcodeToEditableHtml("[imagemap]\nhttps://example.com/map.png\n10 20 30 40 https://example.com old\n[/imagemap]");

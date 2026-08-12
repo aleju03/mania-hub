@@ -14,11 +14,14 @@ import {
   FlipVertical,
   Link2,
   Loader2,
+  Redo2,
   RotateCcw,
   RotateCw,
+  Undo2,
   X,
 } from "lucide-react";
 import { fetchImageBlobViaProxy } from "../../../lib/catbox-upload";
+import { OSU_PROFILE_COLUMN_WIDTH } from "../../../lib/bbcode-layout";
 
 export interface ImageEditorSource {
   /** A local blob (pasted/dropped/replaced) edits with no network round-trip. */
@@ -42,8 +45,16 @@ interface CropRect {
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 
+/** One undoable step: everything the tools here can change about the image. */
+interface EditorState {
+  orientation: Orientation;
+  crop: CropRect | null;
+  output: { w: number; h: number };
+}
+
 const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 const MIN_CROP = 12;
+const MAX_HISTORY = 60;
 
 function exportType(sourceType: string | undefined): { mime: string; quality?: number } {
   const mime = (sourceType ?? "").split(";")[0]?.trim().toLowerCase();
@@ -52,10 +63,17 @@ function exportType(sourceType: string | undefined): { mime: string; quality?: n
   return { mime: "image/png" };
 }
 
+/** Working-frame size for a rotation, without building the canvas for it. */
+function orientedDims(img: HTMLImageElement, rotation: Orientation["rotation"]): { w: number; h: number } {
+  const swap = rotation === 90 || rotation === 270;
+  return {
+    w: swap ? img.naturalHeight : img.naturalWidth,
+    h: swap ? img.naturalWidth : img.naturalHeight,
+  };
+}
+
 function buildOrientedCanvas(img: HTMLImageElement, o: Orientation): HTMLCanvasElement {
-  const swap = o.rotation === 90 || o.rotation === 270;
-  const w = swap ? img.naturalHeight : img.naturalWidth;
-  const h = swap ? img.naturalWidth : img.naturalHeight;
+  const { w, h } = orientedDims(img, o.rotation);
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, w);
   canvas.height = Math.max(1, h);
@@ -75,6 +93,23 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function sameCrop(a: CropRect | null, b: CropRect | null): boolean {
+  if (!a || !b) return a === b;
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
+/** A history step that changed nothing is skipped, so undo always does something. */
+function sameState(a: EditorState, b: EditorState): boolean {
+  return (
+    a.orientation.rotation === b.orientation.rotation &&
+    a.orientation.flipH === b.orientation.flipH &&
+    a.orientation.flipV === b.orientation.flipV &&
+    a.output.w === b.output.w &&
+    a.output.h === b.output.h &&
+    sameCrop(a.crop, b.crop)
+  );
+}
+
 /** Full-screen canvas crop + resize editor. Resolves an edited Blob via onApply. */
 export function ImageEditorModal({
   source,
@@ -85,7 +120,7 @@ export function ImageEditorModal({
   source: ImageEditorSource;
   onApply: (blob: Blob) => void | Promise<void>;
   onCancel: () => void;
-  /** External "uploading the result" state shown after Apply. */
+  /** External "still handling the result" state shown after Apply. */
   busy?: boolean;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
@@ -105,6 +140,10 @@ export function ImageEditorModal({
   >(null);
   const sourceTypeRef = useRef<string | undefined>(source.blob?.type);
   const prevDimsRef = useRef<{ w: number; h: number } | null>(null);
+  const stateRef = useRef<EditorState>({ orientation, crop, output });
+  const historyRef = useRef<{ past: EditorState[]; future: EditorState[] }>({ past: [], future: [] });
+  const pendingEntryRef = useRef<EditorState | null>(null);
+  const [historyVersion, setHistoryVersion] = useState(0);
   const onStageMoveRef = useRef<(event: PointerEvent) => void>(() => {});
   const dragHandlersRef = useRef<{ move: (event: PointerEvent) => void; end: () => void } | null>(null);
 
@@ -114,6 +153,10 @@ export function ImageEditorModal({
     let objectUrl: string | null = null;
     setError(null);
     setImg(null);
+    // Steps from the previous image describe a frame this one doesn't have.
+    historyRef.current = { past: [], future: [] };
+    pendingEntryRef.current = null;
+    setHistoryVersion((version) => version + 1);
     (async () => {
       try {
         let blob = source.blob ?? null;
@@ -193,6 +236,72 @@ export function ImageEditorModal({
     ctx.clearRect(0, 0, dispW, dispH);
     ctx.drawImage(oriented, 0, 0, dispW, dispH);
   }, [oriented, dispW, dispH]);
+
+  // --- undo / redo ----------------------------------------------------------
+  // This modal owns its own history. Without it Ctrl+Z here reaches the editor
+  // underneath and undoes the document text instead of the crop you just drew,
+  // which is both surprising and hard to recover from.
+  stateRef.current = { orientation, crop, output };
+
+  const pushHistory = useCallback((entry: EditorState = stateRef.current) => {
+    const history = historyRef.current;
+    history.past.push(entry);
+    if (history.past.length > MAX_HISTORY) history.past.shift();
+    history.future = [];
+    pendingEntryRef.current = null;
+    setHistoryVersion((version) => version + 1);
+  }, []);
+
+  // A number input fires a change per keystroke; snapshotting on focus and
+  // spending that snapshot on the first edit makes one field edit one step.
+  const armHistory = useCallback(() => {
+    pendingEntryRef.current = stateRef.current;
+  }, []);
+  const spendArmedHistory = useCallback(() => {
+    const armed = pendingEntryRef.current;
+    if (armed) pushHistory(armed);
+  }, [pushHistory]);
+
+  const restore = useCallback((entry: EditorState) => {
+    // The reset-on-new-dimensions effect would otherwise fight an undo that
+    // rotates back, so tell it these dimensions are already accounted for.
+    if (img) prevDimsRef.current = orientedDims(img, entry.orientation.rotation);
+    setOrientation(entry.orientation);
+    setCrop(entry.crop);
+    setOutput(entry.output);
+  }, [img]);
+
+  const undo = useCallback(() => {
+    const history = historyRef.current;
+    let entry = history.past.pop();
+    // A click that starts and ends a drag in place, or a field focused and left
+    // alone, snapshots a step identical to the current one. Skip past those.
+    while (entry && sameState(entry, stateRef.current)) entry = history.past.pop();
+    if (!entry) return;
+    history.future.push(stateRef.current);
+    restore(entry);
+    setHistoryVersion((version) => version + 1);
+  }, [restore]);
+
+  const redo = useCallback(() => {
+    const history = historyRef.current;
+    let entry = history.future.pop();
+    while (entry && sameState(entry, stateRef.current)) entry = history.future.pop();
+    if (!entry) return;
+    history.past.push(stateRef.current);
+    restore(entry);
+    setHistoryVersion((version) => version + 1);
+  }, [restore]);
+
+  // Depths live in a ref so a drag can't re-render on every move; the version
+  // counter is what tells React the buttons changed.
+  const { canUndo, canRedo } = useMemo(
+    () => ({
+      canUndo: historyRef.current.past.length > 0,
+      canRedo: historyRef.current.future.length > 0,
+    }),
+    [historyVersion],
+  );
 
   // --- crop interaction -----------------------------------------------------
   const applyCrop = useCallback(
@@ -296,6 +405,8 @@ export function ImageEditorModal({
       if (event.button !== 0 || !crop) return;
       event.preventDefault();
       event.stopPropagation();
+      // One drag, one undo step: snapshot before the pointer starts moving.
+      pushHistory();
       const startRect = mode === "draw"
         ? (() => {
             const wrapper = event.currentTarget.getBoundingClientRect();
@@ -317,7 +428,7 @@ export function ImageEditorModal({
       window.addEventListener("pointerup", handlers.end);
       window.addEventListener("pointercancel", handlers.end);
     },
-    [crop, displayScale],
+    [crop, displayScale, pushHistory],
   );
 
   // --- output size inputs ---------------------------------------------------
@@ -331,9 +442,18 @@ export function ImageEditorModal({
     setOutput(lockAspect ? { w: Math.max(1, Math.round(h * cropAspect)), h } : { w: output.w, h });
   };
 
-  const rotate = (delta: 90 | -90) =>
+  const rotate = (delta: 90 | -90) => {
+    pushHistory();
     setOrientation((o) => ({ ...o, rotation: (((o.rotation + delta + 360) % 360) as Orientation["rotation"]) }));
-  const reset = () => setOrientation({ rotation: 0, flipH: false, flipV: false });
+  };
+  const flip = (axis: "flipH" | "flipV") => {
+    pushHistory();
+    setOrientation((o) => ({ ...o, [axis]: !o[axis] }));
+  };
+  const reset = () => {
+    pushHistory();
+    setOrientation({ rotation: 0, flipH: false, flipV: false });
+  };
 
   // --- apply ----------------------------------------------------------------
   const handleApply = useCallback(async () => {
@@ -365,6 +485,26 @@ export function ImageEditorModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [exporting, busy, onCancel]);
+
+  // Capture phase, and swallowed either way: while this modal is open an undo
+  // belongs to it, never to the document behind it - even when there is nothing
+  // left here to undo.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      const isUndo = key === "z" && !event.shiftKey;
+      const isRedo = key === "y" || (key === "z" && event.shiftKey);
+      if (!isUndo && !isRedo) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (exporting || busy) return;
+      if (isUndo) undo();
+      else redo();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [busy, exporting, redo, undo]);
 
   if (typeof document === "undefined") return null;
 
@@ -412,24 +552,31 @@ export function ImageEditorModal({
 
         {/* Tools */}
         <div className="flex flex-wrap items-center gap-1.5 border-b border-osu-b3/30 px-4 py-2">
+          <ToolbarButton label="Undo (Ctrl+Z)" onClick={undo} disabled={!canUndo || working}><Undo2 size={15} /></ToolbarButton>
+          <ToolbarButton label="Redo (Ctrl+Shift+Z)" onClick={redo} disabled={!canRedo || working}><Redo2 size={15} /></ToolbarButton>
+          <div className="mx-1 h-5 w-px bg-osu-b3/60" />
           <ToolbarButton label="Rotate left" onClick={() => rotate(-90)} disabled={!img || working}><RotateCcw size={15} /></ToolbarButton>
           <ToolbarButton label="Rotate right" onClick={() => rotate(90)} disabled={!img || working}><RotateCw size={15} /></ToolbarButton>
           <ToolbarButton
             label="Flip horizontal"
-            onClick={() => setOrientation((o) => ({ ...o, flipH: !o.flipH }))}
+            onClick={() => flip("flipH")}
             disabled={!img || working}
             active={orientation.flipH}
           ><FlipHorizontal size={15} /></ToolbarButton>
           <ToolbarButton
             label="Flip vertical"
-            onClick={() => setOrientation((o) => ({ ...o, flipV: !o.flipV }))}
+            onClick={() => flip("flipV")}
             disabled={!img || working}
             active={orientation.flipV}
           ><FlipVertical size={15} /></ToolbarButton>
           <div className="mx-1 h-5 w-px bg-osu-b3/60" />
           <button
             type="button"
-            onClick={() => oriented && applyCrop({ x: 0, y: 0, w: workW, h: workH })}
+            onClick={() => {
+              if (!oriented) return;
+              pushHistory();
+              applyCrop({ x: 0, y: 0, w: workW, h: workH });
+            }}
             disabled={!img || working}
             className="rounded-md px-2 py-1 text-[12px] text-osu-l2 hover:bg-osu-b3/60 hover:text-osu-c1 cursor-pointer disabled:opacity-50"
           >
@@ -492,13 +639,20 @@ export function ImageEditorModal({
         {/* Footer: output size + apply */}
         <div className="flex flex-wrap items-center gap-3 border-t border-osu-b3/30 px-4 py-3">
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">Output</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">Resize to</span>
             <input
               type="number"
               min={1}
               value={output.w || ""}
-              onChange={(event) => setOutputWidth(Number(event.target.value))}
+              onFocus={armHistory}
+              onBlur={() => { pendingEntryRef.current = null; }}
+              onChange={(event) => {
+                spendArmedHistory();
+                setOutputWidth(Number(event.target.value));
+              }}
               disabled={!img || working}
+              title="Width of the exported image, in pixels"
+              aria-label="Output width in pixels"
               className="w-20 rounded-md border border-osu-b3/50 bg-osu-b5 px-2 py-1 text-[13px] text-osu-c1 focus:border-osu-h1/40 focus:outline-none"
             />
             <span className="text-osu-f1">×</span>
@@ -506,12 +660,31 @@ export function ImageEditorModal({
               type="number"
               min={1}
               value={output.h || ""}
-              onChange={(event) => setOutputHeight(Number(event.target.value))}
+              onFocus={armHistory}
+              onBlur={() => { pendingEntryRef.current = null; }}
+              onChange={(event) => {
+                spendArmedHistory();
+                setOutputHeight(Number(event.target.value));
+              }}
               disabled={!img || working}
+              title="Height of the exported image, in pixels"
+              aria-label="Output height in pixels"
               className="w-20 rounded-md border border-osu-b3/50 bg-osu-b5 px-2 py-1 text-[13px] text-osu-c1 focus:border-osu-h1/40 focus:outline-none"
             />
             <span className="text-[11px] text-osu-f1">px</span>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              pushHistory();
+              setOutputWidth(OSU_PROFILE_COLUMN_WIDTH);
+            }}
+            disabled={!img || working}
+            title={`Make it ${OSU_PROFILE_COLUMN_WIDTH}px wide - the full width of the osu! profile column`}
+            className="rounded-md border border-osu-b3/50 bg-osu-b5 px-2 py-1 text-[12px] font-semibold text-osu-l2 hover:text-osu-c1 cursor-pointer disabled:opacity-50"
+          >
+            Full width
+          </button>
           <button
             type="button"
             onClick={() => setLockAspect((value) => !value)}
@@ -540,7 +713,9 @@ export function ImageEditorModal({
               className="flex items-center gap-1.5 rounded-md border border-osu-h1/40 bg-osu-h1/20 px-3 py-1.5 text-[12px] font-semibold text-osu-c1 hover:bg-osu-h1/30 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-default"
             >
               {working ? <Loader2 size={14} className="animate-spin" /> : null}
-              {working ? "Uploading…" : "Apply & upload"}
+              {/* Applying only re-encodes and stages the result in the editor;
+                  the upload happens on Copy BBCode, like every other image. */}
+              {working ? "Applying…" : "Apply"}
             </button>
           </div>
         </div>

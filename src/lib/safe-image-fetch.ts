@@ -18,6 +18,13 @@ import type { Readable } from "node:stream";
 
 const MAX_REDIRECTS = 3;
 
+// Image hosts routinely drop a request with no User-Agent: catbox resets the
+// socket outright (ECONNRESET, verified 2026-08-11), which surfaced as every
+// catbox-hosted profile image failing to resize. Node sends no default one, so
+// it has to be set here. Named rather than spoofed, so a host that wants to
+// block us can, instead of us pretending to be a browser.
+const USER_AGENT = "mania-tracker.com image proxy (+https://mania-tracker.com)";
+
 // Only default ports: the proxy exists for public image hosts, and odd ports
 // are how a "public" IP ends up pointed at someone's admin panel.
 const ALLOWED_URL_PORTS = new Set(["", "80", "443"]);
@@ -200,7 +207,8 @@ export const performPinnedRequest: PinnedTransport = (url, pinned, signal) =>
     };
     // agent: false — the default global agent pools keep-alive sockets by
     // host:port, and a reused socket would skip the lookup pin entirely.
-    const request = requestFn(url, { signal, lookup, agent: false, headers: { Accept: "image/*" } }, (response) => {
+    const headers = { Accept: "image/*", "User-Agent": USER_AGENT };
+    const request = requestFn(url, { signal, lookup, agent: false, headers }, (response) => {
       resolve({ status: response.statusCode ?? 0, headers: response.headers, stream: response });
     });
     request.on("error", reject);

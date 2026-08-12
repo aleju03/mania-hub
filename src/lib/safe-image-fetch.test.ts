@@ -269,6 +269,29 @@ describe("performPinnedRequest", () => {
     }
   });
 
+  it("identifies itself, because hosts drop a request that does not", async () => {
+    // catbox resets the socket outright on a missing User-Agent, and Node sends
+    // none by default - which silently broke resizing every catbox-hosted
+    // profile image until the header was added.
+    const server = createServer((req, res) => {
+      res.setHeader("content-type", "image/png");
+      res.end(`ua=${req.headers["user-agent"] ?? ""}|accept=${req.headers.accept ?? ""}`);
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const response = await performPinnedRequest(
+        new URL(`http://mania-hub-ua-test.invalid:${port}/img.png`),
+        { address: "127.0.0.1", family: 4 },
+        signal(),
+      );
+      const body = String(await readCappedStream(response.stream, 1024));
+      expect(body).toMatch(/^ua=.*mania-tracker\.com.*\|accept=image\/\*$/);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
   it("never reuses a pooled socket from a previous pin for the same host and port", async () => {
     // Two servers on the same port, different loopback addresses. With the
     // default global agent a keep-alive socket from request one would be

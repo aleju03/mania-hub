@@ -4494,7 +4494,7 @@ function PlayerAboutCard({ html, onEdit }: { html: string; onEdit: () => void })
       </button>
       <div
         ref={contentRef}
-        className="bbcode-content px-4 py-3 text-sm text-osu-l2 max-h-[520px] overflow-y-auto"
+        className="bbcode-content bbcode-content--capped px-4 py-3 text-sm text-osu-l2 max-h-[520px] overflow-y-auto"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>

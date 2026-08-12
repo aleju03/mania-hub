@@ -29,6 +29,10 @@ export const WIP: string[] = [
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-11", text: "Images in the BBCode editor now show at the size they will be on your osu! profile", to: "/bbcode" },
+  { date: "2026-08-11", text: "Drag the corner of an image in the BBCode editor to resize it", to: "/bbcode" },
+  { date: "2026-08-11", text: "Right-click an image in the BBCode editor to make an imagemap, then drag its clickable areas", to: "/bbcode" },
+  { date: "2026-08-11", text: "Selected text in the BBCode editor stays readable while you pick a color for it", to: "/bbcode" },
   { date: "2026-08-11", text: "New page: osu!mania Discord servers. Find one to join, or post your own", to: "/communities" },
   { date: "2026-08-11", text: "New GOATs album on the card albums shelf", to: "/packs" },
   { date: "2026-08-10", text: "When uploading a skin, you can now rename screenshots. You can also make a screenshot be the skin's thumbnail cover", to: "/skins" },

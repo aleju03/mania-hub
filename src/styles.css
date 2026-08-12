@@ -437,7 +437,15 @@ html[data-custom-cursor="true"] * {
    text-align centering AND inline image-with-text flow. Force inline-block
    here so images are centered by <center>'s text-align and also flow with
    surrounding text when not centered. */
-.bbcode-content img { display: inline-block; vertical-align: middle; max-width: 100%; width: auto !important; height: auto; max-height: 320px; border-radius: 0.375rem; margin: 0.25em 0; object-fit: contain; }
+.bbcode-content img { display: inline-block; vertical-align: middle; max-width: 100%; height: auto; border-radius: 0.375rem; margin: 0.25em 0; object-fit: contain; }
+
+/* osu! sizes a profile [img] from the file's own pixels - it emits
+   style="width:<intrinsic>px" and caps it at the column with max-width:100%,
+   with no height cap at all. So anywhere we claim to show what osu! will show,
+   an image is left at its natural width. The cap below is for the About card on
+   a player page, which is a narrow box that a 3000px-tall image would wreck;
+   there it also has to beat the inline width osu! sends us. */
+.bbcode-content--capped img { width: auto !important; max-height: 320px; }
 .bbcode-content center { display: block !important; text-align: center !important; }
 .bbcode-content .bbcode__align-left { text-align: left; }
 .bbcode-content .bbcode__align-right { text-align: right; }
@@ -512,14 +520,43 @@ html[data-custom-cursor="true"] * {
 .bbcode-content .bbcode-video iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 0.375rem; background: #000; }
 .bbcode-content audio { width: 100%; max-width: 360px; margin: 0.25em 0; }
 
+/* The osu! profile "me!" column, measured off a live profile page: 890px of
+   content at 14px, fixed at every viewport width (the profile page does not
+   reflow). Laying the editor out at exactly that width is what makes an image's
+   size on screen here the size it will be over there - max-width: 100% then
+   clips at the same place osu! clips. */
+.bbcode-editor-frame {
+  --bbcode-col: 890px;
+  --bbcode-gutter: 1rem;
+  position: relative;
+  overflow: auto;
+}
+/* Scale the whole column to fit a narrower pane instead of letting it reflow,
+   so proportions stay true. zoom (not transform) keeps the caret, hit-testing
+   and scrolling honest inside a contenteditable. */
+.bbcode-editor-frame > .bbcode-content {
+  width: calc(var(--bbcode-col) + 2 * var(--bbcode-gutter));
+  padding-left: var(--bbcode-gutter);
+  padding-right: var(--bbcode-gutter);
+  margin-inline: auto;
+  zoom: var(--bbcode-fit, 1);
+}
+
 /* BBCode visual editing surface */
-/* position: relative so the drag-to-resize handle can be absolutely placed at a
-   selected image's corner, in the surface's scrolling content coordinates. */
-.bbcode-editor-surface { caret-color: var(--color-osu-pink); cursor: text; position: relative; }
+.bbcode-editor-surface { caret-color: var(--color-osu-pink); cursor: text; }
 .bbcode-editor-surface:empty::before {
   content: attr(data-placeholder);
   color: var(--color-osu-f1);
   pointer-events: none;
+}
+/* The OS selection colour paints over the text, which makes the colour and
+   hue-shift controls useless: you pick a colour on a selection you can't see.
+   A translucent wash keeps every glyph's own colour readable while it's
+   selected. No `color` here on purpose - setting one would put the problem
+   back. */
+.bbcode-editor-surface ::selection,
+.bbcode-editor-surface::selection {
+  background: rgba(255, 102, 170, 0.25);
 }
 .bbcode-editor-surface .js-spoilerbox__link { cursor: pointer; }
 .bbcode-editor-surface .js-spoilerbox__link .bbcode-spoilerbox__link-text {
@@ -543,10 +580,13 @@ html[data-custom-cursor="true"] * {
   outline-offset: 1px;
   border-radius: 0.15rem;
 }
-/* While dragging the resize handle, let the image grow past the surface's
-   display caps so the live preview tracks the pointer. */
-.bbcode-editor-surface img.is-resizing { max-height: none; }
-/* Drag-to-resize handle, docked to a selected image's bottom-right corner. */
+/* While dragging, the inline width drives the image and max-width must not
+   fight it - the pointer can ask for a width wider than the column, and the
+   clamp that says no lives in the drag code, not here. */
+.bbcode-editor-surface img.is-resizing { max-width: none; }
+/* Drag-to-resize handle, docked to a selected image's bottom-right corner. It
+   is a child of the (unzoomed) frame rather than the surface, so its position
+   is plain pointer-space pixels and it can never be caught by the serializer. */
 .bbcode-image-resize-handle {
   position: absolute;
   width: 14px;
@@ -560,6 +600,22 @@ html[data-custom-cursor="true"] * {
   z-index: 15;
   touch-action: none;
   user-select: none;
+}
+/* The width the file will actually be encoded at, shown while dragging. */
+.bbcode-image-resize-readout {
+  position: absolute;
+  transform: translate(-100%, 6px);
+  margin-left: -10px;
+  padding: 1px 6px;
+  border-radius: 0.25rem;
+  background: var(--color-osu-pink);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 16;
 }
 .bbcode-editor-surface .imagemap__link {
   pointer-events: auto; cursor: pointer;
