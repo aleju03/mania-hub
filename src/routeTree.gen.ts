@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SplatRouteImport } from './routes/$'
 import { Route as BbcodeRouteImport } from './routes/bbcode'
 import { Route as CommunitiesRouteImport } from './routes/communities'
 import { Route as DiscordRouteImport } from './routes/discord'
@@ -73,6 +74,11 @@ import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/ca
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SplatRoute = SplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BbcodeRoute = BbcodeRouteImport.update({
@@ -373,6 +379,7 @@ const ApiAuthOsuCallbackRoute = ApiAuthOsuCallbackRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
   '/discord': typeof DiscordRoute
@@ -435,6 +442,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
   '/discord': typeof DiscordRoute
@@ -498,6 +506,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
   '/discord': typeof DiscordRoute
@@ -562,6 +571,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/$'
     | '/bbcode'
     | '/communities'
     | '/discord'
@@ -624,6 +634,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/$'
     | '/bbcode'
     | '/communities'
     | '/discord'
@@ -686,6 +697,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/$'
     | '/bbcode'
     | '/communities'
     | '/discord'
@@ -749,6 +761,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SplatRoute: typeof SplatRoute
   BbcodeRoute: typeof BbcodeRoute
   CommunitiesRoute: typeof CommunitiesRoute
   DiscordRoute: typeof DiscordRoute
@@ -809,6 +822,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$': {
+      id: '/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bbcode': {
@@ -1285,6 +1305,7 @@ const ApiAuthOsuRouteWithChildren = ApiAuthOsuRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SplatRoute: SplatRoute,
   BbcodeRoute: BbcodeRoute,
   CommunitiesRoute: CommunitiesRoute,
   DiscordRoute: DiscordRoute,
