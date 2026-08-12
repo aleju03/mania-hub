@@ -487,6 +487,105 @@ export async function describeR2AdminObjects(options: {
   });
 }
 
+export interface R2AdminScannedObject {
+  key: string;
+  sizeBytes: number;
+  lastModified: string | null;
+  contentType: string | null;
+  metadata: Record<string, string>;
+}
+
+/**
+ * Remembers the HEAD of an object that the LIST says has not changed.
+ *
+ * A put moves LastModified even when the bytes are identical, so size plus
+ * timestamp is a sufficient version marker: a hit means nobody has written the
+ * key since we read its metadata. Callers opt in, because "unchanged" here is
+ * only as precise as R2's second-granularity timestamp - anything acting
+ * destructively on the answer should ask for the real read instead.
+ */
+const adminMetadataMemo = new Map<
+  string,
+  { version: string; contentType: string | null; metadata: Record<string, string> }
+>();
+const ADMIN_METADATA_MEMO_LIMIT = 5000;
+
+/**
+ * Every object under `prefix`, with its user metadata read.
+ *
+ * Unlike the paginated browser listing this walks the whole prefix and HEADs
+ * each object, which is one class B operation per file - fine for a small,
+ * human-scale prefix that an admin tool needs a complete picture of, and not
+ * something to point at a prefix with tens of thousands of keys in it. Pass
+ * `useMetadataCache` to pay that cost only for objects the listing shows as
+ * new or rewritten since the last scan.
+ */
+export async function scanR2AdminPrefixWithMetadata(options: {
+  bucket?: string | null;
+  prefix: string;
+  maxObjects: number;
+  useMetadataCache?: boolean;
+}): Promise<{ configured: boolean; objects: R2AdminScannedObject[]; truncated: boolean }> {
+  const def = getAdminBucket(options.bucket);
+  const client = resolveAdminClient(def);
+  if (!client) return { configured: false, objects: [], truncated: false };
+
+  const prefix = normalizeR2AdminPrefix(def.id, options.prefix);
+  const listed: Array<{ key: string; sizeBytes: number; lastModified: string | null }> = [];
+  let continuationToken: string | undefined;
+  let truncated = false;
+
+  do {
+    const page = await client.send(new ListObjectsV2Command({
+      Bucket: def.bucket,
+      Prefix: prefix,
+      MaxKeys: 1000,
+      ContinuationToken: continuationToken,
+    }));
+    for (const object of page.Contents ?? []) {
+      if (!object.Key || object.Key.endsWith("/")) continue;
+      if (listed.length >= options.maxObjects) {
+        truncated = true;
+        break;
+      }
+      listed.push({
+        key: object.Key,
+        sizeBytes: object.Size ?? 0,
+        lastModified: object.LastModified?.toISOString() ?? null,
+      });
+    }
+    continuationToken = !truncated && page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  const objects = await mapWithConcurrency(listed, R2_ADMIN_DESCRIBE_CONCURRENCY, async (entry) => {
+    const memoKey = `${def.id}|${entry.key}`;
+    const version = `${entry.sizeBytes}|${entry.lastModified ?? ""}`;
+    if (options.useMetadataCache) {
+      const hit = adminMetadataMemo.get(memoKey);
+      if (hit?.version === version) {
+        return { ...entry, contentType: hit.contentType, metadata: hit.metadata };
+      }
+    }
+
+    const head = await client
+      .send(new HeadObjectCommand({ Bucket: def.bucket, Key: entry.key }))
+      .catch(() => null);
+    const described = {
+      contentType: head?.ContentType ?? null,
+      metadata: head?.Metadata ?? {},
+    };
+    // Only a real read is worth remembering; a failed HEAD would memoize the
+    // absence of metadata and make the next scan agree with it.
+    if (head) {
+      if (adminMetadataMemo.size >= ADMIN_METADATA_MEMO_LIMIT) adminMetadataMemo.clear();
+      adminMetadataMemo.set(memoKey, { version, ...described });
+    }
+    return { ...entry, ...described };
+  });
+
+  return { configured: true, objects, truncated };
+}
+
 // The live backend writes exactly one <name>.osk per skins/<id>/ folder (see
 // skinOskKey) alongside the preview/screenshot images, so the admin browser can
 // resolve a skin's archive without paging into the folder first.

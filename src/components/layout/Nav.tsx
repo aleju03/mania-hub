@@ -97,6 +97,7 @@ const ADMIN_TOOLS = [
   { to: "/admin/todos", label: "Todos", adminOnly: true },
   { to: "/admin/ghost", label: "Ghost", adminOnly: true },
   { to: "/admin/r2", label: "R2", adminOnly: true, search: { prefix: "replay-cache/" } },
+  { to: "/admin/bbcode-images", label: "BBCode images", adminOnly: true },
   { to: "/admin/discord", label: "Discord", adminOnly: true },
   { to: "/admin/dan-classifier", label: "Chart Patterns", adminOnly: false },
   { to: "/admin/og-preview", label: "OG preview", adminOnly: false },

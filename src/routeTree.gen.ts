@@ -32,6 +32,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as ValleyRouteImport } from './routes/valley'
+import { Route as AdminBbcodeImagesRouteImport } from './routes/admin/bbcode-images'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
 import { Route as AdminGhostRouteImport } from './routes/admin/ghost'
@@ -182,6 +183,11 @@ const TrackerRoute = TrackerRouteImport.update({
 const ValleyRoute = ValleyRouteImport.update({
   id: '/valley',
   path: '/valley',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBbcodeImagesRoute = AdminBbcodeImagesRouteImport.update({
+  id: '/admin/bbcode-images',
+  path: '/admin/bbcode-images',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
@@ -389,6 +395,7 @@ export interface FileRoutesByFullPath {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
+  '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/ghost': typeof AdminGhostRoute
@@ -450,6 +457,7 @@ export interface FileRoutesByTo {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
+  '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/ghost': typeof AdminGhostRoute
@@ -512,6 +520,7 @@ export interface FileRoutesById {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
+  '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/ghost': typeof AdminGhostRoute
@@ -575,6 +584,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/valley'
+    | '/admin/bbcode-images'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/ghost'
@@ -636,6 +646,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/valley'
+    | '/admin/bbcode-images'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/ghost'
@@ -697,6 +708,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/valley'
+    | '/admin/bbcode-images'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/ghost'
@@ -759,6 +771,7 @@ export interface RootRouteChildren {
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
   ValleyRoute: typeof ValleyRoute
+  AdminBbcodeImagesRoute: typeof AdminBbcodeImagesRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
   AdminGhostRoute: typeof AdminGhostRoute
@@ -950,6 +963,13 @@ declare module '@tanstack/react-router' {
       path: '/valley'
       fullPath: '/valley'
       preLoaderRoute: typeof ValleyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/bbcode-images': {
+      id: '/admin/bbcode-images'
+      path: '/admin/bbcode-images'
+      fullPath: '/admin/bbcode-images'
+      preLoaderRoute: typeof AdminBbcodeImagesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/dan-classifier': {
@@ -1287,6 +1307,7 @@ const rootRouteChildren: RootRouteChildren = {
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
   ValleyRoute: ValleyRoute,
+  AdminBbcodeImagesRoute: AdminBbcodeImagesRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminDiscordRoute: AdminDiscordRoute,
   AdminGhostRoute: AdminGhostRoute,
