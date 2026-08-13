@@ -494,7 +494,7 @@ function KofiSupportButton() {
               <div className="text-left">
                 <div className="text-sm font-bold text-white">Support mania-tracker</div>
                 <div className="text-[11px] text-osu-f1">
-                  This site is a hobby project running on a single server. If it&apos;s been useful to you, you can help keep it up here. If you have any suggestions I&apos;ll do my best to add them.
+                  This site is a hobby project running on a single server. If it&apos;s been useful to you, you can help keep it up here.
                 </div>
               </div>
               <button
