@@ -76,16 +76,24 @@ const TIER_ORDER: ManiaCardTier[] = [
   "goat",
 ];
 
+/* The ladder is deliberately compressed at the bottom rather than starting at
+   one shard. Common and Rare are 61% of the pool, so they are what an ordinary
+   pack actually deals, and at 1 and 2 shards the modal pack paid back almost
+   nothing: a duplicate of either recycled for exactly 1 shard, since
+   DUPLICATE_RECYCLE_RATE floors there and cannot go lower. Raising the rate
+   could never fix that (half of 2 still floors to 1); only the base values
+   move it, which is why the bottom four rungs carry the buff and the top three
+   barely moved. */
 const TIER_SHARD_VALUES: Record<ManiaCardTier, number> = {
-  common: 1,
-  rare: 2,
-  elite: 4,
-  superRare: 6,
-  ultraRare: 9,
-  legendary: 14,
-  mythic: 20,
-  ascendant: 28,
-  worldClass: 40,
+  common: 2,
+  rare: 4,
+  elite: 7,
+  superRare: 10,
+  ultraRare: 14,
+  legendary: 20,
+  mythic: 27,
+  ascendant: 36,
+  worldClass: 48,
   // A GOAT card is one of ten in the game; recycling one should be a real
   // decision, not a rounding error next to World Class's 40. It used to be
   // 1000, which was four Legend packs for a card the pack hands you for free
@@ -104,10 +112,17 @@ const TIER_SHARD_VALUES: Record<ManiaCardTier, number> = {
    expected recycle return on a pack would have to beat its price for the pack
    to be worth opening, and beating its price is exactly what made opening one
    an income source rather than a purchase. Halving the duplicate closes that
-   loop: every pack type now returns meaningfully less in shards than it costs
-   (roughly 60% for Wild, 78% for Elite, 41% for Legend against the current
-   pool), so shards flow in from charges and the arcade and drain out through
-   packs, which is the direction the economy is supposed to run. */
+   loop: every pack type still returns less in shards than it costs (roughly
+   83% for Wild, 84% for Elite, 48% for Legend against the current pool), so
+   shards flow in from charges and the arcade and drain out through packs,
+   which is the direction the economy is supposed to run.
+
+   Those margins are thinner than they were, because the ladder's bottom rungs
+   were raised to make an ordinary pack worth recycling. Elite is the one with
+   no room left: its slice is the pool's top 10%, so it deals nothing below
+   ultraRare and its return tracks the ladder's upper half almost exactly. If
+   the ladder is ever buffed again, reprice Elite in the same commit or it
+   becomes the printer this rate exists to prevent. */
 export const DUPLICATE_RECYCLE_RATE = 0.5;
 
 const TIER_DUPLICATE_SHARD_VALUES: Record<ManiaCardTier, number> = Object.fromEntries(

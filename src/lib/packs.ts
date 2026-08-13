@@ -119,13 +119,20 @@ export const PACK_TYPES: PackTypeDef[] = [
     accent: { r: 52, g: 211, b: 153 },
   },
   // The keymode pair: the whole pool cut to one main keymode rather than a
-  // top slice, priced between Wild and Elite because what they sell is
-  // targeting, not card quality - within their pool every player still has
-  // identical odds and rarity still comes from real scores.
+  // top slice. What they sell is targeting, not card quality - within their
+  // pool every player still has identical odds and rarity still comes from
+  // real scores.
+  //
+  // They are priced apart because their pools are not comparable. 4K mains are
+  // ~89% of the tracked pool and skew low (27% common, 0.1% World Class),
+  // while the 988 7K mains are top-heavy (15% World Class), so a 7K card is
+  // worth about four and a half times a 4K one. At a shared 60 that made 4K
+  // the worst deal in the game by a wide margin - a fifth of its price back on
+  // a finished collection, against 7K's two thirds - for the same feature.
   {
     id: "4k",
     name: "4K",
-    cost: { kind: "shards", amount: 60 },
+    cost: { kind: "shards", amount: 40 },
     topFraction: 1,
     keys: 4,
     cardCount: PACK_SIZE,
@@ -154,7 +161,14 @@ export const PACK_TYPES: PackTypeDef[] = [
     // Premium tiers are deliberately steep: shards flow constantly from
     // opened packs and recycling, so cheap top-slice packs made the whole
     // ladder trivial to skip.
-    cost: { kind: "shards", amount: 100 },
+    //
+    // 100 -> 115 came with the shard-ladder buff, not from this pack getting
+    // better. Seven cards out of the pool's top 10% are worth more in shards
+    // than any other pack deals, so Elite is the first one a richer ladder
+    // pushes past its own price; at 100 it would have returned ~96% of its
+    // cost on a finished collection, which is the infinite loop the duplicate
+    // rate exists to close. See TIER_SHARD_VALUES in pack-collection.ts.
+    cost: { kind: "shards", amount: 115 },
     topFraction: 0.1,
     cardCount: 7,
     guaranteesNew: true,

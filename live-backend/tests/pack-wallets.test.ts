@@ -165,7 +165,7 @@ describe("pack wallets", () => {
 
     const result = await recyclePackCollectionCards(db, USER_ID, { mode: "whole_matching", query: "renamed" }, 3000);
     // Two rare copies: the kept one at full value, the duplicate at half.
-    expect(result.gained).toBe(2 + 1);
+    expect(result.gained).toBe(4 + 2);
     expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).total).toBe(0);
   });
 
@@ -180,7 +180,7 @@ describe("pack wallets", () => {
       { mode: "copies", cardCopies: [{ cardKey: "42", copies: 1 }] },
       2000,
     );
-    expect(one.gained).toBe(1);
+    expect(one.gained).toBe(2);
     const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
     expect(page.cards[0]).toMatchObject({ copies: 2, recycledCopies: 1 });
 
@@ -192,7 +192,7 @@ describe("pack wallets", () => {
       { mode: "copies", cardCopies: [{ cardKey: "42", copies: 5 }] },
       3000,
     );
-    expect(rest.gained).toBe(2 + 1);
+    expect(rest.gained).toBe(4 + 2);
     expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).total).toBe(0);
   });
 
@@ -254,7 +254,7 @@ describe("GOAT cards alongside their player's ordinary card", () => {
     await savePackWallet(db, USER_ID, bothCardsPayload(), 0, 1000);
 
     const ordinary = await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: String(BOJII) });
-    expect(ordinary.gained).toBe(40 + 20);
+    expect(ordinary.gained).toBe(48 + 24);
 
     const remaining = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
     expect(remaining.total).toBe(1);
@@ -346,7 +346,7 @@ describe("pack collection pool progress", () => {
       query: "",
       restrictToCardUserIds: [43],
     });
-    expect(recycled.gained).toBe(2);
+    expect(recycled.gained).toBe(4);
     const remaining = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
     expect(remaining.total).toBe(2);
     expect(remaining.cards.map((card) => card.userId).sort()).toEqual([BOJII, 42].sort());
@@ -882,7 +882,7 @@ describe("collection card mints", () => {
     expect(card.tier).toBe("mythic");
     expect(card.skills).toEqual(skills);
     // A recycle of that card still values it as a real tier, never NaN.
-    expect((await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: String(BOJII) })).gained).toBe(20);
+    expect((await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: String(BOJII) })).gained).toBe(27);
   });
 
   it("ignores a mint for a card the owner does not hold", async () => {

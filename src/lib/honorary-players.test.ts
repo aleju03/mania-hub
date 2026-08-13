@@ -111,12 +111,16 @@ describe("honorary pack odds", () => {
      from printing shards: a pack that costs less than its cards recycle for
      is an income source, not a purchase. Wild went 30 -> 45 for exactly that
      reason - ten whole-pool cards recycle for more than 30 once every card it
-     deals is a duplicate. Repricing a pack is a deliberate economy change, so
-     it should have to come through here. */
+     deals is a duplicate. Elite went 100 -> 115 when TIER_SHARD_VALUES was
+     buffed, because its top-10% slice tracks the ladder's upper half and would
+     otherwise have paid back ~96% of its own price. Repricing a pack is a
+     deliberate economy change, so it should have to come through here. */
   it("prices the shard packs above what their cards recycle for", () => {
     expect(packTypeById("standard").cost).toEqual({ kind: "charge" });
     expect(packTypeById("wild").cost).toEqual({ kind: "shards", amount: 45 });
-    expect(packTypeById("elite").cost).toEqual({ kind: "shards", amount: 100 });
+    expect(packTypeById("4k").cost).toEqual({ kind: "shards", amount: 40 });
+    expect(packTypeById("7k").cost).toEqual({ kind: "shards", amount: 60 });
+    expect(packTypeById("elite").cost).toEqual({ kind: "shards", amount: 115 });
     expect(packTypeById("legend").cost).toEqual({ kind: "shards", amount: 250 });
   });
 

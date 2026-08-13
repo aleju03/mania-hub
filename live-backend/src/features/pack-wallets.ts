@@ -222,15 +222,15 @@ interface WalletPayload {
 }
 
 const TIER_SHARD_VALUES: Record<string, number> = {
-  common: 1,
-  rare: 2,
-  elite: 4,
-  superRare: 6,
-  ultraRare: 9,
-  legendary: 14,
-  mythic: 20,
-  ascendant: 28,
-  worldClass: 40,
+  common: 2,
+  rare: 4,
+  elite: 7,
+  superRare: 10,
+  ultraRare: 14,
+  legendary: 20,
+  mythic: 27,
+  ascendant: 36,
+  worldClass: 48,
   // Mirrors the frontend's table in src/lib/pack-collection.ts. GOAT came down
   // from 1000, which was four Legend packs for a card the honorary slot hands
   // out for free once the roster is complete.
@@ -360,7 +360,7 @@ const displayUsernameSql = `coalesce(nullif(${liveUserFieldSql("username")}, '')
    players can hold the GOAT tier.
 
    Collection cards arrive from the client and their tier is otherwise taken on
-   trust, which was harmless when the rarest card recycled for 40 shards. GOAT
+   trust, which was harmless when the rarest card recycled for 48 shards. GOAT
    recycles for 400 (TIER_SHARD_VALUES in src/lib/pack-collection.ts), so an
    unchecked `tier: "goat"` on any player is a shard printer: sync a forged
    card, recycle it, repeat. Membership is a fixed list of ids, so the check is
