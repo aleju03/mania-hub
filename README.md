@@ -53,4 +53,4 @@ Two cooperating parts:
 
 Browsers fetch a snapshot on page entry and subscribe to `/api/live` for updates; reconnects replay missed events via `Last-Event-ID`. All authenticated osu! API calls stay server-side behind a token-bucket rate limiter, and heavy computed artifacts are cached in R2.
 
-`AGENTS.md` has the fuller repository guide (endpoints, job types, per-feature models).
+`AGENTS.md` is the condensed guide for coding agents; the fuller reference (endpoints, job types, per-feature models) lives in `docs/`.

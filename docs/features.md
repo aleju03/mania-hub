@@ -1,0 +1,67 @@
+# Feature Models
+
+Deep per-feature reference: snipes, top plays, maps, farm helper, activity, dan estimates, chart analysis, profiles/rankings, goals, my data, uploaded replays, skins. Card packs and the GOAT poll live in `docs/packs.md`; the Discord bot and `/communities` in `docs/discord.md`.
+
+## Snipes
+
+Each beatmap/lane has a stored board in `country_beatmap_scores` (keyed by country + beatmap + lane + user), so raw scores do not have to be kept forever. A new score is compared to that board; when it overtakes someone the backend writes `snipe_events` and emits an SSE `snipe`. If no board exists yet, `seed_snipe_board` fetches roster users' scores for that beatmap and builds it.
+
+That board is readable at `/api/snapshots/snipe-board?country=XX&beatmap=<id>&mods=DT,HD&lazer=1` (lane derived server-side from the mods and client, so callers pass what a snipe event already carries; ordered by total score, `limit` caps at 100 and the response still reports the full `total`). The frontend loads it lazily when a `/snipes` row is expanded.
+
+## Top plays
+
+Detected country top plays live in `top_play_events`. When an incoming score is near the player's known top-play threshold, the backend queues `refresh_user_top_scores`, confirms via the osu! API whether it actually entered the player's top plays (confirmation window ~30min), records the PP gain, then emits `top_play`.
+
+## Maps
+
+`refresh_user_maps_farmed_scores` pulls a roster user's top 200 and extracts scores that entered their top plays; `refresh_country_maps` aggregates these into `country_maps_snapshots`, and `refresh_global_maps` rolls countries up into a global snapshot. Refresh progress is tracked in `live_meta` and surfaced via `/api/snapshots/maps-progress`.
+
+The `/maps` browser reads from `map_search_index` (materialized from `beatmap_skill_vectors` + beatmap/set metadata). Status stays fresh via the zero-API reconciler in `map-search.ts` (`buildMapStatusPropagationStatement` / `reconcileMapSearchIndexStatuses`), event-driven plus hourly, which only upgrades in-flux -> settled to shield against stale score payloads; and the hourly `refresh_qualified_maps` watch (`features/qualified-maps-watch.ts`), which is the one writer allowed to move a row backwards (qualified -> pending on a dequalify) because the osu! API read is current truth. The watch writes status into `metadata_json.$.status` + the status column (via `persistScoresDisplayMetadata`) and the index, filters to native mania diffs (skips converts), and enqueues `analyze_beatmap_chart` for newly-qualified diffs so they become searchable. `SOURCE_SELECT` excludes sub-0.2* in-flux placeholder diffs (empty stubs that ride along in pack and loved sets), and `pruneMapSearchPlaceholderRows` clears any already indexed.
+
+Free-text search terms of 3+ characters route through `map_search_fts`, an external-content FTS5 trigram table over `search_text` (created and trigger-synced in `db.ts`; same `%term%` semantics as the LIKE they replace). Shorter terms stay on LIKE (lone ASCII characters are dropped as noise), result counts stop at `MAP_SEARCH_COUNT_CAP` (5000, shown as "5,000+"), offsets past the cap short-circuit, and `/api/snapshots/maps-search` sits on the `publicCostly` rate bucket behind a 30s prepared-response cache (`searchResponses` in `maps-response-cache.ts`).
+
+## Farm helper
+
+Recommends maps by comparing the subject player's top 200 against a global peer pool at similar PP, using candidates from `country_maps_farmed_scores` across all countries. Per-keymode (4k/7k) weighted PP lives in `farm_helper_user_key_stats`, seeded on first access.
+
+`country_maps_farmed_scores` carries write-time lane columns (`key_count`, `speed_bucket`, `mods_key`; -1/null = unknown, readers fall back) so the peer aggregation filters by keymode in SQL and never re-derives mods per row; the whole cohort read stays inside the covering index `idx_country_maps_farmed_scores_user_lane`. A one-time boot backfill (`farmed_scores_lane_backfill:v1` in `live_meta`) populated existing rows. The A8 accuracy benchmark scale floors at 0.5, and gain-view snapshots report `belowGainFloorCount` (lanes dropped only by the 1pp minimum-gain floor) so `/farm-helper` can explain an empty board and point at the popular view.
+
+## Activity
+
+Per-day player skill vectors (stream, jack, bracket, LN variants and friends) in `player_activity_*` tables, computed by `analyze_activity_beatmap` jobs. The analysis is versioned (`ACTIVITY_SKILL_ANALYSIS_VERSION`) for cache invalidation.
+
+## Dan estimates
+
+`dan_estimates` caches ratings keyed by a cache version from `live-backend/src/dan/`. Small batches are computed inline at request time; larger requests queue `compute_dan_estimate`. Since cache version 7 the estimates come from the unified chart classifier (`live-backend/src/dan/chart-classifier.ts`, routing 4K RC to LeoBlack Mixed, 4K LN to the in-house kNN, 6K/7K through Sunny interval tables), so 6K and 7K charts are supported.
+
+## Chart analysis
+
+`beatmap_chart_analysis` stores, per beatmap at 1.0x and keyed by `CHART_ANALYSIS_VERSION`, the lean classifier verdict + pattern clusters (`classification_json`) and MinaCalc MSD skillsets (`msd_json`), plus extracted columns (`key_count`, `primary_label`, `primary_family`, `raw_dan`, `msd_overall`) for SQL consumers. Jobs enqueue alongside activity skill analysis for every newly seen beatmap; `POST /api/admin/chart-analysis/backfill?limit=N` sweeps already-cached `.osu` files with no row at the current version (no osu! API cost). The admin page's one-click run (`/api/admin/chart-analysis/{start,cancel}`) drives a self-chaining runner that keeps the analysis queue topped up until the whole cache is covered; pace is set by `CHART_ANALYSIS_LANE_INTERVAL_MS` (default 500ms per chart). Chart analysis runs even when `ENABLE_OSU_API_JOBS` is off (it only skips the `.osu` network fallback then). A backfill computed on one machine can seed another DB: `npm run export:chart-analysis` -> gzip/scp -> `npm run import:chart-analysis:dist -- <file>` (idempotent, existing rows win, schedules a full map search index rebuild afterwards).
+
+The LeoBlack engines and MinaCalc wasm live in `live-backend/vendor/leoblack` (a copy of `src/lib/leoblack`; keep the two trees plus the facade ports in `live-backend/src/dan/` in sync when the frontend classifier changes).
+
+## Profiles and rankings
+
+`player-profiles.ts` caches a best-200 snapshot for 24h (projected forward by top-play events) and profile sections (about, recent) for ~2 minutes. Opening a profile serves the stored snapshot and queues its osu! work (`refresh_profile_user`, `refresh_profile_snapshot`); the only osu! call left on the request path is minting a player never stored at all, which is what a search for an untracked player does.
+
+Presence follows from that: the green dot means a tracked play inside the 10-minute session window and nothing else (osu!'s own `is_online` is ignored here since it also counts idling and browsing; the rankings list still shows it, from a live call, on purpose). Last seen is the newest of the last tracked play and the payload's `last_visit` while that payload is inside its refresh TTL; neither available means no last-seen line at all.
+
+`global-rankings.ts` serves a snapshot built from the union of every tracked country's roster (`country_rosters` joined with `users`, limited to tracked, ranked members with non-null pp), ordered by mania pp, with 7-day deltas from `rank-snapshots.ts`. A `pool=packs` query variant merges manual roster opt-ins (rank null, `source = 'manual'`) into that board by pp, so a self-added player is a pullable maniacard while staying off every leaderboard; pack-pool reads also skip the stat-repair enqueue. Adding `keys=4` or `keys=7` narrows the packs pool to players whose main keymode that is (higher variant pp from `users.pp_4k`/`pp_7k`, falling back to per-keymode farmed weighted pp from `farm_helper_user_key_stats`; players with no signal are in neither) - this backs the 4K/7K card packs, and a failed keymode build fails the request rather than serving the unfiltered pool.
+
+## Goals
+
+Logged-in players set targets stored in `user_goals` (kinds `reach_pp`, `play_pp`, `play_pp_count`, `accuracy`, `pass`, `grade`, `fc`, `reach_rank`), always owned by the osu!-verified viewer id. Play-shaped goals auto-complete the moment ingest sees a matching play (`evaluateScoreGoals`, guarded so a goals bug cannot drop a score); total-pp goals settle on top-play confirmation (`evaluatePpGoals`) and reconcile lazily on read. A `live_meta` marker (`user_goals_changed_at`) plus a negative cache keep the ingest hot path cheap. Completion emits SSE `goal_completed`. Served by `/api/goals`, `/api/goals/create`, `/api/goals/delete`; frontend route `/goals`.
+
+## My Data
+
+`my-data.ts` powers a signed-in player's personal dashboard (frontend route `/my-data`) and adds no table of its own. `getMyDataSummary` aggregates stats that are not on an osu! profile (personal records, a country-timezone-bucketed play-rhythm clock, a mods fingerprint, key/card/goal counts) behind a 30s per-user cache; `getUserTrackedFeed` is a user-scoped tracker feed over `player_activity_score_refs` joined to `score_events`; `getUserTopPlaysFeed` reads the player's durable `top_play_events`. Endpoints `/api/my-data/{summary,dashboard,feed,top-plays,skills}`.
+
+`player-skills.ts` backs the dashboard's "Skill rating" card: per-play MinaCalc SSRs over the player's cached top plays, computed at the play's music rate (DT/NC 1.5x, HT/DC 0.75x, custom `speed_change` skipped) with the play's accuracy as the score goal, aggregated per keymode with Etterna's erfc aggregation into `player_skill_ratings` (keyed by `PLAYER_SKILLS_VERSION`; per-play SSRs cached in `plays_json` so recomputes only run the calc for new plays). Each mode also carries per-pattern ratings over the charts' chart-analysis pattern tags (min 3 plays per tag): the 4K card shows native MSD skillsets plus the LN pattern axis, 6K/7K show pattern axes only, since MinaCalc's skillset names are 4K vocabulary. Converts (non-Mode-3 `.osu`) and non-4/6/7K charts are skipped. `getPlayerSkillBreakdown` enqueues `compute_player_skills` when the row is missing, older than 12h, has pending plays after 30min, or a newer `top_play_events` row landed; like chart analysis it runs with `ENABLE_OSU_API_JOBS` off.
+
+## Uploaded replays
+
+A signed-in player can drop an `.osr` on `/replay`'s Upload tab; the file goes to R2 (`replay-cache/uploaded-replays/<id>.osr`, written by the frontend route `/api/replay-upload`, never lifecycle-expired) and everything human-readable about it is derived on demand into a gzipped description artifact (`replay-cache/uploaded-replay-desc/<id>.json.gz`). The backend owns only the owner index: `uploaded_replays` (id, `owner_user_id`, `owner_username`, `original_filename`, `uploaded_at`), which is what the `/replay/uploads` page ("Your uploads", linked from the Upload tab) lists and what authorizes a delete, since a share link is public and the `.osr` itself names no uploader. Routes `/api/uploaded-replays/{list,get,record,delete}` all take the admin-token bridge (the frontend forwards the osu!-verified viewer id; `asAdmin=1` + `all=1` is the admin's every-uploader view, which names the uploader on each row). The Upload tab's community list also names each upload's uploader, joined from this index (`uploadedBy` on `CommunityUploadEntry`), because the card already names the player in the replay and the two are rarely the same person. A delete drops the row first and the R2 objects after, so a half-failure leaves an orphaned file `/admin/r2` can still see rather than a row whose share link still works. Rows are never pruned by retention. `backfillUploadedReplayOwners` (frontend server fn, admin-only, button on the admin view of `/replay/uploads`) rebuilds rows for uploads that predate the index from the `uploaderid` metadata stamped on each object. Uploads are unlisted, not private: the share link is public by design, so any new surface that offers to delete or list one has to go through `src/lib/uploaded-replays.ts` rather than the R2 key.
+
+## Skins
+
+Skins carry a `visibility` (`public`/`private`) alongside `status`. A private skin is off `/skins`, off the duplicate guard, has no counted download or view, and 404s for anyone but its uploader (a true admin can still read it for moderation, and their private-skins shelf on `/skins` lists every uploader's, via `allPrivate=1` on `/api/skins/list`). Its R2 objects live under a `p-<secret>` key segment, never get a public bucket URL, and only answer to `?t=<secret>`, which `toSkinSummary(row, { asOwner })` attaches for owner-scoped reads only - so any new endpoint that serves a skin must go through that serializer rather than the row. Replay viewers never receive a private `.osk`: `/api/replay-skin/bundle` builds a zip of just the assets that player's stored settings draw (`live-backend/src/skins/replay-bundle.ts`, in-memory cache, no derived artifact in R2) and the client opens it exactly like an archive. What that protects is the file and the page, not the pixels a replay puts on screen.
