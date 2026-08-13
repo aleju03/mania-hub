@@ -208,7 +208,7 @@ function ClustersBlock({ analysis, pending }: { analysis: LiveChartAnalysisDetai
   // the card already sits at max-height (its scroll area absorbs changes), so we
   // let the strip wrap there instead of clipping pattern info.
   return (
-    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5 overflow-hidden sm:h-[22px] sm:flex-nowrap">
+    <div className="flex shrink-0 flex-wrap items-baseline gap-x-4 gap-y-1.5 overflow-hidden sm:h-[22px] sm:flex-nowrap">
       <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Patterns</span>
       {groups.map((group, index) => (
         <span key={group.name} className="flex shrink-0 items-baseline gap-1.5">
