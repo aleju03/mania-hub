@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { applyColorSequence, bbcodeToEditableHtml, captureColorSequence, distributeInlineWrap, editableWrapMarkup, serializeBBCodeDom } from "./bbcode-dom";
+import { applyColorSequence, bbcodeToEditableHtml, captureColorSequence, distributeInlineWrap, editableWrapMarkup, serializeBBCodeDom, unwrapAligns } from "./bbcode-dom";
 
 function serialize(html: string): string {
   const container = document.createElement("div");
@@ -72,6 +72,22 @@ describe("distributeInlineWrap", () => {
     const container = document.createElement("div");
     container.innerHTML = html;
     expect(serializeBBCodeDom(container)).toBe("[size=150]5k:[/size]\n[size=150]6k:[/size]");
+  });
+});
+
+describe("unwrapAligns", () => {
+  it("keeps the contents of an alignment it drops", () => {
+    expect(unwrapAligns('<div data-bb="align" data-param="left" class="bbcode__align-left"><b>hi</b></div>'))
+      .toBe("<b>hi</b>");
+    expect(unwrapAligns("<center>hi</center>")).toBe("hi");
+  });
+
+  it("reaches an alignment nested inside a heading", () => {
+    expect(unwrapAligns('<h2><center>7k practice:</center></h2>')).toBe("<h2>7k practice:</h2>");
+  });
+
+  it("leaves content with no alignment alone", () => {
+    expect(unwrapAligns("<h2>plain</h2>")).toBe("<h2>plain</h2>");
   });
 });
 

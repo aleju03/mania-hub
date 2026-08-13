@@ -68,6 +68,7 @@ import {
   elementAlign,
   escapeBBHtml,
   serializeBBCodeDom,
+  unwrapAligns,
   type EditableWrapKind,
 } from "../../../lib/bbcode-dom";
 import { getUser, searchUsers } from "../../../lib/osu";
@@ -1550,6 +1551,56 @@ export function BBCodeEditor({
     return wrapper;
   }, [closestAtCaret]);
 
+  /**
+   * Grows the selection to the whole heading it sits in, for block wraps.
+   *
+   * osu! purifies the HTML it renders and a heading there may only hold inline
+   * content, so a block tag inside one - an alignment div above all - costs the
+   * whole heading: [heading][left]x[/left][/heading] lands as plain text on the
+   * page. The other order says the same thing and survives, so a block wrap
+   * pressed inside a heading goes around it. Returns the heading it selected.
+   */
+  const expandSelectionOverHeading = useCallback((): Element | null => {
+    const surface = visualRef.current;
+    const selection = window.getSelection();
+    if (!surface || !selection || selection.rangeCount === 0) return null;
+    const heading = closestAtCaret("h1,h2,h3,h4,h5,h6");
+    if (!heading || !surface.contains(heading)) return null;
+    const range = document.createRange();
+    range.selectNode(heading);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return heading;
+  }, [closestAtCaret]);
+
+  /**
+   * Swaps one element for `html` directly in the DOM, caret at the end of what
+   * went in. insertHTML cannot do this: given a selection that covers a whole
+   * block element, Chrome deletes the block, pulls the following line up into
+   * the gap, and rewrites inherited styles as literal spans - which is how
+   * centering a heading used to eat the line under it and center nothing.
+   */
+  const replaceVisualNodeWithHtml = useCallback((target: Element, html: string) => {
+    const el = visualRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    const holder = document.createElement("div");
+    holder.innerHTML = html;
+    const fragment = document.createDocumentFragment();
+    while (holder.firstChild) fragment.appendChild(holder.firstChild);
+    const last = fragment.lastChild;
+    target.replaceWith(fragment);
+    const selection = window.getSelection();
+    if (selection && last) {
+      const range = document.createRange();
+      range.selectNodeContents(last);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    scheduleVisualSync();
+  }, [scheduleVisualSync]);
+
   const wrapVisual = useCallback((kind: EditableWrapKind, param: string | undefined, placeholder: string) => {
     // A selected image has no text range, so target its DOM node directly;
     // otherwise the wrap would drop `placeholder` at a stray caret.
@@ -1562,18 +1613,29 @@ export function BBCodeEditor({
       return;
     }
     const isBlock = BLOCK_WRAP_KINDS.has(kind);
-    if (isBlock && !onImage) expandSelectionOverLines();
+    // A heading is wrapped whole rather than from the inside; "heading" itself
+    // is exempt, since that one only ever means the caret's own line.
+    const heading = isBlock && kind !== "heading" && !onImage ? expandSelectionOverHeading() : null;
+    if (isBlock && !onImage) { if (!heading) expandSelectionOverLines(); }
     else expandSelectionOverInlineWrappers();
     const replacing = ALIGN_WRAP_KINDS[kind] ? alignedBlockToReplace() : null;
-    const inner = replacing ? replacing.innerHTML : (visualSelectionHtml() || escapeBBHtml(placeholder));
+    const selected = replacing ? replacing.innerHTML : (visualSelectionHtml() || escapeBBHtml(placeholder));
+    // An alignment already inside the heading is what broke it; the new one
+    // outside covers the same text, so it leaves with nothing lost.
+    const inner = heading && ALIGN_WRAP_KINDS[kind] ? unwrapAligns(selected) : selected;
     const { open, close } = editableWrapMarkup(kind, param);
     // Block wraps ([centre]/[quote]/[box]/...) legitimately contain block lines;
     // inline wraps ([size]/[spoiler]/[c]) must push into each line instead, or a
     // multi-line selection gets wiped by execCommand("insertHTML").
     const html = isBlock ? open + inner + close : distributeInlineWrap(inner, open, close);
-    insertVisualHtml(html);
+    // When the wrap lands around one whole element (an align block being
+    // re-aligned, a heading being wrapped), swap that node directly; both are
+    // exactly the whole-block selections insertHTML mangles.
+    const target = replacing ?? heading;
+    if (target) replaceVisualNodeWithHtml(target, html);
+    else insertVisualHtml(html);
     if (onImage) resyncImageAfterWrap();
-  }, [alignedBlockToReplace, ensureVisualSelection, expandSelectionOverInlineWrappers, expandSelectionOverLines, insertVisualHtml, isRedundantWrap, resyncImageAfterWrap, selectImageRange, visualSelectionHtml]);
+  }, [alignedBlockToReplace, ensureVisualSelection, expandSelectionOverHeading, expandSelectionOverInlineWrappers, expandSelectionOverLines, insertVisualHtml, isRedundantWrap, replaceVisualNodeWithHtml, resyncImageAfterWrap, selectImageRange, visualSelectionHtml]);
 
   const execVisual = useCallback((command: string) => {
     selectImageRange();

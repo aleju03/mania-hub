@@ -422,6 +422,15 @@ html[data-custom-cursor="true"] * {
 .bbcode-content h2 { font-size: 1.1rem; }
 .bbcode-content h3 { font-size: 1rem; }
 .bbcode-content h4, .bbcode-content h5, .bbcode-content h6 { font-size: 0.9rem; }
+/* osu! runs the profile HTML through HTMLPurifier, where a heading may only
+   hold inline content. A block tag inside one - an alignment div, [notice],
+   [quote], a list - costs the heading itself, so [heading][left]x[/left][/heading]
+   reaches the page as plain text. Show that here instead of a heading osu! is
+   not going to give. The markers are the ones our renderers emit, never a bare
+   div, so a line the browser splits inside a heading while editing is left be. */
+.bbcode-content h2:has(center, blockquote, ul, ol, pre, .well, .js-spoilerbox, [class*="bbcode__align-"]) {
+  font-size: inherit; font-weight: inherit; color: inherit; margin: 0;
+}
 .bbcode-content p { margin: 0.5em 0; }
 .bbcode-content ul, .bbcode-content ol { padding-left: 1.25rem; margin: 0.5em 0; }
 .bbcode-content ul { list-style: disc; }

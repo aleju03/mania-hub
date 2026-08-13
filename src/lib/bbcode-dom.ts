@@ -56,6 +56,21 @@ export function elementAlign(el: Element): BBAlign | null {
 /** Selector matching every element `elementAlign` recognizes. */
 export const ALIGN_SELECTOR = 'center,[data-bb="align"]';
 
+/**
+ * Drops the alignment wrappers out of an HTML fragment, keeping their contents.
+ *
+ * Used when the toolbar moves an alignment from inside a heading to around it:
+ * osu! only lets a heading hold inline content, so the one that was inside was
+ * never doing anything there but costing the heading its size.
+ * Client-only (parses via a live DOM element).
+ */
+export function unwrapAligns(html: string): string {
+  const holder = document.createElement("div");
+  holder.innerHTML = html;
+  holder.querySelectorAll(ALIGN_SELECTOR).forEach((el) => el.replaceWith(...el.childNodes));
+  return holder.innerHTML;
+}
+
 function editableSizeValue(param: string | undefined): number {
   const value = Number(param);
   return Number.isFinite(value) ? value : 100;
