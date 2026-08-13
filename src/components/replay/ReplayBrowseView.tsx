@@ -547,10 +547,12 @@ export function MissingBeatmapPanel({
       <input
         ref={inputRef}
         type="file"
-        accept=".osz,.osu,.zip,application/octet-stream"
+        accept=".osz,.olz,.osu,.zip,application/octet-stream"
         className="sr-only"
         onChange={(event) => handleFiles(event.target.files)}
       />
+
+      <ExportBeatmapHelp />
 
       {error && (
         <p className="mt-3 rounded-lg bg-osu-red/10 px-4 py-2 text-center text-xs text-osu-red-light">{error}</p>
@@ -565,6 +567,30 @@ export function MissingBeatmapPanel({
           Choose a different replay
         </button>
       </div>
+    </div>
+  );
+}
+
+// Both clients can hand over a map, but neither calls it the same thing, and
+// stable's is buried in the editor - so spell out the exact menu path rather
+// than leaving "drop its .osz here" as the only instruction.
+function ExportBeatmapHelp() {
+  return (
+    <div className="mt-5 text-[11px] leading-relaxed text-osu-f1">
+      <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-osu-f1">
+        Getting the map out of osu!
+      </h4>
+      <p className="mb-1.5">
+        <span className="font-semibold text-osu-l2">osu!stable</span> keeps every map as plain files: open
+        osu!/Songs, find the map's folder and drag the difficulty's .osu straight in. To get the whole
+        thing instead, open the map in the editor and choose File &gt; Export package - the .osz appears
+        in osu!/Exports.
+      </p>
+      <p>
+        <span className="font-semibold text-osu-l2">osu!lazer</span> stores maps in its own database, so it
+        has to export one: right-click the map at song select and choose Export, picking For compatibility
+        (.osz) if it offers both. The file lands in the exports folder (Settings &gt; open osu! folder).
+      </p>
     </div>
   );
 }

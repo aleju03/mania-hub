@@ -15,9 +15,12 @@ export type LocalBeatmapMatch = {
   backgroundFilename: string | null;
 };
 
+// .olz is what osu!lazer's own Export writes when the compatibility (.osz)
+// option isn't picked; it is the same zip with another extension, and the MD5
+// check below is what decides whether the contents are the right map anyway.
 export function isLocalBeatmapFileName(name: string): boolean {
   const lower = name.toLowerCase();
-  return lower.endsWith(".osz") || lower.endsWith(".zip") || lower.endsWith(".osu");
+  return lower.endsWith(".osz") || lower.endsWith(".olz") || lower.endsWith(".zip") || lower.endsWith(".osu");
 }
 
 function parseAudioFilename(content: string): string | null {
@@ -84,7 +87,7 @@ export async function matchLocalBeatmapFile(file: File, beatmapChecksum: string)
     return buildMatch(null, new TextDecoder().decode(bytes), file.name);
   }
 
-  if (!name.endsWith(".osz") && !name.endsWith(".zip")) {
+  if (!name.endsWith(".osz") && !name.endsWith(".olz") && !name.endsWith(".zip")) {
     throw new Error("Drop the map's .osz archive, or its exact .osu file.");
   }
 
