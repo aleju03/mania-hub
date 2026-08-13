@@ -3185,12 +3185,14 @@ function ReplaySkinPreview({
 
   // Stage furniture sizing, the stage's own rules: everything but the deck is
   // native pixels in the game's 768-space, and mania-stage-bottom is one
-  // texture pixel per playfield unit (so a tall deck hangs off the far edge
-  // and clips, exactly as in game).
+  // texture pixel per playfield unit on both axes (so a tall deck hangs off
+  // the far edge and clips, exactly as in game).
   const stageArt = (() => {
     const stage = settings.style === "bars" ? profile.assets.stage : null;
     const hintSize = stage?.hint ? getSkinAssetPreviewSize(stage.hint, layoutScale) : null;
-    const bottomSize = stage?.bottom ? getSkinAssetPreviewSize(stage.bottom, layoutScale) : null;
+    const bottomNativeWidth = stage?.bottom
+      ? (stage.bottom.width ?? 0) / (stage.bottom.scale && stage.bottom.scale > 0 ? stage.bottom.scale : 1)
+      : 0;
     const bottomNativeHeight = stage?.bottom
       ? (stage.bottom.height ?? 0) / (stage.bottom.scale && stage.bottom.scale > 0 ? stage.bottom.scale : 1)
       : 0;
@@ -3204,10 +3206,10 @@ function ReplaySkinPreview({
       hint: stage?.hint && hintSize
         ? { asset: stage.hint, height: hintSize.height, pick: identifyStage("hint") }
         : null,
-      bottom: stage?.bottom && bottomSize
+      bottom: stage?.bottom && bottomNativeWidth > 0 && bottomNativeHeight > 0
         ? {
             asset: stage.bottom,
-            width: bottomSize.width,
+            width: Math.max(1, bottomNativeWidth * layoutScale),
             height: Math.max(1, bottomNativeHeight * layoutScale),
             pick: identifyStage("bottom"),
           }

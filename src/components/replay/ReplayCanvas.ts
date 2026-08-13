@@ -3128,13 +3128,15 @@ export class ManiaReplayRenderer {
     const upscroll = this.skinSettings.upscroll;
 
     if (stage.bottom) {
-      // Never stretched to the stage width, and unlike the rest of the
-      // furniture its height is 1 texture pixel per playfield unit ("skinned
-      // for a 480px playfield height", origin Bottom) - so a too-tall canvas
-      // hangs off the top edge and clips, exactly as in game.
+      // Never stretched to the stage width. Both axes use the asset's native
+      // size in the 480-unit playfield space: the wiki's 0.625 note describes
+      // that space relative to osu!'s 768-unit screen, not an extra horizontal
+      // shrink. Applying 480/768 to the width made authored lane covers span
+      // only the middle columns. A too-tall canvas still hangs off the top
+      // edge and clips, exactly as in game.
       const native = this.getStageAssetNativeSize(stage.bottom);
       if (native) {
-        const width = Math.max(1, native.width * (480 / 768) * layout.layoutScale);
+        const width = Math.max(1, native.width * layout.layoutScale);
         const height = Math.max(1, native.height * layout.layoutScale);
         const centerX = playfieldX + playfieldWidth / 2;
         if (upscroll) this.drawSkinImage(stage.bottom, centerX, 0, width, height, 0.5, 0, 1, 0xffffff, true);

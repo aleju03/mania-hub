@@ -541,16 +541,17 @@ export async function renderSkinPreview(
   const bottomImage = bottomAsset ? images.get(bottomAsset.src) : undefined;
   if (bottomImage) {
     // Stable never stretches this element ("this element will not be
-    // stretched to fit the stage width"), and unlike the other furniture its
-    // height is NOT 0.625x: the texture is "skinned for a 480px playfield
-    // height", one pixel per playfield unit, origin Bottom. A canvas taller
-    // than 480 therefore hangs off the TOP of the screen and is clipped -
-    // tekkito2's 576-tall canvas keeps only the lower slice of its black
-    // bar, a strip hugging the very top of the field, not a box mid-stage.
+    // stretched to fit the stage width"). Its native size is authored in the
+    // 480-unit playfield space on both axes; 0.625 is the relationship between
+    // that space and the 768-unit screen, not another width multiplier. A
+    // canvas taller than 480 therefore hangs off the TOP of the screen and is
+    // clipped - tekkito2's 576-tall canvas keeps only the lower slice of its
+    // black bar, a strip hugging the very top of the field, not a box
+    // mid-stage.
     const bottomScale = bottomAsset?.scale && bottomAsset.scale > 0 ? bottomAsset.scale : 1;
     const nativeWidth = (bottomAsset?.width && bottomAsset.width > 0 ? bottomAsset.width : bottomImage.naturalWidth || 1) / bottomScale;
     const nativeHeight = (bottomAsset?.height && bottomAsset.height > 0 ? bottomAsset.height : bottomImage.naturalHeight || 1) / bottomScale;
-    const width = Math.max(1, nativeWidth * (480 / 768) * layout.scale);
+    const width = Math.max(1, nativeWidth * layout.scale);
     const height = Math.max(1, nativeHeight * layout.scale);
     const x = layout.stageX + (layout.stageWidth - width) / 2;
     if (upscroll) drawImageFlippedY(ctx, bottomImage, x, 0, width, height);

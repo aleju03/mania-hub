@@ -424,6 +424,21 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain("desiredPlayfieldWidth * targetLayoutScale");
   });
 
+  it("keeps mania-stage-bottom at its native 480-playfield width", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const catalogPreview = fs.readFileSync(path.resolve(__dirname, "../../lib/skin-preview-render.ts"), "utf8");
+    const settingsPreview = fs.readFileSync(path.resolve(__dirname, "ReplaySkinSettingsModal.tsx"), "utf8");
+    const furniture = /private renderStageFurnitureOver\(layout: Layout\) \{([\s\S]*?)\n  \}\n\n  \/\/ scorebar-bg/.exec(source);
+
+    // The element is centred and never stretched, but its authored width is
+    // already in the 480-unit playfield space. Shrinking it by 480/768 again
+    // leaves a full-stage lane cover sitting over only the middle columns.
+    expect(furniture?.[1]).toBeTruthy();
+    expect(furniture![1]).toContain("native.width * layout.layoutScale");
+    expect(catalogPreview).toContain("nativeWidth * layout.scale");
+    expect(settingsPreview).toContain("bottomNativeWidth * layoutScale");
+  });
+
   it("shows playfield lane dividers and lane tint only for bar skins without imported art", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
