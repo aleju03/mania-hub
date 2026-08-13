@@ -332,6 +332,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateMapSearchIndex(target);
   await migrateMapCollections(target);
   await migrateSkins(target);
+  await migrateUploadedReplays(target);
   await migrateDiscordCommunities(target);
   await migrateUserReplaySkins(target);
   await migrateAdminTodos(target);
@@ -2028,6 +2029,35 @@ async function migrateSkins(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_skins_osk_sha256
       on skins(osk_sha256) where osk_sha256 is not null
+  `);
+}
+
+async function migrateUploadedReplays(db: Db): Promise<void> {
+  // Who uploaded which .osr through the frontend's /api/replay-upload. The file
+  // and everything derived from it stay where they were (R2, plus the derived
+  // description artifact) - this is only the owner index those cannot answer,
+  // so a player can find their own uploads again and delete one.
+  //
+  // Timestamps are ISO text, matching skins and replay_video_exports. Rows are
+  // durable: retention never prunes them, since a pruned row would silently
+  // orphan a file the uploader can no longer reach.
+  await db.execute(`
+    create table if not exists uploaded_replays (
+      id text primary key,
+      owner_user_id integer not null,
+      owner_username text not null,
+      original_filename text,
+      uploaded_at text not null
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_uploaded_replays_owner
+      on uploaded_replays(owner_user_id, uploaded_at desc)
+  `);
+  // The admin shelf reads every uploader's newest first.
+  await db.execute(`
+    create index if not exists idx_uploaded_replays_uploaded_at
+      on uploaded_replays(uploaded_at desc)
   `);
 }
 

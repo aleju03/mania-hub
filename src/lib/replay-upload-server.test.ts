@@ -124,6 +124,9 @@ beforeEach(async () => {
 afterEach(async () => {
   delete process.env.REPLAY_UPLOAD_DIR;
   delete process.env.ENABLE_LOCAL_DEV_ADMIN;
+  delete process.env.LIVE_BACKEND_URL;
+  delete process.env.LIVE_ADMIN_TOKEN;
+  vi.unstubAllGlobals();
   await rm(uploadDir, { recursive: true, force: true });
 });
 
@@ -250,6 +253,49 @@ describe("replay upload POST", () => {
     expect(meta.uploaderId).toBe(viewerId);
     expect(meta.originalFilename).toBe("my replay.osr");
     expect(typeof meta.uploadedAt).toBe("string");
+  });
+
+  it("records the uploader in the owner index when one is configured", async () => {
+    process.env.LIVE_BACKEND_URL = "https://backend.test";
+    process.env.LIVE_ADMIN_TOKEN = "index-token";
+    const calls: { url: string; init: RequestInit }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      calls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    const viewerId = nextViewerId++;
+    const response = await handleReplayUploadPost(postRequest(buildOsr(), {
+      cookie: await authCookie(viewerId),
+      filenameHeader: encodeURIComponent("indexed.osr"),
+    }));
+    expect(response.status).toBe(200);
+    const { id } = await response.json() as { id: string };
+
+    const record = calls.find((call) => call.url.endsWith("/api/uploaded-replays/record"));
+    expect(record).toBeTruthy();
+    expect((record!.init.headers as Record<string, string>).authorization).toBe("Bearer index-token");
+    expect(JSON.parse(String(record!.init.body))).toMatchObject({
+      id,
+      userId: viewerId,
+      username: `tester${viewerId}`,
+      originalFilename: "indexed.osr",
+    });
+  });
+
+  it("still stores the replay when the owner index is unreachable", async () => {
+    process.env.LIVE_BACKEND_URL = "https://backend.test";
+    process.env.LIVE_ADMIN_TOKEN = "index-token";
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("index down");
+    });
+
+    const response = await handleReplayUploadPost(postRequest(buildOsr(), {
+      cookie: await authCookie(nextViewerId++),
+    }));
+    expect(response.status).toBe(200);
+    const { id } = await response.json() as { id: string };
+    expect(await readdir(uploadDir)).toContain(`${id}.osr`);
   });
 
   it("keeps share links publicly readable with download-safe headers", async () => {

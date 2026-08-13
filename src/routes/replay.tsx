@@ -125,6 +125,7 @@ import {
   removeRecentReplay,
   type RecentReplayEntry,
 } from "../lib/replay-recent";
+import { deleteUploadedReplay, fetchUploadedReplayPermissions } from "../lib/uploaded-replays";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { ReplaySkinImageAsset, ReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../lib/replay-overlays";
@@ -702,6 +703,7 @@ function ReplayPage() {
   const navigate = useNavigate();
   const router = useRouter();
   const canGoBack = useCanGoBack();
+  const pageAuth = useAuth();
   const rawSelectedCountry = useSelectedCountry();
   // Replay browse scopes osu! scoreboards by country; regions have no osu!
   // scoreboard scope, so they browse as Global here.
@@ -724,6 +726,10 @@ function ReplayPage() {
   const [uploadedBeatmapsetId, setUploadedBeatmapsetId] = useState<number | undefined>(undefined);
   const [uploadedReplayShareUrl, setUploadedReplayShareUrl] = useState<string | null>(null);
   const [loadedUploadId, setLoadedUploadId] = useState<string | null>(null);
+  // Whether the viewer may take the loaded upload down. Only the owner index
+  // knows whose upload it is, so this is asked once per loaded upload.
+  const [canDeleteLoadedUpload, setCanDeleteLoadedUpload] = useState(false);
+  const [deletingUpload, setDeletingUpload] = useState(false);
   // Set when the user backs out of an uploadId (clear/cancel) so the
   // shared-load effect doesn't reload it during the render gap between the
   // state reset and the navigation that removes ?uploadId from the URL.
@@ -1516,6 +1522,61 @@ function ReplayPage() {
     void loadSharedUploadedReplay(uploadId);
   }, [loadedUploadId, loadSharedUploadedReplay, pendingBeatmapUpload, replay, scoreId, uploadId]);
 
+  // Asked once per loaded upload, and never for a visitor who could not delete
+  // anything anyway.
+  const viewerCanOwnUploads = Boolean(pageAuth.viewer) || pageAuth.canUseAdminFeatures;
+  useEffect(() => {
+    if (!loadedUploadId || !viewerCanOwnUploads) {
+      setCanDeleteLoadedUpload(false);
+      return;
+    }
+    let cancelled = false;
+    fetchUploadedReplayPermissions({ data: { id: loadedUploadId } })
+      .then((permissions) => {
+        if (!cancelled) setCanDeleteLoadedUpload(permissions.canDelete);
+      })
+      .catch(() => {
+        if (!cancelled) setCanDeleteLoadedUpload(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadedUploadId, viewerCanOwnUploads]);
+
+  const handleDeleteLoadedUpload = useCallback(async () => {
+    if (!loadedUploadId || deletingUpload) return;
+    if (!window.confirm("Delete this upload? Its share link stops working and the file is gone for good.")) return;
+    setDeletingUpload(true);
+    try {
+      const result = await deleteUploadedReplay({ data: { id: loadedUploadId } });
+      if (!result.ok) {
+        setError(result.error === "not_found"
+          ? "That upload is already gone."
+          : "Couldn't delete that upload; try again.");
+        return;
+      }
+      // Nothing is left to watch, so land on the uploads page, where the list
+      // is one row shorter.
+      dismissedUploadIdRef.current = loadedUploadId;
+      setCanDeleteLoadedUpload(false);
+      setReplay(null);
+      setBeatmap(null);
+      setBeatmapFileContent(null);
+      setScoreInfo(null);
+      setUploadedReplayMods([]);
+      setUploadedBeatmapsetId(undefined);
+      setUploadedReplayShareUrl(null);
+      setLoadedUploadId(null);
+      setPendingBeatmapUpload(null);
+      applyLocalBeatmapAssets(EMPTY_LOCAL_BEATMAP_ASSETS);
+      navigate({ to: "/replay/uploads", replace: true });
+    } catch {
+      setError("Couldn't delete that upload; try again.");
+    } finally {
+      setDeletingUpload(false);
+    }
+  }, [applyLocalBeatmapAssets, deletingUpload, loadedUploadId, navigate]);
+
   useEffect(() => {
     clearTimeout(scorePreviewTimerRef.current);
 
@@ -1829,6 +1890,8 @@ function ReplayPage() {
       mods={starMods}
       fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId}
       shareUrl={replayShareUrl ?? undefined}
+      onDeleteUpload={canDeleteLoadedUpload ? handleDeleteLoadedUpload : undefined}
+      deletingUpload={deletingUpload}
       playerProfile={playerProfile}
       judgeAsLazer={judgeAsLazer}
       onSelectClient={setClientJudgeAsLazer}

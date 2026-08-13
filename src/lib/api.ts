@@ -127,6 +127,12 @@ export async function setPersistentCache(key: string, data: unknown, ttlMs = CAC
   setMemoryCache(key, data, Date.now() + ttlMs);
 }
 
+/** Drops an entry so the next read rebuilds it, for data that was deleted
+    rather than expired. Per-instance, like the tier itself. */
+export async function invalidatePersistentCache(key: string): Promise<void> {
+  responseCache.delete(key);
+}
+
 // ── Herd control - per-instance in-flight deduplication ──
 // The old distributed lock table is gone. Within one server instance, concurrent same-key builds
 // collapse onto one promise here; across instances, the herd is absorbed one layer down (the osu!

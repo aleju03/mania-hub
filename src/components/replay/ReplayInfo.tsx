@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeftRight, Check, Share2 } from "lucide-react";
+import { ArrowLeftRight, Check, Share2, Trash2 } from "lucide-react";
 import { StarRatingBadge } from "#/components/maps/SearchCard";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { ModBadge } from "#/components/ui/ModBadge";
@@ -31,6 +31,9 @@ interface ReplayInfoProps {
   mods?: OsuMod[];
   fallbackBeatmapsetId?: number;
   shareUrl?: string;
+  /** Present only on an uploaded replay the viewer owns (or an admin's view). */
+  onDeleteUpload?: () => void;
+  deletingUpload?: boolean;
   playerProfile?: ReplayPlayerProfile | null;
   /** Effective judging ruleset while the Client what-if toggle is in play. */
   judgeAsLazer?: boolean;
@@ -39,7 +42,7 @@ interface ReplayInfoProps {
   onClear: () => void;
 }
 
-export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, playerProfile, judgeAsLazer, onSelectClient, onClear }: ReplayInfoProps) {
+export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, onDeleteUpload, deletingUpload = false, playerProfile, judgeAsLazer, onSelectClient, onClear }: ReplayInfoProps) {
   const h = replay.header;
   // An upload has no API score, so the client comes from the .osr's own version
   // stamp; both the label and everything judged below follow from it.
@@ -128,60 +131,55 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
           palette: it scrolls with the page, and the near-black base read as
           a black hole against the regular background. */}
       <div className="sm:hidden relative overflow-hidden rounded-xl border border-white/10 bg-osu-b4/70 p-3">
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="relative flex items-center gap-2">
-              <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_COMPACT} className="absolute -top-3 bottom-0 left-0 right-0" />
-              {/* Symmetric padding (the top pair cancels via the negative margin,
-                  nothing extra below) keeps this block's content centered like the
-                  map column, so the two label/value pairs sit on the same lines. */}
-              <div className="relative -mt-3 -ml-3 pt-3 pl-3 pr-6 min-w-0">
-                <PlayerBanner coverUrl={playerCoverUrl} />
-                <div className="relative flex items-center gap-2 min-w-0">
-                  <PlayerAvatar src={avatarSrc} name={displayName} size={32} />
-                  <div className="min-w-0">
-                    <div className={`text-[8px] uppercase tracking-wider ${playerLabelClass}`}>Player</div>
-                    <PlayerName
-                      username={playerPageUsername}
-                      className={`truncate text-sm font-bold text-white${playerNameShadow}`}
-                    >
-                      {displayName}
-                    </PlayerName>
-                  </div>
-                </div>
-              </div>
-              <div className="relative h-7 w-px bg-osu-b3/40" />
-              <div className="relative min-w-0 flex-1">
-                <div className={`text-[8px] uppercase tracking-wider ${mapLabelClass}`}>Map</div>
-                {/* h-5 matches the player name's text-sm line box so both value
-                    rows share a centerline. */}
-                <div className="flex h-5 items-center gap-1.5 min-w-0">
-                  {beatmap ? (
-                    mapUrl ? (
-                      <a href={mapUrl} target="_blank" rel="noopener noreferrer" className={`min-w-0 truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>
-                        {beatmap.title} [{beatmap.version}]
-                      </a>
-                    ) : (
-                      <div className={`min-w-0 truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
-                    )
-                  ) : (
-                    <div className="min-w-0 truncate text-xs font-semibold text-osu-l2">Replay loaded</div>
-                  )}
-                  {stars != null && <StarRatingBadge stars={stars} className="shrink-0" />}
-                  {displayMods.length > 0 && (
-                    <div className="flex shrink-0 items-center gap-0.5">
-                      {displayMods.map((mod, index) => (
-                        <ModBadge key={`${mod.acronym}-${index}`} mod={mod.acronym} rate={mod.rate} size={0.55} />
-                      ))}
-                    </div>
-                  )}
-                </div>
+        {/* Actions live in their own row at the card's foot instead of beside
+            this header: three buttons next to a player + map + badges row
+            overflow and overlap on narrow phones. */}
+        <div className="relative flex items-center gap-2">
+          <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_COMPACT} className="absolute -top-3 bottom-0 left-0 right-0" />
+          {/* Symmetric padding (the top pair cancels via the negative margin,
+              nothing extra below) keeps this block's content centered like the
+              map column, so the two label/value pairs sit on the same lines. */}
+          <div className="relative -mt-3 -ml-3 pt-3 pl-3 pr-6 min-w-0">
+            <PlayerBanner coverUrl={playerCoverUrl} />
+            <div className="relative flex items-center gap-2 min-w-0">
+              <PlayerAvatar src={avatarSrc} name={displayName} size={32} />
+              <div className="min-w-0">
+                <div className={`text-[8px] uppercase tracking-wider ${playerLabelClass}`}>Player</div>
+                <PlayerName
+                  username={playerPageUsername}
+                  className={`truncate text-sm font-bold text-white${playerNameShadow}`}
+                >
+                  {displayName}
+                </PlayerName>
               </div>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {shareUrl && <ShareReplayButton shareUrl={shareUrl} compact />}
-            <BackButton onClear={onClear} />
+          <div className="relative h-7 w-px bg-osu-b3/40" />
+          <div className="relative min-w-0 flex-1">
+            <div className={`text-[8px] uppercase tracking-wider ${mapLabelClass}`}>Map</div>
+            {/* h-5 matches the player name's text-sm line box so both value
+                rows share a centerline. */}
+            <div className="flex h-5 items-center gap-1.5 min-w-0">
+              {beatmap ? (
+                mapUrl ? (
+                  <a href={mapUrl} target="_blank" rel="noopener noreferrer" className={`min-w-0 truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>
+                    {beatmap.title} [{beatmap.version}]
+                  </a>
+                ) : (
+                  <div className={`min-w-0 truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
+                )
+              ) : (
+                <div className="min-w-0 truncate text-xs font-semibold text-osu-l2">Replay loaded</div>
+              )}
+              {stars != null && <StarRatingBadge stars={stars} className="shrink-0" />}
+              {displayMods.length > 0 && (
+                <div className="flex shrink-0 items-center gap-0.5">
+                  {displayMods.map((mod, index) => (
+                    <ModBadge key={`${mod.acronym}-${index}`} mod={mod.acronym} rate={mod.rate} size={0.55} />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -228,6 +226,11 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
               <div className="text-xs font-bold text-osu-f1">{beatmap.notes.length.toLocaleString()}</div>
             </div>
           )}
+        </div>
+        <div className="mt-2 flex items-center justify-end gap-1.5">
+          {shareUrl && <ShareReplayButton shareUrl={shareUrl} />}
+          {onDeleteUpload && <DeleteUploadButton onDelete={onDeleteUpload} busy={deletingUpload} compact />}
+          <BackButton onClear={onClear} />
         </div>
       </div>
 
@@ -308,8 +311,10 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
               {beatmap && <StripStat label="Notes" valueClassName="text-white/80">{beatmap.notes.length.toLocaleString()}</StripStat>}
             </div>
           </div>
+          {/* No Share here: the Visual Settings playbar inside the stage already
+              carries the share panel on desktop. */}
           <div className="flex shrink-0 items-center gap-2 self-start pt-1.5">
-            {shareUrl && <ShareReplayButton shareUrl={shareUrl} />}
+            {onDeleteUpload && <DeleteUploadButton onDelete={onDeleteUpload} busy={deletingUpload} />}
             <BackButton onClear={onClear} />
           </div>
         </div>
@@ -477,13 +482,12 @@ function BackButton({ onClear }: { onClear: () => void }) {
   );
 }
 
-function ShareReplayButton({ shareUrl, compact = false }: { shareUrl: string; compact?: boolean }) {
+// Mobile card only; on desktop the stage's Visual Settings playbar owns Share.
+function ShareReplayButton({ shareUrl }: { shareUrl: string }) {
   const [copied, setCopied] = useState(false);
 
-  // Straight to the clipboard, never the browser's own share sheet: desktop
-  // Chrome answers that with a QR-code-and-email window, which is not what
-  // anyone pressing this expects. The controls' Share panel keeps the sheet
-  // for touch devices, where it is genuinely the fastest way into a DM.
+  // Straight to the clipboard: the quick "grab the link" path. The controls
+  // card's Share panel keeps the native sheet for anyone who wants a DM.
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
@@ -499,11 +503,28 @@ function ShareReplayButton({ shareUrl, compact = false }: { shareUrl: string; co
     <button
       type="button"
       onClick={handleShare}
-      className={`inline-flex items-center gap-1.5 rounded-lg bg-osu-pink/20 font-semibold text-osu-pink-light transition-colors cursor-pointer hover:bg-osu-pink/30 hover:text-white ${compact ? "px-2.5 py-1.5 text-[11px]" : "px-3 py-1.5 text-xs"}`}
+      className="inline-flex items-center gap-1.5 rounded-lg bg-osu-pink/20 px-2.5 py-1.5 text-[11px] font-semibold text-osu-pink-light transition-colors cursor-pointer hover:bg-osu-pink/30 hover:text-white"
       title={shareUrl}
     >
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       {copied ? "Copied" : "Share"}
+    </button>
+  );
+}
+
+// Only shown to the uploader (or an admin), since an upload's share link is
+// public and the page cannot tell whose file it is without asking the index.
+function DeleteUploadButton({ onDelete, busy, compact = false }: { onDelete: () => void; busy: boolean; compact?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onDelete}
+      disabled={busy}
+      title="Delete this upload"
+      className={`inline-flex items-center gap-1.5 rounded-lg bg-osu-red/20 font-semibold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/30 hover:text-white disabled:cursor-wait disabled:opacity-50 ${compact ? "px-2.5 py-1.5 text-[11px]" : "px-3 py-1.5 text-xs"}`}
+    >
+      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+      {busy ? "Deleting" : "Delete"}
     </button>
   );
 }

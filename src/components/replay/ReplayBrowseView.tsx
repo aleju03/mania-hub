@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, FileDown, Link2, LoaderCircle, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Link2, LoaderCircle, Upload } from "lucide-react";
 
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { GradeImg } from "#/components/ui/GradeImg";
@@ -16,6 +17,7 @@ import { getReplayScoreAvailability } from "#/lib/replay-score-availability";
 import { searchBeatmaps, getUserBeatmapScores } from "#/lib/osu";
 import { filterBeatmapSearchResults } from "#/lib/beatmap-search";
 import { recentReplayUploadKey, type RecentReplayEntry } from "#/lib/replay-recent";
+import { useAuth } from "#/lib/auth-context";
 import { getRecentCommunityUploads, type CommunityUploadEntry } from "#/lib/uploaded-replay-community";
 import type { BeatmapScoreLookupStatus, OsuBeatmap, OsuBeatmapset, OsuScore } from "#/lib/types";
 
@@ -260,6 +262,7 @@ function communityUploadToRecentEntry(upload: CommunityUploadEntry): RecentRepla
     accuracy: upload.accuracy,
     mods: withModRate(upload.mods, upload.modRate),
     viewedAt: upload.uploadedAt,
+    uploadedBy: upload.uploadedBy ?? undefined,
   };
 }
 
@@ -275,6 +278,7 @@ function UploadReplayBrowser({
   onUploadReplay,
   onOpenRecentReplay,
 }: Pick<ReplayBrowseViewProps, "onUploadReplay" | "onOpenRecentReplay">) {
+  const auth = useAuth();
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [communityUploads, setCommunityUploads] = useState<RecentReplayEntry[]>(
@@ -384,16 +388,23 @@ function UploadReplayBrowser({
           onChange={(event) => handleFiles(event.target.files)}
         />
 
-        <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-center sm:gap-5">
-          <div className="flex items-center gap-2 text-[11px] text-osu-f1">
-            <FileDown className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-            <span>In osu!, right-click a score and choose Export to file.</span>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-osu-f1">
-            <Link2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-            <span>Uploading gives you a share link for the replay. Sign in with osu! to upload.</span>
-          </div>
+        <div className="mt-3 flex items-start justify-center gap-2 text-[11px] text-osu-f1">
+          <Link2 className="mt-px h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+          <span>Uploading gives you a share link for the replay. Sign in with osu! to upload.</span>
         </div>
+
+        {/* Everything you uploaded lives on its own page, with the deletes. */}
+        {(auth.viewer || auth.canUseAdminFeatures) && (
+          <div className="mt-4 flex justify-center">
+            <Link
+              to="/replay/uploads"
+              className="inline-flex items-center gap-1 rounded-lg bg-osu-b4 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+            >
+              Your uploads
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </div>
+        )}
       </div>
 
       {communityUploads.length > 0 ? (

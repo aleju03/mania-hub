@@ -80,14 +80,49 @@ describe("replay upload mode", () => {
     // Server-side export muxing can't read local blob: URLs.
     expect(routeSource).toContain("audioUrl: audioEnabled && remoteAudioUrl && !audioError");
 
-    // The panel takes .osz archives and exact .osu files.
+    // The panel takes .osz archives (lazer writes .olz for the same thing) and
+    // exact .osu files, and spells out where each client keeps them.
     expect(browseSource).toContain("export function MissingBeatmapPanel");
-    expect(browseSource).toContain('accept=".osz,.osu,.zip,application/octet-stream"');
+    expect(browseSource).toContain('accept=".osz,.olz,.osu,.zip,application/octet-stream"');
+    expect(browseSource).toContain("File &gt; Export package");
+    expect(localSource).toContain('lower.endsWith(".olz")');
 
     // Matching is by the replay's beatmap MD5, and map assets come out of the
     // archive so unsubmitted maps still get audio and a background.
     expect(localSource).toContain("md5Hex(bytes)");
     expect(localSource).toContain("audioBlob");
     expect(localSource).toContain("backgroundBlob");
+  });
+
+  it("indexes each upload's owner so it can be listed and deleted later", () => {
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const browseSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayBrowseView.tsx"), "utf8");
+    const uploadsPageSource = fs.readFileSync(path.resolve(__dirname, "replay_.uploads.tsx"), "utf8");
+    const uploadServerSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-upload-server.ts"), "utf8");
+    const uploadsSource = fs.readFileSync(path.resolve(__dirname, "../lib/uploaded-replays.ts"), "utf8");
+
+    // The row is written before the response, because the viewer asks whether
+    // it may delete the upload as soon as that response lands.
+    expect(uploadServerSource).toContain("await recordUploadedReplayOwner({");
+
+    // Ownership is the backend's call, and the file only goes after the row it
+    // was authorized against.
+    const deleteHandler = uploadsSource.slice(uploadsSource.indexOf("export const deleteUploadedReplay"));
+    expect(deleteHandler.indexOf("deleteUploadedReplayIndexRow"))
+      .toBeLessThan(deleteHandler.indexOf("deleteUploadedReplayObjects"));
+    expect(uploadsSource).toContain("if (!authorized.ok) return { ok: false, error: authorized.error };");
+    // A signed-out visitor has no shelf, and only an admin sees everyone's.
+    expect(uploadsSource).toContain("const allOwners = data.allOwners && auth.canUseAdminFeatures;");
+
+    // "Your uploads" lives on its own page; the Upload tab only links there.
+    expect(browseSource).toContain('to="/replay/uploads"');
+    expect(uploadsPageSource).toContain('createFileRoute("/replay_/uploads")');
+    expect(uploadsPageSource).toContain("fetchMyUploadedReplays({ data: { page: nextPage, allOwners: owners } })");
+    expect(uploadsPageSource).toContain("deleteUploadedReplay({ data: { id: upload.id } })");
+    // The admin's every-uploader view names who uploaded each row.
+    expect(uploadsPageSource).toContain("showUploader={allOwners}");
+    // The delete button on the viewer itself waits for the ownership answer.
+    expect(routeSource).toContain("fetchUploadedReplayPermissions({ data: { id: loadedUploadId } })");
+    expect(routeSource).toContain("onDeleteUpload={canDeleteLoadedUpload ? handleDeleteLoadedUpload : undefined}");
   });
 });

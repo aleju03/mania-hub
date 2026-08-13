@@ -13,6 +13,7 @@ import { isLocalDevAccessGranted } from "./auth-local-dev";
 import { readViewerFromRequest } from "./auth-server";
 import { parseUploadedReplayBuffer, type UploadedReplayParseResult } from "./replay-upload";
 import { persistUploadedReplayDescription } from "./uploaded-replay-describe";
+import { recordUploadedReplayOwner } from "./uploaded-replay-index";
 import {
   normalizeUploadedReplayId,
   readUploadedReplay,
@@ -220,10 +221,17 @@ export async function validateUploadedReplayOsr(
   };
 }
 
-/** Rate-limit key for an authorized request, or null when unauthenticated. */
-async function authorizeUploader(request: Request): Promise<string | null> {
+interface AuthorizedUploader {
+  /** Rate-limit key for this request. */
+  rateKey: string;
+  /** The signed-in uploader, or null on the local-dev pass. */
+  viewer: { id: number; username: string } | null;
+}
+
+/** The authorized uploader, or null when unauthenticated. */
+async function authorizeUploader(request: Request): Promise<AuthorizedUploader | null> {
   const viewer = await readViewerFromRequest(request);
-  if (viewer) return `user:${viewer.id}`;
+  if (viewer) return { rateKey: `user:${viewer.id}`, viewer: { id: viewer.id, username: viewer.username } };
   let hostname = "";
   try {
     hostname = new URL(request.url).hostname.toLowerCase();
@@ -235,7 +243,7 @@ async function authorizeUploader(request: Request): Promise<string | null> {
     localDevSwitch: process.env.ENABLE_LOCAL_DEV_ADMIN,
     hostname,
   });
-  return localDev ? "local-dev" : null;
+  return localDev ? { rateKey: "local-dev", viewer: null } : null;
 }
 
 // The header is client-supplied and URI-encoded; malformed encoding is
@@ -259,10 +267,11 @@ function getShareUrl(request: Request, id: string): string {
 }
 
 export async function handleReplayUploadPost(request: Request): Promise<Response> {
-  const rateKey = await authorizeUploader(request);
-  if (!rateKey) {
+  const uploader = await authorizeUploader(request);
+  if (!uploader) {
     return Response.json({ error: "Sign in to upload replays." }, { status: 401 });
   }
+  const { rateKey } = uploader;
   if (rateLimiter.isRateLimited(`post:${rateKey}`, UPLOAD_RATE_LIMIT_PER_WINDOW)) {
     return Response.json({ error: "Too many uploads; try again in a minute." }, { status: 429 });
   }
@@ -286,13 +295,29 @@ export async function handleReplayUploadPost(request: Request): Promise<Response
   }
 
   const originalFilename = readUploadFilename(request);
-  const uploaderId = rateKey.startsWith("user:") ? Number(rateKey.slice(5)) : null;
+  const uploaderId = uploader.viewer?.id ?? null;
+  const uploadedAt = new Date().toISOString();
   try {
     const saved = await saveUploadedReplay(buffer, {
       originalFilename,
       uploaderId,
-      uploadedAt: new Date().toISOString(),
+      uploadedAt,
     });
+    // Index the uploader so the file turns up on their own "your uploads"
+    // shelf and they can delete it later. Awaited, not fired off: the viewer
+    // asks whether it may delete this upload as soon as the response lands, and
+    // that answer comes from this row. Never fatal - the object carries the
+    // same uploader id in its metadata, so a missed row is recoverable by the
+    // admin backfill and costs the upload itself nothing.
+    if (uploader.viewer) {
+      await recordUploadedReplayOwner({
+        id: saved.id,
+        userId: uploader.viewer.id,
+        username: uploader.viewer.username,
+        originalFilename,
+        uploadedAt,
+      });
+    }
     // Store the derived description while the parse is in hand, so the
     // community list reads it back instead of re-downloading and re-parsing
     // the .osr. Best-effort: the upload already succeeded, and a miss just

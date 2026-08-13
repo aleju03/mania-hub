@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
 
+import { avatarImageSrc } from "#/components/ui/Avatar";
 import { GradeImg } from "#/components/ui/GradeImg";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { formatAccuracy, formatPP, formatTimeAgo } from "#/lib/format";
@@ -51,7 +52,11 @@ export function ReplayRecentlyViewed({
 
       <div
         className={sidebar
-          ? "replay-score-scroll flex max-h-[440px] flex-col gap-2 overflow-y-auto overscroll-contain"
+          // The nested scroller is for fine pointers only: on touch, a pan
+          // starting on a card would scroll this list instead of the page, and
+          // overscroll-contain would keep even a bottomed-out list from ever
+          // letting the page move. Touch layouts render the list in flow.
+          ? "replay-score-scroll flex flex-col gap-2 pointer-fine:max-h-[440px] pointer-fine:overflow-y-auto pointer-fine:overscroll-contain"
           : "grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"}
       >
         {entries.map((entry, index) => {
@@ -102,6 +107,23 @@ export function ReplayRecentlyViewed({
                           <ModBadge key={`${mod.acronym}-${modIndex}`} mod={mod.acronym} rate={mod.rate} size={0.7} />
                         ))}
                       </div>
+                    )}
+                    {entry.uploadedBy && (
+                      // The uploader, not the player in the replay: kept out of
+                      // the truncating text so it survives narrow cards.
+                      <span className="flex min-w-0 shrink-0 items-center gap-1 text-[10px] font-semibold text-white/90">
+                        {entry.uploadedBy.userId != null && (
+                          <img
+                            src={avatarImageSrc(undefined, entry.uploadedBy.userId)}
+                            alt=""
+                            className="h-3.5 w-3.5 rounded-full"
+                            loading="lazy"
+                          />
+                        )}
+                        <span className="max-w-24 truncate">
+                          {entry.uploadedBy.username || (entry.uploadedBy.userId != null ? `user ${entry.uploadedBy.userId}` : "unknown")}
+                        </span>
+                      </span>
                     )}
                   </div>
                 </div>

@@ -15,6 +15,7 @@ import { handlePacksRoutes } from "./routes/packs.js";
 import { handleProfileRoutes } from "./routes/profiles.js";
 import { handleReplayVideoRoutes } from "./routes/replay-video.js";
 import { handleSkinsRoutes } from "./routes/skins.js";
+import { handleUploadedReplayRoutes } from "./routes/uploaded-replays.js";
 import { handleCommunitiesRoutes } from "./routes/communities.js";
 import { handleSnapshotRoutes } from "./routes/snapshots.js";
 import { handleSystemRoutes } from "./routes/system.js";
@@ -169,6 +170,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (await handleGoatPollRoutes(req, res, ctx, url)) return true;
   if (await handleReplayVideoRoutes(req, res, ctx, url)) return true;
   if (await handleSkinsRoutes(req, res, ctx, url)) return true;
+  if (await handleUploadedReplayRoutes(req, res, ctx, url)) return true;
   if (await handleCommunitiesRoutes(req, res, ctx, url)) return true;
   return false;
 }

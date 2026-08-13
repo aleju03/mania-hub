@@ -1159,6 +1159,67 @@ export async function putUploadedReplay(id: string, buffer: Buffer, metadata: Up
   };
 }
 
+export interface UploadedReplayOwnerMetadata {
+  uploaderId: number | null;
+  originalFilename: string | null;
+  uploadedAt: string | null;
+}
+
+// The uploader stamped on the object at upload time. Only the owner-index
+// backfill reads this: every other caller goes through the index in the live
+// backend, since a HEAD per upload is not a listing.
+export async function headUploadedReplayOwner(id: string): Promise<UploadedReplayOwnerMetadata | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+
+  const storageKey = getUploadedReplayStorageKey(id);
+  assertReplayCacheKey(storageKey);
+
+  try {
+    const head = await r2.send(new HeadObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+    }));
+    const uploaderId = Number(head.Metadata?.uploaderid);
+    return {
+      uploaderId: Number.isSafeInteger(uploaderId) && uploaderId > 0 ? uploaderId : null,
+      originalFilename: head.Metadata?.originalfilename ?? null,
+      uploadedAt: head.Metadata?.uploadedat ?? head.LastModified?.toISOString() ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Deleting an upload for real: the .osr the share link serves, and the derived
+// description artifact that would otherwise keep describing a file that is
+// gone. Throws if the .osr delete fails, so a caller never reports a deletion
+// that did not happen.
+export async function deleteUploadedReplayObjects(id: string): Promise<void> {
+  const r2 = getClient();
+  if (!r2) return;
+
+  const storageKey = getUploadedReplayStorageKey(id);
+  assertReplayCacheKey(storageKey);
+  await r2.send(new DeleteObjectCommand({
+    Bucket: REPLAY_CACHE_BUCKET,
+    Key: storageKey,
+  }));
+
+  const descKey = getUploadedReplayDescStorageKey(id);
+  assertReplayCacheKey(descKey);
+  try {
+    await r2.send(new DeleteObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: descKey,
+    }));
+  } catch {
+    // Derived data: an orphaned description describes nothing anyone can reach,
+    // and the next write of this id (there is none - ids are random) would
+    // replace it anyway.
+  }
+}
+
 export async function putCachedReplay(
   scoreId: number,
   endpointKind: ReplayEndpointKind,

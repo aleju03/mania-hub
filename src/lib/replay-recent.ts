@@ -28,6 +28,9 @@ export interface RecentReplayEntry {
   pp?: number;
   mods?: RecentReplayMod[];
   viewedAt: number;
+  /** Who shared the file, for lists of uploads where the player in the replay
+      is not necessarily the person who uploaded it. Never persisted. */
+  uploadedBy?: { userId: number | null; username: string };
 }
 
 export function recentReplayScoreKey(scoreId: number): string {
