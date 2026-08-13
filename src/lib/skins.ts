@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getLiveBackendUrl, getServerLiveBackendUrl } from "./live-backend";
+import type { PreviewBackdrop } from "./skin-preview-backdrops";
+import type { SkinPreviewChartSnippet } from "./skin-preview-patterns";
 
 // Community skins: public browsing goes straight to the live backend (CORS),
 // per-user actions go through server fns that resolve the osu!-verified viewer
@@ -22,6 +24,19 @@ export interface SkinScreenshot extends SkinImage {
 
 export interface SkinKeymodePreview extends SkinImage {
   keys: number;
+  // Present only in owner-scoped responses. Historical previews have no
+  // recipe because their backdrop and notes were flattened into the PNG.
+  recipe?: SkinPreviewRecipe;
+}
+
+export interface SkinPreviewRecipe {
+  backdrop: PreviewBackdrop;
+  pattern: SkinPreviewChartSnippet | null;
+}
+
+export interface SkinPreviewRecipeUpdate {
+  keys: number;
+  recipe: SkinPreviewRecipe;
 }
 
 export interface SkinSummary {
@@ -891,11 +906,20 @@ export const startSkinEdit = createServerFn({ method: "POST" })
 
 // Closes an edit ticket and hands back the skin as it now stands. Direct to
 // the backend like finishSkinUpload: the ticket is the credential.
-export async function finishSkinEdit(id: string, token: string): Promise<SkinSummary> {
+export async function finishSkinEdit(
+  id: string,
+  token: string,
+  recipes: SkinPreviewRecipeUpdate[] = [],
+): Promise<SkinSummary> {
   const base = getLiveBackendUrl();
   if (!base) throw new SkinUploadError("unavailable", "Server is not configured.");
   const query = new URLSearchParams({ id, token });
-  const response = await fetch(`${base}/api/skins/edit-finish?${query.toString()}`, { method: "POST", credentials: "omit" });
+  const response = await fetch(`${base}/api/skins/edit-finish?${query.toString()}`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ recipes }),
+  });
   const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary; error?: string } | null;
   if (!response.ok || !body?.ok || !body.skin) {
     const code = body?.error ?? "upload_failed";
@@ -999,11 +1023,96 @@ export function uploadSkinPart(options: {
   });
 }
 
-export async function finishSkinUpload(id: string, token: string): Promise<SkinSummary> {
+// Preview images are independent objects, and waiting for the complete R2
+// round trip of one before starting the next makes multi-keymode skins feel
+// much slower than their byte size warrants. Keep the fan-out deliberately
+// small: three connections overlap network/storage latency without turning a
+// ten-keymode skin into a burst of ten costly requests.
+export const SKIN_PREVIEW_UPLOAD_CONCURRENCY = 3;
+
+export interface SkinPreviewUploadItem {
+  keys: number;
+  sizeBytes: number;
+}
+
+export interface SkinPreviewUploadProgress {
+  sentBytes: number;
+  completed: number;
+  total: number;
+  activeKeys: number[];
+}
+
+export async function uploadSkinPreviewsParallel<T extends SkinPreviewUploadItem>(
+  items: readonly T[],
+  upload: (item: T, onProgress: (sentBytes: number) => void) => Promise<void>,
+  onProgress?: (progress: SkinPreviewUploadProgress) => void,
+): Promise<void> {
+  if (items.length === 0) return;
+  const sent = items.map(() => 0);
+  const active = new Set<number>();
+  let cursor = 0;
+  let completed = 0;
+  let failed = false;
+  let firstError: unknown;
+  const report = () => onProgress?.({
+    sentBytes: sent.reduce((sum, bytes) => sum + bytes, 0),
+    completed,
+    total: items.length,
+    activeKeys: [...active].map((index) => items[index].keys).sort((a, b) => a - b),
+  });
+
+  const worker = async () => {
+    while (!failed) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) return;
+      const item = items[index];
+      active.add(index);
+      report();
+      try {
+        await upload(item, (sentBytes) => {
+          sent[index] = Math.max(sent[index], Math.min(item.sizeBytes, Math.max(0, sentBytes)));
+          report();
+        });
+        sent[index] = item.sizeBytes;
+        completed += 1;
+      } catch (error) {
+        if (!failed) firstError = error;
+        failed = true;
+      } finally {
+        active.delete(index);
+        report();
+      }
+    }
+  };
+
+  await Promise.all(Array.from(
+    { length: Math.min(SKIN_PREVIEW_UPLOAD_CONCURRENCY, items.length) },
+    () => worker(),
+  ));
+  if (failed) throw firstError;
+}
+
+export function skinPreviewUploadLabel(activeKeys: readonly number[], completed: number, total: number): string {
+  if (activeKeys.length === 1) return `Uploading the ${activeKeys[0]}K preview.`;
+  if (activeKeys.length > 1) return `Uploading ${activeKeys.map((keys) => `${keys}K`).join(", ")} previews.`;
+  return completed >= total ? "Previews uploaded." : "Uploading previews.";
+}
+
+export async function finishSkinUpload(
+  id: string,
+  token: string,
+  recipes: SkinPreviewRecipeUpdate[] = [],
+): Promise<SkinSummary> {
   const base = getLiveBackendUrl();
   if (!base) throw new SkinUploadError("unavailable", "Server is not configured.");
   const query = new URLSearchParams({ id, token });
-  const response = await fetch(`${base}/api/skins/finish?${query.toString()}`, { method: "POST", credentials: "omit" });
+  const response = await fetch(`${base}/api/skins/finish?${query.toString()}`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ recipes }),
+  });
   const body = (await response.json().catch(() => null)) as
     | { ok?: boolean; skin?: SkinSummary; error?: string; retryAfterMs?: number }
     | null;

@@ -22,6 +22,8 @@ import {
   SkinUploadError,
   startSkinEdit,
   uploadSkinPart,
+  uploadSkinPreviewsParallel,
+  skinPreviewUploadLabel,
   type SkinSummary,
 } from "../../lib/skins";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
@@ -141,6 +143,34 @@ export function SkinPreviewEditorModal({
     const fromSkin = skin.keymodes.length > 0 ? skin.keymodes : imported?.summary.keymodes ?? [];
     return [...fromSkin].sort((a, b) => a - b);
   }, [skin.keymodes, imported]);
+
+  const publishedRecipes = useMemo(() => new Map(
+    skin.previews.flatMap((preview) => preview.recipe ? [[preview.keys, preview.recipe] as const] : []),
+  ), [skin.previews]);
+
+  // Pending picks override one axis only. The other axis continues to come
+  // from the stored recipe, which is what lets a backdrop move without the
+  // chart changing (and vice versa).
+  const backdropFor = useCallback((keys: number): PreviewBackdrop | undefined => (
+    pending.has(keys) ? pending.get(keys) : publishedRecipes.get(keys)?.backdrop
+  ), [pending, publishedRecipes]);
+  const patternFor = useCallback((keys: number): SkinPreviewChartSnippet | null | undefined => (
+    pendingPatterns.has(keys) ? pendingPatterns.get(keys) : publishedRecipes.get(keys)?.pattern
+  ), [pendingPatterns, publishedRecipes]);
+
+  // A persisted choice may not happen to be in this opening's random picker
+  // pool. Keep it visible at the front instead of showing a preview whose
+  // selected backdrop/chart appears to be nothing in the row.
+  const editorBackdropPool = useMemo(() => {
+    const selected = backdropFor(selectedKeymode);
+    if (typeof selected !== "number" || pool.candidates.some((entry) => entry.setId === selected)) return pool;
+    return { ...pool, candidates: [{ setId: selected, label: "Current backdrop" }, ...pool.candidates] };
+  }, [pool, selectedKeymode, backdropFor]);
+  const editorPatternPool = useMemo(() => {
+    const selected = patternFor(selectedKeymode);
+    if (!selected || patternPool.candidates.some((entry) => entry.beatmapId === selected.beatmapId)) return patternPool;
+    return { ...patternPool, candidates: [selected, ...patternPool.candidates] };
+  }, [patternPool, selectedKeymode, patternFor]);
 
   const publishedPreviewUrl = useCallback(
     (keys: number) => skin.previews.find((preview) => preview.keys === keys)?.url ?? null,
@@ -278,8 +308,8 @@ export function SkinPreviewEditorModal({
     if (!imported) return;
     const queue = [...new Set([...pending.keys(), ...pendingPatterns.keys()])]
       .map((keys) => {
-        const backdrop = pending.get(keys) ?? "flat";
-        const pattern = pendingPatterns.get(keys) ?? null;
+        const backdrop = backdropFor(keys) ?? "flat";
+        const pattern = patternFor(keys) ?? null;
         return { keys, backdrop, pattern, signature: `${backdrop}|${pattern?.beatmapId ?? "builtin"}` };
       })
       .filter((entry) => renderedRef.current.get(entry.keys) !== entry.signature)
@@ -325,7 +355,7 @@ export function SkinPreviewEditorModal({
     return () => {
       cancelled = true;
     };
-  }, [imported, pending, pendingPatterns, selectedKeymode, poolImage]);
+  }, [imported, pending, pendingPatterns, selectedKeymode, poolImage, backdropFor, patternFor]);
 
   // "All keymodes" retargets everything the skin ships, which is also how a
   // per-keymode pick is undone; "this keymode only" touches the one on screen.
@@ -338,28 +368,30 @@ export function SkinPreviewEditorModal({
   }, [scope, keymodes, selectedKeymode]);
 
   // A snippet is cut from a chart of one keymode, so a pattern pick only ever
-  // touches the keymode on screen. It also pins a backdrop for that keymode if
-  // none was picked yet: the re-render needs one, and nothing records which
-  // cover the published image used.
+  // touches the keymode on screen. Historical previews have no recipe; only
+  // those need a newly selected fallback backdrop as well.
   const pickPattern = useCallback((choice: SkinPreviewChartSnippet | null) => {
     setNeedsSkinFile(true);
     setPending((previous) => {
-      if (previous.has(selectedKeymode)) return previous;
+      if (previous.has(selectedKeymode) || publishedRecipes.has(selectedKeymode)) return previous;
       return new Map(previous).set(selectedKeymode, pool.candidates[0]?.setId ?? "flat");
     });
     setPendingPatterns((previous) => new Map(previous).set(selectedKeymode, choice));
-  }, [pool.candidates, selectedKeymode]);
+  }, [pool.candidates, selectedKeymode, publishedRecipes]);
 
   // One click for "draw this skin again with the renderer as it is now",
-  // which is what a fix to the playfield renderer needs. Nothing records which
-  // backdrop a published preview used, so this takes the first cover on offer
-  // and the card's art changes with it; shuffle first to steer that.
+  // which is what a fix to the playfield renderer needs. Stored recipes are
+  // copied into the pending maps so neither visual choice changes. Historical
+  // previews fall back once because their flattened images have no recipe.
   const rerenderAll = useCallback(() => {
-    const choice: PreviewBackdrop = pool.candidates[0]?.setId ?? "flat";
+    const fallback: PreviewBackdrop = pool.candidates[0]?.setId ?? "flat";
+    const backdrops = new Map(keymodes.map((keys) => [keys, backdropFor(keys) ?? fallback] as const));
+    const patterns = new Map(keymodes.map((keys) => [keys, patternFor(keys) ?? null] as const));
     setScope("all");
     setNeedsSkinFile(true);
-    setPending(new Map(keymodes.map((keys) => [keys, choice] as const)));
-  }, [pool.candidates, keymodes]);
+    setPending(backdrops);
+    setPendingPatterns(patterns);
+  }, [pool.candidates, keymodes, backdropFor, patternFor]);
 
   const revertPreviews = useCallback(() => {
     setPending(new Map());
@@ -405,11 +437,9 @@ export function SkinPreviewEditorModal({
           return;
         }
         const totalBytes = uploads.reduce((sum, [, render]) => sum + render.blob.size, 0);
-        let doneBytes = 0;
-        for (const [keys, render] of uploads) {
-          const label = `Uploading the ${keys}K preview.`;
-          setProgress({ done: doneBytes, total: totalBytes, label });
-          await uploadSkinPart({
+        await uploadSkinPreviewsParallel(
+          uploads.map(([keys, render]) => ({ keys, sizeBytes: render.blob.size, render })),
+          ({ keys, render }, onProgress) => uploadSkinPart({
             id: started.id,
             token: started.token,
             part: "preview",
@@ -422,12 +452,26 @@ export function SkinPreviewEditorModal({
             // and not at all while a screenshot holds the card.
             cover: coverShot == null && keys === coverKeymode,
             accent: keys === coverKeymode ? render.accent : undefined,
-            onProgress: (sent) => setProgress({ done: doneBytes + sent, total: totalBytes, label }),
-          });
-          doneBytes += render.blob.size;
-        }
+            onProgress,
+          }),
+          ({ sentBytes, activeKeys, completed, total }) => setProgress({
+            done: sentBytes,
+            total: totalBytes,
+            label: skinPreviewUploadLabel(activeKeys, completed, total),
+          }),
+        );
         setProgress({ done: totalBytes, total: totalBytes, label: "Saving." });
-        current = await finishSkinEdit(started.id, started.token);
+        current = await finishSkinEdit(
+          started.id,
+          started.token,
+          uploads.map(([keys]) => ({
+            keys,
+            recipe: {
+              backdrop: backdropFor(keys) ?? "flat",
+              pattern: patternFor(keys) ?? null,
+            },
+          })),
+        );
       }
       // A cover the uploads did not already carry is just a pointer move; no
       // image work involved. A starred screenshot is always one of those, and
@@ -479,7 +523,7 @@ export function SkinPreviewEditorModal({
         : "The previews could not be updated. Try again.");
     }
   }, [saving, dirty, renders, skin.id, skin.screenshots.length, coverKeymode, coverShot, coverChanged,
-    labelsChanged, labelDrafts, revertPreviews, onSaved, onClose]);
+    labelsChanged, labelDrafts, revertPreviews, onSaved, onClose, backdropFor, patternFor]);
 
   const handleDismiss = useCallback(() => {
     if (saving) return;
@@ -673,8 +717,8 @@ export function SkinPreviewEditorModal({
                 <SkinPreviewPickers
                   disabled={busy}
                   backdrop={{
-                    pool,
-                    selected: pending.get(selectedKeymode) ?? null,
+                    pool: editorBackdropPool,
+                    selected: backdropFor(selectedKeymode) ?? null,
                     onPick: pickBackdrop,
                     scope,
                     onScopeChange: setScope,
@@ -686,16 +730,22 @@ export function SkinPreviewEditorModal({
                     ) : null,
                   }}
                   pattern={{
-                    pool: patternPool,
-                    selected: pendingPatterns.get(selectedKeymode) ?? null,
+                    pool: editorPatternPool,
+                    selected: patternFor(selectedKeymode),
                     onPick: pickPattern,
                   }}
                 />
                 <p className="mt-2 text-[11px] leading-relaxed text-osu-f1/70">
-                  Picking a backdrop or a pattern re-renders that playfield from the uploaded .osk. Patterns are cut
-                  from real charts, one keymode at a time. Keymodes left alone keep the previews they were published
-                  with.
+                  Picking a backdrop or a pattern re-renders that playfield from the uploaded .osk while preserving
+                  its other saved choice. Patterns are cut from real charts, one keymode at a time. Keymodes left
+                  alone keep the previews they were published with.
                 </p>
+                {!publishedRecipes.has(selectedKeymode) && publishedPreviewUrl(selectedKeymode) ? (
+                  <p className="mt-1 text-[10.5px] leading-relaxed text-osu-f1/55">
+                    This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a
+                    new backdrop and pattern; later edits will preserve both.
+                  </p>
+                ) : null}
 
                 {/* The screenshots this skin was published with: renaming one
                     retitles it in the gallery, starring one puts it on the

@@ -19,6 +19,33 @@ import { checkRate, sendCors, sendJson } from "../respond.js";
 // the default 1MB limit would 413 a maximal payload before it could be judged.
 const REPLAY_SKIN_BODY_LIMIT_BYTES = 1_100_000;
 
+// Thumbnail requests may arrive three at a time. R2 transfers for different
+// keymodes should overlap, but the previews_json read/modify/write must not:
+// otherwise two completions can both start from the same array and the last
+// write silently drops the other preview. A second, narrower lock prevents
+// two requests for the same keymode from choosing the same immutable R2 key.
+const skinPreviewUploadLocks = new Map<string, Promise<void>>();
+const skinPreviewMetadataLocks = new Map<string, Promise<void>>();
+
+async function withKeyedSkinLock<T>(
+  locks: Map<string, Promise<void>>,
+  key: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previous = locks.get(key) ?? Promise.resolve();
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.catch(() => {}).then(() => gate);
+  locks.set(key, tail);
+  await previous.catch(() => {});
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (locks.get(key) === tail) locks.delete(key);
+  }
+}
+
 export async function handleSkinsRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL): Promise<boolean> {
   if (url.pathname === "/api/skins/list") {
     if (req.method !== "GET") {
@@ -86,7 +113,12 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     }
     if (scope.tokened) res.setHeader("cache-control", "private, no-store");
     else res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-    sendJson(req, res, ctx, 200, { skin: toSkinSummary(skin, { asOwner: isOwner || scope.asAdmin }) });
+    sendJson(req, res, ctx, 200, {
+      skin: toSkinSummary(skin, {
+        asOwner: isOwner || scope.asAdmin,
+        includePreviewRecipes: isOwner || scope.asAdmin,
+      }),
+    });
     return true;
   }
   if (url.pathname === "/api/skins/similar") {
@@ -471,7 +503,10 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     const id = url.searchParams.get("id") ?? "";
     const token = url.searchParams.get("token") ?? "";
     if (url.pathname === "/api/skins/finish") {
-      const result = await finishSkin(ctx.serveWriteDb ?? ctx.db, id, token);
+      const body = String(req.headers["content-type"] ?? "").includes("application/json")
+        ? parseJson<{ recipes?: unknown }>((await readBody(req)) || "{}", {})
+        : {};
+      const result = await finishSkin(ctx.serveWriteDb ?? ctx.db, id, token, body.recipes);
       if (!result.ok) {
         const status = result.error === "not_found" ? 403 : 400;
         sendJson(req, res, ctx, status, { ok: false, error: result.error === "not_found" ? "invalid_ticket" : result.error });
@@ -482,9 +517,15 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       return true;
     }
     if (url.pathname === "/api/skins/edit-finish") {
-      const result = await finishSkinEdit(ctx.serveWriteDb ?? ctx.db, id, token);
+      const body = String(req.headers["content-type"] ?? "").includes("application/json")
+        ? parseJson<{ recipes?: unknown }>((await readBody(req)) || "{}", {})
+        : {};
+      const result = await finishSkinEdit(ctx.serveWriteDb ?? ctx.db, id, token, body.recipes);
       if (!result.ok) {
-        sendJson(req, res, ctx, 403, { ok: false, error: "invalid_ticket" });
+        sendJson(req, res, ctx, result.error === "invalid_recipes" ? 400 : 403, {
+          ok: false,
+          error: result.error === "invalid_recipes" ? result.error : "invalid_ticket",
+        });
         return true;
       }
       // Previews for keymodes a replacement .osk no longer ships: the row has
@@ -612,46 +653,70 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
         const keysParam = Math.round(Number(url.searchParams.get("keys")));
         const keys = Number.isInteger(keysParam) && keysParam >= 1 && keysParam <= 10 ? keysParam : null;
         if (keys != null) {
-          // Preview objects are cached immutably, so a re-render has to land on
-          // a new key; the displaced object is deleted once the row points at
-          // the fresh one.
-          const previous = skin.previews.find((preview) => preview.keys === keys) ?? null;
-          const key = previous
-            ? storageKey(skinKeymodePreviewKey(skin.id, keys, sniffed.ext, nextSkinPreviewRevision(previous.key)))
-            : storageKey(skinKeymodePreviewKey(skin.id, keys, sniffed.ext));
-          const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
           const isCover = url.searchParams.get("cover") === "1";
-          const upserted = await upsertSkinKeymodePreview(
-            ctx.serveWriteDb ?? ctx.db,
-            skin.id,
-            { keys, key, url: uploaded.url, width, height },
-            isCover,
-          );
-          if (!upserted.ok) {
-            await deleteSkinObjects(ctx.config, [key]).catch(() => {});
-            sendJson(req, res, ctx, 400, { ok: false, error: upserted.error });
-            return true;
-          }
-          // What the row no longer points at: the displaced render, plus the
-          // standalone cover object of a pre-keymode skin whose card this
-          // render just took over. A screenshot the cover is moving off is not
-          // one of those - the row still lists it in the gallery.
-          const stillReferenced = new Set([
-            ...skin.previews.filter((preview) => preview.keys !== keys).map((preview) => preview.key),
-            ...skin.screenshots.map((shot) => shot.key),
-          ]);
-          stillReferenced.add(key);
-          // The cover columns follow a re-render of the keymode they point at,
-          // so that key counts as referenced only while it stays the cover.
-          if (!isCover && skin.previewKey && skin.previewKey !== upserted.replaced?.key) {
-            stillReferenced.add(skin.previewKey);
-          }
-          const staleKeys = [upserted.replaced?.key, isCover ? skin.previewKey : null]
-            .filter((candidate): candidate is string => !!candidate && !stillReferenced.has(candidate));
-          if (staleKeys.length > 0) {
-            await deleteSkinObjects(ctx.config, [...new Set(staleKeys)]).catch((error) => {
-              logWarn("skin_preview_stale_cleanup_failed", { id: skin.id, keys, ...errorContext(error) });
+          const result = await withKeyedSkinLock(skinPreviewUploadLocks, `${skin.id}:${keys}`, async () => {
+            // Preview objects are cached immutably, so a re-render has to land
+            // on a new key. Re-read after taking the per-keymode lock so even
+            // duplicate requests cannot select the same revision.
+            const beforeUpload = pending
+              ? await getSkinForUpload(ctx.db, skin.id, token)
+              : await getSkinForEdit(ctx.db, skin.id, token);
+            if (!beforeUpload) return { ok: false as const, error: "not_found" };
+            const previous = beforeUpload.previews.find((preview) => preview.keys === keys) ?? null;
+            const key = previous
+              ? storageKey(skinKeymodePreviewKey(skin.id, keys, sniffed.ext, nextSkinPreviewRevision(previous.key)))
+              : storageKey(skinKeymodePreviewKey(skin.id, keys, sniffed.ext));
+            const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
+
+            return withKeyedSkinLock(skinPreviewMetadataLocks, skin.id, async () => {
+              // Different keymodes uploaded to R2 concurrently. Merge each one
+              // against the row left by the preceding completion.
+              const current = pending
+                ? await getSkinForUpload(ctx.db, skin.id, token)
+                : await getSkinForEdit(ctx.db, skin.id, token);
+              if (!current) {
+                await deleteSkinObjects(ctx.config, [key]).catch(() => {});
+                return { ok: false as const, error: "not_found" };
+              }
+              const upserted = await upsertSkinKeymodePreview(
+                ctx.serveWriteDb ?? ctx.db,
+                skin.id,
+                { keys, key, url: uploaded.url, width, height },
+                isCover,
+              );
+              if (!upserted.ok) {
+                await deleteSkinObjects(ctx.config, [key]).catch(() => {});
+                return upserted;
+              }
+              // What the row no longer points at: the displaced render, plus
+              // the standalone cover object of a pre-keymode skin whose card
+              // this render just took over. Screenshots remain in the gallery.
+              const stillReferenced = new Set([
+                ...current.previews.filter((preview) => preview.keys !== keys).map((preview) => preview.key),
+                ...current.screenshots.map((shot) => shot.key),
+                key,
+              ]);
+              // The cover columns follow a re-render of the keymode they point
+              // at, so that key counts as referenced only while it stays cover.
+              if (!isCover && current.previewKey && current.previewKey !== upserted.replaced?.key) {
+                stillReferenced.add(current.previewKey);
+              }
+              const staleKeys = [upserted.replaced?.key, isCover ? current.previewKey : null]
+                .filter((candidate): candidate is string => !!candidate && !stillReferenced.has(candidate));
+              if (staleKeys.length > 0) {
+                await deleteSkinObjects(ctx.config, [...new Set(staleKeys)]).catch((error) => {
+                  logWarn("skin_preview_stale_cleanup_failed", { id: skin.id, keys, ...errorContext(error) });
+                });
+              }
+              return { ok: true as const };
             });
+          });
+          if (!result.ok) {
+            sendJson(req, res, ctx, result.error === "not_found" ? 403 : 400, {
+              ok: false,
+              error: result.error === "not_found" ? "invalid_ticket" : result.error,
+            });
+            return true;
           }
         } else {
           const key = storageKey(skinPreviewKey(skin.id, sniffed.ext));
@@ -749,7 +814,10 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       }
       const moved = result.changed ? await moveSkinOskForVisibility(ctx, result.skin) : result.skin;
       logInfo("skin_visibility_changed", { id, visibility, by: ownerUserId == null ? "admin" : "owner" });
-      sendJson(req, res, ctx, 200, { ok: true, skin: toSkinSummary(moved, { asOwner: true }) });
+      sendJson(req, res, ctx, 200, {
+        ok: true,
+        skin: toSkinSummary(moved, { asOwner: true, includePreviewRecipes: true }),
+      });
       return true;
     }
     if (url.pathname === "/api/skins/special-keymodes") {

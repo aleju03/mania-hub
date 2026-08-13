@@ -1215,6 +1215,51 @@ describe("editing a published skin's previews", () => {
     expect(await getSkinForEdit(db, id, started.token)).toBeNull();
   });
 
+  it("persists exact preview recipes for owner edits without adding them to public summaries", async () => {
+    const id = await previewedSkin();
+    const started = await startSkinEdit(db, id, OWNER.ownerUserId);
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const recipe = {
+      backdrop: 2556057,
+      pattern: {
+        beatmapId: 55501,
+        keys: 4,
+        label: "Artist - Song [Extra]",
+        stars: 6.25,
+        notes: [
+          { column: 0, time: 0, endTime: 0 },
+          { column: 2, time: 120, endTime: 480 },
+        ],
+      },
+    } as const;
+
+    const finished = await finishSkinEdit(db, id, started.token, [{ keys: 4, recipe }]);
+    expect(finished.ok).toBe(true);
+    if (!finished.ok) return;
+    expect(finished.skin.previews.find((preview) => preview.keys === 4)?.recipe).toEqual(recipe);
+    expect((await getSkin(db, id))?.previews.find((preview) => preview.keys === 4)?.recipe).toEqual(recipe);
+
+    const row = (await getSkin(db, id))!;
+    expect(toSkinSummary(row).previews[0]).not.toHaveProperty("recipe");
+    expect(toSkinSummary(row, { asOwner: true }).previews[0]).not.toHaveProperty("recipe");
+    expect(toSkinSummary(row, { asOwner: true, includePreviewRecipes: true }).previews[0]).toHaveProperty("recipe");
+  });
+
+  it("rejects malformed preview recipes without spending the edit ticket", async () => {
+    const id = await previewedSkin();
+    const started = await startSkinEdit(db, id, OWNER.ownerUserId);
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    expect(await finishSkinEdit(db, id, started.token, [{
+      keys: 4,
+      recipe: { backdrop: 123, pattern: { beatmapId: 5, keys: 7, notes: [] } },
+    }])).toEqual({ ok: false, error: "invalid_recipes" });
+    expect(await getSkinForEdit(db, id, started.token)).not.toBeNull();
+    expect((await getSkin(db, id))?.previews[0]?.recipe).toBeUndefined();
+  });
+
   it("refuses an edit ticket for someone else's skin, and expires like an upload ticket", async () => {
     const id = await previewedSkin();
     expect(await startSkinEdit(db, id, OWNER.ownerUserId + 1)).toEqual({ ok: false, error: "forbidden" });

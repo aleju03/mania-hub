@@ -101,13 +101,14 @@ export function SkinPatternRow({
   pool,
   // The snippet the keymode on screen is set to render with; null is the
   // built-in layout, which is what a skin published before the picker existed
-  // was drawn with.
+  // was drawn with. Undefined is an older flattened preview whose pattern was
+  // never recorded, so the row truthfully leaves every choice unselected.
   selected,
   onPick,
   disabled,
 }: {
   pool: SkinPatternPool;
-  selected: SkinPreviewChartSnippet | null;
+  selected: SkinPreviewChartSnippet | null | undefined;
   onPick: (choice: SkinPreviewChartSnippet | null) => void;
   disabled: boolean;
 }) {

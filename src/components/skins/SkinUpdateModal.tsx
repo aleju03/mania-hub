@@ -27,6 +27,8 @@ import {
   startSkinEdit,
   uploadErrorMessage,
   uploadSkinPart,
+  uploadSkinPreviewsParallel,
+  skinPreviewUploadLabel,
   type SkinSummary,
 } from "../../lib/skins";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
@@ -319,10 +321,10 @@ export function SkinUpdateModal({
       });
       doneBytes += file.size;
 
-      for (const [keys, render] of previewEntries) {
-        const label = `Uploading the ${keys}K preview.`;
-        setProgress({ done: doneBytes, total: totalBytes, label });
-        await uploadSkinPart({
+      const previewBase = doneBytes;
+      await uploadSkinPreviewsParallel(
+        previewEntries.map(([keys, render]) => ({ keys, sizeBytes: render.blob.size, render })),
+        ({ keys, render }, onProgress) => uploadSkinPart({
           id: ticket.id,
           token: ticket.token,
           part: "preview",
@@ -332,13 +334,28 @@ export function SkinUpdateModal({
           keys,
           cover: keys === coverKeymode,
           accent: keys === coverKeymode ? render.accent : undefined,
-          onProgress: (sent) => setProgress({ done: doneBytes + sent, total: totalBytes, label }),
-        });
-        doneBytes += render.blob.size;
-      }
+          onProgress,
+        }),
+        ({ sentBytes, activeKeys, completed, total }) => setProgress({
+          done: previewBase + sentBytes,
+          total: totalBytes,
+          label: skinPreviewUploadLabel(activeKeys, completed, total),
+        }),
+      );
+      doneBytes = totalBytes;
 
       setProgress({ done: totalBytes, total: totalBytes, label: "Saving." });
-      const updated = await finishSkinEdit(ticket.id, ticket.token);
+      const updated = await finishSkinEdit(
+        ticket.id,
+        ticket.token,
+        previewEntries.map(([keys]) => ({
+          keys,
+          recipe: {
+            backdrop: backdropFor(keys),
+            pattern: patterns.get(keys) ?? null,
+          },
+        })),
+      );
       track("skin_file_updated", {
         ...skinEventProperties(updated),
         skin_previews_rerendered: previewEntries.length,
@@ -356,7 +373,7 @@ export function SkinUpdateModal({
       }
       setStep("review");
     }
-  }, [file, renders, coverKeymode, skin.id, onUpdated, onClose]);
+  }, [file, renders, coverKeymode, skin.id, onUpdated, onClose, backdropFor, patterns]);
 
   const uploading = step === "uploading";
 

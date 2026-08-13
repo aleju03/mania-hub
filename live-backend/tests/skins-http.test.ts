@@ -550,11 +550,27 @@ describe("skins HTTP endpoints", () => {
 
   it("re-renders previews and moves the card cover after publishing", async () => {
     const { id, token } = await startUpload();
+    const pattern = {
+      beatmapId: 55501,
+      keys: 4,
+      label: "Artist - Song [Extra]",
+      stars: 6.25,
+      notes: [{ column: 0, time: 0, endTime: 0 }, { column: 2, time: 120, endTime: 480 }],
+    };
     await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
     await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview&keys=4&cover=1&w=1280&h=720`, PNG_BYTES));
     await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview&keys=7&w=1280&h=720`, PNG_BYTES));
-    await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+    await call(bodyReq("POST", `/api/skins/finish?id=${id}&token=${token}`, JSON.stringify({
+      recipes: [
+        { keys: 4, recipe: { backdrop: 2556057, pattern } },
+        { keys: 7, recipe: { backdrop: "flat", pattern: null } },
+      ],
+    }), { "content-type": "application/json" }));
     expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.previewUrl).toContain("preview-4k");
+    // Recipes are edit data: absent from public reads, present for the owner.
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.previews[0].recipe).toBeUndefined();
+    const ownerRead = await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=101`, ADMIN));
+    expect(ownerRead.body.skin.previews[0].recipe).toEqual({ backdrop: 2556057, pattern });
 
     // Cover only: no image work, and only the owner (or an admin) may ask.
     expect((await call(bodyReq("POST", "/api/skins/cover", JSON.stringify({ userId: 101, id, keys: 7 })))).status).toBe(401);
@@ -587,15 +603,35 @@ describe("skins HTTP endpoints", () => {
     expect(uploadedKey).toBe(`skins/${id}/preview-4k-r1.png`);
     expect(vi.mocked(deleteSkinObjects).mock.calls.at(-1)?.[1]).toEqual([`skins/${id}/preview-4k.png`]);
 
-    const finished = await call(mockReq("POST", `/api/skins/edit-finish?id=${editId}&token=${editToken}`));
+    const finished = await call(bodyReq("POST", `/api/skins/edit-finish?id=${editId}&token=${editToken}`, JSON.stringify({
+      recipes: [{ keys: 4, recipe: { backdrop: 2297326, pattern } }],
+    }), { "content-type": "application/json" }));
     expect(finished.status).toBe(200);
     expect(finished.body.skin.previewUrl).toBe(`https://cdn.test/skins/${id}/preview-4k-r1.png`);
     expect(finished.body.skin.previews.map((preview: { keys: number }) => preview.keys)).toEqual([4, 7]);
+    expect(finished.body.skin.previews[0].recipe).toEqual({ backdrop: 2297326, pattern });
+    expect(finished.body.skin.previews[1].recipe).toEqual({ backdrop: "flat", pattern: null });
     expect(finished.body.skin.status).toBe("published");
 
     // The ticket dies with the edit.
     expect((await call(mockReq("POST", `/api/skins/edit-finish?id=${editId}&token=${editToken}`))).status).toBe(403);
     expect((await call(bodyReq("POST", `/api/skins/upload?id=${editId}&token=${editToken}&part=preview&keys=4`, PNG_BYTES))).status).toBe(403);
+  });
+
+  it("merges keymode previews that finish uploading concurrently", async () => {
+    const { id, token } = await startUpload();
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer([3, 4, 7])));
+
+    const uploads = await Promise.all([3, 4, 7].map((keys) => call(bodyReq(
+      "POST",
+      `/api/skins/upload?id=${id}&token=${token}&part=preview&keys=${keys}${keys === 4 ? "&cover=1" : ""}`,
+      PNG_BYTES,
+    ))));
+    expect(uploads.map((response) => response.status)).toEqual([200, 200, 200]);
+
+    const finished = await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+    expect(finished.status).toBe(200);
+    expect(finished.body.skin.previews.map((preview: { keys: number }) => preview.keys)).toEqual([3, 4, 7]);
   });
 
   it("fronts the card with an uploaded screenshot, named by its uploader", async () => {

@@ -10,6 +10,7 @@ import {
   startAdminSkinUpload,
   uploadSkinPart,
   type DuplicateSkinRef,
+  type SkinPreviewRecipe,
   type SkinSummary,
 } from "./skins";
 
@@ -40,6 +41,7 @@ export interface BulkPreparedRender {
   width: number;
   height: number;
   accent: string;
+  recipe: SkinPreviewRecipe;
 }
 
 export interface BulkPreparedScreenshot {
@@ -172,14 +174,14 @@ export async function drawBulkBackdrops(queueLength: number): Promise<BackdropDe
 async function backdropImageFor(
   dealer: BackdropDealer,
   cache: Map<number, HTMLImageElement | null>,
-): Promise<HTMLImageElement | null> {
+): Promise<{ backdrop: number | "flat"; image: HTMLImageElement | null }> {
   const candidate = dealer.next();
-  if (!candidate) return null;
+  if (!candidate) return { backdrop: "flat", image: null };
   const cached = cache.get(candidate.setId);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) return { backdrop: candidate.setId, image: cached };
   const image = await loadSkinPreviewBackgroundForSet(candidate.setId).catch(() => null);
   cache.set(candidate.setId, image);
-  return image;
+  return { backdrop: candidate.setId, image };
 }
 
 export interface BulkUploadContext {
@@ -243,8 +245,15 @@ export async function publishBulkSkin(
         stopIfCancelled();
         const pattern = (await context.patterns?.next(keys)) ?? null;
         stopIfCancelled();
-        const render = await renderSkinPreview(imported.settings, keys, { background, pattern });
-        renders.push({ keys, blob: render.blob, width: render.width, height: render.height, accent: render.accent });
+        const render = await renderSkinPreview(imported.settings, keys, { background: background.image, pattern });
+        renders.push({
+          keys,
+          blob: render.blob,
+          width: render.width,
+          height: render.height,
+          accent: render.accent,
+          recipe: { backdrop: background.backdrop, pattern },
+        });
         onUpdate({ phase: "rendering", progress: renders.length / keymodes.length });
       }
     }
@@ -334,7 +343,11 @@ export async function publishBulkSkin(
     await context.pacer.take(paced);
     stopIfCancelled();
     const skin = await withRateLimitRetry(
-      () => finishSkinUpload(started.id, started.token),
+      () => finishSkinUpload(
+        started.id,
+        started.token,
+        renders.map((render) => ({ keys: render.keys, recipe: render.recipe })),
+      ),
       { onWait: waited, cancelled: context.cancelled },
     );
     step();

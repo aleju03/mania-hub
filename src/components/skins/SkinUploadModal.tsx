@@ -40,6 +40,8 @@ import {
   startSkinUpload,
   uploadErrorMessage,
   uploadSkinPart,
+  uploadSkinPreviewsParallel,
+  skinPreviewUploadLabel,
   type SkinSummary,
   type SkinVisibility,
 } from "../../lib/skins";
@@ -795,10 +797,10 @@ export function SkinUploadModal({
       let doneBytes = 0;
       const report = (label: string, sent: number) => setProgress({ done: doneBytes + sent, total: totalBytes, label });
 
-      for (const [keys, preview] of previewEntries) {
-        const label = `Uploading the ${keys}K preview.`;
-        report(label, 0);
-        await uploadSkinPart({
+      const previewBytes = previewEntries.reduce((sum, [, preview]) => sum + preview.blob.size, 0);
+      await uploadSkinPreviewsParallel(
+        previewEntries.map(([keys, preview]) => ({ keys, sizeBytes: preview.blob.size, preview })),
+        ({ keys, preview }, onProgress) => uploadSkinPart({
           id: ticket.id,
           token: ticket.token,
           part: "preview",
@@ -811,10 +813,15 @@ export function SkinUploadModal({
           // render on a retry that skips the screenshot it already sent.
           cover: coverShot == null && keys === coverKeymode,
           accent: keys === coverKeymode ? preview.accent : undefined,
-          onProgress: (sent) => report(label, sent),
-        });
-        doneBytes += preview.blob.size;
-      }
+          onProgress,
+        }),
+        ({ sentBytes, activeKeys, completed, total }) => setProgress({
+          done: sentBytes,
+          total: totalBytes,
+          label: skinPreviewUploadLabel(activeKeys, completed, total),
+        }),
+      );
+      doneBytes = previewBytes;
 
       for (let index = 0; index < pendingShots.length; index += 1) {
         const shot = pendingShots[index];
@@ -851,7 +858,17 @@ export function SkinUploadModal({
       doneBytes += file.size;
       report("Publishing.", 0);
 
-      const skin = await finishSkinUpload(ticket.id, ticket.token);
+      const skin = await finishSkinUpload(
+        ticket.id,
+        ticket.token,
+        previewEntries.map(([keys]) => ({
+          keys,
+          recipe: {
+            backdrop: backdropFor(keys),
+            pattern: patterns.get(keys) ?? null,
+          },
+        })),
+      );
       track("skin_upload_published", skinEventProperties(skin));
       markSkinsListStale();
       setPublished(skin);
@@ -878,7 +895,7 @@ export function SkinUploadModal({
       }
       setStep("form");
     }
-  }, [file, name, author, description, visibility, onPublished, previews, screenshots, coverKeymode, coverShot]);
+  }, [file, name, author, description, visibility, onPublished, previews, screenshots, coverKeymode, coverShot, backdropFor, patterns]);
 
   const uploading = step === "uploading";
 
@@ -1624,4 +1641,3 @@ function startErrorMessage(code: "not_logged_in" | "unavailable" | "storage_not_
       return "Uploads are not available right now.";
   }
 }
-

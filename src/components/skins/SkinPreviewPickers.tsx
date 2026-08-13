@@ -30,7 +30,9 @@ export function SkinPreviewPickers({
   };
   pattern: {
     pool: SkinPatternPool;
-    selected: SkinPreviewChartSnippet | null;
+    // Undefined is a historical flattened preview whose recipe is unknown;
+    // null is the explicitly selected built-in pattern.
+    selected: SkinPreviewChartSnippet | null | undefined;
     onPick: (choice: SkinPreviewChartSnippet | null) => void;
   };
   disabled: boolean;

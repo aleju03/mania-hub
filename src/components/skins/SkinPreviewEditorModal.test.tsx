@@ -5,16 +5,23 @@ import type { SkinSummary } from "../../lib/skins";
 
 vi.stubEnv("VITE_LIVE_BACKEND_URL", "https://live.test");
 
-const { importOsk, renderPreview } = vi.hoisted(() => ({
+const { importOsk, renderPreview, poolImage } = vi.hoisted(() => ({
   importOsk: vi.fn(),
   renderPreview: vi.fn(),
+  poolImage: vi.fn(async () => null),
 }));
 
 // The pickers are a row of thumbnails over a pool the backend deals; all this
 // test needs from them is the one click that starts the download.
 vi.mock("./SkinPreviewPickers", () => ({
-  SkinPreviewPickers: ({ backdrop }: { backdrop: { onPick: (choice: string) => void } }) => (
-    <button type="button" onClick={() => backdrop.onPick("flat")}>pick flat</button>
+  SkinPreviewPickers: ({ backdrop, pattern }: {
+    backdrop: { onPick: (choice: string) => void };
+    pattern: { onPick: (choice: null | { beatmapId: number; keys: number; label: string; stars: number; notes: never[] }) => void };
+  }) => (
+    <>
+      <button type="button" onClick={() => backdrop.onPick("flat")}>pick flat</button>
+      <button type="button" onClick={() => pattern.onPick({ beatmapId: 9002, keys: 4, label: "New chart", stars: 7, notes: [] })}>pick chart</button>
+    </>
   ),
 }));
 vi.mock("./SkinBackdropPicker", () => ({
@@ -23,7 +30,7 @@ vi.mock("./SkinBackdropPicker", () => ({
     drawing: false,
     shuffle: vi.fn(),
     drop: vi.fn(),
-    image: vi.fn(async () => null),
+    image: poolImage,
     decoded: new Map(),
   }),
 }));
@@ -70,8 +77,8 @@ function archiveResponse(): unknown {
   };
 }
 
-function renderEditor() {
-  return render(<SkinPreviewEditorModal skin={SKIN} open onClose={vi.fn()} onSaved={vi.fn()} />);
+function renderEditor(skin: SkinSummary = SKIN) {
+  return render(<SkinPreviewEditorModal skin={skin} open onClose={vi.fn()} onSaved={vi.fn()} />);
 }
 
 // The pick is what pulls the .osk down; everything under test hangs off it.
@@ -85,6 +92,54 @@ afterEach(() => {
   vi.unstubAllGlobals();
   importOsk.mockReset();
   renderPreview.mockReset();
+  poolImage.mockClear();
+});
+
+describe("SkinPreviewEditorModal saved recipes", () => {
+  const savedPattern = {
+    beatmapId: 9001,
+    keys: 4,
+    label: "Saved chart",
+    stars: 6.5,
+    notes: [{ column: 0, time: 0, endTime: 0 }],
+  };
+  const recipeSkin: SkinSummary = {
+    ...SKIN,
+    previewUrl: "https://cdn.test/preview-4k.png",
+    previews: [{
+      keys: 4,
+      url: "https://cdn.test/preview-4k.png",
+      width: 1280,
+      height: 720,
+      recipe: { backdrop: 2556057, pattern: savedPattern },
+    }],
+  };
+
+  it("changes the backdrop while preserving the saved pattern", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(archiveResponse()));
+    importOsk.mockResolvedValue({ settings: {}, summary: { keymodes: [4] }, sounds: {} });
+    renderPreview.mockResolvedValue({ blob: new Blob(["png"]), width: 1280, height: 720, accent: "#ffffff" });
+    renderEditor(recipeSkin);
+
+    // A backdrop-only edit keeps the exact chart snippet from the published
+    // recipe instead of silently returning to the built-in notes.
+    fireEvent.click(await screen.findByRole("button", { name: /pick flat/i }));
+    await waitFor(() => expect(renderPreview).toHaveBeenCalledTimes(1));
+    expect(renderPreview.mock.calls[0][2]).toMatchObject({ background: null, pattern: savedPattern });
+  });
+
+  it("re-renders with both published choices unchanged", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(archiveResponse()));
+    importOsk.mockResolvedValue({ settings: {}, summary: { keymodes: [4] }, sounds: {} });
+    renderPreview.mockResolvedValue({ blob: new Blob(["png"]), width: 1280, height: 720, accent: "#ffffff" });
+    renderEditor(recipeSkin);
+
+    const rerender = screen.getByRole("button", { name: /re-render every keymode/i }) as HTMLButtonElement;
+    fireEvent.click(rerender);
+    await waitFor(() => expect(renderPreview).toHaveBeenCalledTimes(1));
+    expect(poolImage).toHaveBeenCalledWith(2556057);
+    expect(renderPreview.mock.calls[0][2]).toMatchObject({ pattern: savedPattern });
+  });
 });
 
 describe("SkinPreviewEditorModal download failures", () => {

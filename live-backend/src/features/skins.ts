@@ -35,8 +35,31 @@ export interface SkinScreenshot extends SkinImage {
   label: string | null;
 }
 
+export interface SkinPreviewRecipeNote {
+  column: number;
+  time: number;
+  endTime: number;
+}
+
+export interface SkinPreviewRecipePattern {
+  beatmapId: number;
+  keys: number;
+  label: string;
+  stars: number;
+  notes: SkinPreviewRecipeNote[];
+}
+
+// Everything needed to draw the same flattened preview again. This lives
+// beside the image in previews_json, but only travels to the owner: catalog
+// cards need the PNG, not several charts' worth of note coordinates.
+export interface SkinPreviewRecipe {
+  backdrop: number | "flat";
+  pattern: SkinPreviewRecipePattern | null;
+}
+
 export interface SkinKeymodePreview extends SkinImage {
   keys: number;
+  recipe?: SkinPreviewRecipe;
 }
 
 // What an upload ticket minted against an already published skin unlocks.
@@ -118,7 +141,7 @@ export interface SkinSummary {
   previewUrl: string | null;
   previewWidth: number | null;
   previewHeight: number | null;
-  previews: Array<{ keys: number; url: string; width: number | null; height: number | null }>;
+  previews: Array<{ keys: number; url: string; width: number | null; height: number | null; recipe?: SkinPreviewRecipe }>;
   screenshots: Array<{ url: string; width: number | null; height: number | null; label: string | null }>;
   oskUrl: string | null;
   oskSizeBytes: number | null;
@@ -393,7 +416,7 @@ export async function setSkinCover(
   await attachSkinPreview(db, id, entry);
   const updated = await getSkin(db, id);
   return updated
-    ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }), staleKey }
+    ? { ok: true, skin: toSkinSummary(updated, { asOwner: true, includePreviewRecipes: true }), staleKey }
     : { ok: false, error: "not_found" };
 }
 
@@ -425,7 +448,7 @@ export async function setSkinScreenshotLabels(
     [JSON.stringify(next), nowIso(), id],
   );
   const updated = await getSkin(db, id);
-  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }) } : { ok: false, error: "not_found" };
+  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true, includePreviewRecipes: true }) } : { ok: false, error: "not_found" };
 }
 
 export type SetSkinSpecialKeymodesResult =
@@ -465,7 +488,10 @@ export async function setSkinSpecialKeymodes(
   );
   const updated = await getSkin(db, id);
   return updated
-    ? { ok: true, skin: toSkinSummary(updated, { asOwner: !options?.keymodeModerator }) }
+    ? { ok: true, skin: toSkinSummary(updated, {
+        asOwner: !options?.keymodeModerator,
+        includePreviewRecipes: !options?.keymodeModerator,
+      }) }
     : { ok: false, error: "not_found" };
 }
 
@@ -500,7 +526,7 @@ export async function updateSkinDetails(
     [name, description, buildSearchText(name, row.ownerUsername, row.author), nowIso(), id],
   );
   const updated = await getSkin(db, id);
-  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }) } : { ok: false, error: "not_found" };
+  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true, includePreviewRecipes: true }) } : { ok: false, error: "not_found" };
 }
 
 export type StartSkinEditResult =
@@ -546,19 +572,32 @@ export type FinishSkinEditResult =
   // Preview objects the row no longer points at, for the caller to delete from
   // R2: a replaced .osk can drop keymodes the old build shipped.
   | { ok: true; skin: SkinSummary; staleKeys: string[] }
-  | { ok: false; error: "not_found" };
+  | { ok: false; error: "not_found" | "invalid_recipes" };
 
-export async function finishSkinEdit(db: Db, id: string, token: string): Promise<FinishSkinEditResult> {
+export async function finishSkinEdit(db: Db, id: string, token: string, recipes?: unknown): Promise<FinishSkinEditResult> {
   const row = await getSkinForEdit(db, id, token);
   if (!row) return { ok: false, error: "not_found" };
+  const normalizedRecipes = normalizeSkinPreviewRecipeUpdates(recipes);
+  if (!normalizedRecipes) return { ok: false, error: "invalid_recipes" };
+  // Validate recipe targets against the previews that will survive a replace
+  // before pruning anything. A malformed finish request must leave both the
+  // row and its still-valid edit ticket untouched.
+  const matchingPreviews = row.tokenScope === "replace"
+    ? row.previews.filter((preview) => row.keymodes.includes(preview.keys))
+    : row.previews;
+  const finalPreviews = matchingPreviews.length > 0 ? matchingPreviews : row.previews;
+  if (normalizedRecipes.some((entry) => !finalPreviews.some((preview) => preview.keys === entry.keys))) {
+    return { ok: false, error: "invalid_recipes" };
+  }
   const staleKeys = row.tokenScope === "replace" ? await pruneOrphanedPreviews(db, row) : [];
+  if (!await mergeSkinPreviewRecipes(db, id, normalizedRecipes)) return { ok: false, error: "invalid_recipes" };
   await exec(
     db,
     "update skins set upload_token = null, token_expires_at = null, token_scope = null, updated_at = ? where id = ?",
     [nowIso(), id],
   );
   const updated = await getSkin(db, id);
-  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }), staleKeys } : { ok: false, error: "not_found" };
+  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true, includePreviewRecipes: true }), staleKeys } : { ok: false, error: "not_found" };
 }
 
 // Drops the keymode previews of a skin whose new .osk no longer ships those
@@ -599,13 +638,17 @@ export async function appendSkinScreenshot(db: Db, id: string, entry: SkinScreen
 
 export type FinishSkinResult =
   | { ok: true; skin: SkinSummary }
-  | { ok: false; error: "not_found" | "missing_osk" | "missing_preview" };
+  | { ok: false; error: "not_found" | "missing_osk" | "missing_preview" | "invalid_recipes" };
 
-export async function finishSkin(db: Db, id: string, token: string): Promise<FinishSkinResult> {
+export async function finishSkin(db: Db, id: string, token: string, recipes?: unknown): Promise<FinishSkinResult> {
   const row = await getSkinForUpload(db, id, token);
   if (!row) return { ok: false, error: "not_found" };
   if (!row.oskKey || !row.oskUrl) return { ok: false, error: "missing_osk" };
   if (!row.previewKey || !row.previewUrl) return { ok: false, error: "missing_preview" };
+  const normalizedRecipes = normalizeSkinPreviewRecipeUpdates(recipes);
+  if (!normalizedRecipes || !await mergeSkinPreviewRecipes(db, id, normalizedRecipes)) {
+    return { ok: false, error: "invalid_recipes" };
+  }
   const now = nowIso();
   const slug = row.slug ?? await uniqueSkinSlug(db, row.name, id);
   await exec(
@@ -619,7 +662,7 @@ export async function finishSkin(db: Db, id: string, token: string): Promise<Fin
   // The ticket holder is the uploader, so a private skin comes back whole -
   // its own publish confirmation needs the page link and the file.
   return published
-    ? { ok: true, skin: toSkinSummary(published, { asOwner: true }) }
+    ? { ok: true, skin: toSkinSummary(published, { asOwner: true, includePreviewRecipes: true }) }
     : { ok: false, error: "not_found" };
 }
 
@@ -1085,8 +1128,14 @@ export async function listExpiredPendingSkins(db: Db, cutoffIso: string): Promis
 // private row is stripped down to what a replay credit shows - name, author,
 // keymodes, accent - with every URL and every download-shaped field dropped,
 // so the redaction lives here rather than in each endpoint that serves a skin.
-export function toSkinSummary(row: SkinRow, options?: { asOwner?: boolean }): SkinSummary {
-  const previews = row.previews.map(({ keys, url, width, height }) => ({ keys, url, width, height }));
+export function toSkinSummary(row: SkinRow, options?: { asOwner?: boolean; includePreviewRecipes?: boolean }): SkinSummary {
+  const previews = row.previews.map(({ keys, url, width, height, recipe }) => ({
+    keys,
+    url,
+    width,
+    height,
+    ...(options?.includePreviewRecipes && recipe ? { recipe } : {}),
+  }));
   const screenshots = row.screenshots.map(({ url, width, height, label }) => ({ url, width, height, label }));
   const summary: SkinSummary = {
     id: row.id,
@@ -1240,10 +1289,111 @@ function normalizeKeymodePreviews(value: unknown): SkinKeymodePreview[] {
       const key = textOrNull(raw.key);
       const url = textOrNull(raw.url);
       if (!key || !url || !Number.isInteger(keys) || keys < 1 || keys > 10) return null;
-      return { keys, key, url, width: numberOrNull(raw.width), height: numberOrNull(raw.height) };
+      const recipe = normalizeSkinPreviewRecipe(raw.recipe, keys);
+      return {
+        keys,
+        key,
+        url,
+        width: numberOrNull(raw.width),
+        height: numberOrNull(raw.height),
+        ...(recipe ? { recipe } : {}),
+      };
     })
     .filter((entry): entry is SkinKeymodePreview => Boolean(entry))
     .sort((a, b) => a.keys - b.keys);
+}
+
+interface NormalizedSkinPreviewRecipeUpdate {
+  keys: number;
+  recipe: SkinPreviewRecipe;
+}
+
+const SKIN_PREVIEW_RECIPE_MAX_NOTES = 512;
+const SKIN_PREVIEW_RECIPE_MAX_TIME = 86_400_000;
+
+function normalizeSkinPreviewRecipe(value: unknown, expectedKeys: number): SkinPreviewRecipe | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const backdropNumber = Math.round(Number(raw.backdrop));
+  const backdrop = raw.backdrop === "flat"
+    ? "flat"
+    : Number.isSafeInteger(backdropNumber) && backdropNumber > 0 && backdropNumber <= 2_147_483_647
+      ? backdropNumber
+      : null;
+  if (backdrop == null) return null;
+  if (raw.pattern == null) return { backdrop, pattern: null };
+  if (typeof raw.pattern !== "object") return null;
+  const patternRaw = raw.pattern as Record<string, unknown>;
+  const beatmapId = Math.round(Number(patternRaw.beatmapId));
+  const keys = Math.round(Number(patternRaw.keys));
+  const stars = Number(patternRaw.stars);
+  if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0 || keys !== expectedKeys || !Number.isFinite(stars) || stars < 0 || stars > 100) {
+    return null;
+  }
+  if (!Array.isArray(patternRaw.notes) || patternRaw.notes.length === 0 || patternRaw.notes.length > SKIN_PREVIEW_RECIPE_MAX_NOTES) {
+    return null;
+  }
+  const notes: SkinPreviewRecipeNote[] = [];
+  for (const entry of patternRaw.notes) {
+    if (!entry || typeof entry !== "object") return null;
+    const note = entry as Record<string, unknown>;
+    const column = Math.round(Number(note.column));
+    const time = Math.round(Number(note.time));
+    const endTime = Math.round(Number(note.endTime));
+    if (!Number.isInteger(column) || column < 0 || column >= keys
+      || !Number.isSafeInteger(time) || !Number.isSafeInteger(endTime)
+      || Math.abs(time) > SKIN_PREVIEW_RECIPE_MAX_TIME || Math.abs(endTime) > SKIN_PREVIEW_RECIPE_MAX_TIME
+      || endTime < time) {
+      return null;
+    }
+    notes.push({ column, time, endTime });
+  }
+  return {
+    backdrop,
+    pattern: {
+      beatmapId,
+      keys,
+      label: cleanText(typeof patternRaw.label === "string" ? patternRaw.label : "", 200),
+      stars: Math.round(stars * 100) / 100,
+      notes,
+    },
+  };
+}
+
+function normalizeSkinPreviewRecipeUpdates(value: unknown): NormalizedSkinPreviewRecipeUpdate[] | null {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > 10) return null;
+  const updates: NormalizedSkinPreviewRecipeUpdate[] = [];
+  const seen = new Set<number>();
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") return null;
+    const raw = entry as Record<string, unknown>;
+    const keys = Math.round(Number(raw.keys));
+    if (!Number.isInteger(keys) || keys < 1 || keys > 10 || seen.has(keys)) return null;
+    const recipe = normalizeSkinPreviewRecipe(raw.recipe, keys);
+    if (!recipe) return null;
+    seen.add(keys);
+    updates.push({ keys, recipe });
+  }
+  return updates;
+}
+
+async function mergeSkinPreviewRecipes(
+  db: Db,
+  id: string,
+  updates: NormalizedSkinPreviewRecipeUpdate[],
+): Promise<boolean> {
+  if (updates.length === 0) return true;
+  const row = await getSkin(db, id);
+  if (!row) return false;
+  const recipes = new Map(updates.map((entry) => [entry.keys, entry.recipe]));
+  if ([...recipes.keys()].some((keys) => !row.previews.some((preview) => preview.keys === keys))) return false;
+  const previews = row.previews.map((preview) => {
+    const recipe = recipes.get(preview.keys);
+    return recipe ? { ...preview, recipe } : preview;
+  });
+  await exec(db, "update skins set previews_json = ?, updated_at = ? where id = ?", [JSON.stringify(previews), nowIso(), id]);
+  return true;
 }
 
 function buildSearchText(name: string, ownerUsername: string, author: string | null): string {

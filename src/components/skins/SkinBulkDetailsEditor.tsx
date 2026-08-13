@@ -343,6 +343,7 @@ export function SkinBulkDetailsEditor({
           width: render.width,
           height: render.height,
           accent: render.accent,
+          recipe: { backdrop: backdropFor(keys), pattern: patternFor(keys) },
           url,
         });
       });
