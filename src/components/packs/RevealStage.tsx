@@ -329,8 +329,6 @@ interface CascadeTileProps {
   entry: RevealedCard | undefined;
   username: string;
   cardBack: string;
-  /* True once the flip has landed (burst window). */
-  landed: boolean;
   reducedMotion: boolean;
   onLanded: () => void;
   /* Fires the moment the flip swings past edge-on and the face becomes
@@ -344,21 +342,32 @@ interface CascadeTileProps {
 // what spoils the tier) is called at the halfway point, when the card passes
 // edge-on.
 const CASCADE_FLIP_MS = 360;
+// Burst nodes are heavily composited. Retire them once their visible animation
+// is over instead of leaving every earlier card's particles alive until the
+// whole hand reaches the summary. The GOAT ceremony deliberately runs longer.
+const CASCADE_TIER_BURST_MS = 1_000;
+const CASCADE_GOAT_BURST_MS = 2_600;
 
-function CascadeTile({
+export function CascadeTile({
   entry,
   username,
   cardBack,
-  landed,
   reducedMotion,
   onLanded,
   onFaceVisible,
 }: CascadeTileProps) {
   const flipRef = useRef<HTMLDivElement | null>(null);
+  const burstTimerRef = useRef<number | null>(null);
   const startedRef = useRef(false);
   const firedRef = useRef(false);
   const facedRef = useRef(false);
+  const [settled, setSettled] = useState(false);
+  const [showBurst, setShowBurst] = useState(false);
   const flipped = entry !== undefined;
+
+  useEffect(() => () => {
+    if (burstTimerRef.current !== null) window.clearTimeout(burstTimerRef.current);
+  }, []);
 
   /* The flip runs on the compositor via the Web Animations API, like the
      advance flight below: the other cards' thumbnail paints land on the main
@@ -378,6 +387,18 @@ function CascadeTile({
       if (firedRef.current) return;
       firedRef.current = true;
       showFace();
+      /* A finished tile no longer needs a preserve-3d scene with two
+         backface layers. Flattening it to a regular image is visually
+         identical at 180deg and keeps a ten-card Wild reveal below mobile
+         Safari/Chrome's practical compositor-layer limit. */
+      setSettled(true);
+      if (!reducedMotion && entry?.tier && entry.glowColor) {
+        setShowBurst(true);
+        burstTimerRef.current = window.setTimeout(() => {
+          burstTimerRef.current = null;
+          setShowBurst(false);
+        }, entry.tier === "goat" ? CASCADE_GOAT_BURST_MS : CASCADE_TIER_BURST_MS);
+      }
       onLanded();
     };
     const el = flipRef.current;
@@ -409,20 +430,9 @@ function CascadeTile({
   }, [flipped, reducedMotion]);
 
   return (
-    <div className="relative h-full w-full" style={{ perspective: 700 }}>
-      <div ref={flipRef} className="relative h-full w-full" style={{ transformStyle: "preserve-3d" }}>
-        <div
-          className="absolute inset-0 rounded-[10px] bg-cover bg-center"
-          style={{
-            backgroundImage: `url(${cardBack})`,
-            backfaceVisibility: "hidden",
-            boxShadow: "0 10px 26px rgba(0,0,0,0.45)",
-          }}
-        />
-        <div
-          className="absolute inset-0 overflow-hidden rounded-[10px]"
-          style={{ transform: "rotateY(180deg)", backfaceVisibility: "hidden" }}
-        >
+    <div className="relative h-full w-full" style={settled ? undefined : { perspective: 700 }}>
+      {settled ? (
+        <div className="absolute inset-0 overflow-hidden rounded-[10px]">
           {entry?.thumbnail ? (
             <img src={entry.thumbnail} alt={username} className="h-full w-full object-cover" draggable={false} />
           ) : (
@@ -433,11 +443,36 @@ function CascadeTile({
             </div>
           )}
         </div>
-      </div>
+      ) : (
+        <div ref={flipRef} className="relative h-full w-full" style={{ transformStyle: "preserve-3d" }}>
+          <div
+            className="absolute inset-0 rounded-[10px] bg-cover bg-center"
+            style={{
+              backgroundImage: `url(${cardBack})`,
+              backfaceVisibility: "hidden",
+              boxShadow: "0 10px 26px rgba(0,0,0,0.45)",
+            }}
+          />
+          <div
+            className="absolute inset-0 overflow-hidden rounded-[10px]"
+            style={{ transform: "rotateY(180deg)", backfaceVisibility: "hidden" }}
+          >
+            {entry?.thumbnail ? (
+              <img src={entry.thumbnail} alt={username} className="h-full w-full object-cover" draggable={false} />
+            ) : (
+              /* Mint failure: same dark tile the tray shows, plus the name so
+                 the slot isn't anonymous. */
+              <div className="grid h-full w-full place-items-center bg-osu-b4 px-1 text-center">
+                <span className="break-all text-[9px] font-semibold text-osu-f1">{flipped ? username : ""}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* TierBurst animates in stage-sized pixels; the scale wrapper shrinks
           its whole coordinate space down to tile scale. */}
-      {landed && !reducedMotion && entry?.tier && entry.glowColor && (
+      {showBurst && entry?.tier && entry.glowColor && (
         <div className="pointer-events-none absolute inset-0" style={{ transform: "scale(0.5)" }}>
           {entry.tier === "goat"
             ? <GoatBurst glowColor={entry.glowColor} />
@@ -477,8 +512,6 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   const [cascade, setCascade] = useState<
     { start: number; slotWidth: number; scaleFrom: number; rows: number[] } | null
   >(null);
-  /* Cascade positions whose flip has landed (chime fired, burst showing). */
-  const [cascadeLanded, setCascadeLanded] = useState<number[]>([]);
   /* Cascade positions whose face has swung into view (what the counter counts). */
   const [cascadeFacesUp, setCascadeFacesUp] = useState<number[]>([]);
   const [flight, setFlight] = useState<CardFlight | null>(null);
@@ -831,7 +864,6 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   };
 
   const handleCascadeLanded = (position: number) => {
-    setCascadeLanded((current) => (current.includes(position) ? current : [...current, position]));
     const entry = revealedRef.current[position];
     if (!entry || entry.tier === null) return;
     if (entry.tier === "goat") playGoatFanfare();
@@ -1138,7 +1170,6 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
                     entry={revealed[position]}
                     username={cards[position]?.player.user.username ?? ""}
                     cardBack={cardBack}
-                    landed={cascadeLanded.includes(position)}
                     reducedMotion={reducedMotion}
                     onLanded={() => handleCascadeLanded(position)}
                     onFaceVisible={() => handleCascadeFaceVisible(position)}
