@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  formatCompactCount,
   formatDate,
   formatDetailedTimeAgo,
   formatPreciseTimeAgo,
@@ -79,5 +80,30 @@ describe("formatDetailedTimeAgo", () => {
     vi.setSystemTime(new Date("2026-06-11T22:45:00.000-06:00"));
 
     expect(formatDetailedTimeAgo("2026-06-11T18:45:00.000-06:00")).toBe("4h ago");
+  });
+});
+
+describe("formatCompactCount", () => {
+  it("keeps counts below a thousand exact", () => {
+    expect(formatCompactCount(0)).toBe("0");
+    expect(formatCompactCount(1)).toBe("1");
+    expect(formatCompactCount(999)).toBe("999");
+  });
+
+  it("shortens thousands, dropping a trailing zero decimal", () => {
+    expect(formatCompactCount(1000)).toBe("1k");
+    expect(formatCompactCount(1203)).toBe("1.2k");
+    expect(formatCompactCount(9999)).toBe("10k");
+  });
+
+  it("drops the decimal entirely past ten thousand, where it buys nothing", () => {
+    expect(formatCompactCount(10_000)).toBe("10k");
+    expect(formatCompactCount(45_600)).toBe("46k");
+    expect(formatCompactCount(1_250_000)).toBe("1250k");
+  });
+
+  it("floors fractions and never renders a negative count", () => {
+    expect(formatCompactCount(12.7)).toBe("12");
+    expect(formatCompactCount(-5)).toBe("0");
   });
 });

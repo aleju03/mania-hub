@@ -61,6 +61,9 @@ export interface SkinSummary {
   accentColor: string | null;
   // Public: everyone reads every skin's count.
   downloadCount: number;
+  // Also public: opens of the skin's own page, counted once per visitor per
+  // 6h. Optional because summaries cached before the field existed lack it.
+  viewCount?: number;
   previewUrl: string | null;
   previewWidth: number | null;
   previewHeight: number | null;
@@ -649,6 +652,45 @@ export const setSkinScreenshotLabels = createServerFn({ method: "POST" })
     }
   });
 
+// Removes one of a published skin's screenshots by position, for a shot that
+// has nothing to do with the skin. Owners prune their own; admins and the
+// keymode moderators can prune any public skin's. The stored image is deleted
+// for good, and if it fronted the browse card the cover falls back to a
+// rendered playfield server-side.
+export const removeSkinScreenshot = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; screenshot?: unknown }) => {
+    const id = typeof data.id === "string" ? data.id.trim() : "";
+    const screenshot = Math.round(Number(data.screenshot));
+    if (!id || id.length > 64 || !Number.isInteger(screenshot) || screenshot < 0 || screenshot >= SKIN_MAX_SCREENSHOTS) {
+      throw new Error("Invalid screenshot removal request.");
+    }
+    return { id, screenshot };
+  })
+  .handler(async ({ data }): Promise<{ ok: boolean; skin?: SkinSummary }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return { ok: false };
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/screenshot-remove`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({
+          userId: cfg.userId,
+          id: data.id,
+          screenshot: data.screenshot,
+          asAdmin: cfg.isAdmin,
+          asKeymodeModerator: !cfg.isAdmin && canModerateSkinKeymodes(cfg.userId),
+        }),
+      });
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary } | null;
+      if (!response.ok || !body?.ok || !body.skin) return { ok: false };
+      return { ok: true, skin: body.skin };
+    } catch {
+      return { ok: false };
+    }
+  });
+
 // Corrects which of a skin's keymodes are really (N-1)+1 layouts. Detection
 // reads skin.ini's separator lines, which plenty of 7K+1 skins never set, so
 // the uploader gets the last word; once set, re-uploads keep the manual list.
@@ -1145,6 +1187,24 @@ export function uploadErrorMessage(code: string, status?: number): string {
 export function skinDownloadUrl(id: string): string | null {
   const base = getLiveBackendUrl();
   return base ? `${base}/api/skins/download?id=${encodeURIComponent(id)}` : null;
+}
+
+// The counted view. It is its own endpoint rather than a side effect of
+// loading the page because that load happens in a server function: the
+// backend would see this server's address for every reader and its
+// per-visitor dedup would collapse them into one.
+export function skinViewUrl(ref: string): string | null {
+  const base = getLiveBackendUrl();
+  return base ? `${base}/api/skins/view?id=${encodeURIComponent(ref)}` : null;
+}
+
+// Fires the counted view: the skin page pings it on open, the browse card on
+// a settled hover or a grid download. Fire-and-forget - a view that failed to
+// register is not worth a message anywhere it is called from.
+export function pingSkinView(ref: string): void {
+  const url = skinViewUrl(ref);
+  if (!url) return;
+  void fetch(url, { method: "POST", credentials: "omit", keepalive: true }).catch(() => {});
 }
 
 // CORS-safe .osk fetch for in-page features (asset explorer, map preview):

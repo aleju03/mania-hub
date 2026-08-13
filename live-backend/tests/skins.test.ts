@@ -11,6 +11,7 @@ import {
   backfillSkinSlugs,
   clearSimilarSkinsCache,
   clearSkinDownloadDedup,
+  clearSkinViewDedup,
   createPendingSkin,
   deleteSkin,
   findPublishedSkinByOskSha256,
@@ -25,6 +26,7 @@ import {
   listSkins,
   privateSkinSecretMatches,
   recordSkinDownload,
+  removeSkinScreenshot,
   replaceSkinOsk,
   setSkinVisibility,
   setSkinAccent,
@@ -63,6 +65,7 @@ beforeEach(async () => {
   // test's catalog answers the next one's questions.
   clearSimilarSkinsCache();
   clearSkinDownloadDedup();
+  clearSkinViewDedup();
 });
 
 afterEach(async () => {
@@ -524,6 +527,9 @@ describe("skins feature", () => {
     expect((await getSkin(db, id))?.downloadCount).toBe(1);
     expect(await recordSkinDownload(db, id, "2.2.2.2")).toContain("skin.osk");
     expect((await getSkin(db, id))?.downloadCount).toBe(2);
+    // A grab is a look: each counted download carried a view with it, so the
+    // pair can never read "1 download, 0 views".
+    expect((await getSkin(db, id))?.viewCount).toBe(2);
 
     await setSkinHidden(db, id, true);
     expect(await recordSkinDownload(db, id, "3.3.3.3")).toBeNull();
@@ -534,6 +540,91 @@ describe("skins feature", () => {
     if (!pending.ok) return;
     expect(await recordSkinDownload(db, pending.id, "1.1.1.1")).toBeNull();
     expect(await recordSkinDownload(db, "missing", "1.1.1.1")).toBeNull();
+  });
+
+  it("counts views for published public skins only, once per visitor", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Watched" });
+    const { recordSkinView } = await import("../src/features/skins.js");
+    expect(await recordSkinView(db, id, "1.1.1.1")).toBe(true);
+    // A repeat inside the window still answers true - the page rendered - but
+    // does not count again; a different visitor does.
+    expect(await recordSkinView(db, id, "1.1.1.1")).toBe(true);
+    expect((await getSkin(db, id))?.viewCount).toBe(1);
+    expect(await recordSkinView(db, id, "2.2.2.2")).toBe(true);
+    expect((await getSkin(db, id))?.viewCount).toBe(2);
+
+    // The slug from the pretty URL resolves the same row as the raw id, and
+    // the visitor carries across both spellings.
+    const slug = (await getSkin(db, id))?.slug;
+    expect(slug).toBeTruthy();
+    expect(await recordSkinView(db, String(slug), "2.2.2.2")).toBe(true);
+    expect((await getSkin(db, id))?.viewCount).toBe(2);
+
+    await setSkinHidden(db, id, true);
+    expect(await recordSkinView(db, id, "3.3.3.3")).toBe(false);
+    expect((await getSkin(db, id))?.viewCount).toBe(2);
+
+    const pending = await createPendingSkin(db, OWNER);
+    expect(pending.ok).toBe(true);
+    if (!pending.ok) return;
+    expect(await recordSkinView(db, pending.id, "1.1.1.1")).toBe(false);
+    expect(await recordSkinView(db, "missing", "1.1.1.1")).toBe(false);
+  });
+
+  it("counts one view for a visitor who reads the page and then downloads", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Read Then Grabbed" });
+    const { recordSkinDownload, recordSkinView } = await import("../src/features/skins.js");
+    // The page open counts the view; the download inside the same window adds
+    // only the download, so one person is one of each.
+    expect(await recordSkinView(db, id, "1.1.1.1")).toBe(true);
+    expect(await recordSkinDownload(db, id, "1.1.1.1")).toContain("skin.osk");
+    const row = await getSkin(db, id);
+    expect(row?.viewCount).toBe(1);
+    expect(row?.downloadCount).toBe(1);
+  });
+
+  it("does not count views on a private skin", async () => {
+    const id = await createPublishedSkin({
+      ownerUserId: 101,
+      ownerUsername: "delta",
+      name: "Mine Only",
+      visibility: "private",
+    });
+    const { recordSkinView } = await import("../src/features/skins.js");
+    expect(await recordSkinView(db, id, "1.1.1.1")).toBe(false);
+    expect((await getSkin(db, id))?.viewCount).toBe(0);
+  });
+
+  it("seeds view counts from analytics once, leaving counted rows alone", async () => {
+    const { backfillSkinViewCounts } = await import("../src/features/skins.js");
+    const seeded = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "From History" });
+    const alreadyCounted = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Already Live" });
+    await exec(db, "update skins set view_count = 7 where id = ?", [alreadyCounted]);
+    // Downloads analytics never witnessed - blocked capture, no-JS agents, a
+    // rename that orphaned the old slug's events - floor the seeded number.
+    const grabbedBlind = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Grabbed Blind" });
+    await exec(db, "update skins set download_count = 50 where id = ?", [grabbedBlind]);
+    const slug = (await getSkin(db, seeded))?.slug;
+
+    const counts = new Map<string, number>([
+      // Keyed by slug, the way the URL the pageview was recorded under spells
+      // it; an unknown ref (a deleted skin) is simply skipped.
+      [String(slug), 42],
+      [alreadyCounted, 99],
+      [grabbedBlind, 10],
+      ["gone-skin", 5],
+    ]);
+    expect(await backfillSkinViewCounts(db, async () => counts)).toBe(2);
+    expect((await getSkin(db, seeded))?.viewCount).toBe(42);
+    // A row the live counter has already moved is never overwritten.
+    expect((await getSkin(db, alreadyCounted))?.viewCount).toBe(7);
+    // The reconstruction said 10, the server counted 50 grabs: floor wins.
+    expect((await getSkin(db, grabbedBlind))?.viewCount).toBe(50);
+
+    // One-shot: a second boot reads nothing and changes nothing.
+    let called = false;
+    expect(await backfillSkinViewCounts(db, async () => { called = true; return counts; })).toBe(0);
+    expect(called).toBe(false);
   });
 
   it("prunes only long-expired pending uploads through retention", async () => {
@@ -1192,6 +1283,43 @@ describe("editing a published skin's previews", () => {
     // Someone else's skin is out; the admin path skips the ownership check.
     expect(await setSkinScreenshotLabels(db, id, ["Mine now"], OWNER.ownerUserId + 1)).toEqual({ ok: false, error: "forbidden" });
     expect((await setSkinScreenshotLabels(db, id, ["Moderated"], null)).ok).toBe(true);
+  });
+
+  it("removes a screenshot by position and repoints the card when it fronted it", async () => {
+    const id = await previewedSkin();
+    for (let i = 0; i < 2; i += 1) {
+      await appendSkinScreenshot(db, id, {
+        key: `skins/${id}/shot-${i}.webp`,
+        url: `https://cdn.example/skins/${id}/shot-${i}.webp`,
+        width: 1920,
+        height: 1080,
+        label: null,
+      });
+    }
+
+    // Someone else's skin is out, and a position with nothing behind it too.
+    expect(await removeSkinScreenshot(db, id, 0, OWNER.ownerUserId + 1)).toEqual({ ok: false, error: "forbidden" });
+    expect(await removeSkinScreenshot(db, id, 5, OWNER.ownerUserId)).toEqual({ ok: false, error: "no_screenshot" });
+
+    // The owner drops the second shot: it leaves the row and its object is
+    // reported stale for the caller to delete.
+    const removed = await removeSkinScreenshot(db, id, 1, OWNER.ownerUserId);
+    expect(removed.ok).toBe(true);
+    if (removed.ok) {
+      expect(removed.staleKey).toBe(`skins/${id}/shot-1.webp`);
+      expect(removed.skin.screenshots.map((shot) => shot.url)).toEqual([`https://cdn.example/skins/${id}/shot-0.webp`]);
+    }
+
+    // A shot that fronts the card hands the cover back to the 4K render on the
+    // way out. The keymode-moderator path may do this on a public skin.
+    await setSkinCover(db, id, { kind: "screenshot", index: 0 }, OWNER.ownerUserId);
+    const pruned = await removeSkinScreenshot(db, id, 0, null, { keymodeModerator: true });
+    expect(pruned.ok).toBe(true);
+    if (pruned.ok) {
+      expect(pruned.staleKey).toBe(`skins/${id}/shot-0.webp`);
+      expect(pruned.skin.previewUrl).toContain("preview-4k");
+      expect(pruned.skin.screenshots).toHaveLength(0);
+    }
   });
 
   it("mints an edit ticket that leaves the skin published", async () => {

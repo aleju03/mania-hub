@@ -98,6 +98,7 @@ export interface SkinRow {
   // the archive ships no digestible note images; never serialized to clients.
   visual: SkinVisualSignature | null;
   downloadCount: number;
+  viewCount: number;
   status: "pending" | "published" | "hidden";
   visibility: SkinVisibility;
   // Capability behind a private skin's stored objects: part of every R2 key it
@@ -138,6 +139,10 @@ export interface SkinSummary {
   // Public: every reader sees every skin's count, the same number the
   // downloads sort orders by.
   downloadCount: number;
+  // Also public. Counted per visitor per 6h from the skin's own page, so it
+  // runs well ahead of downloads: opening a skin to look at it is the common
+  // act, grabbing the .osk is the rare one.
+  viewCount: number;
   previewUrl: string | null;
   previewWidth: number | null;
   previewHeight: number | null;
@@ -451,6 +456,61 @@ export async function setSkinScreenshotLabels(
   return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true, includePreviewRecipes: true }) } : { ok: false, error: "not_found" };
 }
 
+export type RemoveSkinScreenshotResult =
+  // staleKey is the removed shot's stored object once nothing on the row
+  // points at it any more, for the caller to delete from storage.
+  | { ok: true; skin: SkinSummary; staleKey: string | null }
+  | { ok: false; error: "not_found" | "forbidden" | "no_screenshot" };
+
+// Drops one attached screenshot by position, for the shot that has nothing to
+// do with the skin. Screenshots only ever arrive on publish tickets, so the
+// list never grows back post-publish and a removed position is never
+// re-filled. A shot that fronted the card hands the cover to a keymode render
+// (4K first, the keymode a skin is recognised by) or, failing that, another
+// screenshot; a row that would be left with no image at all keeps the shot as
+// cover and reports nothing stale, so the card never goes blank.
+// ownerUserId null is the admin path, which skips the ownership check. The
+// keymodeModerator option is the trusted-corrector path (also ownerUserId
+// null): same skip, but only over public skins, since a private skin is a 404
+// for anyone but its uploader.
+export async function removeSkinScreenshot(
+  db: Db,
+  id: string,
+  index: number,
+  ownerUserId: number | null,
+  options?: { keymodeModerator?: boolean },
+): Promise<RemoveSkinScreenshotResult> {
+  const row = await getSkin(db, id);
+  if (!row || row.status === "pending") return { ok: false, error: "not_found" };
+  if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
+  if (options?.keymodeModerator && row.visibility !== "public") return { ok: false, error: "not_found" };
+  const shot = Number.isInteger(index) && index >= 0 ? row.screenshots[index] : undefined;
+  if (!shot) return { ok: false, error: "no_screenshot" };
+  const next = row.screenshots.filter((_, position) => position !== index);
+  await exec(
+    db,
+    "update skins set screenshots_json = ?, updated_at = ? where id = ?",
+    [JSON.stringify(next), nowIso(), id],
+  );
+  let coverStaysOnShot = false;
+  if (row.previewKey === shot.key) {
+    const fallback = row.previews.find((preview) => preview.keys === 4) ?? row.previews[0] ?? next[0];
+    if (fallback) await attachSkinPreview(db, id, fallback);
+    else coverStaysOnShot = true;
+  }
+  const updated = await getSkin(db, id);
+  return updated
+    ? {
+        ok: true,
+        skin: toSkinSummary(updated, {
+          asOwner: !options?.keymodeModerator,
+          includePreviewRecipes: !options?.keymodeModerator,
+        }),
+        staleKey: coverStaysOnShot ? null : shot.key,
+      }
+    : { ok: false, error: "not_found" };
+}
+
 export type SetSkinSpecialKeymodesResult =
   | { ok: true; skin: SkinSummary }
   | { ok: false; error: "not_found" | "forbidden" | "invalid_keymodes" };
@@ -710,6 +770,57 @@ export async function backfillSkinSlugs(db: Db): Promise<number> {
     [SLUG_BACKFILL_META_KEY, JSON.stringify({ backfilled: rows.length }), nowIso()],
   );
   return rows.length;
+}
+
+// v2: v1 reconstructed page opens only, which read as nonsense next to the
+// download column - the grid's own download button has outnumbered page opens
+// since the day skins shipped, so the busiest skins showed more downloads than
+// views. v2 counts historical skin_download clicks as the views they were and
+// floors every skin at its download count.
+const VIEW_BACKFILL_META_KEY = "skin_view_count_backfill:v2";
+
+// Seeds view_count for the catalog that existed before the counter did. The
+// numbers come from the analytics store's own rows, which have carried
+// props.skin_ref for every skin page and download click all along - so the
+// counts arrive with history rather than every skin sitting at zero on deploy
+// day. That store is a separate database pruned at ANALYTICS_RETENTION_DAYS,
+// so this reaches back about that far and no further.
+//
+// One-shot via live_meta, marker written only after the work, same as
+// backfillSkinSlugs. Only rows still at zero take a reconstructed number, so a
+// marker bump re-seeds skins nobody has opened since without stacking on top
+// of anything the live counter has already earned; the download floor is
+// monotonic, so re-running it can only lift.
+export async function backfillSkinViewCounts(
+  db: Db,
+  readCounts: () => Promise<Map<string, number>>,
+): Promise<number> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [VIEW_BACKFILL_META_KEY])).rows[0];
+  if (done) return 0;
+  const counts = await readCounts();
+  let updated = 0;
+  for (const [ref, views] of counts) {
+    // The ref is whatever the URL carried, so it matches on either column -
+    // pre-slug links are raw ids and both point at one row.
+    const result = await exec(
+      db,
+      "update skins set view_count = ? where (id = ? or slug = ?) and view_count = 0",
+      [views, ref, ref],
+    );
+    updated += result.rowsAffected ?? 0;
+  }
+  // Whatever analytics never saw - grabs from browsers that block the capture,
+  // from agents that run no JS, from before a rename orphaned the old slug's
+  // events - still moved download_count on the server, where nothing can hide.
+  // Every counted download was a visitor looking at the skin, so downloads
+  // floor the views; recordSkinDownload keeps that invariant live from here on.
+  const floored = await exec(db, "update skins set view_count = download_count where download_count > view_count");
+  await exec(
+    db,
+    "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+    [VIEW_BACKFILL_META_KEY, JSON.stringify({ seeded: updated, refs: counts.size, floored: floored.rowsAffected ?? 0 }), nowIso()],
+  );
+  return updated;
 }
 
 // Detail-page lookup: accepts the slug from a pretty URL or a raw id from a
@@ -996,36 +1107,53 @@ export async function listSimilarSkins(db: Db, skin: SkinRow, limit = 6, keys?: 
   return skins;
 }
 
-// One counted download per visitor per skin per day. The counter is the
-// catalog's popularity signal (the downloads sort, the number on the card),
-// and while it incremented unconditionally two people clicked one skin to
-// 1.4k in an hour - well inside the publicApi rate limit, so only dedup
-// stops it. In memory on purpose: the serving process is the only writer,
-// and the worst a restart forgives is one extra count per visitor per skin.
-const DOWNLOAD_DEDUP_TTL_MS = 24 * 60 * 60_000;
-const DOWNLOAD_DEDUP_MAX_ENTRIES = 100_000;
-const countedDownloads = new Map<string, number>();
+// One counted hit per visitor per skin per window. The counters are the
+// catalog's popularity signals (the downloads sort, the two numbers on the
+// card), and while downloads incremented unconditionally two people clicked
+// one skin to 1.4k in an hour - well inside the publicApi rate limit, so only
+// dedup stops it. In memory on purpose: the serving process is the only
+// writer, and the worst a restart forgives is one extra count per visitor per
+// skin.
+const DEDUP_MAX_ENTRIES = 100_000;
 
-// Test seam.
-export function clearSkinDownloadDedup(): void {
-  countedDownloads.clear();
+function createVisitorDedup(ttlMs: number) {
+  const counted = new Map<string, number>();
+  return {
+    shouldCount(skinId: string, visitor: string): boolean {
+      const now = Date.now();
+      const key = `${skinId}:${visitor}`;
+      const countedUntil = counted.get(key);
+      if (countedUntil !== undefined && countedUntil > now) return false;
+      // Delete before set so a lapsed key re-enters at the back, keeping the
+      // map's insertion order the eviction order when the cap trims the front.
+      counted.delete(key);
+      counted.set(key, now + ttlMs);
+      while (counted.size > DEDUP_MAX_ENTRIES) {
+        const oldest = counted.keys().next();
+        if (oldest.done) break;
+        counted.delete(oldest.value);
+      }
+      return true;
+    },
+    clear(): void {
+      counted.clear();
+    },
+  };
 }
 
-function shouldCountDownload(skinId: string, visitor: string): boolean {
-  const now = Date.now();
-  const key = `${skinId}:${visitor}`;
-  const countedUntil = countedDownloads.get(key);
-  if (countedUntil !== undefined && countedUntil > now) return false;
-  // Delete before set so a lapsed key re-enters at the back, keeping the
-  // map's insertion order the eviction order when the cap trims the front.
-  countedDownloads.delete(key);
-  countedDownloads.set(key, now + DOWNLOAD_DEDUP_TTL_MS);
-  while (countedDownloads.size > DOWNLOAD_DEDUP_MAX_ENTRIES) {
-    const oldest = countedDownloads.keys().next();
-    if (oldest.done) break;
-    countedDownloads.delete(oldest.value);
-  }
-  return true;
+const downloadDedup = createVisitorDedup(24 * 60 * 60_000);
+// Shorter than a download's window: opening a skin page is the cheap, frequent
+// act, so somebody coming back to it in the evening is a second view while
+// somebody reloading it as they read is not.
+const viewDedup = createVisitorDedup(6 * 60 * 60_000);
+
+// Test seams.
+export function clearSkinDownloadDedup(): void {
+  downloadDedup.clear();
+}
+
+export function clearSkinViewDedup(): void {
+  viewDedup.clear();
 }
 
 // Counts a download and hands back the redirect target. Only published public
@@ -1037,10 +1165,38 @@ function shouldCountDownload(skinId: string, visitor: string): boolean {
 export async function recordSkinDownload(db: Db, id: string, visitor: string): Promise<string | null> {
   const row = await getSkin(db, id);
   if (!row || row.status !== "published" || row.visibility !== "public" || !row.oskUrl) return null;
-  if (shouldCountDownload(row.id, visitor)) {
-    await exec(db, "update skins set download_count = download_count + 1 where id = ?", [row.id]);
+  // A grab is a look: every counted download also moves the view count,
+  // through the same dedup views use everywhere else, so the pair can never
+  // drift into the "1 download, 0 views" reading no matter how the .osk was
+  // fetched - the grid button, a shared link, an agent that runs no JS. A
+  // visitor whose page open already counted the view inside its window adds
+  // only the download here.
+  const countDownload = downloadDedup.shouldCount(row.id, visitor);
+  const countView = viewDedup.shouldCount(row.id, visitor);
+  if (countDownload || countView) {
+    await exec(
+      db,
+      "update skins set download_count = download_count + ?, view_count = view_count + ? where id = ?",
+      [countDownload ? 1 : 0, countView ? 1 : 0, row.id],
+    );
   }
   return row.oskUrl;
+}
+
+// Counts one open of a skin's page. Mirrors recordSkinDownload: only a
+// published public skin has a public number to move, so a hidden, pending or
+// private one answers false and the page renders exactly as before. The ref is
+// the slug from the pretty URL or a raw row id, matching /api/skins/get, and
+// the visitor is the caller's IP - which is why this is its own browser-facing
+// endpoint rather than a side effect of the page fetch, that one arrives from
+// the frontend server and would put every reader in one bucket.
+export async function recordSkinView(db: Db, ref: string, visitor: string): Promise<boolean> {
+  const row = await getSkinByRef(db, ref);
+  if (!row || row.status !== "published" || row.visibility !== "public") return false;
+  if (viewDedup.shouldCount(row.id, visitor)) {
+    await exec(db, "update skins set view_count = view_count + 1 where id = ?", [row.id]);
+  }
+  return true;
 }
 
 export async function getSkin(db: Db, id: string): Promise<SkinRow | null> {
@@ -1149,6 +1305,7 @@ export function toSkinSummary(row: SkinRow, options?: { asOwner?: boolean; inclu
     specialKeymodes: row.specialKeymodes,
     accentColor: row.accentColor,
     downloadCount: row.downloadCount,
+    viewCount: row.viewCount,
     previewUrl: row.previewUrl,
     previewWidth: row.previewWidth,
     previewHeight: row.previewHeight,
@@ -1180,6 +1337,7 @@ export function toSkinSummary(row: SkinRow, options?: { asOwner?: boolean; inclu
     slug: null,
     description: null,
     downloadCount: 0,
+    viewCount: 0,
     previewUrl: null,
     previewWidth: null,
     previewHeight: null,
@@ -1230,6 +1388,7 @@ function rowToSkin(row: Record<string, unknown>): SkinRow {
     accentColor: textOrNull(row.accent_color),
     visual: normalizeSkinVisualSignature(parseJson<unknown>(String(row.visual_json ?? "null"), null)),
     downloadCount: Math.max(0, Math.floor(Number(row.download_count) || 0)),
+    viewCount: Math.max(0, Math.floor(Number(row.view_count) || 0)),
     status,
     visibility: row.visibility === "private" ? "private" : "public",
     privateSecret: textOrNull(row.private_secret),

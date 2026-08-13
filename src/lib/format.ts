@@ -2,6 +2,15 @@ export function formatNumber(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+/* Counts for icon-and-number stat rows, where two of them share the space one
+   spelled-out figure used to hold: "1.2k" rather than "1,203". Only for places
+   that keep the exact number within reach (a title, a detail page). */
+export function formatCompactCount(n: number): string {
+  const value = Math.max(0, Math.floor(n));
+  if (value < 1000) return value.toLocaleString("en-US");
+  return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1).replace(/\.0$/, "")}k`;
+}
+
 /* 1st, 2nd, 3rd, 4th, and the 11th-13th exceptions. */
 export function formatOrdinal(n: number): string {
   const value = Math.floor(n);

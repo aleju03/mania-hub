@@ -24,7 +24,7 @@ import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
 import { backfillPackCardSerials } from "./features/pack-pulls.js";
 import { ensurePackCardCatalog, ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
-import { backfillSkinSlugs } from "./features/skins.js";
+import { backfillSkinSlugs, backfillSkinViewCounts } from "./features/skins.js";
 import { isSkinStorageConfigured, readSkinObject, skinObjectDeletesEnabled } from "./skins/r2.js";
 import { backfillSkinSpecialKeymodes } from "./skins/special-backfill.js";
 import { backfillSkinVisualSignatures } from "./skins/visual-signature.js";
@@ -256,6 +256,27 @@ export async function createApp() {
   if (analytics) {
     await analytics.ensureSchema();
     analytics.start();
+    // Seeds view counts for skins published before the counter existed, from
+    // the page opens and download clicks analytics has been recording for
+    // them all along (floored at each skin's download count). It has to
+    // live here rather than beside the other skin backfills: those run under
+    // schema ownership, and the analytics database only exists in a process
+    // that serves HTTP. Groups over the whole events table, so it runs behind
+    // boot rather than holding it up, and writes on the serving process's own
+    // write connection like every other serving-side write.
+    if (serveWriteDb) {
+      // Waits for the column first. This process does not migrate, and
+      // waitForSchema only proves the tables exist - skins has existed for
+      // months, so on a deploy that restarts both units together this would
+      // otherwise race the worker's "alter table skins add column view_count"
+      // and fail the whole seed until someone restarted it again.
+      void waitForSkinsViewCountColumn(db)
+        .then(() => backfillSkinViewCounts(serveWriteDb, () => analytics.getSkinViewCounts()))
+        .then((seeded) => {
+          if (seeded > 0) logInfo("skin_view_counts_backfilled", { seeded, retention_days: config.analyticsRetentionDays });
+        })
+        .catch((error) => logWarn("skin_view_count_backfill_failed", errorContext(error)));
+    }
   }
   const queue = new JobQueue(db);
   const events = new LiveEventLog(db);
@@ -608,6 +629,29 @@ async function waitForSchema(db: Awaited<ReturnType<typeof createDb>>, timeoutMs
         missing_tables: missing.length,
         missing: missing.slice(0, 5).join(", "),
       });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+// The column half of waitForSchema, for the one boot step that needs a column
+// the migrating process may not have added yet. Same polling shape and budget;
+// a timeout throws into the caller's catch, which logs and leaves the seed's
+// one-shot marker unwritten so the next boot tries again.
+async function waitForSkinsViewCountColumn(
+  db: Awaited<ReturnType<typeof createDb>>,
+  timeoutMs = SCHEMA_WAIT_TIMEOUT_MS,
+): Promise<void> {
+  const startedAt = Date.now();
+  for (;;) {
+    try {
+      const columns = (await db.execute("pragma table_info(skins)")).rows.map((row) => String(row.name));
+      if (columns.includes("view_count")) return;
+    } catch {
+      // Treat an unreadable table as not-ready, same as waitForSchema does.
+    }
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error(`skins.view_count not present after ${timeoutMs}ms; view-count seed skipped this boot`);
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }

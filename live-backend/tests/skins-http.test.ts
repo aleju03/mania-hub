@@ -333,6 +333,29 @@ describe("skins HTTP endpoints", () => {
     expect((await call(mockReq("GET", "/api/skins/list", ADMIN))).body.skins[0].downloadCount).toBe(2);
   });
 
+  it("counts a skin page open per visitor and refuses anything else", async () => {
+    const { id, token } = await startUpload();
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview`, PNG_BYTES));
+    const finished = await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+    expect(finished.body.skin.viewCount).toBe(0);
+
+    const viewed = await call(mockReq("POST", `/api/skins/view?id=${id}`, { "cf-connecting-ip": "203.0.113.7" }));
+    expect(viewed.status).toBe(204);
+    expect(viewed.headers["cache-control"]).toBe("no-store");
+    // Same visitor again is a no-op; a second visitor counts.
+    expect((await call(mockReq("POST", `/api/skins/view?id=${id}`, { "cf-connecting-ip": "203.0.113.7" }))).status).toBe(204);
+    expect((await call(mockReq("POST", `/api/skins/view?id=${id}`, { "cf-connecting-ip": "203.0.113.8" }))).status).toBe(204);
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.viewCount).toBe(2);
+    // The number rides the public list the same way downloads do.
+    expect((await call(mockReq("GET", "/api/skins/list"))).body.skins[0].viewCount).toBe(2);
+
+    // A GET would let a prefetch or a crawler move the counter.
+    expect((await call(mockReq("GET", `/api/skins/view?id=${id}`))).status).toBe(405);
+    expect((await call(mockReq("POST", "/api/skins/view?id=missing"))).status).toBe(404);
+    expect((await call(mockReq("POST", "/api/skins/view"))).status).toBe(404);
+  });
+
   it("recommends lookalikes only for skins with a public page", async () => {
     // Two catalog skins by the same skin.ini author in the same colourway;
     // different keymode blocks keep the archives byte-distinct past the

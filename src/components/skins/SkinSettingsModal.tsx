@@ -9,10 +9,12 @@ import {
   keymodeLabel,
   markSkinsListStale,
   moderateSkin,
+  removeSkinScreenshot,
   setMySkinVisibility,
   setSkinSpecialKeymodes,
   SKIN_DESCRIPTION_MAX_LENGTH,
   SKIN_NAME_MAX_LENGTH,
+  skinScreenshotLabel,
   updateSkinDetails,
   type SkinSummary,
   type SkinVisibility,
@@ -45,9 +47,10 @@ export function SkinSettingsModal({
 }) {
   const auth = useAuth();
   const isOwner = auth.viewer?.id === skin.ownerUserId;
-  // A keymode moderator (neither owner nor admin) reaches this modal only to
-  // fix mislabelled keymodes, so every other row stays off their screen. The
-  // server fns enforce the same boundary; this is just the honest UI for it.
+  // A keymode moderator (neither owner nor admin) reaches this modal to fix
+  // mislabelled keymodes and to drop screenshots that have nothing to do with
+  // the skin; every other row stays off their screen. The server fns enforce
+  // the same boundary; this is just the honest UI for it.
   const keymodesOnly = !isOwner && !auth.isAdmin;
 
   const [busy, setBusy] = useState(false);
@@ -55,6 +58,10 @@ export function SkinSettingsModal({
   const [nameDraft, setNameDraft] = useState(skin.name);
   const [descriptionDraft, setDescriptionDraft] = useState(skin.description ?? "");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Which screenshot's remove button is waiting on its inline confirm, by
+  // position. Removal deletes the stored image for good, so one click is not
+  // enough.
+  const [confirmingShotRemove, setConfirmingShotRemove] = useState<number | null>(null);
   const [bodyLockActive, setBodyLockActive] = useState(false);
 
   // Each open is a fresh session over the skin as it now stands.
@@ -64,6 +71,7 @@ export function SkinSettingsModal({
     setDescriptionDraft(skin.description ?? "");
     setError(null);
     setConfirmingDelete(false);
+    setConfirmingShotRemove(null);
     // skin.name and skin.description are deliberately not deps: an edit saved
     // from this very modal must not clobber a draft the user kept typing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -154,6 +162,14 @@ export function SkinSettingsModal({
     }
   };
 
+  const removeScreenshot = (index: number) => {
+    setConfirmingShotRemove(null);
+    void run(
+      () => removeSkinScreenshot({ data: { id: skin.id, screenshot: index } }),
+      "Removing the screenshot failed. Try again.",
+    );
+  };
+
   const relabelable = skin.keymodes.filter((keys) => keys >= 2);
   const detailsDirty = nameDraft.trim().length > 0
     && (nameDraft.trim() !== skin.name || descriptionDraft.trim() !== (skin.description ?? ""));
@@ -185,7 +201,7 @@ export function SkinSettingsModal({
           >
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-osu-b3/30 px-4 py-3 sm:px-5">
               <span className="min-w-0 truncate text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">
-                {keymodesOnly ? "keymode moderation" : auth.isAdmin && !isOwner ? "moderation" : "skin settings"}
+                {keymodesOnly || (auth.isAdmin && !isOwner) ? "moderation" : "skin settings"}
               </span>
               <button
                 type="button"
@@ -266,6 +282,65 @@ export function SkinSettingsModal({
                   </div>
                   <p className="mt-1.5 text-[11px] text-osu-f1/70">
                     Tap a keymode to toggle its label.
+                  </p>
+                </SettingsRow>
+              )}
+
+              {/* The moderator's prune: a screenshot that has nothing to do
+                  with the skin comes off the page here. Owners and admins do
+                  the same from the preview editor, so this row only shows on
+                  the moderator-scoped modal. Removal is immediate after the
+                  inline confirm, and the stored image is deleted for good. */}
+              {keymodesOnly && skin.screenshots.length > 0 && (
+                <SettingsRow label="Screenshots">
+                  <div className="flex flex-col gap-1.5">
+                    {skin.screenshots.map((shot, index) => (
+                      <div key={shot.url} className="flex items-center gap-2">
+                        <img
+                          src={shot.url}
+                          alt={`Screenshot ${index + 1}`}
+                          loading="lazy"
+                          className="h-11 w-[74px] shrink-0 rounded-md border border-osu-b3/40 object-cover"
+                        />
+                        <span className="min-w-0 flex-1 truncate text-[12.5px] text-osu-l1">
+                          {skinScreenshotLabel(shot, index)}
+                        </span>
+                        {confirmingShotRemove === index ? (
+                          <span className="flex shrink-0 items-center gap-2 text-[12px]">
+                            <button
+                              type="button"
+                              onClick={() => removeScreenshot(index)}
+                              disabled={busy}
+                              className="rounded-full bg-osu-red/25 px-3 py-1 font-bold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/40 disabled:opacity-50"
+                            >
+                              Remove
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmingShotRemove(null)}
+                              disabled={busy}
+                              className="font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
+                            >
+                              Keep
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => setConfirmingShotRemove(index)}
+                            aria-label={`Remove screenshot ${index + 1}`}
+                            title="Remove this screenshot"
+                            className="shrink-0 rounded p-1 text-osu-f1 transition-colors cursor-pointer hover:text-white disabled:cursor-default disabled:opacity-50"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-osu-f1/70">
+                    For screenshots that have nothing to do with the skin.
                   </p>
                 </SettingsRow>
               )}

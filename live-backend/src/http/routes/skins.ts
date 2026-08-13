@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseJson } from "../../db.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, parseSkinsListSort, privateSkinSecretMatches, recordSkinDownload, replaceSkinOsk, setSkinAccent, setSkinCover, setSkinScreenshotLabels, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, updateSkinDetails, upsertSkinKeymodePreview, type SkinCoverTarget, type SkinRow } from "../../features/skins.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, parseSkinsListSort, privateSkinSecretMatches, recordSkinDownload, recordSkinView, removeSkinScreenshot, replaceSkinOsk, setSkinAccent, setSkinCover, setSkinScreenshotLabels, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, updateSkinDetails, upsertSkinKeymodePreview, type SkinCoverTarget, type SkinRow } from "../../features/skins.js";
 import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../../features/user-replay-skins.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import { clientIp } from "../abuse-guard.js";
@@ -205,6 +205,29 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     sendCors(req, res, ctx);
     res.statusCode = 302;
     res.setHeader("location", target);
+    res.setHeader("cache-control", "no-store");
+    res.end();
+    return true;
+  }
+  if (url.pathname === "/api/skins/view") {
+    // Counted from the browser rather than off /api/skins/get, for two
+    // reasons: that read arrives from the frontend server (so every visitor
+    // would share one IP for the dedup), and it is cached for a minute, so a
+    // repeat reader never reaches this process at all.
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const id = url.searchParams.get("id") ?? "";
+    const counted = id
+      ? await recordSkinView(ctx.serveWriteDb ?? ctx.db, id, clientIp(req, ctx.config))
+      : false;
+    if (!counted) {
+      sendJson(req, res, ctx, 404, { error: "not_found" });
+      return true;
+    }
+    sendCors(req, res, ctx);
+    res.statusCode = 204;
     res.setHeader("cache-control", "no-store");
     res.end();
     return true;
@@ -757,13 +780,13 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     sendJson(req, res, ctx, 400, { ok: false, error: "invalid_part" });
     return true;
   }
-  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/details" || url.pathname === "/api/skins/visibility" || url.pathname === "/api/skins/special-keymodes" || url.pathname === "/api/skins/screenshot-labels") {
+  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/details" || url.pathname === "/api/skins/visibility" || url.pathname === "/api/skins/special-keymodes" || url.pathname === "/api/skins/screenshot-labels" || url.pathname === "/api/skins/screenshot-remove") {
     // Admin-token gated like /api/skins/delete: the frontend server fn forwards the
     // osu!-verified viewer id, and the ownership check below keeps a user off anyone
     // else's skin. asAdmin is set only by the server fn that verified a true admin;
-    // asKeymodeModerator only by the special-keymodes server fn after matching the
-    // viewer against its hardcoded trusted-corrector list, and no other action
-    // honours it.
+    // asKeymodeModerator only by server fns that matched the viewer against the
+    // hardcoded trusted-corrector list, and only the special-keymodes and
+    // screenshot-remove actions honour it.
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
@@ -874,6 +897,36 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
         });
       }
       logInfo("skin_cover_changed", { id, ...target, by: ownerUserId == null ? "admin" : "owner" });
+      sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
+      return true;
+    }
+    if (url.pathname === "/api/skins/screenshot-remove") {
+      // Positional, like the labels: entry N is the shot the gallery shows
+      // N-th. Owners prune their own; admins and the keymode moderators prune
+      // any public skin's, which is how an unrelated shot leaves a skin page.
+      const index = Math.round(Number(body.screenshot));
+      if (!Number.isInteger(index) || index < 0 || index >= SKIN_MAX_SCREENSHOTS) {
+        sendJson(req, res, ctx, 400, { error: "invalid_request" });
+        return true;
+      }
+      const keymodeModerator = ownerUserId != null && body.asKeymodeModerator === true;
+      const result = await removeSkinScreenshot(
+        ctx.serveWriteDb ?? ctx.db,
+        id,
+        index,
+        keymodeModerator ? null : ownerUserId,
+        { keymodeModerator },
+      );
+      if (!result.ok) {
+        sendJson(req, res, ctx, result.error === "forbidden" ? 403 : 404, { ok: false, error: result.error });
+        return true;
+      }
+      if (result.staleKey) {
+        await deleteSkinObjects(ctx.config, [result.staleKey]).catch((error) => {
+          logWarn("skin_screenshot_cleanup_failed", { id, ...errorContext(error) });
+        });
+      }
+      logInfo("skin_screenshot_removed", { id, index, by: ownerUserId == null ? "admin" : keymodeModerator ? "keymode_moderator" : "owner" });
       sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
       return true;
     }

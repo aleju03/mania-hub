@@ -23,7 +23,7 @@ import {
   writeMyReplaySkinMemory,
 } from "../lib/replay-owner-skin";
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
-import { canModerateSkinKeymodes, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, readSkinsBrowseEntry, skinDownloadUrl, skinOskFileUrl, skinScreenshotLabel, type SkinSummary } from "../lib/skins";
+import { canModerateSkinKeymodes, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, pingSkinView, readSkinsBrowseEntry, skinDownloadUrl, skinOskFileUrl, skinScreenshotLabel, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -120,6 +120,18 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
       void navigate({ to: "/skins/$id", params: { id: skin.slug }, replace: true });
     }
   }, [skin?.slug, params.id, navigate]);
+  // Counts the open. Fired from the browser so the backend sees the reader's
+  // own address for its per-visitor dedup - the loader below runs on the
+  // server, which would put everyone in one bucket - and so the crawlers the
+  // skins sitemap invites, which never run this, never count. Silent either
+  // way: a view that failed to register is not worth a message on the page.
+  const viewedRef = skin?.slug ?? skin?.id ?? null;
+  const viewCountable = skin?.status === "published" && skin.visibility !== "private";
+  useEffect(() => {
+    if (!viewedRef || !viewCountable) return;
+    pingSkinView(viewedRef);
+  }, [viewedRef, viewCountable]);
+
   // "Use for my replays": idle -> working (download + import + save) -> set.
   const [replaySkinStatus, setReplaySkinStatus] = useState<"idle" | "working" | "set">("idle");
   const [replaySkinError, setReplaySkinError] = useState<string | null>(null);
@@ -210,11 +222,12 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
   const isOwner = skin != null && auth.viewer?.id === skin.ownerUserId;
   const isPrivate = skin?.visibility === "private";
   // The keymode-moderator grant: the settings entry point opens for them on
-  // anyone's public skin, and the modal shows only the keymode labels.
+  // anyone's public skin, and the modal shows only the keymode labels and the
+  // screenshot prune.
   const isKeymodeModerator = skin != null && !isOwner && !auth.isAdmin
     && canModerateSkinKeymodes(auth.viewer?.id)
     && skin.visibility === "public"
-    && skin.keymodes.some((keys) => keys >= 2);
+    && (skin.keymodes.some((keys) => keys >= 2) || skin.screenshots.length > 0);
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -454,9 +467,14 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                         <span className="text-osu-l1">only you</span>
                       </FactRow>
                     ) : (
-                      <FactRow label="Downloads">
-                        <span className="tabular-nums text-osu-l1">{skin.downloadCount.toLocaleString()}</span>
-                      </FactRow>
+                      <>
+                        <FactRow label="Downloads">
+                          <span className="tabular-nums text-osu-l1">{skin.downloadCount.toLocaleString()}</span>
+                        </FactRow>
+                        <FactRow label="Views">
+                          <span className="tabular-nums text-osu-l1">{(skin.viewCount ?? 0).toLocaleString()}</span>
+                        </FactRow>
+                      </>
                     )}
                     {skin.oskSizeBytes ? (
                       <FactRow label="File size">
@@ -487,14 +505,14 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                           holds name, keymodes, visibility, file, previews and
                           delete, so the sidebar stays one button. A keymode
                           moderator gets the same button, but their modal is
-                          just the keymode labels. */}
+                          just the keymode labels and the screenshot prune. */}
                       <button
                         type="button"
                         onClick={() => setSettingsOpen(true)}
                         className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-osu-b3/50 px-5 py-2 text-[13px] font-bold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white"
                       >
                         <Settings className="h-4 w-4" aria-hidden="true" />
-                        {isOwner ? "Skin settings" : auth.isAdmin ? "Moderate skin" : "Fix keymodes"}
+                        {isOwner ? "Skin settings" : "Moderate skin"}
                       </button>
                       <SkinSettingsModal
                         skin={skin}

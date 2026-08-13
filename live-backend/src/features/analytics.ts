@@ -51,6 +51,9 @@ export const MAX_VIEWER_ROWS = 20_000;
    ceiling on how much of it a single request can pull back. */
 export const MAX_VIEWER_EVENT_ROWS = 300;
 const TIMELINE_BUCKETS = 48;
+// Mirrors the live per-visitor view window in features/skins.ts, so the
+// historical seed and everything counted after it are the same measure.
+const SKIN_VIEW_BUCKET_MS = 6 * 60 * 60_000;
 
 // Query-side display defaults.
 const DEFAULT_DISPLAY_TIME_ZONE = "America/Costa_Rica";
@@ -661,6 +664,40 @@ export class AnalyticsStore {
       }
     }
     return names;
+  }
+
+  /* Historical skin views, keyed by the slug (or raw id) the URL carried, for
+     the one-time seed of skins.view_count - under the counter's live meaning,
+     where a download is a view too. A $pageview of the skin's page and a
+     skin_download click both testify somebody looked at the skin, and the
+     downloads matter: the browse card has carried its own download button from
+     the start, so a grid-favourite's story is mostly downloads with no page
+     open behind them. The union is bucketed to 6h per visitor, so one person
+     reading the page and then grabbing the file counts once. The key is
+     distinct_id, a device, rather than the IP the live counter uses, so this
+     is a close reconstruction and not a replay of what would have been
+     counted. Only reaches back ANALYTICS_RETENTION_DAYS, since that is how far
+     the events themselves go. */
+  async getSkinViewCounts(): Promise<Map<string, number>> {
+    await this.flush();
+    const rows = (await exec(this.db, `
+      select ref, count(distinct visitor_bucket) as views from (
+        select json_extract(props, '$.skin_ref') as ref,
+          distinct_id || ':' || (ts / ${SKIN_VIEW_BUCKET_MS}) as visitor_bucket
+        from analytics_events
+        where is_bot = 0 and distinct_id != 'server'
+          and json_extract(props, '$.skin_ref') is not null
+          and ((event = '$pageview' and path like '/skins/%') or event = 'skin_download')
+      )
+      group by ref
+    `)).rows;
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const ref = String(row.ref ?? "").trim();
+      const views = Math.max(0, Math.floor(Number(row.views) || 0));
+      if (ref && views > 0) counts.set(ref, views);
+    }
+    return counts;
   }
 
   async prune(now = Date.now()): Promise<number> {

@@ -16,6 +16,7 @@ import {
   finishSkinEdit,
   formatSkinFileSize,
   markSkinsListStale,
+  removeSkinScreenshot,
   setSkinCover,
   setSkinScreenshotLabels,
   skinOskFileUrl,
@@ -106,6 +107,10 @@ export function SkinPreviewEditorModal({
   const [labelDrafts, setLabelDrafts] = useState<string[]>(
     () => skin.screenshots.map((shot) => shot.label ?? ""),
   );
+  // Shots marked for removal, by their position on the row. A removal is a
+  // draft like the renames: it only lands on save, so closing the modal keeps
+  // the shot. Storage-side cleanup is the backend's job.
+  const [removedShots, setRemovedShots] = useState<number[]>([]);
 
   // Retargeted keymodes only: a keymode with no entry here keeps the render it
   // was published with, so opening the editor and saving nothing changes
@@ -408,7 +413,7 @@ export function SkinPreviewEditorModal({
   const labelsChanged = labelDrafts.some(
     (label, index) => index < skin.screenshots.length && label.trim() !== (skin.screenshots[index]?.label ?? ""),
   );
-  const dirty = renders.size > 0 || coverChanged || labelsChanged;
+  const dirty = renders.size > 0 || coverChanged || labelsChanged || removedShots.length > 0;
   // A pick whose render has not landed yet (the archive may still be coming
   // down) holds the save button, so a pick is never silently dropped.
   const retargeted = useMemo(
@@ -501,6 +506,18 @@ export function SkinPreviewEditorModal({
         }
         current = result.skin ?? current;
       }
+      // Removals go last (cover and labels above still address the original
+      // positions) and highest position first, so each one names the position
+      // the row still holds after the previous.
+      for (const index of [...removedShots].sort((a, b) => b - a)) {
+        const result = await removeSkinScreenshot({ data: { id: skin.id, screenshot: index } });
+        if (!result.ok || !result.skin) {
+          setError("A screenshot could not be removed. Try again.");
+          setSaving(false);
+          return;
+        }
+        current = result.skin;
+      }
       if (!current) {
         setSaving(false);
         return;
@@ -510,6 +527,7 @@ export function SkinPreviewEditorModal({
         skin_previews_rerendered: uploads.length,
         skin_cover_changed: coverChanged,
         skin_screenshots_renamed: labelsChanged,
+        skin_screenshots_removed: removedShots.length,
       });
       markSkinsListStale();
       revertPreviews();
@@ -523,7 +541,7 @@ export function SkinPreviewEditorModal({
         : "The previews could not be updated. Try again.");
     }
   }, [saving, dirty, renders, skin.id, skin.screenshots.length, coverKeymode, coverShot, coverChanged,
-    labelsChanged, labelDrafts, revertPreviews, onSaved, onClose, backdropFor, patternFor]);
+    labelsChanged, labelDrafts, removedShots, revertPreviews, onSaved, onClose, backdropFor, patternFor]);
 
   const handleDismiss = useCallback(() => {
     if (saving) return;
@@ -552,6 +570,7 @@ export function SkinPreviewEditorModal({
     setCoverKeymode(publishedCoverKeymode ?? skin.previews[0]?.keys ?? null);
     setCoverShot(publishedCoverShot);
     setLabelDrafts(skin.screenshots.map((shot) => shot.label ?? ""));
+    setRemovedShots([]);
     setSelectedKeymode(publishedCoverKeymode ?? keymodes[0] ?? 4);
   }, [open, revertPreviews, publishedCoverKeymode, publishedCoverShot, skin.previews, skin.screenshots, keymodes]);
 
@@ -571,6 +590,14 @@ export function SkinPreviewEditorModal({
   }, [open]);
 
   useBodyScrollLock(bodyLockActive);
+
+  // The screenshot rows still on offer: a shot marked for removal leaves the
+  // list until the save applies it (or closing forgets it). The callbacks
+  // below translate a visible position back to the row's own, which is what
+  // the label drafts, the cover star, and the save all address.
+  const visibleShots = skin.screenshots
+    .map((shot, index) => ({ shot, index }))
+    .filter(({ index }) => !removedShots.includes(index));
 
   const heroUrl = renders.get(selectedKeymode)?.url ?? publishedPreviewUrl(selectedKeymode) ?? skin.previewUrl;
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
@@ -749,26 +776,50 @@ export function SkinPreviewEditorModal({
 
                 {/* The screenshots this skin was published with: renaming one
                     retitles it in the gallery, starring one puts it on the
-                    browse card in place of a rendered playfield. New ones are
-                    not accepted here - the .osk flow is where images arrive,
-                    which is why neither add nor remove is wired up. */}
-                {skin.screenshots.length > 0 && (
+                    browse card in place of a rendered playfield, and the X
+                    marks one for removal (a shot that has nothing to do with
+                    the skin), applied on save. New ones are not accepted here -
+                    the .osk flow is where images arrive. */}
+                {visibleShots.length > 0 && (
                   <div className="mt-4">
                     <SkinScreenshotFields
-                      screenshots={skin.screenshots.map((shot, index) => ({
+                      screenshots={visibleShots.map(({ shot, index }) => ({
                         url: shot.url,
                         label: labelDrafts[index] ?? "",
                       }))}
-                      onRename={(index, label) => setLabelDrafts((previous) => {
-                        const next = skin.screenshots.map((_, i) => previous[i] ?? "");
-                        next[index] = label;
-                        return next;
-                      })}
-                      cover={coverShot}
-                      onCover={setCoverShot}
+                      onRename={(visible, label) => {
+                        const original = visibleShots[visible]?.index;
+                        if (original == null) return;
+                        setLabelDrafts((previous) => {
+                          const next = skin.screenshots.map((_, i) => previous[i] ?? "");
+                          next[original] = label;
+                          return next;
+                        });
+                      }}
+                      onRemove={(visible) => {
+                        const original = visibleShots[visible]?.index;
+                        if (original == null) return;
+                        setRemovedShots((previous) => [...previous, original]);
+                        // A removed shot cannot keep the card; the star goes
+                        // back to the keymode renders.
+                        setCoverShot((previous) => (previous === original ? null : previous));
+                      }}
+                      cover={coverShot == null
+                        ? null
+                        : (() => {
+                            const visible = visibleShots.findIndex((entry) => entry.index === coverShot);
+                            return visible >= 0 ? visible : null;
+                          })()}
+                      onCover={(visible) => setCoverShot(visible == null ? null : visibleShots[visible]?.index ?? null)}
                       disabled={saving}
                     />
                   </div>
+                )}
+                {removedShots.length > 0 && (
+                  <p className="mt-1 text-[10.5px] leading-relaxed text-osu-f1/55">
+                    {removedShots.length === 1 ? "1 screenshot" : `${removedShots.length} screenshots`} will be
+                    removed for good when you save.
+                  </p>
                 )}
 
                 {error && (

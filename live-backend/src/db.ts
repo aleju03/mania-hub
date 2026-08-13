@@ -1915,6 +1915,7 @@ async function migrateSkins(db: Db): Promise<void> {
       description text,
       keymodes_json text not null default '[]',
       download_count integer not null default 0,
+      view_count integer not null default 0,
       accent_color text,
       search_text text not null default '',
       status text not null default 'pending',
@@ -1939,6 +1940,13 @@ async function migrateSkins(db: Db): Promise<void> {
   const skinColumns = (await db.execute("pragma table_info(skins)")).rows.map((row) => String(row.name));
   if (!skinColumns.includes("download_count")) {
     await db.execute("alter table skins add column download_count integer not null default 0");
+  }
+  if (!skinColumns.includes("view_count")) {
+    // Skin-page opens, the other half of the popularity signal: most people
+    // look at the previews and never grab the .osk, so downloads alone read as
+    // near-zero interest. Seeded once from the analytics store's own pageviews
+    // by backfillSkinViewCounts.
+    await db.execute("alter table skins add column view_count integer not null default 0");
   }
   if (!skinColumns.includes("description")) {
     await db.execute("alter table skins add column description text");

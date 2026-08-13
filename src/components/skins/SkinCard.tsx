@@ -1,14 +1,27 @@
 import { Link } from "@tanstack/react-router";
-import { Download, Lock } from "lucide-react";
-import { useCallback, useState, type CSSProperties } from "react";
+import { Download, Eye, Lock } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { rememberSkinName, skinEventProperties } from "../../lib/analytics-skins";
 import { track } from "../../lib/analytics";
-import { formatTimeAgo } from "../../lib/format";
-import { formatSkinFileSize, keymodeLabel, rememberSkinsBrowseEntry, skinDownloadUrl, type SkinSummary } from "../../lib/skins";
+import { formatCompactCount, formatTimeAgo } from "../../lib/format";
+import { formatSkinFileSize, keymodeLabel, pingSkinView, rememberSkinsBrowseEntry, skinDownloadUrl, type SkinSummary } from "../../lib/skins";
 import { Avatar } from "../ui/Avatar";
 
 const MAX_KEYMODE_TAGS = 3;
 export const SKIN_FALLBACK_ACCENT = "#ff66ab";
+
+// A view can be earned from the grid, not just by opening the page: a hover
+// that settles on a card is somebody looking at the skin in the sense the
+// counter measures. (A download straight off the grid counts one too, but the
+// backend does that itself - every counted download moves the view count.)
+// The dwell filters the sweep of a mouse crossing the grid on its way
+// somewhere else; the set spares repeat requests for a card re-rendered by
+// filtering (what actually counts is the backend's 6h-per-IP dedup either
+// way). Touch has no hover and its tap fires pointerenter on the way to a
+// click, so touch is ignored here: the tap either opens the page, which
+// counts there, or hits the download button, which the backend counts.
+export const HOVER_VIEW_DWELL_MS = 400;
+const pingedViewRefs = new Set<string>();
 
 export function SkinKeymodeTags({ keymodes, specialKeymodes, overlay = false, max = MAX_KEYMODE_TAGS }: { keymodes: number[]; specialKeymodes?: number[]; overlay?: boolean; max?: number }) {
   const shown = keymodes.slice(0, max);
@@ -82,11 +95,40 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
   // owner or a moderating admin: the corner button links straight at the
   // capability URL on that copy of the summary.
   const downloadUrl = !skin.oskUrl ? null : isPrivate ? skin.oskUrl : skinDownloadUrl(skin.id) ?? skin.oskUrl;
+  const downloadCount = skin.downloadCount ?? 0;
+  // Absent on a summary cached before views existed, which reads as zero until
+  // the list refetches rather than rendering a hole in the row.
+  const viewCount = skin.viewCount ?? 0;
+  // Only a published public skin has a public number to move, same predicate
+  // as the skin page's own ping; the backend refuses anything else anyway.
+  const viewRef = skin.slug ?? skin.id;
+  const viewCountable = skin.status === "published" && !isPrivate;
+  const hoverViewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pingView = useCallback(() => {
+    if (!viewCountable || pingedViewRefs.has(viewRef)) return;
+    pingedViewRefs.add(viewRef);
+    pingSkinView(viewRef);
+  }, [viewCountable, viewRef]);
+  const cancelHoverView = useCallback(() => {
+    if (hoverViewTimer.current != null) {
+      clearTimeout(hoverViewTimer.current);
+      hoverViewTimer.current = null;
+    }
+  }, []);
+  useEffect(() => cancelHoverView, [cancelHoverView]);
   return (
     // The download sits outside the card link (an anchor cannot nest in
     // another), overlaid on the preview's corner, so a skin can be grabbed
     // straight from the grid without opening its page.
-    <div className="group relative">
+    <div
+      className="group relative"
+      onPointerEnter={(event) => {
+        if (event.pointerType === "touch") return;
+        cancelHoverView();
+        hoverViewTimer.current = setTimeout(pingView, HOVER_VIEW_DWELL_MS);
+      }}
+      onPointerLeave={cancelHoverView}
+    >
       <Link
         to="/skins/$id"
         params={{ id: skin.slug ?? skin.id }}
@@ -127,17 +169,30 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
         <div className="flex flex-1 flex-col gap-1 px-2.5 py-2">
           <div className="flex items-baseline justify-between gap-2">
             <div className="truncate text-[13px] font-bold leading-tight text-white">{skin.name}</div>
-            {/* Spelled out rather than pilled behind an icon: the download
-                button sits right above it, and two download glyphs an inch
-                apart read as a mistake. */}
-            <span className="shrink-0 text-[11px] text-osu-f1">
+            {/* Two counts where one spelled-out figure used to sit, so both
+                give up their words. The download glyph here is a statistic and
+                the one over the preview is the button that does something;
+                they read as a pair rather than a mistake because they are in
+                different blocks of the card, and neither number is ever the
+                only thing saying what it is - the label lives on the group, and
+                the page itself spells both out. */}
+            <span
+              className="shrink-0 text-[11px] text-osu-f1"
+              aria-label={isPrivate ? undefined : `${downloadCount.toLocaleString()} downloads, ${viewCount.toLocaleString()} views`}
+            >
               {isPrivate ? (
                 "only you"
               ) : (
-                <>
-                  <span className="tabular-nums">{skin.downloadCount.toLocaleString()}</span>
-                  {skin.downloadCount === 1 ? " download" : " downloads"}
-                </>
+                <span className="inline-flex items-center gap-2" aria-hidden="true">
+                  <span className="inline-flex items-center gap-1" title={`${downloadCount.toLocaleString()} downloads`}>
+                    <Download className="h-3 w-3" />
+                    <span className="tabular-nums">{formatCompactCount(downloadCount)}</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1" title={`${viewCount.toLocaleString()} views`}>
+                    <Eye className="h-3 w-3" />
+                    <span className="tabular-nums">{formatCompactCount(viewCount)}</span>
+                  </span>
+                </span>
               )}
             </span>
           </div>

@@ -112,6 +112,60 @@ describe("AnalyticsStore capture + monitor", () => {
     expect(data.recentServerErrors[0]?.timestamp).toBeTruthy();
   });
 
+  it("counts skin page opens and download clicks per visitor per 6h for the view-count seed", async () => {
+    // Rows go in directly rather than through capture(): the bucketing is the
+    // thing under test, so the timestamps have to sit at known offsets from a
+    // bucket boundary instead of wherever the wall clock happens to be.
+    const BUCKET_MS = 6 * 60 * 60_000;
+    const bucketStart = Math.floor(NOW / BUCKET_MS) * BUCKET_MS;
+    const row = async (opts: {
+      distinctId: string;
+      ref: string | null;
+      ts: number;
+      event?: string;
+      path?: string;
+      isBot?: boolean;
+    }) => {
+      await exec(
+        db,
+        "insert into analytics_events (ts, event, distinct_id, host, path, is_bot, props) values (?, ?, ?, ?, ?, ?, ?)",
+        [
+          opts.ts,
+          opts.event ?? "$pageview",
+          opts.distinctId,
+          LIVE_HOST,
+          opts.path ?? `/skins/${opts.ref}`,
+          opts.isBot ? 1 : 0,
+          JSON.stringify(opts.ref ? { skin_ref: opts.ref } : {}),
+        ],
+      );
+    };
+
+    // Same visitor twice inside one bucket is one view; the same visitor in
+    // the next bucket is a second. Another visitor always counts.
+    await row({ distinctId: "a", ref: "cool-skin", ts: bucketStart + 1_000 });
+    await row({ distinctId: "a", ref: "cool-skin", ts: bucketStart + BUCKET_MS - 1_000 });
+    await row({ distinctId: "a", ref: "cool-skin", ts: bucketStart + BUCKET_MS + 1_000 });
+    await row({ distinctId: "b", ref: "cool-skin", ts: bucketStart + 1_000 });
+    await row({ distinctId: "b", ref: "other-skin", ts: bucketStart + 1_000 });
+    // A download is a view under the live counter's meaning, wherever it was
+    // clicked - the grid's own button most of all, whose downloads never
+    // opened a page. A visitor who read the page and downloaded in the same
+    // bucket still counts once: b's download below adds nothing.
+    await row({ distinctId: "c", ref: "cool-skin", ts: bucketStart + 1_000, event: "skin_download", path: "/skins" });
+    await row({ distinctId: "b", ref: "cool-skin", ts: bucketStart + 2_000, event: "skin_download" });
+    // Excluded: a bot, the server's own events, and the browse page's own
+    // pageview, which names no skin.
+    await row({ distinctId: "bot", ref: "cool-skin", ts: bucketStart + 1_000, isBot: true });
+    await row({ distinctId: "server", ref: "cool-skin", ts: bucketStart + 1_000 });
+    await row({ distinctId: "d", ref: null, ts: bucketStart + 1_000, path: "/skins" });
+
+    const counts = await store.getSkinViewCounts();
+    expect(counts.get("cool-skin")).toBe(4);
+    expect(counts.get("other-skin")).toBe(1);
+    expect(counts.size).toBe(2);
+  });
+
   it("keeps bots out of every aggregate", async () => {
     store.capture(pageview({ distinctId: "bot" }), { isBot: true });
     store.capture(pageview({ distinctId: "human" }), {});
