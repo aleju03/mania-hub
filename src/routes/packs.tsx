@@ -655,7 +655,12 @@ function PacksPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col">
-      <div className="relative z-10 flex flex-1 flex-col overflow-clip bg-osu-b5">
+      {/* WebKit can flash missing backing-store tiles when transformed descendants
+          animate below overflow:clip. The open-pack sequence owns several such
+          transitions, so let the viewport own clipping until it returns home. */}
+      <div
+        className={`relative z-10 flex flex-1 flex-col bg-osu-b5 ${phase === "pack" ? "overflow-clip" : ""}`}
+      >
         <OsuTriangleBackdrop />
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/packs.svg" title="Maniacard packs" />

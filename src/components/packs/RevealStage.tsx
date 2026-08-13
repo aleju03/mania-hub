@@ -329,6 +329,9 @@ interface CascadeTileProps {
   entry: RevealedCard | undefined;
   username: string;
   cardBack: string;
+  /* Mobile browsers have fragile compositing around several simultaneous
+     preserve-3d scenes, so their reveal uses the flat crossfade path. */
+  mobile: boolean;
   reducedMotion: boolean;
   onLanded: () => void;
   /* Fires the moment the flip swings past edge-on and the face becomes
@@ -352,16 +355,18 @@ export function CascadeTile({
   entry,
   username,
   cardBack,
+  mobile,
   reducedMotion,
   onLanded,
   onFaceVisible,
 }: CascadeTileProps) {
   const flipRef = useRef<HTMLDivElement | null>(null);
+  const flatBackRef = useRef<HTMLDivElement | null>(null);
+  const flatFrontRef = useRef<HTMLDivElement | null>(null);
   const burstTimerRef = useRef<number | null>(null);
   const startedRef = useRef(false);
   const firedRef = useRef(false);
   const facedRef = useRef(false);
-  const [settled, setSettled] = useState(false);
   const [showBurst, setShowBurst] = useState(false);
   const flipped = entry !== undefined;
 
@@ -387,12 +392,7 @@ export function CascadeTile({
       if (firedRef.current) return;
       firedRef.current = true;
       showFace();
-      /* A finished tile no longer needs a preserve-3d scene with two
-         backface layers. Flattening it to a regular image is visually
-         identical at 180deg and keeps a ten-card Wild reveal below mobile
-         Safari/Chrome's practical compositor-layer limit. */
-      setSettled(true);
-      if (!reducedMotion && entry?.tier && entry.glowColor) {
+      if (!mobile && !reducedMotion && entry?.tier && entry.glowColor) {
         setShowBurst(true);
         burstTimerRef.current = window.setTimeout(() => {
           burstTimerRef.current = null;
@@ -401,6 +401,52 @@ export function CascadeTile({
       }
       onLanded();
     };
+
+    /* iOS WebKit can flash or drop unrelated page tiles when several nested
+       3D transforms animate below an overflow clip. A Wild pack is the only
+       hand large enough to hit it reliably. The mobile path fades two flat
+       layers instead: no perspective, backface, preserve-3d, or transform is
+       involved, and both faces are already painted before it starts. */
+    if (mobile) {
+      const back = flatBackRef.current;
+      const front = flatFrontRef.current;
+      if (!back || !front || reducedMotion || typeof back.animate !== "function") {
+        if (back) back.style.opacity = "0";
+        if (front) front.style.opacity = "1";
+        fire();
+        return;
+      }
+      const options: KeyframeAnimationOptions = {
+        duration: CASCADE_FLIP_MS,
+        easing: "cubic-bezier(0.3, 0.1, 0.3, 1)",
+        fill: "forwards",
+      };
+      const backAnimation = back.animate([{ opacity: 1 }, { opacity: 0 }], options);
+      const frontAnimation = front.animate([{ opacity: 0 }, { opacity: 1 }], options);
+      let dead = false;
+      const faceTimer = window.setTimeout(() => {
+        if (!dead) showFace();
+      }, CASCADE_FLIP_MS / 2);
+      void Promise.all([backAnimation.finished, frontAnimation.finished])
+        .then(() => {
+          if (dead) return;
+          // Commit the simple end state before cancelling the filled
+          // animations so they do not stay as compositor layers.
+          back.style.opacity = "0";
+          front.style.opacity = "1";
+          backAnimation.cancel();
+          frontAnimation.cancel();
+          fire();
+        })
+        .catch(() => {});
+      return () => {
+        dead = true;
+        window.clearTimeout(faceTimer);
+        backAnimation.cancel();
+        frontAnimation.cancel();
+      };
+    }
+
     const el = flipRef.current;
     if (!el || reducedMotion || typeof el.animate !== "function") {
       if (el) el.style.transform = "rotateY(180deg)";
@@ -427,22 +473,34 @@ export function CascadeTile({
     // The callbacks are per-render closures; startedRef makes the flip
     // one-shot regardless.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flipped, reducedMotion]);
+  }, [flipped, mobile, reducedMotion]);
 
   return (
-    <div className="relative h-full w-full" style={settled ? undefined : { perspective: 700 }}>
-      {settled ? (
-        <div className="absolute inset-0 overflow-hidden rounded-[10px]">
-          {entry?.thumbnail ? (
-            <img src={entry.thumbnail} alt={username} className="h-full w-full object-cover" draggable={false} />
-          ) : (
-            /* Mint failure: same dark tile the tray shows, plus the name so
-               the slot isn't anonymous. */
-            <div className="grid h-full w-full place-items-center bg-osu-b4 px-1 text-center">
-              <span className="break-all text-[9px] font-semibold text-osu-f1">{flipped ? username : ""}</span>
-            </div>
-          )}
-        </div>
+    <div className="relative h-full w-full" style={mobile ? undefined : { perspective: 700 }}>
+      {mobile ? (
+        <>
+          <div
+            ref={flatBackRef}
+            className="absolute inset-0 rounded-[10px] bg-cover bg-center"
+            style={{
+              backgroundImage: `url(${cardBack})`,
+              boxShadow: "0 10px 26px rgba(0,0,0,0.45)",
+            }}
+          />
+          <div
+            ref={flatFrontRef}
+            className="absolute inset-0 overflow-hidden rounded-[10px]"
+            style={{ opacity: 0 }}
+          >
+            {entry?.thumbnail ? (
+              <img src={entry.thumbnail} alt={username} className="h-full w-full object-cover" draggable={false} />
+            ) : (
+              <div className="grid h-full w-full place-items-center bg-osu-b4 px-1 text-center">
+                <span className="break-all text-[9px] font-semibold text-osu-f1">{flipped ? username : ""}</span>
+              </div>
+            )}
+          </div>
+        </>
       ) : (
         <div ref={flipRef} className="relative h-full w-full" style={{ transformStyle: "preserve-3d" }}>
           <div
@@ -485,6 +543,7 @@ export function CascadeTile({
 
 export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }: RevealStageProps) {
   const windowActive = useWindowActive();
+  const mobileViewport = isMobileViewport();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
@@ -916,7 +975,9 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     // Flips wait for the deal-out to finish; the data fetches keep running
     // underneath it. After that, each flip waits only for its data, with a
     // minimum gap so hot data still cascades.
-    const dealMs = reducedMotion ? 0 : 300 + count * 60;
+    /* The mobile cascade is intentionally flat and already laid out in its
+       final slots, so it only needs a short beat for that grid to paint. */
+    const dealMs = reducedMotion ? 0 : mobileViewport ? 120 : 300 + count * 60;
     let nextFlipAt = performance.now() + dealMs;
 
     // Each card runs its whole pipeline (scores, then thumbnail render) in its
@@ -1136,6 +1197,41 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
               const slotHeight = (cascade.slotWidth * 7) / 5;
               const targetX = (column - (rowLength - 1) / 2) * (cascade.slotWidth + CASCADE_GAP);
               const targetY = (row - (rowCount - 1) / 2) * (slotHeight + CASCADE_GAP);
+              const tile = (
+                <CascadeTile
+                  entry={revealed[position]}
+                  username={cards[position]?.player.user.username ?? ""}
+                  cardBack={cardBack}
+                  mobile={mobileViewport}
+                  reducedMotion={reducedMotion}
+                  onLanded={() => handleCascadeLanded(position)}
+                  onFaceVisible={() => handleCascadeFaceVisible(position)}
+                />
+              );
+              if (mobileViewport) {
+                /* Positions are ordinary layout coordinates on mobile. Even a
+                   settled transform plus will-change creates a GPU-backed
+                   layer in WebKit; ten of those were enough to corrupt tiles
+                   outside the reveal itself. */
+                return (
+                  <div
+                    key={position}
+                    data-cascade-index={position}
+                    className="absolute"
+                    style={{
+                      left: `calc(50% + ${targetX}px)`,
+                      top: `calc(50% + ${targetY}px)`,
+                      width: cascade.slotWidth,
+                      height: slotHeight,
+                      marginLeft: -cascade.slotWidth / 2,
+                      marginTop: -slotHeight / 2,
+                      zIndex: count - slot,
+                    }}
+                  >
+                    {tile}
+                  </div>
+                );
+              }
               return (
                 <motion.div
                   key={position}
@@ -1166,14 +1262,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
                       : { delay: 0.05 + slot * 0.06, duration: 0.4, ease: [0.3, 0.7, 0.2, 1] }
                   }
                 >
-                  <CascadeTile
-                    entry={revealed[position]}
-                    username={cards[position]?.player.user.username ?? ""}
-                    cardBack={cardBack}
-                    reducedMotion={reducedMotion}
-                    onLanded={() => handleCascadeLanded(position)}
-                    onFaceVisible={() => handleCascadeFaceVisible(position)}
-                  />
+                  {tile}
                 </motion.div>
               );
             })}

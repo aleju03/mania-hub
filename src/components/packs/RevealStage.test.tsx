@@ -44,7 +44,7 @@ afterEach(() => {
 });
 
 describe("CascadeTile", () => {
-  it("flattens a landed card and retires its tier burst", () => {
+  it("uses a flat face without a particle subtree on mobile", () => {
     const onLanded = vi.fn();
     const onFaceVisible = vi.fn();
     const { container } = render(
@@ -52,19 +52,37 @@ describe("CascadeTile", () => {
         entry={revealedCard()}
         username="player7"
         cardBack="data:image/png;base64,back"
+        mobile={true}
         reducedMotion={false}
         onLanded={onLanded}
         onFaceVisible={onFaceVisible}
       />,
     );
 
-    // jsdom has no Web Animations API, so the tile takes the same immediate
-    // fallback used by older/mobile browsers. Once landed, its two-sided 3D
-    // scene is replaced by the ordinary front image.
+    // jsdom has no Web Animations API, so the flat mobile path lands
+    // immediately. It must never introduce the preserve-3d/backface scene
+    // that corrupts page tiles on mobile WebKit.
     expect(onFaceVisible).toHaveBeenCalledTimes(1);
     expect(onLanded).toHaveBeenCalledTimes(1);
     expect(container.querySelector('[style*="preserve-3d"]')).toBeNull();
-    expect(screen.getByRole("img", { name: "player7" })).toBeTruthy();
+    const face = screen.getByRole("img", { name: "player7" });
+    expect(face.parentElement?.style.opacity).toBe("1");
+    expect(screen.queryByTestId("tier-burst")).toBeNull();
+  });
+
+  it("retires a desktop cascade tier burst", () => {
+    render(
+      <CascadeTile
+        entry={revealedCard()}
+        username="player7"
+        cardBack="data:image/png;base64,back"
+        mobile={false}
+        reducedMotion={false}
+        onLanded={() => {}}
+        onFaceVisible={() => {}}
+      />,
+    );
+
     expect(screen.getByTestId("tier-burst")).toBeTruthy();
 
     act(() => vi.advanceTimersByTime(999));
@@ -79,6 +97,7 @@ describe("CascadeTile", () => {
         entry={revealedCard("goat")}
         username="player7"
         cardBack="data:image/png;base64,back"
+        mobile={false}
         reducedMotion={false}
         onLanded={() => {}}
         onFaceVisible={() => {}}
