@@ -18,6 +18,8 @@ import {
 } from "../../lib/communities";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useAuth } from "../../lib/auth-context";
+import { track } from "../../lib/analytics";
+import { communityEventProperties } from "../../lib/analytics-communities";
 import { CommunityCard } from "./CommunityCard";
 // Both pickers get a filter box: one is every country, the other is most of the
 // languages people play in, and scrolling either for one entry is worse than
@@ -45,12 +47,12 @@ const FIELD_CLASS =
 // the Discord screen holds no surprises. These are exactly the identify and
 // guilds scopes in buildDiscordAuthorizeUrl; keep the two in step.
 const CONSENT_LINES = [
-  "Your Discord username and avatar",
+  "Your username and avatar",
   // Deliberately not "the servers you own or manage": the guilds scope hands
   // over the whole list and we filter it here, and Discord's own screen says as
   // much a click later. Saying the smaller thing would read as a cover-up the
   // moment the two are seen together, so this says the true thing and why.
-  "Which servers you are in, so we can show you the ones you can post",
+  "The servers you are in, so we can show you the ones you can post",
 ];
 
 // Long enough that pasting a link does not fire a lookup per character, short
@@ -91,7 +93,10 @@ export function CommunitySubmitModal({
   const auth = useAuth();
   const countryOptions = useMemo(() => countrySelectOptions(auth.viewer?.countryCode ?? null), [auth.viewer?.countryCode]);
   const [step, setStep] = useState<Step>(discordUsername ? "pick" : "connect");
-  const [guilds, setGuilds] = useState<ManageableGuild[]>([]);
+  // null until a load has finished. The refetch guard keys on that, because
+  // keying on an empty list would refetch forever for someone whose list of
+  // postable servers is genuinely empty.
+  const [guilds, setGuilds] = useState<ManageableGuild[] | null>(null);
   const [guildFilter, setGuildFilter] = useState("");
   const [loadingGuilds, setLoadingGuilds] = useState(false);
   const [guild, setGuild] = useState<ManageableGuild | null>(null);
@@ -115,8 +120,7 @@ export function CommunitySubmitModal({
   useBodyScrollLock(true);
 
   /* Held in a ref so loadGuilds can stay a stable callback: the effect that
-     calls it would otherwise re-run on every render, and for someone with no
-     manageable servers the empty-list guard would never stop it. */
+     calls it would otherwise re-run on every render and refetch each time. */
   const onDisconnectedRef = useRef(onDisconnected);
   useEffect(() => {
     onDisconnectedRef.current = onDisconnected;
@@ -137,6 +141,10 @@ export function CommunitySubmitModal({
         return;
       }
       setGuilds(result.guilds);
+      // The dead end nobody reports: they authorised, and then had nothing
+      // they were allowed to post. If the directory stays quiet, the answer
+      // to "is it the consent screen or the Manage Server bar" is here.
+      if (result.guilds.length === 0) track("community_post_no_servers");
     } catch {
       setError("Could not read your Discord servers. Try connecting again.");
       setStep("connect");
@@ -146,8 +154,24 @@ export function CommunitySubmitModal({
   }, []);
 
   useEffect(() => {
-    if (step === "pick" && guilds.length === 0 && !loadingGuilds) void loadGuilds();
-  }, [step, guilds.length, loadingGuilds, loadGuilds]);
+    if (step === "pick" && guilds === null && !loadingGuilds) void loadGuilds();
+  }, [step, guilds, loadingGuilds, loadGuilds]);
+
+  /*
+   * The submit funnel, one event the first time each step is reached, so the
+   * activity feed can say where people stop: the consent screen, the picker,
+   * or the details form. Going back and forward again does not count twice,
+   * and "done" is tracked at the submit itself, with the listing attached.
+   */
+  const trackedSteps = useRef<Set<Step>>(new Set());
+  useEffect(() => {
+    if (trackedSteps.current.has(step)) return;
+    if (step === "connect") track("community_post_start");
+    else if (step === "pick") track("community_post_pick");
+    else if (step === "details") track("community_post_details", guild ? { community_name: guild.name } : undefined);
+    else return;
+    trackedSteps.current.add(step);
+  }, [step, guild]);
 
   /*
    * The connection lands a moment after the page does, because it is read by a
@@ -248,6 +272,7 @@ export function CommunitySubmitModal({
         setError(communityErrorMessage(result.error));
         return;
       }
+      track("community_post_submitted", communityEventProperties(result.community));
       setStep("done");
       onSubmitted(result.community);
     } catch {
@@ -259,7 +284,7 @@ export function CommunitySubmitModal({
 
   const handleDisconnect = async () => {
     await disconnectDiscord().catch(() => undefined);
-    setGuilds([]);
+    setGuilds(null);
     setGuildFilter("");
     setGuild(null);
     setError(null);
@@ -274,8 +299,8 @@ export function CommunitySubmitModal({
      and a fuzzier match would put the wrong server under the cursor. */
   const guildQuery = guildFilter.trim().toLowerCase();
   const visibleGuilds = guildQuery
-    ? guilds.filter((entry) => entry.name.toLowerCase().includes(guildQuery))
-    : guilds;
+    ? (guilds ?? []).filter((entry) => entry.name.toLowerCase().includes(guildQuery))
+    : guilds ?? [];
 
   /*
    * The card as it will appear on the directory, drawn by the same component
@@ -388,8 +413,7 @@ export function CommunitySubmitModal({
           {step === "connect" && (
             <>
               <p className="text-[12.5px] leading-relaxed text-osu-f1">
-                Discord will ask you to authorise this site, so we can check you own or help run the
-                server you are posting. It will ask for:
+                Sign in with Discord so we can check the server is yours to post. Discord will share:
               </p>
               <ul className="space-y-1.5">
                 {CONSENT_LINES.map((line) => (
@@ -399,13 +423,16 @@ export function CommunitySubmitModal({
                   </li>
                 ))}
               </ul>
+              {/* Aimed at the fear a server owner actually has here, which is
+                  losing control of what goes up, not messages being read. */}
               <p className="flex items-start gap-2 text-[12px] leading-relaxed text-osu-f1">
                 <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden="true" />
-                It cannot read your messages or post anything, and that access ends as soon as your
-                server is posted.
+                Nothing is posted until you review and submit it, and the access ends as soon as it
+                is.
               </p>
               <a
                 href={connectHref}
+                onClick={() => track("community_post_connect")}
                 className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110"
                 style={{ backgroundColor: DISCORD_BLURPLE }}
               >
@@ -418,7 +445,7 @@ export function CommunitySubmitModal({
           {step === "pick" && (
             <>
               <p className="text-[12.5px] text-osu-f1">Pick the server you want to post.</p>
-              {loadingGuilds ? (
+              {loadingGuilds || guilds === null ? (
                 <div className="flex items-center gap-2 py-6 text-[12.5px] text-osu-f1">
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   Reading your servers

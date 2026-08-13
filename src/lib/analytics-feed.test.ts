@@ -74,6 +74,36 @@ describe("describeAnalyticsEvent", () => {
     });
   });
 
+  it("names the selected scope on country-scoped pages", () => {
+    expect(describeAnalyticsEvent(row({ selectedCountry: "BR" }))).toMatchObject({
+      subject: "the tracker",
+      detail: "Brazil",
+    });
+    expect(describeAnalyticsEvent(row({ path: "/", selectedCountry: "GLOBAL" }))).toMatchObject({
+      subject: "the home page",
+      detail: "Global",
+    });
+    expect(describeAnalyticsEvent(row({ path: "/rankings", selectedCountry: "R-SEASIA", rankingsPage: "2" }))).toMatchObject({
+      subject: "the rankings",
+      detail: "Southeast Asia · page 2",
+    });
+    // Capture stores the scope cut to 8 chars; the truncated region code still
+    // resolves ("R-NAMERICA" arrives as "R-NAMERI").
+    expect(describeAnalyticsEvent(row({ path: "/top-plays", selectedCountry: "R-NAMERI" }))).toMatchObject({
+      subject: "top plays",
+      detail: "North America",
+    });
+    expect(describeAnalyticsEvent(row({ path: "/maps", mapsTab: "popular", selectedCountry: "CR" }))).toMatchObject({
+      subject: "Maps · Widely played",
+      detail: "Costa Rica",
+    });
+    // Pages that do not follow the scope stay clean.
+    expect(describeAnalyticsEvent(row({ path: "/settings", selectedCountry: "BR" }))).toMatchObject({
+      subject: "settings",
+      detail: null,
+    });
+  });
+
   it("calls a typed maps query a search and keeps the facets as context", () => {
     const activity = describeAnalyticsEvent(row({
       path: "/maps",
@@ -200,6 +230,34 @@ describe("describeAnalyticsEvent", () => {
     ).toMatchObject({
       kind: "community",
       verb: "opened the invite for",
+      subject: "7K GLOBAL",
+    });
+  });
+
+  it("tells the submit funnel steps apart", () => {
+    expect(describeAnalyticsEvent(row({ event: "community_post_start" }))).toMatchObject({
+      kind: "community",
+      verb: "opened",
+      subject: "the post-a-server form",
+    });
+    expect(describeAnalyticsEvent(row({ event: "community_post_connect" }))).toMatchObject({
+      kind: "community",
+      subject: "Continue with Discord",
+    });
+    expect(describeAnalyticsEvent(row({ event: "community_post_no_servers" }))).toMatchObject({
+      kind: "community",
+      subject: "no servers they can post",
+    });
+    expect(describeAnalyticsEvent(row({ event: "community_post_details", communityName: "7K VSRG FR" }))).toMatchObject({
+      kind: "community",
+      verb: "started describing",
+      subject: "7K VSRG FR",
+    });
+    expect(
+      describeAnalyticsEvent(row({ event: "community_post_submitted", communityId: "abc-123", communityName: "7K GLOBAL" })),
+    ).toMatchObject({
+      kind: "community",
+      verb: "submitted",
       subject: "7K GLOBAL",
     });
   });

@@ -3,6 +3,9 @@
    sessions, and formats the clock bits around them. Kept free of React and of
    server imports so it stays unit-testable. */
 
+import { getCountryName, isGlobalScope, isSupportedCountryCode } from "./country";
+import { REGION_DEFS } from "./regions.generated";
+
 export type AnalyticsDeviceKind = "mobile" | "desktop" | "unknown";
 
 export interface AnalyticsRecentEventRow {
@@ -110,6 +113,10 @@ const ANALYTICS_PACK_TYPE_LABELS: Record<string, string> = {
   legend: "Legend",
 };
 
+/* Pages whose content follows the selected country scope, so the feed line
+   says which tracker/rankings/etc. the visitor was actually looking at. */
+const COUNTRY_SCOPED_PATHS = new Set(["/tracker", "/top-plays", "/snipes"]);
+
 const SIMPLE_PAGE_LABELS: Record<string, string> = {
   "/tracker": "the tracker",
   "/top-plays": "top plays",
@@ -120,6 +127,21 @@ const SIMPLE_PAGE_LABELS: Record<string, string> = {
   "/bbcode": "the BBCode editor",
   "/discord": "the Discord page",
 };
+
+/* The country scope the visitor had selected when the event fired, as a name
+   ("Brazil", "Southeast Asia", "Global"). Capture stores the scope cut to 8
+   characters, so long region codes arrive truncated ("R-NAMERI"); every region
+   code is still unique at 8 characters, so a prefix match recovers them. */
+export function formatAnalyticsSelectedScope(scope: string | null): string | null {
+  const code = scope?.trim().toUpperCase();
+  if (!code) return null;
+  if (isGlobalScope(code)) return "Global";
+  if (code.startsWith("R-")) {
+    const region = REGION_DEFS.find((def) => def.code === code) ?? REGION_DEFS.find((def) => def.code.startsWith(code));
+    return region?.name ?? code;
+  }
+  return isSupportedCountryCode(code) ? getCountryName(code) : code;
+}
 
 export function formatAnalyticsMapsTab(tab: string | null): string {
   // No tab recorded means the default view, which is search.
@@ -187,12 +209,14 @@ function replayMapName(row: AnalyticsRecentEventRow, mapIndex?: AnalyticsReplayM
 }
 
 function describeMaps(row: AnalyticsRecentEventRow): AnalyticsActivity {
+  const scope = formatAnalyticsSelectedScope(row.selectedCountry);
   const where = joinDetail([
     `in Maps · ${formatAnalyticsMapsTab(row.mapsTab)}`,
     row.mapsCollection,
     row.mapsFilters,
     row.mapsSort ? `sort: ${row.mapsSort}` : null,
     row.mapsPage ? `page ${row.mapsPage}` : null,
+    scope,
   ]);
   // Every keystroke lands as its own pageview, so the typed query is the story;
   // without one this is plain browsing of a tab.
@@ -211,6 +235,7 @@ function describeMaps(row: AnalyticsRecentEventRow): AnalyticsActivity {
       row.mapsFilters,
       row.mapsSort ? `sort: ${row.mapsSort}` : null,
       row.mapsPage ? `page ${row.mapsPage}` : null,
+      scope,
     ]),
   };
 }
@@ -292,6 +317,22 @@ export function describeAnalyticsEvent(
     // what happens on Discord's side is not ours to see.
     case "community_join":
       return describeCommunity(row, "opened the invite for", row.communityId);
+    // The submit funnel, in the order the modal walks it: the consent screen,
+    // the picker (or its no-postable-servers dead end), the details form, and
+    // the submit. Which of these a visitor stops at is the point of tracking
+    // them, so each gets its own line rather than a shared one.
+    case "community_post_start":
+      return { kind: "community", verb: "opened", subject: "the post-a-server form", detail: null };
+    case "community_post_connect":
+      return { kind: "community", verb: "clicked", subject: "Continue with Discord", detail: null };
+    case "community_post_pick":
+      return { kind: "community", verb: "reached", subject: "the server picker", detail: null };
+    case "community_post_no_servers":
+      return { kind: "community", verb: "had", subject: "no servers they can post", detail: null };
+    case "community_post_details":
+      return { kind: "community", verb: "started describing", subject: row.communityName || "a server", detail: null };
+    case "community_post_submitted":
+      return describeCommunity(row, "submitted", row.communityId);
     case "skin_upload_failed":
       return { kind: "error", verb: "failed", subject: "a skin upload", detail: row.skinUploadError };
     case "pack_open": {
@@ -321,7 +362,8 @@ export function describeAnalyticsEvent(
   }
 
   const path = row.path || "";
-  if (!path || path === "/") return { kind: "visit", verb: "landed on", subject: "the home page", detail: null };
+  const scope = formatAnalyticsSelectedScope(row.selectedCountry);
+  if (!path || path === "/") return { kind: "visit", verb: "landed on", subject: "the home page", detail: scope };
   if (path === "/maps") return describeMaps(row);
   if (path === "/skins") return describeSkinsList(row);
   if (path.startsWith("/skins/")) {
@@ -373,7 +415,12 @@ export function describeAnalyticsEvent(
     };
   }
   if (path === "/rankings") {
-    return { kind: "visit", verb: "browsed", subject: "the rankings", detail: row.rankingsPage ? `page ${row.rankingsPage}` : null };
+    return {
+      kind: "visit",
+      verb: "browsed",
+      subject: "the rankings",
+      detail: joinDetail([scope, row.rankingsPage ? `page ${row.rankingsPage}` : null]),
+    };
   }
   if (path === "/my-stats" || path === "/my-data") {
     return { kind: "profile", verb: "opened", subject: "their own stats", detail: row.viewerUsername ? `as ${row.viewerUsername}` : null };
@@ -382,7 +429,9 @@ export function describeAnalyticsEvent(
     return { kind: "profile", verb: "opened", subject: "their goals", detail: row.viewerUsername ? `as ${row.viewerUsername}` : null };
   }
   const simple = SIMPLE_PAGE_LABELS[path];
-  if (simple) return { kind: "visit", verb: "visited", subject: simple, detail: null };
+  if (simple) {
+    return { kind: "visit", verb: "visited", subject: simple, detail: COUNTRY_SCOPED_PATHS.has(path) ? scope : null };
+  }
   return { kind: "visit", verb: "visited", subject: path, detail: null };
 }
 
