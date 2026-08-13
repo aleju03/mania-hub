@@ -11,6 +11,9 @@ interface Options {
   remoteDir: string;
   remoteBackup: string | null;
   localDbPath: string | null;
+  analyticsLocalDbPath: string | null;
+  withAnalytics: boolean;
+  analyticsOnly: boolean;
   dryRun: boolean;
   force: boolean;
   includeLiveDb: boolean;
@@ -21,6 +24,19 @@ interface Options {
   compressSnapshot: boolean;
   keepRemoteSnapshots: number;
   keepLocalBackups: number;
+}
+
+// The analytics DB is a second SQLite file with its own WAL (ANALYTICS_DATABASE_URL),
+// so it is synced as a separate target rather than as a sidecar of the live DB.
+type TargetKey = "live" | "analytics";
+
+interface SyncTarget {
+  key: TargetKey;
+  label: string;
+  // Relative to the remote live-backend directory.
+  remoteRelativePath: string;
+  fileName: string;
+  localDbPath: string;
 }
 
 interface RemoteCandidate {
@@ -39,6 +55,11 @@ const DEFAULT_REMOTE = "user@your-vps-host";
 const DEFAULT_REMOTE_DIR = "~/apps/mania-hub/live-backend";
 const DOWNLOAD_DIR_NAME = ".sync-from-vps";
 const LOCAL_BACKUP_DIR_NAME = "local-db-backups";
+const REMOTE_LIVE_DB = "data/mania-hub-live.db";
+const REMOTE_ANALYTICS_DB = "data/mania-hub-analytics.db";
+
+// Declared before the top-level flow below, which reaches it through buildTargets().
+let cachedConfig: ReturnType<typeof readConfig> | null = null;
 
 const options = parseOptions(process.argv.slice(2));
 
@@ -46,69 +67,78 @@ if (options.dryRun) {
   console.log("Dry run: no local files will be changed.");
 }
 
-const localDbPath = resolveLocalDbPath(options);
-const localSidecars = [localDbPath, `${localDbPath}-wal`, `${localDbPath}-shm`];
+const targets = buildTargets(options);
+const localSidecars = targets.flatMap(sidecarsFor);
 
 if (options.dryRun && options.fresh) {
-  console.log(`Would prune remote online-* snapshots down to ${Math.max(0, options.keepRemoteSnapshots - 1)}, then create a fresh snapshot of the live DB on ${options.remote} (sqlite3 VACUUM INTO${options.compressSnapshot ? " + zstd" : ""}), download it, and replace ${localDbPath}.`);
+  console.log(`Would prune remote online-* snapshots down to ${Math.max(0, options.keepRemoteSnapshots - 1)}, then create a fresh snapshot on ${options.remote} (sqlite3 VACUUM INTO${options.compressSnapshot ? " + zstd" : ""}) of:`);
+  for (const target of targets) {
+    console.log(`  ${target.label}: ${options.remoteDir}/${target.remoteRelativePath} -> ${target.localDbPath}`);
+  }
   console.log(`Would end with the newest ${options.keepRemoteSnapshots} remote snapshot(s)${options.backupLocal ? ` and the newest ${options.keepLocalBackups} local backup(s)` : ""}.`);
   process.exit(0);
 }
 
-const remoteBackup = options.remoteBackup
-  ? await resolveRemotePath(options.remote, options.remoteBackup)
-  : options.fresh
-    ? await createFreshRemoteSnapshot(options)
-    : await findLatestRemoteBackup(options);
+const remoteBackups = await resolveRemoteBackups(options, targets);
 
 console.log(`Remote: ${options.remote}`);
-console.log(`Remote backup: ${remoteBackup.path} (${formatBytes(remoteBackup.sizeBytes)}, ${new Date(remoteBackup.modifiedAtMs).toISOString()})`);
-console.log(`Local DB: ${localDbPath}`);
+for (const target of targets) {
+  const remoteBackup = remoteBackups.get(target.key)!;
+  console.log(`Remote ${target.label} backup: ${remoteBackup.path} (${formatBytes(remoteBackup.sizeBytes)}, ${new Date(remoteBackup.modifiedAtMs).toISOString()})`);
+  console.log(`Local ${target.label}: ${target.localDbPath}`);
+}
 
 if (options.dryRun) {
-  console.log("Run without --dry-run to download and replace the local DB.");
+  console.log(`Run without --dry-run to download and replace the local ${targets.length > 1 ? "databases" : "database"}.`);
   process.exit(0);
 }
 
 await assertLocalDbNotOpen(localSidecars, options.force);
 
-const downloadRoot = join(dirname(localDbPath), DOWNLOAD_DIR_NAME);
+const downloadRoot = join(dirname(targets[0].localDbPath), DOWNLOAD_DIR_NAME);
 await mkdir(downloadRoot, { recursive: true });
 await cleanupStaleRuns(downloadRoot);
 const workDir = await mkdtemp(join(downloadRoot, "run-"));
-const downloadedPath = join(workDir, basename(remoteBackup.path));
-const preparedPath = join(workDir, "mania-hub-live.db");
+// One stamp for the whole run, so syncing both DBs leaves one backup folder
+// holding both instead of burning two slots of --keep-local.
+const backupStamp = timestampForPath(new Date());
 
 try {
-  console.log("Downloading remote backup...");
-  await downloadRemoteFile(options.remote, remoteBackup.path, downloadedPath);
-  const downloaded = await stat(downloadedPath);
-  console.log(`Downloaded ${formatBytes(downloaded.size)}.`);
+  for (const target of targets) {
+    const remoteBackup = remoteBackups.get(target.key)!;
+    const downloadedPath = join(workDir, basename(remoteBackup.path));
+    const preparedPath = join(workDir, `prepared-${target.key}.db`);
 
-  await prepareDownloadedDatabase(downloadedPath, preparedPath);
+    console.log(`Downloading remote ${target.label} backup...`);
+    await downloadRemoteFile(options.remote, remoteBackup.path, downloadedPath);
+    const downloaded = await stat(downloadedPath);
+    console.log(`Downloaded ${formatBytes(downloaded.size)}.`);
 
-  if (options.quickCheck) {
-    console.log("Validating downloaded database with pragma quick_check...");
-    await validateSqliteDatabase(preparedPath);
-    console.log("SQLite quick_check passed.");
-  }
+    await prepareDownloadedDatabase(downloadedPath, preparedPath);
 
-  if (options.backupLocal) {
-    const safetyBackupDir = await backupLocalDatabaseFiles(localSidecars);
-    if (safetyBackupDir) {
-      console.log(`Local safety backup: ${safetyBackupDir}`);
-    } else {
-      console.log("No existing local DB was found, so no safety backup was needed.");
+    if (options.quickCheck) {
+      console.log(`Validating downloaded ${target.label} with pragma quick_check...`);
+      await validateSqliteDatabase(preparedPath);
+      console.log("SQLite quick_check passed.");
     }
-  }
 
-  await replaceLocalDatabase(preparedPath, localDbPath);
-  console.log("Local live-backend database updated.");
+    if (options.backupLocal) {
+      const safetyBackupDir = await backupLocalDatabaseFiles(sidecarsFor(target), backupStamp);
+      if (safetyBackupDir) {
+        console.log(`Local safety backup: ${safetyBackupDir}`);
+      } else {
+        console.log(`No existing local ${target.label} was found, so no safety backup was needed.`);
+      }
+    }
+
+    await replaceLocalDatabase(preparedPath, target.localDbPath);
+    console.log(`Local ${target.label} updated.`);
+  }
 
   // Each safety backup is a full copy of a multi-GB database, so retention is
   // enforced the moment a new one lands rather than left to the operator.
   if (options.backupLocal) {
-    await pruneLocalBackups(localDbPath, options.keepLocalBackups);
+    await pruneLocalBackups(targets[0].localDbPath, options.keepLocalBackups);
   }
 
   if (options.fresh) {
@@ -133,6 +163,9 @@ function parseOptions(args: string[]): Options {
     remoteDir: process.env.LIVE_DB_SYNC_REMOTE_DIR || DEFAULT_REMOTE_DIR,
     remoteBackup: process.env.LIVE_DB_SYNC_REMOTE_BACKUP || null,
     localDbPath: process.env.LIVE_DB_SYNC_LOCAL_DB || null,
+    analyticsLocalDbPath: process.env.LIVE_DB_SYNC_LOCAL_ANALYTICS_DB || null,
+    withAnalytics: false,
+    analyticsOnly: false,
     dryRun: false,
     force: false,
     includeLiveDb: false,
@@ -159,6 +192,16 @@ function parseOptions(args: string[]): Options {
         break;
       case "--local-db":
         options.localDbPath = readValue(args, ++index, arg);
+        break;
+      case "--analytics-local-db":
+        options.analyticsLocalDbPath = readValue(args, ++index, arg);
+        break;
+      case "--with-analytics":
+        options.withAnalytics = true;
+        break;
+      case "--analytics-only":
+        options.analyticsOnly = true;
+        options.withAnalytics = true;
         break;
       case "--dry-run":
         options.dryRun = true;
@@ -225,6 +268,16 @@ function printUsage(): void {
   npm run db:sync-from-vps -- [options]
 
 Options:
+  --with-analytics       Also sync the analytics DB (ANALYTICS_DATABASE_URL, a separate SQLite file on
+                         the VPS). With --fresh both databases are snapshotted into the same
+                         online-* directory; otherwise the newest backup of each is downloaded.
+  --analytics-only       Sync only the analytics DB and leave the local live DB alone. With --fresh
+                         this still counts as a snapshot run, so it can prune an older online-*
+                         directory that held a live DB snapshot (--keep-remote applies to runs, not
+                         to databases); a later live sync then needs --fresh of its own.
+  --analytics-local-db PATH
+                         Override the local analytics DB path. Default: ANALYTICS_DATABASE_URL or
+                         data/mania-hub-analytics.db.
   --fresh                Create a fresh snapshot of the live DB on the VPS first (sqlite3 VACUUM INTO,
                          which stays consistent while the backend writes and compacts free pages),
                          then download that instead of the newest pre-existing backup. Older
@@ -235,9 +288,12 @@ Options:
   --dry-run              Show the remote backup that would be used.
   --remote USER@HOST     SSH target. Default: ${DEFAULT_REMOTE}
   --remote-dir PATH      Remote live-backend directory. Default: ${DEFAULT_REMOTE_DIR}
-  --remote-backup PATH   Use an exact remote backup file instead of auto-discovery.
+  --remote-backup PATH   Use an exact remote backup file instead of auto-discovery. Applies to the
+                         live DB when both databases are synced.
   --local-db PATH        Override the local DB path. Default: DATABASE_URL or data/mania-hub-live.db.
-  --include-live-db      Allow using the remote data/mania-hub-live.db file if no backup is newer.
+  --include-live-db      Allow using a live database file itself (data/mania-hub-live.db,
+                         data/mania-hub-analytics.db) when no backup of it exists. Note that copying
+                         a live file leaves its WAL behind, so prefer --fresh.
   --force                Replace even if lsof reports the local DB is open.
   --keep-download        Keep the downloaded backup in the temp sync folder.
   --backup-local         Copy current local DB files before replacing them.
@@ -246,16 +302,73 @@ Options:
 `);
 }
 
-function resolveLocalDbPath(options: Options): string {
-  if (options.localDbPath) return resolve(options.localDbPath);
+function buildTargets(options: Options): SyncTarget[] {
+  const targets: SyncTarget[] = [];
+  if (!options.analyticsOnly) {
+    targets.push({
+      key: "live",
+      label: "live DB",
+      remoteRelativePath: REMOTE_LIVE_DB,
+      fileName: basename(REMOTE_LIVE_DB),
+      localDbPath: resolveLocalDbPath(options.localDbPath, "databaseUrl", "DATABASE_URL"),
+    });
+  }
+  if (options.withAnalytics) {
+    targets.push({
+      key: "analytics",
+      label: "analytics DB",
+      remoteRelativePath: REMOTE_ANALYTICS_DB,
+      fileName: basename(REMOTE_ANALYTICS_DB),
+      localDbPath: resolveLocalDbPath(options.analyticsLocalDbPath, "analyticsDatabaseUrl", "ANALYTICS_DATABASE_URL"),
+    });
+  }
+  return targets;
+}
 
-  const config = readConfig();
-  if (!config.databaseUrl.startsWith("file:")) {
-    throw new Error(`DATABASE_URL must be a local file: URL for this sync utility. Got ${config.databaseUrl}`);
+function sidecarsFor(target: SyncTarget): string[] {
+  return [target.localDbPath, `${target.localDbPath}-wal`, `${target.localDbPath}-shm`];
+}
+
+// Read lazily and once: an explicit --local-db / --analytics-local-db should not
+// need a loadable config, and two targets should not parse the env twice.
+function resolveLocalDbPath(
+  override: string | null,
+  configKey: "databaseUrl" | "analyticsDatabaseUrl",
+  envName: string,
+): string {
+  if (override) return resolve(override);
+
+  cachedConfig ??= readConfig();
+  const databaseUrl = cachedConfig[configKey];
+  if (!databaseUrl.startsWith("file:")) {
+    throw new Error(`${envName} must be a local file: URL for this sync utility. Got ${databaseUrl}`);
   }
 
-  const rawPath = config.databaseUrl.slice("file:".length);
+  const rawPath = databaseUrl.slice("file:".length);
+  if (!rawPath || rawPath === ":memory:") {
+    throw new Error(`${envName} must point at a database file for this sync utility. Got ${databaseUrl}`);
+  }
   return resolve(rawPath);
+}
+
+// --remote-backup pins one file, and with a single target that is unambiguous.
+// With both targets it pins the live DB (the one it has always meant) and the
+// analytics DB still goes through snapshot/discovery.
+async function resolveRemoteBackups(options: Options, targets: SyncTarget[]): Promise<Map<TargetKey, RemoteCandidate>> {
+  const resolved = new Map<TargetKey, RemoteCandidate>();
+  if (options.remoteBackup) {
+    const pinned = targets.find((target) => target.key === "live") ?? targets[0];
+    resolved.set(pinned.key, await resolveRemotePath(options.remote, options.remoteBackup));
+  }
+
+  const remaining = targets.filter((target) => !resolved.has(target.key));
+  if (remaining.length === 0) return resolved;
+
+  const discovered = options.fresh
+    ? await createFreshRemoteSnapshot(options, remaining)
+    : await findLatestRemoteBackups(options, remaining);
+  for (const [key, candidate] of discovered) resolved.set(key, candidate);
+  return resolved;
 }
 
 async function resolveRemotePath(remote: string, path: string): Promise<RemoteCandidate> {
@@ -279,25 +392,31 @@ async function resolveRemotePath(remote: string, path: string): Promise<RemoteCa
 // full-size online-* dir behind and N failures meant N snapshots on a disk that
 // has room for about two. Freeing first also gives the VACUUM the space it
 // needs instead of making it compete with the copies it is about to replace.
-async function createFreshRemoteSnapshot(options: Options): Promise<RemoteCandidate> {
+async function createFreshRemoteSnapshot(options: Options, targets: SyncTarget[]): Promise<Map<TargetKey, RemoteCandidate>> {
   await pruneRemoteSnapshots(options, Math.max(0, options.keepRemoteSnapshots - 1));
-  return createRemoteSnapshot(options);
+  return createRemoteSnapshot(options, targets);
 }
 
-async function createRemoteSnapshot(options: Options): Promise<RemoteCandidate> {
+// Every target of a run is snapshotted into the same online-<stamp> directory, so
+// the whole-directory prune keeps working untouched and a run is all-or-nothing.
+async function createRemoteSnapshot(options: Options, targets: SyncTarget[]): Promise<Map<TargetKey, RemoteCandidate>> {
   const command = [
     "set -eu",
     `root=${shellPath(options.remoteDir)}`,
-    "db=\"$root/data/mania-hub-live.db\"",
-    "[ -f \"$db\" ] || { echo \"Remote live DB not found: $db\" >&2; exit 2; }",
     "command -v sqlite3 >/dev/null 2>&1 || { echo \"sqlite3 is required on the VPS to create a fresh snapshot.\" >&2; exit 2; }",
+    ...targets.flatMap((target, index) => [
+      `db${index}="$root"/${shellQuote(target.remoteRelativePath)}`,
+      `[ -f "$db${index}" ] || { echo "Remote ${target.label} not found: $db${index}" >&2; exit 2; }`,
+    ]),
     // VACUUM INTO writes a second full copy of the DB, and zstd --rm briefly
     // holds the plain copy and the .zst at once. Failing here is a clean abort;
     // filling the VPS disk mid-snapshot takes the live backend down with it.
-    "size=$(stat -c %s \"$db\")",
-    "avail=$(df -Pk \"$root/data\" 2>/dev/null | awk 'NR==2{print $4}')",
-    "if [ -n \"$avail\" ] && [ \"$((avail * 1024))\" -lt \"$((size + size / 10))\" ]; then",
-    "  echo \"Not enough free space on the VPS for a snapshot: $((avail / 1024)) MiB available under $root/data, need about $(((size + size / 10) / 1048576)) MiB.\" >&2",
+    "need=0",
+    ...targets.map((_, index) => `need=$((need + $(stat -c %s "$db${index}")))`),
+    "need=$((need + need / 10))",
+    "avail=$(df -Pk \"$(dirname \"$db0\")\" 2>/dev/null | awk 'NR==2{print $4}')",
+    "if [ -n \"$avail\" ] && [ \"$((avail * 1024))\" -lt \"$need\" ]; then",
+    "  echo \"Not enough free space on the VPS for a snapshot: $((avail / 1024)) MiB available under $(dirname \"$db0\"), need about $((need / 1048576)) MiB.\" >&2",
     "  exit 2",
     "fi",
     "stamp=$(date -u +%Y%m%d-%H%M%S)",
@@ -306,37 +425,46 @@ async function createRemoteSnapshot(options: Options): Promise<RemoteCandidate> 
     // If anything below fails (or the SSH session dies), remove the partial
     // snapshot dir so a later non-fresh sync can never pick up a truncated DB.
     "trap 'rm -rf \"$dir\"' EXIT",
-    "out=\"$dir/mania-hub-live.db\"",
-    // VACUUM INTO copies from a single read transaction, so unlike .backup it
-    // never restarts when the live backend writes mid-copy (which made large
-    // snapshots spin forever). It also compacts free pages. The timeout is a
-    // hard stop so a wedged snapshot fails loudly instead of hanging the sync.
-    "timeout 1800 sqlite3 \"$db\" '.timeout 30000' \"VACUUM INTO '$out.tmp'\"",
-    "mv \"$out.tmp\" \"$out\"",
-    ...(options.compressSnapshot
-      ? [
-          "if command -v zstd >/dev/null 2>&1; then",
-          "  zstd -q -3 --rm \"$out\"",
-          "  out=\"$out.zst\"",
-          "fi",
-        ]
-      : []),
+    ...targets.flatMap((target, index) => [
+      `out="$dir"/${shellQuote(target.fileName)}`,
+      // VACUUM INTO copies from a single read transaction, so unlike .backup it
+      // never restarts when the live backend writes mid-copy (which made large
+      // snapshots spin forever). It also compacts free pages. The timeout is a
+      // hard stop so a wedged snapshot fails loudly instead of hanging the sync.
+      `timeout 1800 sqlite3 "$db${index}" '.timeout 30000' "VACUUM INTO '$out.tmp'"`,
+      "mv \"$out.tmp\" \"$out\"",
+      ...(options.compressSnapshot
+        ? [
+            "if command -v zstd >/dev/null 2>&1; then",
+            "  zstd -q -3 --rm \"$out\"",
+            "  out=\"$out.zst\"",
+            "fi",
+          ]
+        : []),
+      `printf '%s\\t%s\\t%s\\t%s\\n' ${shellQuote(target.key)} "$(stat -c %Y "$out")" "$(stat -c %s "$out")" "$out"`,
+    ]),
     "trap - EXIT",
-    "printf '%s\\t%s\\t%s\\n' \"$(stat -c %Y \"$out\")\" \"$(stat -c %s \"$out\")\" \"$out\"",
   ].join("\n");
 
-  console.log("Creating a fresh snapshot of the live DB on the VPS (sqlite3 VACUUM INTO, consistent even while the backend writes)...");
+  console.log(`Creating a fresh snapshot on the VPS of the ${targets.map((target) => target.label).join(" and ")} (sqlite3 VACUUM INTO, consistent even while the backend writes)...`);
   const result = await runCapture("ssh", [options.remote, command], [0]);
-  const line = result.stdout.trim().split("\n").pop() ?? "";
-  const [modifiedAtSeconds, sizeBytes, remotePath] = line.split("\t");
-  if (!remotePath) {
-    throw new Error("Failed to create the remote snapshot: unexpected output from the VPS.");
+  const snapshots = new Map<TargetKey, RemoteCandidate>();
+  for (const line of result.stdout.split("\n")) {
+    const [key, modifiedAtSeconds, sizeBytes, remotePath] = line.trim().split("\t");
+    const target = targets.find((candidate) => candidate.key === key);
+    if (!target || !remotePath) continue;
+    snapshots.set(target.key, {
+      modifiedAtMs: Number(modifiedAtSeconds) * 1000,
+      sizeBytes: Number(sizeBytes),
+      path: remotePath,
+    });
   }
-  return {
-    modifiedAtMs: Number(modifiedAtSeconds) * 1000,
-    sizeBytes: Number(sizeBytes),
-    path: remotePath,
-  };
+
+  const missing = targets.filter((target) => !snapshots.has(target.key));
+  if (missing.length > 0) {
+    throw new Error(`Failed to create the remote snapshot: the VPS reported no file for the ${missing.map((target) => target.label).join(", ")}.`);
+  }
+  return snapshots;
 }
 
 async function pruneRemoteSnapshots(options: Options, keep: number): Promise<void> {
@@ -372,7 +500,7 @@ async function pruneLocalBackups(localDbPath: string, keep: number): Promise<voi
   }
 }
 
-async function findLatestRemoteBackup(options: Options): Promise<RemoteCandidate> {
+async function findLatestRemoteBackups(options: Options, targets: SyncTarget[]): Promise<Map<TargetKey, RemoteCandidate>> {
   const command = [
     "set -eu",
     `root=${shellPath(options.remoteDir)}`,
@@ -386,20 +514,47 @@ async function findLatestRemoteBackup(options: Options): Promise<RemoteCandidate
   ].join("\n");
   const result = await runCapture("ssh", [options.remote, command], [0]);
   const candidates = parseRemoteCandidates(result.stdout);
-  const selectable = options.includeLiveDb
-    ? candidates
-    : candidates.filter((candidate) => !isRemoteLiveDb(candidate.path));
+  const backups = new Map<TargetKey, RemoteCandidate>();
 
-  if (selectable.length === 0) {
-    const activeOnly = candidates.length > 0 && candidates.every((candidate) => isRemoteLiveDb(candidate.path));
-    if (activeOnly) {
-      throw new Error("Only the remote live DB file was found. Pass --include-live-db to allow using it, or pass --remote-backup PATH for a real backup file.");
+  for (const target of targets) {
+    // Match by file name, not just "newest .db under the remote dir": the two
+    // databases live side by side, and the analytics file (written constantly,
+    // so always the newest) would otherwise be installed over the live DB.
+    const matching = candidates.filter((candidate) => matchesTarget(candidate.path, target));
+    const selectable = options.includeLiveDb
+      ? matching
+      : matching.filter((candidate) => !isRemoteActiveDb(candidate.path, target));
+
+    if (selectable.length === 0) {
+      const activeOnly = matching.length > 0;
+      if (activeOnly) {
+        throw new Error(`Only the remote ${target.label} file itself was found, with no backup of it. Pass --include-live-db to allow using the live file, or pass --remote-backup PATH for a real backup file.`);
+      }
+      throw new Error(`No ${target.label} backup candidates (${target.fileName}) found under ${options.remoteDir}. Pass --remote-backup PATH if the backup uses a different name, or --fresh to create one.`);
     }
-    throw new Error(`No DB backup candidates found under ${options.remoteDir}. Pass --remote-backup PATH if the backup uses a different name.`);
+
+    selectable.sort((a, b) => b.modifiedAtMs - a.modifiedAtMs);
+    backups.set(target.key, selectable[0]);
   }
 
-  selectable.sort((a, b) => b.modifiedAtMs - a.modifiedAtMs);
-  return selectable[0];
+  return backups;
+}
+
+function matchesTarget(path: string, target: SyncTarget): boolean {
+  const name = basename(path).replace(/\.(gz|zst)$/i, "");
+  if (name === target.fileName) return true;
+  // Tolerate a stamped variant of the same database (mania-hub-live-2026....db),
+  // which cannot collide across targets because the stems differ.
+  const stem = target.fileName.replace(/\.(db|sqlite3|sqlite)$/i, "");
+  return new RegExp(`^${escapeRegExp(stem)}[-_.].*\\.(db|sqlite3|sqlite)$`, "i").test(name);
+}
+
+function isRemoteActiveDb(path: string, target: SyncTarget): boolean {
+  return path.endsWith(`/${target.remoteRelativePath}`);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function parseRemoteCandidates(output: string): RemoteCandidate[] {
@@ -416,10 +571,6 @@ function parseRemoteCandidates(output: string): RemoteCandidate[] {
       };
     })
     .filter((candidate) => Number.isFinite(candidate.modifiedAtMs) && Number.isFinite(candidate.sizeBytes) && Boolean(candidate.path));
-}
-
-function isRemoteLiveDb(path: string): boolean {
-  return /\/data\/mania-hub-live\.db$/.test(path);
 }
 
 async function assertLocalDbNotOpen(paths: string[], force: boolean): Promise<void> {
@@ -510,14 +661,14 @@ async function validateSqliteDatabase(path: string): Promise<void> {
   }
 }
 
-async function backupLocalDatabaseFiles(paths: string[]): Promise<string | null> {
+async function backupLocalDatabaseFiles(paths: string[], stamp: string): Promise<string | null> {
   const existing = [];
   for (const path of paths) {
     if (await exists(path)) existing.push(path);
   }
   if (existing.length === 0) return null;
 
-  const backupDir = join(dirname(paths[0]), LOCAL_BACKUP_DIR_NAME, timestampForPath(new Date()));
+  const backupDir = join(dirname(paths[0]), LOCAL_BACKUP_DIR_NAME, stamp);
   await mkdir(backupDir, { recursive: true });
   for (const path of existing) {
     await copyFile(path, join(backupDir, basename(path)));

@@ -49,6 +49,7 @@ The user often keeps local servers running; do not start dev servers or builds u
 - oSC smoke: `cd live-backend && npm run smoke:osc`.
 - Backend DB compaction: `cd live-backend && npm run compact:storage` (full VACUUM/GC) or `npm run compact:maps-farmed` (rebuild maps-farmed overlay).
 - Sync prod DB to local: `npm run live-db:update` creates a fresh VPS snapshot (`VACUUM INTO` + zstd), downloads it, replaces the local SQLite DB, and prunes old remote `online-*` snapshots (keeps 2, `--keep-remote N`). `npm run live-db:sync-from-vps` reuses the newest pre-existing backup instead; supports `--dry-run`/`--force`, plus `--backup-local` (keeps `--keep-local N` copies of the replaced local DB, default 2). Run these from a dev PC, never on the VPS: they overwrite the local DB.
+- Add `--with-analytics` to either command to sync the analytics DB (`ANALYTICS_DATABASE_URL`, a separate SQLite file) in the same run: `npm run live-db:update -- --with-analytics`. Both databases are snapshotted into one `online-*` directory and share one local backup folder, so `--keep-remote`/`--keep-local` still count runs. `--analytics-only` syncs just the analytics DB. Backup discovery matches on file name, so the non-fresh path can never install one database over the other.
 - Dan tooling: `npm run dan:benchmark`, `npm run dan:analyze`.
 
 ## Live Backend Architecture
