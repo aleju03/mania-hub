@@ -355,6 +355,20 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     doneKey: "ln_estimate_recompute_done:v1",
     jobType: "recompute_ln_estimate_sweep",
   }),
+  chartAnalysisSweep({
+    id: "sunny-repin-recompute",
+    label: "Sunny re-pin recompute sweep",
+    description: "Re-analyzes every ready chart after the leoblack re-pin aligned Sunny SR with the authoritative C# port.",
+    doneKey: "sunny_repin_recompute_done:v1",
+    jobType: "recompute_sunny_repin_sweep",
+  }),
+  chartAnalysisSweep({
+    id: "sunny-repin-dt-recompute",
+    label: "Sunny re-pin DT verdict sweep",
+    description: "Re-derives the 1.5x dan verdict from the stored DT MSD on every row carrying one, since the main re-pin sweep preserves the DT columns.",
+    doneKey: "sunny_repin_dt_recompute_done:v1",
+    jobType: "recompute_sunny_repin_dt_sweep",
+  }),
   {
     id: "skill-baseline",
     label: "Skill baseline fold",

@@ -13,7 +13,7 @@ import { enqueueGlobalFarmedBoardRepack, enqueueGlobalMapsRefreshIfDue, enqueueM
 import { cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
-import { ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureLnMsdSweepSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureNoteBpmRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
+import { ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureLnMsdSweepSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureNoteBpmRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-feedback.js";
@@ -429,6 +429,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       void ensureChordjackTagRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[chordjack-tag] seed failed", error));
       void ensureCompanellaRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[companella-recompute] seed failed", error));
       void ensureLnSourceRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-source] seed failed", error));
+      void ensureSunnyRepinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[sunny-repin] seed failed", error));
+      void ensureSunnyRepinDtRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[sunny-repin-dt] seed failed", error));
       void ensureDtRateAnalysisSeeded(app.db, app.queue).catch((error) => console.warn("[dt-rate-analysis] seed failed", error));
       void ensureLnMsdSweepSeeded(app.db, app.queue).catch((error) => console.warn("[ln-msd-sweep] seed failed", error));
       void ensureNoteBpmRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[note-bpm-recompute] seed failed", error));

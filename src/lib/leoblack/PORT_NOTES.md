@@ -1,38 +1,65 @@
 # LeoBlack analyzer port
 
 Vendored calculation layer from LeoBlackMT/osumania_map_analyser (the tosu overlay
-"ManiaMapAnalyser by Leo_Black"), upstream commit `0b27cc8a3d1661cdb5a4e5bae314a1e15bb0c51a`
-(2026-06-21). MIT, see LICENSE in this directory.
+"ManiaMapAnalyser by Leo_Black"), upstream commit `261e76feb16479e412b166d6a74cd4ffbda8a24f`
+(2026-08-10, the PR #48 merge, which also contains PR #47). MIT, see LICENSE in this
+directory.
 
-Upstream reviewed through `c96cb8d` (2026-07-31). Everything since the pin that
-touches the calc layer is accounted for: PR #38's 4K LN interval fix was taken in
-`a8fcb95`, and the three Companella/onnxruntime commits (`40017b5`, `36edb44`,
-`c96cb8d`) are covered under "Companella" below. Upstream's other post-pin commits
-are `app/` UI, which we do not vendor.
+Upstream reviewed through `1865b3bf` (2026-08-13). The post-pin commits are the
+ReworkPP feature (a live-PP overlay: `rework/reworkPerformance.js` plus
+`classicMod`/`withPpMetrics` options threaded into `sunnyAlgorithm.calculate`, both
+gated on `=== true` so the default star path we call is untouched) and `app/` UI.
+Nothing post-pin changes the vendored files' default behavior.
 
 Only the UI-free calc layer is vendored (upstream `js/` minus `app/`, `debug/`,
 `parser/settingsParser.js`); files are copied verbatim so upstream diffs stay easy.
-`vibro.js` is the one exception: it comes from upstream `js/app/vibro.js` but has no
-UI dependencies. The `.d.ts` files, this file, the `ett/` harness (`calc.js`,
-`versions/index.js`), and the TS facades (`src/lib/leoblack-estimator.ts`,
-`src/lib/chart-classifier.ts`) are ours.
+`vibro.js` is the one exception to the path rule: it comes from upstream
+`js/app/vibro.js` but has no UI dependencies. Files that are ours, or ours-modified,
+and must NOT be overwritten on a re-copy:
+
+- The `.d.ts` files, this file, and the TS facades (`src/lib/leoblack-estimator.ts`,
+  `src/lib/chart-classifier.ts`).
+- The `ett/` harness: `calc.js` and `versions/index.js` are our isomorphic
+  implementations, and `ett/index.js` is upstream's file plus a `lnTailTaps`
+  option threaded through `analyzeEtternaFromText` into the calc (the backend's
+  tail-aware SSR pass depends on it; dropping it silently zeroes the LN-tail
+  blend, caught by `live-backend/tests/player-skills.test.ts`).
+- `estimator/companellaEstimator.js` (`getOrtNamespace` divergence, see Companella).
+- The `ett/versions/minaclac-*.js` glue stays at the old pin `0b27cc8` bytes: our
+  calc.js hands over `wasmBinary` and defines the CommonJS globals, so upstream's
+  newer locateFile-based glue offers nothing and re-copying it would re-open the
+  Vite asset-copying quirks the two "stop Vite from copying raw ett glue" commits
+  fixed.
 
 ## What's here
 
-- `parser/` - .osu text parsers (osuFileParser for estimators, patternOsuParser for patterns).
-- `rework/` - JS ports of sunnyxxy's Star Rating Rebirth (`sunnyAlgorithm.js`) and
-  thebagelofman's Daniel (`danielAlgorithm.js`).
+- `parser/` - .osu text parsers (osuFileParser for estimators, patternOsuParser for
+  patterns, shared lane mapping in `noteColumn.js`).
+- `rework/` - JS ports of sunnyxxy's Star Rating Rebirth (`sunnyAlgorithm.js`),
+  thebagelofman's Daniel (`danielAlgorithm.js`), their shared math in
+  `reworkMathCore.js`, and the SunnyWindow LN rework (`sunnyWindowAlgorithm.js`).
 - `estimator/` - dan estimators: Sunny (SR -> interval tables), Daniel, Azusa, Roxy
   (structural features + frozen linear meta-model in `roxyMetaModel.generated.js`),
-  Mixed (per-chart blend of the four, the recommended default). `intervals/` maps
-  Sunny SR to dan names for 4K RC (Reform), 4K LN, 6K RC/LN, 7K RC/LN.
+  Mixed (per-chart blend of the four, the recommended default), and SunnyWindow
+  (`sunnyWindowEstimator.js`, vendored but unwired: our LN path is the in-house
+  kNN). `intervals/` maps Sunny SR to dan names for 4K RC/LN, 6K RC/LN, 7K RC/LN,
+  10K RC, plus `-ext` extended tables and `7k-wild` (upstream renamed
+  `4k-rc-reform.js` to `4k-rc.js` with the export now `rc4K`; note `DAN_INDEX[10]`
+  has no `LN` key, the .d.ts marks it optional). `estDiff` grew optional
+  `useExtended`/`enableAlwaysShowLNDifficulty` params that default to the old
+  behavior.
 - `patterns/` - Interlude-derived pattern analysis with LN additions; outputs
-  BPM-localized clusters plus a chart category.
+  BPM-localized clusters plus a chart category. `config.js` now also owns
+  `modeTagFromLnRatio` (moved out of mixedEstimator, same thresholds).
 - `interlude/` - Interlude star rating.
+- `pipeline/` - upstream's `runAnalysisPipeline.js`, a pure full-analysis
+  orchestrator (parse once, run everything). Vendored for diff hygiene; our
+  facades run their own orchestration and do not call it.
 - `ett/` - Etterna MinaCalc as Emscripten WASM (5 versions). The glue is
   browser-targeted, but `calc.js` is isomorphic: in Node it reads the wasm bytes
   itself (`wasmBinary` override) and defines the CommonJS globals the glue's
-  environment sniffing dereferences at factory time.
+  environment sniffing dereferences at factory time. `constants.js` is upstream's
+  version registry (their `index.js` imports it).
 - `vibro.js` - vibro detection (MSD JackSpeed ratio, or Longjacks pattern clusters).
 
 ## Known quirks
@@ -41,11 +68,11 @@ UI dependencies. The `.d.ts` files, this file, the `ett/` harness (`calc.js`,
   the -2..20.4 scale (Intro=-2..0, Reform 1-10, alpha=11..kappa=20, tier offset +-0.4);
   Daniel-sourced results use 11+i+t (t in [0,1)) and a "Gamma Mid" label style. The
   facade normalizes both.
-- `ett/versions/minaclac-*.js` still dereference `__dirname`; upstream `40017b5` rewrote
-  those glue files to `import.meta.url` instead. We solve the same problem one layer up in
-  `ett/calc.js` (which defines the CommonJS globals and hands over `wasmBinary`), so the
-  glue stays byte-identical to the pin. Re-copying the glue from upstream is safe and just
-  makes our shim redundant.
+- `ett/versions/minaclac-*.js` still dereference `__dirname`; upstream has since moved
+  the glue to `import.meta.url` and a locateFile-based loader. We solve the same problem
+  one layer up in `ett/calc.js` (which defines the CommonJS globals and hands over
+  `wasmBinary`), so the glue stays byte-identical to the old `0b27cc8` pin on purpose
+  (see the ours-modified list above).
 - `estimator/intervals/4k-ln.js` used to carry an inverted interval row ("LN 6 mid/low",
   5.160 > 5.143); upstream fixed it in PR #38 and we took it in `a8fcb95`.
 - Upstream Star-Rating-Rebirth has no license file; the port here is via LeoBlack's MIT
@@ -117,6 +144,39 @@ is missing. Entry points are `src/lib/companella.ts` and `live-backend/src/dan/c
   (~148ms cold, 0.04ms warm afterwards). Over 7500 inferences RSS settles around +100MB with
   the growth rate decaying, i.e. a working-set ceiling rather than a leak.
 
+## Re-pin at 261e76f (2026-08-13)
+
+Two upstream merges motivated it. PR #47 (`042ccee4`) aligned the JS Sunny port with
+the authoritative C# osu-author-port on three divergences: exact-match step
+interpolation takes the previous sample (D1), the percentile/weighted-mean weights
+count LN tails as well as heads (D2), and the earliest note is dropped before
+difficulty (D3). PR #48 was an output-identical perf series, most notably turning
+`findPatterns`' O(n^2) slice-copy loop into an index cursor with a bounded head
+window, which matters at backend chart-analysis scale.
+
+The SR change shifts every Sunny star slightly (LN-weighted charts the most). Our
+benchmark moved within noise, gated before shipping:
+
+- normal/unified: exact 69 -> 70, base% 65.45 -> 64.92 (7 changed rows of 382).
+- normal/leoblack: exact 69 -> 69, base% 65.18 -> 64.92.
+- ln/unified: bit-identical (the in-house kNN owns 4K LN).
+- ln/leoblack (non-production baseline): exact 19 -> 21, base% 55.29 -> 52.94.
+
+Ops wiring that shipped with the re-pin: `DAN_ESTIMATE_CACHE_VERSION` bumped
+(frontend v12, backend v13) for lazy dan-estimate recompute, and a boot-seeded
+full-corpus in-place sweep (`SUNNY_REPIN_RECOMPUTE_JOB` in
+`live-backend/src/features/chart-analysis.ts`) re-analyzes every ready row rather
+than bumping `CHART_ANALYSIS_VERSION`, for the reasons documented on the sweep.
+A companion sweep (`SUNNY_REPIN_DT_RECOMPUTE_JOB`) re-derives `dan_dt_json` (the
+1.5x lean dan verdict, also Sunny-derived) from the stored DT MSD, because the
+main sweep's re-analysis preserves the DT columns and the DT-rate sweep never
+revisits a row that already carries MSD.
+
+Player skill ratings are untouched by design: the skills pipeline rates plays
+with MinaCalc, whose engines, harness, and parser inputs are unchanged here (the
+`ett/index.js` `lnTailTaps` note above is what keeps that true). Only the dan
+positioning readout can move, via the re-minted chart verdicts.
+
 ## Benchmark vs our labels (2026-07-03, `dan_benchmark_labels` in Turso)
 
 `npm run dan:benchmark -- --classifier leoblack [--family ln]`, rate 1.0:
@@ -165,6 +225,8 @@ CommonJS globals the glue reads, so the same files serve the browser and the bac
 
 ## Updating
 
-Re-copy the same directories from upstream `js/`, keep the `.d.ts` files and this file,
-and re-check the facade against upstream changes to `estDiff` label formats and the
-Mixed result shape.
+Re-copy the same directories from upstream `js/`, skip every file in the ours or
+ours-modified list at the top (overwriting `ett/index.js` in particular breaks the
+backend LN-tail SSR blend), and re-check the facade against upstream changes to
+`estDiff` label formats and the Mixed result shape. A cheap wholeness check: diff the
+tree against upstream and confirm the only differing files are the listed ones.

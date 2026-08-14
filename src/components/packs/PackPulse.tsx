@@ -246,9 +246,6 @@ function PulledStatsLine({ stats }: { stats: LivePackPulledStats }) {
         {stats.owners === 1
           ? "1 person has your card"
           : `${stats.owners.toLocaleString()} people have your card`}
-        {stats.pullEvents7d > 0 && (
-          <span className="text-osu-f1/60">, pulled {stats.pullEvents7d.toLocaleString()}x this week</span>
-        )}
       </span>
     </>
   );

@@ -5,3 +5,5 @@ export const PATTERNS_CONFIG: {
   LN_MODE_HIGH_THRESHOLD: number;
   [key: string]: unknown;
 };
+
+export function modeTagFromLnRatio(lnRatio: number): "RC" | "LN" | "Mix";

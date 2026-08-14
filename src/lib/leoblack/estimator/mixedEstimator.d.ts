@@ -3,6 +3,10 @@ export interface LeoBlackEstimatorOptions {
   odFlag?: number | null;
   cvtFlag?: string | null;
   withGraph?: boolean;
+  /** Use the -ext interval tables where a keymode has them (upstream's extended estimation range). */
+  extendedEstimationRange?: boolean;
+  /** Emit the "RC || LN" split even when lnRatio < 0.15. */
+  enableAlwaysShowLNDifficulty?: boolean;
 }
 
 export interface LeoBlackReworkResult {

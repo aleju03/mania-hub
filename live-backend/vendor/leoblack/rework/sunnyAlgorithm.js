@@ -1,62 +1,25 @@
 ﻿import { OsuFileParser } from "../parser/osuFileParser.js";
+import {
+    bisectLeft,
+    bisectRight,
+    cumulativeSum,
+    queryCumsum,
+    smoothOnCorners,
+    interpValues,
+    gaussianFilter1d,
+    rescaleHigh,
+    mergeByHead,
+    applyProximityEnvelope,
+    smoothDForGraph,
+    jackNerfer,
+    targetPercentiles,
+} from "./reworkMathCore.js";
 
-const BREAK_ZERO_THRESHOLD_MS = 400;
-const GRAPH_RESAMPLE_INTERVAL_MS = 100;
-const SMOOTH_SIGMA_MS = 800;
 
-function bisectLeft(arr, target) {
-    let lo = 0;
-    let hi = arr.length;
-    while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (arr[mid] < target) lo = mid + 1;
-    else hi = mid;
-    }
-    return lo;
-}
 
-function bisectRight(arr, target) {
-    let lo = 0;
-    let hi = arr.length;
-    while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (arr[mid] <= target) lo = mid + 1;
-    else hi = mid;
-    }
-    return lo;
-}
 
-function cumulativeSum(x, f) {
-    const F = new Float64Array(x.length);
-    for (let i = 1; i < x.length; i += 1) {
-    F[i] = F[i - 1] + f[i - 1] * (x[i] - x[i - 1]);
-    }
-    return F;
-}
 
-function queryCumsum(q, x, F, f) {
-    if (q <= x[0]) return 0;
-    if (q >= x[x.length - 1]) return F[F.length - 1];
-    const i = bisectRight(x, q) - 1;
-    return F[i] + f[i] * (q - x[i]);
-}
 
-function smoothOnCorners(x, f, window, scale = 1.0, mode = "sum") {
-    const F = cumulativeSum(x, f);
-    const g = new Float64Array(f.length);
-    for (let i = 0; i < x.length; i += 1) {
-    const s = x[i];
-    const a = Math.max(s - window, x[0]);
-    const b = Math.min(s + window, x[x.length - 1]);
-    const val = queryCumsum(b, x, F, f) - queryCumsum(a, x, F, f);
-    if (mode === "avg") {
-            g[i] = b - a > 0 ? val / (b - a) : 0;
-    } else {
-            g[i] = scale * val;
-    }
-    }
-    return g;
-}
 
 function interpSingle(newX, oldX, oldVals) {
     if (newX <= oldX[0]) return oldVals[0];
@@ -71,119 +34,25 @@ function interpSingle(newX, oldX, oldVals) {
     return y0 + t * (y1 - y0);
 }
 
-function interpValues(newX, oldX, oldVals) {
-    const out = new Float64Array(newX.length);
-    let idx = 0;
 
-    for (let i = 0; i < newX.length; i += 1) {
-    const x = newX[i];
 
-    if (x <= oldX[0]) {
-        out[i] = oldVals[0];
-        continue;
-    }
-    if (x >= oldX[oldX.length - 1]) {
-        out[i] = oldVals[oldVals.length - 1];
-        continue;
-    }
 
-    while (idx + 1 < oldX.length && oldX[idx + 1] < x) {
-        idx += 1;
-    }
-
-    const x0 = oldX[idx];
-    const x1 = oldX[idx + 1];
-    const y0 = oldVals[idx];
-    const y1 = oldVals[idx + 1];
-
-    if (x1 === x0) {
-        out[i] = y0;
-        continue;
-    }
-
-    const t = (x - x0) / (x1 - x0);
-    out[i] = y0 + t * (y1 - y0);
-    }
-
-    return out;
-}
 
 function stepInterp(newX, oldX, oldVals) {
     const out = new Float64Array(newX.length);
     let idx = 0;
     for (let i = 0; i < newX.length; i += 1) {
     const x = newX[i];
-    while (idx + 1 < oldX.length && oldX[idx + 1] <= x) {
+    // D1: exact match takes the previous sample (cs StepInterp: BinarySearch + idx - 1).
+    // Sunny-specific since 042ccee (cs osu-author-port sync); daniel keeps the old
+    // semantics via reworkMathCore.stepInterp — do NOT move this back into the core.
+    while (idx + 1 < oldX.length && oldX[idx + 1] < x) {
         idx += 1;
     }
     const clamped = Math.max(0, Math.min(idx, oldVals.length - 1));
     out[i] = oldVals[clamped];
     }
     return out;
-}
-
-function gaussianFilter1d(data, sigmaSamples) {
-    if (!Number.isFinite(sigmaSamples) || sigmaSamples <= 0) {
-    return Array.from(data);
-    }
-
-    const radius = Math.max(1, Math.trunc(4 * sigmaSamples + 0.5));
-    const kernelSize = radius * 2 + 1;
-    const kernel = new Float64Array(kernelSize);
-    let kernelSum = 0;
-
-    for (let i = -radius; i <= radius; i += 1) {
-    const v = Math.exp(-0.5 * ((i / sigmaSamples) ** 2));
-    kernel[i + radius] = v;
-    kernelSum += v;
-    }
-    for (let i = 0; i < kernelSize; i += 1) {
-    kernel[i] /= kernelSum;
-    }
-
-    const padded = new Float64Array(data.length + radius * 2);
-    for (let i = 0; i < data.length; i += 1) {
-    padded[i + radius] = data[i];
-    }
-
-    const out = new Float64Array(data.length);
-    for (let i = 0; i < data.length; i += 1) {
-    let acc = 0;
-    for (let k = 0; k < kernelSize; k += 1) {
-        acc += padded[i + k] * kernel[k];
-    }
-    out[i] = acc;
-    }
-    return Array.from(out);
-}
-
-function rescaleHigh(sr) {
-    if (sr <= 9) return sr;
-    return 9 + (sr - 9) * (1 / 1.2);
-}
-
-function mergeByHead(a, b) {
-    const result = [];
-    let i = 0;
-    let j = 0;
-    while (i < a.length && j < b.length) {
-    if (a[i][1] <= b[j][1]) {
-            result.push(a[i]);
-            i += 1;
-    } else {
-            result.push(b[j]);
-            j += 1;
-    }
-    }
-    while (i < a.length) {
-    result.push(a[i]);
-    i += 1;
-    }
-    while (j < b.length) {
-    result.push(b[j]);
-    j += 1;
-    }
-    return result;
 }
 
 function findNextNoteInColumn(note, times, noteSeqByColumn) {
@@ -193,9 +62,38 @@ function findNextNoteInColumn(note, times, noteSeqByColumn) {
     return idx + 1 < noteSeqByColumn[k].length ? noteSeqByColumn[k][idx + 1] : [0, 1e9, 1e9];
 }
 
-function preprocessFile(osuText, speedRate, odFlag, cvtFlag) {
-    const pObj = new OsuFileParser(osuText);
-    pObj.process();
+// Field-copy clone of a processed OsuFileParser. modIN/modHO mutate the parser
+// in place (columns/noteStarts/noteTypes/noteEnds/breaks), so a shared `parsed`
+// instance must be isolated on a clone before converting — the shared chart
+// stays pristine for later consumers (mutability audit, perf task 9).
+function cloneOsuParser(src) {
+    const p = new OsuFileParser("");
+    p.od = src.od;
+    p.columnCount = src.columnCount;
+    p.columns = [...src.columns];
+    p.noteStarts = [...src.noteStarts];
+    p.noteEnds = [...src.noteEnds];
+    p.noteTypes = [...src.noteTypes];
+    p.gameMode = src.gameMode;
+    p.status = src.status;
+    p.lnRatio = src.lnRatio;
+    p.metaData = { ...src.metaData };
+    p.breaks = src.breaks.map((b) => [...b]);
+    p.objectIntervals = src.objectIntervals.map((o) => [...o]);
+    p.timingPoints = src.timingPoints.map((tp) => [...tp]);
+    return p;
+}
+
+function preprocessFile(osuText, speedRate, odFlag, cvtFlag, parsed = null) {
+    // parsed: a shared OsuFileParser instance already processed by the caller.
+    // Skips the parse; modIN/modHO conversion still runs on the parsed result.
+    // Conversion mutates in place -> run it on a clone so the shared instance
+    // (and any later consumer) sees un-converted data, matching the fresh-parse
+    // behavior where each core parses its own copy.
+    const needsConvert = Boolean(cvtFlag) && (String(cvtFlag).includes("IN") || String(cvtFlag).includes("HO"));
+    const pObj = parsed
+        ? (needsConvert ? cloneOsuParser(parsed) : parsed)
+        : (() => { const p = new OsuFileParser(osuText); p.process(); return p; })();
     let p = pObj.getParsedData();
     let lnRatio = p.lnRatio;
 
@@ -218,8 +116,13 @@ function preprocessFile(osuText, speedRate, odFlag, cvtFlag) {
     }
     }
 
-    pObj.noteTimes = pObj.getNoteTimes();
-    pObj.objectIntervals = pObj.getObjectIntervals();
+    // On a shared parsed instance these were already computed by process()
+    // (and by modIN/modHO when converting) — recomputing writes identical
+    // values but mutates the shared object; skip for read-only sharing.
+    if (!parsed) {
+        pObj.noteTimes = pObj.getNoteTimes();
+        pObj.objectIntervals = pObj.getObjectIntervals();
+    }
     p = pObj.getParsedData();
     lnRatio = pObj.getLNRatio();
 
@@ -288,6 +191,8 @@ function preprocessFile(osuText, speedRate, odFlag, cvtFlag) {
     if (a[1] !== b[1]) return a[1] - b[1];
     return a[0] - b[0];
     });
+    // D3: drop the earliest note, aligning with cs `for (int i = 1; ...)` in ManiaDifficultyCalculator
+    noteSeq.shift();
 
     const K = p.columnCount;
     const noteSeqByColumn = Array.from({ length: K }, () => []);
@@ -392,6 +297,9 @@ function getKeyUsage400(K, T, noteSeq, baseCorners) {
     keyUsage400[k] = new Array(baseCorners.length).fill(0);
     }
 
+    // ponytail: loop-invariant across notes — cornerCoeff computed once instead of per (note, corner)
+    const cornerCoeff = 3.75 / (400 ** 2);
+
     for (const [k, h, t] of noteSeq) {
     const startTime = Math.max(h, 0);
     const endTime = t < 0 ? h : Math.min(t, T - 1);
@@ -401,16 +309,18 @@ function getKeyUsage400(K, T, noteSeq, baseCorners) {
     const rightIdx = bisectLeft(baseCorners, endTime);
     const right400Idx = bisectLeft(baseCorners, endTime + 400);
 
+    const rampValue = 3.75 + Math.min(endTime - startTime, 1500) / 150;
+
     for (let idx = leftIdx; idx < rightIdx; idx += 1) {
-            keyUsage400[k][idx] += 3.75 + Math.min(endTime - startTime, 1500) / 150;
+            keyUsage400[k][idx] += rampValue;
     }
 
     for (let idx = left400Idx; idx < leftIdx; idx += 1) {
-            keyUsage400[k][idx] += 3.75 - (3.75 / (400 ** 2)) * ((baseCorners[idx] - startTime) ** 2);
+            keyUsage400[k][idx] += 3.75 - cornerCoeff * ((baseCorners[idx] - startTime) ** 2);
     }
 
     for (let idx = rightIdx; idx < right400Idx; idx += 1) {
-            keyUsage400[k][idx] += 3.75 - (3.75 / (400 ** 2)) * (Math.abs(baseCorners[idx] - endTime) ** 2);
+            keyUsage400[k][idx] += 3.75 - cornerCoeff * (Math.abs(baseCorners[idx] - endTime) ** 2);
     }
     }
 
@@ -496,7 +406,6 @@ function lnSum(a, b, lnRep) {
 }
 
 function computeJbar(K, x, noteSeqByColumn, baseCorners) {
-    const jackNerfer = (delta) => 1 - 7e-5 * ((0.15 + Math.abs(delta - 0.08)) ** (-4));
 
     const Jks = {};
     const deltaKs = {};
@@ -675,8 +584,11 @@ function computePbar(x, noteSeq, lnRep, anchor, baseCorners) {
             inc = (delta ** -1) * ((0.08 * (x ** -1) * (1 - 24 * (x ** -1) * ((x / 6) ** 2))) ** 0.25) * Math.max(bVal, v);
     }
 
+    // ponytail: loop-invariant across corners — incMax computed once per note
+    const incMax = Math.max(inc, inc * 2 - 10);
+
     for (let idx = leftIdx; idx < rightIdx; idx += 1) {
-            pStep[idx] += Math.min(inc * anchor[idx], Math.max(inc, inc * 2 - 10));
+            pStep[idx] += Math.min(inc * anchor[idx], incMax);
     }
     }
 
@@ -760,10 +672,17 @@ function computeRbar(K, x, noteSeqByColumn, tailSeq, baseCorners) {
 
 function computeCAndKs(K, noteSeq, keyUsage, baseCorners) {
     const noteHitTimes = noteSeq.map((n) => n[1]).sort((a, b) => a - b);
+    // D2: V2 = heads + LN tails (cs noteHitTimesV2), used for effectiveWeights
+    const noteHitTimesV2 = noteSeq
+    .flatMap((n) => (n[2] >= 0 ? [n[1], n[2]] : [n[1]]))
+    .sort((a, b) => a - b);
 
     const CStep = new Float64Array(baseCorners.length);
+    const CStepV2 = new Float64Array(baseCorners.length);
     let lo = 0;
     let hi = 0;
+    let lo2 = 0;
+    let hi2 = 0;
     for (let i = 0; i < baseCorners.length; i += 1) {
     const s = baseCorners[i];
     const low = s - 500;
@@ -776,7 +695,17 @@ function computeCAndKs(K, noteSeq, keyUsage, baseCorners) {
             hi += 1;
     }
 
+
     CStep[i] = hi - lo;
+
+    while (lo2 < noteHitTimesV2.length && noteHitTimesV2[lo2] < low) {
+            lo2 += 1;
+    }
+    while (hi2 < noteHitTimesV2.length && noteHitTimesV2[hi2] < high) {
+            hi2 += 1;
+    }
+
+    CStepV2[i] = hi2 - lo2;
     }
 
     const KsStep = new Float64Array(baseCorners.length);
@@ -788,90 +717,10 @@ function computeCAndKs(K, noteSeq, keyUsage, baseCorners) {
     KsStep[i] = Math.max(count, 1);
     }
 
-    return { CStep, KsStep };
+    return { CStep, CStepV2, KsStep };
 }
 
-function applyProximityEnvelope(allCorners, DAll, noteSeq) {
-    if (!noteSeq.length) {
-    return Array.from(DAll);
-    }
-
-    const noteTimes = noteSeq
-    .map((n) => Number(n[1]))
-    .filter((v) => Number.isFinite(v))
-    .sort((a, b) => a - b);
-
-    if (!noteTimes.length) {
-    return Array.from(DAll);
-    }
-
-    const proximityFadeMs = 500;
-    const out = new Float64Array(allCorners.length);
-    for (let i = 0; i < allCorners.length; i += 1) {
-    const t = allCorners[i];
-    const idx = bisectLeft(noteTimes, t);
-    const after = idx < noteTimes.length ? Math.abs(noteTimes[idx] - t) : Number.POSITIVE_INFINITY;
-    const before = idx > 0 ? Math.abs(noteTimes[idx - 1] - t) : Number.POSITIVE_INFINITY;
-    const d = Math.min(after, before);
-    const ratio = Math.max(0, Math.min(d / proximityFadeMs, 1));
-    const envelope = 0.5 * (1 + Math.cos(Math.PI * ratio));
-    out[i] = DAll[i] * envelope;
-    }
-    return Array.from(out);
-}
-
-function smoothDForGraph(allCorners, DAll, noteSeq) {
-    if (!allCorners.length || !DAll.length) {
-    return [];
-    }
-
-    const tStart = allCorners[0];
-    const tEnd = allCorners[allCorners.length - 1];
-    const uniformTimes = [];
-    for (let t = tStart; t <= tEnd + GRAPH_RESAMPLE_INTERVAL_MS; t += GRAPH_RESAMPLE_INTERVAL_MS) {
-    uniformTimes.push(t);
-    }
-
-    const noteTimes = noteSeq
-    .map((n) => Number(n[1]))
-    .filter((v) => Number.isFinite(v))
-    .sort((a, b) => a - b);
-
-    const uniformD = interpValues(uniformTimes, allCorners, DAll);
-
-    if (noteTimes.length) {
-    for (let i = 0; i < uniformTimes.length; i += 1) {
-            const t = uniformTimes[i];
-            const idx = bisectLeft(noteTimes, t);
-            const after = idx < noteTimes.length ? Math.abs(noteTimes[idx] - t) : Number.POSITIVE_INFINITY;
-            const before = idx > 0 ? Math.abs(noteTimes[idx - 1] - t) : Number.POSITIVE_INFINITY;
-            const dist = Math.min(after, before);
-            if (dist > BREAK_ZERO_THRESHOLD_MS) {
-        uniformD[i] = 0;
-            }
-    }
-    }
-
-    const sigmaSamples = SMOOTH_SIGMA_MS / GRAPH_RESAMPLE_INTERVAL_MS;
-    const smoothed = gaussianFilter1d(uniformD, sigmaSamples);
-
-    if (noteTimes.length) {
-    for (let i = 0; i < uniformTimes.length; i += 1) {
-            const t = uniformTimes[i];
-            const idx = bisectLeft(noteTimes, t);
-            const after = idx < noteTimes.length ? Math.abs(noteTimes[idx] - t) : Number.POSITIVE_INFINITY;
-            const before = idx > 0 ? Math.abs(noteTimes[idx - 1] - t) : Number.POSITIVE_INFINITY;
-            const dist = Math.min(after, before);
-            if (dist > BREAK_ZERO_THRESHOLD_MS) {
-        smoothed[i] = 0;
-            }
-    }
-    }
-
-    return Array.from(interpValues(allCorners, uniformTimes, smoothed));
-}
-
-export function calculate(osuText, speedRate = 1.0, odFlag = null, cvtFlag = null, options = {}) {
+export function calculate(osuText, speedRate = 1.0, odFlag = null, cvtFlag = null, options = {}, parsed = null) {
     const withGraph = options?.withGraph === true;
 
     const {
@@ -885,7 +734,7 @@ export function calculate(osuText, speedRate = 1.0, odFlag = null, cvtFlag = nul
     tailSeq,
     lnRatio,
     columnCount,
-    } = preprocessFile(osuText, speedRate, odFlag, cvtFlag);
+    } = preprocessFile(osuText, speedRate, odFlag, cvtFlag, parsed);
 
     if (status === "Fail") return -1;
     if (status === "NotMania") return -2;
@@ -921,8 +770,9 @@ export function calculate(osuText, speedRate = 1.0, odFlag = null, cvtFlag = nul
     const RbarBase = computeRbar(K, x, noteSeqByColumn, tailSeq, baseCorners);
     const Rbar = interpValues(allCorners, baseCorners, RbarBase);
 
-    const { CStep, KsStep } = computeCAndKs(K, noteSeq, keyUsage, baseCorners);
+    const { CStep, CStepV2, KsStep } = computeCAndKs(K, noteSeq, keyUsage, baseCorners);
     const CArr = stepInterp(allCorners, baseCorners, CStep);
+    const CArrV2 = stepInterp(allCorners, baseCorners, CStepV2);
     const KsArr = stepInterp(allCorners, baseCorners, KsStep);
 
     const DAll = new Array(allCorners.length).fill(0);
@@ -941,7 +791,8 @@ export function calculate(osuText, speedRate = 1.0, odFlag = null, cvtFlag = nul
     gaps[i] = (allCorners[i + 1] - allCorners[i - 1]) / 2;
     }
 
-    const effectiveWeights = CArr.map((c, i) => c * gaps[i]);
+    // D2: effectiveWeights uses C_arrV2 (js has no ModClassic → ContainsCL=false, cs :841)
+    const effectiveWeights = CArrV2.map((c, i) => c * gaps[i]);
     const sortedIndices = DAll.map((_, i) => i).sort((a, b) => DAll[a] - DAll[b]);
     const DSorted = sortedIndices.map((i) => DAll[i]);
     const wSorted = sortedIndices.map((i) => effectiveWeights[i]);
@@ -956,7 +807,6 @@ export function calculate(osuText, speedRate = 1.0, odFlag = null, cvtFlag = nul
     const totalWeight = cumWeights[cumWeights.length - 1];
     const normCumWeights = cumWeights.map((w) => w / totalWeight);
 
-    const targetPercentiles = [0.945, 0.935, 0.925, 0.915, 0.845, 0.835, 0.825, 0.815];
     const percentileIndices = targetPercentiles.map((p) => bisectLeft(normCumWeights, p));
 
     const firstGroup = percentileIndices.slice(0, 4).map((idx) => DSorted[Math.min(idx, DSorted.length - 1)]);
@@ -974,7 +824,6 @@ export function calculate(osuText, speedRate = 1.0, odFlag = null, cvtFlag = nul
     const weightedMean = (num / den) ** (1 / 5);
 
     let sr = (0.88 * percentile93) * 0.25 + (0.94 * percentile83) * 0.2 + weightedMean * 0.55;
-    sr = (sr ** 1) / (8 ** 1) * 8;
 
     let lnLengthTerm = 0;
     for (const [, h, t] of lnSeq) {

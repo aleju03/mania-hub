@@ -65,6 +65,8 @@ describe("sweeps status registry", () => {
       "chordjack-tag-recompute",
       "ln-msd-backfill",
       "ln-source-recompute",
+      "sunny-repin-recompute",
+      "sunny-repin-dt-recompute",
       "skill-baseline",
       "map-search-index",
       "skin-slug-backfill",

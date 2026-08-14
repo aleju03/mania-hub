@@ -358,7 +358,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
       if (parsedRc) {
         rc = toHalf(parsedRc, "rc", "leoblack-sunny-table", sunnySr ?? 0, parsedRc.boundary ? 0.35 : 0.55, rcText);
       }
-      if (lnText && tables) {
+      if (lnText && tables?.LN) {
         const parsedLn = parseTableHalf(lnText, tables.LN.default);
         if (parsedLn) {
           lnFromTables = toHalf(parsedLn, "ln", "leoblack-sunny-table", sunnySr ?? 0, parsedLn.boundary ? 0.35 : 0.55, lnText);

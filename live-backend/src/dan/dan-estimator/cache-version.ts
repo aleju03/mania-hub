@@ -6,4 +6,8 @@
 // v12: Companella wired (companella.ts). The RC half of 4K LN-hybrid charts
 // under 9 Sunny stars now comes from the ONNX model instead of the Sunny
 // fallback, which moves roughly a fifth of cached 4K estimates.
-export const DAN_ESTIMATE_CACHE_VERSION = 12;
+// v13: leoblack re-pinned at upstream 261e76f. Sunny SR now matches the
+// authoritative C# osu-author-port (stepInterp exact-match, LN tails in the
+// percentile weights, first note dropped), shifting cached estimates near
+// interval boundaries; LN-weighted charts move the most.
+export const DAN_ESTIMATE_CACHE_VERSION = 13;

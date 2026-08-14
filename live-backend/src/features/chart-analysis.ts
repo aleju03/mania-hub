@@ -1760,6 +1760,238 @@ async function enqueueLnSourceRecompute(queue: JobQueue, cursor: number): Promis
   );
 }
 
+// One-shot full-corpus re-analysis after the leoblack re-pin at upstream
+// 261e76f: Sunny SR now matches the authoritative C# osu-author-port
+// (exact-match step interpolation, LN tails in the percentile weights, first
+// note dropped), so every stored sunnySr is slightly stale and verdicts near
+// interval boundaries can move; hold-bearing charts move the most. No inline
+// diff pass: the SR shift touches every row, so each chunk enqueues a full
+// re-analysis per ready row and priority ordering paces the whole run - the
+// analysis jobs (priority 4) drain ahead of the continuation chunk (priority
+// -10) in the same worker lane, so the queue never holds much more than one
+// chunk of sweep work at a time.
+//
+// Same reasoning as the Companella sweep for staying off a
+// CHART_ANALYSIS_VERSION bump: hiding every stored row at once would blank
+// the analysis-derived columns in /maps and open farm-helper's DT
+// feasibility gate until the backfill caught up.
+export const SUNNY_REPIN_RECOMPUTE_JOB = "recompute_sunny_repin_sweep";
+const SUNNY_REPIN_META_KEY = "sunny_repin_recompute_done:v1";
+const SUNNY_REPIN_CHUNK = 200;
+
+export interface SunnyRepinRecomputeChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number[];
+  done: boolean;
+}
+
+export async function recomputeSunnyRepinChunk(
+  db: Db,
+  cursor: number,
+  limit = SUNNY_REPIN_CHUNK,
+): Promise<SunnyRepinRecomputeChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const changed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    changed.push(beatmapId);
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureSunnyRepinRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [SUNNY_REPIN_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [SUNNY_REPIN_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueSunnyRepinRecompute(queue, 0);
+}
+
+export async function runSunnyRepinRecomputeJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeSunnyRepinChunk(db, cursor);
+  // Each re-analysis upserts its own search-index row, so refreshed verdicts
+  // reach /maps without a full index rebuild.
+  for (const beatmapId of result.changed) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [SUNNY_REPIN_META_KEY, json({ finishedAt: now }), now],
+    );
+    // Re-verdicted charts must move between dan collections now, not on the
+    // next scheduled rotation.
+    await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+    return;
+  }
+  await enqueueSunnyRepinRecompute(queue, result.nextCursor);
+}
+
+async function enqueueSunnyRepinRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    SUNNY_REPIN_RECOMPUTE_JOB,
+    `${SUNNY_REPIN_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// DT-verdict companion to the sunny re-pin sweep above. The main sweep's full
+// re-analysis deliberately preserves the DT columns, which is right for
+// msd_dt_json (pure MinaCalc, unchanged by the re-pin) but leaves dan_dt_json
+// (the 1.5x lean dan verdict, Sunny-derived) at pre-re-pin values, and the
+// DT-rate sweep never returns to a row that already carries msd_dt_json. This
+// sweep walks exactly those rows and re-derives just the verdict, feeding the
+// stored 1.5x MSD into the classifier instead of re-running MinaCalc, so each
+// chart costs one classifier pass. Consumers: the DT-play dan credit in
+// player-skills and the DT verdict on /maps cards.
+export const SUNNY_REPIN_DT_RECOMPUTE_JOB = "recompute_sunny_repin_dt_sweep";
+const SUNNY_REPIN_DT_META_KEY = "sunny_repin_dt_recompute_done:v1";
+const SUNNY_REPIN_DT_CHUNK = 40;
+
+export interface SunnyRepinDtChunkResult {
+  nextCursor: number;
+  scanned: number;
+  computed: number[];
+  done: boolean;
+}
+
+export async function recomputeSunnyRepinDtChunk(
+  db: Db,
+  cursor: number,
+  limit = SUNNY_REPIN_DT_CHUNK,
+): Promise<SunnyRepinDtChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id, msd_dt_json
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and dan_dt_json is not null
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const computed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    // A row with a verdict but unusable stored MSD keeps its stored verdict:
+    // re-running MinaCalc here would defeat the point of the cheap pass, and
+    // such a row is already invisible to readDtRateMsd's null filter.
+    const storedMsd = parseJson<{ values?: Record<string, number> } | null>(String(row.msd_dt_json ?? ""), null);
+    const msdValues = storedMsd?.values;
+    if (!msdValues || typeof msdValues !== "object") continue;
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText) continue;
+    try {
+      const map = parseManiaBeatmap(osuText);
+      if (map.keyCount !== 4 && map.keyCount !== 7) continue;
+      const starRating = Number((await exec(
+        db,
+        "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
+        [beatmapId],
+      )).rows[0]?.difficulty_rating ?? 0);
+      // Same inputs as the DT-rate sweep's mint, so the verdict differs only
+      // through the re-pinned estimator code.
+      const classification = await classifyChartWithCompanella(map, osuText, {
+        rate: DT_RATE,
+        starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
+        totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+        version: map.version,
+      }, { msdValues });
+
+      const lean = leanClassification(classification);
+      const danDt = {
+        primaryLabel: lean.primary?.displayName ?? null,
+        primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
+        rawDan: lean.primary?.rawDan ?? null,
+      };
+      await exec(
+        db,
+        `update beatmap_chart_analysis
+         set dan_dt_json = json(?)
+         where beatmap_id = ? and analysis_version = ?`,
+        [json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
+      );
+      computed.push(beatmapId);
+    } catch {
+      // A chart the parser/estimator rejects keeps its stored verdict; the
+      // DT-rate sweep would have failed the same way.
+    }
+    // The classifier run is the CPU burst; yield between charts like the
+    // sweeps above so ingest/SSE keep moving.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, computed, done: rows.length < limit };
+}
+
+export async function ensureSunnyRepinDtRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [SUNNY_REPIN_DT_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [SUNNY_REPIN_DT_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueSunnyRepinDtRecompute(queue, 0);
+}
+
+export async function runSunnyRepinDtRecomputeJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeSunnyRepinDtChunk(db, cursor);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [SUNNY_REPIN_DT_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueSunnyRepinDtRecompute(queue, result.nextCursor);
+}
+
+async function enqueueSunnyRepinDtRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    SUNNY_REPIN_DT_RECOMPUTE_JOB,
+    `${SUNNY_REPIN_DT_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
 // One beatmap's stored 1.5x (DT-rate) MSD: the raw skillset vector in
 // MSD_SKILLSETS order plus the sweep's own Overall (null when the stored
 // JSON predates the Overall field or carries an invalid value).

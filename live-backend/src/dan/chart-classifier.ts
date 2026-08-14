@@ -157,7 +157,7 @@ function tableLabelForBase(base: string): string {
  */
 export function danTableLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): string | null {
   const tables = DAN_INDEX[keyCount];
-  const table = tables ? (side === "ln" ? tables.LN.default : tables.RC.default) : undefined;
+  const table = tables ? (side === "ln" ? tables.LN?.default : tables.RC.default) : undefined;
   if (!table) return null;
   const levels = tableLevels(table);
   if (levels.length === 0) return null;
@@ -525,7 +525,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
       if (parsedRc) {
         rc = toHalf(parsedRc, "rc", "leoblack-sunny-table", sunnySr ?? 0, parsedRc.boundary ? 0.35 : 0.55, rcText);
       }
-      if (lnText && tables) {
+      if (lnText && tables?.LN) {
         const parsedLn = parseTableHalf(lnText, tables.LN.default);
         if (parsedLn) {
           lnFromTables = toHalf(parsedLn, "ln", "leoblack-sunny-table", sunnySr ?? 0, parsedLn.boundary ? 0.35 : 0.55, lnText);
