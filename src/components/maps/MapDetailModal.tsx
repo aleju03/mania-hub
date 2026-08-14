@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchLiveChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry } from "../../lib/live-backend";
 import type { MapsFavouriteBeatmapset } from "../../lib/types";
-import { formatDuration, formatNumber } from "../../lib/format";
+import { formatAccuracy, formatDuration, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { PatternRadar } from "./PatternRadar";
@@ -52,6 +52,49 @@ function buildPreviewBeatmapset(entry: LiveMapSearchEntry, diffs: LiveMapSearchE
     bpm: entry.bpm,
     patterns: [entry.primaryPattern],
   };
+}
+
+// A specific player's play on one diff of this set, when the modal is opened
+// from a play row (the skill-plays modal) rather than from search. Rendered as
+// its own stat strip while that diff is the active one.
+export interface MapDetailPlayContext {
+  beatmapId: number;
+  username: string;
+  accuracy: number | null;
+  pp: number | null;
+  rateLabel: string | null;
+  playedAt: string | null;
+  source: "top" | "tracked";
+  rating: number;
+  ratingLabel: string;
+  ratingColor: string;
+}
+
+function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{play.username}&apos;s play</span>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-lg bg-osu-b4/50 px-4 py-2.5">
+        {play.accuracy != null && <Stat label="Accuracy" value={formatAccuracy(play.accuracy)} />}
+        {play.pp != null && <Stat label="PP" value={formatPP(play.pp)} />}
+        {play.rateLabel && <Stat label="Rate" value={play.rateLabel} />}
+        {play.playedAt && (
+          <div className="flex flex-col" title={formatTimeAgoTooltip(play.playedAt)}>
+            <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{formatTimeAgo(play.playedAt)}</span>
+            <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">
+              {play.source === "top" ? "profile top play" : "tracked history"}
+            </span>
+          </div>
+        )}
+        <div className="flex flex-col">
+          <span className="text-[16px] font-bold tabular-nums leading-none" style={{ color: play.ratingColor }}>
+            {play.rating.toFixed(2)}
+          </span>
+          <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{play.ratingLabel} rating</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -230,7 +273,15 @@ function ClustersBlock({ analysis, pending }: { analysis: LiveChartAnalysisDetai
   );
 }
 
-export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry | null; onClose: () => void }) {
+export function MapDetailModal({
+  entry,
+  onClose,
+  play,
+}: {
+  entry: LiveMapSearchEntry | null;
+  onClose: () => void;
+  play?: MapDetailPlayContext | null;
+}) {
   // Which diff of the set is in focus; defaults to the entry's representative.
   const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
@@ -392,6 +443,10 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
                   <Stat label="Plays" value={formatNumber(active.playCount)} />
                   <Stat label="LN notes" value={formatNumber(active.lnCount)} />
                 </div>
+
+                {/* The play this modal was opened from, while its diff is the
+                    active one (it says nothing about the set's other diffs). */}
+                {play && play.beatmapId === active.beatmapId && <PlayContextBlock play={play} />}
 
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
