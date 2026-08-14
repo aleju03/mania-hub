@@ -3,6 +3,7 @@ import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { nowIso } from "../shared/score.js";
+import { classifyKeymodeNoteShape, classifySkinNoteShape, isSkinNoteShape, type SkinArchiveMeta, type SkinNoteShape } from "../skins/archive-meta.js";
 import { normalizeSkinVisualSignature, skinSimilarityMatch, SKIN_SIMILARITY_FLOOR, type SkinSimilarityFacts, type SkinVisualSignature } from "../skins/similarity.js";
 import { slugifySkinName } from "../skins/slug.js";
 
@@ -97,6 +98,17 @@ export interface SkinRow {
   // computed at upload and compared by the similar-skins scoring. Null when
   // the archive ships no digestible note images; never serialized to clients.
   visual: SkinVisualSignature | null;
+  // Archive facts for the catalog filters (src/skins/archive-meta.ts), null
+  // while a row has not been analyzed: the .osk ships a lane cover, ships its
+  // own mania stage art, carries lazer-only modification files.
+  laneCover: boolean | null;
+  maniaStage: boolean | null;
+  lazer: boolean | null;
+  // What the tap notes are, classified from the visual signature.
+  noteShape: SkinNoteShape | null;
+  // The uploader's word on what resolution the skin is made for ("1920x1080",
+  // normalized by normalizeSkinResolution). Optional, never derived.
+  resolution: string | null;
   downloadCount: number;
   viewCount: number;
   status: "pending" | "published" | "hidden";
@@ -136,6 +148,17 @@ export interface SkinSummary {
   keymodes: number[];
   specialKeymodes: number[];
   accentColor: string | null;
+  // The filterable archive facts and labels, same nullability as the row:
+  // null is "not analyzed" (or, for resolution, "the uploader never said").
+  laneCover: boolean | null;
+  maniaStage: boolean | null;
+  lazer: boolean | null;
+  noteShape: SkinNoteShape | null;
+  // Only list responses filtered by note shape set this: the keymode preview
+  // that visually proves the match, so a mixed skin does not show its
+  // uploader-chosen circle cover under the Bars filter.
+  filterKeys?: number | null;
+  resolution: string | null;
   // Public: every reader sees every skin's count, the same number the
   // downloads sort orders by.
   downloadCount: number;
@@ -220,6 +243,9 @@ export async function createPendingSkin(
     // 'private' keeps the finished skin off the catalog entirely; chosen in the
     // upload form and changeable later from the skin's own page.
     visibility?: SkinVisibility;
+    // What resolution the skin is made for, the uploader's optional word.
+    // Anything normalizeSkinResolution cannot read is simply not an answer.
+    resolution?: string | null;
   },
 ): Promise<CreatePendingSkinResult> {
   const name = cleanText(input.name, SKIN_NAME_MAX_LENGTH);
@@ -258,13 +284,33 @@ export async function createPendingSkin(
   await exec(
     db,
     `insert into skins (
-       id, owner_user_id, owner_username, name, author, description, search_text,
+       id, owner_user_id, owner_username, name, author, description, resolution, search_text,
        status, visibility, private_secret, upload_token, token_expires_at, created_at, updated_at
-     ) values (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
-    [id, input.ownerUserId, ownerUsername, name, author, description, buildSearchText(name, ownerUsername, author),
+     ) values (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+    [id, input.ownerUserId, ownerUsername, name, author, description, normalizeSkinResolution(input.resolution),
+     buildSearchText(name, ownerUsername, author),
      visibility, visibility === "private" ? newPrivateSkinSecret() : null, token, expiresAt, now, now],
   );
   return { ok: true, id, token, expiresAt };
+}
+
+// The uploader's "made for 1920x1080" note, normalized to WxH so the filter
+// can match it exactly. Accepts x or the multiplication sign with optional
+// spaces; anything else is no answer rather than an error.
+export function normalizeSkinResolution(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const match = /^\s*(\d{3,5})\s*[x×*]\s*(\d{3,5})\s*$/i.exec(value);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (width < 240 || width > 16384 || height < 240 || height > 16384) return null;
+  return `${width}x${height}`;
+}
+
+// How big a normalized resolution is, for ordering the filter row.
+function resolutionPixels(value: string): number {
+  const [width, height] = value.split("x");
+  return (Number(width) || 0) * (Number(height) || 0);
 }
 
 export async function getSkinForUpload(db: Db, id: string, token: string): Promise<SkinRow | null> {
@@ -280,7 +326,7 @@ export async function getSkinForUpload(db: Db, id: string, token: string): Promi
 export async function attachSkinOsk(
   db: Db,
   skin: SkinRow,
-  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; specialKeymodes: number[]; accentColor: string | null; iniAuthor: string | null; visual?: SkinVisualSignature | null },
+  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; specialKeymodes: number[]; accentColor: string | null; iniAuthor: string | null; visual?: SkinVisualSignature | null; archive?: SkinArchiveMeta | null },
 ): Promise<void> {
   // An author typed in the upload form wins; skin.ini's Author fills the gap.
   const author = skin.author ?? (cleanText(patch.iniAuthor ?? "", SKIN_AUTHOR_MAX_LENGTH) || null);
@@ -289,11 +335,28 @@ export async function attachSkinOsk(
     `update skins set
        osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
        keymodes_json = ?, special_keymodes_json = ?, accent_color = coalesce(accent_color, ?),
-       visual_json = ?, author = ?, search_text = ?, updated_at = ?
+       visual_json = ?, lane_cover = ?, mania_stage = ?, lazer = ?, note_shape = ?,
+       author = ?, search_text = ?, updated_at = ?
      where id = ?`,
     [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(patch.keymodes), JSON.stringify(normalizeKeymodes(patch.specialKeymodes)), patch.accentColor,
-     patch.visual ? JSON.stringify(patch.visual) : null, author, buildSearchText(skin.name, skin.ownerUsername, author), nowIso(), skin.id],
+     patch.visual ? JSON.stringify(patch.visual) : null, ...archiveMetaColumns(patch.archive, patch.visual),
+     author, buildSearchText(skin.name, skin.ownerUsername, author), nowIso(), skin.id],
   );
+}
+
+// The filter columns an .osk decides: the archive flags as analyzed (null when
+// the analysis failed, which is "unknown" rather than "no"), and the note
+// shape classified from the same visual signature being stored.
+function archiveMetaColumns(
+  archive: SkinArchiveMeta | null | undefined,
+  visual: SkinVisualSignature | null | undefined,
+): [number | null, number | null, number | null, string | null] {
+  return [
+    archive ? (archive.laneCover ? 1 : 0) : null,
+    archive ? (archive.maniaStage ? 1 : 0) : null,
+    archive ? (archive.lazer ? 1 : 0) : null,
+    classifySkinNoteShape(visual ?? null),
+  ];
 }
 
 // Swaps a published skin's .osk for a newer build. Unlike attachSkinOsk this
@@ -304,7 +367,7 @@ export async function attachSkinOsk(
 export async function replaceSkinOsk(
   db: Db,
   skin: SkinRow,
-  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; specialKeymodes: number[]; iniAuthor: string | null; visual?: SkinVisualSignature | null },
+  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; specialKeymodes: number[]; iniAuthor: string | null; visual?: SkinVisualSignature | null; archive?: SkinArchiveMeta | null },
 ): Promise<void> {
   const author = skin.author ?? (cleanText(patch.iniAuthor ?? "", SKIN_AUTHOR_MAX_LENGTH) || null);
   const now = nowIso();
@@ -318,10 +381,13 @@ export async function replaceSkinOsk(
     db,
     `update skins set
        osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
-       keymodes_json = ?, special_keymodes_json = ?, visual_json = ?, author = ?, search_text = ?, osk_updated_at = ?, updated_at = ?
+       keymodes_json = ?, special_keymodes_json = ?, visual_json = ?,
+       lane_cover = ?, mania_stage = ?, lazer = ?, note_shape = ?,
+       author = ?, search_text = ?, osk_updated_at = ?, updated_at = ?
      where id = ?`,
     [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(keymodes),
      JSON.stringify(specialKeymodes), patch.visual ? JSON.stringify(patch.visual) : null,
+     ...archiveMetaColumns(patch.archive, patch.visual),
      author, buildSearchText(skin.name, skin.ownerUsername, author), now, now, skin.id],
   );
 }
@@ -569,7 +635,7 @@ export type UpdateSkinDetailsResult =
 export async function updateSkinDetails(
   db: Db,
   id: string,
-  input: { name: string; description?: string | null },
+  input: { name: string; description?: string | null; resolution?: string | null },
   ownerUserId: number | null,
 ): Promise<UpdateSkinDetailsResult> {
   const name = cleanText(input.name, SKIN_NAME_MAX_LENGTH);
@@ -580,10 +646,14 @@ export async function updateSkinDetails(
   const description = input.description === undefined
     ? row.description
     : cleanMultilineText(input.description ?? "", SKIN_DESCRIPTION_MAX_LENGTH) || null;
+  // Same omission semantics as the description: leaving resolution out keeps
+  // what the row holds, sending one replaces it (an unreadable value clears
+  // it, since the only thing worth storing is the normalized form).
+  const resolution = input.resolution === undefined ? row.resolution : normalizeSkinResolution(input.resolution);
   await exec(
     db,
-    "update skins set name = ?, description = ?, search_text = ?, updated_at = ? where id = ?",
-    [name, description, buildSearchText(name, row.ownerUsername, row.author), nowIso(), id],
+    "update skins set name = ?, description = ?, resolution = ?, search_text = ?, updated_at = ? where id = ?",
+    [name, description, resolution, buildSearchText(name, row.ownerUsername, row.author), nowIso(), id],
   );
   const updated = await getSkin(db, id);
   return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true, includePreviewRecipes: true }) } : { ok: false, error: "not_found" };
@@ -877,6 +947,19 @@ export interface SkinsListQuery {
   // true admin gets, the same read /api/skins/get already grants them on a
   // single private skin. Only meaningful together with onlyPrivate.
   adminAllPrivate?: boolean;
+  // The trait filters, each narrowing to skins the archive analysis said yes
+  // about. Rows not analyzed yet (null columns) never match a yes.
+  laneCover?: boolean;
+  maniaStage?: boolean;
+  // Skins with uploader-attached screenshots in the gallery.
+  screenshots?: boolean;
+  // "lazer" keeps skins carrying lazer-only modifications; "stable" keeps the
+  // rest, unanalyzed rows included - a skin without lazer files is a stable
+  // skin, and that is what nearly the whole catalog is.
+  client?: "lazer" | "stable" | null;
+  noteShape?: SkinNoteShape | null;
+  // Exact match on the normalized uploader-provided resolution.
+  resolution?: string | null;
 }
 
 export interface SkinsListResult {
@@ -884,6 +967,10 @@ export interface SkinsListResult {
   total: number;
   page: number;
   pageSize: number;
+  // Every resolution an uploader has actually claimed within the rest of this
+  // query, smallest first, so the page offers only values with skins behind
+  // them instead of a hardcoded ladder that matches nothing.
+  resolutions: string[];
 }
 
 export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsListResult> {
@@ -904,7 +991,7 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
     if (adminAllPrivate) {
       where.push("visibility = 'private'");
     } else if (privateOwner == null) {
-      return { skins: [], total: 0, page, pageSize };
+      return { skins: [], total: 0, page, pageSize, resolutions: [] };
     } else {
       where.push("visibility = 'private' and owner_user_id = ?");
       args.push(privateOwner);
@@ -941,6 +1028,26 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
       args.push(keymode);
     }
   }
+  if (query.laneCover) where.push("lane_cover = 1");
+  if (query.maniaStage) where.push("mania_stage = 1");
+  if (query.screenshots) where.push("json_array_length(coalesce(screenshots_json, '[]')) > 0");
+  if (query.client === "lazer") where.push("lazer = 1");
+  else if (query.client === "stable") where.push("coalesce(lazer, 0) = 0");
+  const noteShape = query.noteShape && isSkinNoteShape(query.noteShape) ? query.noteShape : null;
+  if (noteShape) {
+    where.push("note_shape = ?");
+    args.push(noteShape);
+  }
+  // The resolution facet is read from the query as it stands here, before its
+  // own predicate joins it, so picking a resolution does not collapse the row
+  // to the one that was picked.
+  const facetWhereSql = where.join(" and ");
+  const facetArgs = [...args];
+  const resolution = normalizeSkinResolution(query.resolution);
+  if (resolution) {
+    where.push("resolution = ?");
+    args.push(resolution);
+  }
   const whereSql = where.join(" and ");
 
   const orderSql = SKINS_ORDER_SQL[query.sort ?? "newest"] ?? SKINS_ORDER_SQL.newest;
@@ -952,6 +1059,16 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
      limit ? offset ?`,
     [...args, pageSize, page * pageSize],
   )).rows;
+  const resolutionRows = (await exec(
+    db,
+    `select distinct resolution from skins where ${facetWhereSql} and resolution is not null and resolution <> ''`,
+    facetArgs,
+  )).rows;
+  // Ordered by how big the display is rather than by how many skins claim it,
+  // so the row reads as a ladder.
+  const resolutions = resolutionRows
+    .map((row) => String(row.resolution))
+    .sort((a, b) => resolutionPixels(a) - resolutionPixels(b) || a.localeCompare(b));
 
   return {
     // A private row is only ever in here because it belongs to the viewer the
@@ -961,12 +1078,45 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
     // cannot quietly widen who gets the whole skin.
     skins: rows.map((row) => {
       const skin = rowToSkin(row as Record<string, unknown>);
-      return toSkinSummary(skin, { asOwner: adminAllPrivate || (privateOwner != null && skin.ownerUserId === privateOwner) });
+      const summary = toSkinSummary(skin, { asOwner: adminAllPrivate || (privateOwner != null && skin.ownerUserId === privateOwner) });
+      return noteShape ? { ...summary, filterKeys: noteShapeFilterPreviewKeys(skin, noteShape) } : summary;
     }),
     total: Number(totalRow?.total) || 0,
     page,
     pageSize,
+    resolutions,
   };
+}
+
+// Which stored render makes a note-shape result honest at a glance. Keep the
+// uploader's starred keymode when it already matches. Otherwise the two modes
+// people judge skins by are alternates: a mismatching 4K cover searches around
+// 7K, and a mismatching 7K cover searches around 4K. A special 8K layout is
+// 7K+1, so it sits at 7 for distance purposes; regular 7K wins an exact tie.
+function noteShapeFilterPreviewKeys(row: SkinRow, shape: SkinNoteShape): number | null {
+  if (!row.visual) return null;
+  const matching = row.previews
+    .map((preview) => {
+      const art = row.visual?.keymodes[String(preview.keys)];
+      if (!art || classifyKeymodeNoteShape(art.aspect, art.mask, art.arrowLayout === true) !== shape) return null;
+      return preview.keys;
+    })
+    .filter((keys): keys is number => keys != null);
+  if (matching.length === 0) return null;
+
+  const coverKeys = row.previews.find((preview) => preview.key === row.previewKey)?.keys ?? null;
+  if (coverKeys != null && matching.includes(coverKeys)) return coverKeys;
+
+  const target = coverKeys === 4 ? 7 : 4;
+  const effectiveKeys = (keys: number) => row.specialKeymodes.includes(keys) ? keys - 1 : keys;
+  return [...matching].sort((a, b) => {
+    const distance = Math.abs(effectiveKeys(a) - target) - Math.abs(effectiveKeys(b) - target);
+    if (distance !== 0) return distance;
+    // 7K before 7K+1 when both prove the filter; the special layout is the
+    // fallback when regular 7K does not, as in the Argefangirl skin.
+    const exact = Number(b === target) - Number(a === target);
+    return exact || b - a;
+  })[0] ?? null;
 }
 
 // A similar-skins entry: the summary plus which of the candidate's keymodes
@@ -1304,6 +1454,11 @@ export function toSkinSummary(row: SkinRow, options?: { asOwner?: boolean; inclu
     keymodes: row.keymodes,
     specialKeymodes: row.specialKeymodes,
     accentColor: row.accentColor,
+    laneCover: row.laneCover,
+    maniaStage: row.maniaStage,
+    lazer: row.lazer,
+    noteShape: row.noteShape,
+    resolution: row.resolution,
     downloadCount: row.downloadCount,
     viewCount: row.viewCount,
     previewUrl: row.previewUrl,
@@ -1387,6 +1542,11 @@ function rowToSkin(row: Record<string, unknown>): SkinRow {
     specialKeymodesManual: Number(row.special_keymodes_manual) === 1,
     accentColor: textOrNull(row.accent_color),
     visual: normalizeSkinVisualSignature(parseJson<unknown>(String(row.visual_json ?? "null"), null)),
+    laneCover: boolOrNull(row.lane_cover),
+    maniaStage: boolOrNull(row.mania_stage),
+    lazer: boolOrNull(row.lazer),
+    noteShape: isSkinNoteShape(row.note_shape) ? row.note_shape : null,
+    resolution: textOrNull(row.resolution),
     downloadCount: Math.max(0, Math.floor(Number(row.download_count) || 0)),
     viewCount: Math.max(0, Math.floor(Number(row.view_count) || 0)),
     status,
@@ -1594,6 +1754,13 @@ function cleanMultilineText(value: string, maxLength: number): string {
 function textOrNull(value: unknown): string | null {
   if (typeof value !== "string") return null;
   return value.length > 0 ? value : null;
+}
+
+// Nullable 0/1 column: null stays "not analyzed" rather than collapsing to no.
+function boolOrNull(value: unknown): boolean | null {
+  if (value == null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed !== 0 : null;
 }
 
 function numberOrNull(value: unknown): number | null {

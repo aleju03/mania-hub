@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 280" role="img" aria-label="6K 2nd dan">
+  <defs>
+    <pattern id="hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)">
+      <rect width="9" height="9" fill="none"/>
+      <rect width="3.4" height="9" fill="rgba(0,0,0,0.17)"/>
+    </pattern>
+    <radialGradient id="vig" cx="50%" cy="46%" r="56%">
+      <stop offset="0.62" stop-color="rgba(0,0,0,0)"/>
+      <stop offset="1" stop-color="rgba(0,0,0,0.28)"/>
+    </radialGradient>
+    <filter id="gsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+  <path d="M 266.00 140.00 L 203.00 249.12 L 77.00 249.12 L 14.00 140.00 L 77.00 30.88 L 203.00 30.88 Z" fill="none" stroke="#8e8e95" stroke-width="3" stroke-dasharray="150 96" stroke-dashoffset="40" opacity="0.6"/>
+  <path d="M 244.00 140.00 L 192.00 230.07 L 88.00 230.07 L 36.00 140.00 L 88.00 49.93 L 192.00 49.93 Z" fill="#4c4c50"/>
+  <path d="M 244.00 140.00 L 192.00 230.07 L 88.00 230.07 L 36.00 140.00 L 88.00 49.93 L 192.00 49.93 Z" fill="url(#hatch)"/>
+  <path d="M 244.00 140.00 L 192.00 230.07 L 88.00 230.07 L 36.00 140.00 L 88.00 49.93 L 192.00 49.93 Z" fill="url(#vig)"/>
+  <path d="M 252.00 140.00 L 196.00 236.99 L 84.00 236.99 L 28.00 140.00 L 84.00 43.01 L 196.00 43.01 Z" fill="none" stroke="#a8a8af" stroke-width="8"/>
+  <path d="M 247.50 140.00 L 193.75 233.10 L 86.25 233.10 L 32.50 140.00 L 86.25 46.90 L 193.75 46.90 Z" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="2"/>
+  <path d="M 257.00 140.00 L 198.50 241.32 L 81.50 241.32 L 23.00 140.00 L 81.50 38.68 L 198.50 38.68 Z" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.5"/>
+  <g filter="url(#gsh)"><g transform="translate(100.37 84.00) scale(0.8615)" fill="#fff" stroke="#fff" stroke-width="34.8" stroke-linejoin="round"><g transform="translate(0.000000,130.000000) scale(0.100000,-0.100000)" stroke="none"> <path d="M371 1289 c-161 -28 -305 -154 -352 -311 -17 -56 -20 -87 -17 -166 6 -135 32 -189 149 -304 l89 -86 -110 -206 c-61 -114 -110 -209 -110 -211 0 -3 202 -5 450 -5 l450 0 0 235 0 235 -70 0 -69 0 55 113 c67 138 83 212 67 322 -18 125 -91 242 -199 316 -87 59 -222 87 -333 68z m244 -89 c117 -56 215 -193 230 -318 10 -94 -7 -154 -95 -324 l-81 -158 96 0 95 0 0 -165 0 -165 -366 0 c-201 0 -364 4 -362 8 2 4 87 166 191 359 150 283 187 359 187 390 0 22 -5 44 -12 51 -18 18 -88 15 -110 -5 -20 -18 -24 -73 -7 -101 8 -14 -3 -41 -56 -137 -36 -66 -70 -124 -74 -128 -16 -16 -120 93 -153 161 -31 63 -33 73 -33 172 1 96 3 110 29 160 57 110 129 176 231 213 74 26 222 20 290 -13z"/> </g></g></g>
+</svg>

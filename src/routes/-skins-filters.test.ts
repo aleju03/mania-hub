@@ -2,13 +2,29 @@ import { describe, expect, it } from "vitest";
 
 import { parseSkinsSearch } from "./skins";
 
+const DEFAULTS = {
+  q: "",
+  page: 0,
+  sort: "newest",
+  k: 0,
+  special: false,
+  mine: false,
+  cover: false,
+  stage: false,
+  shots: false,
+  lazer: false,
+  stable: false,
+  shape: "",
+  res: "",
+};
+
 describe("skins search params", () => {
   it("returns defaults for an empty search", () => {
-    expect(parseSkinsSearch({})).toEqual({ q: "", page: 0, sort: "newest", k: 0, special: false, mine: false });
+    expect(parseSkinsSearch({})).toEqual(DEFAULTS);
   });
 
   it("keeps a valid query and page", () => {
-    expect(parseSkinsSearch({ q: "rainbow", page: "2" })).toEqual({ q: "rainbow", page: 2, sort: "newest", k: 0, special: false, mine: false });
+    expect(parseSkinsSearch({ q: "rainbow", page: "2" })).toEqual({ ...DEFAULTS, q: "rainbow", page: 2 });
   });
 
   it("reads the uploader filter from either the boolean or its URL form", () => {
@@ -43,6 +59,34 @@ describe("skins search params", () => {
     // Off 8K the refinement means nothing and is dropped.
     expect(parseSkinsSearch({ k: "7", special: true }).special).toBe(false);
     expect(parseSkinsSearch({ special: true }).special).toBe(false);
+  });
+
+  it("reads each trait checkbox in its boolean and URL forms", () => {
+    for (const flag of ["cover", "stage", "shots", "lazer", "stable"] as const) {
+      expect(parseSkinsSearch({ [flag]: true })[flag]).toBe(true);
+      expect(parseSkinsSearch({ [flag]: "1" })[flag]).toBe(true);
+      expect(parseSkinsSearch({ [flag]: "no" })[flag]).toBe(false);
+      expect(parseSkinsSearch({})[flag]).toBe(false);
+    }
+  });
+
+  it("normalizes conflicting client flags to any", () => {
+    expect(parseSkinsSearch({ stable: "1", lazer: "1" })).toMatchObject({ stable: false, lazer: false });
+  });
+
+  it("keeps a known note shape and drops anything else", () => {
+    for (const shape of ["circle", "arrow", "bar", "other"]) {
+      expect(parseSkinsSearch({ shape }).shape).toBe(shape);
+    }
+    expect(parseSkinsSearch({ shape: "star" }).shape).toBe("");
+    expect(parseSkinsSearch({ shape: 4 }).shape).toBe("");
+  });
+
+  it("normalizes the resolution filter and drops what it cannot read", () => {
+    expect(parseSkinsSearch({ res: "1920x1080" }).res).toBe("1920x1080");
+    expect(parseSkinsSearch({ res: "2560 × 1440" }).res).toBe("2560x1440");
+    expect(parseSkinsSearch({ res: "1080p" }).res).toBe("");
+    expect(parseSkinsSearch({ res: 1080 }).res).toBe("");
   });
 
   it("caps the query at 80 characters", () => {

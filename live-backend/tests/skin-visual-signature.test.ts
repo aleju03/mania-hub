@@ -19,6 +19,12 @@ function circlePng(size: number, fill: string): Promise<Buffer> {
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
+function arrowPng(size: number, fill: string, rotation: number): Promise<Buffer> {
+  const points = "4,32 38,4 38,19 60,19 60,45 38,45 38,60";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><polygon points="${points}" fill="${fill}" transform="rotate(${rotation} 32 32)"/></svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
 async function buildOsk(files: Record<string, string | Buffer>): Promise<Buffer> {
   const zip = new JSZip();
   for (const [path, content] of Object.entries(files)) {
@@ -84,6 +90,49 @@ describe("computeSkinVisualSignature", () => {
     expect(Object.keys(signature.keymodes).sort()).toEqual(["4", "6"]);
     expect(signature.keymodes["4"].aspect).toBeCloseTo(1, 1);
     expect(signature.keymodes["6"].aspect).toBeCloseTo(4);
+  });
+
+  it("retains guarded directional arrow assignments when high-resolution geometry supports them", async () => {
+    const arrows = await computeSkinVisualSignature(await buildOsk({
+      "skin.ini": "[General]\nName: Soft arrows\n\n[Mania]\nKeys: 4\n"
+        + "NoteImage0: arrows/LEFT\nNoteImage1: arrows/DOWN\n"
+        + "NoteImage2: arrows/UP\nNoteImage3: arrows/RIGHT\n",
+      "arrows/LEFT.png": await arrowPng(64, "#aaccff", 0),
+      "arrows/DOWN.png": await arrowPng(64, "#aaccff", -90),
+      "arrows/UP.png": await arrowPng(64, "#aaccff", 90),
+      "arrows/RIGHT.png": await arrowPng(64, "#aaccff", 180),
+      // These are unused alternatives. Their @2x suffix must not beat the
+      // exact 1x paths above merely because suffix recovery can find them.
+      "mania/arrows/left@2x.png": await circlePng(128, "#aaccff"),
+      "mania/arrows/down@2x.png": await circlePng(128, "#aaccff"),
+      "mania/arrows/up@2x.png": await circlePng(128, "#aaccff"),
+      "mania/arrows/right@2x.png": await circlePng(128, "#aaccff"),
+    }));
+    expect(arrows?.keymodes["4"].arrowLayout).toBe(true);
+  });
+
+  it("does not let inherited arrow paths override flat circle geometry", async () => {
+    const round = await circlePng(64, "#aaccff");
+    const directionalNames = await computeSkinVisualSignature(await buildOsk({
+      "skin.ini": "[General]\nName: Circles in an arrow template\n\n[Mania]\nKeys: 4\n"
+        + "NoteImage0: mania/arrows/left\nNoteImage1: mania/arrows/down\n"
+        + "NoteImage2: mania/arrows/up\nNoteImage3: mania/arrows/right\n",
+      "mania/arrows/left.png": round,
+      "mania/arrows/down.png": round,
+      "mania/arrows/up.png": round,
+      "mania/arrows/right.png": round,
+    }));
+    expect(directionalNames?.keymodes["4"].arrowLayout).toBeUndefined();
+
+    // A copied rounded note living under arrows/ and reused in every column is
+    // not directional evidence (the gray Malevich false positive).
+    const repeated = await computeSkinVisualSignature(await buildOsk({
+      "skin.ini": "[General]\nName: Rounded square\n\n[Mania]\nKeys: 4\n"
+        + "NoteImage0: mania/arrows/left\nNoteImage1: mania/arrows/left\n"
+        + "NoteImage2: mania/arrows/left\nNoteImage3: mania/arrows/left\n",
+      "mania/arrows/left.png": round,
+    }));
+    expect(repeated?.keymodes["4"].arrowLayout).toBeUndefined();
   });
 
   it("digests nothing without note art or skin.ini", async () => {
@@ -164,6 +213,7 @@ describe("backfillSkinVisualSignatures", () => {
     const readOsk = async (key: string) => (key.includes(digestible) ? osk : null);
     expect(await backfillSkinVisualSignatures(db, readOsk)).toBe(1);
     expect((await getSkin(db, digestible))?.visual?.keymodes["4"].aspect).toBeCloseTo(4);
+    expect((await getSkin(db, digestible))?.noteShape).toBe("bar");
     expect((await getSkin(db, unreadable))?.visual).toBeNull();
 
     // One skin failing does not stall the marker: the scan must not re-read

@@ -9,11 +9,13 @@ import {
   keymodeLabel,
   markSkinsListStale,
   moderateSkin,
+  normalizeSkinResolution,
   removeSkinScreenshot,
   setMySkinVisibility,
   setSkinSpecialKeymodes,
   SKIN_DESCRIPTION_MAX_LENGTH,
   SKIN_NAME_MAX_LENGTH,
+  SKIN_RESOLUTION_PRESETS,
   skinScreenshotLabel,
   updateSkinDetails,
   type SkinSummary,
@@ -57,6 +59,7 @@ export function SkinSettingsModal({
   const [error, setError] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState(skin.name);
   const [descriptionDraft, setDescriptionDraft] = useState(skin.description ?? "");
+  const [resolutionDraft, setResolutionDraft] = useState(skin.resolution ?? "");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   // Which screenshot's remove button is waiting on its inline confirm, by
   // position. Removal deletes the stored image for good, so one click is not
@@ -69,6 +72,7 @@ export function SkinSettingsModal({
     if (!open) return;
     setNameDraft(skin.name);
     setDescriptionDraft(skin.description ?? "");
+    setResolutionDraft(skin.resolution ?? "");
     setError(null);
     setConfirmingDelete(false);
     setConfirmingShotRemove(null);
@@ -121,7 +125,7 @@ export function SkinSettingsModal({
     const name = nameDraft.trim();
     if (!name || !detailsDirty) return;
     void run(
-      () => updateSkinDetails({ data: { id: skin.id, name, description: descriptionDraft } }),
+      () => updateSkinDetails({ data: { id: skin.id, name, description: descriptionDraft, resolution: resolutionDraft } }),
       "Saving the name and description failed. Try again.",
     );
   };
@@ -172,7 +176,9 @@ export function SkinSettingsModal({
 
   const relabelable = skin.keymodes.filter((keys) => keys >= 2);
   const detailsDirty = nameDraft.trim().length > 0
-    && (nameDraft.trim() !== skin.name || descriptionDraft.trim() !== (skin.description ?? ""));
+    && (nameDraft.trim() !== skin.name
+      || descriptionDraft.trim() !== (skin.description ?? "")
+      || (normalizeSkinResolution(resolutionDraft) ?? "") !== (skin.resolution ?? ""));
 
   if (typeof document === "undefined") return null;
 
@@ -242,6 +248,26 @@ export function SkinSettingsModal({
                       placeholder="A line about the skin"
                       className="min-w-0 resize-y rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] leading-relaxed text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
                     />
+                    <input
+                      type="text"
+                      value={resolutionDraft}
+                      maxLength={12}
+                      disabled={busy}
+                      list="skin-settings-resolution-presets"
+                      onChange={(event) => setResolutionDraft(event.target.value)}
+                      aria-label="Made for resolution"
+                      placeholder="Made for, e.g. 1920x1080"
+                      className={`min-w-0 rounded-lg border bg-osu-b4 px-3 py-2 text-[13px] text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:outline-none ${
+                        resolutionDraft.trim() && !normalizeSkinResolution(resolutionDraft)
+                          ? "border-osu-red-light/60 focus:border-osu-red-light/60"
+                          : "border-osu-b3/30 focus:border-osu-pink/50"
+                      }`}
+                    />
+                    <datalist id="skin-settings-resolution-presets">
+                      {SKIN_RESOLUTION_PRESETS.map((preset) => (
+                        <option key={preset} value={preset} />
+                      ))}
+                    </datalist>
                     {detailsDirty && (
                       <button
                         type="submit"

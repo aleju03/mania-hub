@@ -17,7 +17,9 @@ import {
   fetchPrivateSkinsShelf,
   fetchSkinsListDirect,
   fetchSkinsListSsr,
+  isSkinNoteShape,
   isSkinsSort,
+  normalizeSkinResolution,
   readCachedPrivateShelf,
   readCachedSkinsList,
   readPrivateShelfOpen,
@@ -27,6 +29,7 @@ import {
   writeCachedPrivateShelf,
   writeCachedSkinsList,
   writePrivateShelfOpen,
+  type SkinNoteShape,
   type SkinsListResult,
   type SkinsSort,
   type SkinSummary,
@@ -47,6 +50,20 @@ interface SkinsSearch {
   // Nobody's id is in the URL, so the filter travels as a plain flag and means
   // whoever is signed in when the link is opened; signed out it means nothing.
   mine?: boolean;
+  // The trait filters, each narrowing to skins the backend's archive analysis
+  // said yes about: ships a lane cover, ships its own mania stage art, has
+  // screenshots attached.
+  cover?: boolean;
+  stage?: boolean;
+  shots?: boolean;
+  // Which client the skin is for. The UI presents one axis: any, stable, or
+  // lazer. The two booleans keep the existing compact URL shape.
+  lazer?: boolean;
+  stable?: boolean;
+  // What the tap notes are; "" is any.
+  shape?: SkinNoteShape | "";
+  // Recommended resolution, normalized "1920x1080"; "" is any.
+  res?: string;
 }
 
 const DEFAULT_SKINS_SEARCH = {
@@ -56,6 +73,13 @@ const DEFAULT_SKINS_SEARCH = {
   k: 0,
   special: false,
   mine: false,
+  cover: false,
+  stage: false,
+  shots: false,
+  lazer: false,
+  stable: false,
+  shape: "" as SkinNoteShape | "",
+  res: "",
 };
 
 // One entry per sort option, each holding both of its directions: picking an
@@ -66,6 +90,15 @@ const SORT_OPTIONS: Array<{ label: string; ascLabel?: string; desc: SkinsSort; a
   { label: "newest", ascLabel: "oldest", desc: "newest", asc: "oldest" },
   { label: "downloads", desc: "downloads", asc: "downloads-asc" },
   { label: "size", desc: "size", asc: "size-asc" },
+];
+
+// The note-shape chips, labelled by what the notes are called in the wild.
+// "other" is everything the classifier could not call a circle, arrow or bar.
+const NOTE_SHAPE_FILTERS: Array<{ label: string; shape: SkinNoteShape }> = [
+  { label: "circles", shape: "circle" },
+  { label: "arrows", shape: "arrow" },
+  { label: "bars", shape: "bar" },
+  { label: "other", shape: "other" },
 ];
 
 // 0 means no keymode filter; the options cover the keymodes skins realistically
@@ -81,18 +114,34 @@ const KEYMODE_FILTERS: Array<{ label: string; k: number; special: boolean }> = [
   { label: "10K", k: 10, special: false },
 ];
 
+// The truthy forms a boolean search param arrives in from a typed URL.
+function searchFlag(value: unknown): boolean {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
 export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
   const q = typeof search.q === "string" ? search.q.slice(0, 80) : DEFAULT_SKINS_SEARCH.q;
   const page = Number(search.page);
   const rawK = Number(search.k);
   const k = Number.isInteger(rawK) && rawK >= 1 && rawK <= 10 ? rawK : DEFAULT_SKINS_SEARCH.k;
+  const rawLazer = searchFlag(search.lazer);
+  const rawStable = searchFlag(search.stable);
   return {
     q,
     page: Number.isInteger(page) && page > 0 ? page : DEFAULT_SKINS_SEARCH.page,
     sort: isSkinsSort(search.sort) ? search.sort : DEFAULT_SKINS_SEARCH.sort,
     k,
-    special: k === 8 && (search.special === true || search.special === "true" || search.special === 1 || search.special === "1"),
-    mine: search.mine === true || search.mine === "true" || search.mine === 1 || search.mine === "1",
+    special: k === 8 && searchFlag(search.special),
+    mine: searchFlag(search.mine),
+    cover: searchFlag(search.cover),
+    stage: searchFlag(search.stage),
+    shots: searchFlag(search.shots),
+    // Old links may carry both flags. That always meant no backend filter, so
+    // normalize it to the explicit "any" state instead of showing ambiguity.
+    lazer: rawLazer && !rawStable,
+    stable: rawStable && !rawLazer,
+    shape: isSkinNoteShape(search.shape) ? search.shape : DEFAULT_SKINS_SEARCH.shape,
+    res: typeof search.res === "string" ? (normalizeSkinResolution(search.res) ?? DEFAULT_SKINS_SEARCH.res) : DEFAULT_SKINS_SEARCH.res,
   };
 }
 
@@ -101,6 +150,8 @@ export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
 // has: those URLs are not in the sitemap and no crawler lands on one.
 export function isDefaultSkinsView(search: SkinsSearch): boolean {
   return !search.q && !search.page && !search.k && !search.mine
+    && !search.cover && !search.stage && !search.shots && !search.lazer && !search.stable
+    && !search.shape && !search.res
     && (search.sort ?? "newest") === "newest";
 }
 
@@ -135,7 +186,7 @@ export const Route = createFileRoute("/skins")({
 function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-      <span className="w-14 shrink-0 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{label}</span>
+      <span className="w-14 shrink-0 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/45">{label}</span>
       <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3.5 gap-y-1">{children}</div>
     </div>
   );
@@ -161,8 +212,8 @@ function FilterOption({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex items-baseline gap-0.5 text-[12.5px] font-semibold tabular-nums transition-colors cursor-pointer ${
-        active ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
+      className={`inline-flex items-baseline gap-0.5 text-[12.5px] tabular-nums transition-colors cursor-pointer ${
+        active ? "font-bold text-white" : "font-medium text-osu-f1/75 hover:text-osu-pink-light"
       }`}
     >
       {children}
@@ -189,7 +240,10 @@ function SkinCardSkeleton() {
 }
 
 function SkinsPage() {
-  const { q = "", page = 0, sort = "newest", k = 0, special = false, mine = false } = Route.useSearch();
+  const {
+    q = "", page = 0, sort = "newest", k = 0, special = false, mine = false,
+    cover = false, stage = false, shots = false, lazer = false, stable = false, shape = "", res = "",
+  } = Route.useSearch();
   const navigate = useNavigate();
   const location = useLocation();
   const auth = useAuth();
@@ -204,18 +258,28 @@ function SkinsPage() {
   // flag has nobody to point at, so it filters nothing.
   const owner = mine ? viewerId : null;
   const mineActive = owner != null;
+  // Whether anything beyond the plain browse view is narrowing the grid, for
+  // the empty state's wording and for where a fresh publish may land.
+  const traitFilterCount = [cover, stage, shots, lazer !== stable, Boolean(shape), Boolean(res)].filter(Boolean).length;
+  const traitFiltersActive = traitFilterCount > 0;
+  // One client axis: only a lone flag narrows anything. Neither is every skin,
+  // and parseSkinsSearch normalizes legacy links carrying both back to neither.
+  const client = lazer !== stable ? (lazer ? "lazer" as const : "stable" as const) : undefined;
+  const shapeParam = shape || undefined;
+  const resParam = res || undefined;
 
   // The server-rendered grid, present only on a cold load of the plain browse
   // view; every other URL, and every client navigation, gets null here.
   const ssrList = Route.useLoaderData();
-  const ssrSeeded = ssrList != null && isDefaultSkinsView({ q, page, sort, k, mine });
+  const ssrSeeded = ssrList != null && isDefaultSkinsView({ q, page, sort, k, mine, cover, stage, shots, lazer, stable, shape, res });
 
   // Seeded from the in-memory list cache so walking back from a skin page
   // paints the same grid it left, not a screen of skeletons. Failing that, the
   // server-rendered page starts on its own skins rather than on skeletons it
   // would replace a moment later.
   const [data, setData] = useState<SkinsListResult | null>(
-    () => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k, variant, owner })) ?? (ssrSeeded ? ssrList : null),
+    () => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k, variant, owner, cover, stage, shots, client, shape: shapeParam, res: resParam }))
+      ?? (ssrSeeded ? ssrList : null),
   );
   const [loading, setLoading] = useState(!ssrSeeded);
   // Consumed by the first run of the list effect, which the server render has
@@ -236,17 +300,35 @@ function SkinsPage() {
   const [privateOpen, setPrivateOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(q);
   const [reloadTick, setReloadTick] = useState(0);
+  // The trait rows (notes, includes, display) fold away, so the browse view
+  // keeps the two short rows it always had and the rest is one click down.
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(traitFiltersActive);
+
+  // The resolutions worth offering are the ones the catalog answers to, which
+  // the list ships as a facet. A filter already in the URL joins them either
+  // way, so it can always be seen and cleared.
+  const resolutionOptions = (() => {
+    const options = data?.resolutions ?? [];
+    return res && !options.includes(res) ? [...options, res] : options;
+  })();
 
   const applySearch = useCallback(
     (patch: SkinsSearch) => {
       void navigate({
         to: "/skins",
-        search: { q, sort, k, special, mine, page: 0, ...patch },
+        search: { q, sort, k, special, mine, cover, stage, shots, lazer, stable, shape, res, page: 0, ...patch },
         replace: true,
       });
     },
-    [navigate, q, sort, k, special, mine],
+    [navigate, q, sort, k, special, mine, cover, stage, shots, lazer, stable, shape, res],
   );
+
+  // A link into a filtered URL opens the drawer, so nothing narrows the grid
+  // from behind a fold. Collapsing it again is left alone: the toggle counts
+  // what is still on.
+  useEffect(() => {
+    if (traitFiltersActive) setMoreFiltersOpen(true);
+  }, [traitFiltersActive]);
 
   // Debounced text search: typing updates local state, the URL follows.
   useEffect(() => {
@@ -264,7 +346,7 @@ function SkinsPage() {
       setFailed(true);
       return;
     }
-    const cacheKey = skinsListCacheKey({ q, page, sort, k, variant, owner });
+    const cacheKey = skinsListCacheKey({ q, page, sort, k, variant, owner, cover, stage, shots, client, shape: shapeParam, res: resParam });
     // The server-rendered grid is already on screen and was fetched for this
     // very request, so the first pass has nothing to do: fetching here would
     // pull the same 24 rows a second time, once in the HTML and once over the
@@ -285,7 +367,7 @@ function SkinsPage() {
     setLoading(!cached);
     setFailed(false);
     // One list for everyone, straight from the backend and cacheable there.
-    fetchSkinsListDirect({ q, page, sort, k, variant, owner }, { signal: controller.signal })
+    fetchSkinsListDirect({ q, page, sort, k, variant, owner, cover, stage, shots, client, shape: shapeParam, res: resParam }, { signal: controller.signal })
       .then((result) => {
         writeCachedSkinsList(cacheKey, result);
         if (controller.signal.aborted) return;
@@ -299,7 +381,7 @@ function SkinsPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [q, page, sort, k, variant, owner, reloadTick, ssrList]);
+  }, [q, page, sort, k, variant, owner, cover, stage, shots, client, shapeParam, resParam, reloadTick, ssrList]);
 
   useEffect(() => {
     if (!viewerId || !isLiveBackendConfigured()) {
@@ -351,11 +433,11 @@ function SkinsPage() {
     }
     // Land the fresh skin at the top of an unfiltered first page.
     setData((previous) =>
-      previous && page === 0 && !q && !k
+      previous && page === 0 && !q && !k && !traitFiltersActive
         ? { ...previous, total: previous.total + 1, skins: [skin, ...previous.skins].slice(0, SKINS_PAGE_SIZE) }
         : previous,
     );
-  }, [page, q, k]);
+  }, [page, q, k, traitFiltersActive]);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(`${location.pathname}${location.searchStr}`)}`;
@@ -435,7 +517,7 @@ function SkinsPage() {
                 />
               </div>
 
-              <div className="mt-3 flex flex-col gap-1.5">
+              <div className="mt-3.5 flex flex-col gap-2">
                 <FilterRow label="keys">
                   <FilterOption active={k === 0} onClick={() => applySearch({ k: 0, special: false })}>
                     any
@@ -452,7 +534,104 @@ function SkinsPage() {
                       </FilterOption>
                     );
                   })}
+                  {/* The trait rows sit behind this, at the end of the first
+                      row rather than on a line of its own: they are the ones
+                      you go looking for, not the ones you browse past. */}
+                  <button
+                    type="button"
+                    onClick={() => setMoreFiltersOpen((open) => !open)}
+                    aria-expanded={moreFiltersOpen}
+                    className="ml-auto inline-flex items-center gap-1 text-[12.5px] font-medium text-osu-f1/75 transition-colors cursor-pointer hover:text-osu-pink-light"
+                  >
+                    {moreFiltersOpen ? "fewer filters" : "more filters"}
+                    {!moreFiltersOpen && traitFilterCount > 0 && (
+                      <span className="tabular-nums text-white">{traitFilterCount}</span>
+                    )}
+                    <ChevronDown
+                      className={`h-3 w-3 self-center transition-transform ${moreFiltersOpen ? "" : "-rotate-90"}`}
+                      aria-hidden="true"
+                    />
+                  </button>
                 </FilterRow>
+                {moreFiltersOpen && (
+                  /* Two columns rather than four more stacked rows: the extra
+                     axes read as one banded group off to the side of the ones
+                     that are always on, instead of extending the same column
+                     of grey words further down the page. */
+                  <div className="mt-1 grid gap-x-12 gap-y-2 border-y border-osu-b3/25 py-2.5 sm:grid-cols-2">
+                    {/* What the tap notes are, classified from each skin's own
+                        note art. One shape at a time; picking the active one
+                        clears it. */}
+                    <FilterRow label="notes">
+                      <FilterOption active={!shape} onClick={() => applySearch({ shape: "" })}>
+                        any
+                      </FilterOption>
+                      {NOTE_SHAPE_FILTERS.map((option) => (
+                        <FilterOption
+                          key={option.shape}
+                          active={shape === option.shape}
+                          onClick={() => applySearch({ shape: shape === option.shape ? "" : option.shape })}
+                        >
+                          {option.label}
+                        </FilterOption>
+                      ))}
+                    </FilterRow>
+                    {/* Independent checkboxes: each chip narrows to skins that
+                        ship the thing. */}
+                    <FilterRow label="includes">
+                      <FilterOption active={cover} onClick={() => applySearch({ cover: !cover })}>
+                        lane cover
+                      </FilterOption>
+                      <FilterOption active={stage} onClick={() => applySearch({ stage: !stage })}>
+                        mania stage
+                      </FilterOption>
+                      <FilterOption active={shots} onClick={() => applySearch({ shots: !shots })}>
+                        screenshots
+                      </FilterOption>
+                    </FilterRow>
+                    {/* Client compatibility is a pick-one axis, not something
+                        the archive "includes". */}
+                    <FilterRow label="client">
+                      <FilterOption
+                        active={!stable && !lazer}
+                        onClick={() => applySearch({ stable: false, lazer: false })}
+                      >
+                        any
+                      </FilterOption>
+                      <FilterOption
+                        active={stable}
+                        onClick={() => applySearch({ stable: !stable, lazer: false })}
+                      >
+                        stable
+                      </FilterOption>
+                      <FilterOption
+                        active={lazer}
+                        onClick={() => applySearch({ lazer: !lazer, stable: false })}
+                      >
+                        lazer
+                      </FilterOption>
+                    </FilterRow>
+                    {/* The resolution the uploader said the skin is made for,
+                        offered as the ones uploaders have actually answered.
+                        Nobody has answered yet, no row. */}
+                    {resolutionOptions.length > 0 && (
+                      <FilterRow label="display">
+                        <FilterOption active={!res} onClick={() => applySearch({ res: "" })}>
+                          any
+                        </FilterOption>
+                        {resolutionOptions.map((option) => (
+                          <FilterOption
+                            key={option}
+                            active={res === option}
+                            onClick={() => applySearch({ res: res === option ? "" : option })}
+                          >
+                            {option}
+                          </FilterOption>
+                        ))}
+                      </FilterRow>
+                    )}
+                  </div>
+                )}
                 {/* Only worth a row to someone who has an account to filter
                     by; signed out there is no "you". */}
                 {auth.viewer && (
@@ -554,14 +733,16 @@ function SkinsPage() {
             ) : skins.length === 0 ? (
               <div className="mx-auto max-w-md px-4 py-16 text-center">
                 <div className="text-sm font-bold text-white">
-                  {mineActive && !q && !k ? "You have not published a skin yet" : q || k || mineActive ? "No skins match" : "No skins yet"}
+                  {mineActive && !q && !k && !traitFiltersActive
+                    ? "You have not published a skin yet"
+                    : q || k || mineActive || traitFiltersActive ? "No skins match" : "No skins yet"}
                 </div>
                 <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-                  {mineActive && !q && !k
+                  {mineActive && !q && !k && !traitFiltersActive
                     ? privateSkins.length > 0
                       ? "Your private skins are on the shelf above; anything you publish lands here."
                       : "Upload a skin and it lands here."
-                    : q || k || mineActive
+                    : q || k || mineActive || traitFiltersActive
                       ? "Clear the filters, or upload the skin yourself."
                       : "The first uploaded skin lands here."}
                 </p>
@@ -570,8 +751,9 @@ function SkinsPage() {
               <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {skins.map((skin) => (
-                    // Cards front the filtered keymode's own render (7K+1 is
-                    // the 8K one) instead of whatever cover the uploader chose.
+                    // An explicit keymode fronts its own render (7K+1 is the
+                    // 8K one). Without one, SkinCard uses the note-shape
+                    // proof keymode returned for mixed skins by the backend.
                     <SkinCard key={skin.id} skin={skin} previewKeys={k >= 1 ? k : undefined} />
                   ))}
                 </div>

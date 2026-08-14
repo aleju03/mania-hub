@@ -117,6 +117,23 @@ describe("SkinCard", () => {
     render(<SkinCard skin={withoutViews} />);
     expect(screen.getByLabelText("0 downloads, 0 views")).toBeTruthy();
   });
+
+  it("fronts the note-filter proof render unless an explicit keymode wins", () => {
+    const mixed: SkinSummary = {
+      ...SKIN,
+      filterKeys: 7,
+      previews: [
+        { keys: 4, url: "https://cdn.test/preview-4k.webp", width: 1280, height: 720 },
+        { keys: 7, url: "https://cdn.test/preview-7k.webp", width: 1280, height: 720 },
+      ],
+    };
+    render(<SkinCard skin={mixed} />);
+    expect(screen.getByAltText("aleju03 lazer preview").getAttribute("src")).toBe("https://cdn.test/preview-7k.webp");
+    cleanup();
+
+    render(<SkinCard skin={mixed} previewKeys={4} />);
+    expect(screen.getByAltText("aleju03 lazer preview").getAttribute("src")).toBe("https://cdn.test/preview-4k.webp");
+  });
 });
 
 // React derives onPointerEnter/Leave from pointerover/out, and jsdom has no

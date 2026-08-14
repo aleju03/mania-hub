@@ -2011,6 +2011,23 @@ async function migrateSkins(db: Db): Promise<void> {
     // owner-scoped reads, and rotated whenever a skin turns private.
     await db.execute("alter table skins add column private_secret text");
   }
+  if (!skinColumns.includes("lane_cover")) {
+    // The archive facts the /skins filters read (src/skins/archive-meta.ts):
+    // whether the .osk ships a lane cover, its own mania stage art, and
+    // lazer-only modification files; and what the tap notes are, classified
+    // from the visual signature. Written at upload/replacement and backfilled
+    // once by backfillSkinArchiveMeta; null means not analyzed.
+    await db.execute("alter table skins add column lane_cover integer");
+    await db.execute("alter table skins add column mania_stage integer");
+    await db.execute("alter table skins add column lazer integer");
+    await db.execute("alter table skins add column note_shape text");
+  }
+  if (!skinColumns.includes("resolution")) {
+    // The uploader's word on what resolution the skin is made for ("1920x1080",
+    // normalized). Optional at upload, editable with the details; never derived
+    // from the archive.
+    await db.execute("alter table skins add column resolution text");
+  }
   await db.execute(`
     create unique index if not exists idx_skins_slug
       on skins(slug) where slug is not null

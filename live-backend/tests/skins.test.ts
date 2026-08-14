@@ -24,6 +24,7 @@ import {
   listExpiredPendingSkins,
   listSimilarSkins,
   listSkins,
+  normalizeSkinResolution,
   privateSkinSecretMatches,
   recordSkinDownload,
   removeSkinScreenshot,
@@ -82,12 +83,16 @@ async function createPublishedSkin(input: {
   visibility?: "public" | "private";
   author?: string | null;
   accent?: string | null;
+  resolution?: string | null;
+  archive?: { laneCover: boolean; maniaStage: boolean; lazer: boolean } | null;
+  visual?: Parameters<typeof attachSkinOsk>[2]["visual"];
 }): Promise<string> {
   const created = await createPendingSkin(db, {
     ownerUserId: input.ownerUserId,
     ownerUsername: input.ownerUsername,
     name: input.name,
     visibility: input.visibility,
+    resolution: input.resolution,
   });
   if (!created.ok) throw new Error(`createPendingSkin failed: ${created.error}`);
   const pendingRow = await getSkin(db, created.id);
@@ -101,6 +106,8 @@ async function createPublishedSkin(input: {
     specialKeymodes: input.specialKeymodes ?? [],
     accentColor: input.accent === undefined ? "#ff66aa" : input.accent,
     iniAuthor: input.author ?? null,
+    archive: input.archive,
+    visual: input.visual,
   });
   await attachSkinPreview(db, created.id, {
     key: skinPreviewKey(created.id, "webp"),
@@ -1735,5 +1742,176 @@ describe("private skins", () => {
     // A newer .osk or a re-saved payload has to land on a different URL.
     expect(replaySkinBundleVersion({ oskKey: "skins/a/x-r1.osk", oskSha256: "ab", settingsUpdatedAt: "2026-08-03" })).not.toBe(version);
     expect(replaySkinBundleVersion({ oskKey: "skins/a/x.osk", oskSha256: "ab", settingsUpdatedAt: "2026-08-04" })).not.toBe(version);
+  });
+});
+
+describe("skin trait filters", () => {
+  const BAR_VISUAL = {
+    v: 3 as const,
+    keymodes: { 4: { aspect: 3, mask: "9".repeat(64), colors: ["#ffffff"], accents: [], sat: 0 } },
+  };
+
+  it("narrows the list by the analyzed archive flags, leaving unanalyzed rows out of a yes", async () => {
+    const covered = await createPublishedSkin({
+      ...OWNER, name: "Covered", sha256: "aa".repeat(32),
+      archive: { laneCover: true, maniaStage: true, lazer: false },
+    });
+    await createPublishedSkin({
+      ...OWNER, name: "Plain", sha256: "bb".repeat(32),
+      archive: { laneCover: false, maniaStage: false, lazer: false },
+    });
+    // A pre-analysis row: attachSkinOsk without archive leaves the columns null.
+    await createPublishedSkin({ ...OWNER, name: "Legacy", sha256: "cc".repeat(32) });
+
+    const byCover = await listSkins(db, { laneCover: true });
+    expect(byCover.skins.map((skin) => skin.id)).toEqual([covered]);
+    const byStage = await listSkins(db, { maniaStage: true });
+    expect(byStage.skins.map((skin) => skin.id)).toEqual([covered]);
+    expect((await listSkins(db, {})).total).toBe(3);
+  });
+
+  it("splits the catalog into lazer-modified and stable, with unanalyzed rows counting as stable", async () => {
+    const modified = await createPublishedSkin({
+      ...OWNER, name: "Lazer build", sha256: "aa".repeat(32),
+      archive: { laneCover: false, maniaStage: false, lazer: true },
+    });
+    await createPublishedSkin({
+      ...OWNER, name: "Stable build", sha256: "bb".repeat(32),
+      archive: { laneCover: false, maniaStage: false, lazer: false },
+    });
+    await createPublishedSkin({ ...OWNER, name: "Old row", sha256: "cc".repeat(32) });
+
+    const lazer = await listSkins(db, { client: "lazer" });
+    expect(lazer.skins.map((skin) => skin.id)).toEqual([modified]);
+    const stable = await listSkins(db, { client: "stable" });
+    expect(stable.total).toBe(2);
+    expect(stable.skins.some((skin) => skin.id === modified)).toBe(false);
+  });
+
+  it("filters by the note shape classified from the visual signature", async () => {
+    const bars = await createPublishedSkin({ ...OWNER, name: "Bars", sha256: "aa".repeat(32), visual: BAR_VISUAL });
+    await createPublishedSkin({ ...OWNER, name: "No art", sha256: "bb".repeat(32) });
+    const list = await listSkins(db, { noteShape: "bar" });
+    expect(list.skins.map((skin) => skin.id)).toEqual([bars]);
+    expect(list.skins[0].noteShape).toBe("bar");
+    expect((await listSkins(db, { noteShape: "circle" })).total).toBe(0);
+  });
+
+  it("fronts a keymode that proves the selected note shape on mixed skins", async () => {
+    const circle = {
+      aspect: 1,
+      mask: "0169961019999991699999969999999999999999699999961999999101699610",
+      colors: ["#ffffff"],
+      accents: [],
+      sat: 0,
+    };
+    const bar = { aspect: 1.7, mask: "9".repeat(64), colors: ["#ffffff"], accents: [], sat: 0 };
+    const argefangirl = await createPublishedSkin({
+      ...OWNER,
+      name: "Argefangirl mixed",
+      keymodes: [4, 5, 7, 8, 9],
+      specialKeymodes: [8],
+      visual: {
+        v: 3,
+        keymodes: { 4: circle, 5: bar, 7: circle, 8: bar, 9: bar },
+      },
+    });
+    for (const keys of [4, 5, 7, 8, 9]) {
+      await upsertSkinKeymodePreview(db, argefangirl, {
+        keys,
+        key: `skins/${argefangirl}/preview-${keys}k.webp`,
+        url: `https://cdn.example/${argefangirl}/preview-${keys}k.webp`,
+        width: 1280,
+        height: 720,
+      }, keys === 4);
+    }
+
+    const teto = await createPublishedSkin({
+      ...OWNER,
+      ownerUserId: OWNER.ownerUserId + 1,
+      name: "Teto mixed",
+      keymodes: [4, 6, 7, 8],
+      specialKeymodes: [8],
+      sha256: "bb".repeat(32),
+      visual: { v: 3, keymodes: { 4: circle, 6: bar, 7: bar, 8: bar } },
+    });
+    for (const keys of [4, 6, 7, 8]) {
+      await upsertSkinKeymodePreview(db, teto, {
+        keys,
+        key: `skins/${teto}/preview-${keys}k.webp`,
+        url: `https://cdn.example/${teto}/preview-${keys}k.webp`,
+        width: 1280,
+        height: 720,
+      }, keys === 4);
+    }
+
+    const filtered = await listSkins(db, { noteShape: "bar", sort: "oldest" });
+    expect(filtered.skins.map((skin) => [skin.name, skin.filterKeys])).toEqual([
+      ["Argefangirl mixed", 8],
+      ["Teto mixed", 7],
+    ]);
+    // The hint belongs only to a shape-filtered response; ordinary cards keep
+    // the uploader's starred cover.
+    expect((await listSkins(db, {})).skins.every((skin) => skin.filterKeys === undefined)).toBe(true);
+  });
+
+  it("filters to skins with screenshots attached", async () => {
+    const shot = await createPublishedSkin({ ...OWNER, name: "With shots", sha256: "aa".repeat(32) });
+    await createPublishedSkin({ ...OWNER, name: "Without", sha256: "bb".repeat(32) });
+    await appendSkinScreenshot(db, shot, {
+      key: `skins/${shot}/shot-0.webp`,
+      url: `https://cdn.example/skins/${shot}/shot-0.webp`,
+      width: 1280,
+      height: 720,
+      label: null,
+    });
+    const list = await listSkins(db, { screenshots: true });
+    expect(list.skins.map((skin) => skin.id)).toEqual([shot]);
+  });
+});
+
+describe("skin recommended resolution", () => {
+  it("normalizes what the uploader typed and refuses what it cannot read", () => {
+    expect(normalizeSkinResolution("1920x1080")).toBe("1920x1080");
+    expect(normalizeSkinResolution(" 2560 × 1440 ")).toBe("2560x1440");
+    expect(normalizeSkinResolution("1366X768")).toBe("1366x768");
+    expect(normalizeSkinResolution("1080p")).toBeNull();
+    expect(normalizeSkinResolution("99x99")).toBeNull();
+    expect(normalizeSkinResolution(null)).toBeNull();
+  });
+
+  it("stores it at upload, serves it on the summary, and matches the filter exactly", async () => {
+    const fullHd = await createPublishedSkin({ ...OWNER, name: "For 1080p", sha256: "aa".repeat(32), resolution: "1920 × 1080" });
+    await createPublishedSkin({ ...OWNER, name: "Unsaid", sha256: "bb".repeat(32) });
+    const row = await getSkin(db, fullHd);
+    expect(row?.resolution).toBe("1920x1080");
+    expect(toSkinSummary(row!).resolution).toBe("1920x1080");
+    const list = await listSkins(db, { resolution: "1920x1080" });
+    expect(list.skins.map((skin) => skin.id)).toEqual([fullHd]);
+    expect((await listSkins(db, { resolution: "2560x1440" })).total).toBe(0);
+  });
+
+  it("offers the resolutions the catalog answers to, smallest display first", async () => {
+    await createPublishedSkin({ ...OWNER, name: "4K", sha256: "aa".repeat(32), resolution: "3840x2160" });
+    await createPublishedSkin({ ...OWNER, name: "1080p", sha256: "bb".repeat(32), resolution: "1920x1080" });
+    await createPublishedSkin({ ...OWNER, name: "Also 1080p", sha256: "cc".repeat(32), resolution: "1920x1080" });
+    await createPublishedSkin({ ...OWNER, name: "Unsaid", sha256: "dd".repeat(32) });
+    expect((await listSkins(db, {})).resolutions).toEqual(["1920x1080", "3840x2160"]);
+    // Picking one leaves the row intact, so it can be swapped or cleared.
+    const filtered = await listSkins(db, { resolution: "1920x1080" });
+    expect(filtered.total).toBe(2);
+    expect(filtered.resolutions).toEqual(["1920x1080", "3840x2160"]);
+    // Every other filter does narrow it: nothing on offer returns no skins.
+    expect((await listSkins(db, { q: "4K" })).resolutions).toEqual(["3840x2160"]);
+  });
+
+  it("edits with the details: omitted keeps it, a new value replaces it, junk clears it", async () => {
+    const id = await createPublishedSkin({ ...OWNER, name: "Editable", sha256: "aa".repeat(32), resolution: "1920x1080" });
+    const kept = await updateSkinDetails(db, id, { name: "Editable" }, OWNER.ownerUserId);
+    expect(kept.ok && kept.skin.resolution).toBe("1920x1080");
+    const changed = await updateSkinDetails(db, id, { name: "Editable", resolution: "2560x1440" }, OWNER.ownerUserId);
+    expect(changed.ok && changed.skin.resolution).toBe("2560x1440");
+    const cleared = await updateSkinDetails(db, id, { name: "Editable", resolution: "" }, OWNER.ownerUserId);
+    expect(cleared.ok && cleared.skin.resolution).toBeNull();
   });
 });

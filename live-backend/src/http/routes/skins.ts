@@ -7,6 +7,7 @@ import { clientIp } from "../abuse-guard.js";
 import { readCachedSkinImage } from "../../skins/image-cache.js";
 import { drawPreviewPatterns } from "../../skins/preview-patterns.js";
 import { copySkinObject, deleteSkinObjects, getSkinObject, isPrivateSkinKey, isSkinStorageConfigured, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, privateSkinKey, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../../skins/r2.js";
+import { computeSkinArchiveMeta, isSkinNoteShape } from "../../skins/archive-meta.js";
 import { getReplaySkinBundle, replaySkinBundleVersion } from "../../skins/replay-bundle.js";
 import { sniffImage, validateOskBuffer } from "../../skins/validate-osk.js";
 import { computeSkinVisualSignature } from "../../skins/visual-signature.js";
@@ -63,6 +64,8 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     else res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
     const variant = url.searchParams.get("variant");
     const owner = Number(url.searchParams.get("owner"));
+    const client = url.searchParams.get("client");
+    const shape = url.searchParams.get("shape");
     const list = await listSkins(ctx.db, {
       q: (url.searchParams.get("q") ?? "").slice(0, 80),
       keymode: Number.isInteger(keymode) && keymode >= 1 && keymode <= 10 ? keymode : null,
@@ -84,6 +87,14 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       // The moderation shelf: every uploader's private skins, and only for a
       // request that proved it is a true admin.
       adminAllPrivate: scope.asAdmin && url.searchParams.get("allPrivate") === "1",
+      // The trait filters: lane cover, own stage art, screenshots attached,
+      // which client the skin is for, note shape, recommended resolution.
+      laneCover: url.searchParams.get("cover") === "1",
+      maniaStage: url.searchParams.get("stage") === "1",
+      screenshots: url.searchParams.get("shots") === "1",
+      client: client === "lazer" || client === "stable" ? client : null,
+      noteShape: isSkinNoteShape(shape) ? shape : null,
+      resolution: url.searchParams.get("res"),
     });
     sendJson(req, res, ctx, 200, list);
     return true;
@@ -474,7 +485,7 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown; bypassLimits?: unknown; visibility?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown; bypassLimits?: unknown; visibility?: unknown; resolution?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     if (!Number.isInteger(userId) || userId <= 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
@@ -494,6 +505,7 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       // verifies a true admin before forwarding it on this token-gated route.
       bypassLimits: body.bypassLimits === true,
       visibility: body.visibility === "private" ? "private" : "public",
+      resolution: typeof body.resolution === "string" ? body.resolution : null,
     });
     if (!result.ok) {
       if (result.error === "duplicate") {
@@ -610,6 +622,10 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       // an archive with no digestible note art just leaves the column null and
       // scoring falls back to the sampled accent.
       const visual = await computeSkinVisualSignature(buffer).catch(() => null);
+      // The trait flags the catalog filters read (lane cover, stage art,
+      // lazer files). Best effort the same way: a failed analysis stores
+      // "unknown", never a wrong no.
+      const archive = await computeSkinArchiveMeta(buffer).catch(() => null);
       if (editing) {
         // An update lands on a fresh key (the published object is cached
         // immutably) but keeps the skin's own download filename. The old build
@@ -625,6 +641,7 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
           specialKeymodes: validation.info.specialKeymodes,
           iniAuthor: validation.info.author,
           visual,
+          archive,
         });
         if (skin.oskKey && skin.oskKey !== key) {
           await deleteSkinObjects(ctx.config, [skin.oskKey]).catch((error) => {
@@ -647,6 +664,7 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
         accentColor: validation.info.accentColor,
         iniAuthor: validation.info.author,
         visual,
+        archive,
       });
       logInfo("skin_upload_osk", { id: skin.id, ownerUserId: skin.ownerUserId, sizeBytes: uploaded.sizeBytes, keymodes: validation.info.keymodes });
       sendJson(req, res, ctx, 200, { ok: true, keymodes: validation.info.keymodes });
@@ -799,7 +817,7 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; screenshot?: unknown; labels?: unknown; name?: unknown; description?: unknown; asAdmin?: unknown; asKeymodeModerator?: unknown; scope?: unknown; visibility?: unknown; specialKeymodes?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; screenshot?: unknown; labels?: unknown; name?: unknown; description?: unknown; resolution?: unknown; asAdmin?: unknown; asKeymodeModerator?: unknown; scope?: unknown; visibility?: unknown; specialKeymodes?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     const id = typeof body.id === "string" ? body.id : "";
     if (!Number.isInteger(userId) || userId <= 0 || !id) {
@@ -816,6 +834,7 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
         {
           name: typeof body.name === "string" ? body.name : "",
           description: typeof body.description === "string" ? body.description : undefined,
+          resolution: typeof body.resolution === "string" ? body.resolution : undefined,
         },
         ownerUserId,
       );

@@ -79,15 +79,17 @@ export function SkinPreviewImage({
 // onClick is for callers that render the card outside the browse grid (the
 // upload modal's publish confirmation) and need to tear their own UI down as
 // the navigation happens.
-// previewKeys is the browse grid's keymode filter: with it set the card fronts
-// that keymode's own render when the skin has one, so filtering 4K shows every
-// skin's 4K playfield even where a 7K render was chosen as the cover.
+// previewKeys is an explicit keymode chosen by the caller: with it set the
+// card fronts that keymode's own render. A note-shape-filtered list can also
+// carry filterKeys, the backend-selected render that proves a mixed skin has
+// the requested notes. The explicit keymode wins when both filters are on.
 // showUploader is for the admin private shelf, which mixes every uploader's
 // skins and would otherwise give no way to tell whose is whose.
 export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: { skin: SkinSummary; previewKeys?: number; showUploader?: boolean; onClick?: () => void }) {
   const accent = skin.accentColor ?? SKIN_FALLBACK_ACCENT;
   const isPrivate = skin.visibility === "private";
-  const keymodePreview = previewKeys != null ? skin.previews.find((preview) => preview.keys === previewKeys) : undefined;
+  const selectedPreviewKeys = previewKeys ?? skin.filterKeys ?? undefined;
+  const keymodePreview = selectedPreviewKeys != null ? skin.previews.find((preview) => preview.keys === selectedPreviewKeys) : undefined;
   const preview = keymodePreview
     ? { url: keymodePreview.url, width: keymodePreview.width, height: keymodePreview.height }
     : { url: skin.previewUrl, width: skin.previewWidth, height: skin.previewHeight };

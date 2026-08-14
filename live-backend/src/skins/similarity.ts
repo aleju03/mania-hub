@@ -33,6 +33,11 @@ export interface SkinKeymodeVisual {
   // white note with a thin coloured edge from a fully coloured one, and keeps
   // a monochrome skin from matching a neon one on rim colour alone.
   sat: number;
+  // Some arrow sets have a nearly round alpha silhouette because the arrow is
+  // painted inside a soft body. When skin.ini assigns at least three cardinal
+  // directions from an arrows folder, retain that layout evidence alongside
+  // the raster digest. Omitted for the ordinary case to keep stored JSON lean.
+  arrowLayout?: true;
 }
 
 // The whole skin's digest, stored on the skins row as visual_json: one entry
@@ -308,10 +313,18 @@ function normalizeKeymodeVisual(value: unknown): SkinKeymodeVisual | null {
   if (!Number.isFinite(sat) || sat < 0 || sat > 1) return null;
   const colors = hexList(raw.colors);
   const accents = hexList(raw.accents);
+  if (raw.arrowLayout != null && raw.arrowLayout !== true) return null;
   // Colours are required (every readable sprite has an average); accents are
   // legitimately empty on colourless art, but a malformed list is not.
   if (!colors || colors.length === 0 || !accents) return null;
-  return { aspect, mask: raw.mask, colors, accents, sat };
+  return {
+    aspect,
+    mask: raw.mask,
+    colors,
+    accents,
+    sat,
+    ...(raw.arrowLayout === true ? { arrowLayout: true as const } : {}),
+  };
 }
 
 function hexList(value: unknown): string[] | null {

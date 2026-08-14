@@ -23,7 +23,7 @@ import {
   writeMyReplaySkinMemory,
 } from "../lib/replay-owner-skin";
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
-import { canModerateSkinKeymodes, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, pingSkinView, readSkinsBrowseEntry, skinDownloadUrl, skinOskFileUrl, skinScreenshotLabel, type SkinSummary } from "../lib/skins";
+import { canModerateSkinKeymodes, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, pingSkinView, readSkinsBrowseEntry, skinDownloadUrl, skinNoteShapeLabel, skinOskFileUrl, skinScreenshotLabel, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -475,6 +475,27 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                           <span className="tabular-nums text-osu-l1">{(skin.viewCount ?? 0).toLocaleString()}</span>
                         </FactRow>
                       </>
+                    )}
+                    {skin.noteShape && (
+                      <FactRow label="Notes">
+                        <span className="text-osu-l1">{skinNoteShapeLabel(skin.noteShape)}</span>
+                      </FactRow>
+                    )}
+                    {skin.resolution && (
+                      <FactRow label="Made for">
+                        <span className="tabular-nums text-osu-l1">{skin.resolution}</span>
+                      </FactRow>
+                    )}
+                    {(skin.laneCover || skin.maniaStage || skin.lazer) && (
+                      <FactRow label="Includes">
+                        <span className="text-osu-l1">
+                          {[
+                            skin.laneCover ? "lane cover" : null,
+                            skin.maniaStage ? "mania stage" : null,
+                            skin.lazer ? "lazer edits" : null,
+                          ].filter(Boolean).join(", ")}
+                        </span>
+                      </FactRow>
                     )}
                     {skin.oskSizeBytes ? (
                       <FactRow label="File size">

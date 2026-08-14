@@ -26,6 +26,7 @@ import { backfillPackCardSerials } from "./features/pack-pulls.js";
 import { ensurePackCardCatalog, ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
 import { backfillSkinSlugs, backfillSkinViewCounts } from "./features/skins.js";
 import { isSkinStorageConfigured, readSkinObject, skinObjectDeletesEnabled } from "./skins/r2.js";
+import { backfillSkinArchiveMeta } from "./skins/archive-meta.js";
 import { backfillSkinSpecialKeymodes } from "./skins/special-backfill.js";
 import { backfillSkinVisualSignatures } from "./skins/visual-signature.js";
 import { ensureArchivedPlayers } from "./archived-players.js";
@@ -182,7 +183,16 @@ export async function createApp() {
         .then((updated) => {
           if (updated > 0) logInfo("skin_visual_signatures_backfilled", { updated });
         })
-        .catch((error) => logWarn("skin_visual_signatures_backfill_failed", errorContext(error)));
+        .catch((error) => logWarn("skin_visual_signatures_backfill_failed", errorContext(error)))
+        // Lane-cover / stage / lazer flags and the note-shape label for skins
+        // uploaded before the filter columns existed. Chained for the same
+        // reason: one .osk buffer in memory at a time. Runs after the visual
+        // sweep on purpose - the shape label is classified from visual_json.
+        .then(() => backfillSkinArchiveMeta(db, (key) => readSkinObject(config, key, config.skinOskMaxBytes)))
+        .then((updated) => {
+          if (updated > 0) logInfo("skin_archive_meta_backfilled", { updated });
+        })
+        .catch((error) => logWarn("skin_archive_meta_backfill_failed", errorContext(error)));
     }
     // GOAT cards split off from their player's ordinary card, so collection
     // rows are keyed (owner, card_key) now. Rebuilds the table once on a

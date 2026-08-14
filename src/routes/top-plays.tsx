@@ -20,6 +20,7 @@ import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
+import { PpGainsRail } from "../components/top-plays/PpGainsRail";
 import type { CountryTopPlay } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
@@ -68,7 +69,6 @@ const RANGE_MS: Record<TimeRange, number> = {
 };
 
 const PAGE_SIZE = 15;
-const PP_GAIN_SKELETON_COUNT = 6;
 const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   range: "7d",
   country: undefined,
@@ -318,8 +318,6 @@ function PopOffsPage() {
     return () => source.close();
   }, [liveBackendEnabled, mergePopoffs, popoffs, popoffsWindow, range, selectedCountry, setCachedPopoffs]);
 
-  const selectedPlayerIdSet = useMemo(() => new Set(selectedPlayerIds), [selectedPlayerIds]);
-
   const togglePlayerFilter = useCallback((playerId: number) => {
     setSelectedPlayerIds((current) =>
       current.includes(playerId)
@@ -389,28 +387,6 @@ function PopOffsPage() {
       .map(([id, info]) => ({ id, ...info }));
     return ranked;
   }, [hiddenUserIds, livePpGains, rangedPopoffs]);
-
-  const ppGainsRailRef = useRef<HTMLDivElement | null>(null);
-  const [ppGainsRailFade, setPpGainsRailFade] = useState<{ top: boolean; bottom: boolean }>({ top: false, bottom: false });
-  const updatePpGainsRailFade = useCallback(() => {
-    const el = ppGainsRailRef.current;
-    if (!el) return;
-    const top = el.scrollTop > 4;
-    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 4;
-    setPpGainsRailFade((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
-  }, []);
-  useEffect(() => {
-    updatePpGainsRailFade();
-    window.addEventListener("resize", updatePpGainsRailFade);
-    return () => window.removeEventListener("resize", updatePpGainsRailFade);
-  }, [playerPpGains.length, updatePpGainsRailFade]);
-  const ppGainsRailMaskClass = ppGainsRailFade.top && ppGainsRailFade.bottom
-    ? "tracker-rail--tb"
-    : ppGainsRailFade.top
-      ? "tracker-rail--t"
-      : ppGainsRailFade.bottom
-        ? "tracker-rail--b"
-        : "";
 
   const showPpGainsRail = playerPpGains.length > 0;
 
@@ -578,100 +554,11 @@ function PopOffsPage() {
       <div className="relative z-10">
         <div className="max-w-[1200px] mx-auto px-5 py-6 flex flex-col lg:flex-row gap-4 lg:gap-5">
           {showPpGainsRail && (
-            <>
-              {/* Mobile: horizontal row */}
-              <div className="lg:hidden flex items-start gap-3 overflow-x-auto scrollbar-hide py-1 min-h-[54px]">
-                <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold flex-shrink-0 pt-2">PP Gained</span>
-                {playerPpGains.length > 0 ? (
-                  playerPpGains.map((player) => (
-                    <button
-                      key={player.id}
-                      onClick={() => togglePlayerFilter(player.id)}
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                      }}
-                      aria-pressed={selectedPlayerIdSet.has(player.id)}
-                      className="cursor-pointer group relative flex-shrink-0 flex flex-col items-center gap-0.5"
-                      title={`${player.username}: +${formatPpGain(player.totalGain)}pp - click to filter`}
-                    >
-                      <div className={`ring-2 ring-inset rounded-full transition-all ${
-                        selectedPlayerIdSet.has(player.id)
-                          ? "ring-osu-pink shadow-[0_0_0_3px_rgba(255,102,171,0.18)]"
-                          : "ring-osu-pink/40 group-hover:ring-osu-pink"
-                      }`}>
-                        <Avatar url={player.avatar_url} size={32} />
-                      </div>
-                      <span className="text-[9px] font-semibold text-osu-green">
-                        +{formatPpGain(player.totalGain)}
-                      </span>
-                    </button>
-                  ))
-                ) : (
-                  Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex-shrink-0 flex flex-col items-center gap-1">
-                      <Skeleton className="w-8 h-8 rounded-full" />
-                      <Skeleton className="h-2.5 w-8" />
-                    </div>
-                  ))
-                )}
-              </div>
-              {/* Desktop: vertical sidebar, three columns, edge-faded internal scroll */}
-              <div className="hidden lg:flex sticky top-[76px] max-h-[calc(100svh_-_196px)] self-start flex-col flex-shrink-0 min-w-[128px]">
-                {playerPpGains.length > 0 ? (
-                  <>
-                    <div className="flex items-baseline justify-between gap-2 mb-2 px-0.5">
-                      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP Gained</span>
-                      <span className="text-[9px] tabular-nums text-osu-f1/70 font-semibold">{playerPpGains.length}</span>
-                    </div>
-                    <div
-                      ref={ppGainsRailRef}
-                      onScroll={updatePpGainsRailFade}
-                      className={`min-h-0 overflow-y-auto overscroll-contain scrollbar-hide ${ppGainsRailMaskClass}`}
-                    >
-                      <div className="grid grid-cols-3 gap-x-2 gap-y-1.5 place-items-center px-0.5 py-1">
-                        {playerPpGains.map((player) => (
-                          <button
-                            key={player.id}
-                            onClick={() => togglePlayerFilter(player.id)}
-                            onContextMenu={(event) => {
-                              event.preventDefault();
-                            }}
-                            aria-pressed={selectedPlayerIdSet.has(player.id)}
-                            className="cursor-pointer group relative flex flex-col items-center gap-0.5 shrink-0"
-                            title={`${player.username}: +${formatPpGain(player.totalGain)}pp - click to filter`}
-                          >
-                            <div className={`ring-2 rounded-full transition-all ${
-                              selectedPlayerIdSet.has(player.id)
-                                ? "ring-osu-pink shadow-[0_0_0_3px_rgba(255,102,171,0.18)]"
-                                : "ring-osu-pink/40 group-hover:ring-osu-pink"
-                            }`}>
-                              <Avatar url={player.avatar_url} size={32} />
-                            </div>
-                            <span className="text-[9px] font-semibold text-osu-green">
-                              +{formatPpGain(player.totalGain)}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-baseline justify-between gap-2 mb-2 px-0.5">
-                      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP Gained</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-x-2 gap-y-1.5 place-items-center px-0.5 py-1">
-                      {Array.from({ length: PP_GAIN_SKELETON_COUNT }).map((_, i) => (
-                        <div key={i} className="flex flex-col items-center gap-1">
-                          <Skeleton className="w-8 h-8 rounded-full" />
-                          <Skeleton className="h-2.5 w-8" />
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </>
+            <PpGainsRail
+              players={playerPpGains}
+              selectedPlayerIds={selectedPlayerIds}
+              onTogglePlayer={togglePlayerFilter}
+            />
           )}
           <div className="flex-1 min-w-0">
           {/* Loading skeletons on initial load */}

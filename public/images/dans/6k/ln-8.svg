@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 280" role="img" aria-label="6K LN 8th dan">
+  <defs>
+    <pattern id="hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)">
+      <rect width="9" height="9" fill="none"/>
+      <rect width="3.4" height="9" fill="rgba(0,0,0,0.17)"/>
+    </pattern>
+    <radialGradient id="vig" cx="50%" cy="46%" r="56%">
+      <stop offset="0.62" stop-color="rgba(0,0,0,0)"/>
+      <stop offset="1" stop-color="rgba(0,0,0,0.28)"/>
+    </radialGradient>
+    <filter id="gsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+    <linearGradient id="fgrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d4d4d8"/>
+      <stop offset="0.5" stop-color="#ababb2"/>
+      <stop offset="1" stop-color="#7e7e86"/>
+    </linearGradient>
+    <clipPath id="plateclip"><path d="M 140.00 242.00 L 51.67 191.00 L 51.67 89.00 L 140.00 38.00 L 228.33 89.00 L 228.33 191.00 Z"/></clipPath>
+  </defs>
+  <path d="M 140.00 262.00 L 34.34 201.00 L 34.34 79.00 L 140.00 18.00 L 245.66 79.00 L 245.66 201.00 Z M 140.00 242.00 L 51.67 191.00 L 51.67 89.00 L 140.00 38.00 L 228.33 89.00 L 228.33 191.00 Z Z" fill="url(#fgrad)" fill-rule="evenodd"/>
+  <path d="M 140.00 262.00 L 34.34 201.00 L 34.34 79.00 L 140.00 18.00 L 245.66 79.00 L 245.66 201.00 Z" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="2"/>
+  <path d="M 140.00 242.00 L 51.67 191.00 L 51.67 89.00 L 140.00 38.00 L 228.33 89.00 L 228.33 191.00 Z" fill="#713b3b"/>
+  <g clip-path="url(#plateclip)">
+    <rect x="118" y="10" width="44" height="260" fill="rgba(255,255,255,0.09)"/>
+  </g>
+  <path d="M 140.00 242.00 L 51.67 191.00 L 51.67 89.00 L 140.00 38.00 L 228.33 89.00 L 228.33 191.00 Z" fill="url(#hatch)"/>
+  <path d="M 140.00 242.00 L 51.67 191.00 L 51.67 89.00 L 140.00 38.00 L 228.33 89.00 L 228.33 191.00 Z" fill="url(#vig)"/>
+  <path d="M 140.00 243.00 L 50.80 191.50 L 50.80 88.50 L 140.00 37.00 L 229.20 88.50 L 229.20 191.50 Z" fill="none" stroke="rgba(0,0,0,0.4)" stroke-width="3"/>
+  <g filter="url(#gsh)"><g transform="translate(100.71 84.00) scale(0.9032)" fill="#fff" stroke="#fff" stroke-width="33.2" stroke-linejoin="round"><g transform="translate(0.000000,124.000000) scale(0.100000,-0.100000)" stroke="none"> <path d="M340 1226 c-105 -22 -209 -107 -253 -204 -29 -67 -35 -192 -11 -267 14 -45 15 -61 5 -74 -6 -9 -26 -45 -44 -81 -30 -61 -32 -71 -32 -175 0 -103 2 -114 32 -178 79 -167 246 -259 440 -243 233 19 393 192 393 425 0 95 -19 162 -64 226 -34 48 -35 49 -18 79 13 24 17 57 17 141 0 127 -13 162 -93 247 -55 59 -116 92 -197 107 -71 13 -104 13 -175 -3z m220 -69 c162 -69 238 -255 167 -409 l-25 -56 38 -51 c59 -78 73 -124 68 -228 -2 -68 -9 -100 -29 -143 -34 -73 -99 -136 -179 -174 -59 -28 -74 -31 -165 -31 -88 0 -107 3 -157 27 -76 35 -151 107 -185 177 -25 50 -28 67 -28 161 0 115 12 152 76 225 l31 35 -28 55 c-82 170 20 376 211 426 43 12 164 3 205 -14z M382 925 c-26 -22 -32 -34 -32 -66 0 -84 91 -121 144 -58 32 38 33 80 4 113 -35 40 -78 43 -116 11z m76 -66 c4 -31 -18 -44 -43 -25 -25 18 -11 58 18 54 15 -2 23 -11 25 -29z M384 536 c-49 -22 -74 -61 -74 -118 0 -43 5 -55 33 -83 88 -88 225 -26 214 98 -5 53 -26 83 -74 103 -40 17 -59 17 -99 0z m105 -72 c26 -34 26 -54 0 -88 -39 -49 -129 -20 -129 43 0 65 89 96 129 45z"/> </g></g></g>
+</svg>

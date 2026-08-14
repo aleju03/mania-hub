@@ -216,7 +216,10 @@ describe("skinSimilarity accent fallback (no signatures)", () => {
 
 describe("normalizeSkinVisualSignature", () => {
   it("round-trips a well-formed signature", () => {
-    const multi: SkinVisualSignature = { v: 3, keymodes: { "4": CIRCLE_ART, "6": BAR_ART } };
+    const multi: SkinVisualSignature = {
+      v: 3,
+      keymodes: { "4": { ...CIRCLE_ART, arrowLayout: true }, "6": BAR_ART },
+    };
     expect(normalizeSkinVisualSignature(JSON.parse(JSON.stringify(multi)))).toEqual(multi);
   });
 
@@ -237,5 +240,6 @@ describe("normalizeSkinVisualSignature", () => {
     expect(normalizeSkinVisualSignature({ v: 3, keymodes: { "4": { ...BAR_ART, mask: "9".repeat(63) } } })).toBeNull();
     expect(normalizeSkinVisualSignature({ v: 3, keymodes: { "4": { ...BAR_ART, colors: [] } } })).toBeNull();
     expect(normalizeSkinVisualSignature({ v: 3, keymodes: { "4": { ...BAR_ART, colors: ["#ffffff", "white"] } } })).toBeNull();
+    expect(normalizeSkinVisualSignature({ v: 3, keymodes: { "4": { ...BAR_ART, arrowLayout: false } } })).toBeNull();
   });
 });

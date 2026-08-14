@@ -13,6 +13,7 @@ import type { Db } from "../db.js";
 import { exec } from "../db.js";
 import { logWarn } from "../logger.js";
 import { nowIso } from "../shared/score.js";
+import { classifySkinNoteShape } from "./archive-meta.js";
 import type { SkinKeymodeVisual, SkinVisualSignature } from "./similarity.js";
 import { parseSkinIni } from "./validate-osk.js";
 
@@ -91,6 +92,7 @@ export async function computeSkinVisualSignature(buffer: Buffer): Promise<SkinVi
     let mask: string | null = null;
     const colors: string[] = [];
     const accents: string[] = [];
+    const notes: AnalyzedNote[] = [];
     let sat = 0;
     for (const entry of files) {
       const note = await analyzeOnce(entry.key, entry.file);
@@ -102,6 +104,7 @@ export async function computeSkinVisualSignature(buffer: Buffer): Promise<SkinVi
       colors.push(note.color);
       if (note.accent) accents.push(note.accent);
       sat += note.sat;
+      notes.push(note);
     }
     if (aspect != null && mask != null && colors.length > 0) {
       keymodes[String(keys)] = {
@@ -110,11 +113,33 @@ export async function computeSkinVisualSignature(buffer: Buffer): Promise<SkinVi
         colors: colors.slice(0, 4),
         accents: accents.slice(0, 4),
         sat: sat / colors.length,
+        ...(hasArrowLayout(block, keys, notes) ? { arrowLayout: true as const } : {}),
       };
     }
   }
   if (Object.keys(keymodes).length === 0) return null;
   return { v: 3, keymodes };
+}
+
+// A filename merely containing "arrow" is weak evidence: skins keep unused
+// alternatives in arrow folders, and rounded-square edits are often copied
+// from one. A live Mania block assigning at least three different cardinal
+// directions from such a folder is the convention used by actual arrow sets.
+// The referenced art must also point along one axis at full resolution. That
+// visual check matters because many circle skins inherit these exact folder
+// and filename conventions from an arrow template.
+function hasArrowLayout(block: Record<string, string>, keys: number, notes: AnalyzedNote[]): boolean {
+  const references = Array.from({ length: keys }, (_, column) => block[`NoteImage${column}`])
+    .filter((reference): reference is string => Boolean(reference));
+  if (!references.some((reference) => /(?:^|[\\/_ -])arrows?(?:[\\/_ -]|$)/i.test(reference))) return false;
+  const directions = new Set<string>();
+  for (const reference of references) {
+    const basename = reference.replace(/\\/g, "/").split("/").pop()?.replace(/@2x$/i, "").toLowerCase() ?? "";
+    for (const direction of ["left", "right", "up", "down"] as const) {
+      if (basename.includes(direction)) directions.add(direction);
+    }
+  }
+  return directions.size >= 3 && notes.some((note) => note.directionalAlpha);
 }
 
 // Stable's default column layout: alternating 1/2 mirrored from the outer
@@ -139,14 +164,22 @@ function resolveNoteImage(
     if (!name) continue;
     const base = cleanZipPath(name).replace(/\.(png|jpe?g)$/i, "");
     if (!base) continue;
-    for (const ext of ["png", "jpg", "jpeg"]) {
-      for (const candidate of [`${base}@2x.${ext}`, `${base}.${ext}`]) {
-        const key = candidate.toLowerCase();
-        const direct = lookup.get(key);
-        if (direct) return { key, file: direct };
-        for (const [entryKey, file] of lookup) {
-          if (entryKey.endsWith(`/${key}`)) return { key: entryKey, file };
-        }
+    const candidates = ["png", "jpg", "jpeg"]
+      .flatMap((ext) => [`${base}@2x.${ext}`, `${base}.${ext}`])
+      .map((candidate) => candidate.toLowerCase());
+    // Exact paths have stable's @2x preference, but an unrelated nested
+    // alternative must never beat the exact 1x file. re;owoTuna, for example,
+    // references Arrows/LEFT.png while also shipping a circle at
+    // mania/arrows/left@2x.png.
+    for (const key of candidates) {
+      const direct = lookup.get(key);
+      if (direct) return { key, file: direct };
+    }
+    // Some uploads omit the art folder from skin.ini/default references, so
+    // retain the one-folder-deep recovery only after exact resolution fails.
+    for (const key of candidates) {
+      for (const [entryKey, file] of lookup) {
+        if (entryKey.endsWith(`/${key}`)) return { key: entryKey, file };
       }
     }
   }
@@ -166,6 +199,10 @@ interface AnalyzedNote {
   accent: string | null;
   // Share of the drawn pixels that carry saturated colour, 0-1.
   sat: number;
+  // The full-resolution alpha silhouette points along one axis. Kept only
+  // while digesting so directional filenames cannot turn flat circles into
+  // arrows, while coarse 8x8 masks can still be rescued when they blur one.
+  directionalAlpha: boolean;
 }
 
 async function analyzeNoteImage(file: JSZip.JSZipObject): Promise<AnalyzedNote | null> {
@@ -213,6 +250,30 @@ async function analyzeNoteImage(file: JSZip.JSZipObject): Promise<AnalyzedNote |
   const boxWidth = right - left + 1;
   const boxHeight = bottom - top + 1;
   const aspect = Math.min(20, Math.max(0.05, boxWidth / boxHeight));
+
+  // The compact mask below deliberately loses detail. Measure symmetry once
+  // against the original alpha pixels so a rounded/lobed arrow still has
+  // visual evidence behind an arrow-named skin.ini layout. Cardinal arrows
+  // disagree strongly with one mirror and little with the perpendicular one;
+  // circles remain near zero on both (apart from antialiasing rounding).
+  let mirrorXDifference = 0;
+  let mirrorYDifference = 0;
+  let mirrorSamples = 0;
+  for (let y = top; y <= bottom; y += 1) {
+    for (let x = left; x <= right; x += 1) {
+      const alpha = data[(y * width + x) * 4 + 3];
+      const mirrorXAlpha = data[(y * width + (left + right - x)) * 4 + 3];
+      const mirrorYAlpha = data[((top + bottom - y) * width + x) * 4 + 3];
+      mirrorXDifference += Math.abs(alpha - mirrorXAlpha);
+      mirrorYDifference += Math.abs(alpha - mirrorYAlpha);
+      mirrorSamples += 1;
+    }
+  }
+  const normalizedMirrorX = mirrorXDifference / (mirrorSamples * 255);
+  const normalizedMirrorY = mirrorYDifference / (mirrorSamples * 255);
+  const strongMirrorDifference = Math.max(normalizedMirrorX, normalizedMirrorY);
+  const weakMirrorDifference = Math.min(normalizedMirrorX, normalizedMirrorY);
+  const directionalAlpha = strongMirrorDifference >= 0.06 && weakMirrorDifference <= 0.04;
 
   // 8x8 mean-alpha grid over the trimmed box, one decile digit per cell.
   let mask = "";
@@ -284,6 +345,7 @@ async function analyzeNoteImage(file: JSZip.JSZipObject): Promise<AnalyzedNote |
     // and averaging a handful of stray ones would invent one.
     accent: satFraction >= 0.02 ? `#${hex(accentR, saturated)}${hex(accentG, saturated)}${hex(accentB, saturated)}` : null,
     sat: satFraction,
+    directionalAlpha,
   };
 }
 
@@ -292,8 +354,11 @@ async function analyzeNoteImage(file: JSZip.JSZipObject): Promise<AnalyzedNote |
 // colourful the note art is: the catalog turned out to be mostly round white
 // notes of near-identical proportions, so shape alone left forty skins at one
 // indistinguishable point and their strips were arbitrary. Each bump
-// re-digests the whole catalog once.
-const BACKFILL_META_KEY = "skin_visual_signature_backfill:v3";
+// re-digests the whole catalog once. v4 retained guarded arrow-layout evidence
+// for soft arrows whose outer alpha silhouette looks round; v5 required the
+// referenced sprite itself to have directional full-resolution geometry; v6
+// also gives exact 1x references precedence over unrelated nested @2x art.
+const BACKFILL_META_KEY = "skin_visual_signature_backfill:v6";
 
 // One-time digest of skins uploaded before signatures existed: re-reads each
 // stored .osk and records what its notes look like. Purely additive metadata,
@@ -330,8 +395,8 @@ export async function backfillSkinVisualSignatures(
     }
     await exec(
       db,
-      "update skins set visual_json = ?, updated_at = ? where id = ?",
-      [JSON.stringify(signature), nowIso(), id],
+      "update skins set visual_json = ?, note_shape = ?, updated_at = ? where id = ?",
+      [JSON.stringify(signature), classifySkinNoteShape(signature), nowIso(), id],
     );
     updated += 1;
   }

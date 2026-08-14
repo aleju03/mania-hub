@@ -59,6 +59,21 @@ export interface SkinSummary {
   // cached before the field existed lack it.
   specialKeymodes?: number[];
   accentColor: string | null;
+  // Archive traits the backend analyzed out of the .osk, each null (or
+  // missing, on summaries cached before they existed) when unknown: whether
+  // the skin ships a lane cover, its own mania stage art, and lazer-only
+  // modification files.
+  laneCover?: boolean | null;
+  maniaStage?: boolean | null;
+  lazer?: boolean | null;
+  // What the tap notes are, classified server-side from the note art.
+  noteShape?: SkinNoteShape | null;
+  // On a note-shape-filtered list, the keymode render that actually proves the
+  // match. Absent on detail pages and responses from older backends.
+  filterKeys?: number | null;
+  // The uploader's word on what resolution the skin is made for, normalized
+  // to "1920x1080"; null when they never said.
+  resolution?: string | null;
   // Public: everyone reads every skin's count.
   downloadCount: number;
   // Also public: opens of the skin's own page, counted once per visitor per
@@ -92,6 +107,9 @@ export interface SkinsListResult {
   total: number;
   page: number;
   pageSize: number;
+  // Every resolution uploaders have actually claimed within the rest of the
+  // query, smallest display first. Absent on a response from an older backend.
+  resolutions?: string[];
 }
 
 export const SKINS_PAGE_SIZE = 24;
@@ -134,6 +152,38 @@ export function isSkinsSort(value: unknown): value is SkinsSort {
 // whose eighth column is a scratch lane), "regular" makes 8K mean actual 8K.
 export type SkinsKeymodeVariant = "special" | "regular";
 
+// What the tap notes are, classified server-side from the note art.
+export type SkinNoteShape = "circle" | "arrow" | "bar" | "other";
+
+const SKIN_NOTE_SHAPES: readonly string[] = ["circle", "arrow", "bar", "other"];
+
+export function isSkinNoteShape(value: unknown): value is SkinNoteShape {
+  return typeof value === "string" && SKIN_NOTE_SHAPES.includes(value);
+}
+
+export function skinNoteShapeLabel(shape: SkinNoteShape): string {
+  return shape === "circle" ? "Circles" : shape === "arrow" ? "Arrows" : shape === "bar" ? "Bars" : "Other";
+}
+
+// Which client a skin is for: "lazer" keeps skins carrying lazer-only
+// modifications, "stable" keeps the rest.
+export type SkinsClient = "lazer" | "stable";
+
+// Suggestions in the upload and settings forms, nothing more: the field takes
+// any WxH, and the browse filter offers whatever uploaders actually answered.
+export const SKIN_RESOLUTION_PRESETS = ["1280x720", "1366x768", "1920x1080", "2560x1440", "3840x2160"] as const;
+
+// Mirror of the backend's normalizeSkinResolution: what the upload form
+// checks before offering to send the value at all.
+export function normalizeSkinResolution(value: string): string | null {
+  const match = /^\s*(\d{3,5})\s*[x×*]\s*(\d{3,5})\s*$/i.exec(value);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (width < 240 || width > 16384 || height < 240 || height > 16384) return null;
+  return `${width}x${height}`;
+}
+
 export interface SkinsListParams {
   q?: string;
   page?: number;
@@ -144,6 +194,15 @@ export interface SkinsListParams {
   // one, so this shows that uploader's public skins only; their private ones
   // live on the shelf above the grid.
   owner?: number | null;
+  // The trait filters: skins that ship a lane cover, their own mania stage
+  // art, uploader-attached screenshots.
+  cover?: boolean;
+  stage?: boolean;
+  shots?: boolean;
+  client?: SkinsClient;
+  shape?: SkinNoteShape;
+  // Exact match on the normalized recommended resolution ("1920x1080").
+  res?: string;
 }
 
 // The list endpoint is browser-cached (max-age=60 + stale-while-revalidate
@@ -174,7 +233,10 @@ const SKINS_LIST_MEMORY_MAX = 12;
 const skinsListMemory = new Map<string, { at: number; result: SkinsListResult }>();
 
 export function skinsListCacheKey(params: SkinsListParams): string {
-  return [params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0, params.variant ?? "", params.owner ?? ""].join("|");
+  return [
+    params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0, params.variant ?? "", params.owner ?? "",
+    params.cover ? 1 : "", params.stage ? 1 : "", params.shots ? 1 : "", params.client ?? "", params.shape ?? "", params.res ?? "",
+  ].join("|");
 }
 
 export function readCachedSkinsList(key: string): SkinsListResult | null {
@@ -252,6 +314,12 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
     if (params.variant) query.set("variant", params.variant);
   }
   if (params.owner && Number.isInteger(params.owner) && params.owner > 0) query.set("owner", String(params.owner));
+  if (params.cover) query.set("cover", "1");
+  if (params.stage) query.set("stage", "1");
+  if (params.shots) query.set("shots", "1");
+  if (params.client) query.set("client", params.client);
+  if (params.shape) query.set("shape", params.shape);
+  if (params.res) query.set("res", params.res);
   query.set("pageSize", String(SKINS_PAGE_SIZE));
   const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { credentials: "omit", cache: skinsListCacheMode(), ...init });
   if (!response.ok) throw new Error(`Server ${response.status}`);
@@ -455,7 +523,7 @@ async function resolveSkinsBackend(): Promise<SkinsBackend | null> {
 }
 
 export const startSkinUpload = createServerFn({ method: "POST" })
-  .validator((data: { name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown; visibility?: unknown }) => ({
+  .validator((data: { name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown; visibility?: unknown; resolution?: unknown }) => ({
     name: typeof data.name === "string" ? data.name.slice(0, 80) : "",
     author: typeof data.author === "string" ? data.author.slice(0, SKIN_AUTHOR_MAX_LENGTH) : "",
     description: typeof data.description === "string" ? data.description.slice(0, SKIN_DESCRIPTION_MAX_LENGTH) : "",
@@ -463,6 +531,7 @@ export const startSkinUpload = createServerFn({ method: "POST" })
       ? data.oskSha256.toLowerCase()
       : null,
     visibility: (data.visibility === "private" ? "private" : "public") as SkinVisibility,
+    resolution: typeof data.resolution === "string" ? normalizeSkinResolution(data.resolution) : null,
   }))
   .handler(async ({ data }): Promise<StartSkinUploadResult> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -481,6 +550,7 @@ export const startSkinUpload = createServerFn({ method: "POST" })
           description: data.description,
           oskSha256: data.oskSha256,
           visibility: data.visibility,
+          resolution: data.resolution,
         }),
       });
       const body = (await response.json().catch(() => null)) as
@@ -736,14 +806,19 @@ export const setSkinSpecialKeymodes = createServerFn({ method: "POST" })
 // is not rebuilt: it was assigned at publish time and is what shared links point
 // at. Leaving description out keeps the stored one; an empty string clears it.
 export const updateSkinDetails = createServerFn({ method: "POST" })
-  .validator((data: { id?: unknown; name?: unknown; description?: unknown }) => {
+  .validator((data: { id?: unknown; name?: unknown; description?: unknown; resolution?: unknown }) => {
     const id = typeof data.id === "string" ? data.id.trim() : "";
     const name = typeof data.name === "string" ? data.name.slice(0, SKIN_NAME_MAX_LENGTH).trim() : "";
     if (!id || id.length > 64 || !name) throw new Error("Invalid skin details request.");
     const description = typeof data.description === "string"
       ? data.description.slice(0, SKIN_DESCRIPTION_MAX_LENGTH)
       : undefined;
-    return { id, name, description };
+    // Same omission semantics the description has: leaving it out keeps the
+    // stored value, an empty or unreadable string clears it.
+    const resolution = typeof data.resolution === "string"
+      ? (normalizeSkinResolution(data.resolution) ?? "")
+      : undefined;
+    return { id, name, description, resolution };
   })
   .handler(async ({ data }): Promise<{ ok: boolean; skin?: SkinSummary }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -759,6 +834,7 @@ export const updateSkinDetails = createServerFn({ method: "POST" })
           id: data.id,
           name: data.name,
           description: data.description,
+          resolution: data.resolution,
           asAdmin: cfg.isAdmin,
         }),
       });

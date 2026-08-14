@@ -32,10 +32,12 @@ import {
   formatSkinFileSize,
   hashOskFile,
   markSkinsListStale,
+  normalizeSkinResolution,
   SKIN_DESCRIPTION_MAX_LENGTH,
   SKIN_MAX_SCREENSHOTS,
   SKIN_AUTHOR_MAX_LENGTH,
   SKIN_OSK_MAX_BYTES,
+  SKIN_RESOLUTION_PRESETS,
   SkinUploadError,
   startSkinUpload,
   uploadErrorMessage,
@@ -266,6 +268,9 @@ export function SkinUploadModal({
   // credit this instead of the uploader.
   const [author, setAuthor] = useState("");
   const [description, setDescription] = useState("");
+  // The resolution the skin is made for, the uploader's optional word; the
+  // /skins display filter matches on it. Free-typed, normalized server-side.
+  const [resolution, setResolution] = useState("");
   // Public puts the skin on /skins for anyone to download; private keeps it to
   // the uploader and lets it front their replays without leaving the server.
   const [visibility, setVisibility] = useState<SkinVisibility>("public");
@@ -772,7 +777,7 @@ export function SkinUploadModal({
       if (!ticketRef.current) {
         const oskSha256 = oskHashRef.current?.file === file ? await oskHashRef.current.hash : null;
         const started = await startSkinUpload({
-          data: { name: trimmedName, author: author.trim(), description: description.trim(), oskSha256, visibility },
+          data: { name: trimmedName, author: author.trim(), description: description.trim(), oskSha256, visibility, resolution: resolution.trim() },
         });
         if (!started.ok) {
           setStep("form");
@@ -895,7 +900,7 @@ export function SkinUploadModal({
       }
       setStep("form");
     }
-  }, [file, name, author, description, visibility, onPublished, previews, screenshots, coverKeymode, coverShot, backdropFor, patterns]);
+  }, [file, name, author, description, resolution, visibility, onPublished, previews, screenshots, coverKeymode, coverShot, backdropFor, patterns]);
 
   const uploading = step === "uploading";
 
@@ -984,6 +989,8 @@ export function SkinUploadModal({
                     setAuthor={setAuthor}
                     description={description}
                     setDescription={setDescription}
+                    resolution={resolution}
+                    setResolution={setResolution}
                     visibility={visibility}
                     setVisibility={setVisibility}
                     screenshots={screenshots}
@@ -1232,6 +1239,8 @@ function FormStep({
   setAuthor,
   description,
   setDescription,
+  resolution,
+  setResolution,
   visibility,
   setVisibility,
   screenshots,
@@ -1277,6 +1286,8 @@ function FormStep({
   setAuthor: (author: string) => void;
   description: string;
   setDescription: (description: string) => void;
+  resolution: string;
+  setResolution: (resolution: string) => void;
   visibility: SkinVisibility;
   setVisibility: (visibility: SkinVisibility) => void;
   screenshots: DraftScreenshot[];
@@ -1467,6 +1478,30 @@ function FormStep({
             placeholder="A line about the skin"
             className="w-full resize-y rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] leading-relaxed text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
           />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
+            Made for <span className="normal-case tracking-normal text-osu-f1/70">(resolution, optional)</span>
+          </span>
+          <input
+            type="text"
+            value={resolution}
+            maxLength={12}
+            disabled={uploading}
+            list="skin-resolution-presets"
+            onChange={(event) => setResolution(event.target.value)}
+            placeholder="1920x1080"
+            className={`w-full rounded-lg border bg-osu-b4 px-3 py-2 text-[13.5px] text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:outline-none ${
+              resolution.trim() && !normalizeSkinResolution(resolution)
+                ? "border-osu-red-light/60 focus:border-osu-red-light/60"
+                : "border-osu-b3/30 focus:border-osu-pink/50"
+            }`}
+          />
+          <datalist id="skin-resolution-presets">
+            {SKIN_RESOLUTION_PRESETS.map((preset) => (
+              <option key={preset} value={preset} />
+            ))}
+          </datalist>
         </label>
         <div className="flex flex-col gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Visibility</span>
