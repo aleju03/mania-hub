@@ -200,10 +200,16 @@ export function usePackWallet(): PackWalletApi {
   const commitServerWallet = (payload: string, rev: number) => {
     const parsed = parseWalletPayload(payload);
     if (!parsed) return;
+    /* The backend persists regeneration lazily: a wallet can still store four
+       charges with an old refill timestamp even though the fifth charge is
+       already available. Project that timestamp before painting the server's
+       response, instead of briefly regressing a settled local cache until the
+       one-second countdown interval catches up. */
+    const settled = settleCharges(parsed, Date.now());
     const sync = syncRef.current;
     sync.enabled = true;
     sync.rev = rev;
-    commit(stripWalletCards(parsed));
+    commit(stripWalletCards(settled));
     setSyncStatus("synced");
   };
 

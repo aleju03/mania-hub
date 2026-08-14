@@ -69,6 +69,48 @@ describe("normalizeAvatarAccentUrl", () => {
   });
 });
 
+describe("avatar accent account-key migration", () => {
+  it("preserves old cached colors and clears only redundant queued jobs", async () => {
+    // A fresh test DB has already recorded the one-shot migration. Rewind that marker and seed the
+    // shape that existed before avatar URLs were canonicalized to one row per osu! account.
+    await exec(db, "delete from live_meta where key = ?", ["avatar_accents_account_keys:v1"]);
+    await seedAccent("https://a.ppy.sh/42?100.jpeg", "#112233", "ok", 100);
+    await seedAccent("https://a.ppy.sh/42?200.png", "#abcdef", "ok", 200);
+    await seedAccent("https://a.ppy.sh/43?300.jpeg", null, "error", 300);
+    await exec(
+      db,
+      `insert into jobs (type, dedupe_key, status, priority, run_after, payload_json, created_at, updated_at)
+       values
+         ('compute_avatar_accent', 'avatar-accent:https://a.ppy.sh/42', 'queued', 20, ?, '{}', ?, ?),
+         ('compute_avatar_accent', 'avatar-accent:https://a.ppy.sh/43', 'queued', 20, ?, '{}', ?, ?),
+         ('compute_avatar_accent', 'avatar-accent:https://a.ppy.sh/44', 'queued', 20, ?, '{}', ?, ?)`,
+      Array(9).fill(new Date().toISOString()),
+    );
+
+    await migrate(db);
+
+    const accents = await exec(db, "select avatar_url, accent, status from avatar_accents order by avatar_url");
+    expect(accents.rows.map((row) => ({
+      url: String(row.avatar_url),
+      accent: row.accent == null ? null : String(row.accent),
+      status: String(row.status),
+    }))).toEqual([
+      { url: "https://a.ppy.sh/42", accent: "#abcdef", status: "ok" },
+      { url: "https://a.ppy.sh/43", accent: null, status: "error" },
+    ]);
+
+    const jobs = await exec(db, "select dedupe_key from jobs where type = 'compute_avatar_accent' order by dedupe_key");
+    expect(jobs.rows.map((row) => String(row.dedupe_key))).toEqual([
+      "avatar-accent:https://a.ppy.sh/43",
+      "avatar-accent:https://a.ppy.sh/44",
+    ]);
+
+    // The sentinel makes later boots leave the canonical rows untouched.
+    await migrate(db);
+    expect((await exec(db, "select count(*) as count from avatar_accents")).rows[0]?.count).toBe(2);
+  });
+});
+
 describe("accent color pipeline", () => {
   it("picks a legible accent from a saturated image", () => {
     // 24x24 solid red block (RGB triplets).

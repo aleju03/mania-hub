@@ -431,6 +431,12 @@ function PacksPage() {
      otherwise leave the pack on the anonymous draw. */
   const viewerRef = useRef(auth.viewer);
   viewerRef.current = auth.viewer;
+  /* Latest pack on stage. The server deal starts at the cut, a beat before
+     the rip's delayed onOpened, so a refused deal can bump the pack id while
+     that callback is still pending; comparing against this ref lets the late
+     callback recognize it belongs to the dead pack. */
+  const packIdRef = useRef(packId);
+  packIdRef.current = packId;
   /* Whether opens run through the server (drawn, paid and minted in one
      request). Dev's ?forceGoat pin needs the local roll, so it opts out. */
   const serverDeals = () => Boolean(viewerRef.current) && isLiveBackendConfigured() && !devForceGoatPull();
@@ -713,15 +719,26 @@ function PacksPage() {
     setPackId((id) => id + 1);
   };
 
+  /* The instant the blade commits: for a signed-in wallet the slash is the
+     purchase and the purchase IS the server draw, so the deal leaves the
+     browser here and the rip choreography runs over the round trip instead
+     of in front of it. Anonymous wallets already dealt at the grab. */
+  const handleCut = () => {
+    if (serverDeals()) dealTriggerRef.current?.();
+  };
+
   const handleOpened = (cutDamage: PackDamage | null) => {
+    /* A refused server deal reset the stage while the rip was still playing;
+       this delayed callback belongs to that dead pack, and firing it would
+       consume the next pack's freshly armed trigger. */
+    if (packId !== packIdRef.current) return;
     setDamage(cutDamage);
     const trigger = dealTriggerRef.current;
     if (serverDeals()) {
-      /* The slash is the moment of purchase, and for a signed-in wallet the
-         purchase IS the server draw - so it fires here, not at the grab, and
-         the shuffle covers the wait exactly as it does for auto-open. An
-         already-consumed trigger means the deal is running (or was refused
-         and reset the stage), so there is nothing to start twice. */
+      /* The deal normally left at the cut, so the trigger is already consumed
+         and this is a no-op backstop (a login that hydrates mid-rip lands
+         here with the grab-time trigger still armed). The shuffle covers
+         whatever the rip did not, exactly as it does for auto-open. */
       trigger?.();
       setPhase("reveal");
       return;
@@ -893,6 +910,7 @@ function PacksPage() {
                       <PackStage
                         reducedMotion={reducedMotion}
                         onOpened={handleOpened}
+                        onCut={handleCut}
                         /* Grab-time dealing is the free-draw head start; a
                            server deal spends, so it waits for the slash. */
                         onGrab={() => {

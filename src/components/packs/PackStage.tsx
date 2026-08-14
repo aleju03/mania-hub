@@ -84,6 +84,10 @@ interface PackStageProps {
   /* Damage is non-null when the blade went through the pack's middle: the
      cards inside were cut, and the page has to deal a ruined hand. */
   onOpened: (damage: PackDamage | null) => void;
+  /* Fires the instant the slash commits and the rip starts, ~900ms before
+     onOpened. The page starts the signed-in server deal off this signal, so
+     the rip choreography hides the round trip instead of preceding it. */
+  onCut?: () => void;
   /* Fires on the first touch of the pack (any pointerdown on the stage that
      could start the slash). The page deals the hand off this signal, so the
      drag plus the rip animation hide the draw's network time. */
@@ -102,18 +106,20 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackStageProps) {
+export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType }: PackStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   // The blade effect below subscribes once ([] deps), so it reads the latest
   // callbacks through refs instead of resubscribing per render. onOpened
   // matters as much as onGrab: the page charges the selected pack type in it,
   // and the stage stays mounted while the shelf switches types under it.
   const onGrabRef = useRef(onGrab);
+  const onCutRef = useRef(onCut);
   const onOpenedRef = useRef(onOpened);
   useEffect(() => {
     onGrabRef.current = onGrab;
+    onCutRef.current = onCut;
     onOpenedRef.current = onOpened;
-  }, [onGrab, onOpened]);
+  }, [onGrab, onCut, onOpened]);
   const packRef = useRef<HTMLDivElement | null>(null);
   // Offscreen 2D canvas the cut renders into; the 3D scene shows it as the
   // front texture of the pack mesh.
@@ -147,6 +153,14 @@ export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackSta
   } | null>(null);
   const bladeHeldRef = useRef<{ pointerId: number } | null>(null);
   const rippingRef = useRef(false);
+  /* The rip-to-onOpened delay. Cleared on unmount: the deal now starts at the
+     cut, so a refused server deal can reset the stage while the rip is still
+     playing, and a stray onOpened after that would re-fire the freshly armed
+     deal trigger and force the page back to the reveal. */
+  const openedTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (openedTimerRef.current !== null) window.clearTimeout(openedTimerRef.current);
+  }, []);
   const sparkIdRef = useRef(0);
   // Cut y per column as a height fraction; NaN = column not cut yet.
   const binsRef = useRef<Float32Array>(new Float32Array(BIN_COUNT).fill(Number.NaN));
@@ -687,6 +701,7 @@ export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackSta
     if (rippingRef.current) return;
     rippingRef.current = true;
     const damage = readDamage();
+    onCutRef.current?.();
     if (damage) playCardSlice();
     else playPackRip();
     slashRef.current = null;
@@ -711,7 +726,13 @@ export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackSta
       }
     }
     setRipping(true);
-    window.setTimeout(() => onOpenedRef.current(damage), reducedMotionRef.current ? 220 : 880);
+    // Held in a ref and cleared on unmount: a server deal refused mid-rip
+    // resets the stage, and this callback firing after that would revive the
+    // dead pack (see openedTimerRef).
+    openedTimerRef.current = window.setTimeout(
+      () => onOpenedRef.current(damage),
+      reducedMotionRef.current ? 220 : 880,
+    );
   };
 
   const setCutSpan = (xa: number, yaFrac: number, xb: number, ybFrac: number, deep: boolean) => {

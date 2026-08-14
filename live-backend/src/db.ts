@@ -2382,10 +2382,9 @@ async function migrateDanBenchmark(db: Db): Promise<void> {
 }
 
 async function migrateAvatarAccents(db: Db): Promise<void> {
-  // Per-avatar-URL accent colors for player names (features/avatar-accents.ts). a.ppy.sh URLs are
-  // cache-busted per avatar change, so a row is effectively content-addressed: accent computed once,
-  // shipped in snapshot payloads. status is ok|error (error rows retry after a day). Retention
-  // prunes rows older than ~180d as a slow refresh; everything self-heals via compute jobs.
+  // Per-osu-account accent colors for player names (features/avatar-accents.ts). status is ok|error
+  // (error rows retry after a day). Retention prunes rows older than ~180d as a slow refresh;
+  // everything self-heals via compute jobs.
   await db.execute(`
     create table if not exists avatar_accents (
       avatar_url text primary key,
@@ -2398,6 +2397,77 @@ async function migrateAvatarAccents(db: Db): Promise<void> {
     create index if not exists idx_avatar_accents_computed
       on avatar_accents(computed_at)
   `);
+
+  // v1 stored the complete cache-busted osu! URL (`/123?timestamp.jpeg`). The account-keyed v2
+  // normalizer intentionally strips that query, but shipping it without moving the existing rows
+  // made every known accent look like a miss and flooded the extraction lane with thousands of
+  // duplicate jobs. Collapse the old rows in-place, keeping the newest result when an account has
+  // more than one avatar URL, then retire only the now-redundant queued jobs. This is deliberately
+  // a one-shot boot migration: the request path only writes canonical keys after this version.
+  const canonicalKeyMigration = "avatar_accents_account_keys:v1";
+  if (!(await hasMigrationSentinel(db, canonicalKeyMigration))) {
+    const prefix = "https://a.ppy.sh/";
+    await db.execute({
+      sql: `
+        insert into avatar_accents (avatar_url, accent, status, computed_at)
+        select substr(avatar_url, 1, instr(avatar_url, '?') - 1), accent, status, computed_at
+          from avatar_accents
+         where substr(avatar_url, 1, ?) = ?
+           and instr(avatar_url, '?') > ?
+           and length(substr(avatar_url, ? + 1, instr(avatar_url, '?') - ? - 1)) between 1 and 12
+           and substr(avatar_url, ? + 1, instr(avatar_url, '?') - ? - 1) glob '[0-9]*'
+           and substr(avatar_url, ? + 1, instr(avatar_url, '?') - ? - 1) not glob '*[^0-9]*'
+        on conflict(avatar_url) do update set
+          accent = excluded.accent,
+          status = excluded.status,
+          computed_at = excluded.computed_at
+        where excluded.computed_at > avatar_accents.computed_at
+      `,
+      args: [
+        prefix.length,
+        prefix,
+        prefix.length + 1,
+        prefix.length,
+        prefix.length,
+        prefix.length,
+        prefix.length,
+        prefix.length,
+        prefix.length,
+      ],
+    });
+    await db.execute({
+      sql: `
+        delete from avatar_accents
+         where substr(avatar_url, 1, ?) = ?
+           and instr(avatar_url, '?') > ?
+           and length(substr(avatar_url, ? + 1, instr(avatar_url, '?') - ? - 1)) between 1 and 12
+           and substr(avatar_url, ? + 1, instr(avatar_url, '?') - ? - 1) glob '[0-9]*'
+           and substr(avatar_url, ? + 1, instr(avatar_url, '?') - ? - 1) not glob '*[^0-9]*'
+      `,
+      args: [
+        prefix.length,
+        prefix,
+        prefix.length + 1,
+        prefix.length,
+        prefix.length,
+        prefix.length,
+        prefix.length,
+        prefix.length,
+        prefix.length,
+      ],
+    });
+    await db.execute(`
+      delete from jobs
+       where type = 'compute_avatar_accent'
+         and status = 'queued'
+         and exists (
+           select 1 from avatar_accents
+            where avatar_accents.status = 'ok'
+              and jobs.dedupe_key = 'avatar-accent:' || avatar_accents.avatar_url
+         )
+    `);
+    await setMigrationSentinel(db, canonicalKeyMigration);
+  }
 }
 
 async function migrateOsuProxyCache(db: Db): Promise<void> {

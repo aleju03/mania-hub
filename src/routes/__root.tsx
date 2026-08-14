@@ -1,4 +1,4 @@
-import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Link, Outlet, Scripts, createRootRoute, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Coffee, X } from "lucide-react";
@@ -7,7 +7,9 @@ import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { ChangelogModal } from "../components/layout/ChangelogModal";
 import { GhostLayer } from "../components/ghost/GhostLayer";
 import { CustomCursor } from "../components/layout/CustomCursor";
+import { ManiaRain } from "../components/home/ManiaRain";
 import { Nav } from "../components/layout/Nav";
+import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { GoalToasts } from "../components/me/GoalToasts";
 import { TrackingToasts } from "../components/me/TrackingToasts";
@@ -578,7 +580,8 @@ function RootLayout() {
             <>
               <Nav />
               <RouteLoadingBar />
-              <main className="flex-1 pt-[60px]">
+              <main className="relative flex-1 pt-[60px]">
+                <SkinsBackdrop />
                 <Outlet />
               </main>
               <GoalToasts />
@@ -614,6 +617,26 @@ function RootLayout() {
         </AnalyticsProvider>
       </AuthContext.Provider>
     </InitialCountryContext.Provider>
+  );
+}
+
+// /skins and /skins/:id are sibling file routes, so a rain canvas owned by
+// either page is torn down when navigating between them. Keep one canvas in
+// the root shell for the whole skins route family instead. Its parent follows
+// the outlet's height, letting ManiaRain preserve and rescale the same notes
+// when the browse and detail pages have different lengths.
+function SkinsBackdrop() {
+  const active = useRouterState({
+    select: (state) => /^\/skins(?:\/|$)/.test(state.location.pathname),
+  });
+
+  if (!active) return null;
+
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden bg-osu-b5" aria-hidden="true">
+      <OsuTriangleBackdrop />
+      <ManiaRain />
+    </div>
   );
 }
 

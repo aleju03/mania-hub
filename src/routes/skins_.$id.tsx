@@ -1,8 +1,6 @@
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Check, Download, Lock, MonitorPlay, Settings } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { ManiaRain } from "../components/home/ManiaRain";
-import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags, SkinPreviewImage } from "../components/skins/SkinCard";
 import { SkinAssetExplorer } from "../components/skins/SkinAssetExplorer";
@@ -238,12 +236,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
 
   return (
     <div className="relative flex min-h-screen flex-col">
-      <div className="relative z-10 flex flex-1 flex-col overflow-clip bg-osu-b5">
-        <OsuTriangleBackdrop />
-        {/* Same falling notes as /skins so the two pages read as one surface. */}
-        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-          <ManiaRain />
-        </div>
+      <div className="relative z-10 flex flex-1 flex-col overflow-clip">
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader
             iconSrc="/images/icons/skins.svg"

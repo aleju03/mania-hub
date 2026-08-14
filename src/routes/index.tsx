@@ -688,9 +688,9 @@ function HomePage() {
       {warming && <CountryWarming country={selectedCountry} />}
 
       {!warming && (
-      <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 pb-8 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-4">
+      <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 pb-8 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4">
         {/* Country Top players (or Global note) */}
-        <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
+        <section className="min-w-0 bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">{boardScope ? "Top players" : "Rankings"}</h2>
             <Link to="/rankings" search={{ page: 1, country: selectedCountry }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
@@ -786,7 +786,7 @@ function HomePage() {
           )}
         </section>
 
-        <div className="flex flex-col gap-4">
+        <div className="min-w-0 flex flex-col gap-4">
         {/* Recent Top Plays - featured */}
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">

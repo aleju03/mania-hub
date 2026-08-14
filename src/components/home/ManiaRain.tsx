@@ -171,7 +171,6 @@ export function ManiaRain() {
     const nextWidth = Math.max(1, Math.round(rect.width));
     const nextHeight = Math.max(1, Math.round(rect.height));
     const previousWidth = canvas.width || nextWidth;
-    const previousHeight = canvas.height || nextHeight;
 
     if (canvas.width === nextWidth && canvas.height === nextHeight) {
       return;
@@ -202,13 +201,18 @@ export function ManiaRain() {
     }
 
     const scaleX = nextWidth / previousWidth;
-    const scaleY = nextHeight / previousHeight;
     notesRef.current = notesRef.current.map((note) => ({
       ...note,
       x: note.x * scaleX,
-      y: note.y * scaleY,
+      // The canvas follows its page's content height. Scaling y here made all
+      // visible notes jump whenever sibling routes (notably /skins and a skin
+      // detail) had different heights, even though the canvas itself stayed
+      // mounted. Keep document-space positions stable; notes outside a shorter
+      // canvas are clipped and naturally recycle from above, while a taller
+      // canvas simply reveals more falling space.
+      y: note.y,
       size: note.size * Math.min(1.08, Math.max(0.92, scaleX)),
-      lnHeight: note.lnHeight * scaleY,
+      lnHeight: note.lnHeight,
     }));
   }, []);
 

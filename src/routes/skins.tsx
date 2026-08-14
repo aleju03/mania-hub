@@ -1,8 +1,6 @@
 import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, ChevronDown, Layers, Lock, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ManiaRain } from "../components/home/ManiaRain";
-import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SkinCard } from "../components/skins/SkinCard";
 import { SkinBulkUploadModal } from "../components/skins/SkinBulkUploadModal";
@@ -479,12 +477,7 @@ function SkinsPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col">
-      <div className="relative z-10 flex flex-1 flex-col overflow-clip bg-osu-b5">
-        <OsuTriangleBackdrop />
-        {/* The home page's falling notes; skins are about notes, after all. */}
-        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-          <ManiaRain />
-        </div>
+      <div className="relative z-10 flex flex-1 flex-col overflow-clip">
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/skins.svg" title="osu!mania skins" right={headerAction} />
 
