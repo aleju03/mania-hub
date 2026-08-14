@@ -6,6 +6,7 @@ import {
   drawPackPlayersFromPool,
   fetchPackPlayerScores,
   liveEntryToPackPlayer,
+  mapServerPackDraw,
   PACK_SIZE,
   PACK_TYPES,
   packTypeById,
@@ -816,5 +817,62 @@ describe("startBoundedPrefetches", () => {
   it("runs everything even when the bound exceeds the item count", async () => {
     const results = startBoundedPrefetches([1, 2], async (item) => item * 10, 8);
     await expect(Promise.all(results)).resolves.toEqual([10, 20]);
+  });
+});
+
+describe("mapServerPackDraw", () => {
+  const score = { pp: 321 } as OsuScore;
+
+  it("maps ranked slots into pack players and seeds only non-empty stored windows", () => {
+    const mapped = mapServerPackDraw({
+      poolTotal: 4200,
+      players: [
+        { userId: 11, isNew: true, username: "alpha", avatarUrl: "https://a.ppy.sh/11", countryCode: "CR", globalRank: 900, poolRank: 12, pp: 5000 },
+        // No osu! global rank: the pool position stands in, exactly like the
+        // client draw's liveEntryToPackPlayer.
+        { userId: 22, isNew: false, username: "bravo", avatarUrl: "https://a.ppy.sh/22", countryCode: "AR", globalRank: null, poolRank: 34, pp: 4000 },
+      ],
+      cards: [
+        { user: { id: 11 }, bestScores: [score] },
+        // An empty stored window would mint a blank card; it must not seed.
+        { user: { id: 22 }, bestScores: [] },
+      ],
+      wallet: { payload: '{"shards":7}', rev: 12 },
+    });
+    expect(mapped.draw.poolTotal).toBe(4200);
+    expect(mapped.draw.players.map((player) => player.user.id)).toEqual([11, 22]);
+    expect(mapped.draw.players[0].globalRank).toBe(900);
+    expect(mapped.draw.players[1].globalRank).toBe(34);
+    expect(mapped.draw.players[1].user.statistics.global_rank).toBeNull();
+    expect(mapped.scoresByUserId.get(11)).toEqual([score]);
+    expect(mapped.scoresByUserId.has(22)).toBe(false);
+    // The server's isNew rides along under the wallet card key, and the spent
+    // wallet passes through for the page to adopt.
+    expect(mapped.isNewByCardKey.get("11")).toBe(true);
+    expect(mapped.isNewByCardKey.get("22")).toBe(false);
+    expect(mapped.wallet).toEqual({ payload: '{"shards":7}', rev: 12 });
+  });
+
+  it("hydrates honorary slots from the local roster and drops ids it cannot render", () => {
+    const member = HONORARY_PACK_POOL[0];
+    const mapped = mapServerPackDraw({
+      poolTotal: 4200,
+      players: [
+        { userId: 11, username: "alpha", avatarUrl: "", countryCode: "CR", globalRank: 900, poolRank: 12, pp: 5000 },
+        { userId: 999_999_999, honorary: true },
+        { userId: member.id, honorary: true, isNew: true },
+      ],
+      cards: [],
+      wallet: null,
+    });
+    // The unknown honorary id (deploy skew) is dropped, not dealt broken.
+    expect(mapped.draw.players).toHaveLength(2);
+    const goat = mapped.draw.players[1];
+    expect(goat.user.id).toBe(member.id);
+    expect(goat.user.username).toBe(member.username);
+    expect(goat.pp).toBe(member.peakPp);
+    // A GOAT's isNew keys by the goat variant, never the plain player key.
+    expect(mapped.isNewByCardKey.get(`${member.id}:goat`)).toBe(true);
+    expect(mapped.isNewByCardKey.has(String(member.id))).toBe(false);
   });
 });

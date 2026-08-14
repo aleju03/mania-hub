@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getCanonicalOrigin } from "./origin";
+import { getAssetOrigin, getCanonicalOrigin } from "./origin";
 
 function request(url: string, headers: Record<string, string> = {}): Request {
   return new Request(url, { headers });
@@ -60,5 +60,48 @@ describe("getCanonicalOrigin", () => {
     vi.stubEnv("SITE_URL", "");
     vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "mania-tracker.com");
     expect(getCanonicalOrigin(proxied("attacker.example"))).toBe("https://mania-tracker.com");
+  });
+});
+
+/* Every font and sprite the OG renderer pulls comes from this origin, and the
+   card it produces is stored in R2 under a key that says nothing about which
+   origin produced it. So a host accepted here writes the shared entry that
+   every later unfurl of that page is served. */
+describe("getAssetOrigin", () => {
+  it("prefers the configured origin over the forwarded host", () => {
+    vi.stubEnv("SITE_URL", "https://mania-tracker.com");
+    expect(getAssetOrigin(proxied("evil.loca.lt"))).toBe("https://mania-tracker.com");
+  });
+
+  it("refuses wildcard tunnel and preview hosts in production", () => {
+    vi.stubEnv("SITE_URL", "");
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "");
+    vi.stubEnv("NODE_ENV", "production");
+    // No allowed host, so it falls back to the request's own origin rather than
+    // to anything the caller named.
+    expect(getAssetOrigin(proxied("evil.loca.lt"))).toBe("http://127.0.0.1:3000");
+    expect(getAssetOrigin(proxied("some-preview-abc123.vercel.app"))).toBe("http://127.0.0.1:3000");
+    // Loopback is a development host too: accepting it would point the renderer
+    // at a port on the box.
+    expect(getAssetOrigin(proxied("127.0.0.1:7227"))).toBe("http://127.0.0.1:3000");
+  });
+
+  it("still honours the site's own hosts", () => {
+    vi.stubEnv("SITE_URL", "");
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "");
+    vi.stubEnv("NODE_ENV", "production");
+    expect(getAssetOrigin(proxied("mania-tracker.com"))).toBe("https://mania-tracker.com");
+    expect(getAssetOrigin(proxied("ninja.mania-tracker.com"))).toBe("https://ninja.mania-tracker.com");
+  });
+
+  it("keeps tunnels working outside production, and on an explicit allowlist", () => {
+    vi.stubEnv("SITE_URL", "");
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "");
+    vi.stubEnv("NODE_ENV", "development");
+    expect(getAssetOrigin(proxied("mine.loca.lt"))).toBe("https://mine.loca.lt");
+
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("MANIA_HUB_ALLOWED_HOST_SUFFIXES", ".loca.lt");
+    expect(getAssetOrigin(proxied("mine.loca.lt"))).toBe("https://mine.loca.lt");
   });
 });

@@ -24,13 +24,14 @@ import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
 import { backfillPackCardSerials } from "./features/pack-pulls.js";
 import { ensurePackCardCatalog, ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
-import { backfillSkinSlugs, backfillSkinViewCounts } from "./features/skins.js";
+import { backfillSkinNoteShapes, backfillSkinSlugs, backfillSkinViewCounts } from "./features/skins.js";
 import { isSkinStorageConfigured, readSkinObject, skinObjectDeletesEnabled } from "./skins/r2.js";
 import { backfillSkinArchiveMeta } from "./skins/archive-meta.js";
 import { backfillSkinSpecialKeymodes } from "./skins/special-backfill.js";
 import { backfillSkinVisualSignatures } from "./skins/visual-signature.js";
 import { ensureArchivedPlayers } from "./archived-players.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
+import { isAdmin } from "./http/request.js";
 import { CountryClientTracker } from "./live/country-clients.js";
 import { GhostHub, handleGhost } from "./live/ghost.js";
 import { handleReplayPresence } from "./live/replay-presence.js";
@@ -166,6 +167,9 @@ export async function createApp() {
     // Data backfill rides with schema ownership: assign slugs to skins
     // published before the slug column existed.
     await bootWrite("backfill_skin_slugs", () => backfillSkinSlugs(db));
+    // The note-art digest already contains every per-keymode shape, so this
+    // fills the mixed-shape filter column without re-downloading any .osk.
+    await bootWrite("backfill_skin_note_shapes", () => backfillSkinNoteShapes(db));
     // Classify skins uploaded before 7K+1 detection existed by re-reading each
     // stored .osk's skin.ini (metadata only; the uploads themselves stay as
     // they are). One-shot like the slug backfill, but it downloads the whole
@@ -391,9 +395,19 @@ export async function createApp() {
       if (await routeHttp(req, res, ctx)) return;
       sendNotFound(res);
     } catch (error) {
+      // The message is often a raw libsql/driver string naming tables and
+      // columns, so it goes to the log rather than to the caller. Admin
+      // requests still get it: the admin UI is where these are read.
+      logWarn("http_unhandled_error", {
+        method: req.method,
+        path: (req.url ?? "").split("?")[0],
+        ...errorContext(error),
+      });
       res.statusCode = 500;
       res.setHeader("content-type", "application/json; charset=utf-8");
-      res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+      res.end(JSON.stringify({
+        error: isAdmin(req, ctx) ? (error instanceof Error ? error.message : String(error)) : "internal_error",
+      }));
     }
   });
   // Caddy fronts this server and reuses upstream connections. Node's default

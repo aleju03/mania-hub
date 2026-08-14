@@ -6,7 +6,7 @@ import { logWarn } from "../logger.js";
 import type { AbuseBucket, RateLimitResult } from "./abuse-guard.js";
 import { COMPRESSIBLE_MIN_BYTES, type PreparedJsonResponse } from "./prepared-json.js";
 import { REQUEST_FARM_HELPER_TIMINGS, REQUEST_STARTED_AT, type HttpContext, type TimedRequest } from "./context.js";
-import { isAdmin } from "./request.js";
+import { isAdmin, isBridge } from "./request.js";
 
 // sendJson for the surfaces that render player names: attaches avatar accents next to every
 // avatar URL in the payload (and queues extraction for unseen avatars). Additive only; an
@@ -21,6 +21,17 @@ export async function sendAccentEnrichedJson(req: IncomingMessage, res: ServerRe
 // endpoints deserve the same ceiling but must not spend each other's budget.
 export function checkRate(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, bucket: AbuseBucket, suffix = ""): boolean {
   if (!ctx.abuse || isAdmin(req, ctx)) return true;
+  /* Bridge requests are not exempt, they are re-bucketed. Exempting them was
+     how an unauthenticated public route on the frontend (which forwards with
+     the token) became an unmetered firehose at the DB. But they cannot be
+     charged the public per-IP buckets either: they all arrive from the frontend
+     server, so one address carries every signed-in visitor's traffic and a
+     120/min ceiling would throttle the whole site at once. Its own generous
+     bucket keeps a leaked bridge token bounded without capping real users. */
+  if (isBridge(req, ctx)) {
+    bucket = "bridge";
+    suffix = "";
+  }
   const result = ctx.abuse.check(req, ctx.config, bucket, suffix);
   if (result.allowed) return true;
   sendRateLimited(req, res, ctx, result);

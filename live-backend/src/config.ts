@@ -52,6 +52,7 @@ export interface Config {
   livePublicOrigin: string;
   allowedOrigins: string[];
   liveAdminToken?: string;
+  liveBridgeToken?: string;
   trustProxyHeaders: boolean;
   countryWarmTtlMs: number;
   publicApiRatePerMinute: number;
@@ -73,6 +74,7 @@ export interface Config {
   ghostMaxClientsPerIp: number;
   replayVideoRatePerMinute: number;
   skinUploadRatePerMinute: number;
+  bridgeRatePerMinute: number;
   osuApiTargetPerMinute: number;
   osuApiHardPerMinute: number;
   oscJsonTargetPerMinute: number;
@@ -258,6 +260,25 @@ function readLiveAdminToken(nodeEnv: string): string | undefined {
   return token;
 }
 
+/* The server-to-server credential for the per-user routes (goals, wallets,
+   skins ownership, roster opt-in, the osu! proxy): the frontend's server
+   functions verify the osu! login cookie and then call the backend with this,
+   forwarding the viewer id they verified. Separate from LIVE_ADMIN_TOKEN so a
+   leak of either one is not a leak of both capabilities - see isBridge in
+   http/request.ts. Unset means "not split yet": the bridge accepts the admin
+   token, exactly as it always has. Setting it here without setting it on the
+   frontend answers 401 to every per-user feature, so move both together. */
+function readLiveBridgeToken(nodeEnv: string): string | undefined {
+  const token = process.env.LIVE_BRIDGE_TOKEN?.trim() || undefined;
+  if (token && nodeEnv === "production" && token.length < 32) {
+    throw new Error("LIVE_BRIDGE_TOKEN must be at least 32 characters in production (generate one with: openssl rand -hex 32).");
+  }
+  if (token && token === process.env.LIVE_ADMIN_TOKEN?.trim()) {
+    throw new Error("LIVE_BRIDGE_TOKEN must differ from LIVE_ADMIN_TOKEN; splitting them is the point.");
+  }
+  return token;
+}
+
 export function readConfig(): Config {
   const trackedCountries = countryCsv("TRACKED_COUNTRIES", ["CR"]);
   const prewarmCountries = countryCsv("PREWARM_COUNTRIES", TOP_50_MANIA_COUNTRIES);
@@ -297,6 +318,7 @@ export function readConfig(): Config {
     livePublicOrigin: process.env.LIVE_PUBLIC_ORIGIN ?? "http://localhost:7227",
     allowedOrigins: csv(process.env.ALLOWED_ORIGINS, "http://localhost:3000"),
     liveAdminToken: readLiveAdminToken(nodeEnv),
+    liveBridgeToken: readLiveBridgeToken(nodeEnv),
     trustProxyHeaders: readBool("TRUST_PROXY_HEADERS", false),
     countryWarmTtlMs: readInt("COUNTRY_WARM_TTL_MS", 72 * 60 * 60 * 1000),
     publicApiRatePerMinute: readInt("PUBLIC_API_RATE_PER_MINUTE", 120),
@@ -329,6 +351,7 @@ export function readConfig(): Config {
     // to 4 screenshots + the .osk + finish), so the budget must cover a full
     // multi-keymode upload with headroom; uploads are ticket-gated anyway.
     skinUploadRatePerMinute: readInt("SKIN_UPLOAD_RATE_PER_MINUTE", 40),
+    bridgeRatePerMinute: readInt("BRIDGE_RATE_PER_MINUTE", 6000),
     osuApiTargetPerMinute: readInt("OSU_API_TARGET_PER_MINUTE", 45),
     osuApiHardPerMinute: readInt("OSU_API_HARD_PER_MINUTE", 60),
     oscJsonTargetPerMinute: readInt("OSC_JSON_TARGET_PER_MINUTE", 30),

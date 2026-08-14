@@ -20,8 +20,9 @@ import type { JobQueue } from "../jobs/queue.js";
 // every tracked country. The candidate pool is `country_maps_farmed_scores` (the
 // proven farm-map set: rows only exist when a score entered someone's top plays),
 // aggregated across all countries. The subject's own top plays come from
-// `getPlayerProfileSnapshot` (osu! API, cached 24h), so this works for any
-// player, tracked or not.
+// `getPlayerProfileSnapshot` (osu! API, cached 24h). Internal/offline callers
+// can still build for any player; public HTTP routes first apply the known-
+// subject gate below so arbitrary names cannot spend the shared osu! budget.
 
 export type FarmHelperKeyMode = "4k" | "7k" | "any";
 type ConcreteFarmHelperKeyMode = Exclude<FarmHelperKeyMode, "any">;
@@ -166,6 +167,15 @@ export interface FarmHelperParams {
   keyMode?: FarmHelperKeyMode;
   view?: FarmHelperView;
   limit?: number;
+  // Who is asking, when the request proved it. A player's feedback marks are
+  // private (every other route that touches them is bridge-gated and forwards
+  // an osu!-verified viewer id), but the marks also ride the snapshot as
+  // per-rec tags and two envelope counters, and this endpoint names its subject
+  // in the query string. So the marks are built into the wire payload only when
+  // this equals the resolved subject; every public read gets a board with the
+  // same recommendations and no trace of what its subject marked. Part of the
+  // snapshot cache key, so an owner-scoped build is never handed to a stranger.
+  viewerUserId?: number | null;
 }
 
 export class FarmHelperUserNotFoundError extends Error {
@@ -173,6 +183,65 @@ export class FarmHelperUserNotFoundError extends Error {
     super(`farm helper could not resolve user "${key}"`);
     this.name = "FarmHelperUserNotFoundError";
   }
+}
+
+export type FarmHelperProfileLookupMode = "auto" | "userId";
+
+export interface KnownFarmHelperSubject {
+  lookupMode: FarmHelperProfileLookupMode;
+}
+
+/* Resolve only against local identity data. Public Farm Helper routes call this
+   before getPlayerProfileSnapshot is allowed to mint anything, so a caller can
+   search stored/roster players but cannot turn arbitrary usernames into osu!
+   API work. Username precedence mirrors the profile resolver, including the
+   unusual but valid case of an all-numeric username. */
+export async function resolveKnownFarmHelperSubject(
+  db: Db,
+  rawKey: string,
+): Promise<KnownFarmHelperSubject | null> {
+  const key = normalizeIdentityKey(rawKey);
+  if (!key || key.length > 120) return null;
+
+  const storedByUsername = (await exec(
+    db,
+    "select 1 from profile_snapshots where username_key = ? limit 1",
+    [key],
+  )).rows[0];
+  if (storedByUsername) return { lookupMode: "auto" };
+
+  const usernameRow = (await exec(
+    db,
+    `select u.user_id,
+            exists(select 1 from profile_snapshots ps where ps.user_id = u.user_id) as has_profile,
+            exists(select 1 from country_rosters cr where cr.user_id = u.user_id) as has_roster
+     from users u
+     where lower(u.username) = ?
+     limit 1`,
+    [key],
+  )).rows[0];
+  if (usernameRow) {
+    return Number(usernameRow.has_profile ?? 0) > 0 || Number(usernameRow.has_roster ?? 0) > 0
+      ? { lookupMode: "auto" }
+      : null;
+  }
+
+  const numericKey = Number(key);
+  if (!Number.isSafeInteger(numericKey) || numericKey <= 0) return null;
+  const storedById = (await exec(
+    db,
+    "select 1 from profile_snapshots where user_id = ? limit 1",
+    [numericKey],
+  )).rows[0];
+  if (storedById) return { lookupMode: "auto" };
+  const rosterById = (await exec(
+    db,
+    "select 1 from country_rosters where user_id = ? limit 1",
+    [numericKey],
+  )).rows[0];
+  // Force an id lookup for a roster-only numeric key. Auto mode tries numeric
+  // usernames first and could otherwise hydrate a different, unknown account.
+  return rosterById ? { lookupMode: "userId" } : null;
 }
 
 export const FARM_HELPER_DEFAULT_LIMIT = 100;
@@ -579,6 +648,10 @@ export interface FarmHelperSnapshotOptions {
   // a slow request names the stage that cost the time; every other caller
   // omits it and the instrumentation compiles away to one branch per stage.
   timings?: FarmHelperTimings;
+  // Trusted callers may force a numeric subject to resolve as an id. The HTTP
+  // route uses this only for a roster-only numeric key or for the bridge-proven
+  // viewer's own id, avoiding osu!'s valid all-numeric username ambiguity.
+  profileLookupMode?: FarmHelperProfileLookupMode;
 }
 
 export async function getFarmHelperSnapshot(
@@ -593,12 +666,24 @@ export async function getFarmHelperSnapshot(
   const view = params.view ?? "gain";
   const limit = clampLimit(params.limit);
   const timings = options.timings;
-  const variantKey = `${requestedKeyMode}:${view}:${limit}`;
+  const profileLookupMode = options.profileLookupMode ?? "auto";
+  const viewerUserId = Number.isInteger(params.viewerUserId) && Number(params.viewerUserId) > 0
+    ? Number(params.viewerUserId)
+    : 0;
+  // The viewer is part of the variant: an owner-scoped build carries the
+  // subject's private marks, so it must never be served from (or into) the
+  // entry a public read uses. Only the subject's own requests carry a viewer,
+  // so this adds at most one extra entry per subject.
+  const variantKey = `${requestedKeyMode}:${view}:${limit}:${viewerUserId}`;
   const aliasKey = normalizeIdentityKey(rawKey);
 
   // Identity first: with the canonical id already known, a fresh snapshot is
   // served without touching the profile snapshot or its projection.
-  const aliasUserId = aliasKey ? readIdentityAlias(db, aliasKey) : null;
+  const forcedUserId = profileLookupMode === "userId" && aliasKey != null
+    && Number.isSafeInteger(Number(aliasKey)) && Number(aliasKey) > 0
+    ? Number(aliasKey)
+    : null;
+  const aliasUserId = forcedUserId ?? (aliasKey ? readIdentityAlias(db, aliasKey) : null);
   if (aliasUserId != null) {
     timings?.setSubject({ userId: aliasUserId, keyMode: requestedKeyMode, view, limit });
     const hit = takeFreshSnapshot(db, `${aliasUserId}:${variantKey}`);
@@ -640,6 +725,8 @@ export async function getFarmHelperSnapshot(
     view,
     limit,
     variantKey,
+    viewerUserId,
+    profileLookupMode,
     queue,
     options,
     // Read before any I/O: an invalidation that lands while this request is
@@ -671,6 +758,9 @@ async function resolveAndBuildSnapshot(
     view: FarmHelperView;
     limit: number;
     variantKey: string;
+    // 0 for a public read; a positive id only when the caller proved it.
+    viewerUserId: number;
+    profileLookupMode: FarmHelperProfileLookupMode;
     queue?: JobQueue;
     options: FarmHelperSnapshotOptions;
     generation: number;
@@ -679,10 +769,10 @@ async function resolveAndBuildSnapshot(
     onIdentityResolved?: (userId: number) => void;
   },
 ): Promise<FarmHelperSnapshot> {
-  const { requestedKeyMode, view, limit, variantKey, queue, options, generation } = request;
+  const { requestedKeyMode, view, limit, variantKey, viewerUserId, profileLookupMode, queue, options, generation } = request;
   const timings = options.timings;
 
-  const profile = await timeStage(timings, "fh_profile", () => resolveProfile(db, osu, rawKey, queue));
+  const profile = await timeStage(timings, "fh_profile", () => resolveProfile(db, osu, rawKey, queue, profileLookupMode));
   const user = profile.user;
   const userId = Number(user.id ?? 0);
   if (!Number.isInteger(userId) || userId <= 0) throw new FarmHelperUserNotFoundError(rawKey);
@@ -708,7 +798,7 @@ async function resolveAndBuildSnapshot(
   // `aliasKey` is safe because it is the key that just resolved to this user,
   // and the username is safe because a username lookup is what the resolver
   // tries first.
-  writeIdentityAlias(db, aliasKey, userId);
+  if (profileLookupMode === "auto") writeIdentityAlias(db, aliasKey, userId);
   writeIdentityAlias(db, normalizeIdentityKey(username), userId);
 
   const cache = getCache(db);
@@ -735,6 +825,8 @@ async function resolveAndBuildSnapshot(
     requestedKeyMode,
     view,
     limit,
+    // Owner-scoped build: only then do the subject's own marks reach the wire.
+    isOwnerView: viewerUserId > 0 && viewerUserId === userId,
     queue,
     writeDb: options.writeDb,
     timings,
@@ -817,14 +909,20 @@ export async function buildFarmHelperSnapshotForBacktest(
   });
 }
 
-async function resolveProfile(db: Db, osu: ProfileOsuClient, rawKey: string, queue?: JobQueue) {
+async function resolveProfile(
+  db: Db,
+  osu: ProfileOsuClient,
+  rawKey: string,
+  queue?: JobQueue,
+  lookupMode: FarmHelperProfileLookupMode = "auto",
+) {
   try {
     // The queue is how a stored profile gets refreshed at all now, so passing
     // it is what keeps farm-helper subjects from serving a frozen snapshot.
     // Note BPM is profile-page decoration read off a separate indexed lookup
     // over ~200 beatmaps; nothing in the recommendation build consumes it, so
     // skipping it takes that lookup off every Farm Helper request.
-    return await getPlayerProfileSnapshot(db, osu, rawKey, { queue, includeNoteBpms: false });
+    return await getPlayerProfileSnapshot(db, osu, rawKey, { queue, includeNoteBpms: false, lookupMode });
   } catch (error) {
     if (error instanceof OsuApiError && error.status === 404) throw new FarmHelperUserNotFoundError(rawKey);
     throw error;
@@ -843,6 +941,10 @@ interface BuildCtx {
   requestedKeyMode: FarmHelperKeyMode;
   view: FarmHelperView;
   limit: number;
+  // True when the request proved it is the subject (see
+  // FarmHelperParams.viewerUserId). The marks always shape the board; this only
+  // decides whether they are also described on the wire.
+  isOwnerView?: boolean;
   // Internal-only "as of" cutoff (epoch ms) used exclusively by the offline
   // backtest harness to reconstruct a historical snapshot: subject best scores
   // are pre-filtered by the caller, peer farmed rows are filtered by played_at,
@@ -1035,13 +1137,18 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
     generatedAt,
     ...(peerBands ? { peerBands } : {}),
     // Gain view only (the popular browse never hides on marks); 0 included so
-    // the UI can rely on the field's presence.
+    // the UI can rely on the field's presence. The hidden count describes the
+    // subject's own marks, so it is owner-only; the gain-floor count describes
+    // the board and is public.
     ...(isPopular ? {} : {
-      feedbackHiddenCount: runs.reduce((sum, run) => sum + run.feedbackHidden, 0),
+      ...(ctx.isOwnerView
+        ? { feedbackHiddenCount: runs.reduce((sum, run) => sum + run.feedbackHidden, 0) }
+        : {}),
       belowGainFloorCount: runs.reduce((sum, run) => sum + run.belowGainFloor, 0),
     }),
-    // Transparency: the margin adjustment the marks applied (absent when none).
-    ...(ctx.feedbackMarginAdjust ? { feedbackMarginAdjust: ctx.feedbackMarginAdjust } : {}),
+    // Transparency: the margin adjustment the subject's marks applied (absent
+    // when none, and owner-only for the same reason as the tags above).
+    ...(ctx.feedbackMarginAdjust && ctx.isOwnerView ? { feedbackMarginAdjust: ctx.feedbackMarginAdjust } : {}),
   };
 
   const merged = runs.flatMap((run) => run.scored);
@@ -1727,7 +1834,8 @@ async function scoreCandidates(
       rankScore: 0,
       survival: survival == null ? null : round2(survival),
       clearRisk,
-      ...(laneFeedback ? { feedback: laneFeedback } : {}),
+      // Owner-only: what this player marked this lane is theirs to know.
+      ...(laneFeedback && ctx.isOwnerView ? { feedback: laneFeedback } : {}),
       difficultyFit,
       recencyFit,
     });
@@ -2261,8 +2369,9 @@ export async function getFarmHelperFarmers(
   speedBucket?: ScoreSpeedBucket,
   requestedKeyMode?: FarmHelperKeyMode,
   queue?: JobQueue,
+  profileLookupMode: FarmHelperProfileLookupMode = "auto",
 ): Promise<FarmHelperFarmersResult> {
-  const profile = await resolveProfile(db, osu, rawKey, queue);
+  const profile = await resolveProfile(db, osu, rawKey, queue, profileLookupMode);
   const user = profile.user;
   const userId = Number(user.id ?? 0);
   if (!Number.isInteger(userId) || userId <= 0) throw new FarmHelperUserNotFoundError(rawKey);
@@ -2363,8 +2472,9 @@ export async function getFarmHelperNeighbors(
   rawKey: string,
   requestedKeyMode: FarmHelperKeyMode = "any",
   queue?: JobQueue,
+  profileLookupMode: FarmHelperProfileLookupMode = "auto",
 ): Promise<FarmHelperNeighborsResult> {
-  const profile = await resolveProfile(db, osu, rawKey, queue);
+  const profile = await resolveProfile(db, osu, rawKey, queue, profileLookupMode);
   const user = profile.user;
   const userId = Number(user.id ?? 0);
   if (!Number.isInteger(userId) || userId <= 0) throw new FarmHelperUserNotFoundError(rawKey);

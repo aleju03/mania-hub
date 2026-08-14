@@ -1,10 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { GoatPollBoardPayload, GoatPollNominee } from "./live-backend";
+import { liveBridgeToken } from "./live-backend-tokens";
 
 // Server functions for the temporary GOAT nomination poll on /packs. The viewer
 // always comes from the osu! login cookie, never from client input, so a user
 // can only ever vote or nominate as themselves. The backend routes are
-// admin-token gated and that token only exists server-side. Mirrors the
+// bridge-token gated and that token only exists server-side. Mirrors the
 // roster-self-track / pack-wallet bridge.
 //
 // While the poll is unreleased (GOAT_POLL.adminOnly in the backend) it is also
@@ -80,6 +81,17 @@ function backendBase(): string | null {
 }
 
 function bridgeHeaders(json = false): HeadersInit {
+  const headers: HeadersInit = json ? { "content-type": "application/json" } : {};
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) {
+    headers.authorization = `Bearer ${bridgeToken}`;
+  }
+  return headers;
+}
+
+// The two /api/admin/goat-poll/ routes (remove, voters) are a true admin's, not
+// a player's, so they carry the admin credential rather than the bridge one.
+function adminHeaders(json = false): HeadersInit {
   const headers: HeadersInit = json ? { "content-type": "application/json" } : {};
   if (process.env.LIVE_ADMIN_TOKEN) {
     headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
@@ -211,7 +223,7 @@ export const removeGoatPollNominee = createServerFn({ method: "POST" })
     try {
       response = await fetch(`${base}/api/admin/goat-poll/remove`, {
         method: "POST",
-        headers: bridgeHeaders(true),
+        headers: adminHeaders(true),
         body: JSON.stringify({ nomineeId: data.nomineeId }),
       });
     } catch {
@@ -255,7 +267,7 @@ export const fetchGoatPollVoters = createServerFn({ method: "GET" })
     try {
       const response = await fetch(
         `${base}/api/admin/goat-poll/voters?nomineeId=${encodeURIComponent(data.nomineeId)}`,
-        { headers: bridgeHeaders() },
+        { headers: adminHeaders() },
       );
       if (!response.ok) return null;
       const body = (await response.json()) as { voters?: unknown };

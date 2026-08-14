@@ -297,6 +297,16 @@ function recKey(rec: LiveFarmHelperRec): string {
 // substitute for the snapshot's own numbers.
 type KnownSubject = RecentPlayer;
 
+/* True when this subject key names the signed-in player themselves. Their own
+   board is fetched through a server function that proves who is asking, because
+   only that build carries their private feedback marks; every other board is
+   read straight from the public endpoint. */
+function isOwnSubjectKey(subjectKey: string | null, viewer: ReturnType<typeof useAuth>["viewer"]): boolean {
+  if (!subjectKey || !viewer) return false;
+  const normalized = subjectKey.trim().toLowerCase();
+  return String(viewer.id) === normalized || viewer.username.trim().toLowerCase() === normalized;
+}
+
 function findKnownSubject(subjectKey: string | null, viewer: ReturnType<typeof useAuth>["viewer"]): KnownSubject | null {
   if (!subjectKey) return null;
   const normalized = subjectKey.trim().toLowerCase();
@@ -311,12 +321,12 @@ function findKnownSubject(subjectKey: string | null, viewer: ReturnType<typeof u
 // Every still-fresh view of this subject the module cache already holds. Runs
 // once at mount, which is what makes back-navigation from a map detail paint
 // the board immediately (the cache is a no-op during SSR).
-function seedSnapshotsFromCache(subjectKey: string | null): Map<string, LiveFarmHelperSnapshot> {
+function seedSnapshotsFromCache(subjectKey: string | null, owner: boolean): Map<string, LiveFarmHelperSnapshot> {
   const seeded = new Map<string, LiveFarmHelperSnapshot>();
   if (!subjectKey) return seeded;
   for (const keyMode of FARM_HELPER_KEY_MODES) {
     for (const view of FARM_HELPER_VIEWS) {
-      const cached = peekFarmHelperSnapshot({ subjectKey, keyMode, view, limit: SNAPSHOT_LIMIT });
+      const cached = peekFarmHelperSnapshot({ subjectKey, keyMode, view, limit: SNAPSHOT_LIMIT, owner });
       if (cached) seeded.set(farmHelperRequestKey(subjectKey, keyMode, view), cached);
     }
   }
@@ -333,7 +343,7 @@ function FarmHelperPage() {
   // this component) repaints the board it was already showing instead of the
   // initial skeleton.
   const [snapshotsByRequestKey, setSnapshotsByRequestKey] = useState<Map<string, LiveFarmHelperSnapshot>>(
-    () => seedSnapshotsFromCache(search.user ?? null),
+    () => seedSnapshotsFromCache(search.user ?? null, isOwnSubjectKey(search.user ?? null, auth.viewer)),
   );
   const [error, setError] = useState<string | null>(null);
 
@@ -348,6 +358,8 @@ function FarmHelperPage() {
   const [query, setQuery] = useState("");
   const isXl = useMediaQuery("(min-width: 1280px)");
   const requestKey = farmHelperRequestKey(subjectKey, keyMode, view);
+  // Their own board is the only one that comes back with their marks on it.
+  const isOwnSubject = isOwnSubjectKey(subjectKey, auth.viewer);
   const subjectNorm = subjectKey?.trim().toLowerCase() ?? "";
   const subjectPrefix = `${subjectNorm}\u0000`;
   // Per-subject freshness epochs: once the owner mutates a mark, every cached
@@ -434,6 +446,7 @@ function FarmHelperPage() {
       keyMode,
       view,
       limit: SNAPSHOT_LIMIT,
+      owner: isOwnSubject,
       // Post-mark epoch (undefined until the owner mutates a mark): bypasses
       // the browser HTTP cache without busting it on every call. Not an
       // effect dep on purpose; the mutation flow does its own fresh refetch.
@@ -457,7 +470,9 @@ function FarmHelperPage() {
     return () => {
       cancelled = true;
     };
-  }, [liveEnabled, subjectKey, keyMode, view, requestKey]);
+  // isOwnSubject is a dep: signing in on the page turns the same board into the
+  // owner-scoped one, which is a different payload and a different cache entry.
+  }, [liveEnabled, subjectKey, keyMode, view, requestKey, isOwnSubject]);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [retainedSelection, setRetainedSelection] = useState<{ requestKey: string; rec: LiveFarmHelperRec } | null>(null);
@@ -590,7 +605,7 @@ function FarmHelperPage() {
       // component's own map below.
       invalidateFarmHelperSubject(subjectKey);
       try {
-        const data = await loadFarmHelperSnapshot({ subjectKey, keyMode, view, limit: SNAPSHOT_LIMIT, fresh: epoch });
+        const data = await loadFarmHelperSnapshot({ subjectKey, keyMode, view, limit: SNAPSHOT_LIMIT, fresh: epoch, owner: true });
         setSnapshotsByRequestKey((current) => {
           const next = new Map<string, LiveFarmHelperSnapshot>();
           // Drop every other cached view of this subject: the browser may
@@ -794,12 +809,7 @@ function FarmHelperPage() {
           ) : waitingForInitialSnapshot ? (
             <LoadingState subject={knownSubject} />
           ) : error === "not-found" && !shellSnapshot ? (
-            <EmptyNotice
-              eyebrow="not found"
-              title={`Couldn't find "${subjectKey}"`}
-              body="Check the spelling, or search for the player again."
-              action={<ChangeSubjectButton onPick={setSubject} />}
-            />
+            <UnknownSubjectNotice subject={subjectKey} onPick={setSubject} />
           ) : error && !shellSnapshot ? (
             <EmptyNotice
               eyebrow="error"
@@ -2071,7 +2081,7 @@ const PREFETCH_DWELL_MS = 140;
 // keyMode/view come from the current search params because picking a player
 // preserves them (see navigateFarmHelper), so warming the defaults instead
 // would prefetch a board the click never asks for.
-function usePickIntent(keyMode: LiveFarmHelperKeyMode, view: LiveFarmHelperView) {
+function usePickIntent(keyMode: LiveFarmHelperKeyMode, view: LiveFarmHelperView, viewer: ReturnType<typeof useAuth>["viewer"]) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancel = () => {
     if (timerRef.current != null) clearTimeout(timerRef.current);
@@ -2080,7 +2090,7 @@ function usePickIntent(keyMode: LiveFarmHelperKeyMode, view: LiveFarmHelperView)
   useEffect(() => cancel, []);
 
   return (subjectKey: string) => {
-    const warm = () => prefetchFarmHelperSnapshot({ subjectKey, keyMode, view, limit: SNAPSHOT_LIMIT });
+    const warm = () => prefetchFarmHelperSnapshot({ subjectKey, keyMode, view, limit: SNAPSHOT_LIMIT, owner: isOwnSubjectKey(subjectKey, viewer) });
     const warmAfterDwell = () => {
       cancel();
       timerRef.current = setTimeout(warm, PREFETCH_DWELL_MS);
@@ -2105,7 +2115,7 @@ function PlayerPicker({ viewer, onPick, keyMode, view }: {
   view: LiveFarmHelperView;
 }) {
   const [recents, setRecents] = useState<RecentPlayer[]>([]);
-  const pickIntentProps = usePickIntent(keyMode, view);
+  const pickIntentProps = usePickIntent(keyMode, view, viewer);
   const viewerId = viewer?.id;
 
   useIsoLayoutEffect(() => {
@@ -2351,7 +2361,45 @@ function peerBandRangeLabel(snapshot: LiveFarmHelperSnapshot): string {
   return range ? `compared to ${range} pp` : "no pp range";
 }
 
-function ChangeSubjectButton({ onPick }: { onPick: (key: string) => void }) {
+/* The subject resolved to nobody the backend has ever loaded, which is not the
+   same as a typo: the picker searches all of osu!, so a real account that has
+   never been viewed here lands right here. The screen leads with the name that
+   was searched and offers the one thing that fixes it. */
+function UnknownSubjectNotice({ subject, onPick }: { subject: string; onPick: (key: string) => void }) {
+  return (
+    <div className="mx-auto flex min-h-[70vh] max-w-lg flex-col items-center justify-center py-10 text-center">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">never loaded here</div>
+      <h2 className="mt-2 max-w-full break-words text-3xl font-black leading-tight text-osu-c1">{subject}</h2>
+      <p className="mt-3 max-w-sm text-sm leading-relaxed text-osu-f1">
+        Farm helper needs a player's top 200, and this account has never been loaded here. Opening their
+        profile once is enough.
+      </p>
+
+      <Link
+        to="/player/$username"
+        params={{ username: subject }}
+        className="group mt-7 inline-flex items-center gap-2 rounded-xl border border-osu-b3/30 bg-osu-b4 py-2 pl-4 pr-3 text-sm font-bold text-osu-c1 transition-colors duration-150 hover:border-osu-pink/60 hover:bg-osu-b3"
+      >
+        open their profile
+        <ArrowRight className="h-4 w-4 shrink-0 text-osu-pink transition-transform group-hover:translate-x-0.5" />
+      </Link>
+
+      <div className="mt-4 w-full max-w-xs">
+        <ChangeSubjectButton onPick={onPick} label="or pick someone else" quiet />
+      </div>
+    </div>
+  );
+}
+
+function ChangeSubjectButton({
+  onPick,
+  label = "change player",
+  quiet = false,
+}: {
+  onPick: (key: string) => void;
+  label?: string;
+  quiet?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -2375,9 +2423,13 @@ function ChangeSubjectButton({ onPick }: { onPick: (key: string) => void }) {
     <button
       type="button"
       onClick={() => setOpen(true)}
-      className="w-full rounded-lg bg-osu-b3/60 px-3 py-2 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
+      className={
+        quiet
+          ? "w-full py-1 text-xs font-medium text-osu-f1 transition-colors hover:text-osu-c1"
+          : "w-full rounded-lg bg-osu-b3/60 px-3 py-2 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
+      }
     >
-      change player
+      {label}
     </button>
   );
 }

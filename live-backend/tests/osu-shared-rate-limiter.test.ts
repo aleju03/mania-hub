@@ -15,7 +15,7 @@ afterEach(async () => {
   dirs.length = 0;
 });
 
-async function setupLimiters(options: { targetPerMinute: number; hardPerMinute: number; maxReserveWaitMs?: number }) {
+async function setupLimiters(options: { targetPerMinute: number; hardPerMinute: number; maxReserveWaitMs?: number; backgroundReservedPerMinute?: number }) {
   const dir = await mkdtemp(join(tmpdir(), "mania-osu-shared-limiter-"));
   dirs.push(dir);
   const databaseUrl = `file:${join(dir, "test.db")}`;
@@ -97,6 +97,37 @@ describe("sqlite shared osu! rate limiter", () => {
     const interactiveStart = await second.reserve("getUser", "/users/1/mania", "interactive");
 
     expect(interactiveStart).toBe(startedAt);
+  });
+
+  it("reserves shared hard-window capacity for background lanes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const { first, second } = await setupLimiters({
+      targetPerMinute: 60_000,
+      hardPerMinute: 5,
+      backgroundReservedPerMinute: 1,
+    });
+
+    for (let index = 0; index < 4; index += 1) {
+      await first.reserve(`api:farm-helper:${index}`, `/users/${index}/mania`, "interactive");
+    }
+    let extraInteractiveResolved = false;
+    const extraInteractive = first.reserve("api:farm-helper:extra", "/users/99/mania", "interactive").then(() => {
+      extraInteractiveResolved = true;
+    });
+
+    let jobResolved = false;
+    const job = second.reserve("job:enrich_user", "/users/100/mania", "job").then(() => {
+      jobResolved = true;
+    });
+    await vi.advanceTimersByTimeAsync(2);
+    await job;
+
+    expect(jobResolved).toBe(true);
+    expect(extraInteractiveResolved).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(60_001);
+    await extraInteractive;
   });
 
   it("caps the shared 429 pause for interactive lanes while jobs wait it out", async () => {

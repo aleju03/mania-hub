@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import { liveBridgeToken } from "./live-backend-tokens";
 
 // Bridge to the live-backend goals API. Every call resolves the osu! viewer from the signed login
-// cookie server-side and forwards that id with the admin token (the roster-self-track pattern), so
+// cookie server-side and forwards that id with the bridge token (the roster-self-track pattern), so
 // a logged-in user can only ever read or mutate their own goals. The browser never sends a user id.
 
 export type GoalKind = "reach_pp" | "play_pp" | "play_pp_count" | "accuracy" | "pass" | "grade" | "fc" | "reach_rank";
@@ -88,7 +89,8 @@ async function resolveGoalsBackend(): Promise<GoalsBackend | null> {
   const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
   if (!base) return null;
   const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
   const country = auth.viewer.countryCode?.trim().toUpperCase() ?? "";
   return { base, headers, userId: auth.viewer.id, country: /^[A-Z]{2}$/.test(country) ? country : null };
 }

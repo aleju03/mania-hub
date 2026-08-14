@@ -7,6 +7,7 @@ import { extractSkinSoundsFromArchive, hasAnyImportedAssets, loadOskImageAssetBy
 import type { OskArchive } from "./replay-skin-import";
 import { skinOskFileUrl } from "./skins";
 import type { SkinSummary } from "./skins";
+import { liveBridgeToken } from "./live-backend-tokens";
 
 // A player's "replay skin": one published community skin (/skins) plus their
 // customized ReplaySkinSettings, stored server-side so anyone opening their
@@ -652,7 +653,8 @@ async function resolveOwnerSkinBackend(): Promise<OwnerSkinBackend | null> {
   const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
   if (!base) return null;
   const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
   return { base, headers, userId: auth.viewer.id };
 }
 

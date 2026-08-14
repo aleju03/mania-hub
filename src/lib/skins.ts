@@ -2,10 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { getLiveBackendUrl, getServerLiveBackendUrl } from "./live-backend";
 import type { PreviewBackdrop } from "./skin-preview-backdrops";
 import type { SkinPreviewChartSnippet } from "./skin-preview-patterns";
+import { liveBridgeToken } from "./live-backend-tokens";
 
 // Community skins: public browsing goes straight to the live backend (CORS),
 // per-user actions go through server fns that resolve the osu!-verified viewer
-// from the auth cookie and forward it with the admin token (the goals bridge).
+// from the auth cookie and forward it with the bridge token (the goals bridge).
 // The 50MB .osk upload itself is browser -> live backend with a short-lived
 // ticket minted by startSkinUpload, so the archive never transits the frontend server.
 
@@ -66,7 +67,10 @@ export interface SkinSummary {
   laneCover?: boolean | null;
   maniaStage?: boolean | null;
   lazer?: boolean | null;
-  // What the tap notes are, classified server-side from the note art.
+  // Every distinct tap-note shape across the skin's keymodes, with the
+  // primary/majority shape first. Missing on summaries from older backends.
+  noteShapes?: SkinNoteShape[];
+  // The primary tap-note shape, retained as the catalog-filter label.
   noteShape?: SkinNoteShape | null;
   // On a note-shape-filtered list, the keymode render that actually proves the
   // match. Absent on detail pages and responses from older backends.
@@ -445,7 +449,7 @@ export const fetchSkinById = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<SkinSummary | null> => {
     const base = getServerLiveBackendUrl();
     if (!base) return null;
-    // The signed-in viewer rides along with the admin token so a true admin
+    // The signed-in viewer rides along with the bridge token so a true admin
     // reads hidden skins back (to unhide them); everyone else gets the public,
     // cacheable published-only view.
     const query = new URLSearchParams({ id: data.id });
@@ -453,8 +457,9 @@ export const fetchSkinById = createServerFn({ method: "GET" })
     try {
       const { readCurrentAuth } = await import("./auth-server");
       const auth = await readCurrentAuth();
-      if (auth.viewer && process.env.LIVE_ADMIN_TOKEN) {
-        headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+      const bridgeToken = liveBridgeToken();
+      if (auth.viewer && bridgeToken) {
+        headers.authorization = `Bearer ${bridgeToken}`;
         query.set("viewerUserId", String(auth.viewer.id));
         if (auth.isAdmin) query.set("asAdmin", "1");
         const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -518,7 +523,8 @@ async function resolveSkinsBackend(): Promise<SkinsBackend | null> {
   const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
   if (!base) return null;
   const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
   return { base, headers, userId: auth.viewer.id, username: auth.viewer.username, isAdmin: auth.isAdmin === true };
 }
 
@@ -881,7 +887,7 @@ export const setMySkinVisibility = createServerFn({ method: "POST" })
 // pages. For a true admin it is every uploader's private skins, the same
 // moderation read /api/skins/get already grants on a single one. It goes
 // through a server fn because the list endpoint only trusts an owner id (and an
-// admin claim) that arrives with the admin token.
+// admin claim) that arrives with the bridge token.
 export interface PrivateSkinsShelf {
   skins: SkinSummary[];
   // Rows matching the shelf query, which can exceed the page fetched above.
@@ -1059,6 +1065,7 @@ export const moderateSkin = createServerFn({ method: "POST" })
     const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
     if (!base) return { ok: false };
     const headers: HeadersInit = { "content-type": "application/json" };
+    // The moderation route lives under /api/admin/, so it takes the admin token.
     if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
     try {
       const response = await fetch(`${base}/api/admin/skins/moderate`, {

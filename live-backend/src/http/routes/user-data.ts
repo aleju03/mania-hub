@@ -9,15 +9,15 @@ import { getPlayerSkillBreakdown } from "../../features/player-skills.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { addManualRosterMember, removeManualRosterMember } from "../../rosters/country-rosters.js";
 import type { HttpContext } from "../context.js";
-import { clampInteger, clampLimit, isAdmin, readBody } from "../request.js";
+import { clampInteger, clampLimit, isBridge, readBody } from "../request.js";
 import { sendJson } from "../respond.js";
 import { readMyDataTopPlaysQuery, readMyDataTrackedQuery } from "../snapshot-queries.js";
 
 export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL): Promise<boolean> {
   if (url.pathname === "/api/roster/self-add" || url.pathname === "/api/roster/self-remove") {
-    // Admin-token gated: the frontend server fn forwards the osu!-verified viewer id with the
-    // shared admin token (the pack-wallet pattern), so a user can only ever opt themselves in.
-    if (!isAdmin(req, ctx)) {
+    // Bridge-token gated: the frontend server fn forwards the osu!-verified viewer id with the
+    // shared bridge token (the pack-wallet pattern), so a user can only ever opt themselves in.
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -43,10 +43,10 @@ export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   if (url.pathname === "/api/goals" || url.pathname === "/api/goals/create" || url.pathname === "/api/goals/update" || url.pathname === "/api/goals/delete") {
-    // All goal endpoints are admin-token gated: the frontend server fn injects the osu!-verified
+    // All goal endpoints are bridge-token gated: the frontend server fn injects the osu!-verified
     // viewer id (the roster/pack-wallet bridge), so a user only ever reads or mutates their own
     // goals. The browser can never name a different user id here.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -145,10 +145,10 @@ export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   if (url.pathname === "/api/farm-helper/feedback" || url.pathname === "/api/farm-helper/feedback/set" || url.pathname === "/api/farm-helper/feedback/clear") {
-    // Same trust contract as the goals endpoints above: admin-token gated and
+    // Same trust contract as the goals endpoints above: bridge-token gated and
     // called server-to-server, with the frontend server fn injecting the
     // osu!-verified viewer id, so a user only ever touches their own marks.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -212,7 +212,7 @@ export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   if (url.pathname === "/api/my-data/summary") {
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -229,7 +229,7 @@ export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   if (url.pathname === "/api/my-data/dashboard") {
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -263,7 +263,7 @@ export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   if (url.pathname === "/api/my-data/skills") {
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -281,7 +281,7 @@ export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   if (url.pathname === "/api/my-data/feed") {
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -301,7 +301,7 @@ export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   if (url.pathname === "/api/my-data/top-plays") {
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }

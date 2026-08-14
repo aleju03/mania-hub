@@ -9,6 +9,7 @@ import {
   backfillSkinArchiveMeta,
   classifyKeymodeNoteShape,
   classifySkinNoteShape,
+  classifySkinNoteShapes,
   computeSkinArchiveMeta,
 } from "../src/skins/archive-meta.js";
 import { computeSkinVisualSignature } from "../src/skins/visual-signature.js";
@@ -161,18 +162,22 @@ describe("classifySkinNoteShape", () => {
   });
 
   it("settles a mixed skin by majority", () => {
-    expect(classifySkinNoteShape(visualOf({
+    const mixed = visualOf({
       4: { aspect: 1, mask: CIRCLE_MASK },
       6: { aspect: 3, mask: FULL_MASK },
       7: { aspect: 3, mask: FULL_MASK },
-    }))).toBe("bar");
+    });
+    expect(classifySkinNoteShape(mixed)).toBe("bar");
+    expect(classifySkinNoteShapes(mixed)).toEqual(["bar", "circle"]);
   });
 
   it("breaks a tie toward the lowest keymode", () => {
-    expect(classifySkinNoteShape(visualOf({
+    const mixed = visualOf({
       4: { aspect: 1, mask: CIRCLE_MASK },
       7: { aspect: 3, mask: FULL_MASK },
-    }))).toBe("circle");
+    });
+    expect(classifySkinNoteShape(mixed)).toBe("circle");
+    expect(classifySkinNoteShapes(mixed)).toEqual(["circle", "bar"]);
   });
 
   it("labels Cirno by its 4K arrows when its 7K notes are circles", () => {

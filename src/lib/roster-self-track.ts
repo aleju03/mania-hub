@@ -1,9 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
+import { liveBridgeToken } from "./live-backend-tokens";
 
 // Server functions letting a logged-in user opt their own osu! account into their country's
 // roster so their plays get tracked (activity, recent timeline) even when they are not in the
 // top 100. The viewer always comes from the osu! login cookie, never from client input, so a
-// user can only ever add or remove themselves. The backend route is admin-token gated; that
+// user can only ever add or remove themselves. The backend route is bridge-token gated; that
 // token only exists server-side. Mirrors the pack-wallet-sync bridge.
 
 export type RosterSelfTrackStatus =
@@ -32,8 +33,9 @@ async function callRosterAction(action: "self-add" | "self-remove"): Promise<Ros
     return { ok: false, status: "unavailable", country: country || null };
   }
   const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) {
-    headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) {
+    headers.authorization = `Bearer ${bridgeToken}`;
   }
   let response: Response;
   try {

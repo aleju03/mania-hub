@@ -31,7 +31,7 @@ import {
   msUntilNextCharge,
   ownedCards,
   PACK_OPEN_SHARD_REWARD,
-  parsePackCardKey,
+  packCardKey,
   type PackWallet,
 } from "../lib/pack-collection";
 import { isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
@@ -41,10 +41,11 @@ import {
   readPendingPack,
   writePendingPack,
 } from "../lib/pack-pending";
-import { fetchServerPackCollectionOwnedKeys, recordServerPackPulls } from "../lib/pack-wallet-sync";
+import { mintServerPackCollectionCards, recordServerPackPulls } from "../lib/pack-wallet-sync";
 import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
+  drawPackPlayersFromServer,
   PACK_TYPES,
   packTypeById,
   prefetchPackPlayerScores,
@@ -52,6 +53,7 @@ import {
   type PackTypeDef,
   type PackTypeId,
 } from "../lib/packs";
+import type { OsuScore } from "../lib/types";
 import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
 
@@ -150,13 +152,24 @@ function scheduleCollectionPanelMount(callback: () => void, reducedMotion: boole
    cache misses through the small osu! concurrency bound. That lets a hot card
    near the end of a ten-card hand become ready even when four earlier players
    are cold. A resolved null = the fetch failed (network, rate limit), as
-   opposed to a player with genuinely no ranked plays; the reveal retries it. */
-function buildCardStates(players: PackPlayer[]): PackCardState[] {
-  const scoresPromises = prefetchPackPlayerScores(players.map((player) => player.user.id));
-  return players.map((player, index) => ({
-    player,
-    scoresPromise: scoresPromises[index] ?? Promise.resolve(null),
-  }));
+   opposed to a player with genuinely no ranked plays; the reveal retries it.
+
+   A server-dealt pack arrives with the hand's stored windows already in the
+   response; those seed their cards directly and only the players the backend
+   had nothing for go through the probe. */
+function buildCardStates(players: PackPlayer[], seededScores?: Map<number, OsuScore[]>): PackCardState[] {
+  const missingIds = players
+    .map((player) => player.user.id)
+    .filter((id) => !seededScores?.has(id));
+  const missingPromises = prefetchPackPlayerScores(missingIds);
+  const missPromises = new Map(missingIds.map((id, index) => [id, missingPromises[index]] as const));
+  return players.map((player) => {
+    const seeded = seededScores?.get(player.user.id);
+    return {
+      player,
+      scoresPromise: seeded ? Promise.resolve(seeded) : missPromises.get(player.user.id) ?? Promise.resolve(null),
+    };
+  });
 }
 
 /* Dev only: `/packs?forceGoat=1` pins the honorary slot so the GOAT reveal can
@@ -180,28 +193,21 @@ function canAffordPack(wallet: PackWallet | null, type: PackTypeDef): boolean {
    of a player means the pool should deal someone else. `ownedGoatUserIds`
    drives the honorary slot, where holding a player's ordinary card is not
    holding their GOAT - those are separate cards, so a World Class bojii must
-   not make the roster's one GOAT bojii count as already collected. */
-async function getDuplicateProtectionOwned(
+   not make the roster's one GOAT bojii count as already collected.
+
+   Anonymous wallets only: a signed-in open is dealt server-side, where the
+   synced collection lives, so a local wallet's cards are the whole story
+   here. */
+function getDuplicateProtectionOwned(
   type: PackTypeDef,
   wallet: PackWallet | null,
-  syncStatus: "local" | "syncing" | "synced",
-): Promise<{ ownedUserIds: Set<number>; ownedGoatUserIds: Set<number> } | undefined> {
+): { ownedUserIds: Set<number>; ownedGoatUserIds: Set<number> } | undefined {
   if (!type.guaranteesNew || !wallet) return undefined;
   const ownedUserIds = new Set<number>();
   const ownedGoatUserIds = new Set<number>();
   for (const card of ownedCards(wallet)) {
     ownedUserIds.add(card.userId);
     if (card.tier === "goat") ownedGoatUserIds.add(card.userId);
-  }
-  if (syncStatus === "local") return { ownedUserIds, ownedGoatUserIds };
-
-  const serverOwnedKeys = await fetchServerPackCollectionOwnedKeys();
-  if (!serverOwnedKeys) throw new Error("Synced collection is unavailable.");
-  for (const key of serverOwnedKeys) {
-    const parsed = parsePackCardKey(key);
-    if (!parsed) continue;
-    ownedUserIds.add(parsed.userId);
-    if (parsed.goat) ownedGoatUserIds.add(parsed.userId);
   }
   return { ownedUserIds, ownedGoatUserIds };
 }
@@ -397,10 +403,32 @@ function PacksPage() {
     { serial: number; mintedTotal: number; isFirstGlobal: boolean }
   > | null>(null);
   const preparedPackKeyRef = useRef<string | null>(null);
-  /* Armed by the deal effect with the draw for the current selection; the
-     pack's first grab pulls it. Null while no deal is owed (already dealt,
-     already started, or nothing selected). */
+  /* Armed by the deal effect with the draw for the current selection. For an
+     anonymous wallet the pack's first grab pulls it (the draw is free, so
+     dealing early hides latency behind the rip); for a signed-in wallet the
+     slash pulls it instead, because the server draw IS the purchase and a
+     grabbed-then-abandoned pack must not burn a charge. Null while no deal
+     is owed (already dealt, already started, or nothing selected). */
   const dealTriggerRef = useRef<(() => void) | null>(null);
+  /* The server's word on which dealt cards are first copies, keyed by wallet
+     card key. The synced collection lives server-side, so this beats the
+     local wallet's answer for the reveal's NEW badge. */
+  const serverIsNewRef = useRef<Map<string, boolean> | null>(null);
+  /* True once the server draw has spent for the pack on screen: the slash
+     and the auto-open charge must not pay a second time locally. */
+  const serverPaidRef = useRef(false);
+  /* The in-flight labelling pass for the pack on screen. The summary's
+     recycle waits on it: the dealt rows are tierless until it lands, and a
+     recycle that outruns it would price every card as unrated. */
+  const mintPassRef = useRef<Promise<unknown> | null>(null);
+  /* Read at deal time, not at arm time: the deal effect's deps deliberately
+     exclude auth, so a login that hydrates between the arm and the grab would
+     otherwise leave the pack on the anonymous draw. */
+  const viewerRef = useRef(auth.viewer);
+  viewerRef.current = auth.viewer;
+  /* Whether opens run through the server (drawn, paid and minted in one
+     request). Dev's ?forceGoat pin needs the local roll, so it opts out. */
+  const serverDeals = () => Boolean(viewerRef.current) && isLiveBackendConfigured() && !devForceGoatPull();
   const [collectionPanelReady, setCollectionPanelReady] = useState(!streakOpen);
   const [collectionPanelMounted, setCollectionPanelMounted] = useState(!streakOpen);
   // Holds the last wallet the visible collection rendered. Spending a pack
@@ -509,6 +537,9 @@ function PacksPage() {
     preparedPackKeyRef.current = null;
     setCards(null);
     setDealError(false);
+    serverIsNewRef.current = null;
+    serverPaidRef.current = false;
+    mintPassRef.current = null;
     if (packId === 0) {
       const pendingPlayers = readPendingPack();
       if (pendingPlayers) {
@@ -523,9 +554,53 @@ function PacksPage() {
     }
     const type = packTypeById(packTypeId);
     const currentWallet = walletApi.wallet;
+    const finishDeal = (players: PackPlayer[], poolTotal: number | null, seededScores?: Map<number, OsuScore[]>) => {
+      // poolTotal feeds collection progress over the WHOLE pool; a keymode
+      // draw reports only its filtered slice, so it must not overwrite it.
+      if (!type.keys) walletApi.notePoolTotal(poolTotal);
+      preparedPackKeyRef.current = dealKey;
+      setCards(buildCardStates(players, seededScores));
+      /* A pack opened straight from the summary pays here rather than at the
+         slash, because there is no slash: charging only once the draw
+         succeeded keeps a failed deal from eating the price. A server deal
+         already paid inside the draw itself. */
+      if (autoOpenRef.current) {
+        autoOpenRef.current = false;
+        setPhase(serverPaidRef.current || chargeForPack(type) ? "reveal" : "pack");
+      }
+    };
     const deal = async () => {
       try {
-        const owned = await getDuplicateProtectionOwned(type, currentWallet, walletApi.syncStatus);
+        /* Signed-in opens are dealt by the backend: one request carries the
+           whole open - the players, their cards, the spend out of the server
+           wallet, and the dealt copies landing in the synced collection.
+           "unavailable" means the server no longer recognizes the login; the
+           browser-local draw below still deals (and charges locally). */
+        if (serverDeals()) {
+          const outcome = await drawPackPlayersFromServer(type.id);
+          if (cancelled) return;
+          if (outcome.kind === "insufficient") {
+            /* The wallet on the server could not pay (a charge burned in
+               another tab, clock drift on the regen countdown). Adopt the
+               true balance and put the shelf back; with it corrected, the
+               stage shows the countdown or greys the pack on its own. */
+            if (outcome.wallet) walletApi.applyServerWallet(outcome.wallet.payload, outcome.wallet.rev);
+            autoOpenRef.current = false;
+            setPhase("pack");
+            setPackId((id) => id + 1);
+            return;
+          }
+          if (outcome.kind === "dealt") {
+            const dealt = outcome.deal;
+            serverIsNewRef.current = dealt.isNewByCardKey;
+            serverPaidRef.current = true;
+            if (dealt.wallet) walletApi.applyServerWallet(dealt.wallet.payload, dealt.wallet.rev);
+            track("pack_open", { pack_type: type.id, pack_username: viewerRef.current?.username });
+            finishDeal(dealt.draw.players, dealt.draw.poolTotal, dealt.scoresByUserId);
+            return;
+          }
+        }
+        const owned = getDuplicateProtectionOwned(type, currentWallet);
         const draw = await drawPackPlayers(Math.random, {
           topFraction: type.topFraction,
           keys: type.keys,
@@ -536,21 +611,10 @@ function PacksPage() {
           ownedGoatUserIds: owned?.ownedGoatUserIds,
         });
         if (cancelled) return;
-        // poolTotal feeds collection progress over the WHOLE pool; a keymode
-        // draw reports only its filtered slice, so it must not overwrite it.
-        if (!type.keys) walletApi.notePoolTotal(draw.poolTotal);
         if (isLiveBackendConfigured()) {
           void warmLivePackPlayers(draw.players.map((player) => player.user.id)).catch(() => {});
         }
-        preparedPackKeyRef.current = dealKey;
-        setCards(buildCardStates(draw.players));
-        /* A pack opened straight from the summary pays here rather than at the
-           slash, because there is no slash: charging only once the draw
-           succeeded keeps a failed deal from eating the price. */
-        if (autoOpenRef.current) {
-          autoOpenRef.current = false;
-          setPhase(chargeForPack(type) ? "reveal" : "pack");
-        }
+        finishDeal(draw.players, draw.poolTotal);
       } catch {
         autoOpenRef.current = false;
         if (!cancelled) setDealError(true);
@@ -637,12 +701,27 @@ function PacksPage() {
   };
 
   const handleOpened = () => {
-    // The slash is the moment of purchase.
+    const trigger = dealTriggerRef.current;
+    if (serverDeals()) {
+      /* The slash is the moment of purchase, and for a signed-in wallet the
+         purchase IS the server draw - so it fires here, not at the grab, and
+         the shuffle covers the wait exactly as it does for auto-open. An
+         already-consumed trigger means the deal is running (or was refused
+         and reset the stage), so there is nothing to start twice. */
+      trigger?.();
+      setPhase("reveal");
+      return;
+    }
+    // The slash is the moment of purchase (anonymous wallets pay locally).
     if (!chargeForPack(selectedType)) {
       setPackTypeId("standard");
       setPackId((id) => id + 1);
       return;
     }
+    /* Normally consumed by the grab; still armed here only if the wallet
+       flipped from synced to local between grab and slash (a logout mid-
+       grab), in which case the deal has not started yet. */
+    trigger?.();
     setPhase("reveal");
   };
 
@@ -751,6 +830,7 @@ function PacksPage() {
                 onExit={() => {
                   showStreakView(false);
                 }}
+                onWalletRefresh={walletApi.refreshServerWallet}
               />
             ) : dealError ? (
               <div className="mx-auto max-w-[420px] text-center">
@@ -799,7 +879,11 @@ function PacksPage() {
                       <PackStage
                         reducedMotion={reducedMotion}
                         onOpened={handleOpened}
-                        onGrab={() => dealTriggerRef.current?.()}
+                        /* Grab-time dealing is the free-draw head start; a
+                           server deal spends, so it waits for the slash. */
+                        onGrab={() => {
+                          if (!serverDeals()) dealTriggerRef.current?.();
+                        }}
                         packType={selectedType}
                       />
                     )}
@@ -845,7 +929,10 @@ function PacksPage() {
                           selectedType.cost.kind === "shards" ? selectedType.cost.amount : null
                         }
                         serials={serials}
-                        onRecycleCopies={walletApi.recycleCopies}
+                        onRecycleCopies={async (entries) => {
+                          await mintPassRef.current;
+                          return walletApi.recycleCopies(entries);
+                        }}
                       />
                     ) : cards ? (
                       <RevealStage
@@ -854,10 +941,37 @@ function PacksPage() {
                         onCardRevealed={(pull) => {
                           // In the wallet now, so no longer owed by the pending pack.
                           consumePendingPackCard(pull.userId);
-                          return walletApi.recordPull(pull);
+                          const localIsNew = walletApi.recordPull(pull);
+                          // The synced collection lives server-side, so the
+                          // draw's own answer wins; the local wallet only
+                          // speaks for anonymous (and resumed) packs.
+                          return (
+                            serverIsNewRef.current?.get(packCardKey(pull.userId, pull.tier)) ?? localIsNew
+                          );
                         }}
                         onComplete={(pulls, handoff) => {
                           clearPendingPack();
+                          /* The labelling pass: the server wrote the dealt
+                             rows at draw time, and this hands it the tier and
+                             skills the reveal just computed for each card.
+                             Fire-and-forget - a lost call costs a stat bar
+                             until the collection's repair path re-mints it,
+                             never a card. */
+                          if (auth.viewer && pulls.length > 0) {
+                            const mints = pulls
+                              .filter((pull) => pull.skills)
+                              .map((pull) => ({
+                                cardKey: packCardKey(pull.player.user.id, pull.tier),
+                                tier: pull.tier,
+                                tierLabel: pull.tierLabel,
+                                skills: pull.skills,
+                                pp: pull.player.pp,
+                                globalRank: pull.player.globalRank,
+                              }));
+                            if (mints.length > 0) {
+                              mintPassRef.current = mintServerPackCollectionCards({ data: { cards: mints } }).catch(() => {});
+                            }
+                          }
                           /* Log the opened pack into the community pull feed.
                              Fire-and-forget: the reveal is already done and
                              the wallet is the source of truth either way. */

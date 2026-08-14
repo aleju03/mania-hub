@@ -2,15 +2,38 @@ import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { HttpContext } from "./context.js";
 
-export function isAdmin(req: IncomingMessage, ctx: HttpContext): boolean {
-  // Fail closed: no configured token means no admin access in any NODE_ENV.
-  const token = ctx.config.liveAdminToken;
+function bearerMatches(req: IncomingMessage, token: string | undefined): boolean {
+  // Fail closed: no configured token means no access in any NODE_ENV.
   if (!token) return false;
   const header = req.headers.authorization;
   if (typeof header !== "string") return false;
   const expected = Buffer.from(`Bearer ${token}`);
   const provided = Buffer.from(header);
   return provided.length === expected.length && timingSafeEqual(provided, expected);
+}
+
+/** A true-admin request: `/api/admin/*`, the destructive actions, the admin
+    analytics queries. Nothing here acts on behalf of a player. */
+export function isAdmin(req: IncomingMessage, ctx: HttpContext): boolean {
+  return bearerMatches(req, ctx.config.liveAdminToken);
+}
+
+/* The server-to-server bridge: the frontend's server functions authenticate the
+   osu! login cookie and then call these routes with the verified viewer id in
+   the payload. The token says "this came from my own server"; the viewer id in
+   the body says who it is acting as. Those are two different claims, and giving
+   them one credential meant a leaked admin token could write as any player on
+   the site, not just reach the admin panel.
+
+   LIVE_BRIDGE_TOKEN is what separates them. While it is unset the bridge simply
+   is the admin token, which is exactly the old behaviour, so an existing
+   deployment keeps working unchanged. Once it is set, the admin token stops
+   opening these routes - so set it on the frontend and the backend in the same
+   breath, or the site's per-user features answer 401. */
+export function isBridge(req: IncomingMessage, ctx: HttpContext): boolean {
+  const bridgeToken = ctx.config.liveBridgeToken;
+  if (!bridgeToken) return isAdmin(req, ctx);
+  return bearerMatches(req, bridgeToken);
 }
 
 export const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;

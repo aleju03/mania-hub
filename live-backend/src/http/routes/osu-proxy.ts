@@ -4,12 +4,12 @@ import { getOsuJsonWithProxyCache, normalizeOsuProxyCacheHints } from "../../fea
 import { getCachedBeatmapFile, normalizeBeatmapFileChecksum } from "../../osu/beatmap-file-cache.js";
 import { OsuApiError } from "../../osu/client.js";
 import type { HttpContext } from "../context.js";
-import { isAdmin, readBody } from "../request.js";
+import { isBridge, readBody } from "../request.js";
 import { sendCors, sendJson } from "../respond.js";
 
 export async function handleOsuProxyRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL): Promise<boolean> {
   if (url.pathname === "/api/osu/v2") {
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -47,7 +47,7 @@ export async function handleOsuProxyRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   if (url.pathname === "/api/osu/beatmap-file") {
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }

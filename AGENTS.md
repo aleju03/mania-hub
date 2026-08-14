@@ -45,7 +45,7 @@ Minimum verification: for live backend changes run `npm test` and `npx tsc --noE
 - Backend logs are structured JSON via `live-backend/src/logger.ts` (`logInfo`/`logWarn`), never `console.log`.
 - Privacy invariants: any endpoint that serves a skin must go through `toSkinSummary(row, { asOwner })`; any surface that lists or deletes uploaded replays must go through `src/lib/uploaded-replays.ts` (details in `docs/features.md`).
 - Some admin controls (reset-local-db, delete-country) are destructive; treat with care.
-- Secrets live in `.env` (root) and `live-backend/.env`; never commit them. `live-backend/src/config.ts` holds the full ~90-var list with defaults; key frontend vars are `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `LIVE_ADMIN_TOKEN`, R2 vars.
+- Secrets live in `.env` (root) and `live-backend/.env`; never commit them. `live-backend/src/config.ts` holds the full ~90-var list with defaults; key frontend vars are `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `LIVE_ADMIN_TOKEN`, `LIVE_BRIDGE_TOKEN`, R2 vars.
 
 ## Style
 

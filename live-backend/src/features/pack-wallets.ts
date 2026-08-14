@@ -219,6 +219,10 @@ interface WalletPayload {
   lastRefillAt?: unknown;
   openedPacks?: unknown;
   poolTotal?: unknown;
+  /* Set once by mergeImportedPackWallet: the moment this account's local
+     (pre-login) wallet history was folded in. Its presence closes the merge
+     door for good. */
+  importedAt?: unknown;
 }
 
 const TIER_SHARD_VALUES: Record<string, number> = {
@@ -525,6 +529,121 @@ export async function addWalletShards(db: Db, userId: number, gained: number, no
     [nextPayload, nextRev, now, userId],
   );
   return { payload: nextPayload, rev: nextRev, updatedAt: now };
+}
+
+/* ---- Server-owned economy ----------------------------------------------
+   The wallet's numbers (charges, shards, opened packs) used to be whatever
+   the client last pushed; the server merely stored the blob. They are now
+   written only here: the draw route spends through spendPackOpen, recycling
+   and the arcade grant through addWalletShards, and a client push can no
+   longer change any of it. The constants mirror src/lib/pack-collection.ts,
+   which still runs the same math for anonymous (browser-local) wallets and
+   for the signed-in regen countdown display. */
+
+export const MAX_PACK_CHARGES = 5;
+export const PACK_CHARGE_REGEN_MS = 20_000;
+/* Every opened pack banks a few shards, so the shard packs are reachable by
+   just playing. */
+export const PACK_OPEN_SHARD_REWARD = 2;
+
+export type PackOpenCost = { kind: "charge" } | { kind: "shards"; amount: number };
+
+export interface PackWalletEconomy {
+  shards: number;
+  shardsSpent: number;
+  charges: number;
+  lastRefillAt: number;
+  openedPacks: number;
+  poolTotal: number | null;
+}
+
+/* The stored economy, clamped to sane values. lastRefillAt is capped at now
+   because pre-refactor payloads were client-authored: a future-dated stamp
+   would stall regeneration until the clock caught up with the lie. */
+function economyFromParsedPayload(parsed: WalletPayload, now: number): PackWalletEconomy {
+  const poolTotal = Math.floor(toFiniteNumber(parsed.poolTotal, 0));
+  return {
+    shards: Math.max(0, Math.floor(toFiniteNumber(parsed.shards, 0))),
+    shardsSpent: Math.max(0, Math.floor(toFiniteNumber(parsed.shardsSpent, 0))),
+    charges: Math.min(MAX_PACK_CHARGES, Math.max(0, Math.floor(toFiniteNumber(parsed.charges, MAX_PACK_CHARGES)))),
+    lastRefillAt: Math.min(now, Math.max(0, Math.floor(toFiniteNumber(parsed.lastRefillAt, now)))),
+    openedPacks: Math.max(0, Math.floor(toFiniteNumber(parsed.openedPacks, 0))),
+    poolTotal: poolTotal > 0 ? poolTotal : null,
+  };
+}
+
+export function packWalletEconomy(payload: string | null, now: number): PackWalletEconomy {
+  const parsed = payload ? parseJson<WalletPayload | null>(payload, null) : null;
+  return economyFromParsedPayload(parsed ?? {}, now);
+}
+
+/* Charge regeneration since lastRefillAt; the same function as the
+   frontend's settleCharges, run against the server's clock. */
+export function settlePackWalletCharges(economy: PackWalletEconomy, now: number): PackWalletEconomy {
+  if (economy.charges >= MAX_PACK_CHARGES) return economy;
+  const elapsed = now - economy.lastRefillAt;
+  if (elapsed < PACK_CHARGE_REGEN_MS) return economy;
+  const gained = Math.floor(elapsed / PACK_CHARGE_REGEN_MS);
+  const charges = Math.min(MAX_PACK_CHARGES, economy.charges + gained);
+  return {
+    ...economy,
+    charges,
+    lastRefillAt: charges >= MAX_PACK_CHARGES ? now : economy.lastRefillAt + gained * PACK_CHARGE_REGEN_MS,
+  };
+}
+
+export type PackOpenSpendResult =
+  | { ok: true; wallet: StoredPackWallet }
+  | { ok: false; reason: "charges" | "shards"; wallet: StoredPackWallet };
+
+/* The purchase half of opening a pack: settle regeneration, take the cost,
+   bank the open reward. Refusal returns the stored wallet so the client can
+   adopt the true balance instead of its stale display.
+
+   The write is a compare-and-set on the rev with a short retry: all writes
+   run on the single serving process, so a conflict only means two draws for
+   the same account interleaved at an await point. */
+export async function spendPackOpen(
+  db: Db,
+  userId: number,
+  cost: PackOpenCost,
+  now = Date.now(),
+  poolTotal?: number | null,
+): Promise<PackOpenSpendResult> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const wallet = await getOrCreatePackWallet(db, userId, now);
+    const parsed = parseJson<WalletPayload | null>(wallet.payload, null) ?? {};
+    const settled = settlePackWalletCharges(economyFromParsedPayload(parsed, now), now);
+    let next: PackWalletEconomy;
+    if (cost.kind === "charge") {
+      if (settled.charges <= 0) return { ok: false, reason: "charges", wallet };
+      next = {
+        ...settled,
+        charges: settled.charges - 1,
+        // Spending from a full wallet starts the regen clock fresh.
+        lastRefillAt: settled.charges >= MAX_PACK_CHARGES ? now : settled.lastRefillAt,
+      };
+    } else {
+      if (settled.shards < cost.amount) return { ok: false, reason: "shards", wallet };
+      next = { ...settled, shards: settled.shards - cost.amount, shardsSpent: settled.shardsSpent + cost.amount };
+    }
+    next = {
+      ...next,
+      shards: next.shards + PACK_OPEN_SHARD_REWARD,
+      openedPacks: next.openedPacks + 1,
+      poolTotal: typeof poolTotal === "number" && poolTotal > 0 ? Math.floor(poolTotal) : next.poolTotal,
+    };
+    const nextPayload = JSON.stringify({ ...parsed, cards: {}, ...next });
+    const updated = await exec(
+      db,
+      "update pack_wallets set payload = ?, rev = ?, updated_at = ? where user_id = ? and rev = ?",
+      [nextPayload, wallet.rev + 1, now, userId, wallet.rev],
+    );
+    if (Number(updated.rowsAffected ?? 0) > 0) {
+      return { ok: true, wallet: { payload: nextPayload, rev: wallet.rev + 1, updatedAt: now } };
+    }
+  }
+  throw new Error(`Pack wallet spend kept conflicting for user ${userId}.`);
 }
 
 async function importCardsFromPayload(
@@ -999,7 +1118,12 @@ export async function applyPackCollectionCardMint(
   db: Db,
   ownerUserId: number,
   rawCardKey: unknown,
-  mint: { tier?: unknown; tierLabel?: unknown; skills?: unknown },
+  /* pp/globalRank are the card's face numbers, sent by the post-draw mint
+     pass: a server-dealt GOAT lands with no real numbers (the roster's peaks
+     live in the frontend mirror), so the mint that labels it fills them in.
+     Display-only, bounded, and never applied to a card whose mint is being
+     refused. */
+  mint: { tier?: unknown; tierLabel?: unknown; skills?: unknown; pp?: unknown; globalRank?: unknown },
   now = Date.now(),
 ): Promise<{ applied: boolean; cardKey: string | null }> {
   const cardKey = normalizePackCardKey(rawCardKey);
@@ -1025,6 +1149,18 @@ export async function applyPackCollectionCardMint(
   const tierLabel = tier === null ? null : (typeof mint.tierLabel === "string" ? mint.tierLabel.slice(0, 60) : null);
   const skillsJson = JSON.stringify(skills);
   if (skillsJson.length > PACK_CARD_SKILLS_MAX_CHARS) return { applied: false, cardKey };
+  const mintPp = Math.min(PACK_CARD_MAX_PP, Math.max(0, toFiniteNumber(mint.pp, 0)));
+  const mintGlobalRank = Math.max(0, Math.floor(toFiniteNumber(mint.globalRank, 0)));
+  // Only fills a row that has no numbers yet (a freshly dealt GOAT); a card
+  // minted from the ranked pool already carries the pool board's figures.
+  const faceNumberStatement = (targetKey: string): DbStatement[] =>
+    mintPp > 0
+      ? [{
+          sql: `update pack_collection_cards set pp = ?, global_rank = ?, updated_at = ?
+                where owner_user_id = ? and card_key = ? and pp <= 0`,
+          args: [mintPp, mintGlobalRank, now, ownerUserId, targetKey],
+        }]
+      : [];
 
   const nextKey = packCardKey(cardUserId, tier);
   const tierSlot = packCardTierSlot(tier);
@@ -1070,6 +1206,7 @@ export async function applyPackCollectionCardMint(
             where owner_user_id = ? and card_key = ?`,
       args: [tier, skillsId, now, ownerUserId, cardKey],
     });
+    statements.push(...faceNumberStatement(cardKey));
     await execBatch(db, statements);
     return { applied: true, cardKey };
   }
@@ -1101,6 +1238,7 @@ export async function applyPackCollectionCardMint(
       sql: "delete from pack_collection_cards where owner_user_id = ? and card_key = ?",
       args: [ownerUserId, cardKey],
     },
+    ...faceNumberStatement(nextKey),
   );
   await execBatch(db, statements);
   return { applied: true, cardKey: nextKey };
@@ -1124,6 +1262,259 @@ export async function listPackCollectionOwnedCardKeys(db: Db, userId: number): P
   return rows
     .map((row) => (typeof row.card_key === "string" ? row.card_key : null))
     .filter((key): key is string => key !== null);
+}
+
+/* One slot of a server-dealt hand, as the draw route hands it over: ranked
+   slots carry the pool board's identity, honorary slots carry tier "goat" and
+   whatever identity the roster mirror has (usually none - deleted accounts). */
+export interface DealtPackCardSlot {
+  userId: number;
+  tier: "goat" | null;
+  username: string;
+  avatarUrl: string;
+  countryCode: string;
+  pp: number;
+  globalRank: number;
+}
+
+/* Writes a dealt hand into the collection at draw time. This is what makes
+   copy counts server-owned: the only things that add copies to a signed-in
+   collection are this (one per dealt slot) and the one-time first-sync merge,
+   so a pushed wallet can no longer claim cards into existence. The client
+   still reports each card's minted tier and skills afterwards (the maniacard
+   rating runs in the browser), but applyPackCollectionCardMint only labels a
+   row that already exists - it never adds one.
+
+   A ranked slot lands with tier null and mints properly moments later; the
+   tier-upgrade rule in the upsert means the label pass can never downgrade a
+   card, and a goat slot's tier is set right here since roster membership is
+   the server's to award. Returns whether each card key was new to this
+   collection (no held copies before this hand), which is the reveal's NEW
+   badge. */
+export async function mintDealtPackCards(
+  db: Db,
+  ownerUserId: number,
+  slots: readonly DealtPackCardSlot[],
+  now = Date.now(),
+): Promise<Map<string, boolean>> {
+  const isNewByCardKey = new Map<string, boolean>();
+  if (!Number.isInteger(ownerUserId) || ownerUserId <= 0 || slots.length === 0) return isNewByCardKey;
+
+  const cards: StoredPackCard[] = slots
+    .filter((slot) => Number.isInteger(slot.userId) && slot.userId > 0)
+    .map((slot) => ({
+      userId: slot.userId,
+      username: slot.username.slice(0, PACK_CARD_USERNAME_MAX_CHARS),
+      avatarUrl: normalizeAvatarUrl(slot.avatarUrl),
+      countryCode: normalizeCountryCode(slot.countryCode),
+      tier: slot.tier === "goat" && HONORARY_USER_IDS.has(slot.userId) ? "goat" : null,
+      // The label belongs to the client's mint pass, like the skills.
+      tierLabel: null,
+      skills: null,
+      pp: Math.min(PACK_CARD_MAX_PP, Math.max(0, slot.pp)),
+      globalRank: Math.max(0, Math.floor(slot.globalRank)),
+      copies: 1,
+      recycledCopies: 0,
+      firstPulledAt: now,
+      lastPulledAt: now,
+    }));
+  if (cards.length === 0) return isNewByCardKey;
+
+  const keys = [...new Set(cards.map((card) => packCardKey(card.userId, card.tier)))];
+  const ownedRows = (await exec(
+    db,
+    `select card_key from pack_collection_cards
+     where owner_user_id = ? and copies > 0 and card_key in (${keys.map(() => "?").join(", ")})`,
+    [ownerUserId, ...keys],
+  )).rows;
+  const owned = new Set(ownedRows.map((row) => String(row.card_key)));
+  for (const key of keys) isNewByCardKey.set(key, !owned.has(key));
+
+  /* Ranked slots seed catalog identity from the pool board (or the users row,
+     which packCardIdentityStatements prefers when it exists). Honorary slots
+     carry no identity of their own, so their variant borrows from the users
+     row or any variant of that player the catalog already holds - the same
+     fallback the mint route uses. */
+  const ranked = cards.filter((card) => card.tier !== "goat");
+  const honorary = cards.filter((card) => card.tier === "goat");
+  const honoraryIdentityStatement = (card: StoredPackCard): DbStatement => ({
+    sql: `insert or ignore into pack_cards (
+            card_key, tier, card_user_id, username, avatar_url, country_code, tier_label, updated_at
+          )
+          select ?, 'goat', ?,
+            coalesce((select u.username from users u where u.user_id = ?),
+              (select pc.username from pack_cards pc where pc.card_user_id = ? and pc.username != '' limit 1), ''),
+            coalesce((select u.avatar_url from users u where u.user_id = ?),
+              (select pc.avatar_url from pack_cards pc where pc.card_user_id = ? and pc.avatar_url != '' limit 1), ''),
+            coalesce((select u.country_code from users u where u.user_id = ?),
+              (select pc.country_code from pack_cards pc where pc.card_user_id = ? and pc.country_code != '' limit 1), ''),
+            null, ?`,
+    args: [
+      packCardKey(card.userId, card.tier), card.userId,
+      card.userId, card.userId,
+      card.userId, card.userId,
+      card.userId, card.userId,
+      now,
+    ],
+  });
+  /* A goat slot arrives with no real numbers (the roster's peak pp/rank live
+     in the frontend mirror), so its upsert only counts the copy: an existing
+     holding keeps the pp, tier and skills its mint froze, and a new row gets
+     its face numbers from the client's mint pass moments later. */
+  const goatOwnershipStatement = (card: StoredPackCard): DbStatement => ({
+    sql: `insert into pack_collection_cards (
+            owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank,
+            copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
+          ) values (?, ?, ?, 'goat', null, ?, ?, 1, 0, ?, ?, ?)
+          on conflict(owner_user_id, card_key) do update set
+            copies = pack_collection_cards.copies + 1,
+            first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
+            last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
+            updated_at = excluded.updated_at`,
+    args: [ownerUserId, card.userId, packCardKey(card.userId, "goat"), card.pp, card.globalRank, now, now, now],
+  });
+  await execBatch(db, [
+    ...(await packCardIdentityStatements(db, ranked, now)),
+    ...honorary.map(honoraryIdentityStatement),
+    ...ranked.map((card) => packOwnershipUpsertStatement(ownerUserId, card, now, "delta", new Map())),
+    ...honorary.map(goatOwnershipStatement),
+  ]);
+  return isNewByCardKey;
+}
+
+/* Bounds for the one first-sync import below. Honest anonymous wallets fit
+   comfortably (per-card copies rarely reach double digits, duplicates in the
+   hundreds mean hundreds of packs opened logged-out); what the caps bound is
+   a hand-written localStorage wallet, whose one shot at the server is this
+   call. Everything here inflates only the importer's own account - shards and
+   cards are not transferable - so the caps are about keeping that inflation
+   small, not about protecting anyone else's collection. */
+const WALLET_IMPORT_MAX_DISTINCT_CARDS = 8_000;
+const WALLET_IMPORT_MAX_COPIES_PER_CARD = 100;
+const WALLET_IMPORT_DUPLICATE_BUDGET = 1_000;
+const WALLET_IMPORT_MAX_SHARDS = 2_000;
+const WALLET_IMPORT_MAX_OPENED_PACKS = 100_000;
+
+export interface PackWalletMergeResult {
+  merged: boolean;
+  wallet: StoredPackWallet;
+  /* What actually came in, for the route's log line. Null when not merged. */
+  imported: { cards: number; copies: number; shards: number; droppedCards: number } | null;
+}
+
+/* Folds a browser-local wallet (the anonymous history from before this
+   account's first sign-in) into the server wallet, once per account ever.
+
+   The gate is "this account never really played server-side": no banked or
+   spent shards, no opened packs, no collection rows, and no earlier import.
+   That is the only moment a client-authored economy is believed at all, and
+   it is exactly the moment the pre-server-economy sync flow trusted too - the
+   difference is that it now happens once, capped, instead of on every push.
+   An account that already has history keeps it untouched and the local copy
+   is simply superseded (a second device's never-synced leftovers are
+   forfeited rather than merged; by this point in the feature's life those are
+   stale mirrors, not history).
+
+   Cards must name players the server can vouch for (a users row or the
+   honorary roster) - an invented user id will never render a card face and
+   would exist only to be recycled. Every distinct card keeps at least one
+   copy so a big honest collection imports whole; the duplicate budget is what
+   bounds the recycle value a forged import could mint. */
+export async function mergeImportedPackWallet(
+  db: Db,
+  userId: number,
+  claimedPayload: string,
+  now = Date.now(),
+): Promise<PackWalletMergeResult> {
+  const wallet = await getOrCreatePackWallet(db, userId, now);
+  const parsed = parseJson<WalletPayload | null>(wallet.payload, null) ?? {};
+  const economy = economyFromParsedPayload(parsed, now);
+  const hasEconomyHistory =
+    Boolean(parsed.importedAt) || economy.shards > 0 || economy.shardsSpent > 0 || economy.openedPacks > 0;
+  if (hasEconomyHistory) return { merged: false, wallet, imported: null };
+  const heldRow = (await exec(
+    db,
+    "select count(*) as held from pack_collection_cards where owner_user_id = ? and copies > 0",
+    [userId],
+  )).rows[0];
+  if (Number(heldRow?.held ?? 0) > 0) return { merged: false, wallet, imported: null };
+
+  const claimed = parseJson<WalletPayload | null>(claimedPayload, null) ?? {};
+  const rawCards = claimed.cards && typeof claimed.cards === "object" ? Object.values(claimed.cards) : [];
+  let normalized = rawCards
+    .map((card) => normalizeCard(card, now))
+    .filter((card): card is StoredPackCard => card !== null && card.copies > 0);
+
+  // Only players the server can vouch for.
+  const unknownIds = [...new Set(normalized.map((card) => card.userId))].filter((id) => !HONORARY_USER_IDS.has(id));
+  const known = new Set<number>(HONORARY_USER_IDS);
+  for (const batch of chunked(unknownIds)) {
+    const rows = (await exec(
+      db,
+      `select user_id from users where user_id in (${batch.map(() => "?").join(", ")})`,
+      batch as InValue[],
+    )).rows;
+    for (const row of rows) known.add(Number(row.user_id));
+  }
+  const vouched = normalized.filter((card) => known.has(card.userId));
+  const droppedCards = normalized.length - vouched.length + Math.max(0, vouched.length - WALLET_IMPORT_MAX_DISTINCT_CARDS);
+  normalized = vouched.slice(0, WALLET_IMPORT_MAX_DISTINCT_CARDS);
+
+  let duplicateBudget = WALLET_IMPORT_DUPLICATE_BUDGET;
+  let importedCopies = 0;
+  const cards = normalized.map((card) => {
+    const copies = Math.min(card.copies, WALLET_IMPORT_MAX_COPIES_PER_CARD);
+    const extras = Math.min(Math.max(0, copies - 1), duplicateBudget);
+    duplicateBudget -= extras;
+    importedCopies += 1 + extras;
+    return {
+      ...card,
+      copies: 1 + extras,
+      recycledCopies: Math.min(card.recycledCopies, WALLET_IMPORT_MAX_COPIES_PER_CARD),
+    };
+  });
+
+  if (cards.length > 0) {
+    const skillsIds = await internPackCardSkills(
+      db,
+      cards.filter((card) => card.skills != null).map((card) => JSON.stringify(card.skills)),
+    );
+    await execBatch(db, [
+      ...(await packCardIdentityStatements(db, cards, now)),
+      // Snapshot mode, so a retried merge (crash between this batch and the
+      // wallet write below) converges instead of double-counting copies.
+      ...cards.map((card) => packOwnershipUpsertStatement(userId, card, now, "snapshot", skillsIds)),
+    ]);
+  }
+
+  const grantedShards = Math.min(Math.max(0, Math.floor(toFiniteNumber(claimed.shards, 0))), WALLET_IMPORT_MAX_SHARDS);
+  const claimedOpened = Math.min(
+    Math.max(0, Math.floor(toFiniteNumber(claimed.openedPacks, 0))),
+    WALLET_IMPORT_MAX_OPENED_PACKS,
+  );
+  const claimedPoolTotal = Math.floor(toFiniteNumber(claimed.poolTotal, 0));
+  const nextPayload = JSON.stringify({
+    ...parsed,
+    cards: {},
+    shards: economy.shards + grantedShards,
+    shardsSpent: economy.shardsSpent,
+    charges: economy.charges,
+    lastRefillAt: economy.lastRefillAt,
+    openedPacks: Math.max(economy.openedPacks, claimedOpened),
+    poolTotal: economy.poolTotal ?? (claimedPoolTotal > 0 ? claimedPoolTotal : null),
+    importedAt: now,
+  });
+  const nextRev = wallet.rev + 1;
+  await exec(
+    db,
+    "update pack_wallets set payload = ?, rev = ?, updated_at = ? where user_id = ?",
+    [nextPayload, nextRev, now, userId],
+  );
+  return {
+    merged: true,
+    wallet: { payload: nextPayload, rev: nextRev, updatedAt: now },
+    imported: { cards: cards.length, copies: importedCopies, shards: grantedShards, droppedCards },
+  };
 }
 
 /* pack_collection_cards used to be keyed (owner, player), one row per player.

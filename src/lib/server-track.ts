@@ -5,6 +5,8 @@
 // backend.
 import { waitUntil } from "@vercel/functions";
 
+import { liveBridgeToken } from "./live-backend-tokens";
+
 const CAPTURE_TIMEOUT_MS = 5_000;
 
 function fireAndForget(url: string, body: string, headers: Record<string, string>): void {
@@ -45,7 +47,9 @@ export function trackServerEvent(
   };
 
   const base = (process.env.LIVE_BACKEND_URL ?? process.env.VITE_LIVE_BACKEND_URL)?.replace(/\/+$/, "");
-  const token = process.env.LIVE_ADMIN_TOKEN;
+  // Analytics capture is a bridge route, not an admin one: this is the site's
+  // own server reporting an operational signal, never an admin action.
+  const token = liveBridgeToken();
   if (base && token) {
     fireAndForget(
       `${base}/api/analytics/capture`,

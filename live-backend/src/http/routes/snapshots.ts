@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { isGlobalCountry, resolveCountryScope } from "../../countries.js";
-import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot } from "../../features/farm-helper.js";
+import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot, resolveKnownFarmHelperSubject } from "../../features/farm-helper.js";
 import { FarmHelperTimings, timeStage } from "../../features/farm-helper-timing.js";
 import { enrichPayloadAvatarAccents } from "../../features/avatar-accents.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, getRegionRankingsSnapshot } from "../../features/global-rankings.js";
@@ -10,14 +10,14 @@ import { getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, 
 import { getRankDeltaSnapshot } from "../../features/rank-snapshots.js";
 import { getSnipeBoardSnapshot, getSnipesSnapshot } from "../../features/snipes.js";
 import { getTopPlaysSnapshot } from "../../features/top-plays.js";
-import { getTrackerSnapshot } from "../../features/tracker.js";
+import { getTrackerSnapshot, TRACKER_MAX_OFFSET } from "../../features/tracker.js";
 import { getBoardLaneKey } from "../../shared/score.js";
 import type { HttpContext, TimedRequest } from "../context.js";
 import { REQUEST_FARM_HELPER_TIMINGS } from "../context.js";
 import { activatePublicCountry, isObserveCountryRequest } from "../country-activation.js";
 import { buildGlobalMapsResponseOnThread, enforceCompressedLargeBody, getMapsResponseCacheState, MAP_SEARCH_RESPONSE_CACHE_TTL_MS, MAPS_GLOBAL_STALE_SERVE_MS, MAPS_PAGE_RESPONSE_CACHE_TTL_MS, MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS, pruneMapsResponseCache, serveMapsResponseCached } from "../maps-response-cache.js";
 import { prepareJsonResponse } from "../prepared-json.js";
-import { clampInteger, clampLimit, parseModAcronyms, parseUserIds } from "../request.js";
+import { clampInteger, clampLimit, isBridge, parseModAcronyms, parseUserIds } from "../request.js";
 import { checkRate, negotiateEncoding, sendAccentEnrichedJson, sendJson } from "../respond.js";
 import { parseFarmHelperKeyMode, parseFarmHelperSpeedBucket, parseFarmHelperView, parseGlobalRankingsQuery, parseMapsPageQuery, parseMapsPlayersKind, parseMapsRandomDrawQuery, parseMapSearchQuery, parseTopPlaysSnapshotQuery, parseTrackerSnapshotFilters, parseTrackerSnapshotSort, parseTrackerSnapshotSortDirection } from "../snapshot-queries.js";
 
@@ -40,7 +40,9 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
     // tracked country's score_events on each request.
     const windowHours = global ? clampInteger(url.searchParams.get("hours"), 1, 24 * 30, 1) : 0;
     const limit = clampLimit(url.searchParams.get("limit"), 100, 500);
-    const offset = clampInteger(url.searchParams.get("offset"), 0, global ? Number.MAX_SAFE_INTEGER : 500, 0);
+    // Global used to be unbounded here, which made every distinct offset a
+    // cache miss into a synchronous deep-offset scan on the serving loop.
+    const offset = clampInteger(url.searchParams.get("offset"), 0, global ? TRACKER_MAX_OFFSET : 500, 0);
     const filters = parseTrackerSnapshotFilters(url.searchParams);
     const sort = parseTrackerSnapshotSort(url.searchParams);
     const sortDirection = parseTrackerSnapshotSortDirection(url.searchParams);
@@ -259,28 +261,58 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   if (url.pathname === "/api/snapshots/farm-helper") {
-    // Global tool: no country activation. The osu! best-scores fetch for an
-    // unknown subject is the costly part, so it shares the costly bucket.
+    // Global tool: no country activation. A roster-only subject may still need
+    // a cold best-scores mint, so it shares the costly bucket; arbitrary
+    // subjects are rejected by the local known-subject gate below.
     const userKey = (url.searchParams.get("user") ?? "").trim();
     if (!userKey) {
       sendJson(req, res, ctx, 400, { error: "missing_user" });
       return true;
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    const viewerUserId = isBridge(req, ctx)
+      ? clampInteger(url.searchParams.get("viewerUserId"), 0, Number.MAX_SAFE_INTEGER, 0)
+      : 0;
+    // The bridge may cold-mint only the verified viewer's own numeric id. Every
+    // public/other subject must already be a roster member or have a stored
+    // profile, otherwise arbitrary names would spend up to three osu! calls.
+    const ownerColdMint = viewerUserId > 0 && userKey === String(viewerUserId);
+    const knownSubject = ownerColdMint
+      ? { lookupMode: "userId" as const }
+      : await resolveKnownFarmHelperSubject(ctx.db, userKey);
+    if (!knownSubject) {
+      sendJson(req, res, ctx, 404, { error: "user_not_found" });
+      return true;
+    }
     // Stage timings: which part of a slow build actually cost the time. Kept on
     // the request so setServerTiming and the slow log can both read it.
     const timings = new FarmHelperTimings();
     (req as TimedRequest)[REQUEST_FARM_HELPER_TIMINGS] = timings;
+    // The subject's feedback marks are private, so they only ride the snapshot
+    // when the request proved who is asking - which only the server-to-server
+    // bridge can do, by attaching the token and the osu!-verified viewer id
+    // (the frontend server fn does this for the player's own board). A browser
+    // reading this endpoint directly is anonymous and gets the public build.
     try {
       const snapshot = await getFarmHelperSnapshot(ctx.db, ctx.osu, userKey, {
         keyMode: parseFarmHelperKeyMode(url.searchParams.get("key")),
         view: parseFarmHelperView(url.searchParams.get("view")),
         limit: clampInteger(url.searchParams.get("limit"), 1, FARM_HELPER_MAX_LIMIT, FARM_HELPER_DEFAULT_LIMIT),
+        viewerUserId,
         // The build's read-time feedback reconcile writes; keep those writes
         // off the read connection that serves page loads (the serveWriteDb
         // invariant, same as the feedback mutation endpoints below).
-      }, ctx.queue, { writeDb: ctx.serveWriteDb ?? ctx.db, timings });
-      res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+      }, ctx.queue, {
+        writeDb: ctx.serveWriteDb ?? ctx.db,
+        timings,
+        profileLookupMode: knownSubject.lookupMode,
+      });
+      // An owner-scoped board carries that player's own marks, so it must not
+      // sit in any shared cache on the way back.
+      res.setHeader(
+        "cache-control",
+        viewerUserId > 0 ? "private, no-store" : "public, max-age=60, stale-while-revalidate=300",
+      );
       await timeStage(timings, "fh_accents", () => enrichPayloadAvatarAccents(ctx.db, ctx.queue ?? null, snapshot));
       sendJson(req, res, ctx, 200, snapshot);
     } catch (error) {
@@ -304,6 +336,11 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
       return true;
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    const knownSubject = await resolveKnownFarmHelperSubject(ctx.db, userKey);
+    if (!knownSubject) {
+      sendJson(req, res, ctx, 404, { error: "user_not_found" });
+      return true;
+    }
     try {
       const result = await getFarmHelperFarmers(
         ctx.db,
@@ -313,6 +350,7 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
         parseFarmHelperSpeedBucket(url.searchParams.get("speed")),
         parseFarmHelperKeyMode(url.searchParams.get("key")),
         ctx.serveWriteQueue ?? ctx.queue,
+        knownSubject.lookupMode,
       );
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
       await sendAccentEnrichedJson(req, res, ctx, 200, result);
@@ -332,6 +370,11 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
       return true;
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    const knownSubject = await resolveKnownFarmHelperSubject(ctx.db, userKey);
+    if (!knownSubject) {
+      sendJson(req, res, ctx, 404, { error: "user_not_found" });
+      return true;
+    }
     try {
       const result = await getFarmHelperNeighbors(
         ctx.db,
@@ -339,6 +382,7 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
         userKey,
         parseFarmHelperKeyMode(url.searchParams.get("key")),
         ctx.serveWriteQueue ?? ctx.queue,
+        knownSubject.lookupMode,
       );
       res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=600");
       sendJson(req, res, ctx, 200, result);

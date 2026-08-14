@@ -4,7 +4,7 @@ import { MAX_VIEWER_EVENT_ROWS, MAX_VIEWER_ROWS } from "../../features/analytics
 import { attachViewerRanks, normalizeAnalyticsViewerSort, sortRankedViewers } from "../../features/analytics-viewer-ranks.js";
 import { normalizeCountryParam } from "../abuse-guard.js";
 import type { HttpContext } from "../context.js";
-import { isAdmin, readBody } from "../request.js";
+import { isAdmin, isBridge, readBody } from "../request.js";
 import { sendCors, sendJson } from "../respond.js";
 
 // Admin-only viewer roster responses; see the /api/admin/analytics/viewers
@@ -18,7 +18,9 @@ export async function handleAnalyticsRoutes(req: IncomingMessage, res: ServerRes
       sendJson(req, res, ctx, 404, { error: "analytics_disabled" });
       return true;
     }
-    if (!isAdmin(req, ctx)) {
+    // The ingress, not an admin action: the frontend's /api/sync proxy forwards
+    // browser events here. The admin queries below keep the admin token.
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }

@@ -4,7 +4,7 @@
    value depends on two properties: same client today -> same key, and no way
    back to the address it was built from (nor across a day boundary). */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildClientKey } from "./api/sync";
+import { applyServerViewer, buildClientKey } from "./api/sync";
 
 const SECRET = "test-admin-token";
 
@@ -61,5 +61,47 @@ describe("analytics client key", () => {
     // own id exactly as it did before any of this existed.
     expect(await buildClientKey(request({ "user-agent": CHROME }), SECRET)).toBeNull();
     expect(await buildClientKey(request({ "x-forwarded-for": "203.0.113.7" }), SECRET)).toBeNull();
+  });
+
+  it("prefers the edge address over the forwarded chain", async () => {
+    const edge = await buildClientKey(
+      request({ "cf-connecting-ip": "203.0.113.7", "x-forwarded-for": "10.0.0.1", "user-agent": CHROME }),
+      SECRET,
+    );
+    const same = await buildClientKey(
+      request({ "cf-connecting-ip": "203.0.113.7", "x-forwarded-for": "10.0.0.2", "user-agent": CHROME }),
+      SECRET,
+    );
+    // A caller varying x-forwarded-for cannot mint fresh keys behind the edge.
+    expect(edge).toBe(same);
+  });
+});
+
+/* The acting identity has to come off the session cookie: the store writes it
+   into a viewer roster that outlives event pruning, so a browser-supplied one
+   would let anyone put words in another player's mouth. */
+describe("analytics viewer identity", () => {
+  const viewer = { id: 2927048, username: "someone", avatarUrl: "", countryCode: "CR" };
+
+  it("replaces a client-supplied viewer with the signed-in one", () => {
+    const [event] = applyServerViewer(
+      [{ event: "$pageview", properties: { viewer_id: 1, viewer_username: "not-them", $pathname: "/packs" } }],
+      viewer,
+    ) as Array<{ properties: Record<string, unknown> }>;
+    expect(event.properties).toEqual({ $pathname: "/packs", viewer_id: 2927048, viewer_username: "someone" });
+  });
+
+  it("drops a client-supplied viewer entirely when nobody is signed in", () => {
+    const [event] = applyServerViewer(
+      [{ event: "$pageview", properties: { viewer_id: 1, viewer_username: "not-them" } }],
+      null,
+    ) as Array<{ properties: Record<string, unknown> }>;
+    expect(event.properties).toEqual({});
+  });
+
+  it("leaves non-object events and missing property bags alone", () => {
+    expect(applyServerViewer(["nope", null], viewer)).toEqual(["nope", null]);
+    const [event] = applyServerViewer([{ event: "$pageview" }], null) as Array<Record<string, unknown>>;
+    expect(event).toEqual({ event: "$pageview", properties: {} });
   });
 });

@@ -59,7 +59,10 @@ const SUB_PATTERN_SET = new Set(MAP_SEARCH_SUB_PATTERNS);
 // Whitelisted column lookup for the pattern families. Returns null for anything
 // not in the canonical eight, so callers can safely interpolate the result.
 export function patternScoreColumn(pattern: string): string | null {
-  return PATTERN_COLUMNS[pattern] ?? null;
+  // Own-property only: `PATTERN_COLUMNS[pattern]` alone would return an
+  // inherited Object.prototype member (a function, so not nullish) for keys
+  // like "constructor", and the result is interpolated into SQL.
+  return Object.hasOwn(PATTERN_COLUMNS, pattern) ? PATTERN_COLUMNS[pattern] : null;
 }
 
 const SORT_COLUMNS: Record<string, string> = {

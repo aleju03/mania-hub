@@ -44,7 +44,11 @@ export function collectAvatarAccentsFromPayload(payload: unknown): Map<string, s
 // response feeds the same store, coloring the names in place.
 
 const ACCENT_REQUEST_FLUSH_MS = 250;
-const ACCENT_REQUEST_MAX_URLS = 100;
+// Matches AVATAR_ACCENT_LOOKUP_MAX_URLS on the backend. Anything above the cap
+// is dropped there, and this module only ever asks once per URL per session, so
+// a larger batch would leave those names uncolored. Leftovers stay pending and
+// go out in the next flush instead.
+const ACCENT_REQUEST_MAX_URLS = 25;
 
 const pendingAccentUrls = new Set<string>();
 const requestedAccentUrls = new Set<string>();

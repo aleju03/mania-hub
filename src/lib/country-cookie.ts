@@ -63,16 +63,23 @@ export function resolveDetectedCountry(country: string | null | undefined): stri
   return normalized && isSupportedCountryCode(normalized) ? normalized : null;
 }
 
-// Every edge provider exposes the visitor's country under its own header name.
-// x-vercel-ip-country stays first so a rollback to Vercel keeps working; on the
-// VPS it is simply absent and cf-ipcountry answers instead.
-const EDGE_COUNTRY_HEADERS = [
-  "x-vercel-ip-country",
-  "cf-ipcountry",
-  "cloudfront-viewer-country",
-  "x-country-code",
-  "x-geo-country",
-] as const;
+// Only the header the edge in front of this deployment actually sets is read.
+// The rest (cloudfront-viewer-country, x-country-code, x-geo-country, and off
+// Vercel x-vercel-ip-country too) are ordinary request headers: Cloudflare
+// forwards them and Caddy does not strip them, so a caller could send one and,
+// because x-vercel-ip-country was checked first, beat the genuine cf-ipcountry.
+// That is enough to auto-activate a country the backend has never tracked
+// (src/routes/__root.tsx) and to stamp a forged country on an analytics row
+// whose whole point is being edge-derived (src/routes/api/sync.ts).
+// The Vercel name stays for the rollback target, gated on the variable that
+// platform sets for itself.
+const CLOUDFLARE_COUNTRY_HEADER = "cf-ipcountry";
+const VERCEL_COUNTRY_HEADER = "x-vercel-ip-country";
+
+function edgeCountryHeaders(): readonly string[] {
+  const onVercel = typeof process !== "undefined" && Boolean(process.env?.VERCEL);
+  return onVercel ? [VERCEL_COUNTRY_HEADER, CLOUDFLARE_COUNTRY_HEADER] : [CLOUDFLARE_COUNTRY_HEADER];
+}
 
 /** The visitor's country exactly as the edge reported it: any ISO code, *not*
     narrowed to the countries this site tracks. Analytics wants a flag for every
@@ -81,7 +88,7 @@ const EDGE_COUNTRY_HEADERS = [
     Returns null off the edge entirely (direct-to-origin requests carry no geo
     header at all), which is how this silently went blank after the Vercel move. */
 export function readEdgeCountry(headers: Headers): string | null {
-  for (const headerName of EDGE_COUNTRY_HEADERS) {
+  for (const headerName of edgeCountryHeaders()) {
     const value = headers.get(headerName)?.trim().toUpperCase();
     // XX is Cloudflare's "could not determine", not a country; passing it on
     // would render as a broken flag rather than as the absence it really is.

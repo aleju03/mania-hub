@@ -1,6 +1,7 @@
 import { createStart, createMiddleware } from "@tanstack/react-start";
 import { hasAuthCookieHeader } from "./lib/auth-shared";
 import { hasCountryCookieHeader } from "./lib/country-cookie";
+import { getAppRateLimitClientIp } from "./lib/app-client-ip";
 import { trackServerEvent } from "./lib/server-track";
 
 interface DocumentCacheConfig {
@@ -13,7 +14,7 @@ const DEFAULT_DOCUMENT_CACHE: DocumentCacheConfig = {
   swr: 300,
 };
 
-type AppRateBucket = "api" | "serverFn" | "costly";
+type AppRateBucket = "api" | "serverFn" | "costly" | "sync";
 
 const appRateWindows = new Map<string, { count: number; resetAt: number }>();
 let appRateChecksSincePrune = 0;
@@ -26,6 +27,14 @@ let appRateChecksSincePrune = 0;
 export const DEVICE_ACCESS_PERMISSIONS_POLICY =
   "local-network=(), loopback-network=(), local-network-access=()";
 
+// SAMEORIGIN rather than DENY: /admin/ghost frames the site's own pages to show
+// what a visitor is looking at, and that is a same-origin frame. Cross-site
+// framing is what matters here, and it is refused. The session cookie is
+// HttpOnly + SameSite=Lax so a foreign frame already renders signed out, which
+// is why this is hardening (phishing overlays on public pages) rather than a
+// fix for a live clickjacking path.
+export const FRAME_ANCESTORS_POLICY = "frame-ancestors 'self'";
+
 const deviceAccessPolicyMiddleware = createMiddleware().server(
   async ({ next }) => {
     const result = await next();
@@ -37,6 +46,8 @@ const deviceAccessPolicyMiddleware = createMiddleware().server(
 
     try {
       response.headers.set("Permissions-Policy", DEVICE_ACCESS_PERMISSIONS_POLICY);
+      response.headers.set("X-Frame-Options", "SAMEORIGIN");
+      response.headers.set("Content-Security-Policy", FRAME_ANCESTORS_POLICY);
     } catch {
       // Some framework response objects expose immutable headers. The normal
       // document response is mutable; leave exceptional responses untouched.
@@ -62,36 +73,27 @@ function appRateLimitForBucket(bucket: AppRateBucket): number {
       return readPositiveInt("APP_SERVER_FN_RATE_PER_MINUTE", 120);
     case "costly":
       return readPositiveInt("APP_COSTLY_RATE_PER_MINUTE", 30);
+    case "sync":
+      return readPositiveInt("APP_SYNC_RATE_PER_MINUTE", 600);
   }
 }
 
 function appRateBucketForPath(pathname: string): AppRateBucket | null {
   if (pathname.includes("/_serverFn/")) return "serverFn";
   if (pathname === "/api/og") return "costly";
+  // Analytics capture forwards to a token-gated backend write path, so it gets
+  // a ceiling of its own. Above the generic api one on purpose: this counts
+  // beacon requests, and one public address can carry a whole NAT of visitors
+  // each flushing every 500 ms per tab. See the note in routes/api/sync.ts.
+  if (pathname === "/api/sync") return "sync";
   if (pathname.startsWith("/api/")) return "api";
   return null;
-}
-
-function getClientIp(request: Request): string {
-  const trustProxy = /^(1|true|yes|on)$/i.test(process.env.TRUST_PROXY_HEADERS ?? "");
-  if (trustProxy) {
-    const forwarded = request.headers.get("cf-connecting-ip")
-      ?? request.headers.get("x-real-ip")
-      ?? request.headers.get("x-forwarded-for")?.split(",")[0];
-    if (forwarded?.trim()) return normalizeIp(forwarded);
-  }
-  return normalizeIp(request.headers.get("x-real-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0] ?? "unknown");
-}
-
-function normalizeIp(value: string): string {
-  const trimmed = value.trim();
-  return trimmed.startsWith("::ffff:") ? trimmed.slice(7) : trimmed || "unknown";
 }
 
 function checkAppRateLimit(request: Request, bucket: AppRateBucket): { allowed: true } | { allowed: false; retryAfterMs: number; limit: number } {
   const now = Date.now();
   const limit = appRateLimitForBucket(bucket);
-  const key = `${bucket}:${getClientIp(request)}`;
+  const key = `${bucket}:${getAppRateLimitClientIp(request)}`;
   appRateChecksSincePrune += 1;
   if (appRateChecksSincePrune >= 128 || appRateWindows.size > 10_000) {
     appRateChecksSincePrune = 0;

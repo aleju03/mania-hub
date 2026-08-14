@@ -13,7 +13,11 @@ export type AbuseBucket =
   | "danEstimate"
   | "sseConnect"
   | "replayVideo"
-  | "skinUpload";
+  | "skinUpload"
+  // Server-to-server calls from the frontend (see isBridge). Deliberately far
+  // above any public bucket: one address carries every signed-in visitor here,
+  // so this is a backstop against a leaked bridge token, not a user throttle.
+  | "bridge";
 
 export type RateLimitResult =
   | { allowed: true }
@@ -161,6 +165,8 @@ function limitForBucket(config: Config, bucket: AbuseBucket): number {
       return Math.max(1, config.replayVideoRatePerMinute ?? 2);
     case "skinUpload":
       return Math.max(1, config.skinUploadRatePerMinute ?? 40);
+    case "bridge":
+      return Math.max(1, config.bridgeRatePerMinute ?? 6000);
   }
 }
 

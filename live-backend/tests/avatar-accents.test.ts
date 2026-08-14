@@ -48,11 +48,24 @@ async function seedAccent(url: string, accent: string | null, status = "ok", com
 
 describe("normalizeAvatarAccentUrl", () => {
   it("accepts only https a.ppy.sh urls", () => {
-    expect(normalizeAvatarAccentUrl("https://a.ppy.sh/123?456.jpeg")).toBe("https://a.ppy.sh/123?456.jpeg");
+    expect(normalizeAvatarAccentUrl("https://a.ppy.sh/123?456.jpeg")).toBe("https://a.ppy.sh/123");
     expect(normalizeAvatarAccentUrl("http://a.ppy.sh/123")).toBeNull();
     expect(normalizeAvatarAccentUrl("https://evil.example/123")).toBeNull();
     expect(normalizeAvatarAccentUrl("")).toBeNull();
     expect(normalizeAvatarAccentUrl(42)).toBeNull();
+  });
+
+  it("collapses the cache-bust query so one avatar cannot mint many keys", () => {
+    expect(normalizeAvatarAccentUrl("https://a.ppy.sh/2?n=1")).toBe("https://a.ppy.sh/2");
+    expect(normalizeAvatarAccentUrl("https://a.ppy.sh/2?n=2")).toBe("https://a.ppy.sh/2");
+    expect(normalizeAvatarAccentUrl("https://a.ppy.sh/2#frag")).toBe("https://a.ppy.sh/2");
+  });
+
+  it("rejects paths that are not a bare osu! user id", () => {
+    expect(normalizeAvatarAccentUrl("https://a.ppy.sh/")).toBeNull();
+    expect(normalizeAvatarAccentUrl("https://a.ppy.sh/2/x")).toBeNull();
+    expect(normalizeAvatarAccentUrl("https://a.ppy.sh/avatar-guest.png")).toBeNull();
+    expect(normalizeAvatarAccentUrl("https://a.ppy.sh/00000000000000000001")).toBeNull();
   });
 });
 
@@ -93,7 +106,9 @@ describe("accent color pipeline", () => {
 
 describe("enrichPayloadAvatarAccents", () => {
   it("attaches accents in both key spellings and queues misses", async () => {
-    await seedAccent("https://a.ppy.sh/1?a.jpeg", "#ff8899");
+    // Stored rows are keyed by the normalized URL; payloads carry the raw
+    // cache-busted one the osu! API hands out.
+    await seedAccent("https://a.ppy.sh/1", "#ff8899");
     const { queue, enqueued } = fakeQueue();
 
     const payload = {
@@ -112,12 +127,12 @@ describe("enrichPayloadAvatarAccents", () => {
     // Off-domain URLs get an explicit null and never a job.
     expect((payload.offDomain as Record<string, unknown>).avatarAccent).toBeNull();
     expect(enqueued).toHaveLength(1);
-    expect(enqueued[0]).toMatchObject({ type: AVATAR_ACCENT_JOB, payload: { url: "https://a.ppy.sh/2?b.jpeg" } });
+    expect(enqueued[0]).toMatchObject({ type: AVATAR_ACCENT_JOB, payload: { url: "https://a.ppy.sh/2" } });
   });
 
   it("does not re-queue fresh error rows but retries stale ones", async () => {
-    await seedAccent("https://a.ppy.sh/3?c.jpeg", null, "error", Date.now());
-    await seedAccent("https://a.ppy.sh/4?d.jpeg", null, "error", Date.now() - 25 * 60 * 60 * 1000);
+    await seedAccent("https://a.ppy.sh/3", null, "error", Date.now());
+    await seedAccent("https://a.ppy.sh/4", null, "error", Date.now() - 25 * 60 * 60 * 1000);
     const { queue, enqueued } = fakeQueue();
 
     const payload = [
@@ -127,13 +142,13 @@ describe("enrichPayloadAvatarAccents", () => {
     await enrichPayloadAvatarAccents(db, queue, payload);
 
     expect(enqueued).toHaveLength(1);
-    expect(enqueued[0].payload).toEqual({ url: "https://a.ppy.sh/4?d.jpeg" });
+    expect(enqueued[0].payload).toEqual({ url: "https://a.ppy.sh/4" });
   });
 });
 
 describe("getAvatarAccentForUrl", () => {
   it("returns the stored accent and queues nothing", async () => {
-    await seedAccent("https://a.ppy.sh/9?z.jpeg", "#aabbcc");
+    await seedAccent("https://a.ppy.sh/9", "#aabbcc");
     const { queue, enqueued } = fakeQueue();
     expect(await getAvatarAccentForUrl(db, queue, "https://a.ppy.sh/9?z.jpeg")).toBe("#aabbcc");
     expect(enqueued).toHaveLength(0);
@@ -148,19 +163,30 @@ describe("getAvatarAccentForUrl", () => {
 
 describe("pruneAvatarAccents", () => {
   it("prunes only rows older than the retention window", async () => {
-    await seedAccent("https://a.ppy.sh/old?1.jpeg", "#111111", "ok", Date.now() - 200 * 24 * 60 * 60 * 1000);
-    await seedAccent("https://a.ppy.sh/new?2.jpeg", "#222222", "ok", Date.now());
+    await seedAccent("https://a.ppy.sh/901", "#111111", "ok", Date.now() - 200 * 24 * 60 * 60 * 1000);
+    await seedAccent("https://a.ppy.sh/902", "#222222", "ok", Date.now());
     expect(await pruneAvatarAccents(db)).toBe(1);
     const rows = await exec(db, "select avatar_url from avatar_accents");
-    expect(rows.rows.map((row) => String(row.avatar_url))).toEqual(["https://a.ppy.sh/new?2.jpeg"]);
+    expect(rows.rows.map((row) => String(row.avatar_url))).toEqual(["https://a.ppy.sh/902"]);
   });
 });
 
 describe("lookupAvatarAccents", () => {
   it("returns accents keyed by the raw requested url", async () => {
-    await seedAccent("https://a.ppy.sh/10?1.jpeg", "#aabbcc");
+    await seedAccent("https://a.ppy.sh/10", "#aabbcc");
     const accents = await lookupAvatarAccents(db, null, ["https://a.ppy.sh/10?1.jpeg", "https://a.ppy.sh/11?2.jpeg"]);
     expect(accents).toEqual({ "https://a.ppy.sh/10?1.jpeg": "#aabbcc" });
+  });
+
+  it("enqueues one job for many query variants of the same avatar", async () => {
+    const { queue, enqueued } = fakeQueue();
+    await lookupAvatarAccents(db, queue, [
+      "https://a.ppy.sh/13?1.jpeg",
+      "https://a.ppy.sh/13?2.jpeg",
+      "https://a.ppy.sh/13?3.jpeg",
+    ]);
+    expect(enqueued).toHaveLength(1);
+    expect(enqueued[0].payload).toEqual({ url: "https://a.ppy.sh/13" });
   });
 
   it("enqueues compute jobs for unknown urls and ignores foreign hosts", async () => {
@@ -173,7 +199,7 @@ describe("lookupAvatarAccents", () => {
     expect(accents).toEqual({});
     expect(enqueued).toHaveLength(1);
     expect(enqueued[0].type).toBe(AVATAR_ACCENT_JOB);
-    expect(enqueued[0].payload).toEqual({ url: "https://a.ppy.sh/12?3.jpeg" });
+    expect(enqueued[0].payload).toEqual({ url: "https://a.ppy.sh/12" });
   });
 
   it("tolerates a non-array payload", async () => {

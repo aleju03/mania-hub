@@ -128,7 +128,17 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   repack_global_farmed_board: 1,
 };
 
+// shedPressure() walks every reserved lane with a depth count and a possible
+// write-lock-taking UPDATE, so calling it on each enqueue turned one insert into
+// tens of statements on the single SQLite writer. Bursts of enqueues (an ingest
+// fan-out, or an unauthenticated batch route) paid that toll per job. One
+// rebalance per this interval is enough: claim() refills a starved lane inline
+// and the 60s pressure tick covers quiet periods.
+const ENQUEUE_SHED_INTERVAL_MS = 2_000;
+
 export class JobQueue {
+  private lastShedAt = 0;
+
   constructor(private readonly db: Db) {}
 
   async enqueue(type: string, dedupeKey: string, payload: unknown, options: { priority?: number; runAfter?: Date; replaceDone?: boolean; debounce?: boolean } = {}): Promise<void> {
@@ -172,7 +182,7 @@ export class JobQueue {
         options.replaceDone ? 1 : 0,
       ],
     );
-    await this.shedPressure();
+    if (Date.now() - this.lastShedAt >= ENQUEUE_SHED_INTERVAL_MS) await this.shedPressure();
   }
 
   async claim(workerId: string, limit = 1, options: ClaimOptions = {}): Promise<Job[]> {
@@ -313,6 +323,9 @@ export class JobQueue {
   }
 
   async shedPressure(targetDepth = QUEUE_TARGET_DEPTH): Promise<number> {
+    // Stamped before the work, not after, so concurrent enqueues awaiting this
+    // pass do not each start their own.
+    this.lastShedAt = Date.now();
     let deferred = 0;
     // Reserved lanes are refilled to their reserve (and trimmed back to it)
     // independently of the shared pool below.

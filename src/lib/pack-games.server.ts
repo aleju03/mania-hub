@@ -1,6 +1,7 @@
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { readCurrentAuth } from "./auth-server";
 import type { PackGameAllowance } from "./pack-games";
+import { liveBridgeToken } from "./live-backend-tokens";
 
 // The server half of the arcade's till. Only ever reached from inside a
 // createServerFn handler body (those are compiled out of the client bundle),
@@ -14,7 +15,8 @@ async function gameTarget(): Promise<
   const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
   if (!base) return null;
   const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
   return { base, headers, userId: auth.viewer.id, username: auth.viewer.username };
 }
 

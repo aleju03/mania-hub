@@ -12,7 +12,7 @@ import { getReplaySkinBundle, replaySkinBundleVersion } from "../../skins/replay
 import { sniffImage, validateOskBuffer } from "../../skins/validate-osk.js";
 import { computeSkinVisualSignature } from "../../skins/visual-signature.js";
 import type { HttpContext } from "../context.js";
-import { isAdmin, readBody, readBodyBuffer } from "../request.js";
+import { isBridge, readBody, readBodyBuffer } from "../request.js";
 import { checkRate, sendCors, sendJson } from "../respond.js";
 
 // The replay-skin settings payload caps at USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS,
@@ -260,9 +260,9 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     // A private skin's objects answer only to the ?t= capability its owner-
     // scoped reads carry. Nothing else about the request identifies anyone:
     // these URLs are what an <img> and the asset explorer fetch straight from
-    // the browser, with no cookie and no admin token to check.
+    // the browser, with no cookie and no bridge token to check.
     const unlocked = !skin || privateSkinSecretMatches(skin, url.searchParams.get("t"));
-    const visible = skin && unlocked && (skin.status === "published" || isAdmin(req, ctx));
+    const visible = skin && unlocked && (skin.status === "published" || isBridge(req, ctx));
     const key = visible
       ? [skin.oskKey, skin.previewKey, ...skin.previews.map((preview) => preview.key), ...skin.screenshots.map((shot) => shot.key)]
           .find((candidate): candidate is string => Boolean(candidate && candidate.split("/").pop() === filename))
@@ -418,10 +418,10 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     return true;
   }
   if (url.pathname === "/api/replay-skin/set" || url.pathname === "/api/replay-skin/clear") {
-    // Same trust contract as the goals endpoints: admin-token gated and called
+    // Same trust contract as the goals endpoints: bridge-token gated and called
     // server-to-server, with the frontend server fn injecting the osu!-verified
     // viewer id, so a user only ever points their own replays at a skin.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -470,10 +470,10 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     return true;
   }
   if (url.pathname === "/api/skins/start") {
-    // Admin-token gated: the frontend server fn forwards the osu!-verified viewer id with the
-    // shared admin token (the goals/pack-wallet bridge), so uploads are always attributed to
+    // Bridge-token gated: the frontend server fn forwards the osu!-verified viewer id with the
+    // shared bridge token (the goals/pack-wallet bridge), so uploads are always attributed to
     // the logged-in user. The browser then talks to /api/skins/upload with the minted ticket.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -799,13 +799,13 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     return true;
   }
   if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/details" || url.pathname === "/api/skins/visibility" || url.pathname === "/api/skins/special-keymodes" || url.pathname === "/api/skins/screenshot-labels" || url.pathname === "/api/skins/screenshot-remove") {
-    // Admin-token gated like /api/skins/delete: the frontend server fn forwards the
+    // Bridge-token gated like /api/skins/delete: the frontend server fn forwards the
     // osu!-verified viewer id, and the ownership check below keeps a user off anyone
     // else's skin. asAdmin is set only by the server fn that verified a true admin;
     // asKeymodeModerator only by server fns that matched the viewer against the
     // hardcoded trusted-corrector list, and only the special-keymodes and
     // screenshot-remove actions honour it.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -980,9 +980,9 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     return true;
   }
   if (url.pathname === "/api/skins/delete") {
-    // Admin-token gated owner delete: the frontend server fn forwards the osu!-verified viewer
+    // Bridge-token gated owner delete: the frontend server fn forwards the osu!-verified viewer
     // id, and the ownership check below keeps a user from deleting anyone else's skin.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -1077,7 +1077,7 @@ async function moveSkinOskForVisibility(ctx: HttpContext, skin: SkinRow): Promis
 
 // Who is asking for skin data, for the endpoints that can hand back hidden
 // skins. Only a true admin reads a hidden row, so the request has to carry an
-// identity the frontend server fn vouched for with the admin token (the goals
+// identity the frontend server fn vouched for with the bridge token (the goals
 // bridge).
 //
 // A tokened request with no viewer attached is the admin dashboard calling
@@ -1087,7 +1087,7 @@ function skinViewerScope(
   ctx: HttpContext,
   url: URL,
 ): { tokened: boolean; asAdmin: boolean; viewerUserId: number | null } {
-  const tokened = isAdmin(req, ctx);
+  const tokened = isBridge(req, ctx);
   const viewerUserId = tokened ? Number(url.searchParams.get("viewerUserId")) : Number.NaN;
   const viewer = Number.isInteger(viewerUserId) && viewerUserId > 0 ? viewerUserId : null;
   const asAdmin = tokened && (viewer == null || url.searchParams.get("asAdmin") === "1");

@@ -6,6 +6,8 @@
 // (/api/replay-upload) records through here too, and route handlers run outside
 // that context.
 
+import { liveBridgeToken } from "./live-backend-tokens";
+
 export interface UploadedReplayIndexRow {
   id: string;
   ownerUserId: number;
@@ -26,8 +28,8 @@ const INDEX_TIMEOUT_MS = 8_000;
 
 function resolveBackend(): { base: string; token: string } | null {
   const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
-  const token = process.env.LIVE_ADMIN_TOKEN?.trim();
-  // The index is admin-token gated end to end (the token is what vouches for
+  const token = liveBridgeToken();
+  // The index is bridge-token gated end to end (the token is what vouches for
   // the viewer id we forward), so without one there is no index at all.
   if (!base || !token) return null;
   return { base, token };

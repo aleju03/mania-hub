@@ -3,12 +3,12 @@ import { useAuth } from "#/lib/auth-context";
 import type { ManiaCardTier } from "#/lib/maniacard";
 import {
   applyCardMint,
+  createEmptyWallet,
   loadWalletForViewer,
   MAX_PACK_CHARGES,
   ownedCards,
   packCardKeyOf,
   packWalletStorageKey,
-  reconcileWallets,
   recordPull,
   recycleAllCopies,
   recycleAllDuplicates,
@@ -24,10 +24,9 @@ import {
 } from "#/lib/pack-collection";
 import {
   fetchServerPackWallet,
+  mergeServerPackWallet,
   mintServerPackCollectionCard,
-  pushServerPackWallet,
   recycleServerPackCollection,
-  type PackWalletCardsMode,
 } from "#/lib/pack-wallet-sync";
 import type { PackCost } from "#/lib/packs";
 
@@ -39,10 +38,19 @@ export interface PackWalletApi {
   /* Ticks once a second while charges regenerate, for countdown displays. */
   nowMs: number;
   /* "local" = browser-only (logged out or backend unreachable);
-     "synced" = the server holds this exact wallet. */
+     "synced" = the server owns this wallet's numbers. */
   syncStatus: PackSyncStatus;
+  /* Spends locally. Anonymous wallets only: a synced open is paid inside the
+     server draw, whose response the page adopts via applyServerWallet. */
   openPack: (cost: PackCost) => boolean;
   recordPull: (pull: PulledCard) => boolean;
+  /* Adopts a wallet state the server just returned (the draw response, a
+     refused spend's true balance). The server's word is the wallet for a
+     signed-in account, so this also marks the wallet synced. */
+  applyServerWallet: (payload: string, rev: number) => void;
+  /* Re-reads the server wallet; for surfaces whose shards were granted by a
+     route that does not return the wallet (the arcade). */
+  refreshServerWallet: () => void;
   /* Recycles a card's duplicate copies, keeping one. Cards are addressed by
      their wallet key (see packCardKey), not by player: a GOAT and an ordinary
      card of the same player are two cards and recycle separately. */
@@ -65,8 +73,6 @@ export interface PackWalletApi {
   notePoolTotal: (total: number | null) => void;
 }
 
-const PUSH_DEBOUNCE_MS = 1200;
-const PUSH_RETRY_MS = 15_000;
 const LOCAL_WRITE_TIMEOUT_MS = 900;
 
 type WindowWithIdleCallback = Window & {
@@ -77,11 +83,6 @@ type WindowWithIdleCallback = Window & {
 interface SyncState {
   enabled: boolean;
   rev: number;
-  lastSyncedPayload: string | null;
-  cardsMode: PackWalletCardsMode;
-  pushTimer: ReturnType<typeof setTimeout> | null;
-  pushPromise: Promise<void> | null;
-  pushing: boolean;
   /* Bumped on viewer change so stale async work drops its results. */
   generation: number;
 }
@@ -97,6 +98,21 @@ function parseWalletPayload(payload: string | null): PackWallet | null {
 
 function stripWalletCards(wallet: PackWallet): PackWallet {
   return Object.keys(wallet.cards).length === 0 ? wallet : { ...wallet, cards: {} };
+}
+
+/* Whether this browser holds pack history the server may never have seen:
+   pre-login pulls and shards. Decides first contact's shape - offer it for
+   the one-time merge, or just read the server wallet. A synced session's own
+   local cache trips this too (it mirrors the server's shard count), which is
+   fine: the merge endpoint refuses accounts with history and answers with
+   the authoritative wallet either way, so the call doubles as the fetch. */
+function hasLocalHistory(wallet: PackWallet): boolean {
+  return (
+    Object.keys(wallet.cards).length > 0 ||
+    wallet.shards > 0 ||
+    wallet.shardsSpent > 0 ||
+    wallet.openedPacks > 0
+  );
 }
 
 function collectionCardMatchesFilter(
@@ -127,11 +143,6 @@ export function usePackWallet(): PackWalletApi {
   const syncRef = useRef<SyncState>({
     enabled: false,
     rev: 0,
-    lastSyncedPayload: null,
-    cardsMode: "delta",
-    pushTimer: null,
-    pushPromise: null,
-    pushing: false,
     generation: 0,
   });
 
@@ -174,105 +185,25 @@ export function usePackWallet(): PackWalletApi {
     }
   };
 
-  const schedulePush = (delayMs = PUSH_DEBOUNCE_MS) => {
-    const sync = syncRef.current;
-    if (!sync.enabled) return;
-    if (sync.pushTimer) clearTimeout(sync.pushTimer);
-    sync.pushTimer = setTimeout(() => {
-      sync.pushTimer = null;
-      void runPushNow();
-    }, delayMs);
-  };
-
-  const pushNow = async () => {
-    const sync = syncRef.current;
-    const current = walletRef.current;
-    if (!sync.enabled || sync.pushing || !current) return;
-    const payload = JSON.stringify(current);
-    if (payload === sync.lastSyncedPayload) {
-      setSyncStatus("synced");
-      return;
-    }
-    sync.pushing = true;
-    setSyncStatus("syncing");
-    const generation = sync.generation;
-    try {
-      const result = await pushServerPackWallet({ data: { payload, baseRev: sync.rev, cardsMode: sync.cardsMode } });
-      if (generation !== sync.generation) return;
-      if (!result) {
-        // Logged out server-side or no backend configured: stay local.
-        sync.enabled = false;
-        setSyncStatus("local");
-        return;
-      }
-      if (result.ok) {
-        sync.rev = result.rev;
-        const latestPayload = JSON.stringify(walletRef.current);
-        // Mutations that landed mid-flight get their own push.
-        if (latestPayload !== payload) {
-          schedulePush();
-        } else {
-          const stripped = stripWalletCards(current);
-          const strippedPayload = JSON.stringify(stripped);
-          sync.lastSyncedPayload = strippedPayload;
-          sync.cardsMode = "delta";
-          walletRef.current = stripped;
-          scheduleLocalWrite(keyRef.current, stripped);
-          setWallet(stripped);
-          setSyncStatus("synced");
-        }
-        return;
-      }
-      // Another device moved the wallet forward: reconcile and push again.
-      sync.rev = result.conflict.rev;
-      const serverWallet = parseWalletPayload(result.conflict.payload);
-      if (serverWallet && walletRef.current) {
-        commit(reconcileWallets(walletRef.current, serverWallet, Date.now()));
-      } else {
-        schedulePush();
-      }
-    } catch {
-      // Transient network/server failure: retry later, keep playing locally.
-      if (generation === sync.generation) schedulePush(PUSH_RETRY_MS);
-    } finally {
-      sync.pushing = false;
-    }
-  };
-
-  const runPushNow = () => {
-    const sync = syncRef.current;
-    if (sync.pushing && sync.pushPromise) return sync.pushPromise;
-    const promise = pushNow();
-    sync.pushPromise = promise;
-    void promise.finally(() => {
-      if (syncRef.current.pushPromise === promise) syncRef.current.pushPromise = null;
-    });
-    return promise;
-  };
-
-  const commit = (next: PackWallet, syncEligible = true) => {
+  /* Local-wallet commit: React state plus the debounced localStorage write.
+     For a synced wallet the local copy is only a display cache; the numbers
+     that matter come back from the server with every spend and grant. */
+  const commit = (next: PackWallet) => {
     walletRef.current = next;
     scheduleLocalWrite(keyRef.current, next);
     setWallet(next);
     // Keep countdowns honest immediately after a spend instead of waiting
     // for the next interval tick.
     setNowMs(Date.now());
-    if (syncEligible) schedulePush();
   };
 
   const commitServerWallet = (payload: string, rev: number) => {
     const parsed = parseWalletPayload(payload);
     if (!parsed) return;
-    const stripped = stripWalletCards(parsed);
-    const serialized = JSON.stringify(stripped);
     const sync = syncRef.current;
+    sync.enabled = true;
     sync.rev = rev;
-    sync.lastSyncedPayload = serialized;
-    sync.cardsMode = "delta";
-    walletRef.current = stripped;
-    scheduleLocalWrite(keyRef.current, stripped);
-    setWallet(stripped);
-    setNowMs(Date.now());
+    commit(stripWalletCards(parsed));
     setSyncStatus("synced");
   };
 
@@ -286,21 +217,12 @@ export function usePackWallet(): PackWalletApi {
        re-reads its page whenever a sync lands, so a recycle that happened
        somewhere else on the page (the pull summary) announces itself this
        way; the panel's own recycles already refresh themselves and would
-       only pay for a second read. Set after the pending push is flushed, or
-       the push's own landing would eat the transition. */
+       only pay for a second read. */
     announce = false,
   ) => {
     const sync = syncRef.current;
     if (!sync.enabled) return null;
     try {
-      if (sync.pushTimer) {
-        clearTimeout(sync.pushTimer);
-        sync.pushTimer = null;
-        await runPushNow();
-      } else if (sync.pushPromise) {
-        await sync.pushPromise;
-      }
-      if (Object.keys(walletRef.current?.cards ?? {}).length > 0) return null;
       if (announce) setSyncStatus("syncing");
       const result = await recycleServerPackCollection({
         data: {
@@ -332,18 +254,10 @@ export function usePackWallet(): PackWalletApi {
     sync.generation += 1;
     sync.enabled = false;
     sync.rev = 0;
-    sync.lastSyncedPayload = null;
-    sync.cardsMode = "delta";
-    if (sync.pushTimer) {
-      clearTimeout(sync.pushTimer);
-      sync.pushTimer = null;
-    }
-    sync.pushPromise = null;
     setSyncStatus("local");
 
     keyRef.current = packWalletStorageKey(viewerId);
     const loaded = loadWalletForViewer(viewerId, Date.now());
-    sync.cardsMode = Object.keys(loaded.cards).length > 0 ? "snapshot" : "delta";
     walletRef.current = loaded;
     scheduleLocalWrite(keyRef.current, loaded);
     setWallet(loaded);
@@ -352,21 +266,30 @@ export function usePackWallet(): PackWalletApi {
     if (!viewerId) return;
     const generation = sync.generation;
     setSyncStatus("syncing");
-    void fetchServerPackWallet()
+    /* First contact. A browser holding local history offers it for the
+       one-time merge (pre-login pulls fold into an account that has never
+       played; for everyone else the server refuses and simply answers with
+       the authoritative wallet). A clean browser just reads the wallet; a
+       missing one starts from the defaults and is created by the first
+       draw. Failure either way keeps this session browser-local - the local
+       history is still on disk, so a later session retries the merge. */
+    const contact = hasLocalHistory(loaded)
+      ? mergeServerPackWallet({ data: { payload: JSON.stringify(loaded) } }).then((result) =>
+          result ? { payload: result.payload, rev: result.rev } : null,
+        )
+      : fetchServerPackWallet().then((server) =>
+          server
+            ? { payload: server.payload ?? JSON.stringify(createEmptyWallet(Date.now())), rev: server.rev }
+            : null,
+        );
+    void contact
       .then((server) => {
         if (generation !== sync.generation) return;
         if (!server) {
           setSyncStatus("local");
           return;
         }
-        sync.enabled = true;
-        sync.rev = server.rev;
-        sync.lastSyncedPayload = server.payload;
-        const serverWallet = parseWalletPayload(server.payload);
-        const local = walletRef.current ?? loaded;
-        // First contact merges this device's history into the account
-        // wallet; pushNow then no-ops if the server already has it all.
-        commit(serverWallet ? reconcileWallets(local, serverWallet, Date.now()) : local);
+        commitServerWallet(server.payload, server.rev);
       })
       .catch(() => {
         if (generation === sync.generation) setSyncStatus("local");
@@ -374,19 +297,13 @@ export function usePackWallet(): PackWalletApi {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewerId]);
 
-  // Flush local durability and a pending server push when the page is leaving
-  // or backgrounded. Normal interaction writes stay off animation frames.
+  // Flush local durability when the page is leaving or backgrounded. Normal
+  // interaction writes stay off animation frames.
   useEffect(() => {
     if (typeof document === "undefined") return;
     const flush = () => {
       if (document.visibilityState !== "hidden") return;
       flushLocalWrite();
-      const sync = syncRef.current;
-      if (sync.enabled && sync.pushTimer) {
-        clearTimeout(sync.pushTimer);
-        sync.pushTimer = null;
-        void runPushNow();
-      }
     };
     const onPageHide = () => flushLocalWrite();
     document.addEventListener("visibilitychange", flush);
@@ -406,10 +323,10 @@ export function usePackWallet(): PackWalletApi {
       setNowMs(Date.now());
       const current = walletRef.current;
       if (!current) return;
-      // Pure regen ticks skip the server push; reconciles re-settle charges
-      // from lastRefillAt anyway, and the next real mutation carries them.
+      // Display-only settling: the server re-runs the same regeneration math
+      // from lastRefillAt at the moment a synced draw spends.
       const settled = settleCharges(current, Date.now());
-      if (settled !== current) commit(settled, false);
+      if (settled !== current) commit(settled);
     }, 1000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -434,8 +351,26 @@ export function usePackWallet(): PackWalletApi {
       const current = walletRef.current;
       if (!current) return false;
       const result = recordPull(current, pull, Date.now());
+      /* A synced collection's cards live in server rows, written by the draw
+         itself - the local blob stays empty, and the caller prefers the
+         draw's own isNew over this fallback answer. */
+      if (syncRef.current.enabled) return result.isNew;
       commit(result.wallet);
       return result.isNew;
+    },
+    applyServerWallet: (payload, rev) => {
+      commitServerWallet(payload, rev);
+    },
+    refreshServerWallet: () => {
+      const sync = syncRef.current;
+      if (!sync.enabled) return;
+      const generation = sync.generation;
+      void fetchServerPackWallet()
+        .then((server) => {
+          if (generation !== sync.generation || !server?.payload) return;
+          commitServerWallet(server.payload, server.rev);
+        })
+        .catch(() => {});
     },
     recycleCard: (cardKey) => {
       if (syncRef.current.enabled) {

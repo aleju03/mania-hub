@@ -1,9 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import type { LeanTrackerScore } from "./types";
+import { liveBridgeToken } from "./live-backend-tokens";
 
 // Bridge to the live-backend My Data endpoints. Resolves the osu! viewer from the signed login
-// cookie server-side and forwards it with the admin token, so the data is always the viewer's own.
+// cookie server-side and forwards it with the bridge token, so the data is always the viewer's own.
 // Returns null/empty when logged out or the live backend is not configured.
 
 export const MY_DATA_PAGE_SIZE = 12;
@@ -177,7 +178,8 @@ async function myDataBackend(): Promise<MyDataBackendConfig | null> {
   const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
   if (!base) return null;
   const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
   return { base, headers, userId: auth.viewer.id };
 }
 

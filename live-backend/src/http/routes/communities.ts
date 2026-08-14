@@ -27,13 +27,13 @@ import {
 import { fetchWidgetInviteCode, resolveDiscordInvite } from "../../discord/invites.js";
 import { logInfo } from "../../logger.js";
 import type { HttpContext } from "../context.js";
-import { isAdmin, readBody } from "../request.js";
+import { isBridge, readBody } from "../request.js";
 import { sendJson } from "../respond.js";
 
 /*
  * /communities routes.
  *
- * Every one of these is admin-token gated, including the reads, even though the
+ * Every one of these is bridge-token gated, including the reads, even though the
  * directory itself is open to anyone: the frontend server functions are the
  * only callers, and they forward the osu!-verified viewer id and country
  * alongside the shared token (the same bridge skins and goat-poll writes use).
@@ -88,7 +88,7 @@ function communityVisibleTo(
 }
 
 function communityScope(req: IncomingMessage, ctx: HttpContext, url: URL, body?: Record<string, unknown>): CommunityScope {
-  const tokened = isAdmin(req, ctx);
+  const tokened = isBridge(req, ctx);
   const raw = body?.userId ?? url.searchParams.get("viewerUserId");
   const viewerUserId = tokened && Number.isInteger(Number(raw)) && Number(raw) > 0 ? Number(raw) : null;
   const asAdmin = tokened && (body?.asAdmin === true || url.searchParams.get("asAdmin") === "1");
@@ -209,7 +209,7 @@ export async function handleCommunitiesRoutes(
    */
   if (url.pathname === "/api/communities/report") {
     if (req.method !== "POST") return methodNotAllowed(req, res, ctx);
-    if (!isAdmin(req, ctx)) return unauthorized(req, res, ctx);
+    if (!isBridge(req, ctx)) return unauthorized(req, res, ctx);
     const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
     const scope = communityScope(req, ctx, url, body);
     const id = typeof body.id === "string" ? body.id : "";
@@ -251,7 +251,7 @@ export async function handleCommunitiesRoutes(
    */
   if (url.pathname === "/api/communities/preview") {
     if (req.method !== "POST") return methodNotAllowed(req, res, ctx);
-    if (!isAdmin(req, ctx)) return unauthorized(req, res, ctx);
+    if (!isBridge(req, ctx)) return unauthorized(req, res, ctx);
     const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
     const guildId = typeof body.guildId === "string" && body.guildId !== "" ? body.guildId : undefined;
     res.setHeader("cache-control", "private, no-store");
@@ -292,7 +292,7 @@ export async function handleCommunitiesRoutes(
 
   if (url.pathname === "/api/communities/submit") {
     if (req.method !== "POST") return methodNotAllowed(req, res, ctx);
-    if (!isAdmin(req, ctx)) return unauthorized(req, res, ctx);
+    if (!isBridge(req, ctx)) return unauthorized(req, res, ctx);
     const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
     const scope = communityScope(req, ctx, url, body);
     if (scope.viewerUserId == null) return badRequest(req, res, ctx);
@@ -345,7 +345,7 @@ export async function handleCommunitiesRoutes(
 
   if (url.pathname === "/api/communities/update") {
     if (req.method !== "POST") return methodNotAllowed(req, res, ctx);
-    if (!isAdmin(req, ctx)) return unauthorized(req, res, ctx);
+    if (!isBridge(req, ctx)) return unauthorized(req, res, ctx);
     const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
     const scope = communityScope(req, ctx, url, body);
     const id = typeof body.id === "string" ? body.id : "";
@@ -389,7 +389,7 @@ export async function handleCommunitiesRoutes(
 
   if (url.pathname === "/api/communities/delete") {
     if (req.method !== "POST") return methodNotAllowed(req, res, ctx);
-    if (!isAdmin(req, ctx)) return unauthorized(req, res, ctx);
+    if (!isBridge(req, ctx)) return unauthorized(req, res, ctx);
     const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
     const scope = communityScope(req, ctx, url, body);
     const id = typeof body.id === "string" ? body.id : "";
@@ -402,7 +402,7 @@ export async function handleCommunitiesRoutes(
 
   if (url.pathname === "/api/communities/queue") {
     if (req.method !== "GET") return methodNotAllowed(req, res, ctx);
-    if (!isAdmin(req, ctx)) return unauthorized(req, res, ctx);
+    if (!isBridge(req, ctx)) return unauthorized(req, res, ctx);
     res.setHeader("cache-control", "private, no-store");
     sendJson(req, res, ctx, 200, await listReviewQueue(ctx.db));
     return true;
@@ -410,7 +410,7 @@ export async function handleCommunitiesRoutes(
 
   if (url.pathname === "/api/communities/review") {
     if (req.method !== "POST") return methodNotAllowed(req, res, ctx);
-    if (!isAdmin(req, ctx)) return unauthorized(req, res, ctx);
+    if (!isBridge(req, ctx)) return unauthorized(req, res, ctx);
     const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
     const id = typeof body.id === "string" ? body.id : "";
     const action = typeof body.action === "string" ? body.action : "";
@@ -447,7 +447,7 @@ export async function handleCommunitiesRoutes(
   // listing does not have to wait out the sweep interval to be confirmed.
   if (url.pathname === "/api/communities/refresh") {
     if (req.method !== "POST") return methodNotAllowed(req, res, ctx);
-    if (!isAdmin(req, ctx)) return unauthorized(req, res, ctx);
+    if (!isBridge(req, ctx)) return unauthorized(req, res, ctx);
     const { refreshCommunityInvites } = await import("../../communities/refresh.js");
     const checked = await refreshCommunityInvites(ctx.serveWriteDb ?? ctx.db, ctx.config, { force: true });
     sendJson(req, res, ctx, 200, { ok: true, ...checked });

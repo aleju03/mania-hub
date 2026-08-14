@@ -13,7 +13,7 @@ import type { Db } from "../db.js";
 import { exec } from "../db.js";
 import { logWarn } from "../logger.js";
 import { nowIso } from "../shared/score.js";
-import { classifySkinNoteShape } from "./archive-meta.js";
+import { classifySkinNoteShapes } from "./archive-meta.js";
 import type { SkinKeymodeVisual, SkinVisualSignature } from "./similarity.js";
 import { parseSkinIni } from "./validate-osk.js";
 
@@ -393,10 +393,11 @@ export async function backfillSkinVisualSignatures(
       logWarn("skin_visual_signature_undigestible", { id });
       continue;
     }
+    const noteShapes = classifySkinNoteShapes(signature);
     await exec(
       db,
-      "update skins set visual_json = ?, note_shape = ?, updated_at = ? where id = ?",
-      [JSON.stringify(signature), classifySkinNoteShape(signature), nowIso(), id],
+      "update skins set visual_json = ?, note_shape = ?, note_shapes_json = ?, updated_at = ? where id = ?",
+      [JSON.stringify(signature), noteShapes[0] ?? null, JSON.stringify(noteShapes), nowIso(), id],
     );
     updated += 1;
   }

@@ -11,7 +11,7 @@ import {
 } from "../../features/goat-poll.js";
 import { logWarn } from "../../logger.js";
 import type { HttpContext } from "../context.js";
-import { isAdmin, readBody } from "../request.js";
+import { isBridge, readBody } from "../request.js";
 import { sendJson } from "../respond.js";
 
 /* The temporary GOAT nomination poll (features/goat-poll.ts).
@@ -67,7 +67,7 @@ export async function handleGoatPollRoutes(req: IncomingMessage, res: ServerResp
     // which reads the viewer's admin status off the signed login cookie first.
     // The refusal is the retired-poll 404 rather than a 401, so a browser cannot
     // tell an unreleased poll from one that does not exist.
-    if (window.adminOnly && !isAdmin(req, ctx)) {
+    if (window.adminOnly && !isBridge(req, ctx)) {
       sendJson(req, res, ctx, 404, { error: "poll_not_configured" });
       return true;
     }
@@ -96,7 +96,7 @@ export async function handleGoatPollRoutes(req: IncomingMessage, res: ServerResp
   }
 
   if (url.pathname === "/api/goat-poll/mine" || url.pathname === "/api/goat-poll/vote" || url.pathname === "/api/goat-poll/nominate") {
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Link } from "@tanstack/react-router";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../lib/my-data";
 import { useAuth } from "../../lib/auth-context";
 
@@ -12,15 +11,14 @@ import { useAuth } from "../../lib/auth-context";
 
 // Etterna's skillset taxonomy (from the MinaCalc analysis), with colors from
 // the same palette the old pattern fingerprint used. Native for 4K only.
-// searchPattern is the /maps search family the axis maps onto.
-export const MSD_SKILLSET_META: Array<{ key: string; label: string; color: string; searchPattern: string | null }> = [
-  { key: "Stream", label: "Stream", color: "#8f6bd8", searchPattern: "stream" },
-  { key: "Jumpstream", label: "Jumpstream", color: "#6f87d8", searchPattern: "jumpstream" },
-  { key: "Handstream", label: "Handstream", color: "#b06bc0", searchPattern: "handstream" },
-  { key: "Stamina", label: "Stamina", color: "#ad6b5d", searchPattern: "stamina" },
-  { key: "JackSpeed", label: "Jackspeed", color: "#c66f84", searchPattern: "jack" },
-  { key: "Chordjack", label: "Chordjack", color: "#c59a5c", searchPattern: "chordjack" },
-  { key: "Technical", label: "Technical", color: "#83a86f", searchPattern: "tech" },
+export const MSD_SKILLSET_META: Array<{ key: string; label: string; color: string }> = [
+  { key: "Stream", label: "Stream", color: "#8f6bd8" },
+  { key: "Jumpstream", label: "Jumpstream", color: "#6f87d8" },
+  { key: "Handstream", label: "Handstream", color: "#b06bc0" },
+  { key: "Stamina", label: "Stamina", color: "#ad6b5d" },
+  { key: "JackSpeed", label: "Jackspeed", color: "#c66f84" },
+  { key: "Chordjack", label: "Chordjack", color: "#c59a5c" },
+  { key: "Technical", label: "Technical", color: "#83a86f" },
 ];
 
 // Non-4K axes come from the in-house pattern detector instead (MinaCalc's
@@ -55,8 +53,6 @@ export interface SkillAxisEntry {
   // The percentile lookup key: skillset name for MSD axes, `pattern:{id}` for
   // pattern-derived axes.
   axis: string;
-  // The /maps search family this axis links to, when one exists.
-  searchPattern: string | null;
 }
 
 // 4K speaks MinaCalc's native skillsets; other keymodes speak the in-house
@@ -65,7 +61,7 @@ export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
   if (mode.keyCount !== 4) {
     const byId = new Map((mode.patterns ?? []).map((entry) => [entry.id, entry.rating]));
     const patternEntries = PATTERN_RATING_META
-      .map((meta) => ({ ...meta, value: Number(byId.get(meta.key) ?? 0), axis: `pattern:${meta.key}`, searchPattern: meta.key }))
+      .map((meta) => ({ ...meta, value: Number(byId.get(meta.key) ?? 0), axis: `pattern:${meta.key}` }))
       .filter((entry) => entry.value >= 1)
       .sort((a, b) => b.value - a.value);
     if (patternEntries.length > 0) return patternEntries;
@@ -78,7 +74,7 @@ export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
   // Etterna's taxonomy has no LN skillset, so the 4K card grafts in the LN
   // pattern axis (same rating scale: Overall SSRs on LN-tagged charts).
   const ln = (mode.patterns ?? []).find((entry) => entry.id === "ln");
-  if (ln && ln.rating >= 1) entries.push({ key: "ln", label: "LN", color: "#f07474", value: ln.rating, axis: "pattern:ln", searchPattern: "ln" });
+  if (ln && ln.rating >= 1) entries.push({ key: "ln", label: "LN", color: "#f07474", value: ln.rating, axis: "pattern:ln" });
   return entries.sort((a, b) => b.value - a.value);
 }
 
@@ -124,12 +120,6 @@ function ProvisionalChip({ mode }: { mode: MyDataSkillMode }) {
       provisional
     </span>
   );
-}
-
-function mapsKeyParam(keyCount: number): "4k" | "7k" | "other" {
-  if (keyCount === 4) return "4k";
-  if (keyCount === 7) return "7k";
-  return "other";
 }
 
 function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode): string | undefined {
@@ -460,14 +450,21 @@ function SkillRadar({
   );
 }
 
-export function SkillModePanel({ skills, mode }: { skills: MyDataSkillBreakdown; mode: MyDataSkillMode }) {
+export function SkillModePanel({
+  skills,
+  mode,
+  onSelectEntry,
+}: {
+  skills: MyDataSkillBreakdown;
+  mode: MyDataSkillMode;
+  onSelectEntry?: (entry: SkillAxisEntry, mode: MyDataSkillMode) => void;
+}) {
   const [hovered, setHovered] = useState<string | null>(null);
   const entries = skillModeEntries(mode);
   const accent = entries[0]?.color ?? "#8f6bd8";
   const overall = Number(mode.ratings.Overall ?? 0);
   const overallPercentile = mode.percentiles?.Overall;
   const max = entries[0]?.value ?? 1;
-  const sKeys = mapsKeyParam(mode.keyCount);
   return (
     <div className="flex h-full flex-col rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -521,19 +518,19 @@ export function SkillModePanel({ skills, mode }: { skills: MyDataSkillBreakdown;
             const rowClass = `flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-[80ms] ${
               hovered === entry.key ? "bg-osu-b3/30" : ""
             }`;
-            // Each axis is a door: click through to the maps search filtered
-            // to that pattern in this keymode.
-            return entry.searchPattern ? (
-              <Link
+            // The public profile turns every axis into an explanation of the
+            // rating: the strongest plays behind it open in place.
+            return onSelectEntry ? (
+              <button
+                type="button"
                 key={entry.key}
-                to="/maps"
-                search={{ tab: "search", sKeys, sPatterns: entry.searchPattern } as never}
                 className={rowClass}
-                title={percentileTitle(entry, mode) ?? `Browse ${entry.label.toLowerCase()} maps`}
+                title={`${percentileTitle(entry, mode) ? `${percentileTitle(entry, mode)} · ` : ""}View top ${entry.label.toLowerCase()} plays`}
                 onMouseEnter={() => setHovered(entry.key)}
+                onClick={() => onSelectEntry(entry, mode)}
               >
                 {row}
-              </Link>
+              </button>
             ) : (
               <div key={entry.key} className={rowClass} title={percentileTitle(entry, mode)} onMouseEnter={() => setHovered(entry.key)}>
                 {row}

@@ -8,7 +8,7 @@ import {
 } from "../../features/uploaded-replays.js";
 import { logInfo } from "../../logger.js";
 import type { HttpContext } from "../context.js";
-import { isAdmin, readBody } from "../request.js";
+import { isBridge, readBody } from "../request.js";
 import { sendJson } from "../respond.js";
 
 // The owner index behind "your uploads" on /replay's Upload tab. Every route
@@ -35,7 +35,7 @@ export async function handleUploadedReplayRoutes(
   url: URL,
 ): Promise<boolean> {
   if (!url.pathname.startsWith("/api/uploaded-replays/")) return false;
-  if (!isAdmin(req, ctx)) {
+  if (!isBridge(req, ctx)) {
     sendJson(req, res, ctx, 401, { error: "unauthorized" });
     return true;
   }

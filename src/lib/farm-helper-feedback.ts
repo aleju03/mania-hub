@@ -1,9 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 
+import type { LiveFarmHelperSnapshot } from "./live-backend";
+import { liveBridgeToken } from "./live-backend-tokens";
+
 // Bridge to the live-backend farm helper feedback API. Every call resolves the osu! viewer from
-// the signed login cookie server-side and forwards that id with the admin token (the goals
+// the signed login cookie server-side and forwards that id with the bridge token (the goals
 // pattern), so a logged-in user can only ever read or mutate their own marks. The browser never
-// sends a user id and never sees the admin token.
+// sends a user id and never sees the bridge token.
 
 export type FarmHelperFeedbackVerdict = "too_hard" | "too_easy";
 
@@ -45,7 +48,8 @@ async function resolveFeedbackBackend(): Promise<FeedbackBackendResult> {
   const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
   if (!base) return { ok: false, reason: "failed" };
   const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
   return { ok: true, backend: { base, headers, userId: auth.viewer.id } };
 }
 
@@ -122,5 +126,42 @@ export const clearMyFarmHelperFeedback = createServerFn({ method: "POST" })
       return response.ok && body.ok === true ? { ok: true } : { ok: false, reason: "failed" };
     } catch {
       return { ok: false, reason: "failed" };
+    }
+  });
+
+/* The player's own board, fetched server-side so the request can carry proof of
+   who is asking. The marks a player leaves are private - every other route that
+   reads them goes through this same bridge - but they also ride the snapshot as
+   per-rec tags and the "hidden by your feedback" counter, and the snapshot
+   endpoint names its subject in a query string anyone can type. So the backend
+   only builds those fields in for a request that forwards an osu!-verified
+   viewer id, which is this. Anyone else reads the same board over the public
+   endpoint, with no trace of what its subject marked.
+
+   Returns null when nobody is signed in or the backend is unconfigured; the
+   caller then takes the ordinary public path. */
+export const getOwnFarmHelperSnapshot = createServerFn({ method: "GET" })
+  .validator((data: { user: string; keyMode?: string; view?: string; limit?: number }) => data)
+  .handler(async ({ data }): Promise<{ ok: true; snapshot: LiveFarmHelperSnapshot } | { ok: false; status: number | null }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveFeedbackBackend();
+    if (!cfg.ok) return { ok: false, status: null };
+    // The subject comes from the verified session, not caller-controlled server
+    // function input. Besides preserving feedback ownership, this is what lets
+    // the backend allow one exception to its known-subject gate: a new player
+    // may cold-mint their own profile, never an arbitrary account.
+    const query = new URLSearchParams({ user: String(cfg.backend.userId), viewerUserId: String(cfg.backend.userId) });
+    if (data.keyMode) query.set("key", data.keyMode);
+    if (data.view) query.set("view", data.view);
+    if (data.limit != null) query.set("limit", String(data.limit));
+    try {
+      const response = await fetch(`${cfg.backend.base}/api/snapshots/farm-helper?${query.toString()}`, {
+        headers: cfg.backend.headers,
+      });
+      if (!response.ok) return { ok: false, status: response.status };
+      return { ok: true, snapshot: (await response.json()) as LiveFarmHelperSnapshot };
+    } catch {
+      return { ok: false, status: null };
     }
   });

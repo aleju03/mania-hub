@@ -260,9 +260,19 @@ async function insertMarkableChart(beatmapId: number, technical: number, withMsd
   if (withMsd) await insertSearchIndex(beatmapId, TECH_PAT, 4, techMsd(technical));
 }
 
+// The subject reading their own board: marks shape every build, but they are
+// only described on the wire (per-rec `feedback`, feedbackHiddenCount,
+// feedbackMarginAdjust) for a request that proved it is the subject, so these
+// tests ask as the owner to observe them.
 async function getFeasSnapshot(bestScores: OscScore[], view?: "gain" | "popular") {
   const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
-  return getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k", ...(view ? { view } : {}) }, stubQueue);
+  return getFarmHelperSnapshot(
+    db,
+    osu,
+    "Subject",
+    { keyMode: "4k", viewerUserId: SUBJECT_ID, ...(view ? { view } : {}) },
+    stubQueue,
+  );
 }
 
 describe("farm helper build-time feedback", () => {
@@ -289,7 +299,7 @@ describe("farm helper build-time feedback", () => {
       },
     }) as Db;
 
-    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", {}, undefined, { writeDb });
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { viewerUserId: SUBJECT_ID }, undefined, { writeDb });
     expect(snapshot.status).toBe("ready");
     // The reconcile ran on the write connection...
     expect(writeBatches).toBeGreaterThanOrEqual(1);
@@ -311,7 +321,7 @@ describe("farm helper build-time feedback", () => {
     await seedPeers();
     await insertMark(BM_IMPROVE, "normal", "too_easy", Date.parse("2024-01-01T00:00:00Z"));
 
-    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { viewerUserId: SUBJECT_ID });
     expect(snapshot.status).toBe("ready");
     const row = (await exec(
       db,
@@ -334,14 +344,14 @@ describe("farm helper build-time feedback", () => {
     }
 
     // Unmarked control: the over-cap benchmark still drops the lane.
-    const unmarked = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const unmarked = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { viewerUserId: SUBJECT_ID });
     expect(unmarked.recs.some((rec) => rec.beatmapId === BM_CLAIMED)).toBe(false);
 
     // An active too_easy mark: the player claimed the lane, so the target
     // clamps to the cap rather than vanishing.
     await insertMark(BM_CLAIMED, "normal", "too_easy");
     invalidateFarmHelperCacheForUser(db, SUBJECT_ID);
-    const marked = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const marked = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { viewerUserId: SUBJECT_ID });
     const rec = marked.recs.find((candidate) => candidate.beatmapId === BM_CLAIMED);
     expect(rec).toBeDefined();
     expect(rec?.reason).toBe("missing");
@@ -370,7 +380,7 @@ describe("farm helper build-time feedback", () => {
     await insertMark(BM_WOULD_SHOW, "normal", "too_hard");
     await insertMark(BM_NEVER_QUALIFIED, "normal", "too_hard");
 
-    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { viewerUserId: SUBJECT_ID });
     expect(gain.recs.some((rec) => rec.beatmapId === BM_WOULD_SHOW)).toBe(false);
     expect(gain.recs.some((rec) => rec.beatmapId === BM_NEVER_QUALIFIED)).toBe(false);
     // Only the lane that passed every other gate counts as "hidden by your
@@ -378,7 +388,7 @@ describe("farm helper build-time feedback", () => {
     expect(gain.feedbackHiddenCount).toBe(1);
 
     // The popular browse keeps both rows, tagged.
-    const popular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular" });
+    const popular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular", viewerUserId: SUBJECT_ID });
     expect(popular.recs.find((rec) => rec.beatmapId === BM_WOULD_SHOW)?.feedback).toBe("too_hard");
     expect(popular.recs.find((rec) => rec.beatmapId === BM_NEVER_QUALIFIED)?.feedback).toBe("too_hard");
     expect(popular.feedbackHiddenCount).toBeUndefined();
@@ -399,7 +409,7 @@ describe("farm helper build-time feedback", () => {
     }
     await insertMark(BM_DUAL, "dt", "too_hard");
 
-    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { viewerUserId: SUBJECT_ID });
     const dualRecs = gain.recs.filter((rec) => rec.beatmapId === BM_DUAL);
     // The hidden DT lane counts as hidden (it would have shown) but the NM
     // lane survives the collapse: hide first, then collapse.

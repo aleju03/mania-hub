@@ -9,6 +9,7 @@ import {
   invalidateFarmHelperCacheForUser,
   prepareWeightedDistribution,
   quantileOfDistribution,
+  resolveKnownFarmHelperSubject,
   selectTopPeers,
   weightedQuantile,
 } from "../src/features/farm-helper.js";
@@ -116,6 +117,60 @@ const NO_OSU = new Proxy({}, {
     throw new Error(`unexpected osu! call: ${String(prop)}`);
   },
 }) as unknown as OsuApiClient;
+
+describe("farm helper known-subject gate", () => {
+  it("admits stored profiles and roster members but not arbitrary known user rows", async () => {
+    expect(await resolveKnownFarmHelperSubject(db, "never-seen")).toBeNull();
+
+    const now = nowIso();
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, updated_at) values (?, ?, '', 'CR', ?)",
+      [SUBJECT_ID, SUBJECT_NAME, now],
+    );
+    expect(await resolveKnownFarmHelperSubject(db, SUBJECT_NAME)).toBeNull();
+
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', ?, 1, 'osu_rankings', 1, ?)`,
+      [SUBJECT_ID, now],
+    );
+    expect(await resolveKnownFarmHelperSubject(db, SUBJECT_NAME)).toEqual({ lookupMode: "auto" });
+    expect(await resolveKnownFarmHelperSubject(db, String(SUBJECT_ID))).toEqual({ lookupMode: "userId" });
+  });
+
+  it("preserves numeric-username precedence instead of falling through to a known id", async () => {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, updated_at) values (?, ?, '', 'CR', ?)",
+      [SUBJECT_ID, SUBJECT_NAME, now],
+    );
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', ?, 1, 'osu_rankings', 1, ?)`,
+      [SUBJECT_ID, now],
+    );
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, updated_at) values (?, ?, '', 'CR', ?)",
+      [SUBJECT_ID + 1, String(SUBJECT_ID), now],
+    );
+
+    // The raw key names the local numeric-username row first. That account is
+    // not rostered/stored, so the known id with the same digits cannot open an
+    // API mint for it through the fallback.
+    expect(await resolveKnownFarmHelperSubject(db, String(SUBJECT_ID))).toBeNull();
+  });
+
+  it("recognizes a stored profile without requiring roster membership", async () => {
+    await seedStoredProfile();
+    expect(await resolveKnownFarmHelperSubject(db, SUBJECT_NAME)).toEqual({ lookupMode: "auto" });
+    expect(await resolveKnownFarmHelperSubject(db, String(SUBJECT_ID))).toEqual({ lookupMode: "auto" });
+  });
+});
 
 // A statement counter. NOTE: the farm-helper caches are WeakMap-keyed by the
 // Db object, so a test that cares about cache state must use ONE proxy for

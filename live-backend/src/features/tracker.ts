@@ -27,6 +27,14 @@ export interface TrackerSnapshotOptions {
 // `total` undercounts.
 const HYDRATED_SNAPSHOT_SCAN_LIMIT = 5000;
 
+// Deepest page anyone may ask for. SQLite walks the ordered join row by row up
+// to the offset, synchronously on the serving event loop, and the offset is part
+// of the snapshot cache key, so every distinct one is a guaranteed miss into
+// that walk. Country scopes have always been capped at 500; global was capped at
+// Number.MAX_SAFE_INTEGER, which made a deep-offset request a free 0.2-2s stall
+// of every other response and SSE write in the process.
+export const TRACKER_MAX_OFFSET = 5000;
+
 export async function getTrackerSnapshot(
   db: Db,
   country: string,
@@ -34,6 +42,12 @@ export async function getTrackerSnapshot(
   offset = 0,
   options: TrackerSnapshotOptions = {},
 ): Promise<{ country: string; scores: LeanTrackerScore[]; gains: Record<number, number>; fetchedAt: number; total: number; offset: number }> {
+  // Past the bound, answer without the walk (same shape as map search's
+  // MAP_SEARCH_COUNT_CAP guard). Callers clamp to this, so a legitimate page
+  // never lands here.
+  if (offset >= TRACKER_MAX_OFFSET) {
+    return { country, scores: [], gains: {}, fetchedAt: Date.now(), total: 0, offset };
+  }
   // Global aggregates every tracked country (only tracked countries ever land
   // rows in score_events, so dropping the country filter is exactly the union).
   // A region narrows the same table to its member countries at read time.

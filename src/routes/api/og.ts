@@ -19,7 +19,7 @@ import {
 } from "../../lib/score";
 import { readCurrentAuth } from "../../lib/auth-server";
 import { getCachedOgImage, putOgImage } from "../../lib/r2-cache";
-import { OG_IMAGE_VERSION } from "../../lib/seo";
+import { countryTopPlaysTitle, OG_IMAGE_VERSION } from "../../lib/seo";
 import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../lib/maniacard";
 import type { ManiaCardTier } from "../../lib/maniacard";
 import { getCosmicTierPalette } from "../../lib/maniacard-cosmic";
@@ -102,16 +102,114 @@ function scheduleOgStore(cacheKey: string, buffer: Buffer): void {
   }
 }
 
-async function serveOg(cacheKey: string, render: () => Promise<Response>): Promise<Response> {
+/* Rasterization is the most expensive thing this box does, so two limits sit
+   around it. Renders of the same card collapse into one (a link posted in a
+   busy Discord unfurls from many crawlers at once, all missing the same key),
+   and no more than a couple run at a time - past that, callers are handed the
+   cached default card instead of queueing behind multi-second renders. That
+   keeps the 4 vCPUs available for serving pages no matter how many distinct
+   card identities someone asks for. */
+const MAX_CONCURRENT_OG_RENDERS = 2;
+const inFlightOgRenders = new Map<string, Promise<Response>>();
+
+/* A small hand-off semaphore, rather than a check followed by an increment.
+   The distinction matters on a cold default-card cache: the overflow request
+   may have to wait for one of the two active renders, but it must never become
+   a third render while doing so. Releasing directly hands the occupied slot to
+   the oldest waiter, so a new arrival cannot steal it between wake-up and the
+   waiter's continuation. */
+export class OgRenderGate {
+  private active = 0;
+  private readonly waiters: Array<() => void> = [];
+
+  constructor(private readonly limit: number) {}
+
+  get activeCount(): number {
+    return this.active;
+  }
+
+  async run<T>(task: () => Promise<T>): Promise<T> {
+    await this.acquire();
+    try {
+      return await task();
+    } finally {
+      this.release();
+    }
+  }
+
+  private acquire(): Promise<void> {
+    if (this.active < this.limit) {
+      this.active += 1;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => this.waiters.push(resolve));
+  }
+
+  private release(): void {
+    const next = this.waiters.shift();
+    if (next) {
+      // The slot stays counted as active while ownership is handed over.
+      next();
+      return;
+    }
+    this.active = Math.max(0, this.active - 1);
+  }
+}
+
+const ogRenderGate = new OgRenderGate(MAX_CONCURRENT_OG_RENDERS);
+
+function defaultOgCacheKey(): string {
+  return `default:v${OG_IMAGE_VERSION}`;
+}
+
+/* The R2 key for the player and maniacard cards is the username, so the shape
+   of what may become a key has to be the shape of a real osu! username
+   (letters, digits, spaces, `_`, `-`, `[`, `]`, and up to 15 of them) or a bare
+   user id. Anything else is refused before the osu! lookup and before any
+   render: it could never have resolved to a player anyway, and rejecting it
+   here is what stops junk from costing a request an osu! call apiece. Returns
+   the lowercased key, or null for a name no osu! account can have. */
+const OSU_USERNAME_RE = /^[A-Za-z0-9_[\] -]{1,15}$/;
+
+export function ogUsernameKey(raw: string | null | undefined): string | null {
+  const trimmed = raw?.trim() ?? "";
+  if (!trimmed || !OSU_USERNAME_RE.test(trimmed)) return null;
+  return trimmed.toLowerCase();
+}
+
+async function renderAndStoreOg(cacheKey: string, render: () => Promise<Response>): Promise<Response> {
+  const inFlight = inFlightOgRenders.get(cacheKey);
+  // Every joiner needs its own Response: a body can only be read once.
+  if (inFlight) return (await inFlight).clone();
+
+  const attempt = ogRenderGate.run(async () => {
+    const response = await render();
+    if (!response.ok) return response;
+    const buffer = Buffer.from(await response.arrayBuffer());
+    scheduleOgStore(cacheKey, buffer);
+    return ogImageResponse(buffer);
+  }).finally(() => {
+    inFlightOgRenders.delete(cacheKey);
+  });
+  inFlightOgRenders.set(cacheKey, attempt);
+  return (await attempt).clone();
+}
+
+async function serveOg(request: Request, cacheKey: string, render: () => Promise<Response>): Promise<Response> {
   const cached = await getCachedOgImage(cacheKey);
   if (cached) return ogImageResponse(cached);
 
-  const response = await render();
-  if (!response.ok) return response;
+  const defaultKey = defaultOgCacheKey();
+  if (cacheKey !== defaultKey && ogRenderGate.activeCount >= MAX_CONCURRENT_OG_RENDERS && !inFlightOgRenders.has(cacheKey)) {
+    const fallback = await getCachedOgImage(defaultKey);
+    if (fallback) return ogImageResponse(fallback);
+    // Nothing cached to hand back yet (first request after a version bump).
+    // The default card single-flights and waits for a render slot. The gate in
+    // renderAndStoreOg keeps this cold-cache path inside the same hard cap.
+    return renderAndStoreOg(defaultKey, () => renderDefaultBrandOg(request));
+  }
 
-  const buffer = Buffer.from(await response.arrayBuffer());
-  scheduleOgStore(cacheKey, buffer);
-  return ogImageResponse(buffer);
+  return renderAndStoreOg(cacheKey, render);
 }
 
 /* The `tier` query param, honoured only for dev users. Anyone else gets the
@@ -1660,7 +1758,11 @@ function cosmicBackgroundDataUrl(palette: CosmicTierPalette): string {
 /* GOAT's laurel watermark: the card back's wreath, tinted to the tier glow and
    dropped behind the avatar at 13%. The asset paints every leaf in one green,
    so recolouring is a straight swap of that fill. Null when the asset cannot be
-   fetched — the card just loses the watermark rather than the render. */
+   fetched — the card just loses the watermark rather than the render.
+   Unkeyed on purpose (the asset is the same for every request), which means the
+   first origin to fill it wins for the life of the process. That is only safe
+   because getAssetOrigin prefers the configured origin and refuses hosts that
+   are not ours; if that ever loosens again, key this by origin. */
 let laurelSvgCache: Promise<string | null> | undefined;
 
 async function cosmicLaurelDataUrl(request: Request, tier: ManiaCardTier): Promise<string | null> {
@@ -5438,11 +5540,12 @@ export const Route = createFileRoute("/api/og")({
 
         // Player route. Username in URL, data comes from osu! API.
         if (kind === "player") {
-          const username = url.searchParams.get("username");
+          const username = ogUsernameKey(url.searchParams.get("username"));
           if (!username) return new Response("Missing username", { status: 400 });
           try {
             return await serveOg(
-              `player:${username.trim().toLowerCase()}:v${version}`,
+              request,
+              `player:${username}:v${version}`,
               () => renderPlayerOg(request, username),
             );
           } catch (err) {
@@ -5453,11 +5556,12 @@ export const Route = createFileRoute("/api/og")({
         // Maniacard route. Username in URL; skills computed from the player's
         // top plays via the live backend, rendered as a tier card.
         if (kind === "maniacard") {
-          const username = url.searchParams.get("username");
+          const username = ogUsernameKey(url.searchParams.get("username"));
           if (!username) return new Response("Missing username", { status: 400 });
           try {
             return await serveOg(
-              `maniacard:${username.trim().toLowerCase()}:v${version}`,
+              request,
+              `maniacard:${username}:v${version}`,
               () => renderManiacardOg(request, username),
             );
           } catch (err) {
@@ -5481,6 +5585,7 @@ export const Route = createFileRoute("/api/og")({
                 return preview;
               }
               return await serveOg(
+                request,
                 `pull:${ownerId}:${cardId}:v${version}`,
                 () => renderPulledCardOg(request, ownerId, cardId),
               );
@@ -5497,6 +5602,7 @@ export const Route = createFileRoute("/api/og")({
           if (label) {
             try {
               return await serveOg(
+                request,
                 `dan-emblem:${family}:${label}:v${version}`,
                 () => renderDanEmblemOg(request, label, family),
               );
@@ -5512,6 +5618,7 @@ export const Route = createFileRoute("/api/og")({
           if (Number.isFinite(scoreId) && scoreId > 0) {
             try {
               return await serveOg(
+                request,
                 `replay:${scoreId}:v${version}`,
                 () => renderReplayOg(request, scoreId),
               );
@@ -5525,7 +5632,7 @@ export const Route = createFileRoute("/api/og")({
         // branded card shared by every share of the page.
         if (kind === "farm-helper") {
           try {
-            return await serveOg(`farm-helper:v${version}`, () => renderFarmHelperOg(request));
+            return await serveOg(request, `farm-helper:v${version}`, () => renderFarmHelperOg(request));
           } catch (err) {
             console.warn("[og] farm-helper render failed, falling back", err);
           }
@@ -5544,7 +5651,7 @@ export const Route = createFileRoute("/api/og")({
         const staticRender = kind ? staticKindRenderers[kind] : undefined;
         if (kind && staticRender) {
           try {
-            return await serveOg(`${kind}:v${version}`, () => staticRender(request));
+            return await serveOg(request, `${kind}:v${version}`, () => staticRender(request));
           } catch (err) {
             console.warn(`[og] ${kind} render failed, falling back`, err);
           }
@@ -5555,7 +5662,7 @@ export const Route = createFileRoute("/api/og")({
         if (countryValid) {
           if (kind === "maps") {
             try {
-              return await serveOg(`maps:${country}:v${version}`, () => renderMapsOg(request, country));
+              return await serveOg(request, `maps:${country}:v${version}`, () => renderMapsOg(request, country));
             } catch (err) {
               if (!isOgFallbackError(err)) {
                 console.warn("[og] maps render failed, falling back", err);
@@ -5565,7 +5672,7 @@ export const Route = createFileRoute("/api/og")({
 
           if (kind === "home") {
             try {
-              return await serveOg(`home:${country}:v${version}`, () => renderHomeOg(request, country));
+              return await serveOg(request, `home:${country}:v${version}`, () => renderHomeOg(request, country));
             } catch (err) {
               console.warn("[og] home render failed, falling back", err);
             }
@@ -5573,21 +5680,26 @@ export const Route = createFileRoute("/api/og")({
 
           if (kind === "rankings") {
             try {
-              return await serveOg(`rankings:${country}:v${version}`, () => renderRankingsOg(request, country));
+              return await serveOg(request, `rankings:${country}:v${version}`, () => renderRankingsOg(request, country));
             } catch (err) {
               console.warn("[og] rankings render failed, falling back", err);
             }
           }
 
           // No recognized kind — generic country scoreboard fallback. The
-          // rendered title is part of the card, so it joins the R2 key;
-          // clamped + slugged to keep the key space bounded by real page
-          // titles rather than raw query input.
-          const fallbackTitle = clamp(url.searchParams.get("title") ?? "", MAX_TITLE_LEN);
-          const fallbackTitleKey =
-            fallbackTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "none";
+          // rendered title is part of the card, so it would join the R2 key,
+          // and a caller-chosen title is then a caller-chosen key: every
+          // `?title=<random>` was a guaranteed miss, a multi-second render and
+          // a new R2 object. Only the one title the site sends for this card is
+          // rendered (see countryTopPlaysTitle); anything else gets the
+          // untitled country card. Two keys per country, whatever is asked for.
+          const requestedTitle = clamp(url.searchParams.get("title") ?? "", MAX_TITLE_LEN);
+          const knownTitle = clamp(countryTopPlaysTitle(getCountryName(country) || country), MAX_TITLE_LEN);
+          const fallbackTitle = requestedTitle === knownTitle ? requestedTitle : "";
+          const fallbackTitleKey = fallbackTitle ? "top-plays" : "none";
           try {
             return await serveOg(
+              request,
               `country:${country}:${fallbackTitleKey}:v${version}`,
               () => renderCountryOg(request, country, fallbackTitle),
             );
@@ -5600,7 +5712,7 @@ export const Route = createFileRoute("/api/og")({
         // (no country, no recognised kind). Falls back to the
         // title-only minimal layout on error.
         try {
-          return await serveOg(`default:v${version}`, () => renderDefaultBrandOg(request));
+          return await serveOg(request, `default:v${version}`, () => renderDefaultBrandOg(request));
         } catch (err) {
           console.warn("[og] default brand render failed, falling back", err);
         }

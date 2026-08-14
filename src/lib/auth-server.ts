@@ -368,6 +368,12 @@ export function normalizeAuthNext(value: string | null | undefined, request: Req
     const origin = getCanonicalOrigin(request);
     const url = new URL(value, origin);
     if (url.origin !== new URL(origin).origin) return "/";
+    // `https://mania-tracker.com//evil.example/phish` passes the origin check
+    // above (the origin genuinely is the site) but leaves `//evil.example/phish`
+    // as the pathname, and every caller resolves the returned string against
+    // `request.url`, where a leading `//` is protocol-relative and lands on the
+    // attacker's host. Only a single-slash absolute path may come back.
+    if (!url.pathname.startsWith("/") || url.pathname.startsWith("//")) return "/";
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
     return "/";

@@ -516,7 +516,17 @@ function useCardBackImage(): string | null {
   return src;
 }
 
-export function StreakGame({ onExit }: { onExit: () => void }) {
+export function StreakGame({
+  onExit,
+  onWalletRefresh,
+}: {
+  onExit: () => void;
+  /* Re-reads the synced wallet after a run pays out: the arcade's grants land
+     server-side (the casual claim and the blitz payout both go through the
+     backend's till), so the shard count above the game only moves once the
+     wallet is fetched again. */
+  onWalletRefresh?: () => void;
+}) {
   const auth = useAuth();
   const [round, setRound] = useState<Round | null>(null);
   const [verdict, setVerdict] = useState<null | "correct" | "wrong">(null);
@@ -863,15 +873,22 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
       blitz: blitzRef.current,
       streak_username: auth.viewer?.username,
     });
-    if (blitzRef.current || !auth.viewer || finalStreak <= 0) return;
+    if (blitzRef.current) {
+      // A blitz run was paid by the backend when it ended; the wallet just
+      // needs re-reading to show it.
+      if (auth.viewer && finalStreak > 0) onWalletRefresh?.();
+      return;
+    }
+    if (!auth.viewer || finalStreak <= 0) return;
     void claimStreakShards({ data: { streak: finalStreak } })
       .then((result) => {
         if (!result) return;
         setEarned(result.granted);
         setAllowance({ remainingToday: result.remainingToday, cap: result.cap });
+        if (result.granted > 0) onWalletRefresh?.();
       })
       .catch(() => {});
-  }, [auth.viewer]);
+  }, [auth.viewer, onWalletRefresh]);
 
   /* A finished run, however it finished. Casual writes its own best; blitz
      has a board for that, and the number it puts there is the server's. */

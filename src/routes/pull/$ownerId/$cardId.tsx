@@ -295,7 +295,8 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
             className={`text-[13px] tabular-nums ${shared.serial === 1 ? "font-bold text-amber-300" : "text-osu-f1"}`}
           >
             {formatOrdinal(shared.serial)} person to pull this card
-            {shared.mintedTotal > 0 && (
+            {shared.mintedTotal > 0 && shared.mintedTotal !== shared.serial && (
+              // Skip the total when it just repeats the serial ("61st ... out of 61").
               <span className="text-osu-f1"> out of {shared.mintedTotal.toLocaleString()}</span>
             )}
           </div>

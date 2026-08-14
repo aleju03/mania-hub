@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, sep } from "node:path";
 import ffmpegStaticPath from "ffmpeg-static";
 import type { Config } from "../config.js";
 import type { Db } from "../db.js";
@@ -10,6 +10,9 @@ import { uploadReplayVideo } from "./r2.js";
 
 const DEFAULT_MAX_VIDEO_BYTES = 600 * 1024 * 1024;
 const VIDEO_ID_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+// The shape createVideoId() mints, and the only shape that may reach the
+// filesystem helpers below.
+const REPLAY_VIDEO_ID_RE = /^[0-9A-Za-z]{8}$/;
 
 export type ReplayVideoExportStatus = "started" | "uploaded" | "queued" | "running" | "done" | "failed" | "cancelled";
 
@@ -112,6 +115,11 @@ export async function markReplayVideoQueued(db: Db, id: string): Promise<ReplayV
 }
 
 export async function cancelReplayVideoExport(db: Db, config: Config, id: string): Promise<void> {
+  // Every sibling action looks the row up with requireReplayVideoExport first;
+  // this one goes straight to a recursive delete, so the id has to be checked
+  // here. `resolve` collapses `..`, so an id like "../../.." would otherwise
+  // point rm at the backend's data directory.
+  if (!REPLAY_VIDEO_ID_RE.test(id)) return;
   await ensureReplayVideoExportSchema(db);
   await exec(db, "update replay_video_exports set status = 'cancelled', updated_at = ? where id = ?", [new Date().toISOString(), id]);
   await rm(workDir(config, id), { recursive: true, force: true });
@@ -497,7 +505,14 @@ function parseOptionalPositiveInteger(value: unknown): number | null {
 }
 
 function workDir(config: Config, id: string): string {
-  return resolve(config.replayVideoWorkDir, id);
+  const root = resolve(config.replayVideoWorkDir);
+  const dir = resolve(root, id);
+  // Belt and braces behind the id charset check: no caller gets a path outside
+  // the work dir, whatever it passed.
+  if (!dir.startsWith(root + sep)) {
+    throw new Error(`Invalid replay video id: ${id}`);
+  }
+  return dir;
 }
 
 function inputPath(config: Config, id: string): string {

@@ -149,6 +149,64 @@ describe("admin authorization fails closed", () => {
   });
 });
 
+/* Two credentials, two capabilities. The admin token reaches the admin panel
+   and the destructive actions; the bridge token is what the frontend's server
+   functions carry when they act for a signed-in player. Handing one credential
+   both jobs meant a leak of it could write as anyone on the site. */
+const BRIDGE = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+const BRIDGED = "/api/goals?userId=1";
+
+describe("admin/bridge token split", () => {
+  it("keeps the admin token working everywhere while no bridge token is configured", async () => {
+    const config = { liveAdminToken: TOKEN, liveBridgeToken: undefined };
+    expect((await call(PROTECTED, { authorization: `Bearer ${TOKEN}` }, config)).status).toBe(200);
+    expect((await call(BRIDGED, { authorization: `Bearer ${TOKEN}` }, config)).status).toBe(200);
+  });
+
+  it("takes the per-user routes off the admin token once the bridge token exists", async () => {
+    const config = { liveAdminToken: TOKEN, liveBridgeToken: BRIDGE };
+    expect((await call(BRIDGED, { authorization: `Bearer ${BRIDGE}` }, config)).status).toBe(200);
+    expect((await call(BRIDGED, { authorization: `Bearer ${TOKEN}` }, config)).status).toBe(401);
+  });
+
+  it("keeps the admin panel off the bridge token", async () => {
+    const config = { liveAdminToken: TOKEN, liveBridgeToken: BRIDGE };
+    expect((await call(PROTECTED, { authorization: `Bearer ${BRIDGE}` }, config)).status).toBe(401);
+    expect((await call(PROTECTED, { authorization: `Bearer ${TOKEN}` }, config)).status).toBe(200);
+  });
+
+  it("still fails closed for an anonymous caller either way", async () => {
+    for (const config of [{ liveAdminToken: TOKEN }, { liveAdminToken: TOKEN, liveBridgeToken: BRIDGE }]) {
+      expect((await call(BRIDGED, {}, config)).status).toBe(401);
+      expect((await call(PROTECTED, {}, config)).status).toBe(401);
+    }
+  });
+});
+
+describe("readConfig LIVE_BRIDGE_TOKEN validation", () => {
+  it("refuses a bridge token identical to the admin token", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("LIVE_ADMIN_TOKEN", TOKEN);
+    vi.stubEnv("LIVE_BRIDGE_TOKEN", TOKEN);
+    expect(() => readConfig()).toThrow(/must differ/);
+  });
+
+  it("rejects a short bridge token in production and accepts a long one", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("LIVE_ADMIN_TOKEN", TOKEN);
+    vi.stubEnv("LIVE_BRIDGE_TOKEN", "short-token");
+    expect(() => readConfig()).toThrow(/at least 32 characters/);
+    vi.stubEnv("LIVE_BRIDGE_TOKEN", BRIDGE);
+    expect(readConfig().liveBridgeToken).toBe(BRIDGE);
+  });
+
+  it("leaves the bridge unset (and so equal to the admin token) by default", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("LIVE_ADMIN_TOKEN", TOKEN);
+    expect(readConfig().liveBridgeToken).toBeUndefined();
+  });
+});
+
 describe("readConfig LIVE_ADMIN_TOKEN validation", () => {
   it("rejects a short token in production", () => {
     vi.stubEnv("NODE_ENV", "production");

@@ -63,7 +63,8 @@ import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
 import { ShowcaseShelf } from "../../components/packs/ShowcaseShelf";
 import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../lib/maniacard";
-import { KeymodeScaleNote, SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent } from "../../components/player/SkillBreakdown";
+import { KeymodeScaleNote, SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "../../components/player/SkillBreakdown";
+import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
 import {
@@ -1121,12 +1122,9 @@ export function PlayerProfilePage({
   const [aboutError, setAboutError] = useState<string | null>(null);
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [tabState, setTab] = useState<PlayerTab>(() => normalizePlayerTab(initialTab));
-  // Skills stays admin-only while the skill/dan formulas are in calibration preview;
-  // non-admins landing on /skills (old links) fall back to the default tab.
   const auth = useAuth();
-  const canSeeSkillsTab = auth.canUseAdminFeatures;
-  const tab = !canSeeSkillsTab && tabState === "skills" ? "best" : tabState;
-  const playerTabs = canSeeSkillsTab ? PLAYER_TABS : PLAYER_TABS.filter((t) => t !== "skills");
+  const tab = tabState;
+  const playerTabs = PLAYER_TABS;
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [bestModFilter, setBestModFilter] = useState<ModFilterState>({});
   const [bestSort, setBestSort] = useState<BestSort>("pp-desc");
@@ -2899,8 +2897,7 @@ function PlayerPageSkeleton({
   tab: PlayerTab;
   onTabChange: (tab: PlayerTab) => void;
 }) {
-  const canSeeSkillsTab = useAuth().canUseAdminFeatures;
-  const playerTabs = canSeeSkillsTab ? PLAYER_TABS : PLAYER_TABS.filter((t) => t !== "skills");
+  const playerTabs = PLAYER_TABS;
   return (
     <div className="flex-1 bg-osu-b5">
       <div className="relative overflow-hidden bg-osu-b4">
@@ -3094,6 +3091,7 @@ function PlayerSkillCard({ title, accent, children }: { title: string; accent: s
 function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   const [skills, setSkills] = useState<LivePlayerSkills | null>(null);
   const [skillsError, setSkillsError] = useState(false);
+  const [selectedSkill, setSelectedSkill] = useState<{ entry: SkillAxisEntry; keyCount: number } | null>(null);
   const liveConfigured = isLiveBackendConfigured();
 
   useEffect(() => {
@@ -3123,6 +3121,10 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       if (timer) clearTimeout(timer);
     };
   }, [user.id, liveConfigured]);
+
+  useEffect(() => {
+    setSelectedSkill(null);
+  }, [user.id]);
 
   if (!liveConfigured) {
     return <div className="py-8 text-center text-sm text-osu-f1">Skill ratings are unavailable right now.</div>;
@@ -3157,20 +3159,38 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
     );
   }
   return (
-    <div>
-      {modes.length > 1 ? <KeymodeScaleNote className="mb-2" /> : null}
-      <div
-        className={`grid grid-cols-1 gap-3 ${
-          modes.length > 1
-            ? "xl:grid-cols-2 xl:[&>*:last-child:nth-child(odd)]:col-span-2"
-            : "md:max-w-[640px]"
-        }`}
-      >
-        {modes.map((mode) => (
-          <SkillModePanel key={mode.keyCount} skills={skills} mode={mode} />
-        ))}
+    <>
+      <div>
+        {modes.length > 1 ? <KeymodeScaleNote className="mb-2" /> : null}
+        <div
+          className={`grid grid-cols-1 gap-3 ${
+            modes.length > 1
+              ? "xl:grid-cols-2 xl:[&>*:last-child:nth-child(odd)]:col-span-2"
+              : "md:max-w-[640px]"
+          }`}
+        >
+          {modes.map((mode) => (
+            <SkillModePanel
+              key={mode.keyCount}
+              skills={skills}
+              mode={mode}
+              onSelectEntry={(entry) => setSelectedSkill({ entry, keyCount: mode.keyCount })}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+      {selectedSkill ? (
+        <SkillPlaysModal
+          userId={user.id}
+          username={user.username}
+          keyCount={selectedSkill.keyCount}
+          axis={selectedSkill.entry.axis}
+          label={selectedSkill.entry.label}
+          color={selectedSkill.entry.color}
+          onClose={() => setSelectedSkill(null)}
+        />
+      ) : null}
+    </>
   );
 }
 

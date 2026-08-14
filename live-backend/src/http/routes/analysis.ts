@@ -14,6 +14,9 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
+    // Unauthenticated, and every miss buys a queue insert on the single SQLite
+    // writer, so it charges the costly bucket like the sibling batch route.
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
     const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
     sendJson(req, res, ctx, 200, { accents: await lookupAvatarAccents(ctx.db, ctx.queue ?? null, body.urls) });
     return true;

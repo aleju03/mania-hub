@@ -6,7 +6,24 @@ const PRIMARY_SITE_HOSTS = ["mania-tracker.com", "www.mania-tracker.com"];
     redirect uri. */
 const DEV_SITE_HOST = "ninja.mania-tracker.com";
 const DEV_SITE_ORIGIN = `https://${DEV_SITE_HOST}`;
-const DEFAULT_ALLOWED_HOST_SUFFIXES = [".vercel.app", ".loca.lt"];
+/** Wildcard host suffixes are a development affordance: a localtunnel (phone
+    testing) or a throwaway preview deployment needs its own host treated as
+    ours. In production they are a foothold - any `*.loca.lt` host an attacker
+    registers would be an allowed host - so they are off unless something asks
+    for them. `MANIA_HUB_ALLOWED_HOST_SUFFIXES` overrides the defaults. */
+const DEV_ALLOWED_HOST_SUFFIXES = [".vercel.app", ".loca.lt"];
+
+function getAllowedHostSuffixes(): string[] {
+  const configured = (readEnv("MANIA_HUB_ALLOWED_HOST_SUFFIXES") ?? "")
+    .split(",")
+    .map((suffix) => suffix.trim().toLowerCase())
+    .filter(Boolean);
+  if (configured.length > 0) return configured;
+  // Preview deployments are the platform's own hosts, so they stay allowed
+  // there without a manual list.
+  if (readEnv("VERCEL")) return [".vercel.app"];
+  return readEnv("NODE_ENV") === "production" ? [] : DEV_ALLOWED_HOST_SUFFIXES;
+}
 
 function readEnv(name: string): string | undefined {
   if (typeof process === "undefined") return undefined;
@@ -54,11 +71,14 @@ function getAllowedHosts(): string[] {
 }
 
 function isAllowedHost(host: string): boolean {
-  if (isLocalHost(host)) return true;
+  // Loopback is a development host. In production nothing legitimate forwards
+  // it, while accepting it lets a caller point the OG renderer's asset fetches
+  // at a port on the box.
+  if (isLocalHost(host) && readEnv("NODE_ENV") !== "production") return true;
   const withoutPort = host.replace(/:\d+$/, "");
   const allowedHosts = getAllowedHosts();
   if (allowedHosts.includes(host) || allowedHosts.includes(withoutPort)) return true;
-  return DEFAULT_ALLOWED_HOST_SUFFIXES.some((suffix) => withoutPort.endsWith(suffix));
+  return getAllowedHostSuffixes().some((suffix) => withoutPort.endsWith(suffix));
 }
 
 function requestOrigin(request: Request): string {
@@ -154,11 +174,17 @@ export function isSameOriginRequest(request: Request): boolean {
   return false;
 }
 
+/** Where the OG renderer pulls its fonts and sprites from. The configured
+    origin comes first, matching getCanonicalOrigin: the request-derived origin
+    is built from x-forwarded-host, and every card the renderer produces is
+    stored in R2 under a key that does not include the origin, so a caller who
+    got their own host accepted here could put their imagery under a
+    mania-tracker.com OG url for as long as that cache entry lives. */
 export function getAssetOrigin(request: Request): string {
   return (
-    getAllowedRequestOrigin(request) ??
     getExplicitConfiguredOrigin() ??
     getVercelProductionOrigin() ??
+    getAllowedRequestOrigin(request) ??
     requestOrigin(request)
   );
 }

@@ -35,6 +35,10 @@ let queue: JobQueue;
 let events: LiveEventLog;
 
 const SUBJECT_ID = 1;
+// The subject asking for their own board. Marks shape every build, but the
+// wire only describes them (per-rec `feedback`, feedbackHiddenCount) when the
+// request proved it is the subject, so these tests ask as the owner.
+const OWNER_VIEW = { viewerUserId: SUBJECT_ID } as const;
 const SUBJECT_PP = 5000;
 const BM_IMPROVE = 10;
 const BM_STALE = 11;
@@ -446,7 +450,7 @@ describe("farm helper feedback in recommendations", () => {
     await seedPeers();
     await setFarmHelperFeedback(db, { userId: SUBJECT_ID, beatmapId: BM_MISSING, speedBucket: "normal", verdict: "too_hard" });
 
-    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", OWNER_VIEW);
     expect(gain.recs.some((rec) => rec.beatmapId === BM_MISSING)).toBe(false);
     expect(gain.feedbackHiddenCount).toBe(1);
     // The other lanes are untouched.
@@ -454,11 +458,38 @@ describe("farm helper feedback in recommendations", () => {
     expect(gain.recs.some((rec) => rec.beatmapId === BM_STALE)).toBe(true);
     expect(gain.recs.every((rec) => rec.feedback === undefined)).toBe(true);
 
-    const popular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular" });
+    const popular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { ...OWNER_VIEW, view: "popular" });
     const popularRec = popular.recs.find((rec) => rec.beatmapId === BM_MISSING);
     expect(popularRec).toBeDefined();
     expect(popularRec?.feedback).toBe("too_hard");
     expect(popular.feedbackHiddenCount).toBeUndefined();
+  });
+
+  /* The endpoint names its subject in a query string, so a stranger can ask for
+     anyone's board. The marks still shape it (a hidden lane stays hidden), but
+     nothing on the wire says which lanes this player called too hard. */
+  it("tells a stranger nothing about the subject's marks", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    await setFarmHelperFeedback(db, { userId: SUBJECT_ID, beatmapId: BM_MISSING, speedBucket: "normal", verdict: "too_hard" });
+
+    const owner = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", OWNER_VIEW);
+    const stranger = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const nobody = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { viewerUserId: SUBJECT_ID + 1 });
+
+    for (const snapshot of [stranger, nobody]) {
+      expect(snapshot.feedbackHiddenCount).toBeUndefined();
+      expect(snapshot.feedbackMarginAdjust).toBeUndefined();
+      expect(snapshot.recs.every((rec) => rec.feedback === undefined)).toBe(true);
+      // Same board, minus the private annotations: the marks are still applied.
+      expect(snapshot.recs.map((rec) => rec.beatmapId)).toEqual(owner.recs.map((rec) => rec.beatmapId));
+    }
+    // And the owner's own build is unaffected by the public ones sharing a
+    // subject: the two never share a cache entry.
+    expect(owner.feedbackHiddenCount).toBe(1);
+
+    const popularStranger = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular" });
+    expect(popularStranger.recs.every((rec) => rec.feedback === undefined)).toBe(true);
   });
 
   it("keeps a too_easy lane recommended and tags it", async () => {
@@ -466,7 +497,7 @@ describe("farm helper feedback in recommendations", () => {
     await seedPeers();
     await setFarmHelperFeedback(db, { userId: SUBJECT_ID, beatmapId: BM_MISSING, speedBucket: "normal", verdict: "too_easy" });
 
-    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", OWNER_VIEW);
     const rec = gain.recs.find((candidate) => candidate.beatmapId === BM_MISSING);
     expect(rec?.feedback).toBe("too_easy");
     expect(gain.feedbackHiddenCount).toBe(0);
@@ -503,7 +534,7 @@ describe("farm helper feedback in recommendations", () => {
     await setFarmHelperFeedback(db, { userId: SUBJECT_ID, beatmapId: hardMarked, speedBucket: "normal", verdict: "too_easy" });
     const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
 
-    const gain = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
+    const gain = await getFarmHelperSnapshot(db, osu, "Subject", { ...OWNER_VIEW, keyMode: "4k" }, stubQueue);
     const marked = gain.recs.find((rec) => rec.beatmapId === hardMarked);
     expect(marked).toBeDefined();
     expect(marked?.feedback).toBe("too_easy");
@@ -527,7 +558,7 @@ describe("farm helper feedback in recommendations", () => {
     await seedSubjectAccModel(model);
     await setFarmHelperFeedback(db, { userId: SUBJECT_ID, beatmapId: BM_ACC, speedBucket: "normal", verdict: "too_easy" });
 
-    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", OWNER_VIEW);
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_ACC);
 
     const prediction = predictPlayerAccuracy(model, { keyCount: 4, chartOverall: 24, family: "stream" })!;
@@ -564,7 +595,7 @@ describe("farm helper feedback in recommendations", () => {
     await seedSubjectAccModel(accModelForTest({ a: Math.log(0.04), choke: HEAVY_CHOKE }));
     await setFarmHelperFeedback(db, { userId: SUBJECT_ID, beatmapId: BM_RISKY_MARKED, speedBucket: "normal", verdict: "too_easy" });
 
-    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", OWNER_VIEW);
     const marked = snapshot.recs.find((rec) => rec.beatmapId === BM_RISKY_MARKED);
     const unmarked = snapshot.recs.find((rec) => rec.beatmapId === BM_RISKY_UNMARKED);
 
@@ -591,7 +622,7 @@ describe("farm helper feedback in recommendations", () => {
     ]);
     await setFarmHelperFeedback(db, { userId: SUBJECT_ID, beatmapId: BM_STALE, speedBucket: "normal", verdict: "too_hard" });
 
-    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", OWNER_VIEW);
     expect(snapshot.recs.some((rec) => rec.beatmapId === BM_IMPROVE)).toBe(true);
     expect(snapshot.recs.find((rec) => rec.beatmapId === BM_IMPROVE)?.feedback).toBeUndefined();
     expect(snapshot.recs.some((rec) => rec.beatmapId === BM_STALE)).toBe(false);
@@ -609,24 +640,24 @@ describe("farm helper feedback in recommendations", () => {
     const bestScores = buildSubjectBestScores();
     await seedPeers();
 
-    const first = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const first = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", OWNER_VIEW);
     expect(first.recs.some((rec) => rec.beatmapId === BM_MISSING)).toBe(true);
 
     // A direct table write alone leaves the 5-minute cache serving stale recs.
     await setFarmHelperFeedback(db, { userId: SUBJECT_ID, beatmapId: BM_MISSING, speedBucket: "normal", verdict: "too_hard" });
-    const stale = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const stale = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", OWNER_VIEW);
     expect(stale.recs.some((rec) => rec.beatmapId === BM_MISSING)).toBe(true);
 
     // The eviction (as the set/clear handlers call it) makes the next build fresh.
     invalidateFarmHelperCacheForUser(db, SUBJECT_ID);
-    const fresh = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const fresh = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", OWNER_VIEW);
     expect(fresh.recs.some((rec) => rec.beatmapId === BM_MISSING)).toBe(false);
     expect(fresh.feedbackHiddenCount).toBe(1);
 
     // End to end through the HTTP handler: clearing the mark brings it back.
     const cleared = await call(bodyReq("POST", "/api/farm-helper/feedback/clear", { userId: SUBJECT_ID, beatmapId: BM_MISSING, speedBucket: "normal" }, ADMIN));
     expect(cleared.status).toBe(200);
-    const restored = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const restored = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", OWNER_VIEW);
     expect(restored.recs.some((rec) => rec.beatmapId === BM_MISSING)).toBe(true);
     expect(restored.feedbackHiddenCount).toBe(0);
   });

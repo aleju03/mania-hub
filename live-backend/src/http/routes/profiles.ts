@@ -3,7 +3,7 @@ import { exec } from "../../db.js";
 import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../../features/activity.js";
 import { enrichPayloadAvatarAccents } from "../../features/avatar-accents.js";
 import { getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu } from "../../features/player-profiles.js";
-import { getPlayerSkillBreakdown } from "../../features/player-skills.js";
+import { getPlayerSkillBreakdown, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import type { OscScore } from "../../shared/types.js";
@@ -118,6 +118,22 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       sendJson(req, res, ctx, 200, await decoratePlayerSkillBreakdown(ctx.db, userId, breakdown));
       return true;
     }
+    if (profileRoute.kind === "skill-plays") {
+      if (!checkRate(req, res, ctx, "publicCostly")) return true;
+      const axis = url.searchParams.get("axis") ?? "";
+      const keyCount = clampInteger(url.searchParams.get("keys"), 1, 18, 0);
+      if (!isPlayerSkillAxis(axis) || keyCount <= 0) {
+        sendJson(req, res, ctx, 400, { error: "invalid_skill_axis" });
+        return true;
+      }
+      const page = await getPlayerSkillPlays(ctx.db, userId, keyCount, axis, {
+        limit: clampInteger(url.searchParams.get("limit"), 1, 50, 50),
+        offset: clampInteger(url.searchParams.get("offset"), 0, 5_000, 0),
+      });
+      res.setHeader("cache-control", "public, max-age=60");
+      sendJson(req, res, ctx, 200, page);
+      return true;
+    }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
     sendJson(req, res, ctx, 200, await getPlayerAbout(ctx.serveWriteDb ?? ctx.db, ctx.osu, userId));
     return true;
@@ -125,8 +141,8 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
   return false;
 }
 
-function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability" | "skills"; key: string } | null {
-  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|about|activity|activity-day|activity-availability|skills)$/.exec(pathname);
+function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays"; key: string } | null {
+  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|about|activity|activity-day|activity-availability|skills|skill-plays)$/.exec(pathname);
   if (!match) return null;
   let key: string;
   try {
@@ -136,7 +152,7 @@ function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snaps
   }
   return {
     key,
-    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability" | "skills",
+    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays",
   };
 }
 

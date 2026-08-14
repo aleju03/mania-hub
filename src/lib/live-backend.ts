@@ -9,6 +9,33 @@ import { CrossTabEventSource, supportsCrossTabEventSource } from "./cross-tab-ev
 import { SharedEventSourcePool, type PoolableEventSource, type SharedEventSource } from "./shared-event-source";
 
 export type LivePlayerSkills = MyDataSkillBreakdown;
+
+export interface LivePlayerSkillPlay {
+  beatmapId: number;
+  beatmapsetId: number | null;
+  title: string;
+  artist: string;
+  creator: string | null;
+  version: string;
+  coverUrl: string | null;
+  keyCount: number;
+  rating: number;
+  overallRating: number;
+  pp: number | null;
+  accuracy: number | null;
+  rate: number;
+  playedAt: string | null;
+  source: "top" | "tracked";
+  scoreId: number | null;
+}
+
+export interface LivePlayerSkillPlaysPage {
+  items: LivePlayerSkillPlay[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 import type {
   CountryTopPlay,
   LeanDanEstimate,
@@ -1250,6 +1277,23 @@ export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePl
 export async function fetchLivePlayerSkillsDirect(userId: number): Promise<LivePlayerSkills> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   return fetchLiveJson(`/api/profiles/${userId}/skills`);
+}
+
+export async function fetchLivePlayerSkillPlaysDirect(
+  userId: number,
+  keyCount: number,
+  axis: string,
+  options: { limit?: number; offset?: number; signal?: AbortSignal } = {},
+): Promise<LivePlayerSkillPlaysPage> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  if (!Number.isInteger(keyCount) || keyCount <= 0) throw new Error("Invalid key count.");
+  const query = new URLSearchParams({
+    keys: String(keyCount),
+    axis,
+    limit: String(Math.max(1, Math.min(50, Math.floor(options.limit ?? 50)))),
+    offset: String(Math.max(0, Math.floor(options.offset ?? 0))),
+  });
+  return fetchLiveJson(`/api/profiles/${userId}/skill-plays?${query.toString()}`, options.signal ? { signal: options.signal } : undefined);
 }
 
 export async function fetchLivePlayerActivityDirect(
@@ -2645,4 +2689,3 @@ export async function fetchDiscordShowcase(
   if (options?.fresh) query.set("fresh", "1");
   return fetchLiveJson<DiscordShowcase>(`/api/discord/showcase?${query.toString()}`);
 }
-

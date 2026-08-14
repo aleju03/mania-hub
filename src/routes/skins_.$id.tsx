@@ -221,6 +221,13 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
 
   const isOwner = skin != null && auth.viewer?.id === skin.ownerUserId;
   const isPrivate = skin?.visibility === "private";
+  // Older cached/backend summaries only carry the primary shape, so keep that
+  // as a fallback while newer ones can name every keymode's distinct art.
+  const noteShapes = skin?.noteShapes?.length
+    ? skin.noteShapes
+    : skin?.noteShape
+      ? [skin.noteShape]
+      : [];
   // The keymode-moderator grant: the settings entry point opens for them on
   // anyone's public skin, and the modal shows only the keymode labels and the
   // screenshot prune.
@@ -476,9 +483,9 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                         </FactRow>
                       </>
                     )}
-                    {skin.noteShape && (
+                    {noteShapes.length > 0 && (
                       <FactRow label="Notes">
-                        <span className="text-osu-l1">{skinNoteShapeLabel(skin.noteShape)}</span>
+                        <span className="text-osu-l1">{noteShapes.map(skinNoteShapeLabel).join(", ")}</span>
                       </FactRow>
                     )}
                     {skin.resolution && (

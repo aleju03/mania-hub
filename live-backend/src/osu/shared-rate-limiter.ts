@@ -30,12 +30,17 @@ export interface SqliteSharedRateLimiterOptions {
   targetPerMinute: number;
   hardPerMinute: number;
   maxReserveWaitMs?: number;
+  // Capacity interactive requests may not consume. Defaults to 20% of the
+  // hard window (while always leaving at least one interactive slot).
+  backgroundReservedPerMinute?: number;
 }
 
 export class SqliteSharedRateLimiter implements SharedLimiter {
   private readonly provider: string;
   private readonly targetPerMinute: number;
   private readonly hardPerMinute: number;
+  private readonly backgroundReservedPerMinute: number;
+  private readonly interactivePerMinute: number;
   private readonly maxReserveWaitMs: number;
   private reservationTail: Promise<void> = Promise.resolve();
   private lastPruneAtMs = 0;
@@ -44,6 +49,20 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
     this.provider = options.provider ?? "osu";
     this.targetPerMinute = Math.max(1, Math.floor(options.targetPerMinute));
     this.hardPerMinute = Math.max(1, Math.floor(options.hardPerMinute));
+    const defaultReserve = this.hardPerMinute > 1
+      ? Math.max(1, Math.floor(this.hardPerMinute * 0.2))
+      : 0;
+    const requestedReserve = Number.isFinite(options.backgroundReservedPerMinute)
+      ? Math.floor(Number(options.backgroundReservedPerMinute))
+      : defaultReserve;
+    this.backgroundReservedPerMinute = Math.max(
+      0,
+      Math.min(
+        this.hardPerMinute - 1,
+        requestedReserve,
+      ),
+    );
+    this.interactivePerMinute = this.hardPerMinute - this.backgroundReservedPerMinute;
     this.maxReserveWaitMs = Math.max(1, Math.floor(options.maxReserveWaitMs ?? DEFAULT_MAX_RESERVE_WAIT_MS));
   }
 
@@ -78,7 +97,7 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
     ).catch(() => undefined);
   }
 
-  async state(): Promise<{ usedLastMinute: number; pausedMs: number; targetPerMinute: number; hardPerMinute: number }> {
+  async state(): Promise<{ usedLastMinute: number; pausedMs: number; targetPerMinute: number; hardPerMinute: number; backgroundReservedPerMinute: number }> {
     const now = Date.now();
     const row = (await exec(
       this.db,
@@ -90,6 +109,7 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
       pausedMs: Math.max(0, (await this.readPause()).until - now),
       targetPerMinute: this.targetPerMinute,
       hardPerMinute: this.hardPerMinute,
+      backgroundReservedPerMinute: this.backgroundReservedPerMinute,
     };
   }
 
@@ -107,15 +127,32 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
 
     const windowRows = (await exec(
       this.db,
-      `select count(*) as count, min(started_at_ms) as oldest
+      `select
+         count(*) as count,
+         min(started_at_ms) as oldest,
+         sum(case when lane = 'interactive' then 1 else 0 end) as interactive_count,
+         min(case when lane = 'interactive' then started_at_ms end) as oldest_interactive
        from api_rate_limit_reservations
        where provider = ? and started_at_ms > ?`,
       [this.provider, now - WINDOW_MS],
     )).rows[0];
     const used = Number(windowRows?.count ?? 0);
     const oldest = Number(windowRows?.oldest ?? 0);
+    const interactiveUsed = Number(windowRows?.interactive_count ?? 0);
+    const oldestInteractive = Number(windowRows?.oldest_interactive ?? 0);
     if (used >= this.hardPerMinute && Number.isFinite(oldest) && oldest > 0) {
       waitMs = Math.max(waitMs, oldest + WINDOW_MS + 1 - now);
+    }
+
+    // Interactive traffic may burst above the paced target, but it may not
+    // occupy the whole hard window. Leaving this slice unused by interactive
+    // callers guarantees that a worker process can reserve a job slot after
+    // target spacing even while the public server remains saturated.
+    if (lane === "interactive"
+      && interactiveUsed >= this.interactivePerMinute
+      && Number.isFinite(oldestInteractive)
+      && oldestInteractive > 0) {
+      waitMs = Math.max(waitMs, oldestInteractive + WINDOW_MS + 1 - now);
     }
 
     if (lane !== "interactive") {

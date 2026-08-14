@@ -9,6 +9,7 @@ import {
   computePlayerSkillRatings,
   estimateWifeAccuracy,
   getPlayerSkillBreakdown,
+  getPlayerSkillPlays,
   getRankedPlayRate,
   loadArchivedTrackedEvidence,
   loadBeatmapOds,
@@ -901,6 +902,61 @@ describe("getPlayerSkillBreakdown", () => {
       expect(byKeyCount.get(4)?.dan?.rc?.label).toBe("alpha++");
       // The 4K LN ladder ends at 15 (Yume); there is no LN 16 dan.
       expect(byKeyCount.get(4)?.dan?.ln?.label).toBe("15");
+    });
+  });
+});
+
+describe("getPlayerSkillPlays", () => {
+  it("filters and paginates the durable plays behind a skill axis", async () => {
+    await withDb(async (db) => {
+      const now = new Date().toISOString();
+      await exec(
+        db,
+        `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
+         values (10, 'Skill Song', 'Skill Artist', 'Skill Mapper', 'ranked', ?, '{}', ?)`,
+        [JSON.stringify({ list: "https://example.com/list.jpg" }), now],
+      );
+      for (const [beatmapId, version] of [[101, "Stream A"], [102, "Stream B"], [103, "Seven Keys"]] as const) {
+        await exec(
+          db,
+          `insert into beatmaps
+           (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
+           values (?, 10, 'mania', 'ranked', ?, 5, 180, 1000, ?, null, '{}', ?)`,
+          [beatmapId, beatmapId === 103 ? 7 : 4, version, now],
+        );
+      }
+      const plays = [
+        { identity: "official:1", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.95, pp: 200, values: { Overall: 22, Stream: 24 }, patterns: ["stream"], source: "top", accuracy: 0.97, endedAt: "2026-08-01T00:00:00Z" },
+        { identity: "official:2", beatmapId: 102, keyCount: 4, rate: 1.5, goal: 0.96, pp: 180, values: { Overall: 25, Stream: 29 }, patterns: ["stream", "ln"], source: "tracked", accuracy: 0.98, endedAt: "2026-08-02T00:00:00Z" },
+        { identity: "official:3", beatmapId: 103, keyCount: 7, rate: 1, goal: 0.94, pp: 250, values: { Overall: 30, Stream: 31 }, patterns: ["stream"], source: "top", accuracy: 0.96, endedAt: "2026-08-03T00:00:00Z" },
+      ];
+      await exec(
+        db,
+        `insert into player_skill_ratings
+         (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+         values (99, ?, 'ready', '{}', ?, ?, ?)`,
+        [PLAYER_SKILLS_VERSION, JSON.stringify({ version: PLAYER_SKILLS_VERSION, plays }), now, now],
+      );
+
+      const first = await getPlayerSkillPlays(db, 99, 4, "Stream", { limit: 1 });
+      expect(first.total).toBe(2);
+      expect(first.items).toHaveLength(1);
+      expect(first.items[0]).toMatchObject({
+        beatmapId: 102,
+        title: "Skill Song",
+        version: "Stream B",
+        rating: 29,
+        rate: 1.5,
+        source: "tracked",
+        scoreId: 2,
+      });
+
+      const second = await getPlayerSkillPlays(db, 99, 4, "Stream", { limit: 1, offset: 1 });
+      expect(second.items[0]).toMatchObject({ beatmapId: 101, rating: 24 });
+
+      const ln = await getPlayerSkillPlays(db, 99, 4, "pattern:ln");
+      expect(ln.total).toBe(1);
+      expect(ln.items[0]).toMatchObject({ beatmapId: 102, rating: 25 });
     });
   });
 });

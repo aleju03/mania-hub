@@ -1,0 +1,128 @@
+import { createServerFn } from "@tanstack/react-start";
+import { liveBridgeToken } from "./live-backend-tokens";
+import type { OsuScore } from "./types";
+
+/* The server-side pack deal. The opener always comes from the osu! login
+   cookie, never from client input, and the backend rolls the dice AND takes
+   the payment: pool slice, uniform odds, duplicate protection against the
+   synced collection, the honorary chance, the charge or shard cost, and the
+   dealt copies landing in the collection all happen where the pool and the
+   wallet live. The response carries the whole open - the dealt players,
+   their card snapshots, and the spent wallet - so revealing a pack no longer
+   starts from ids the browser picked or a balance the browser vouched for.
+   Anonymous wallets (browser-local, never synced, never logged) keep the
+   client-side draw and economy in packs.ts / pack-collection.ts. */
+
+/* One dealt slot. Honorary hits arrive as a bare id + flag: the roster's
+   identity (name, avatar, peak numbers) lives in src/lib/honorary-players.ts
+   and is hydrated client-side, so the card face has one source of truth.
+   isNew is the server's word against the synced collection at deal time,
+   which is what the reveal's NEW badge shows. */
+export interface ServerPackDrawSlot {
+  userId: number;
+  honorary?: boolean;
+  isNew?: boolean;
+  username?: string;
+  avatarUrl?: string;
+  countryCode?: string;
+  globalRank?: number | null;
+  poolRank?: number;
+  pp?: number;
+}
+
+/* One card snapshot from the draw response, typed to the fields the mapper
+   reads; at runtime each row is the full LivePackCardSnapshot and passes
+   through untouched. */
+export interface ServerPackDrawCard {
+  user?: { id?: number | null } | null;
+  bestScores?: OsuScore[];
+}
+
+export interface ServerWalletState {
+  payload: string;
+  rev: number;
+}
+
+export interface ServerPackDrawResult {
+  poolTotal: number;
+  players: ServerPackDrawSlot[];
+  /* Card snapshots for the dealt hand. Players the backend has nothing
+     stored for are simply absent; the reveal's cold path owns them. */
+  cards: ServerPackDrawCard[];
+  /* The wallet after the spend: the draw is the purchase, so this is the
+     authoritative balance the page should adopt. */
+  wallet: ServerWalletState | null;
+}
+
+/* Null when the draw cannot run as this viewer (logged out server-side or no
+   backend configured); the caller falls back to the browser-local draw. A
+   wallet that cannot pay comes back as a refusal carrying the true balance;
+   any other failure (pool unavailable, rate limited) throws, surfacing as
+   the page's "couldn't deal" retry. */
+export type ServerPackDrawOutcome =
+  | { status: "dealt"; result: ServerPackDrawResult }
+  | { status: "insufficient"; reason: "charges" | "shards"; wallet: ServerWalletState | null }
+  | null;
+
+function walletFrom(value: unknown): ServerWalletState | null {
+  const wallet = value as { payload?: unknown; rev?: unknown } | null;
+  if (!wallet || typeof wallet.payload !== "string" || !wallet.payload) return null;
+  return { payload: wallet.payload, rev: Math.max(0, Math.floor(Number(wallet.rev) || 0)) };
+}
+
+export const drawServerPack = createServerFn({ method: "POST" })
+  .validator((input: { packType?: unknown }) => {
+    const packType =
+      typeof input?.packType === "string" && /^[a-z0-9_]{1,24}$/.test(input.packType) ? input.packType : null;
+    if (!packType) throw new Error("Invalid pack type.");
+    return { packType };
+  })
+  .handler(async ({ data }): Promise<ServerPackDrawOutcome> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const { readCurrentAuth } = await import("./auth-server");
+    const auth = await readCurrentAuth();
+    if (!auth.viewer) return null;
+    const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
+    if (!base) return null;
+    const headers: HeadersInit = { "content-type": "application/json" };
+    const bridgeToken = liveBridgeToken();
+    if (bridgeToken) {
+      headers.authorization = `Bearer ${bridgeToken}`;
+    }
+    const response = await fetch(`${base}/api/packs/draw`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        userId: auth.viewer.id,
+        packType: data.packType,
+      }),
+    });
+    if (response.status === 409) {
+      const body = (await response.json().catch(() => null)) as
+        | { error?: unknown; reason?: unknown; wallet?: unknown }
+        | null;
+      if (body?.error === "insufficient_funds") {
+        return {
+          status: "insufficient",
+          reason: body.reason === "shards" ? "shards" : "charges",
+          wallet: walletFrom(body.wallet),
+        };
+      }
+      throw new Error("Pack draw failed (409).");
+    }
+    if (!response.ok) throw new Error(`Pack draw failed (${response.status}).`);
+    const body = (await response.json()) as Partial<ServerPackDrawResult>;
+    const players = (Array.isArray(body.players) ? body.players : [])
+      .filter((slot): slot is ServerPackDrawSlot => Math.floor(Number(slot?.userId) || 0) > 0);
+    if (players.length === 0) throw new Error("Pack draw dealt no players.");
+    return {
+      status: "dealt",
+      result: {
+        poolTotal: Math.max(0, Math.floor(Number(body.poolTotal) || 0)),
+        players,
+        cards: Array.isArray(body.cards) ? (body.cards as ServerPackDrawCard[]) : [],
+        wallet: walletFrom(body.wallet),
+      },
+    };
+  });

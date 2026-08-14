@@ -8,6 +8,7 @@ import {
   appendSkinScreenshot,
   attachSkinOsk,
   attachSkinPreview,
+  backfillSkinNoteShapes,
   backfillSkinSlugs,
   clearSimilarSkinsCache,
   clearSkinDownloadDedup,
@@ -24,6 +25,7 @@ import {
   listExpiredPendingSkins,
   listSimilarSkins,
   listSkins,
+  parseSkinsListSort,
   normalizeSkinResolution,
   privateSkinSecretMatches,
   recordSkinDownload,
@@ -1833,7 +1835,7 @@ describe("skin trait filters", () => {
       keymodes: [4, 6, 7, 8],
       specialKeymodes: [8],
       sha256: "bb".repeat(32),
-      visual: { v: 3, keymodes: { 4: circle, 6: bar, 7: bar, 8: bar } },
+      visual: { v: 3, keymodes: { 4: { ...circle, arrowLayout: true }, 6: bar, 7: bar, 8: bar } },
     });
     for (const keys of [4, 6, 7, 8]) {
       await upsertSkinKeymodePreview(db, teto, {
@@ -1849,6 +1851,20 @@ describe("skin trait filters", () => {
     expect(filtered.skins.map((skin) => [skin.name, skin.filterKeys])).toEqual([
       ["Argefangirl mixed", 8],
       ["Teto mixed", 7],
+    ]);
+    expect(filtered.skins.map((skin) => skin.noteShapes)).toEqual([
+      ["bar", "circle"],
+      ["bar", "arrow"],
+    ]);
+    // A mixed skin belongs to every shape bucket it actually carries, not only
+    // the majority label stored in note_shape.
+    const arrows = await listSkins(db, { noteShape: "arrow" });
+    expect(arrows.skins.map((skin) => [skin.name, skin.noteShape, skin.filterKeys])).toEqual([
+      ["Teto mixed", "bar", 4],
+    ]);
+    const circles = await listSkins(db, { noteShape: "circle" });
+    expect(circles.skins.map((skin) => [skin.name, skin.noteShape, skin.filterKeys])).toEqual([
+      ["Argefangirl mixed", "bar", 4],
     ]);
     // The hint belongs only to a shape-filtered response; ordinary cards keep
     // the uploader's starred cover.
@@ -1867,6 +1883,28 @@ describe("skin trait filters", () => {
     });
     const list = await listSkins(db, { screenshots: true });
     expect(list.skins.map((skin) => skin.id)).toEqual([shot]);
+  });
+
+  it("backfills all note-shape buckets from existing visual digests", async () => {
+    const id = await createPublishedSkin({
+      ...OWNER,
+      name: "Legacy mixed",
+      keymodes: [4, 6, 7],
+      visual: {
+        v: 3,
+        keymodes: {
+          4: { aspect: 1, mask: "0169961019999991699999969999999999999999699999961999999101699610", colors: ["#ffffff"], accents: [], sat: 0, arrowLayout: true },
+          6: BAR_VISUAL.keymodes[4],
+          7: BAR_VISUAL.keymodes[4],
+        },
+      },
+    });
+    await exec(db, "update skins set note_shapes_json = '[]' where id = ?", [id]);
+
+    expect((await listSkins(db, { noteShape: "arrow" })).total).toBe(0);
+    expect(await backfillSkinNoteShapes(db)).toBe(1);
+    expect((await listSkins(db, { noteShape: "arrow" })).skins.map((skin) => skin.id)).toEqual([id]);
+    expect(await backfillSkinNoteShapes(db)).toBe(0);
   });
 });
 
@@ -1913,5 +1951,18 @@ describe("skin recommended resolution", () => {
     expect(changed.ok && changed.skin.resolution).toBe("2560x1440");
     const cleared = await updateSkinDetails(db, id, { name: "Editable", resolution: "" }, OWNER.ownerUserId);
     expect(cleared.ok && cleared.skin.resolution).toBeNull();
+  });
+});
+
+describe("parseSkinsListSort", () => {
+  it("keeps the six real sorts and refuses inherited keys", () => {
+    for (const sort of ["newest", "oldest", "downloads", "downloads-asc", "size", "size-asc"]) {
+      expect(parseSkinsListSort(sort)).toBe(sort);
+    }
+    // `in` used to accept these, and the ?? fallback did not catch them because
+    // a prototype member is not nullish, so the value reached the order by.
+    for (const sort of ["constructor", "toString", "valueOf", "__proto__", "hasOwnProperty", "nope", null, undefined]) {
+      expect(parseSkinsListSort(sort as string | null | undefined)).toBe("newest");
+    }
   });
 });

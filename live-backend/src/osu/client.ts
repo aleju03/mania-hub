@@ -36,6 +36,7 @@ type PendingLimiterCall<T = unknown> = {
   lane: LimiterLane;
   priority: number;
   seq: number;
+  queuedAt: number;
   resolve: (value: T) => void;
   reject: (error: unknown) => void;
 };
@@ -64,6 +65,14 @@ const DEFAULT_MAX_PENDING_CALLS = 500;
  * a page load needs (a handful of instant calls) while capping the sustained
  * overage at interactiveBurstCapacity per minute. */
 const INTERACTIVE_BURST_REFILL_MS = 60_000;
+
+/* Interactive requests normally win because a person is waiting, but strict
+   priority made a sustained public-request stream capable of leaving every job
+   behind it forever. Once background work has waited this long, the oldest
+   background call receives the next local slot. The shared SQLite limiter has
+   a separate per-minute reservation below, so this also works when server and
+   worker run in different processes. */
+export const BACKGROUND_LANE_MAX_WAIT_MS = 5_000;
 
 /* Filling a card that nobody is waiting on is background work, not a page
    load. Under the old "api:profile_snapshot" caller it classified as
@@ -111,6 +120,7 @@ export class TokenBucketLimiter {
         lane,
         priority: lanePriority(lane),
         seq: this.sequence++,
+        queuedAt: Date.now(),
         resolve,
         reject,
       } as PendingLimiterCall);
@@ -194,6 +204,24 @@ export class TokenBucketLimiter {
 
   private bestPendingIndex(): number {
     if (this.pending.length === 0) return -1;
+    const now = Date.now();
+    let oldestStarvedBackground = -1;
+    // A 429 pause deliberately lets interactive work resume early. Do not let
+    // an aged background call that is still paused become the selected call
+    // and park the whole local scheduler until the longer pause expires.
+    if (now >= this.pausedUntil) {
+      for (let i = 0; i < this.pending.length; i++) {
+        const current = this.pending[i];
+        if ((current.lane !== "job" && current.lane !== "bulk")
+          || now - current.queuedAt < BACKGROUND_LANE_MAX_WAIT_MS) continue;
+        if (oldestStarvedBackground < 0
+          || current.seq < this.pending[oldestStarvedBackground].seq) {
+          oldestStarvedBackground = i;
+        }
+      }
+    }
+    if (oldestStarvedBackground >= 0) return oldestStarvedBackground;
+
     let bestIndex = 0;
     for (let i = 1; i < this.pending.length; i++) {
       const current = this.pending[i];

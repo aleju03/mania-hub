@@ -634,13 +634,18 @@ export function PackSummary({
                   // pull count ("1st of 97 to pull this"), so being an early
                   // number never masquerades as being the only one.
                   const first = mint.isFirstGlobal;
+                  // Being the newest holder makes the count repeat the serial
+                  // ("61st of 61"), so drop the total in that case.
+                  const latest = mint.serial === mint.mintedTotal;
                   return (
                     <div
                       className={`mt-0.5 text-[11px] tabular-nums ${first ? "font-bold text-amber-300" : "text-osu-f1"}`}
                     >
                       {first
                         ? "first ever to pull this"
-                        : `${formatOrdinal(mint.serial)} of ${mint.mintedTotal.toLocaleString()} to pull this`}
+                        : latest
+                          ? `${formatOrdinal(mint.serial)} to pull this`
+                          : `${formatOrdinal(mint.serial)} of ${mint.mintedTotal.toLocaleString()} to pull this`}
                     </div>
                   );
                 })()}

@@ -9,8 +9,10 @@ import {
   warmLivePackPlayers,
   type LiveGlobalRankingEntry,
 } from "./live-backend";
-import { HONORARY_PACK_POOL, isHonoraryPlayer, type HonoraryPlayer } from "./honorary-players";
+import { harvestAvatarAccents } from "./avatar-accent-harvest";
+import { HONORARY_PACK_POOL, honoraryPlayerById, isHonoraryPlayer, type HonoraryPlayer } from "./honorary-players";
 import { getUserScoresBestWindow } from "./osu";
+import { drawServerPack, type ServerPackDrawResult, type ServerWalletState } from "./pack-draw";
 import type { OsuScore } from "./types";
 
 /* Default cards per pack; pack types override via cardCount. */
@@ -26,6 +28,13 @@ export const PACK_SIZE = 5;
 // opens got its pool reads 429ed by the backend's abuse guard, which routed
 // every one of those draws onto random deep osu! rankings pages (~50 real
 // osu! API calls a minute). A draw the pool cannot serve fails instead.
+//
+// Signed-in opens no longer roll here at all: drawPackPlayersFromServer asks
+// the backend to deal (POST /api/packs/draw, live-backend/src/features/
+// pack-draw.ts), which enforces the slice, the odds and duplicate protection
+// where the pool lives and returns the hand with its cards in one response.
+// The paging, dup-replacement and honorary machinery below is the
+// browser-local draw for anonymous wallets, which are never synced or logged.
 
 // Pool pages mirror the osu! rankings shape: 50 rows per page.
 export const RANKINGS_PAGE_SIZE = 50;
@@ -688,6 +697,89 @@ export async function drawPackPlayers(
     }
     throw error;
   }
+}
+
+export interface ServerPackDeal {
+  draw: PackDraw;
+  /* Stored best-score windows the draw response carried, keyed by player id.
+     Players absent here mint through the existing cold path. */
+  scoresByUserId: Map<number, OsuScore[]>;
+  /* The server's word on which dealt cards are first copies, keyed by wallet
+     card key. The synced collection lives server-side, so this - not the
+     local wallet - is what the reveal's NEW badge should show. */
+  isNewByCardKey: Map<string, boolean>;
+  /* The wallet after the spend (the draw is the purchase); null only if the
+     backend response somehow lacked one. */
+  wallet: ServerWalletState | null;
+}
+
+/* Maps the backend's dealt hand into the shapes the reveal renders. Honorary
+   slots arrive as bare ids and hydrate from the local roster, which stays the
+   one source of a GOAT card's face; an id this build's roster cannot render
+   (deploy skew) is dropped rather than dealt as a broken card. */
+export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal {
+  const players: PackPlayer[] = [];
+  const isNewByCardKey = new Map<string, boolean>();
+  for (const slot of result.players) {
+    if (typeof slot.isNew === "boolean") {
+      isNewByCardKey.set(slot.honorary ? `${slot.userId}:goat` : String(slot.userId), slot.isNew);
+    }
+    if (slot.honorary) {
+      const member = honoraryPlayerById(slot.userId);
+      if (member?.cardReady) players.push(honoraryToPackPlayer(member));
+      continue;
+    }
+    players.push({
+      user: {
+        id: slot.userId,
+        username: slot.username ?? `User ${slot.userId}`,
+        avatar_url: slot.avatarUrl ?? "",
+        country_code: slot.countryCode ?? "",
+        statistics: { global_rank: slot.globalRank ?? null, pp: slot.pp ?? 0 },
+      },
+      globalRank: slot.globalRank ?? slot.poolRank ?? UNKNOWN_HONORARY_PEAK_RANK,
+      pp: slot.pp ?? 0,
+    });
+  }
+  const scoresByUserId = new Map<number, OsuScore[]>();
+  for (const card of result.cards) {
+    const userId = Math.floor(Number(card?.user?.id) || 0);
+    // An empty stored window means the player's plays were never fetched;
+    // seeding it would mint a blank card, so leave them to the cold path.
+    if (userId > 0 && Array.isArray(card?.bestScores) && card.bestScores.length > 0) {
+      scoresByUserId.set(userId, card.bestScores);
+    }
+  }
+  return {
+    draw: { players, poolTotal: result.poolTotal > 0 ? result.poolTotal : null },
+    scoresByUserId,
+    isNewByCardKey,
+    wallet: result.wallet,
+  };
+}
+
+export type ServerPackDealOutcome =
+  | { kind: "dealt"; deal: ServerPackDeal }
+  /* The server wallet could not pay; `wallet` is the true balance to adopt. */
+  | { kind: "insufficient"; reason: "charges" | "shards"; wallet: ServerWalletState | null }
+  /* Logged out server-side or no backend configured: the caller falls back
+     to the browser-local draw and economy. */
+  | { kind: "unavailable" };
+
+/* The signed-in deal: one request that says "open a pack", pays for it out
+   of the server wallet, and comes back with the hand, its cards, and the
+   spent balance. Failures other than the outcomes above throw into the
+   page's "couldn't deal" retry. */
+export async function drawPackPlayersFromServer(packTypeId: PackTypeId): Promise<ServerPackDealOutcome> {
+  const outcome = await drawServerPack({ data: { packType: packTypeId } });
+  if (!outcome) return { kind: "unavailable" };
+  if (outcome.status === "insufficient") {
+    return { kind: "insufficient", reason: outcome.reason, wallet: outcome.wallet };
+  }
+  // The backend enriches avatar accents into the payload like every other
+  // player-listing response; collect them before the shapes are rebuilt.
+  harvestAvatarAccents(outcome.result);
+  return { kind: "dealt", deal: mapServerPackDraw(outcome.result) };
 }
 
 /* Cheap first half of a card mint. Kept separate from the cold fallback so a

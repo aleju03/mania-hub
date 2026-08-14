@@ -68,7 +68,15 @@ describe("logout POST", () => {
   it("clamps an off-origin next back to the site root", () => {
     // Off-host, protocol-relative, and same-host-wrong-scheme all resolve to a
     // foreign origin, so normalizeAuthNext drops them.
-    for (const next of ["https://evil.example/steal", "//evil.example/steal", "http://mania-tracker.com/steal"]) {
+    // The fourth form keeps the site's own origin, so only the leading `//`
+    // left on the pathname gives it away; resolved against request.url it is
+    // protocol-relative and would land on evil.example.
+    for (const next of [
+      "https://evil.example/steal",
+      "//evil.example/steal",
+      "http://mania-tracker.com/steal",
+      "https://mania-tracker.com//evil.example/steal",
+    ]) {
       const response = handleAuthLogoutPost(logoutRequest(next));
       expect(response.status, next).toBe(303);
       expect(response.headers.get("location"), next).toBe(`${ORIGIN}/`);

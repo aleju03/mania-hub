@@ -3,7 +3,7 @@ import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { nowIso } from "../shared/score.js";
-import { classifyKeymodeNoteShape, classifySkinNoteShape, isSkinNoteShape, type SkinArchiveMeta, type SkinNoteShape } from "../skins/archive-meta.js";
+import { classifyKeymodeNoteShape, classifySkinNoteShapes, isSkinNoteShape, type SkinArchiveMeta, type SkinNoteShape } from "../skins/archive-meta.js";
 import { normalizeSkinVisualSignature, skinSimilarityMatch, SKIN_SIMILARITY_FLOOR, type SkinSimilarityFacts, type SkinVisualSignature } from "../skins/similarity.js";
 import { slugifySkinName } from "../skins/slug.js";
 
@@ -153,6 +153,9 @@ export interface SkinSummary {
   laneCover: boolean | null;
   maniaStage: boolean | null;
   lazer: boolean | null;
+  // Every distinct note shape found across the skin's keymodes, primary shape
+  // first. noteShape remains the single catalog-filter label.
+  noteShapes: SkinNoteShape[];
   noteShape: SkinNoteShape | null;
   // Only list responses filtered by note shape set this: the keymode preview
   // that visually proves the match, so a mixed skin does not show its
@@ -335,7 +338,7 @@ export async function attachSkinOsk(
     `update skins set
        osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
        keymodes_json = ?, special_keymodes_json = ?, accent_color = coalesce(accent_color, ?),
-       visual_json = ?, lane_cover = ?, mania_stage = ?, lazer = ?, note_shape = ?,
+       visual_json = ?, lane_cover = ?, mania_stage = ?, lazer = ?, note_shape = ?, note_shapes_json = ?,
        author = ?, search_text = ?, updated_at = ?
      where id = ?`,
     [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(patch.keymodes), JSON.stringify(normalizeKeymodes(patch.specialKeymodes)), patch.accentColor,
@@ -346,16 +349,18 @@ export async function attachSkinOsk(
 
 // The filter columns an .osk decides: the archive flags as analyzed (null when
 // the analysis failed, which is "unknown" rather than "no"), and the note
-// shape classified from the same visual signature being stored.
+// shapes classified from the same visual signature being stored.
 function archiveMetaColumns(
   archive: SkinArchiveMeta | null | undefined,
   visual: SkinVisualSignature | null | undefined,
-): [number | null, number | null, number | null, string | null] {
+): [number | null, number | null, number | null, string | null, string] {
+  const noteShapes = classifySkinNoteShapes(visual ?? null);
   return [
     archive ? (archive.laneCover ? 1 : 0) : null,
     archive ? (archive.maniaStage ? 1 : 0) : null,
     archive ? (archive.lazer ? 1 : 0) : null,
-    classifySkinNoteShape(visual ?? null),
+    noteShapes[0] ?? null,
+    JSON.stringify(noteShapes),
   ];
 }
 
@@ -382,7 +387,7 @@ export async function replaceSkinOsk(
     `update skins set
        osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
        keymodes_json = ?, special_keymodes_json = ?, visual_json = ?,
-       lane_cover = ?, mania_stage = ?, lazer = ?, note_shape = ?,
+       lane_cover = ?, mania_stage = ?, lazer = ?, note_shape = ?, note_shapes_json = ?,
        author = ?, search_text = ?, osk_updated_at = ?, updated_at = ?
      where id = ?`,
     [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(keymodes),
@@ -842,6 +847,35 @@ export async function backfillSkinSlugs(db: Db): Promise<number> {
   return rows.length;
 }
 
+// note_shapes_json arrived after the original majority-only note_shape column.
+// Rebuild it cheaply from the already-stored visual digest: no R2 reads are
+// needed. This intentionally has no one-shot marker. During a rolling deploy,
+// an older process can still replace a skin without writing the new column;
+// comparing every digest on the next boot repairs that small compatibility
+// window while only writing rows whose derived value is actually stale.
+export async function backfillSkinNoteShapes(db: Db): Promise<number> {
+  const rows = (await exec(
+    db,
+    `select id, visual_json, note_shape, note_shapes_json from skins
+     where visual_json is not null or note_shape is not null`,
+  )).rows;
+  let updated = 0;
+  for (const row of rows) {
+    const visual = normalizeSkinVisualSignature(parseJson<unknown>(String(row.visual_json ?? "null"), null));
+    const detected = classifySkinNoteShapes(visual);
+    const shapes = detected.length > 0
+      ? detected
+      : isSkinNoteShape(row.note_shape)
+        ? [row.note_shape]
+        : [];
+    const serialized = JSON.stringify(shapes);
+    if (String(row.note_shapes_json ?? "[]") === serialized) continue;
+    await exec(db, "update skins set note_shapes_json = ? where id = ?", [serialized, String(row.id)]);
+    updated += 1;
+  }
+  return updated;
+}
+
 // v2: v1 reconstructed page opens only, which read as nonsense next to the
 // download column - the grid's own download button has outnumbered page opens
 // since the day skins shipped, so the busiest skins showed more downloads than
@@ -917,7 +951,10 @@ const SKINS_ORDER_SQL: Record<SkinsListSort, string> = {
 
 /** The list sort a query string asked for; anything unknown means newest. */
 export function parseSkinsListSort(value: string | null | undefined): SkinsListSort {
-  return value != null && value in SKINS_ORDER_SQL ? value as SkinsListSort : "newest";
+  // Object.hasOwn, not `in`: `in` walks the prototype chain, so "constructor"
+  // and friends passed validation and then won the `?? newest` fallback below
+  // (a function is not nullish), landing a function body in the order by.
+  return value != null && Object.hasOwn(SKINS_ORDER_SQL, value) ? value as SkinsListSort : "newest";
 }
 
 export interface SkinsListQuery {
@@ -1035,7 +1072,7 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
   else if (query.client === "stable") where.push("coalesce(lazer, 0) = 0");
   const noteShape = query.noteShape && isSkinNoteShape(query.noteShape) ? query.noteShape : null;
   if (noteShape) {
-    where.push("note_shape = ?");
+    where.push("exists (select 1 from json_each(skins.note_shapes_json) note_shapes where note_shapes.value = ?)");
     args.push(noteShape);
   }
   // The resolution facet is read from the query as it stands here, before its
@@ -1050,7 +1087,8 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
   }
   const whereSql = where.join(" and ");
 
-  const orderSql = SKINS_ORDER_SQL[query.sort ?? "newest"] ?? SKINS_ORDER_SQL.newest;
+  const sort = query.sort ?? "newest";
+  const orderSql = Object.hasOwn(SKINS_ORDER_SQL, sort) ? SKINS_ORDER_SQL[sort] : SKINS_ORDER_SQL.newest;
   const totalRow = (await exec(db, `select count(*) as total from skins where ${whereSql}`, args)).rows[0];
   const rows = (await exec(
     db,
@@ -1443,6 +1481,7 @@ export function toSkinSummary(row: SkinRow, options?: { asOwner?: boolean; inclu
     ...(options?.includePreviewRecipes && recipe ? { recipe } : {}),
   }));
   const screenshots = row.screenshots.map(({ url, width, height, label }) => ({ url, width, height, label }));
+  const detectedNoteShapes = classifySkinNoteShapes(row.visual);
   const summary: SkinSummary = {
     id: row.id,
     slug: row.slug,
@@ -1457,6 +1496,7 @@ export function toSkinSummary(row: SkinRow, options?: { asOwner?: boolean; inclu
     laneCover: row.laneCover,
     maniaStage: row.maniaStage,
     lazer: row.lazer,
+    noteShapes: detectedNoteShapes.length > 0 ? detectedNoteShapes : row.noteShape ? [row.noteShape] : [],
     noteShape: row.noteShape,
     resolution: row.resolution,
     downloadCount: row.downloadCount,

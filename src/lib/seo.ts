@@ -41,6 +41,16 @@ export function ogImagePath(
    from the osu! API and composes a profile-card image (avatar, rank, PP,
    country). The `username` arrives raw so the endpoint can re-lookup it
    the same way the osu! API does (case-insensitive). */
+/* The only title the site itself ever sends to the country-scoreboard OG card:
+   every other country-scoped page passes a `kind` instead, and ogImagePath
+   drops the title when it does. /api/og renders a title it does not recognise
+   as the untitled country card and keys it as such, because the title is part
+   of the R2 key and a caller-chosen one is a caller-chosen key. Change this and
+   the card follows; invent a new titled country page and teach both sides. */
+export function countryTopPlaysTitle(countryName: string): string {
+  return `Top mania plays in ${countryName}`;
+}
+
 export function playerOgImagePath(username: string): string {
   const params = new URLSearchParams({
     kind: "player",

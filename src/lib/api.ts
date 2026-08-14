@@ -7,6 +7,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
 import { trackServerEvent } from "./server-track";
+import { liveBridgeToken } from "./live-backend-tokens";
 
 const LIVE_BACKEND_OSU_TIMEOUT_MS = 120_000;
 const BEATMAP_FILE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -452,8 +453,9 @@ function getServerLiveBackendUrl(): string {
 
 function liveBackendHeaders(): HeadersInit {
   const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) {
-    headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) {
+    headers.authorization = `Bearer ${bridgeToken}`;
   }
   return headers;
 }

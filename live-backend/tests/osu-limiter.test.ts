@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, logApiCall, migrate } from "../src/db.js";
-import { INTERACTIVE_PAUSE_CAP_MS, OsuApiError, TokenBucketLimiter, type LimiterCallLog } from "../src/osu/client.js";
+import { BACKGROUND_LANE_MAX_WAIT_MS, INTERACTIVE_PAUSE_CAP_MS, OsuApiError, TokenBucketLimiter, type LimiterCallLog } from "../src/osu/client.js";
 
 const dirs: string[] = [];
 
@@ -69,6 +69,34 @@ describe("token bucket limiter", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(done).toBeGreaterThan(target * 0.9);
     expect(done).toBeLessThanOrEqual(target + 2 * burst + 2);
+  });
+
+  it("gives a waiting background job a slot under sustained interactive demand", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const limiter = new TokenBucketLimiter(1_000, 60);
+    const calls: string[] = [];
+
+    const first = limiter.schedule("getUser", "/users/1/mania", async () => {
+      calls.push("interactive-1");
+    });
+    const job = limiter.schedule("job:enrich_user", "/users/2/mania", async () => {
+      calls.push("job");
+    });
+    for (let index = 0; index < 20; index += 1) {
+      void limiter.schedule("getUser", `/users/${index + 10}/mania`, async () => {
+        calls.push(`interactive-${index + 2}`);
+      });
+    }
+
+    await vi.advanceTimersByTimeAsync(BACKGROUND_LANE_MAX_WAIT_MS - 1);
+    expect(calls).not.toContain("job");
+    await vi.advanceTimersByTimeAsync(1_001);
+    await job;
+
+    expect(calls.indexOf("job")).toBeGreaterThan(0);
+    expect(calls.indexOf("job")).toBeLessThan(calls.length);
+    await first;
   });
 
   it("reports duration and status through onCall", async () => {

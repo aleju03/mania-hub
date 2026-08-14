@@ -254,6 +254,52 @@ export interface PlayerSkillBreakdown {
   stale?: boolean;
 }
 
+export const PLAYER_SKILL_PATTERN_AXES = [
+  "chordstream",
+  "bracket",
+  "delay",
+  "stream",
+  "jack",
+  "chordjack",
+  "tech",
+  "ln",
+] as const;
+
+export interface PlayerSkillPlay {
+  beatmapId: number;
+  beatmapsetId: number | null;
+  title: string;
+  artist: string;
+  creator: string | null;
+  version: string;
+  coverUrl: string | null;
+  keyCount: number;
+  rating: number;
+  overallRating: number;
+  pp: number | null;
+  accuracy: number | null;
+  rate: number;
+  playedAt: string | null;
+  source: "top" | "tracked";
+  scoreId: number | null;
+}
+
+export interface PlayerSkillPlaysPage {
+  items: PlayerSkillPlay[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+const PLAYER_SKILL_AXES = new Set<string>([
+  ...SKILL_RATING_SKILLSETS.filter((axis) => axis !== "Overall"),
+  ...PLAYER_SKILL_PATTERN_AXES.map((axis) => `pattern:${axis}`),
+]);
+
+export function isPlayerSkillAxis(axis: string): boolean {
+  return PLAYER_SKILL_AXES.has(axis);
+}
+
 interface StoredPlaySsr {
   identity: string;
   beatmapId: number;
@@ -1313,6 +1359,122 @@ export async function getPlayerSkillBreakdown(
     // Looked up after the enqueue above so a first read already sees its job.
     queue: await getSkillQueueStatus(db, userId),
   };
+}
+
+/**
+ * The rated plays behind one visible skill axis, ordered by that axis's SSR.
+ *
+ * This deliberately reads the durable per-play skill cache rather than the
+ * current profile best window. Ratings also learn from tracked history, and a
+ * play should not disappear from this explanation merely because it fell out
+ * of the player's current best 200 or its raw score payload aged out.
+ */
+export async function getPlayerSkillPlays(
+  db: Db,
+  userId: number,
+  keyCount: number,
+  axis: string,
+  options: { limit?: number; offset?: number } = {},
+): Promise<PlayerSkillPlaysPage> {
+  const limit = Math.max(1, Math.min(50, Math.floor(Number(options.limit) || 50)));
+  const offset = Math.max(0, Math.min(5_000, Math.floor(Number(options.offset) || 0)));
+  if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(keyCount) || keyCount <= 0 || !isPlayerSkillAxis(axis)) {
+    return { items: [], total: 0, limit, offset };
+  }
+
+  const row = (await exec(
+    db,
+    `select status, plays_json from player_skill_ratings
+     where user_id = ? and analysis_version = ?`,
+    [userId, PLAYER_SKILLS_VERSION],
+  )).rows[0];
+  if (String(row?.status ?? "") !== "ready") return { items: [], total: 0, limit, offset };
+
+  const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row?.plays_json ?? ""), null);
+  const patternId = axis.startsWith("pattern:") ? axis.slice("pattern:".length) : null;
+  const matches = (Array.isArray(stored?.plays) ? stored.plays : [])
+    .flatMap((play) => {
+      if (!play || play.keyCount !== keyCount || !Number.isInteger(play.beatmapId) || play.beatmapId <= 0) return [];
+      if (patternId && !Array.isArray(play.patterns)) return [];
+      if (patternId && !play.patterns.includes(patternId)) return [];
+      const rating = Number(play.values?.[patternId ? "Overall" : axis] ?? 0);
+      if (!Number.isFinite(rating) || rating <= 0) return [];
+      return [{ play, rating }];
+    })
+    .sort((left, right) =>
+      right.rating - left.rating
+      || Number(right.play.pp ?? 0) - Number(left.play.pp ?? 0)
+      || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
+      || left.play.beatmapId - right.play.beatmapId);
+
+  const page = matches.slice(offset, offset + limit);
+  const metadata = await readPlayerSkillPlayMetadata(db, page.map(({ play }) => play.beatmapId));
+  const items = page.map(({ play, rating }): PlayerSkillPlay => {
+    const map = metadata.get(play.beatmapId);
+    const officialId = /^official:(\d+)$/.exec(play.identity ?? "");
+    const scoreId = officialId ? Number(officialId[1]) : null;
+    const accuracy = Number(play.accuracy);
+    const pp = Number(play.pp);
+    return {
+      beatmapId: play.beatmapId,
+      beatmapsetId: map?.beatmapsetId ?? null,
+      title: map?.title ?? "Unknown map",
+      artist: map?.artist ?? "Unknown artist",
+      creator: map?.creator ?? null,
+      version: map?.version ?? `${keyCount}K`,
+      coverUrl: map?.coverUrl ?? null,
+      keyCount,
+      rating: Math.round(rating * 100) / 100,
+      overallRating: Math.round(Number(play.values?.Overall ?? 0) * 100) / 100,
+      pp: Number.isFinite(pp) && pp > 0 ? pp : null,
+      accuracy: Number.isFinite(accuracy) && accuracy > 0 ? accuracy : null,
+      rate: Number.isFinite(play.rate) && play.rate > 0 ? play.rate : 1,
+      playedAt: typeof play.endedAt === "string" && Number.isFinite(Date.parse(play.endedAt)) ? play.endedAt : null,
+      source: play.source === "top" ? "top" : "tracked",
+      scoreId: scoreId != null && Number.isSafeInteger(scoreId) && scoreId > 0 ? scoreId : null,
+    };
+  });
+  return { items, total: matches.length, limit, offset };
+}
+
+interface PlayerSkillPlayMetadata {
+  beatmapsetId: number | null;
+  title: string;
+  artist: string;
+  creator: string | null;
+  version: string;
+  coverUrl: string | null;
+}
+
+async function readPlayerSkillPlayMetadata(db: Db, beatmapIds: number[]): Promise<Map<number, PlayerSkillPlayMetadata>> {
+  const rows = await selectRowsByIntegerSet(
+    db,
+    `select b.beatmap_id, b.beatmapset_id, b.version, s.title, s.artist, s.creator, s.covers_json
+     from beatmaps b left join beatmapsets s on s.beatmapset_id = b.beatmapset_id
+     where b.beatmap_id in`,
+    beatmapIds,
+  );
+  const metadata = new Map<number, PlayerSkillPlayMetadata>();
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
+    const rawBeatmapsetId = Number(row.beatmapset_id);
+    const beatmapsetId = Number.isSafeInteger(rawBeatmapsetId) && rawBeatmapsetId > 0 ? rawBeatmapsetId : null;
+    const covers = parseJson<Record<string, unknown> | null>(String(row.covers_json ?? ""), null);
+    const coverUrl = covers
+      ? [covers["list@2x"], covers.list, covers["cover@2x"], covers.cover, covers["card@2x"], covers.card]
+          .find((value): value is string => typeof value === "string" && value.length > 0) ?? null
+      : null;
+    metadata.set(beatmapId, {
+      beatmapsetId,
+      title: typeof row.title === "string" && row.title ? row.title : "Unknown map",
+      artist: typeof row.artist === "string" && row.artist ? row.artist : "Unknown artist",
+      creator: typeof row.creator === "string" && row.creator ? row.creator : null,
+      version: typeof row.version === "string" && row.version ? row.version : "Unknown difficulty",
+      coverUrl: coverUrl ?? (beatmapsetId ? `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/list.jpg` : null),
+    });
+  }
+  return metadata;
 }
 
 function isValidMode(mode: unknown): mode is PlayerSkillModeBreakdown {

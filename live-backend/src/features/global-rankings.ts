@@ -442,6 +442,13 @@ export async function getPackPoolRoster(db: Db): Promise<readonly GlobalRankingE
   return (await getPackPoolBoard(db)).entries;
 }
 
+/* The pool as the server-side pack deal reads it (features/pack-draw.ts):
+   the same merged entries every other pool read shares, optionally narrowed
+   to one main keymode. Shared cache rows - callers read and never mutate. */
+export async function getPackPoolEntries(db: Db, keys?: PackPoolKeymode): Promise<readonly GlobalRankingEntry[]> {
+  return (keys ? await getPackKeymodeBoard(db, keys) : await getPackPoolBoard(db)).entries;
+}
+
 // The keymode packs ("main 4K players only") are the pack pool narrowed to one
 // main keymode and renumbered. Unlike the manual-member merge above, a failed
 // build must NOT degrade to the unfiltered pool: a 4K pack dealing a 7K main

@@ -12,6 +12,7 @@ import {
   type CommunitySummary,
   type ManageableGuild,
 } from "./communities-shared";
+import { liveBridgeToken } from "./live-backend-tokens";
 
 /*
  * Client-side access to the /communities directory.
@@ -22,7 +23,7 @@ import {
  * restricted listings a viewer is shown, and whether an invite comes with them,
  * both depend on the osu!-verified country. Keeping the reads server-side is
  * what lets that country be read from the session instead of taken from the
- * browser, so the backend routes stay behind the admin-token bridge.
+ * browser, so the backend routes stay behind the server-to-server bridge.
  *
  * The client never asserts who it is. Every handler re-reads the osu!-verified
  * viewer and forwards the id itself, or forwards nobody when there is no
@@ -99,7 +100,8 @@ function resolveBackendBase(): string | null {
 
 function backendHeaders(): HeadersInit {
   const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
   return headers;
 }
 

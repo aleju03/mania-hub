@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireDevFeatureAccess } from "./auth";
 import { getServerLiveBackendUrl } from "./live-backend";
+import { bridgeAuthHeaders } from "./live-backend-tokens";
 
 // Server fns for the /admin/dan-classifier page. All chart data comes from the
 // live backend's local projections (beatmap_osu_files / beatmaps / beatmapsets):
@@ -39,6 +40,13 @@ function liveBackendHeaders(): HeadersInit {
     headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
   }
   return headers;
+}
+
+// The osu! proxy is a bridge route, not an admin one: it is the same endpoint
+// every page read goes through, so it takes the bridge credential even when an
+// admin tool is the caller.
+function osuProxyHeaders(): HeadersInit {
+  return { connection: "close", ...bridgeAuthHeaders() };
 }
 
 // Network-level failures (socket reuse races, backend restarts) get one retry;
@@ -83,7 +91,7 @@ export const getDanClassifierChartFile = createServerFn({ method: "POST" })
     const base = requireLiveBackendBase();
     const params = new URLSearchParams({ beatmapId: String(data.beatmapId), caller: "dan_classifier_admin" });
     if (!data.allowOsuFetch) params.set("cachedOnly", "1");
-    const response = await fetchLiveBackend(`${base}/api/osu/beatmap-file?${params.toString()}`, { headers: liveBackendHeaders() });
+    const response = await fetchLiveBackend(`${base}/api/osu/beatmap-file?${params.toString()}`, { headers: osuProxyHeaders() });
     if (response.status === 404 && !data.allowOsuFetch) {
       return { content: null, notCached: true };
     }

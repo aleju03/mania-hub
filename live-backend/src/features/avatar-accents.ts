@@ -3,11 +3,12 @@ import { deleteInBatches, exec } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logWarn, errorContext } from "../logger.js";
 
-// Per-avatar accent colors for player names, computed here once per avatar URL and shipped inside
+// Per-avatar accent colors for player names, computed here once per osu! account and shipped inside
 // the snapshot payloads the frontend already fetches (the legacy design computed these on Vercel per
-// batch request and cached them in Turso). a.ppy.sh avatar URLs carry a cache-bust timestamp, so a
-// URL's pixels never change: a computed accent is content-addressed and permanent. Retention prunes
-// old rows only as a slow self-healing refresh.
+// batch request and cached them in Turso). a.ppy.sh avatar URLs carry a cache-bust timestamp, but it
+// is stripped during normalization (it is caller-supplied text and would let one avatar mint endless
+// rows), so a stored accent is keyed by account and goes stale when someone changes their avatar.
+// Retention's 180-day prune is what refreshes it: the row is dropped and recomputed on next sight.
 //
 // The extraction pipeline (quantize -> chromatic hue-bin vote -> normalize for text legibility) is
 // ported verbatim from the legacy frontend src/lib/avatar.ts so colors do not shift mid-migration.
@@ -260,6 +261,13 @@ export function extractDominantColors(pixelData: Uint8Array | Buffer, channels: 
   return [...buckets.values()].sort((a, b) => b.count - a.count);
 }
 
+// Only `https://a.ppy.sh/<osu user id>` survives, with the query string and hash
+// dropped. Keeping them would let a caller mint unlimited distinct keys out of
+// one real avatar (`/2?n=1`, `/2?n=2`, ...), each a fresh row and a fresh
+// compute job; collapsing to origin+path caps the whole table at one row per
+// osu! account.
+const AVATAR_ACCENT_PATH_RE = /^\/\d{1,12}$/;
+
 export function normalizeAvatarAccentUrl(url: unknown): string | null {
   if (typeof url !== "string" || url.length === 0 || url.length > AVATAR_ACCENT_MAX_URL_LENGTH) return null;
 
@@ -268,8 +276,8 @@ export function normalizeAvatarAccentUrl(url: unknown): string | null {
     if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "a.ppy.sh") {
       return null;
     }
-    parsedUrl.hash = "";
-    return parsedUrl.href;
+    if (!AVATAR_ACCENT_PATH_RE.test(parsedUrl.pathname)) return null;
+    return `${parsedUrl.origin}${parsedUrl.pathname}`;
   } catch {
     return null;
   }
@@ -421,7 +429,9 @@ export async function getAvatarAccentForUrl(db: Db, queue: JobQueue | null, url:
   return null;
 }
 
-export const AVATAR_ACCENT_LOOKUP_MAX_URLS = 100;
+// Deliberately small: the route is unauthenticated and every miss costs a queue
+// insert, so one request must not be able to buy a hundred of them.
+export const AVATAR_ACCENT_LOOKUP_MAX_URLS = 25;
 
 // Batch lookup for surfaces whose data never passes through
 // enrichPayloadAvatarAccents (osu!-API-sourced rankings on home and /rankings):

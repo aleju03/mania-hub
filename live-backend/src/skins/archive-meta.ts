@@ -302,26 +302,32 @@ function cleanZipPath(path: string): string {
 
 const MASK_SIZE = 8;
 
-// The catalog-facing shape label: what the tap notes are. Classified per
-// keymode block from the digest's trimmed aspect and 8x8 alpha mask, then
-// settled by majority across the blocks (ties go to the lowest keymode, the
-// one a skin is usually recognised by). Null when the skin has no signature.
-export function classifySkinNoteShape(visual: SkinVisualSignature | null): SkinNoteShape | null {
-  if (!visual) return null;
+// Every tap-note shape a skin carries, classified per keymode block from the
+// digest's trimmed aspect and 8x8 alpha mask. The majority shape comes first;
+// ties follow the lowest keymode, the one a skin is usually recognised by.
+export function classifySkinNoteShapes(visual: SkinVisualSignature | null): SkinNoteShape[] {
+  if (!visual) return [];
   const entries = Object.entries(visual.keymodes)
     .map(([keys, art]) => ({
       keys: Number(keys),
       shape: classifyKeymodeNoteShape(art.aspect, art.mask, art.arrowLayout === true),
     }))
     .sort((a, b) => a.keys - b.keys);
-  if (entries.length === 0) return null;
-  const counts = new Map<SkinNoteShape, number>();
-  for (const entry of entries) counts.set(entry.shape, (counts.get(entry.shape) ?? 0) + 1);
-  let best = entries[0].shape;
-  for (const [shape, count] of counts) {
-    if (count > (counts.get(best) ?? 0)) best = shape;
+  const buckets = new Map<SkinNoteShape, { count: number; firstKeys: number }>();
+  for (const entry of entries) {
+    const bucket = buckets.get(entry.shape);
+    if (bucket) bucket.count += 1;
+    else buckets.set(entry.shape, { count: 1, firstKeys: entry.keys });
   }
-  return best;
+  return [...buckets]
+    .sort(([, left], [, right]) => right.count - left.count || left.firstKeys - right.firstKeys)
+    .map(([shape]) => shape);
+}
+
+// The catalog filter still needs one primary label. Keep its established
+// majority/tie behavior while summaries expose the complete set above.
+export function classifySkinNoteShape(visual: SkinVisualSignature | null): SkinNoteShape | null {
+  return classifySkinNoteShapes(visual)[0] ?? null;
 }
 
 export function classifyKeymodeNoteShape(aspect: number, mask: string, arrowLayout = false): SkinNoteShape {
@@ -441,10 +447,11 @@ export async function backfillSkinArchiveMeta(
       continue;
     }
     const visual = normalizeSkinVisualSignature(parseJson<unknown>(String(row.visual_json ?? "null"), null));
+    const noteShapes = classifySkinNoteShapes(visual);
     await exec(
       db,
-      "update skins set lane_cover = ?, mania_stage = ?, lazer = ?, note_shape = ?, updated_at = ? where id = ?",
-      [meta.laneCover ? 1 : 0, meta.maniaStage ? 1 : 0, meta.lazer ? 1 : 0, classifySkinNoteShape(visual), nowIso(), id],
+      "update skins set lane_cover = ?, mania_stage = ?, lazer = ?, note_shape = ?, note_shapes_json = ?, updated_at = ? where id = ?",
+      [meta.laneCover ? 1 : 0, meta.maniaStage ? 1 : 0, meta.lazer ? 1 : 0, noteShapes[0] ?? null, JSON.stringify(noteShapes), nowIso(), id],
     );
     updated += 1;
   }

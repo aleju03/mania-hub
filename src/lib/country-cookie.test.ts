@@ -9,16 +9,28 @@ describe("readEdgeCountry", () => {
     expect(readEdgeCountry(new Headers({ "cf-ipcountry": "DE" }))).toBe("DE");
   });
 
-  it("still reads the Vercel header, so a rollback keeps geo working", () => {
-    expect(readEdgeCountry(new Headers({ "x-vercel-ip-country": "CR" }))).toBe("CR");
+  it("reads the Vercel header on the rollback target, and nowhere else", () => {
+    const vercel = process.env.VERCEL;
+    try {
+      process.env.VERCEL = "1";
+      expect(readEdgeCountry(new Headers({ "x-vercel-ip-country": "CR" }))).toBe("CR");
+      delete process.env.VERCEL;
+      expect(readEdgeCountry(new Headers({ "x-vercel-ip-country": "CR" }))).toBeNull();
+    } finally {
+      if (vercel === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = vercel;
+    }
   });
 
-  // The regression this function exists to prevent: analytics used to read only
-  // x-vercel-ip-country, so every event lost its country the moment the site
-  // moved off Vercel, and the admin flags silently went blank.
-  it("does not depend on any single provider being present", () => {
-    expect(readEdgeCountry(new Headers({ "cloudfront-viewer-country": "JP" }))).toBe("JP");
-    expect(readEdgeCountry(new Headers({ "x-geo-country": "br" }))).toBe("BR");
+  // Nothing but the real edge gets a say: these are plain request headers that
+  // any caller can send, and trusting one is enough to activate a country the
+  // backend has never tracked or to forge the geo on an analytics row.
+  it("ignores geo headers no edge in front of this deployment sets", () => {
+    expect(readEdgeCountry(new Headers({ "cloudfront-viewer-country": "JP" }))).toBeNull();
+    expect(readEdgeCountry(new Headers({ "x-geo-country": "br" }))).toBeNull();
+    expect(readEdgeCountry(new Headers({ "x-country-code": "KP" }))).toBeNull();
+    // The genuine header still wins when a forged one rides alongside it.
+    expect(readEdgeCountry(new Headers({ "x-vercel-ip-country": "KP", "cf-ipcountry": "DE" }))).toBe("DE");
   });
 
   it("keeps countries the site does not track, since analytics wants every flag", () => {

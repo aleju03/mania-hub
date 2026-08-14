@@ -2022,6 +2022,11 @@ async function migrateSkins(db: Db): Promise<void> {
     await db.execute("alter table skins add column lazer integer");
     await db.execute("alter table skins add column note_shape text");
   }
+  if (!skinColumns.includes("note_shapes_json")) {
+    // Every distinct per-keymode note shape. note_shape remains the primary
+    // label; this array lets a catalog filter include mixed skins too.
+    await db.execute("alter table skins add column note_shapes_json text not null default '[]'");
+  }
   if (!skinColumns.includes("resolution")) {
     // The uploader's word on what resolution the skin is made for ("1920x1080",
     // normalized). Optional at upload, editable with the details; never derived

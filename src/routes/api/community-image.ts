@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { readCurrentAuth } from "#/lib/auth-server";
+import { liveBridgeToken } from "../../lib/live-backend-tokens";
 
 /*
  * A /communities listing's icon or banner, served by us instead of by Discord.
@@ -55,7 +56,8 @@ export const Route = createFileRoute("/api/community-image")({
         const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
         if (!base) return notFound();
         const headers: Record<string, string> = {};
-        if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+        const bridgeToken = liveBridgeToken();
+        if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
 
         // Who is asking, off the osu!-verified viewer and never off the request:
         // the country is what decides whether this listing is even visible, so

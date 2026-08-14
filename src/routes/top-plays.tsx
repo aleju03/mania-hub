@@ -24,7 +24,7 @@ import { PpGainsRail } from "../components/top-plays/PpGainsRail";
 import type { CountryTopPlay } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
-import { pageSeo } from "../lib/seo";
+import { countryTopPlaysTitle, pageSeo } from "../lib/seo";
 import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
 import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
 import { getReplaySearch } from "../lib/replay-navigation";
@@ -87,7 +87,7 @@ export const Route = createFileRoute("/top-plays")({
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
     return pageSeo({
-      title: countryName ? `Top mania plays in ${countryName}` : "Top osu!mania plays",
+      title: countryName ? countryTopPlaysTitle(countryName) : "Top osu!mania plays",
       description: countryName
         ? `Recent top osu!mania plays and pp records in ${countryName}.`
         : "Recent top osu!mania plays and pp records by country.",

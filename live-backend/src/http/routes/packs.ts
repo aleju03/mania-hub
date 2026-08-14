@@ -3,17 +3,45 @@ import { parseJson } from "../../db.js";
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
 import { getPackCardCollectors, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
-import { applyPackCollectionCardMint, countMissingGoatCards, getPackCollectionPoolProgress, getPackShowcase, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet, setPackShowcase } from "../../features/pack-wallets.js";
+import { applyPackCollectionCardMint, countMissingGoatCards, getPackCollectionPoolProgress, getPackShowcase, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot } from "../../features/pack-wallets.js";
+import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError } from "../../features/pack-draw.js";
+import { logInfo } from "../../logger.js";
 import { getPackPoolMembership, getPackPoolRoster } from "../../features/global-rankings.js";
 import { getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, selectReadyPackCardUserIds, warmProfileSnapshots } from "../../features/player-profiles.js";
 import type { HttpContext } from "../context.js";
-import { DEFAULT_BODY_LIMIT_BYTES, isAdmin, readBody, readBodyBuffer } from "../request.js";
+import { DEFAULT_BODY_LIMIT_BYTES, isBridge, readBody, readBodyBuffer } from "../request.js";
 import { checkRate, sendAccentEnrichedJson, sendJson } from "../respond.js";
 
 // A wallet holding the full ~6k tracked-player pool serializes to ~1.5MB,
 // so pack wallet pushes get more headroom than the default body limit.
 const PACK_WALLET_BODY_LIMIT_BYTES = 4 * 1024 * 1024;
 const PACK_WALLET_PAYLOAD_MAX_CHARS = 3_500_000;
+
+/* Per-account draw ceiling. Bridge traffic shares one generous per-IP bucket
+   (every signed-in visitor arrives from the frontend server), so a scripted
+   account could otherwise spend the whole site's card-build budget alone. No
+   honest client opens 30 packs a minute; the 2026-08-05 sitewide peak was 245.
+   In-memory on purpose: a restart forgiving a window is fine at this size. */
+const PACK_DRAW_MAX_PER_MINUTE = 30;
+const PACK_DRAW_WINDOW_MS = 60_000;
+const PACK_DRAW_MAX_EXCLUDE_KEYS = 30;
+const packDrawWindows = new Map<number, { windowStartMs: number; count: number }>();
+
+function packDrawRateLimited(userId: number): boolean {
+  const now = Date.now();
+  const window = packDrawWindows.get(userId);
+  if (!window || now - window.windowStartMs >= PACK_DRAW_WINDOW_MS) {
+    if (packDrawWindows.size > 4096) {
+      for (const [key, value] of packDrawWindows) {
+        if (now - value.windowStartMs >= PACK_DRAW_WINDOW_MS) packDrawWindows.delete(key);
+      }
+    }
+    packDrawWindows.set(userId, { windowStartMs: now, count: 1 });
+    return false;
+  }
+  window.count += 1;
+  return window.count > PACK_DRAW_MAX_PER_MINUTE;
+}
 
 export async function handlePacksRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL): Promise<boolean> {
   if (url.pathname === "/api/packs/warm") {
@@ -90,11 +118,116 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     sendJson(req, res, ctx, 200, { ready: await selectReadyPackCardUserIds(ctx.db, userIds) });
     return true;
   }
+  if (url.pathname === "/api/packs/draw") {
+    /* The deal itself, rolled here rather than in the browser. Server-to-server
+       like the wallet: the frontend's server function authenticates the osu!
+       login cookie and forwards the verified opener, so the pool slice, the
+       uniform odds, duplicate protection and the honorary chance are enforced
+       where the pool lives instead of advised to the client. The response
+       inlines the hand's card snapshots, so one request is the whole open;
+       anonymous (browser-local, never-synced) wallets keep the client-side
+       draw over the public pool pages. */
+    if (!isBridge(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    const ownerUserId = Math.floor(Number(body.userId) || 0);
+    const packType = typeof body.packType === "string" ? body.packType : "";
+    if (ownerUserId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_draw_owner" });
+      return true;
+    }
+    const type = PACK_DRAW_TYPES.get(packType);
+    if (!type) {
+      sendJson(req, res, ctx, 400, { error: "invalid_pack_type" });
+      return true;
+    }
+    if (packDrawRateLimited(ownerUserId)) {
+      res.setHeader("retry-after", "60");
+      sendJson(req, res, ctx, 429, { error: "rate_limited" });
+      return true;
+    }
+    /* Compat hint from clients built before the draw wrote the collection
+       itself: cards pulled moments ago that their debounced wallet push has
+       not landed. New clients send nothing here - the previous hand is
+       already in pack_collection_cards by the time the next draw reads it. */
+    const excludeCardKeys = (Array.isArray(body.excludeCardKeys) ? body.excludeCardKeys : [])
+      .slice(0, PACK_DRAW_MAX_EXCLUDE_KEYS)
+      .map(normalizePackCardKey)
+      .filter((key): key is string => key !== null);
+    let hand;
+    try {
+      hand = await drawPackHand(ctx.db, { packType, ownerUserId, excludeCardKeys });
+    } catch (error) {
+      if (error instanceof PackPoolUnavailableError) {
+        sendJson(req, res, ctx, 503, { error: "pack_pool_unavailable" });
+        return true;
+      }
+      throw error;
+    }
+    if (!hand) {
+      sendJson(req, res, ctx, 400, { error: "invalid_pack_type" });
+      return true;
+    }
+    /* The purchase, after the draw proved servable and before anything is
+       minted: a pool outage charges nobody, and a refused wallet mints
+       nothing. The refusal carries the stored wallet so the client corrects
+       its display instead of retrying against the same answer. */
+    const writeDb = ctx.serveWriteDb ?? ctx.db;
+    const spend = await spendPackOpen(writeDb, ownerUserId, type.cost, Date.now(), hand.poolTotal);
+    if (!spend.ok) {
+      sendJson(req, res, ctx, 409, {
+        error: "insufficient_funds",
+        reason: spend.reason,
+        wallet: { payload: spend.wallet.payload, rev: spend.wallet.rev },
+      });
+      return true;
+    }
+    /* The dealt hand becomes collection rows here, not via a client push:
+       copies are the economy's other half. The client's mint pass labels the
+       rows (tier, skills) once the reveal computes them. */
+    const dealtSlots: DealtPackCardSlot[] = hand.players.map((slot) =>
+      slot.honorary
+        ? { userId: slot.userId, tier: "goat", username: "", avatarUrl: "", countryCode: "", pp: 0, globalRank: 0 }
+        : {
+            userId: slot.userId,
+            tier: null,
+            username: slot.username,
+            avatarUrl: slot.avatarUrl,
+            countryCode: slot.countryCode,
+            pp: slot.pp,
+            globalRank: slot.globalRank ?? 0,
+          },
+    );
+    const isNewByCardKey = await mintDealtPackCards(writeDb, ownerUserId, dealtSlots, Date.now());
+    // Dealt because the slice had no ready replacement left: start their
+    // fetch now so the reveal's cold path joins an in-flight warm.
+    if (hand.notReadyUserIds.length > 0) {
+      void warmProfileSnapshots(writeDb, ctx.osu, hand.notReadyUserIds).catch(() => {});
+    }
+    const cards = await getCachedPackCardSnapshots(ctx.db, hand.players.map((player) => player.userId));
+    const players = hand.players.map((slot) => ({
+      ...slot,
+      isNew: isNewByCardKey.get(packCardKey(slot.userId, slot.honorary ? "goat" : null)) ?? false,
+    }));
+    await sendAccentEnrichedJson(req, res, ctx, 200, {
+      poolTotal: hand.poolTotal,
+      players,
+      cards,
+      wallet: { payload: spend.wallet.payload, rev: spend.wallet.rev },
+    });
+    return true;
+  }
   if (url.pathname === "/api/packs/pulls") {
     // Server-to-server only, like the wallet sync: the frontend's server
     // function authenticates the osu! login cookie and forwards the verified
     // viewer identity, so an event can only ever be logged as yourself.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -195,7 +328,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     // wallet sync: the frontend's server function resolves the id from the
     // osu! login cookie, so you can only ever list the collectors of your own
     // card. The public endpoint next to it stays a count.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -235,7 +368,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     // but admin-gated while the showcase design is still being judged: the
     // frontend only renders the shelf for admins, and this keeps the shelves
     // of everyone else unreadable in the meantime.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -286,7 +419,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
        Unlike the casual claim next to it, nothing here takes the client's word
        for what happened - the pair, the question, the answer and the clock all
        live in the run row. */
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -348,7 +481,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     // forwards the verified viewer, so a run can only ever be claimed as
     // yourself. What stops a scripted run claiming all day is the daily
     // allowance inside grantPackGameShards, not this route.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -381,7 +514,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     // Server-to-server only: the frontend's server functions authenticate
     // the osu! login cookie and forward the viewer's own wallet with the
     // admin bearer token. Browsers never call this directly.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -402,18 +535,35 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         {},
       );
       const payload = typeof body.payload === "string" ? body.payload : "";
-      const baseRev = Number(body.baseRev);
-      const cardImportMode = body.cardsMode === "delta" ? "delta" : "snapshot";
-      if (!payload || payload.length > PACK_WALLET_PAYLOAD_MAX_CHARS || !Number.isFinite(baseRev) || baseRev < 0) {
+      if (!payload || payload.length > PACK_WALLET_PAYLOAD_MAX_CHARS) {
         sendJson(req, res, ctx, 400, { error: "invalid_wallet_payload" });
         return true;
       }
-      const result = await savePackWallet(ctx.serveWriteDb ?? ctx.db, walletUserId, payload, Math.floor(baseRev), Date.now(), cardImportMode);
-      if (!result.ok) {
-        sendJson(req, res, ctx, 409, { error: "wallet_conflict", payload: result.current.payload, rev: result.current.rev });
+      /* The one write a client wallet still gets: folding its pre-login
+         (browser-local) history into a server wallet that has never played,
+         once per account ever. Everything about the payload is capped inside
+         the merge; the log line is what makes an abused cap visible. */
+      if (body.mode === "merge") {
+        const result = await mergeImportedPackWallet(ctx.serveWriteDb ?? ctx.db, walletUserId, payload);
+        if (result.merged && result.imported) {
+          logInfo("pack_wallet_import", { userId: walletUserId, ...result.imported });
+        }
+        sendJson(req, res, ctx, 200, {
+          merged: result.merged,
+          payload: result.wallet.payload,
+          rev: result.wallet.rev,
+        });
         return true;
       }
-      sendJson(req, res, ctx, 200, { rev: result.rev });
+      /* Compat for clients built when the wallet blob was client-authored:
+         they push their whole economy after every mutation. The economy and
+         the copy counts are server-owned now, so nothing here is written -
+         the push is acknowledged with the current rev and the response is
+         shaped so the old client settles instead of looping on conflicts.
+         (Their card mints ride this path too and are dropped; the collected
+         card self-repairs through the mint route next time it renders.) */
+      const current = await getPackWallet(ctx.serveWriteDb ?? ctx.db, walletUserId);
+      sendJson(req, res, ctx, 200, { rev: current?.rev ?? 0 });
       return true;
     }
     sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
@@ -425,7 +575,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     // login cookie and forwards the viewer's own id, so a user only ever
     // edits their own shelf. Reads of *other* people's shelves go through the
     // public /api/packs/showcase endpoint instead.
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -453,7 +603,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
   }
   const packCollectionMatch = url.pathname.match(/^\/api\/pack-collection\/(\d+)$/);
   if (packCollectionMatch) {
-    if (!isAdmin(req, ctx)) {
+    if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
@@ -467,9 +617,30 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         (await readBodyBuffer(req, DEFAULT_BODY_LIMIT_BYTES)).toString("utf8") || "{}",
         {},
       );
-      // Repairing a card's missing skills snapshot: no economy change, so it
-      // returns the card key rather than a wallet, and never bumps the rev.
+      // Labelling cards: the tier, tier label and skills the browser's
+      // maniacard pass computed for rows the server already holds. No economy
+      // change and never a new copy - applyPackCollectionCardMint only writes
+      // onto an owned row. Two shapes: a single card (the collection panel's
+      // legacy-card repair) or a hand's worth at once (the pass that follows
+      // every server-dealt open).
       if (body.mode === "mint") {
+        if (Array.isArray(body.cards)) {
+          const mints = body.cards.slice(0, 10);
+          let applied = 0;
+          for (const raw of mints) {
+            const mint = (raw ?? {}) as Record<string, unknown>;
+            const result = await applyPackCollectionCardMint(ctx.serveWriteDb ?? ctx.db, walletUserId, mint.cardKey, {
+              tier: mint.tier,
+              tierLabel: mint.tierLabel,
+              skills: mint.skills,
+              pp: mint.pp,
+              globalRank: mint.globalRank,
+            });
+            if (result.applied) applied += 1;
+          }
+          sendJson(req, res, ctx, 200, { applied });
+          return true;
+        }
         const result = await applyPackCollectionCardMint(
           ctx.serveWriteDb ?? ctx.db,
           walletUserId,

@@ -339,7 +339,8 @@ export function CardSpotlight({
                   className={`text-[12px] tabular-nums ${card.serial === 1 ? "font-bold text-amber-300" : "text-osu-f1"}`}
                 >
                   {formatOrdinal(card.serial)} person to pull this
-                  {card.mintedTotal ? (
+                  {card.mintedTotal && card.mintedTotal !== card.serial ? (
+                    // Skip the total when it just repeats the serial ("61st ... out of 61").
                     <span className="text-osu-f1"> out of {card.mintedTotal.toLocaleString()}</span>
                   ) : null}
                 </div>

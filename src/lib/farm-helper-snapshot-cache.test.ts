@@ -10,6 +10,14 @@ vi.mock("./live-backend", () => ({
   fetchLiveFarmHelperSnapshot: (...args: unknown[]) => fetchSnapshot(...args),
 }));
 
+// The owner's own board comes back through a server function instead, because
+// only that request can prove who is asking and carry their private marks.
+const fetchOwnSnapshot = vi.fn();
+
+vi.mock("./farm-helper-feedback", () => ({
+  getOwnFarmHelperSnapshot: (...args: unknown[]) => fetchOwnSnapshot(...args),
+}));
+
 const {
   clearFarmHelperSnapshotCache,
   invalidateFarmHelperSubject,
@@ -26,6 +34,8 @@ function snapshotFor(username: string) {
 
 beforeEach(() => {
   clearFarmHelperSnapshotCache();
+  fetchOwnSnapshot.mockReset();
+  fetchOwnSnapshot.mockImplementation(async () => ({ ok: true, snapshot: { ...snapshotFor("Shiny"), feedbackHiddenCount: 2 } }));
   fetchSnapshot.mockReset();
   fetchSnapshot.mockImplementation(async (userKey: string) => snapshotFor(userKey));
   vi.useRealTimers();
@@ -158,5 +168,35 @@ describe("farm helper client snapshot cache", () => {
     // The oldest entries were evicted; the newest are still there.
     expect(peekFarmHelperSnapshot({ ...REQUEST, subjectKey: "player0" })).toBeNull();
     expect(peekFarmHelperSnapshot({ ...REQUEST, subjectKey: "player29" })).not.toBeNull();
+  });
+});
+
+describe("owner-scoped boards", () => {
+  it("fetches the owner's board through the server function and keeps it apart", async () => {
+    const own = await loadFarmHelperSnapshot({ ...REQUEST, owner: true });
+    expect(own).toMatchObject({ feedbackHiddenCount: 2 });
+    expect(fetchOwnSnapshot).toHaveBeenCalledTimes(1);
+    expect(fetchSnapshot).not.toHaveBeenCalled();
+
+    // The public board of the same subject is a different payload, so it must
+    // not be answered from the owner's entry (nor the other way round).
+    const publicBoard = await loadFarmHelperSnapshot(REQUEST);
+    expect(publicBoard).not.toMatchObject({ feedbackHiddenCount: 2 });
+    expect(fetchSnapshot).toHaveBeenCalledTimes(1);
+    expect(peekFarmHelperSnapshot({ ...REQUEST, owner: true })).toMatchObject({ feedbackHiddenCount: 2 });
+    expect(peekFarmHelperSnapshot(REQUEST)).not.toMatchObject({ feedbackHiddenCount: 2 });
+  });
+
+  it("falls back to the public board when nobody is signed in", async () => {
+    fetchOwnSnapshot.mockImplementation(async () => ({ ok: false, status: null }));
+    const board = await loadFarmHelperSnapshot({ ...REQUEST, owner: true });
+    expect(board).toMatchObject({ username: "Shiny" });
+    expect(fetchSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces a real backend status so an unknown player still reads as 404", async () => {
+    fetchOwnSnapshot.mockImplementation(async () => ({ ok: false, status: 404 }));
+    await expect(loadFarmHelperSnapshot({ ...REQUEST, owner: true })).rejects.toThrow("404");
+    expect(fetchSnapshot).not.toHaveBeenCalled();
   });
 });

@@ -1,11 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { ManiaCardTier, ManiaSkills } from "./maniacard";
+import { liveBridgeToken } from "./live-backend-tokens";
 
-// Server functions bridging the browser's pack wallet to the server's
-// pack_wallets store. The viewer always comes from the osu! login cookie,
-// never from client input, so a logged-in user can only ever read and write
-// their own wallet. The backend route is admin-token gated; that token only
-// exists server-side.
+// Server functions bridging the browser to the server's pack_wallets store.
+// The viewer always comes from the osu! login cookie, never from client
+// input, so a logged-in user only ever touches their own wallet. The backend
+// routes are bridge-token gated; that token only exists server-side.
+//
+// The wallet's numbers are server-owned: the draw spends, recycling and the
+// arcade grant, and this module only ever *reads* them back - there is no
+// push. The one write a local wallet still gets is mergeServerPackWallet,
+// which folds pre-login browser history into an account that has never
+// played, once ever.
 
 export interface ServerPackWallet {
   payload: string | null;
@@ -76,12 +82,6 @@ export interface ServerPackCollectionMissingPage {
   goatMissing: number;
 }
 
-export type PushPackWalletResult =
-  | { ok: true; rev: number }
-  | { ok: false; conflict: { payload: string; rev: number } };
-
-export type PackWalletCardsMode = "snapshot" | "delta";
-
 const PAYLOAD_MAX_CHARS = 3_500_000;
 
 // Mirrors PACK_COLLECTION_MAX_PAGE_SIZE in the live backend's pack-wallets
@@ -96,8 +96,9 @@ async function getSyncTarget(): Promise<{ url: string; headers: HeadersInit } | 
   const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
   if (!base) return null;
   const headers: HeadersInit = { "content-type": "application/json" };
-  if (process.env.LIVE_ADMIN_TOKEN) {
-    headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) {
+    headers.authorization = `Bearer ${bridgeToken}`;
   }
   return { url: `${base}/api/pack-wallet/${auth.viewer.id}`, headers };
 }
@@ -120,23 +121,32 @@ export const fetchServerPackWallet = createServerFn({ method: "GET" }).handler(
   },
 );
 
-export const pushServerPackWallet = createServerFn({ method: "POST" })
-  .validator((input: { payload?: unknown; baseRev?: unknown; cardsMode?: unknown }) => {
+export interface MergePackWalletResult {
+  merged: boolean;
+  payload: string;
+  rev: number;
+}
+
+/* Folds the browser-local wallet (pre-login pulls, shards and opened packs)
+   into the account's server wallet. The server only accepts this once ever,
+   and only for an account that has never played server-side; every other
+   call is answered with the authoritative wallet and merged: false, so
+   calling it doubles as the wallet fetch on first contact. Null when signed
+   out or with no backend configured. */
+export const mergeServerPackWallet = createServerFn({ method: "POST" })
+  .validator((input: { payload?: unknown }) => {
     const payload = typeof input?.payload === "string" ? input.payload : "";
-    const baseRev = Number(input?.baseRev);
-    const cardsMode = input?.cardsMode === "delta" ? "delta" : "snapshot";
-    if (!payload || payload.length > PAYLOAD_MAX_CHARS || !Number.isFinite(baseRev) || baseRev < 0) {
-      throw new Error("Invalid pack wallet payload.");
-    }
-    return { payload, baseRev: Math.floor(baseRev), cardsMode };
+    if (!payload || payload.length > PAYLOAD_MAX_CHARS) throw new Error("Invalid pack wallet payload.");
+    return { payload };
   })
-  .handler(async ({ data }): Promise<PushPackWalletResult | null> => {
+  .handler(async ({ data }): Promise<MergePackWalletResult | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const target = await getSyncTarget();
     if (!target) return null;
     // Normalize through the shared sanitizer so a tampered client can only
-    // ever store a structurally valid wallet under its own account.
+    // ever offer a structurally valid wallet under its own account; what of
+    // it is believed (and how much) is the backend's decision.
     const { sanitizeWallet } = await import("./pack-collection");
     let wallet: unknown;
     try {
@@ -149,21 +159,15 @@ export const pushServerPackWallet = createServerFn({ method: "POST" })
     const response = await fetch(target.url, {
       method: "POST",
       headers: target.headers,
-      body: JSON.stringify({ payload: JSON.stringify(sanitized), baseRev: data.baseRev, cardsMode: data.cardsMode }),
+      body: JSON.stringify({ mode: "merge", payload: JSON.stringify(sanitized) }),
     });
-    if (response.status === 409) {
-      const body = (await response.json()) as { payload?: unknown; rev?: unknown };
-      return {
-        ok: false,
-        conflict: {
-          payload: typeof body.payload === "string" ? body.payload : "",
-          rev: Number(body.rev) || 0,
-        },
-      };
-    }
-    if (!response.ok) throw new Error(`Pack wallet push failed (${response.status}).`);
-    const body = (await response.json()) as { rev?: unknown };
-    return { ok: true, rev: Number(body.rev) || 0 };
+    if (!response.ok) throw new Error(`Pack wallet merge failed (${response.status}).`);
+    const body = (await response.json()) as { merged?: unknown; payload?: unknown; rev?: unknown };
+    return {
+      merged: body.merged === true,
+      payload: typeof body.payload === "string" ? body.payload : "",
+      rev: Number(body.rev) || 0,
+    };
   });
 
 export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
@@ -264,7 +268,7 @@ export const PACK_SHOWCASE_MAX_CARDS = 5;
 
 /* Any player's shelf, for rendering on their profile. Admin-gated on both
    sides while the showcase design is still being judged, so this runs
-   server-side (the backend route needs the admin token) and answers empty for
+   server-side (the backend route needs the bridge token) and answers empty for
    everyone else rather than erroring. */
 export const fetchPackShowcaseCards = createServerFn({ method: "GET" })
   .validator((input: { userId?: unknown }) => ({ userId: Math.max(0, Math.floor(Number(input?.userId) || 0)) }))
@@ -278,7 +282,8 @@ export const fetchPackShowcaseCards = createServerFn({ method: "GET" })
     const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
     if (!base) return [];
     const headers: HeadersInit = {};
-    if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    const bridgeToken = liveBridgeToken();
+    if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
     const response = await fetch(`${base}/api/packs/showcase/${data.userId}`, { headers });
     if (!response.ok) throw new Error(`Pack showcase fetch failed (${response.status}).`);
     const body = (await response.json()) as { cards?: unknown };
@@ -390,8 +395,9 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
     const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
     if (!base) return null;
     const headers: HeadersInit = { "content-type": "application/json" };
-    if (process.env.LIVE_ADMIN_TOKEN) {
-      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    const bridgeToken = liveBridgeToken();
+    if (bridgeToken) {
+      headers.authorization = `Bearer ${bridgeToken}`;
     }
     const response = await fetch(`${base}/api/packs/pulls`, {
       method: "POST",
@@ -461,8 +467,9 @@ export const fetchServerPackCardCollectors = createServerFn({ method: "GET" }).h
     const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
     if (!base) return null;
     const headers: HeadersInit = {};
-    if (process.env.LIVE_ADMIN_TOKEN) {
-      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    const bridgeToken = liveBridgeToken();
+    if (bridgeToken) {
+      headers.authorization = `Bearer ${bridgeToken}`;
     }
     const response = await fetch(`${base}/api/packs/pulled-by/${auth.viewer.id}`, { headers });
     if (!response.ok) throw new Error(`Card collectors fetch failed (${response.status}).`);
@@ -613,4 +620,63 @@ export const mintServerPackCollectionCard = createServerFn({ method: "POST" })
     if (!response.ok) return false;
     const body = (await response.json()) as { applied?: unknown };
     return body.applied === true;
+  });
+
+export interface PackPullMintCard {
+  cardKey: string;
+  tier: ManiaCardTier | null;
+  tierLabel: string | null;
+  skills: ManiaSkills | null;
+  /* Face numbers for cards the server dealt without any (GOAT slots, whose
+     peak figures live in the frontend roster). Display-only; the backend
+     only fills them onto a row that has none. */
+  pp?: number;
+  globalRank?: number;
+}
+
+/* The labelling pass that follows a server-dealt open: the tier, tier label
+   and skills the reveal's maniacard computation produced for each card. The
+   backend wrote the rows (and their copies) at draw time; this can only ever
+   describe them, so a lost call costs a card its stat bar until the
+   collection's repair path re-mints it, never a card. */
+export const mintServerPackCollectionCards = createServerFn({ method: "POST" })
+  .validator((input: { cards?: unknown }) => {
+    const cards: PackPullMintCard[] = (Array.isArray(input?.cards) ? input.cards : [])
+      .slice(0, 10)
+      .map((raw: unknown): PackPullMintCard | null => {
+        const card = raw as Partial<PackPullMintCard> | null;
+        const cardKey = typeof card?.cardKey === "string" ? sanitizeCardKey(card.cardKey) : null;
+        const skills = card?.skills && typeof card.skills === "object" && !Array.isArray(card.skills)
+          ? card.skills
+          : null;
+        if (!cardKey || !skills) return null;
+        const pp = Number(card?.pp);
+        const globalRank = Number(card?.globalRank);
+        return {
+          cardKey,
+          tier: typeof card?.tier === "string" ? (card.tier as ManiaCardTier) : null,
+          tierLabel: typeof card?.tierLabel === "string" ? card.tierLabel : null,
+          skills,
+          ...(Number.isFinite(pp) && pp > 0 ? { pp } : {}),
+          ...(Number.isFinite(globalRank) && globalRank > 0 ? { globalRank } : {}),
+        };
+      })
+      .filter((card): card is PackPullMintCard => card !== null);
+    if (cards.length === 0) throw new Error("Nothing to mint.");
+    return { cards };
+  })
+  .handler(async ({ data }): Promise<number> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const target = await getSyncTarget();
+    if (!target) return 0;
+    const url = target.url.replace("/api/pack-wallet/", "/api/pack-collection/");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: target.headers,
+      body: JSON.stringify({ mode: "mint", cards: data.cards }),
+    });
+    if (!response.ok) return 0;
+    const body = (await response.json()) as { applied?: unknown };
+    return Math.max(0, Math.floor(Number(body.applied) || 0));
   });
