@@ -2,7 +2,12 @@ import { StrictMode, startTransition } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { StartClient } from "@tanstack/react-start/client";
 import { track } from "./lib/analytics";
+import { installDomTranslateGuard } from "./lib/dom-translate-guard";
 import { reapplyThemeToDom } from "./store";
+
+// Must run before hydration so every React commit goes through the patched
+// removeChild/insertBefore (see dom-translate-guard.ts).
+installDomTranslateGuard();
 
 // Mirrors @tanstack/react-start's default client entry
 // (node_modules/@tanstack/react-start/src/default-entry/client.tsx), plus an
