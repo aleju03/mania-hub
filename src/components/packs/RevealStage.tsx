@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type { ManiaCardTier, ManiaSkills } from "#/lib/maniacard";
+import type { PackDamage } from "#/lib/pack-damage";
 import { tierRank, type PulledCard } from "#/lib/pack-collection";
 import { fetchPackPlayerScores, type PackPlayer } from "#/lib/packs";
 import { withTimeout } from "#/lib/promise-timeout";
@@ -24,8 +25,9 @@ import {
   rememberCardThumbnailDataUrl,
 } from "./cardThumbnailCache";
 import { getCachedCardBackCanvas, getCachedCardBackDataUrl } from "./packArt";
-import { playCardDraw, playFlipWhoosh, playGoatFanfare, playRevealChime } from "./packSfx";
+import { playCardDraw, playCardSlice, playFlipWhoosh, playGoatFanfare, playRevealChime } from "./packSfx";
 import { GoatBurst } from "./GoatBurst";
+import { SlicedFace } from "./SlicedFace";
 import { TierBurst } from "./TierBurst";
 
 export interface PackCardState {
@@ -50,6 +52,10 @@ export interface RevealedCard {
 interface RevealStageProps {
   cards: PackCardState[];
   reducedMotion: boolean;
+  /* Set when the pack was cut open through its middle: the blade went through
+     the cards too, so the whole hand deals out at once, in halves, with none
+     of the ceremony a card nobody ruined would get. */
+  damage?: PackDamage | null;
   /* Called once per card the moment it is revealed; returns whether this is
      the player's first copy in the viewer's collection. */
   onCardRevealed?: (pull: PulledCard) => boolean;
@@ -333,6 +339,8 @@ interface CascadeTileProps {
      preserve-3d scenes, so their reveal uses the flat crossfade path. */
   mobile: boolean;
   reducedMotion: boolean;
+  /* The cut this card took in the pack, or null for an intact one. */
+  damage?: PackDamage | null;
   onLanded: () => void;
   /* Fires the moment the flip swings past edge-on and the face becomes
      readable, which is halfway through the animation. Flips overlap, so the
@@ -357,6 +365,7 @@ export function CascadeTile({
   cardBack,
   mobile,
   reducedMotion,
+  damage = null,
   onLanded,
   onFaceVisible,
 }: CascadeTileProps) {
@@ -392,7 +401,8 @@ export function CascadeTile({
       if (firedRef.current) return;
       firedRef.current = true;
       showFace();
-      if (!mobile && !reducedMotion && entry?.tier && entry.glowColor) {
+      // No tier ceremony over a card in two pieces, whatever it rolled.
+      if (!mobile && !reducedMotion && !damage && entry?.tier && entry.glowColor) {
         setShowBurst(true);
         burstTimerRef.current = window.setTimeout(() => {
           burstTimerRef.current = null;
@@ -475,55 +485,61 @@ export function CascadeTile({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flipped, mobile, reducedMotion]);
 
+  /* Both faces of a cut card are drawn in halves. The intact tile keeps its
+     original shape exactly: the back paints on the positioned element itself
+     and the face image is that element's only child. */
+  const backStyle = {
+    backgroundImage: `url(${cardBack})`,
+    boxShadow: "0 10px 26px rgba(0,0,0,0.45)",
+  };
+  const slicedBack = damage ? (
+    <SlicedFace damage={damage}>
+      <div className="h-full w-full rounded-[10px] bg-cover bg-center" style={backStyle} />
+    </SlicedFace>
+  ) : null;
+  const face = entry?.thumbnail ? (
+    <img src={entry.thumbnail} alt={username} className="h-full w-full object-cover" draggable={false} />
+  ) : (
+    /* Mint failure: same dark tile the tray shows, plus the name so the slot
+       isn't anonymous. */
+    <div className="grid h-full w-full place-items-center bg-osu-b4 px-1 text-center">
+      <span className="break-all text-[9px] font-semibold text-osu-f1">{flipped ? username : ""}</span>
+    </div>
+  );
+  const faceContent = damage ? <SlicedFace damage={damage}>{face}</SlicedFace> : face;
+
   return (
     <div className="relative h-full w-full" style={mobile ? undefined : { perspective: 700 }}>
       {mobile ? (
         <>
           <div
             ref={flatBackRef}
-            className="absolute inset-0 rounded-[10px] bg-cover bg-center"
-            style={{
-              backgroundImage: `url(${cardBack})`,
-              boxShadow: "0 10px 26px rgba(0,0,0,0.45)",
-            }}
-          />
+            className={`absolute inset-0 ${damage ? "" : "rounded-[10px] bg-cover bg-center"}`}
+            style={damage ? undefined : backStyle}
+          >
+            {slicedBack}
+          </div>
           <div
             ref={flatFrontRef}
             className="absolute inset-0 overflow-hidden rounded-[10px]"
             style={{ opacity: 0 }}
           >
-            {entry?.thumbnail ? (
-              <img src={entry.thumbnail} alt={username} className="h-full w-full object-cover" draggable={false} />
-            ) : (
-              <div className="grid h-full w-full place-items-center bg-osu-b4 px-1 text-center">
-                <span className="break-all text-[9px] font-semibold text-osu-f1">{flipped ? username : ""}</span>
-              </div>
-            )}
+            {faceContent}
           </div>
         </>
       ) : (
         <div ref={flipRef} className="relative h-full w-full" style={{ transformStyle: "preserve-3d" }}>
           <div
-            className="absolute inset-0 rounded-[10px] bg-cover bg-center"
-            style={{
-              backgroundImage: `url(${cardBack})`,
-              backfaceVisibility: "hidden",
-              boxShadow: "0 10px 26px rgba(0,0,0,0.45)",
-            }}
-          />
+            className={`absolute inset-0 ${damage ? "" : "rounded-[10px] bg-cover bg-center"}`}
+            style={damage ? { backfaceVisibility: "hidden" } : { ...backStyle, backfaceVisibility: "hidden" }}
+          >
+            {slicedBack}
+          </div>
           <div
             className="absolute inset-0 overflow-hidden rounded-[10px]"
             style={{ transform: "rotateY(180deg)", backfaceVisibility: "hidden" }}
           >
-            {entry?.thumbnail ? (
-              <img src={entry.thumbnail} alt={username} className="h-full w-full object-cover" draggable={false} />
-            ) : (
-              /* Mint failure: same dark tile the tray shows, plus the name so
-                 the slot isn't anonymous. */
-              <div className="grid h-full w-full place-items-center bg-osu-b4 px-1 text-center">
-                <span className="break-all text-[9px] font-semibold text-osu-f1">{flipped ? username : ""}</span>
-              </div>
-            )}
+            {faceContent}
           </div>
         </div>
       )}
@@ -541,7 +557,13 @@ export function CascadeTile({
   );
 }
 
-export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }: RevealStageProps) {
+export function RevealStage({
+  cards,
+  reducedMotion,
+  damage = null,
+  onCardRevealed,
+  onComplete,
+}: RevealStageProps) {
   const windowActive = useWindowActive();
   const mobileViewport = isMobileViewport();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -923,6 +945,12 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   };
 
   const handleCascadeLanded = (position: number) => {
+    /* A card in halves gets the blade's sound, not a chime - including a GOAT,
+       which is the whole point of what just happened to it. */
+    if (damage) {
+      playCardSlice(0.45);
+      return;
+    }
     const entry = revealedRef.current[position];
     if (!entry || entry.tier === null) return;
     if (entry.tier === "goat") playGoatFanfare();
@@ -1077,6 +1105,19 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     if (!cancelledRef.current) onComplete(revealedRef.current, { sourceRects: collectHandoffRects() });
   };
 
+  /* A butchered pack has nothing to draw for one at a time: there is no tier
+     worth holding a beat on, and the stack is in halves. It deals itself out
+     the moment the reveal mounts, and the summary follows. The ref keeps that
+     to one run: StrictMode's mount -> cleanup -> mount would otherwise start a
+     second pass that records every pull twice. */
+  const autoDealtRef = useRef(false);
+  useEffect(() => {
+    if (!damage || autoDealtRef.current) return;
+    autoDealtRef.current = true;
+    void revealRest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // While the active card is on the canvas, its DOM back leaves the stack.
   const firstBackCardIndex = phase === "flipping" || phase === "shown" ? index + 1 : index;
   const remainingBacks = Math.max(0, cards.length - firstBackCardIndex);
@@ -1132,9 +1173,12 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
         }
         transition={{ duration: reducedMotion ? 0 : 0.45, ease: [0.3, 0.7, 0.2, 1] }}
       >
-        {/* Face-down stack (the cascade row replaces it while skipping) */}
+        {/* Face-down stack (the cascade row replaces it while skipping). A cut
+            pack never shows it: the deal starts on the first effect, and one
+            frame of an intact stack would undercut what just happened. */}
         {cardBack &&
           !cascade &&
+          !damage &&
           Array.from({ length: remainingBacks }, (_, position) => position)
             .reverse()
             .map((position) => {
@@ -1204,6 +1248,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
                   cardBack={cardBack}
                   mobile={mobileViewport}
                   reducedMotion={reducedMotion}
+                  damage={damage}
                   onLanded={() => handleCascadeLanded(position)}
                   onFaceVisible={() => handleCascadeFaceVisible(position)}
                 />
@@ -1398,21 +1443,24 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              {phase === "preparing"
-                ? slowDraw
-                  ? "Warming this player up... first draws can take a moment"
-                  : "Drawing player..."
-                : skipping
-                  ? "Revealing the rest..."
-                  : "Tap the stack or drag the top card to draw"}
+              {damage
+                ? "Every card came out in two pieces"
+                : phase === "preparing"
+                  ? slowDraw
+                    ? "Warming this player up... first draws can take a moment"
+                    : "Drawing player..."
+                  : skipping
+                    ? "Revealing the rest..."
+                    : "Tap the stack or drag the top card to draw"}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Controls */}
+      {/* Controls. A cut pack offers none: it is already dealing itself out,
+          and there is nothing left to decide about it. */}
       <div className="mt-2 flex items-center gap-4">
-        {phase === "stack" && !skipping && (
+        {phase === "stack" && !skipping && !damage && (
           <button
             type="button"
             onClick={() => void reveal(index)}
@@ -1430,7 +1478,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
             {index + 1 >= cards.length ? "See your pulls" : "Next card"}
           </button>
         )}
-        {!skipping && index + 1 < cards.length && (phase === "stack" || phase === "shown") && (
+        {!skipping && !damage && index + 1 < cards.length && (phase === "stack" || phase === "shown") && (
           <button
             type="button"
             onClick={() => void revealRest()}

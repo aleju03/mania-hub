@@ -125,6 +125,19 @@ export function playPackRip() {
   playTone(ctx, { freq: 150, endFreq: 52, duration: 0.2, gain: 0.26, type: "sine" });
 }
 
+/* The blade going through the pack's middle: card stock, not foil. Drier and
+   lower than the tear along the perforation, so a cut that ruins the cards
+   never sounds like a clean open. Intensity scales it down for the flip of a
+   single sliced card, where it plays instead of the reveal chime. */
+export function playCardSlice(intensity = 1) {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const level = Math.max(0.15, Math.min(1, intensity));
+  playNoise(ctx, { duration: 0.09, gain: 0.26 * level, startFreq: 2600, endFreq: 700, q: 1.6 });
+  playNoise(ctx, { at: 0.02, duration: 0.2, gain: 0.15 * level, startFreq: 900, endFreq: 240, q: 0.8 });
+  playTone(ctx, { freq: 120, endFreq: 46, duration: 0.24, gain: 0.11 * level, type: "sine" });
+}
+
 /* Soft card slide when a draw starts. */
 export function playCardDraw() {
   const ctx = ensureAudio();

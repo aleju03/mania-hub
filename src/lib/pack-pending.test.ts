@@ -31,7 +31,33 @@ describe("pack-pending", () => {
   it("round-trips the unrevealed remainder", () => {
     const players = [makePlayer(1), makePlayer(2), makePlayer(3)];
     writePendingPack(players);
-    expect(readPendingPack()).toEqual(players);
+    expect(readPendingPack()).toEqual({ players, damage: null });
+  });
+
+  it("round-trips the cut a slash through the pack's middle left", () => {
+    const players = [makePlayer(1), makePlayer(2)];
+    writePendingPack(players, { path: [0.4, 0.5, 0.45, 0.6] });
+    expect(readPendingPack()).toEqual({ players, damage: { path: [0.4, 0.5, 0.45, 0.6] } });
+    // A resumed pack stays cut as its cards are consumed one at a time.
+    consumePendingPackCard(1);
+    expect(readPendingPack()).toEqual({
+      players: [makePlayer(2)],
+      damage: { path: [0.4, 0.5, 0.45, 0.6] },
+    });
+  });
+
+  it("resumes a pack stored before cut packs existed as an intact one", () => {
+    const players = [makePlayer(1)];
+    localStorage.setItem(PENDING_PACK_STORAGE_KEY, JSON.stringify(players));
+    expect(readPendingPack()).toEqual({ players, damage: null });
+  });
+
+  it("drops damage it cannot trust", () => {
+    localStorage.setItem(
+      PENDING_PACK_STORAGE_KEY,
+      JSON.stringify({ players: [makePlayer(1)], damage: { path: ["half", 0.5] } }),
+    );
+    expect(readPendingPack()).toEqual({ players: [makePlayer(1)], damage: null });
   });
 
   it("returns null when nothing is pending", () => {
@@ -50,10 +76,10 @@ describe("pack-pending", () => {
   it("consumes revealed cards by id and empties out", () => {
     writePendingPack([makePlayer(1), makePlayer(2)]);
     consumePendingPackCard(1);
-    expect(readPendingPack()).toEqual([makePlayer(2)]);
+    expect(readPendingPack()).toEqual({ players: [makePlayer(2)], damage: null });
     // Unknown ids leave the remainder alone.
     consumePendingPackCard(99);
-    expect(readPendingPack()).toEqual([makePlayer(2)]);
+    expect(readPendingPack()).toEqual({ players: [makePlayer(2)], damage: null });
     consumePendingPackCard(2);
     expect(readPendingPack()).toBeNull();
     expect(localStorage.getItem(PENDING_PACK_STORAGE_KEY)).toBeNull();

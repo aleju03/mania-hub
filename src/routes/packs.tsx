@@ -35,6 +35,7 @@ import {
   type PackWallet,
 } from "../lib/pack-collection";
 import { isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
+import type { PackDamage } from "../lib/pack-damage";
 import {
   clearPendingPack,
   consumePendingPackCard,
@@ -387,6 +388,10 @@ function PacksPage() {
   const [packId, setPackId] = useState(0);
   const [packTypeId, setPackTypeId] = useState<PackTypeId>("standard");
   const [cards, setCards] = useState<PackCardState[] | null>(null);
+  /* Non-null once a slash has gone through the pack's middle instead of its
+     perforation: the cards were cut with it, so the reveal deals them in
+     halves and the summary hands the whole ruined hand back for shards. */
+  const [damage, setDamage] = useState<PackDamage | null>(null);
   const [revealed, setRevealed] = useState<RevealedCard[]>([]);
   /* Reveal-all handoff: the rects every card tile occupied when the reveal
      finished. Non-null means the viewer already saw the whole grid, so the
@@ -536,18 +541,21 @@ function PacksPage() {
     };
     preparedPackKeyRef.current = null;
     setCards(null);
+    setDamage(null);
     setDealError(false);
     serverIsNewRef.current = null;
     serverPaidRef.current = false;
     mintPassRef.current = null;
     if (packId === 0) {
-      const pendingPlayers = readPendingPack();
-      if (pendingPlayers) {
+      const pending = readPendingPack();
+      if (pending) {
         if (isLiveBackendConfigured()) {
-          void warmLivePackPlayers(pendingPlayers.map((player) => player.user.id)).catch(() => {});
+          void warmLivePackPlayers(pending.players.map((player) => player.user.id)).catch(() => {});
         }
         preparedPackKeyRef.current = dealKey;
-        setCards(buildCardStates(pendingPlayers));
+        setCards(buildCardStates(pending.players));
+        // A pack that was cut open comes back cut.
+        setDamage(pending.damage);
         setPhase("reveal");
         return;
       }
@@ -647,8 +655,8 @@ function PacksPage() {
      one as cards flip into the wallet. */
   useEffect(() => {
     if (phase !== "reveal" || !cards) return;
-    writePendingPack(cards.map((card) => card.player));
-  }, [phase, cards]);
+    writePendingPack(cards.map((card) => card.player), damage);
+  }, [phase, cards, damage]);
 
   useEffect(() => {
     if (streakOpen) {
@@ -680,6 +688,10 @@ function PacksPage() {
     setRevealed([]);
     setSummaryFlyFrom(null);
     setSerials(null);
+    /* Cleared here as well as in the deal effect: the next pack's id lands in
+       this same render, so the reveal would otherwise remount for one commit
+       still holding the last pack's cut, and deal its ruined hand again. */
+    setDamage(null);
     autoOpenRef.current = false;
     // Keep the chosen pack type across packs while it stays affordable.
     if (!canAffordPack(walletApi.wallet, packTypeById(packTypeId))) setPackTypeId("standard");
@@ -695,12 +707,14 @@ function PacksPage() {
     setRevealed([]);
     setSummaryFlyFrom(null);
     setSerials(null);
+    setDamage(null);
     autoOpenRef.current = true;
     setPhase("reveal");
     setPackId((id) => id + 1);
   };
 
-  const handleOpened = () => {
+  const handleOpened = (cutDamage: PackDamage | null) => {
+    setDamage(cutDamage);
     const trigger = dealTriggerRef.current;
     if (serverDeals()) {
       /* The slash is the moment of purchase, and for a signed-in wallet the
@@ -929,6 +943,7 @@ function PacksPage() {
                           selectedType.cost.kind === "shards" ? selectedType.cost.amount : null
                         }
                         serials={serials}
+                        damage={damage}
                         onRecycleCopies={async (entries) => {
                           await mintPassRef.current;
                           return walletApi.recycleCopies(entries);
@@ -938,6 +953,7 @@ function PacksPage() {
                       <RevealStage
                         cards={cards}
                         reducedMotion={reducedMotion}
+                        damage={damage}
                         onCardRevealed={(pull) => {
                           // In the wallet now, so no longer owed by the pending pack.
                           consumePendingPackCard(pull.userId);

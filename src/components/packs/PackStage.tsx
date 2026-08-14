@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { packDamageFromCut, type PackDamage } from "#/lib/pack-damage";
 import type { PackTypeDef } from "#/lib/packs";
 import { useWindowActive } from "#/lib/window-activity";
 import {
@@ -11,11 +12,12 @@ import {
   PACK_ART_HEIGHT,
   PACK_ART_WIDTH,
   PACK_ASPECT,
+  PACK_MAX_RIP_STRIP_FRACTION,
   PACK_RIP_STRIP_FRACTION,
   PACK_TEAR_FRACTION,
 } from "./packArt";
 import { createPackScene, type PackScene } from "./packScene";
-import { playPackRip, playSlashTick } from "./packSfx";
+import { playCardSlice, playPackRip, playSlashTick } from "./packSfx";
 
 // The cut is tracked in vertical columns; each cut column remembers the y
 // (as a fraction of pack height) where the blade crossed it, so the tear
@@ -34,6 +36,25 @@ const TEAR_BAND_BOTTOM = 0.25;
 // perforation even if the cursor wanders.
 const CUT_MIN_Y = 0.09;
 const CUT_MAX_Y = 0.24;
+/* The other way to open a pack: straight through the middle. Nothing stops a
+   blade from going through the pack's body, and nothing stops it going
+   through the cards stacked inside either - they come out in halves. The band
+   starts well clear of the perforation, so a slash aimed at the dotted line
+   can never fall into it by accident. */
+const DEEP_BAND_TOP = 0.34;
+const DEEP_BAND_BOTTOM = 0.86;
+/* Where a stroke that started in that band is allowed to travel. Wider than
+   the band on both sides, because the cut the cards get drawn with is fitted
+   to this path: clamping a steep slash to the band would flatten it, and the
+   cards would come out cut at an angle nobody made. */
+const DEEP_CUT_MIN_Y = 0.26;
+const DEEP_CUT_MAX_Y = 0.93;
+// Columns of foil the blade has to cross below the seam before the cards
+// inside count as cut. A tap, or a hand that slipped, is not a butchering.
+const DEEP_DAMAGE_MIN_COLUMNS = 6;
+// Breathing room under the cut so the flying piece carries its own torn edge
+// rather than ending exactly on it.
+const DEEP_STRIP_MARGIN = 0.05;
 // How far the foil's freshly cut edge gapes away from the body, as a
 // fraction of pack height. The foil is stiff: it eases to this and holds.
 // Kept small: the opening reads through the real hole in the front shell,
@@ -60,7 +81,9 @@ interface SlashSpark {
 }
 
 interface PackStageProps {
-  onOpened: () => void;
+  /* Damage is non-null when the blade went through the pack's middle: the
+     cards inside were cut, and the page has to deal a ruined hand. */
+  onOpened: (damage: PackDamage | null) => void;
   /* Fires on the first touch of the pack (any pointerdown on the stage that
      could start the slash). The page deals the hand off this signal, so the
      drag plus the rip animation hide the draw's network time. */
@@ -82,11 +105,15 @@ function clampNumber(value: number, min: number, max: number) {
 export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   // The blade effect below subscribes once ([] deps), so it reads the latest
-  // onGrab through a ref instead of resubscribing per render.
+  // callbacks through refs instead of resubscribing per render. onOpened
+  // matters as much as onGrab: the page charges the selected pack type in it,
+  // and the stage stays mounted while the shelf switches types under it.
   const onGrabRef = useRef(onGrab);
+  const onOpenedRef = useRef(onOpened);
   useEffect(() => {
     onGrabRef.current = onGrab;
-  }, [onGrab]);
+    onOpenedRef.current = onOpened;
+  }, [onGrab, onOpened]);
   const packRef = useRef<HTMLDivElement | null>(null);
   // Offscreen 2D canvas the cut renders into; the 3D scene shows it as the
   // front texture of the pack mesh.
@@ -105,9 +132,19 @@ export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackSta
   const [sceneEpoch, setSceneEpoch] = useState(0);
   const sceneLostRef = useRef(false);
   const [ripping, setRipping] = useState(false);
+  // The blade is below the seam and the cards are taking it; the caption says
+  // so while there is still time to stop.
+  const [slicing, setSlicing] = useState(false);
   const [sparks, setSparks] = useState<SlashSpark[]>([]);
 
-  const slashRef = useRef<{ lastX: number; lastYFrac: number; lastSparkX: number } | null>(null);
+  const slashRef = useRef<{
+    lastX: number;
+    lastYFrac: number;
+    lastSparkX: number;
+    /* Where this stroke entered the pack decides what it cuts for its whole
+       length: the seam, or the cards. */
+    deep: boolean;
+  } | null>(null);
   const bladeHeldRef = useRef<{ pointerId: number } | null>(null);
   const rippingRef = useRef(false);
   const sparkIdRef = useRef(0);
@@ -119,6 +156,13 @@ export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackSta
   const liftCurrentRef = useRef<Float32Array>(new Float32Array(BIN_COUNT));
   const settlingRef = useRef(false);
   const cutCountRef = useRef(0);
+  // Columns the blade crossed below the seam, and how many: the cards inside
+  // are cut where these are, and only if there are enough of them.
+  const deepBinsRef = useRef<Uint8Array>(new Uint8Array(BIN_COUNT));
+  const deepCountRef = useRef(0);
+  /* The pointer handlers below subscribe once, so the "cards are being cut"
+     announcement is latched on a ref rather than on the state it sets. */
+  const slicingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const trailCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const trailPointsRef = useRef<Array<{ x: number; y: number; t: number }>>([]);
@@ -610,10 +654,41 @@ export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackSta
     return strip;
   };
 
+  /* What the blade did to the cards, read off the columns it crossed below
+     the seam. Null when it stayed at the perforation, or barely dipped. */
+  const readDamage = (): PackDamage | null => {
+    if (deepCountRef.current < DEEP_DAMAGE_MIN_COLUMNS) return null;
+    const bins = binsRef.current;
+    const deep = deepBinsRef.current;
+    const points: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < BIN_COUNT; i += 1) {
+      if (!deep[i] || !Number.isFinite(bins[i])) continue;
+      points.push({ x: (i + 0.5) / BIN_COUNT, y: bins[i] });
+    }
+    return packDamageFromCut(points);
+  };
+
+  /* Everything above the deepest point of the cut leaves with the tear-off
+     piece, so a slash through the middle takes most of the pack with it. */
+  const ripStripFraction = () => {
+    const bins = binsRef.current;
+    let deepest = 0;
+    for (let i = 0; i < BIN_COUNT; i += 1) {
+      if (Number.isFinite(bins[i])) deepest = Math.max(deepest, bins[i]);
+    }
+    return clampNumber(
+      deepest + DEEP_STRIP_MARGIN,
+      PACK_RIP_STRIP_FRACTION,
+      PACK_MAX_RIP_STRIP_FRACTION,
+    );
+  };
+
   const triggerRip = () => {
     if (rippingRef.current) return;
     rippingRef.current = true;
-    playPackRip();
+    const damage = readDamage();
+    if (damage) playCardSlice();
+    else playPackRip();
     slashRef.current = null;
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
@@ -625,14 +700,21 @@ export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackSta
     const body = liveCanvasRef.current;
     const strip = ripStripCanvasRef.current;
     if (art && back && body && strip) {
+      const fraction = ripStripFraction();
+      // Resizing clears the canvas, which buildRipStrip redraws anyway.
+      const stripHeight = Math.ceil(PACK_ART_HEIGHT * fraction);
+      if (strip.height !== stripHeight) strip.height = stripHeight;
       const builtStrip = buildRipStrip(art, back, body, strip);
-      if (builtStrip) sceneRef.current?.beginRip(builtStrip);
+      if (builtStrip) {
+        sceneRef.current?.setRipStripFraction(fraction);
+        sceneRef.current?.beginRip(builtStrip);
+      }
     }
     setRipping(true);
-    window.setTimeout(onOpened, reducedMotion ? 220 : 880);
+    window.setTimeout(() => onOpenedRef.current(damage), reducedMotionRef.current ? 220 : 880);
   };
 
-  const setCutSpan = (xa: number, yaFrac: number, xb: number, ybFrac: number) => {
+  const setCutSpan = (xa: number, yaFrac: number, xb: number, ybFrac: number, deep: boolean) => {
     const binA = clampNumber(Math.floor((xa / PACK_ART_WIDTH) * BIN_COUNT), 0, BIN_COUNT - 1);
     const binB = clampNumber(Math.floor((xb / PACK_ART_WIDTH) * BIN_COUNT), 0, BIN_COUNT - 1);
     const low = Math.min(binA, binB);
@@ -645,11 +727,23 @@ export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackSta
       const t = binA === binB ? 0 : (i - binA) / (binB - binA);
       bins[i] = yaFrac + (ybFrac - yaFrac) * t;
       cutCountRef.current += 1;
+      if (deep) {
+        deepBinsRef.current[i] = 1;
+        deepCountRef.current += 1;
+      }
       changed = true;
     }
     if (changed) {
       recomputeCutFields();
       playSlashTick(cutCountRef.current / BIN_COUNT);
+      /* The moment enough of the blade is through the body to have reached
+         the cards. Said out loud once, while the pack could still be dropped
+         and the rest of the cut abandoned. */
+      if (deep && !slicingRef.current && deepCountRef.current >= DEEP_DAMAGE_MIN_COLUMNS) {
+        slicingRef.current = true;
+        setSlicing(true);
+        playCardSlice(0.4);
+      }
     }
   };
 
@@ -687,9 +781,9 @@ export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackSta
   };
 
   /* Advances the blade gesture at a viewport point: starts a slash when the
-     blade enters the tear band, extends the cut while slashing. The point is
-     mapped onto the tilted pack's plane by the 3D scene; x is tracked in
-     texture pixels. */
+     blade enters the tear band (or the body below it), extends the cut while
+     slashing. The point is mapped onto the tilted pack's plane by the 3D
+     scene; x is tracked in texture pixels. */
   const cutAtPoint = (clientX: number, clientY: number) => {
     if (rippingRef.current) return;
     const point = sceneRef.current?.pointerToPack(clientX, clientY);
@@ -697,19 +791,25 @@ export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackSta
     const ny = point.v;
     const slash = slashRef.current;
     if (!slash) {
-      if (ny < TEAR_BAND_TOP || ny > TEAR_BAND_BOTTOM) return;
+      const seam = ny >= TEAR_BAND_TOP && ny <= TEAR_BAND_BOTTOM;
+      const deep = ny >= DEEP_BAND_TOP && ny <= DEEP_BAND_BOTTOM;
+      if (!seam && !deep) return;
       // Horizontal slack so a swipe that starts off the pack still bites.
       if (point.u < -0.2 || point.u > 1.2) return;
       const x = clampNumber(point.u, 0, 1) * PACK_ART_WIDTH;
-      const yFrac = clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
-      slashRef.current = { lastX: x, lastYFrac: yFrac, lastSparkX: x };
-      setCutSpan(x, yFrac, x, yFrac);
+      const yFrac = deep
+        ? clampNumber(ny, DEEP_CUT_MIN_Y, DEEP_CUT_MAX_Y)
+        : clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
+      slashRef.current = { lastX: x, lastYFrac: yFrac, lastSparkX: x, deep };
+      setCutSpan(x, yFrac, x, yFrac, deep);
       ensureLoop();
       return;
     }
     const x = clampNumber(point.u, 0, 1) * PACK_ART_WIDTH;
-    const yFrac = clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
-    setCutSpan(slash.lastX, slash.lastYFrac, x, yFrac);
+    const yFrac = slash.deep
+      ? clampNumber(ny, DEEP_CUT_MIN_Y, DEEP_CUT_MAX_Y)
+      : clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
+    setCutSpan(slash.lastX, slash.lastYFrac, x, yFrac, slash.deep);
     slash.lastX = x;
     slash.lastYFrac = yFrac;
     if (Math.abs(x - slash.lastSparkX) > 35) {
@@ -824,10 +924,18 @@ export function PackStage({ onOpened, onGrab, reducedMotion, packType }: PackSta
       />
 
       {/* One line: the old second line only restated the first one in other
-          words, and the gesture is the whole instruction. */}
+          words, and the gesture is the whole instruction. The blade below the
+          seam gets its own warning, because by then the line is no longer an
+          instruction but the news. */}
       <div className="mt-5 h-5 text-center" aria-live="polite">
-        <div className="text-sm font-semibold text-white">
-          {ripping ? "Opening..." : "Hold and drag across the dotted line"}
+        <div className={`text-sm font-semibold ${slicing && !ripping ? "text-osu-pink-light" : "text-white"}`}>
+          {ripping
+            ? slicing
+              ? "Opening what is left..."
+              : "Opening..."
+            : slicing
+              ? "You are cutting through the cards"
+              : "Hold and drag across the dotted line"}
         </div>
       </div>
     </div>

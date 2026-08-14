@@ -1,12 +1,19 @@
+import { sanitizePackDamage, type PackDamage } from "./pack-damage";
 import type { PackPlayer } from "./packs";
 
 /* The pack a viewer paid for but has not fully revealed yet. The charge is
    spent the moment the pack is slashed, so the unrevealed cards must survive
    leaving /packs (profile peeks, refreshes, closed tabs). Revealed cards are
    recorded into the wallet one by one as they flip; this stores only the
-   unrevealed remainder, in draw order. */
+   unrevealed remainder, in draw order, plus the damage a slash through the
+   pack's middle did to them - a pack that comes back has to come back cut. */
 
 export const PENDING_PACK_STORAGE_KEY = "mania-hub-pending-pack-v1";
+
+export interface PendingPack {
+  players: PackPlayer[];
+  damage: PackDamage | null;
+}
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -37,29 +44,40 @@ function sanitizePlayer(value: unknown): PackPlayer | null {
   };
 }
 
-export function readPendingPack(): PackPlayer[] | null {
+export function readPendingPack(): PendingPack | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(PENDING_PACK_STORAGE_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) return null;
-    const players = parsed.map(sanitizePlayer);
+    /* A bare array is a pack left pending by a build that predates cut
+       packs; it was opened along the perforation, so it resumes intact. */
+    const record =
+      Array.isArray(parsed)
+        ? { players: parsed as unknown[], damage: null }
+        : parsed && typeof parsed === "object"
+          ? {
+              players: (parsed as { players?: unknown }).players,
+              damage: sanitizePackDamage((parsed as { damage?: unknown }).damage),
+            }
+          : null;
+    if (!record || !Array.isArray(record.players) || record.players.length === 0) return null;
+    const players = record.players.map(sanitizePlayer);
     if (players.some((player) => player === null)) return null;
-    return players as PackPlayer[];
+    return { players: players as PackPlayer[], damage: record.damage };
   } catch {
     return null;
   }
 }
 
-export function writePendingPack(players: PackPlayer[]): void {
+export function writePendingPack(players: PackPlayer[], damage: PackDamage | null = null): void {
   if (typeof window === "undefined") return;
   try {
     if (players.length === 0) {
       localStorage.removeItem(PENDING_PACK_STORAGE_KEY);
       return;
     }
-    localStorage.setItem(PENDING_PACK_STORAGE_KEY, JSON.stringify(players));
+    localStorage.setItem(PENDING_PACK_STORAGE_KEY, JSON.stringify({ players, damage }));
   } catch {
     // Quota or privacy mode: the reveal still works this session, the pack
     // just won't survive leaving the page.
@@ -70,12 +88,13 @@ export function writePendingPack(players: PackPlayer[]): void {
    the wallet. Reveals run in draw order, but match by id anyway so an
    out-of-sync entry cannot eat the wrong card. */
 export function consumePendingPackCard(userId: number): void {
-  const players = readPendingPack();
-  if (!players) return;
-  const index = players.findIndex((player) => player.user.id === userId);
+  const pending = readPendingPack();
+  if (!pending) return;
+  const index = pending.players.findIndex((player) => player.user.id === userId);
   if (index === -1) return;
-  players.splice(index, 1);
-  writePendingPack(players);
+  pending.players.splice(index, 1);
+  // The remainder of a cut pack is still cut.
+  writePendingPack(pending.players, pending.damage);
 }
 
 export function clearPendingPack(): void {

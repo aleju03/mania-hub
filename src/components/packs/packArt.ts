@@ -11,10 +11,14 @@ export const PACK_ASPECT = PACK_ART_WIDTH / PACK_ART_HEIGHT;
 // PackStage reads these so the DOM tear interaction lines up with the art.
 export const PACK_CRIMP_FRACTION = 0.078;
 export const PACK_TEAR_FRACTION = 0.16;
-// The torn strip never extends below the interaction's cut band. Keeping its
-// texture cropped to this fraction avoids uploading a mostly transparent
-// full-pack canvas when the rip begins.
+// A tear along the perforation never extends below the interaction's cut
+// band. Keeping its texture cropped to this fraction avoids uploading a mostly
+// transparent full-pack canvas when the rip begins.
 export const PACK_RIP_STRIP_FRACTION = 0.27;
+// A slash through the pack's middle takes everything above it with it, so the
+// flying piece is rebuilt at the cut's own depth. Capped short of the bottom
+// seal: below this there is no pack left to drop away.
+export const PACK_MAX_RIP_STRIP_FRACTION = 0.95;
 
 const FONT = "Torus, Arial, sans-serif";
 

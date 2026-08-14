@@ -91,6 +91,33 @@ describe("CascadeTile", () => {
     expect(screen.queryByTestId("tier-burst")).toBeNull();
   });
 
+  it("draws a cut card in halves and skips its tier ceremony", () => {
+    const damage = { path: [0.42, 0.5, 0.44, 0.58, 0.5] };
+    const { container } = render(
+      <CascadeTile
+        entry={revealedCard("goat")}
+        username="player7"
+        cardBack="data:image/png;base64,back"
+        mobile={false}
+        reducedMotion={false}
+        damage={damage}
+        onLanded={() => {}}
+        onFaceVisible={() => {}}
+      />,
+    );
+
+    // Both faces come apart: two clipped copies of the back and two of the
+    // front, cut along the same line.
+    const halves = container.querySelectorAll('[style*="clip-path"]');
+    expect(halves).toHaveLength(4);
+    // The card is still named exactly once, not once per piece.
+    expect(screen.getAllByRole("img", { name: "player7" })).toHaveLength(1);
+    // Nothing celebrates a GOAT that came out in two pieces.
+    expect(screen.queryByTestId("goat-burst")).toBeNull();
+    act(() => vi.advanceTimersByTime(3_000));
+    expect(screen.queryByTestId("goat-burst")).toBeNull();
+  });
+
   it("keeps the longer GOAT ceremony bounded too", () => {
     render(
       <CascadeTile

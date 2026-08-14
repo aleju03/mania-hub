@@ -12,10 +12,12 @@ import {
   type CollectedCard,
 } from "#/lib/pack-collection";
 import type { ManiaCardTier } from "#/lib/maniacard";
+import type { PackDamage } from "#/lib/pack-damage";
 import { CountryFlag } from "../ui/CountryFlag";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import { playRecycleClink } from "./packSfx";
 import type { FlightRect, RevealedCard } from "./RevealStage";
+import { SlicedFace } from "./SlicedFace";
 
 interface PackSummaryProps {
   cards: RevealedCard[];
@@ -35,6 +37,9 @@ interface PackSummaryProps {
      a card the pack was the first copy of leaves the collection, a duplicate
      gives up only the copy this pack added. Resolves with the shards paid. */
   onRecycleCopies: (entries: Array<{ cardKey: string; copies: number }>) => number | Promise<number>;
+  /* Set when the pack was cut open through its middle. The hand is in halves
+     and nothing in it is worth keeping, so it recycles itself on arrival. */
+  damage?: PackDamage | null;
   reducedMotion: boolean;
   /* Reveal-all handoff: where each card's tile sat when the reveal finished,
      keyed by card position. Present = the viewer already saw every card, so
@@ -50,6 +55,9 @@ interface SummaryFlight {
   from: FlightRect;
   to: FlightRect;
 }
+
+/* The gap between one tile turning over to the recycler and the next. */
+const RECYCLE_STAGGER_MS = 90;
 
 /* The tiles of this hand that are copies of one collected card. A pack can
    deal the same player twice, and both tiles are then the same wallet card:
@@ -103,6 +111,7 @@ export function PackSummary({
   nextPackShardCost,
   serials,
   onRecycleCopies,
+  damage = null,
   reducedMotion,
   flyFrom = null,
 }: PackSummaryProps) {
@@ -134,6 +143,9 @@ export function PackSummary({
      each of them recycles on its own. What a recycled tile paid is kept with
      it, so its slot can show its own number. */
   const [recycled, setRecycled] = useState<Map<number, number>>(new Map());
+  /* How long each tile waits before it turns, in ms after its batch went
+     back, so a batch goes into the recycler one card at a time. */
+  const [recycleDelays, setRecycleDelays] = useState<Map<number, number>>(new Map());
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [menu, setMenu] = useState<{ position: number; x: number; y: number } | null>(null);
@@ -227,6 +239,16 @@ export function PackSummary({
         // to a wallet that no longer holds the cards), so the tiles stay.
         if (gained <= 0) return;
         const paid = splitRecycleValues(positions);
+        // A row that greys out all at once reads as a glitch rather than as
+        // cards going into the recycler, so they turn in the order they sit
+        // in, each waiting on the one to its left.
+        setRecycleDelays((current) => {
+          const next = new Map(current);
+          [...paid.keys()]
+            .sort((a, b) => a - b)
+            .forEach((position, index) => next.set(position, index * RECYCLE_STAGGER_MS));
+          return next;
+        });
         setRecycled((current) => new Map([...current, ...paid]));
         setSelecting(false);
         setSelected(new Set());
@@ -235,6 +257,40 @@ export function PackSummary({
       .catch(() => {})
       .finally(() => setRecycleBusy(false));
   };
+
+  /* Cut cards are scrap, and they go back as soon as the hand has landed
+     rather than after a beat that only reads as the page hesitating. Not
+     before it lands, though: a tile is hidden for as long as its handoff
+     flight is in the air, so recycling underneath one would have it reappear
+     already grey instead of turning. It takes the same path the Recycle all
+     button takes, so a synced collection loses the copies server-side exactly
+     as it would by hand. The ref keeps it to one run under StrictMode's
+     mount -> cleanup -> mount. */
+  const autoRecycledRef = useRef(false);
+  const autoRecycle = () => {
+    if (!damage || autoRecycledRef.current) return;
+    autoRecycledRef.current = true;
+    const go = () => runRecycle(new Set(cards.map((_, position) => position)), null);
+    /* One painted frame first. The flight ending un-hides the tiles, and
+       React puts that and everything the recycle changes into a single
+       commit, so the tiles would go from hidden straight to grey - and a
+       transition with no previously painted value to leave does not run at
+       all. A frame of the hand sitting there in colour is what gives it
+       something to turn from. */
+    if (typeof requestAnimationFrame !== "function") {
+      go();
+      return;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(go));
+  };
+  /* Set before paint by the flight's own layout effect, so this can tell a
+     hand that is about to fly from one that never will (reduced motion, or a
+     summary reached without a reveal to hand off from). */
+  const handoffRef = useRef(false);
+  useEffect(() => {
+    if (!handoffRef.current) autoRecycle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const exitSelecting = () => {
     setSelecting(false);
@@ -327,7 +383,7 @@ export function PackSummary({
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const flightImgRefs = useRef<Map<number, HTMLImageElement>>(new Map());
+  const flightImgRefs = useRef<Map<number, HTMLElement>>(new Map());
   const [flights, setFlights] = useState<SummaryFlight[] | null>(null);
 
   /* Measured once on mount, before paint: pair each handed-off rect with its
@@ -367,7 +423,10 @@ export function PackSummary({
         },
       });
     });
-    if (next.length > 0) setFlights(next);
+    if (next.length > 0) {
+      handoffRef.current = true;
+      setFlights(next);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -396,11 +455,16 @@ export function PackSummary({
     }
     if (animations.length === 0) {
       setFlights(null);
+      autoRecycle();
       return;
     }
     let cancelled = false;
     void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
-      if (!cancelled) setFlights(null);
+      if (cancelled) return;
+      setFlights(null);
+      // The hand is down and every tile is visible again, so a cut one can
+      // now be seen turning rather than simply arriving grey.
+      autoRecycle();
     });
     return () => {
       cancelled = true;
@@ -415,8 +479,18 @@ export function PackSummary({
       {/* What the pack was worth, in figures rather than in a sentence under
           the grid where it used to sit. */}
       <div className="flex items-baseline justify-center gap-7 sm:gap-10">
+        {damage && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black leading-none text-white tabular-nums">{cards.length}</span>
+            <span className="text-[12px] text-osu-f1">sliced</span>
+          </div>
+        )}
         <div className="flex items-baseline gap-2">
-          <span className="text-3xl font-black leading-none text-white tabular-nums">{newCount}</span>
+          <span
+            className={`text-3xl font-black leading-none tabular-nums ${damage ? "text-osu-f1" : "text-white"}`}
+          >
+            {newCount}
+          </span>
           <span className="text-[12px] text-osu-f1">new</span>
         </div>
         {dupeCount > 0 && (
@@ -455,6 +529,13 @@ export function PackSummary({
           const isBest = position === bestPosition;
           const recycledFor = recycled.get(position);
           const isRecycled = recycledFor !== undefined;
+          /* A cut hand is guaranteed to recycle, so give it the recycler's
+             settled footprint from the moment its handoff flight lands. If
+             this scale starts only after the painted pre-recycle frame, the
+             card visibly arrives large and then pops smaller a frame later. */
+          const isRecycleSized = isRecycled || Boolean(damage);
+          const turnDelay = isRecycled ? (recycleDelays.get(position) ?? 0) : 0;
+          const turnDelayStyle = turnDelay > 0 ? { transitionDelay: `${turnDelay}ms` } : undefined;
           const isSelected = selected.has(position);
           const glow = card.glowColor
             ? `rgba(${card.glowColor.r}, ${card.glowColor.g}, ${card.glowColor.b}, 0.55)`
@@ -469,7 +550,7 @@ export function PackSummary({
               data-select-keep=""
               data-pull-position={position}
               onContextMenu={(event) => {
-                if (isRecycled) return;
+                if (isRecycled || damage) return;
                 event.preventDefault();
                 setMenuConfirm(false);
                 setMenu({
@@ -484,6 +565,10 @@ export function PackSummary({
             >
               <button
                 type="button"
+                /* A cut card is not a card any more: it cannot be lifted into
+                   the spotlight (which would show it whole), selected, or
+                   recycled by hand, since it is already on its way back. */
+                disabled={Boolean(damage)}
                 onPointerDown={(event) => {
                   if (!selecting || isRecycled) return;
                   if (event.pointerType !== "mouse") {
@@ -498,7 +583,7 @@ export function PackSummary({
                   applySelect(position, dragRef.current.mode);
                 }}
                 onClick={(event) => {
-                  if (isRecycled) return;
+                  if (isRecycled || damage) return;
                   if (selecting) {
                     // Touch taps and keyboard activation; a mouse press was
                     // already handled on pointer down.
@@ -517,7 +602,7 @@ export function PackSummary({
                   });
                   setLiftedPosition(position);
                 }}
-                className={`block w-full ${isRecycled ? "cursor-default" : "cursor-pointer"}`}
+                className={`block w-full ${isRecycled || damage ? "cursor-default" : "cursor-pointer"}`}
                 style={
                   liftedPosition === position || inFlight.has(position)
                     ? { visibility: "hidden" }
@@ -527,9 +612,11 @@ export function PackSummary({
                 aria-label={
                   isRecycled
                     ? `${card.player.user.username}'s card, recycled for ${recycledFor} shards`
-                    : selecting
-                      ? `${isSelected ? "Deselect" : "Select"} ${card.player.user.username}`
-                      : `View ${card.player.user.username}'s card`
+                    : damage
+                      ? `${card.player.user.username}'s card, cut in half`
+                      : selecting
+                        ? `${isSelected ? "Deselect" : "Select"} ${card.player.user.username}`
+                        : `View ${card.player.user.username}'s card`
                 }
               >
                 <div
@@ -539,40 +626,57 @@ export function PackSummary({
                      transition on it keeps the tile painted for the whole
                      duration - so the card lands on a copy of itself. */
                   className={`relative overflow-hidden rounded-[10px] transition-[transform,box-shadow] ${
-                    isRecycled ? "scale-[0.94] duration-300" : "hover:-translate-y-1 duration-150"
+                    isRecycleSized ? "scale-[0.94] duration-300" : "hover:-translate-y-1 duration-150"
                   }`}
                   style={{
                     aspectRatio: "5 / 7",
-                    boxShadow: isRecycled
+                    /* A sliced card never enters the best-pull presentation:
+                       the painted frame before auto-recycle would otherwise
+                       flash its tier ring and glow around the best card. */
+                    boxShadow: isRecycleSized
                       ? "inset 0 0 0 1px rgba(148, 163, 184, 0.16)"
                       : isBest
                         ? `0 0 0 2px ${tierColor}, 0 10px 34px ${glow}`
                         : `0 10px 26px rgba(0,0,0,0.45)`,
+                    ...turnDelayStyle,
                   }}
                 >
-                  {card.isNew && !isRecycled && (
-                    <span className="absolute left-1.5 top-1.5 z-10 rounded bg-osu-pink px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white">
+                  {/* Kept mounted once recycled, so the badge fades out with
+                      the card under it rather than blinking off ahead of it. */}
+                  {card.isNew && (
+                    <span
+                      aria-hidden={isRecycled || undefined}
+                      className={`absolute left-1.5 top-1.5 z-10 rounded bg-osu-pink px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white transition-opacity duration-300 ${
+                        isRecycled ? "opacity-0" : ""
+                      }`}
+                      style={turnDelayStyle}
+                    >
                       new
                     </span>
                   )}
-                  {card.thumbnail ? (
-                    <img
-                      src={card.thumbnail}
-                      alt={`${card.player.user.username} maniacard`}
-                      className={`h-full w-full object-cover transition-[opacity,filter] duration-500 ${
-                        isRecycled ? "opacity-20 grayscale" : ""
-                      }`}
-                      draggable={false}
-                    />
-                  ) : (
-                    <div
-                      className={`grid h-full w-full place-items-center bg-osu-b4/70 px-3 text-center transition-[opacity,filter] duration-500 ${
-                        isRecycled ? "opacity-25 grayscale" : ""
-                      }`}
-                    >
-                      <span className="text-[12px] font-semibold text-white">{card.player.user.username}</span>
-                    </div>
-                  )}
+                  {(() => {
+                    const face = card.thumbnail ? (
+                      <img
+                        src={card.thumbnail}
+                        alt={`${card.player.user.username} maniacard`}
+                        className={`h-full w-full object-cover transition-[opacity,filter] duration-500 ${
+                          isRecycled ? "opacity-20 grayscale" : ""
+                        }`}
+                        style={turnDelayStyle}
+                        draggable={false}
+                      />
+                    ) : (
+                      <div
+                        className={`grid h-full w-full place-items-center bg-osu-b4/70 px-3 text-center transition-[opacity,filter] duration-500 ${
+                          isRecycled ? "opacity-25 grayscale" : ""
+                        }`}
+                        style={turnDelayStyle}
+                      >
+                        <span className="text-[12px] font-semibold text-white">{card.player.user.username}</span>
+                      </div>
+                    );
+                    return damage ? <SlicedFace damage={damage}>{face}</SlicedFace> : face;
+                  })()}
                   {selecting && !isRecycled && (
                     <>
                       <span
@@ -595,7 +699,7 @@ export function PackSummary({
                       className="absolute inset-0 z-20 grid place-items-center"
                       initial={reducedMotion ? false : { opacity: 0, scale: 0.75 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.3, ease: "easeOut" }}
+                      transition={{ duration: 0.3, delay: turnDelay / 1000, ease: "easeOut" }}
                     >
                       <span className="flex flex-col items-center gap-1 text-osu-pink-light">
                         <Recycle className="h-4 w-4" />
@@ -605,7 +709,10 @@ export function PackSummary({
                   )}
                 </div>
               </button>
-              <div className={`mt-2 text-center transition-opacity duration-300 ${isRecycled ? "opacity-40" : ""}`}>
+              <div
+                className={`mt-2 text-center transition-opacity duration-300 ${isRecycled ? "opacity-40" : ""}`}
+                style={turnDelayStyle}
+              >
                 <Link
                   to="/player/$username"
                   params={{ username: card.player.user.username }}
@@ -840,29 +947,39 @@ export function PackSummary({
       />
 
       {/* Handoff flights: each card sliding from where the reveal left it
-          into its grid slot */}
-      {flights?.map((flight) => (
-        <img
-          key={flight.position}
-          ref={(el) => {
-            if (el) flightImgRefs.current.set(flight.position, el);
-            else flightImgRefs.current.delete(flight.position);
-          }}
-          src={flight.thumbnail}
-          alt=""
-          className="pointer-events-none absolute z-40 rounded-[10px] object-cover"
-          style={{
-            left: flight.from.left,
-            top: flight.from.top,
-            width: flight.from.width,
-            height: flight.from.height,
-            transformOrigin: "top left",
-            willChange: "transform",
-          }}
-          draggable={false}
-          aria-hidden="true"
-        />
-      ))}
+          into its grid slot. Wrapped rather than a bare image so a cut card
+          flies over in the same two pieces the reveal showed. */}
+      {flights?.map((flight) => {
+        const face = (
+          <img
+            src={flight.thumbnail}
+            alt=""
+            className="h-full w-full rounded-[10px] object-cover"
+            draggable={false}
+          />
+        );
+        return (
+          <div
+            key={flight.position}
+            ref={(el) => {
+              if (el) flightImgRefs.current.set(flight.position, el);
+              else flightImgRefs.current.delete(flight.position);
+            }}
+            className="pointer-events-none absolute z-40"
+            style={{
+              left: flight.from.left,
+              top: flight.from.top,
+              width: flight.from.width,
+              height: flight.from.height,
+              transformOrigin: "top left",
+              willChange: "transform",
+            }}
+            aria-hidden="true"
+          >
+            {damage ? <SlicedFace damage={damage}>{face}</SlicedFace> : face}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -20,7 +20,12 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import { PACK_ASPECT, PACK_CRIMP_FRACTION, PACK_RIP_STRIP_FRACTION } from "./packArt";
+import {
+  PACK_ASPECT,
+  PACK_CRIMP_FRACTION,
+  PACK_MAX_RIP_STRIP_FRACTION,
+  PACK_RIP_STRIP_FRACTION,
+} from "./packArt";
 
 // World size of the pack; bulge depths are fractions of the width. A real
 // booster is a thin lens: ~5 cards plus air is roughly 9% of the width in
@@ -44,7 +49,12 @@ const BODY_MS = 500;
 const BODY_DROP_Y = 0.92;
 const REDUCED_RIP_MS = 180;
 const IDLE_FRAME_MS = 1000 / 30;
-const STRIP_BASE_Y = (PACK_WORLD_HEIGHT * (1 - PACK_RIP_STRIP_FRACTION)) / 2;
+/* The flying piece hangs from the pack's top edge, so its centre sits half
+   its own height below that edge. */
+function stripBaseYFor(fraction: number) {
+  return (PACK_WORLD_HEIGHT * (1 - fraction)) / 2;
+}
+const STRIP_BASE_Y = stripBaseYFor(PACK_RIP_STRIP_FRACTION);
 
 function clamp01(t: number) {
   return Math.min(1, Math.max(0, t));
@@ -93,8 +103,7 @@ function createPouchGeometry(bulge: number) {
   return geometry;
 }
 
-function createPouchStripGeometry(bulge: number) {
-  const fraction = PACK_RIP_STRIP_FRACTION;
+function createPouchStripGeometry(bulge: number, fraction = PACK_RIP_STRIP_FRACTION) {
   const height = PACK_WORLD_HEIGHT * fraction;
   const geometry = new PlaneGeometry(PACK_WORLD_WIDTH, height, 72, Math.max(8, Math.round(96 * fraction)));
   const positions = geometry.attributes.position;
@@ -156,6 +165,9 @@ interface PackSceneCore {
   stripMesh: Mesh;
   frontGeometry: PlaneGeometry;
   backGeometry: PlaneGeometry;
+  /* The crimp-depth strip every ordinary rip uses. A cut through the pack's
+     middle swaps in a taller one for its own rip and puts this back after. */
+  stripGeometry: PlaneGeometry;
   /* 1x1 parked maps: they give renderer.compile() the USE_MAP shader variant
      during warmup, and hold the map slots while no PackScene is mounted. */
   parkedFrontMap: CanvasTexture;
@@ -280,7 +292,8 @@ async function buildCore(): Promise<PackSceneCore> {
     alphaTest: 0.01,
     depthWrite: false,
   });
-  const stripMesh = new Mesh(createPouchStripGeometry(FRONT_BULGE), stripMaterial);
+  const stripGeometry = createPouchStripGeometry(FRONT_BULGE);
+  const stripMesh = new Mesh(stripGeometry, stripMaterial);
   stripMesh.position.set(0, STRIP_BASE_Y, 0.03);
   stripMesh.renderOrder = 2;
   const bodyGroup = new Group();
@@ -316,6 +329,7 @@ async function buildCore(): Promise<PackSceneCore> {
     stripMesh,
     frontGeometry,
     backGeometry,
+    stripGeometry,
     parkedFrontMap,
     parkedBackMap,
     dead: false,
@@ -397,6 +411,11 @@ export class PackScene {
   private readonly stripMesh: Mesh;
   private readonly stripMaterial: MeshStandardMaterial;
   private stripTexture: CanvasTexture | null = null;
+  /* Only set while this pack's tear-off piece runs deeper than the crimp
+     strip the core keeps; disposed with the scene. */
+  private deepStripGeometry: PlaneGeometry | null = null;
+  private stripFraction = PACK_RIP_STRIP_FRACTION;
+  private stripBaseY = STRIP_BASE_Y;
   private tiltTarget = { x: 0, y: 0 };
   private tiltCurrent = { x: 0, y: 0 };
   private reducedMotion: boolean;
@@ -445,6 +464,7 @@ export class PackScene {
     this.bodyGroup.position.set(0, 0, 0);
     this.bodyGroup.scale.setScalar(1);
     this.packGroup.remove(this.stripMesh);
+    this.stripMesh.geometry = core.stripGeometry;
     this.stripMesh.position.set(0, STRIP_BASE_Y, 0.03);
     this.stripMesh.rotation.set(0, 0, 0);
     this.stripMaterial.map = core.parkedFrontMap;
@@ -519,6 +539,27 @@ export class PackScene {
     };
   }
 
+  /* How deep the tear-off piece reaches, as a fraction of the pack's height.
+     A cut along the perforation leaves this alone; a slash through the pack's
+     middle takes everything above it, so the flying piece is rebuilt at that
+     depth. Call before beginRip - the strip texture has to be cropped to the
+     same fraction. */
+  setRipStripFraction(fraction: number) {
+    if (this.disposed) return;
+    const next = Math.min(
+      PACK_MAX_RIP_STRIP_FRACTION,
+      Math.max(PACK_RIP_STRIP_FRACTION, fraction),
+    );
+    if (Math.abs(next - this.stripFraction) < 0.001) return;
+    this.stripFraction = next;
+    this.deepStripGeometry?.dispose();
+    this.deepStripGeometry =
+      next > PACK_RIP_STRIP_FRACTION + 0.001 ? createPouchStripGeometry(FRONT_BULGE, next) : null;
+    this.stripMesh.geometry = this.deepStripGeometry ?? this.core.stripGeometry;
+    this.stripBaseY = stripBaseYFor(next);
+    this.stripMesh.position.y = this.stripBaseY;
+  }
+
   /* Starts the tear-off: both shells swap to body-only textures (a slash
      goes through both foil layers, so the whole top empties out) and a strip
      mesh (same bulged geometry, strip-only texture) flies away. */
@@ -569,6 +610,12 @@ export class PackScene {
     this.frameId = null;
     this.renderer.domElement.remove();
     this.packGroup.remove(this.stripMesh);
+    // Hand the shared mesh back on the core's own geometry before this
+    // pack's deeper one dies with it.
+    this.stripMesh.geometry = this.core.stripGeometry;
+    this.stripMesh.position.y = STRIP_BASE_Y;
+    this.deepStripGeometry?.dispose();
+    this.deepStripGeometry = null;
     this.stripMaterial.map = this.core.parkedFrontMap;
     this.stripMaterial.opacity = 1;
     // Park the map slots so the shared materials never point at disposed
@@ -623,7 +670,7 @@ export class PackScene {
       } else {
         const stripProgress = clamp01(elapsed / STRIP_MS);
         const stripEase = 1 - Math.pow(1 - stripProgress, 3);
-        this.stripMesh.position.y = STRIP_BASE_Y + stripEase * STRIP_TRAVEL_Y;
+        this.stripMesh.position.y = this.stripBaseY + stripEase * STRIP_TRAVEL_Y;
         this.stripMesh.position.x = stripEase * STRIP_TRAVEL_X;
         this.stripMesh.rotation.z = stripEase * STRIP_SPIN_RAD;
         this.stripMaterial.opacity = 1 - stripEase;
