@@ -50,6 +50,7 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     packUsername: null,
     skinsQuery: null,
     skinsKeys: null,
+    skinsFilters: null,
     skinsSort: null,
     skinsPage: null,
     skinRef: null,

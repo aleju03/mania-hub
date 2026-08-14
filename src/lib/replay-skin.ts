@@ -157,6 +157,9 @@ export interface ReplaySkinKeymodeProfile {
   // skin.ini JudgementLine: the white line at HitPosition. Circle/arrow skins
   // almost always turn it off; stable defaults it on.
   judgementLine: boolean;
+  // skin.ini ColourJudgementLine as #rrggbb or #rrggbbaa. An explicit black
+  // is how circle skins commonly keep the default-on line invisible.
+  judgementLineColor: string;
   // skin.ini ColumnStart: the stage's left edge in osu!pixels from the left
   // edge of the screen (853.33 units wide at 16:9). Skins centre themselves
   // with 427 - width/2; BMS-style skins sit at the left on purpose. null
@@ -397,6 +400,7 @@ export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
   columnLineColor: "",
   columnBackgrounds: [],
   judgementLine: true,
+  judgementLineColor: "",
   columnStart: null,
   lightPosition: null,
   hitPosition: null,
@@ -714,6 +718,7 @@ function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKe
     columnLineColor: normalizeLineColor(raw.columnLineColor),
     columnBackgrounds: normalizeColumnColors(raw.columnBackgrounds),
     judgementLine: typeof raw.judgementLine === "boolean" ? raw.judgementLine : true,
+    judgementLineColor: normalizeLineColor(raw.judgementLineColor),
     columnStart: normalizeNullableStagePosition(raw.columnStart, 853),
     lightPosition: normalizeNullableStagePosition(raw.lightPosition, 480),
     hitPosition: normalizeNullableStagePosition(raw.hitPosition, 768),
@@ -1136,6 +1141,7 @@ function compactKeymodeProfileV3(profile: ReplaySkinKeymodeProfile): Record<stri
   if (profile.columnLineWidths.length > 0) out.n = profile.columnLineWidths;
   if (profile.columnLineColor) out.o = compactColor(profile.columnLineColor);
   if (!profile.judgementLine) out.p = 0;
+  if (profile.judgementLineColor) out.u = compactColor(profile.judgementLineColor);
   if (profile.hitPosition != null) out.q = profile.hitPosition;
   if (profile.scorePosition != null) out.r = profile.scorePosition;
   if (profile.comboPosition != null) out.s = profile.comboPosition;
@@ -1163,6 +1169,7 @@ function expandKeymodeProfileV3(value: unknown): Record<string, unknown> {
     columnLineWidths: raw.n,
     columnLineColor: expandLineColor(raw.o),
     judgementLine: expandBoolean(raw.p),
+    judgementLineColor: expandLineColor(raw.u),
     hitPosition: raw.q,
     scorePosition: raw.r,
     comboPosition: raw.s,

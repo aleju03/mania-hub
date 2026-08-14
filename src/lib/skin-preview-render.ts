@@ -488,52 +488,56 @@ export async function renderSkinPreview(
     else ctx.drawImage(hintImage, layout.stageX, judgmentLineY - height / 2, layout.stageWidth, height);
   }
 
-  // Key images: width stretched to the lane, height at the texture's NATIVE
-  // size in the game's 768-unit space (pixel height / @2x scale, then into
-  // 480-space), bottom-anchored at the screen edge. This is the lazer legacy
-  // key-area rule and it matches gameplay pixel-for-pixel: pl0x's 400px @2x
-  // key renders 125 skin-units tall, putting its ring exactly note-sized with
-  // its bottom on the hit line. One column renders pressed for life.
-  for (let col = 0; col < keys; col += 1) {
-    const assets = profile.assets.columns[col] ?? {};
-    const asset = isPressed(col) ? assets.receptorPressed ?? assets.receptor : assets.receptor;
-    const image = asset ? images.get(asset.src) : undefined;
-    const laneX = layout.laneXs[col];
-    const laneWidth = layout.laneWidths[col];
-    if (image) {
-      const assetScale = asset?.scale && asset.scale > 0 ? asset.scale : 1;
-      const nativeHeight = (asset?.height && asset.height > 0 ? asset.height : image.naturalHeight || 1) / assetScale;
-      const height = Math.max(1, nativeHeight * (480 / 768) * layout.scale);
-      if (upscroll) {
-        // The game flips the stage for upscroll: key art hangs from the top.
-        ctx.save();
-        ctx.scale(1, -1);
-        ctx.drawImage(image, laneX, -height, laneWidth, height);
-        ctx.restore();
+  // Imported key-area art is authored against the stage edge below the hit
+  // line, not against this preview canvas's edge. The preview may clamp the
+  // hit line upward for readability, so anchoring to the canvas separated the
+  // receptor from the note and LightingN art that should overlap it. This is
+  // the same positioning rule as ReplayCanvas.renderReceptors.
+  const drawReceptors = () => {
+    const stageEdge = hitGap;
+    for (let col = 0; col < keys; col += 1) {
+      const assets = profile.assets.columns[col] ?? {};
+      const asset = isPressed(col) ? assets.receptorPressed ?? assets.receptor : assets.receptor;
+      const image = asset ? images.get(asset.src) : undefined;
+      const laneX = layout.laneXs[col];
+      const laneWidth = layout.laneWidths[col];
+      if (image) {
+        const assetScale = asset?.scale && asset.scale > 0 ? asset.scale : 1;
+        const nativeHeight = (asset?.height && asset.height > 0 ? asset.height : image.naturalHeight || 1) / assetScale;
+        const height = Math.max(1, nativeHeight * (480 / 768) * layout.scale);
+        const top = upscroll
+          ? judgmentLineY - stageEdge
+          : judgmentLineY + stageEdge - height;
+        if (upscroll) drawImageFlippedY(ctx, image, laneX, top, laneWidth, height);
+        else ctx.drawImage(image, laneX, top, laneWidth, height);
       } else {
-        ctx.drawImage(image, laneX, SKIN_PREVIEW_HEIGHT - height, laneWidth, height);
+        const height = Math.max(6, SKIN_PREVIEW_HEIGHT * 0.012);
+        const top = upscroll ? judgmentLineY - height - 2 : judgmentLineY + 2;
+        ctx.fillStyle = isPressed(col) ? accent : "rgba(255, 255, 255, 0.25)";
+        fillRoundedRect(ctx, laneX + 2, top, laneWidth - 4, height, 2);
       }
-    } else {
-      const height = Math.max(6, SKIN_PREVIEW_HEIGHT * 0.012);
-      const top = upscroll ? judgmentLineY - height - 2 : judgmentLineY + 2;
-      ctx.fillStyle = isPressed(col) ? accent : "rgba(255, 255, 255, 0.25)";
-      fillRoundedRect(ctx, laneX + 2, top, laneWidth - 4, height, 2);
     }
-  }
+  };
 
-  // The white line at HitPosition, only when skin.ini asks for it
-  // (JudgementLine, default on); circle and arrow skins turn it off.
-  if (profile.judgementLine) {
-    ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
-    ctx.fillRect(layout.stageX, judgmentLineY - 1, layout.stageWidth, 2);
-  }
-
+  // Match the game's sprite order. Most circle skins leave KeysUnderNotes at
+  // zero, so their receptor ring belongs over the landing note; arrow/deck
+  // skins can explicitly put the key area underneath instead.
+  if (profile.keysUnderNotes) drawReceptors();
   for (const ln of pattern.longNotes) {
     drawLongNote(ctx, profile, images, layout, ln, settings, noteAssetHeight, mapY);
   }
   for (const tap of pattern.taps) {
     drawTapNote(ctx, profile, images, layout, tap, upscroll, noteAssetHeight, mapY);
   }
+
+  // The line at HitPosition uses the skin's declared colour. Black-on-black
+  // is intentionally invisible; inventing a translucent white line made this
+  // skin look unlike both stable and lazer.
+  if (profile.judgementLine) {
+    ctx.fillStyle = profile.judgementLineColor || "rgba(255, 255, 255, 0.25)";
+    ctx.fillRect(layout.stageX, judgmentLineY - 1, layout.stageWidth, 2);
+  }
+  if (!profile.keysUnderNotes) drawReceptors();
 
   // Deck, frame and hit glow sit over the columns, as they do in game: the
   // key area art overlaps the bottom of the stage and the frame flanks it.
@@ -1091,6 +1095,11 @@ function drawJudgementAndCombo(
 ): void {
   const centerX = layout.stageX + layout.stageWidth / 2;
   const averageLane = layout.stageWidth / Math.max(1, layout.laneWidths.length);
+  const stagePositionY = (key: "scorePosition" | "comboPosition") => {
+    const fromBottom = Math.max(0, Math.min(768, getReplaySkinStagePosition(profile, settings, key)))
+      * (480 / 768) * layout.scale;
+    return settings.upscroll ? fromBottom : SKIN_PREVIEW_HEIGHT - fromBottom;
+  };
   // The MAX judgement, exactly as the skin defines it: a skin that ships a
   // transparent 300g hides perfect hits in game, so the preview stays empty
   // there too. hit300 only stands in when the skin has no 300g asset at all.
@@ -1105,7 +1114,11 @@ function drawJudgementAndCombo(
     const nativeHeight = (judgementImage.naturalHeight || 1) / judgementScale;
     const width = Math.min(layout.stageWidth * 0.9, nativeWidth * (480 / 768) * layout.scale);
     const height = nativeHeight * (width / nativeWidth);
-    ctx.drawImage(judgementImage, centerX - width / 2, SKIN_PREVIEW_HEIGHT * 0.52 - height / 2, width, height);
+    const centerY = Math.max(
+      SKIN_PREVIEW_HEIGHT * 0.05,
+      Math.min(SKIN_PREVIEW_HEIGHT * 0.8, stagePositionY("scorePosition")),
+    );
+    ctx.drawImage(judgementImage, centerX - width / 2, centerY - height / 2, width, height);
   }
 
   const combo = profile.assets.combo;
@@ -1127,8 +1140,7 @@ function drawJudgementAndCombo(
   // around the declared spot - tekkito2 paints a mania-stage-bottom bar
   // there as the counter's backdrop - so a fixed height left that art
   // orphaned. Clamped to the card for degenerate values.
-  const comboCenter = SKIN_PREVIEW_HEIGHT
-    - Math.max(0, Math.min(768, getReplaySkinStagePosition(profile, settings, "comboPosition"))) * (480 / 768) * layout.scale;
+  const comboCenter = stagePositionY("comboPosition");
   const y = Math.max(
     SKIN_PREVIEW_HEIGHT * 0.05,
     Math.min(SKIN_PREVIEW_HEIGHT * 0.8, comboCenter - digitHeight / 2),

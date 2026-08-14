@@ -20,6 +20,24 @@ const SORT_LABELS: Record<string, string> = {
 
 const MAX_QUERY_CHARS = 80;
 const MAX_NAME_CHARS = 80;
+const MAX_FILTERS_CHARS = 220;
+
+// The trait filters, worded by the chips on the page ("notes", "includes",
+// "client", "display", "uploader"). A bare "other" would say nothing in a feed
+// line, so that one shape names its row.
+const NOTE_SHAPE_LABELS: Record<string, string> = {
+  circle: "circles",
+  arrow: "arrows",
+  bar: "bars",
+  other: "other notes",
+};
+
+// The truthy forms a boolean search param arrives in from a typed URL, minus
+// the non-string ones a URLSearchParams cannot hold.
+function paramFlag(params: URLSearchParams, key: string): boolean {
+  const value = params.get(key);
+  return value === "true" || value === "1";
+}
 
 // A skin URL carries a slug, not a name ("pl0x-aleju03-mix"), and the detail
 // page's own data arrives after the pageview fires. The card that starts the
@@ -59,7 +77,7 @@ export function skinRefFromPath(pathname: string): string {
 
 /**
  * Pageview properties for /skins, keyed the way the admin activity feed reads
- * them back (skins_query, skins_keys, skins_sort, skins_page).
+ * them back (skins_query, skins_keys, skins_filters, skins_sort, skins_page).
  */
 export function getSkinsPageviewProperties(params: URLSearchParams): Record<string, unknown> {
   const props: Record<string, unknown> = {};
@@ -68,7 +86,27 @@ export function getSkinsPageviewProperties(params: URLSearchParams): Record<stri
   if (query) props.skins_query = query.slice(0, MAX_QUERY_CHARS);
 
   const keys = Number(params.get("k"));
-  if (Number.isInteger(keys) && keys >= 1 && keys <= 10) props.skins_keys = `${keys}K`;
+  if (Number.isInteger(keys) && keys >= 1 && keys <= 10) {
+    // 8K splits into two chips on the page: the special flag is the 7K+1 one.
+    props.skins_keys = keys === 8 && paramFlag(params, "special") ? "7K+1" : `${keys}K`;
+  }
+
+  // The trait filters, in the order the page lays them out. Old links may
+  // carry both client flags; that always meant no filter, like the route.
+  const shape = params.get("shape");
+  const resolution = params.get("res")?.trim();
+  const lazer = paramFlag(params, "lazer");
+  const stable = paramFlag(params, "stable");
+  const filters = [
+    shape ? NOTE_SHAPE_LABELS[shape] ?? shape : null,
+    paramFlag(params, "cover") ? "lane cover" : null,
+    paramFlag(params, "stage") ? "mania stage" : null,
+    paramFlag(params, "shots") ? "screenshots" : null,
+    lazer !== stable ? (lazer ? "lazer" : "stable") : null,
+    resolution || null,
+    paramFlag(params, "mine") ? "their uploads" : null,
+  ].filter((part): part is string => Boolean(part));
+  if (filters.length > 0) props.skins_filters = filters.join(" · ").slice(0, MAX_FILTERS_CHARS);
 
   const sort = params.get("sort");
   if (sort) props.skins_sort = SORT_LABELS[sort] ?? sort;

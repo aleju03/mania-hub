@@ -42,6 +42,26 @@ describe("getSkinsPageviewProperties", () => {
     expect(getSkinsPageviewProperties(params("k=99"))).toEqual({});
   });
 
+  it("calls the 7K+1 chip by its name instead of 8K", () => {
+    expect(getSkinsPageviewProperties(params("k=8&special=true")).skins_keys).toBe("7K+1");
+    expect(getSkinsPageviewProperties(params("k=8")).skins_keys).toBe("8K");
+    // The flag refines nothing but an 8K filter, like the route.
+    expect(getSkinsPageviewProperties(params("k=7&special=true")).skins_keys).toBe("7K");
+  });
+
+  it("joins the trait filters the way the page words them", () => {
+    expect(getSkinsPageviewProperties(params("shape=arrow&cover=true&shots=true&lazer=true&res=1920x1080"))).toEqual({
+      skins_filters: "arrows · lane cover · screenshots · lazer · 1920x1080",
+    });
+    expect(getSkinsPageviewProperties(params("shape=other&stage=true&stable=true&mine=true"))).toEqual({
+      skins_filters: "other notes · mania stage · stable · their uploads",
+    });
+  });
+
+  it("reads a legacy link carrying both client flags as no client filter", () => {
+    expect(getSkinsPageviewProperties(params("lazer=true&stable=true"))).toEqual({});
+  });
+
   it("caps a pasted-in search so one visitor cannot bloat the feed", () => {
     const props = getSkinsPageviewProperties(params(`q=${"a".repeat(200)}`));
     expect(String(props.skins_query)).toHaveLength(80);

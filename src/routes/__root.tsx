@@ -546,7 +546,10 @@ function ChangelogFooterLink() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          track("changelog_open");
+          setOpen(true);
+        }}
         className="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-osu-pink-light/60"
       >
         changelog

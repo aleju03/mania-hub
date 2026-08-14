@@ -3865,12 +3865,16 @@ export class ManiaReplayRenderer {
   }
 
   private renderJudgmentLine(layout: Layout) {
-    // skin.ini JudgementLine: the white bar across the hit position. Skins
-    // that draw their own hit line (or want none) turn it off, and stable
-    // honours that; drawing it anyway put a line through art that has none.
+    // skin.ini JudgementLine + ColourJudgementLine: skins either disable the
+    // bar or paint it into the stage (often black-on-black for circle decks).
+    // Inventing white here put a line through art that has none in game.
     if (this.skinSettings.style !== "bars" || !this.skinProfile.judgementLine) return;
     const { playfieldX, playfieldWidth, judgmentY } = layout;
-    this.line(playfieldX, judgmentY, playfieldX + playfieldWidth, judgmentY, "#ffffff", 0.82, 2);
+    const declaredColor = this.skinProfile.judgementLineColor;
+    const rawColor = declaredColor || "#ffffff";
+    const color = rawColor.slice(0, 7);
+    const alpha = rawColor.length === 9 ? parseInt(rawColor.slice(7, 9), 16) / 255 : declaredColor ? 1 : 0.82;
+    this.line(playfieldX, judgmentY, playfieldX + playfieldWidth, judgmentY, color, alpha, 2);
   }
 
   private renderReceptors(layout: Layout) {

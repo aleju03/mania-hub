@@ -42,6 +42,7 @@ export interface AnalyticsRecentEventRow {
   packUsername: string | null;
   skinsQuery: string | null;
   skinsKeys: string | null;
+  skinsFilters: string | null;
   skinsSort: string | null;
   skinsPage: string | null;
   skinRef: string | null;
@@ -243,6 +244,7 @@ function describeMaps(row: AnalyticsRecentEventRow): AnalyticsActivity {
 function describeSkinsList(row: AnalyticsRecentEventRow): AnalyticsActivity {
   const facets = joinDetail([
     row.skinsKeys,
+    row.skinsFilters,
     row.skinsSort ? `sort: ${row.skinsSort}` : null,
     row.skinsPage ? `page ${row.skinsPage}` : null,
   ]);
@@ -296,6 +298,8 @@ export function describeAnalyticsEvent(
 ): AnalyticsActivity {
   // Explicit events first: they say more than the page they happened on.
   switch (row.event) {
+    case "changelog_open":
+      return { kind: "visit", verb: "opened", subject: "the changelog", detail: null };
     case "replay_view": {
       const map = replayMapName(row, replayMaps);
       return {

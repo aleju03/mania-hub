@@ -559,6 +559,7 @@ async function buildProfileFromManiaBlock({
   const columnLineColor = parseColorWithAlpha(block.ColourColumnLine) ?? "";
   const judgementLineValue = parseNumber(block.JudgementLine);
   const judgementLine = judgementLineValue == null ? true : judgementLineValue !== 0;
+  const judgementLineColor = parseColorWithAlpha(block.ColourJudgementLine) ?? "";
   // ColumnStart is the stage's left edge in osu!pixels from the screen's left
   // edge (853.33 units wide at 16:9); LightPosition is the column light's
   // bottom edge, top-down in the 480 space like HitPosition. Both stay null
@@ -751,6 +752,7 @@ async function buildProfileFromManiaBlock({
       columnLineWidths,
       columnLineColor,
       judgementLine,
+      judgementLineColor,
       columnStart,
       lightPosition,
       hitPosition,

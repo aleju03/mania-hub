@@ -670,6 +670,7 @@ describe("ManiaReplayRenderer skin customization", () => {
 
   it("places the stage from the keymode's own hit position", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const cardSource = fs.readFileSync(path.resolve(__dirname, "../../lib/skin-preview-render.ts"), "utf8");
 
     // A skin sets HitPosition per [Mania] block (the Teto edit holds 4K at 440
     // and 7K at 393) and pads its key art to land on that line, so the hit
@@ -680,6 +681,11 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain('const y = this.getStagePositionY(this.stagePosition("scorePosition"), layout);');
     expect(source).toContain('const comboY = this.getStagePositionY(this.stagePosition("comboPosition"), layout);');
     expect(source).toContain("return getReplaySkinStagePosition(this.skinProfile, this.skinSettings, key);");
+    // Catalog HUD art uses the same per-keymode ScorePosition/ComboPosition;
+    // a fixed percentage reverses their order on Everything Circles.
+    expect(cardSource).toContain('stagePositionY("scorePosition")');
+    expect(cardSource).toContain('stagePositionY("comboPosition")');
+    expect(cardSource).not.toContain("SKIN_PREVIEW_HEIGHT * 0.52 - height / 2");
   });
 
   it("keeps preview stages transparent under a skin that declares black lanes", () => {
@@ -705,6 +711,7 @@ describe("ManiaReplayRenderer skin customization", () => {
 
   it("renders imported key images stable-style and mutes built-in stage cosmetics under skin art", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const cardSource = fs.readFileSync(path.resolve(__dirname, "../../lib/skin-preview-render.ts"), "utf8");
 
     // Key images keep their native height in the game's 768-space and sit on
     // the bottom edge of the stage (lazer's LegacyKeyArea rule, shared with
@@ -720,9 +727,14 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain('const stageEdge = getSkinStagePositionUnits(this.stagePosition("hitPosition")) * layout.layoutScale;');
     expect(source).toContain("this.drawSkinImage(receptorAsset, x + colWidth / 2, judgmentY + stageEdge - height, colWidth, height, 0.5, 0, 1);");
     expect(source).toContain("this.drawSkinImage(receptorAsset, x + colWidth / 2, judgmentY - stageEdge, colWidth, height, 0.5, 0, 1, 0xffffff, true);");
+    expect(cardSource).toContain("const stageEdge = hitGap;");
+    expect(cardSource).toContain("judgmentLineY + stageEdge - height");
+    expect(cardSource).not.toContain("ctx.drawImage(image, laneX, SKIN_PREVIEW_HEIGHT - height, laneWidth, height)");
     // skin.ini KeysUnderNotes flips the draw order, nothing else.
     expect(source).toContain("if (keysUnderNotes) this.renderReceptors(layout);");
     expect(source).toContain("if (!keysUnderNotes) this.renderReceptors(layout);");
+    expect(cardSource).toContain("if (profile.keysUnderNotes) drawReceptors();");
+    expect(cardSource).toContain("if (!profile.keysUnderNotes) drawReceptors();");
     // The alternating tints / boundary lines / border rect are the built-in
     // bars look; a skin with real column art must not get them stacked on top.
     expect(source).toContain('const showColumnDividers = this.skinSettings.style === "bars" && !hasImportedColumnArt;');
@@ -744,6 +756,8 @@ describe("ManiaReplayRenderer skin customization", () => {
     // Skins that draw their own hit line (JudgementLine: 0) got a white bar
     // through art that has none.
     expect(source).toContain('if (this.skinSettings.style !== "bars" || !this.skinProfile.judgementLine) return;');
+    expect(source).toContain("const declaredColor = this.skinProfile.judgementLineColor;");
+    expect(source).toContain('const rawColor = declaredColor || "#ffffff";');
     // Cap art is widest at its centre, so a body carried to the cap's far
     // edge pokes out around a round note.
     expect(source).toContain("const bodyHeadY = this.skinSettings.upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;");

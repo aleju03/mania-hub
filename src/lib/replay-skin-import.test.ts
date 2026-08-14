@@ -351,13 +351,17 @@ describe("importReplaySkinFromOsk per-keymode stage positions", () => {
 });
 
 describe("importReplaySkinFromOsk stage flags and lazer HUD layout", () => {
-  const iniLines = ["[General]", "Name: Deck", "[Mania]", "Keys: 4", "KeysUnderNotes: 1", "ComboPosition: 150"];
+  const iniLines = [
+    "[General]", "Name: Deck", "[Mania]", "Keys: 4", "KeysUnderNotes: 1",
+    "ComboPosition: 150", "ColourJudgementLine: 0,0,0,128",
+  ];
 
   it("reads KeysUnderNotes and leaves the combo alone without a lazer layout file", async () => {
     const file = await buildOsk(iniLines.join("\n"), ["mania-note1.png", "mania-key1.png"]);
     const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
 
     expect(result.settings.keymodeProfiles["4"].keysUnderNotes).toBe(true);
+    expect(result.settings.keymodeProfiles["4"].judgementLineColor).toBe("#00000080");
     expect(result.settings.keymodeProfiles["4"].comboScale).toBe(1);
     // skin.ini ComboPosition 150 (top-down 480-space) in replay coordinates.
     expect(result.settings.comboPosition).toBe(Math.round((480 - 150) * 1.6));

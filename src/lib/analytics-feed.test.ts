@@ -44,6 +44,7 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     packUsername: null,
     skinsQuery: null,
     skinsKeys: null,
+    skinsFilters: null,
     skinsSort: null,
     skinsPage: null,
     skinRef: null,
@@ -70,6 +71,15 @@ describe("describeAnalyticsEvent", () => {
       kind: "visit",
       verb: "visited",
       subject: "the tracker",
+      detail: null,
+    });
+  });
+
+  it("shows changelog clicks as their own activity", () => {
+    expect(describeAnalyticsEvent(row({ event: "changelog_open", path: "/skins" }))).toEqual({
+      kind: "visit",
+      verb: "opened",
+      subject: "the changelog",
       detail: null,
     });
   });
@@ -179,6 +189,29 @@ describe("describeAnalyticsEvent", () => {
       verb: "shipped a new build of",
       subject: "Freedom Dive",
       detail: "4K/7K",
+    });
+  });
+
+  it("keeps the skins facets as context, on a search and on a plain browse", () => {
+    expect(
+      describeAnalyticsEvent(row({
+        path: "/skins",
+        skinsQuery: "arrow",
+        skinsKeys: "7K",
+        skinsFilters: "circles · lane cover",
+        skinsSort: "most downloaded",
+      })),
+    ).toEqual({
+      kind: "search",
+      verb: "searched",
+      subject: '"arrow"',
+      detail: "in Skins · 7K · circles · lane cover · sort: most downloaded",
+    });
+    expect(describeAnalyticsEvent(row({ path: "/skins", skinsFilters: "lazer · their uploads" }))).toEqual({
+      kind: "skin",
+      verb: "browsed",
+      subject: "Skins",
+      detail: "lazer · their uploads",
     });
   });
 

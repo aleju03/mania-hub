@@ -124,6 +124,7 @@ export interface AnalyticsFeedEvent {
   packUsername: string | null;
   skinsQuery: string | null;
   skinsKeys: string | null;
+  skinsFilters: string | null;
   skinsSort: string | null;
   skinsPage: string | null;
   skinRef: string | null;
@@ -859,6 +860,7 @@ export function buildMonitorFeedEvent(displayTimeZone: string, record: Analytics
     farmMapUser: str("farm_map_user"),
     skinsQuery: str("skins_query"),
     skinsKeys: str("skins_keys"),
+    skinsFilters: str("skins_filters"),
     skinsSort: str("skins_sort"),
     skinsPage: str("skins_page"),
     skinRef: str("skin_ref"),

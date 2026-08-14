@@ -113,6 +113,7 @@ describe("replay skin settings", () => {
           columnLineColor: "",
           columnBackgrounds: [],
           judgementLine: true,
+          judgementLineColor: "",
           columnStart: null,
           lightPosition: null,
           hitPosition: null,
@@ -267,7 +268,7 @@ describe("replay skin settings", () => {
     expect(payload?.settings).toEqual(settings);
   });
 
-  it("round-trips column line widths, colour, and judgement line through v3 share codes", () => {
+  it("round-trips column and judgement line styling through v3 share codes", () => {
     const settings = normalizeReplaySkinSettings({
       keymodeProfiles: {
         8: {
@@ -275,6 +276,7 @@ describe("replay skin settings", () => {
           columnLineWidths: [0, 1, 0, 0, 0, 0, 0, 0, 0],
           columnLineColor: "#ffffff96",
           judgementLine: false,
+          judgementLineColor: "#11223380",
         },
       },
     });
@@ -282,6 +284,7 @@ describe("replay skin settings", () => {
     expect(profile.columnLineWidths).toEqual([0, 1, 0, 0, 0, 0, 0, 0, 0]);
     expect(profile.columnLineColor).toBe("#ffffff96");
     expect(profile.judgementLine).toBe(false);
+    expect(profile.judgementLineColor).toBe("#11223380");
 
     const payload = parseReplaySkinShareKey(createReplaySkinShareKey("lines", settings));
     expect(payload?.settings).toEqual(settings);
