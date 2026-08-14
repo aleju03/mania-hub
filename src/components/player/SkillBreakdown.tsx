@@ -125,7 +125,7 @@ function ProvisionalChip({ mode }: { mode: MyDataSkillMode }) {
 function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode): string | undefined {
   const percentile = mode.percentiles?.[entry.axis];
   if (!percentile) return undefined;
-  return `${entry.label}: ${formatTopShare(percentile.value)} of ${percentile.population.toLocaleString()} tracked ${mode.keyCount}K players`;
+  return `${entry.label}: ${formatTopShare(percentile.value)} of ${percentile.population.toLocaleString()} tracked ${mode.keyCount}K mains`;
 }
 
 function DanChips({ mode }: { mode: MyDataSkillMode }) {
@@ -227,7 +227,7 @@ export function SkillBreakdownBody({ skills, mode, own = false }: { skills: MyDa
       {overallPercentile ? (
         <div className="mb-2.5 text-[11px] text-osu-l2">
           <span className="font-semibold text-osu-pink-light">{formatTopShare(overallPercentile.value)}</span>
-          {" "}of {overallPercentile.population.toLocaleString()} tracked {mode!.keyCount}K players
+          {" "}of {overallPercentile.population.toLocaleString()} tracked {mode!.keyCount}K mains
         </div>
       ) : (
         <div className="mb-2.5" />
@@ -482,7 +482,7 @@ export function SkillModePanel({
           {overallPercentile ? (
             <div className="mt-1 text-[11px] text-osu-l2">
               <span className="font-semibold text-osu-pink-light">{formatTopShare(overallPercentile.value)}</span>
-              {" "}of {overallPercentile.population.toLocaleString()} tracked {mode.keyCount}K players
+              {" "}of {overallPercentile.population.toLocaleString()} tracked {mode.keyCount}K mains
             </div>
           ) : null}
         </div>

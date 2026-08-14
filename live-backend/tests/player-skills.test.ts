@@ -449,6 +449,39 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
+  it("vetoes the tech tag on near-certain chordjack charts", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      // Pure CJ charts carry a mid tech score from chord churn alone; only the
+      // chart below the chordjack-certainty bar keeps its tech tag.
+      const taggings = [
+        [101, [{ id: "chordjack", score: 1 }, { id: "bracket", score: 1 }, { id: "tech", score: 0.6 }]],
+        [102, [{ id: "chordjack", score: 0.85 }, { id: "tech", score: 0.75 }]],
+        [103, [{ id: "chordjack", score: 0.4 }, { id: "tech", score: 0.7 }]],
+      ] as const;
+      for (const [beatmapId, patterns] of taggings) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ patterns }), new Date().toISOString()],
+        );
+      }
+
+      const scores = [
+        play({ id: 1, beatmap_id: 101, accuracy: 0.99 }),
+        play({ id: 2, beatmap_id: 102, accuracy: 0.97 }),
+        play({ id: 3, beatmap_id: 103, accuracy: 0.95 }),
+      ];
+      const result = await computePlayerSkillRatings(db, failingOsu, scores, []);
+      const byBeatmap = new Map(result.plays.map((entry) => [entry.beatmapId, entry.patterns]));
+      expect(byBeatmap.get(101)).toEqual(["chordjack", "bracket"]);
+      expect(byBeatmap.get(102)).toEqual(["chordjack"]);
+      expect(byBeatmap.get(103)).toEqual(["tech"]);
+    });
+  });
+
   it("positions player dan from a quorum of qualifying clears per verdict side", async () => {
     await withDb(async (db) => {
       await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });

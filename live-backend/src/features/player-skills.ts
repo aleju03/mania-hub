@@ -82,6 +82,15 @@ const PATTERN_RATING_MIN_PLAYS = 3;
 // tags (ln, tech) land on nearly every chart and would aggregate to a copy of
 // Overall. A chart only counts toward a pattern it is meaningfully made of.
 const PATTERN_TAG_MIN_SCORE = 0.5;
+// A chart the analyzer reads as near-certain chordjack never counts as a tech
+// chart, even when its tech score clears the bar: dense chordjack saturates
+// the tech detector's ingredients (chord-size churn, direction changes, row
+// variety), so pure CJ charts carried a 0.5-0.76 tech score and, ranked by
+// Overall SSR, topped every "top Tech plays" list. Checked 2026-08 against
+// mapper-tagged sets: only ~2-3% of tech-labelled diffs reach chordjack 0.8,
+// so the veto costs genuine tech charts almost nothing, while unambiguous CJ
+// diffs (chordjack >= 0.8) carried a false tech tag 75-88% of the time.
+const TECH_TAG_CHORDJACK_VETO = 0.8;
 const SSR_GOAL_MIN = 0.8;
 // The calc clamps goals above 0.965 internally (Etterna's SSR cap); goals
 // above it are served by extrapolating from the calc's slope between the MSD
@@ -614,12 +623,17 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
   )).rows;
   for (const row of rows) {
     const parsed = parseJson<LeanClassificationJson | null>(String(row.classification_json ?? ""), null);
-    const patternIds = Array.isArray(parsed?.patterns)
-      ? [...new Set(parsed.patterns
-          .filter((hit) => Number(hit?.score ?? 0) >= PATTERN_TAG_MIN_SCORE)
-          .map((hit) => String(hit?.id ?? ""))
-          .filter(Boolean))]
-      : [];
+    const patternScores = new Map<string, number>();
+    for (const hit of Array.isArray(parsed?.patterns) ? parsed.patterns : []) {
+      const id = String(hit?.id ?? "");
+      if (id) patternScores.set(id, Math.max(patternScores.get(id) ?? 0, Number(hit?.score ?? 0)));
+    }
+    const chordjackScore = patternScores.get("chordjack") ?? 0;
+    const patternIds = [...patternScores.entries()]
+      .filter(([id, score]) =>
+        score >= PATTERN_TAG_MIN_SCORE
+        && !(id === "tech" && chordjackScore >= TECH_TAG_CHORDJACK_VETO))
+      .map(([id]) => id);
     const lnRatio = Number(parsed?.lnRatio);
     const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
     const dtRawDan = readRawDan(danDt ?? undefined);
