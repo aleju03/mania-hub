@@ -135,12 +135,17 @@ interface AxisCurveEntry {
 
 type AxisCurveMap = Record<string, AxisCurveEntry>;
 
+// Exact curves always carry the raw median their values were shrunk with.
+interface ExactAxisCurveEntry extends AxisCurveEntry {
+  median: number;
+}
+
 export interface ExactSkillCurves {
   computedAt: string;
   playerSkillsVersion: number;
   minPlays: number;
   // keyCount -> axis -> entry; axis is a skillset name or `pattern:{id}`.
-  curves: Record<string, Record<string, { count: number; curve: number[]; median: number }>>;
+  curves: Record<string, Record<string, ExactAxisCurveEntry>>;
   users: Record<string, number>;
 }
 
@@ -558,7 +563,7 @@ export async function buildExactSkillCurves(db: Db): Promise<ExactSkillCurves> {
   const users: Record<string, number> = {};
   for (const [keyCount, axes] of samples) {
     users[String(keyCount)] = members.get(keyCount) ?? 0;
-    const axisCurves: Record<string, { count: number; curve: number[]; median: number }> = {};
+    const axisCurves: Record<string, ExactAxisCurveEntry> = {};
     for (const [axis, list] of axes) {
       if (list.length < BASELINE_MIN_USERS_PER_CURVE) continue;
       const raw = list.map((sample) => sample.value).sort((a, b) => a - b);
@@ -613,7 +618,7 @@ async function finalizeSkillBaseline(db: Db, runId: string): Promise<void> {
         else axisValues.set(axis, [Number(value)]);
       }
     }
-    const axisCurves: Record<string, { count: number; curve: number[] }> = {};
+    const axisCurves: Record<string, Omit<AxisCurveEntry, "median">> = {};
     for (const [axis, values] of axisValues) {
       if (values.length < BASELINE_MIN_USERS_PER_CURVE) continue;
       values.sort((a, b) => a - b);
