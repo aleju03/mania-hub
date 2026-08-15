@@ -28,7 +28,7 @@ export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
   { date: "2026-08-15", text: "Collections show every dan logo in a pack's range on its cover, not just the last one", to: "/maps" },
-  { date: "2026-08-15", text: "Fixed many 4K maps showing a way lower MSD and dan estimate than they should since Aug 14. Affected maps are being recomputed", to: "/maps" },
+  { date: "2026-08-15", text: "Fixed many maps showing a way lower MSD and dan estimate than they should since Aug 14. Affected maps and player skill ratings are being recomputed", to: "/maps" },
   { date: "2026-08-15", text: "Skins that mix circles and bars are now labeled correctly", to: "/skins" },
   { date: "2026-08-15", text: "Farm helper: estimated pp gains and target scores are more realistic, they used to lowball what a map could give you", to: "/farm-helper" },
   { date: "2026-08-15", text: "Farm helper: push acc is now skillboost. Skillboost maps are hidden by default until you achieve one of its scores; the skillboost tab still shows them", to: "/farm-helper" },
