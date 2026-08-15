@@ -73,12 +73,61 @@ function bucketLabel(summary: LiveMapCollectionSummary): string {
   return "MSD";
 }
 
-/** The badge that represents a dan bucket: its hardest level's course logo. */
-function bucketBadgeSrc(summary: LiveMapCollectionSummary): string | null {
-  if (summary.axis !== "dan") return null;
-  const level = summary.bucketHi ?? summary.bucketLo;
-  if (level == null) return null;
-  return danScaleImage(level, danContext(summary));
+// Where a ladder starts, for buckets left open at the bottom: "up to 3 dan"
+// runs from the first course of its ladder.
+function ladderFloor(context: DanScaleContext): number {
+  return context === "reform" || context === "ln" ? 1 : 0;
+}
+
+/** The badges for a dan bucket: the course logo of every level it spans. */
+function bucketBadgeSrcs(summary: LiveMapCollectionSummary): string[] {
+  if (summary.axis !== "dan") return [];
+  const context = danContext(summary);
+  const lo = summary.bucketLo ?? ladderFloor(context);
+  // An open top ("Delta+") shows its floor alone: the ladder runs on to kappa
+  // and no pack reaches anywhere near that far.
+  const hi = summary.bucketHi ?? summary.bucketLo;
+  if (hi == null) return [];
+  const srcs: string[] = [];
+  for (let level = lo; level <= hi; level += 1) {
+    const src = danScaleImage(level, context);
+    // The scale clamps past the ends of a ladder, so a bucket that overshoots
+    // one would otherwise repeat its last badge.
+    if (src && !srcs.includes(src)) srcs.push(src);
+  }
+  return srcs;
+}
+
+// 4K reform tops out at 10 and the 4K LN ladder at 16; both draw those
+// two-digit badges at a smaller font than the single-digit ones, since two
+// glyphs have to fit the same square. Left alone, "9 10" reads as a step down in
+// size, so the two-digit box grows to bring the numeral back to its neighbours'
+// height. The 7K badges are circles of one radius and need no such thing.
+function isTwoDigitBadge(src: string): boolean {
+  return /\/dans\/(reform|ln)\/1[0-6]\.svg$/.test(src);
+}
+
+function DanBadges({ srcs, size, className = "" }: { srcs: string[]; size: number; className?: string }) {
+  return (
+    <div className={`flex flex-shrink-0 items-center gap-1 ${className}`}>
+      {srcs.map((src) => {
+        const px = isTwoDigitBadge(src) ? Math.round(size * 1.4) : size;
+        return (
+          <img
+            key={src}
+            src={src}
+            alt=""
+            style={{ width: px, height: px }}
+            // No CSS drop-shadow: every badge asset draws its own feDropShadow,
+            // and a second one would put a filtered layer on each of the ~100
+            // badges a page of packs renders.
+            className="object-contain"
+            loading="lazy"
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 function collectionCovers(summary: LiveMapCollectionSummary): number[] {
@@ -162,7 +211,7 @@ function CoverStrip({ setIds, className = "" }: { setIds: number[]; className?: 
 }
 
 function CollectionTile({ summary, onClick }: { summary: LiveMapCollectionSummary; onClick: () => void }) {
-  const badge = bucketBadgeSrc(summary);
+  const badges = bucketBadgeSrcs(summary);
   const label = bucketLabel(summary);
   const accent = PATTERN_COLOR[summary.pattern ?? ""] ?? "#cfcfe6";
   return (
@@ -170,22 +219,32 @@ function CollectionTile({ summary, onClick }: { summary: LiveMapCollectionSummar
       type="button"
       onClick={onClick}
       style={{ "--tile-accent": accent } as CSSProperties}
-      className="group flex flex-col overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 text-left transition-colors hover:border-(--tile-accent) focus:outline-none cursor-pointer"
+      className="group relative flex flex-col rounded-xl border border-osu-b3/20 bg-osu-b4 text-left focus:outline-none cursor-pointer"
     >
-      <CoverStrip setIds={collectionCovers(summary)} className="h-14 w-full" />
-      <div className="flex items-center gap-2.5 px-3 py-2.5">
-        {badge ? (
-          <img src={badge} alt="" className="h-9 w-9 flex-shrink-0 object-contain" loading="lazy" />
-        ) : (
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-osu-b3/50 text-[9px] font-extrabold uppercase tracking-wide text-osu-f1">
-            msd
-          </span>
+      {/* The course logos are stamped on the artwork rather than set beside the
+          title: a four-level range beside it left the title truncating, and the
+          badges carry their own outline and shadow, so they read over a cover.
+          Centred, not against one edge - sat over the leftmost cover they read
+          as that map's rating instead of the pack's range. */}
+      <div className="relative overflow-hidden rounded-t-[11px]">
+        <CoverStrip setIds={collectionCovers(summary)} className="h-16 w-full" />
+        {badges.length > 0 && (
+          <>
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.55)_45%,rgba(0,0,0,0.1)_100%)]" />
+            <DanBadges srcs={badges} size={32} className="absolute inset-0 justify-center" />
+          </>
         )}
-        <div className="min-w-0">
-          <div className="truncate text-[14px] font-extrabold leading-tight text-osu-l1">{label}</div>
-          <div className="mt-0.5 text-[10.5px] text-osu-f1">{summary.memberCount} maps</div>
-        </div>
       </div>
+      <div className="min-w-0 px-3 py-2.5">
+        <div className="truncate text-[14px] font-extrabold leading-tight text-osu-l1">{label}</div>
+        <div className="mt-0.5 text-[10.5px] text-osu-f1">{summary.memberCount} maps</div>
+      </div>
+      {/* The accent edge fades in as an overlay's opacity, not as the button's
+          own border-color: opacity animates on the compositor, while a
+          border-color transition repaints the whole tile - three covers and the
+          scrim with them - on every frame of the fade, for every tile a pointer
+          crosses on its way across the row. */}
+      <div className="pointer-events-none absolute -inset-px rounded-xl border border-(--tile-accent) opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
     </button>
   );
 }
@@ -383,7 +442,7 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
   // Skip order for the preview player: the pack as listed.
   const previewTracks = useMemo(() => (detail?.items ?? []).map(toPreviewTrack), [detail]);
 
-  const badge = detail ? bucketBadgeSrc(detail) : null;
+  const badges = detail ? bucketBadgeSrcs(detail) : [];
   // Rotation newcomers are a header stat only: each rotation re-samples most of
   // the pack (40 from a pool that is often ~4x that), so a per-card "new" badge
   // was lit on the majority of cards and read as "newly ranked map". A pack
@@ -408,7 +467,7 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
       ) : (
         <>
           <div className="flex items-center gap-3.5 border-b border-osu-b3/25 pb-3">
-            {badge && <img src={badge} alt="" className="h-12 w-12 flex-shrink-0 object-contain" loading="lazy" />}
+            {badges.length > 0 && <DanBadges srcs={badges} size={48} />}
             <div className="min-w-0">
               <h1 className="flex flex-wrap items-baseline gap-x-2.5 text-[22px] font-extrabold tracking-tight text-osu-l1">
                 {patternLabel(detail.pattern ?? "")} · {detail.keyCount ?? "?"}K · {bucketLabel(detail)}

@@ -35,6 +35,9 @@ import type { OscScore } from "../shared/types.js";
 //                                    predicted-accuracy benchmark scaling)
 //   npm run backtest:farm-helper -- --no-survival     (A/B: disable the A10
 //                                    survival ranking discount)
+//   npm run backtest:farm-helper -- --acc-conservative (A/B: scale benchmarks
+//                                    on the pre-2026-08-15 conservative
+//                                    accuracy percentile instead of the median)
 //
 // NOTE ON A8 LEAKAGE: the personal accuracy model comes from the CURRENT
 // player_skill_ratings row (stored acc_model_json, or fitted on the fly from
@@ -67,6 +70,7 @@ interface Args {
   accOnly: boolean;
   noAccScaling: boolean;
   noSurvival: boolean;
+  accConservative: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -93,6 +97,7 @@ function parseArgs(argv: string[]): Args {
     accOnly: argv.includes("--acc-only"),
     noAccScaling: argv.includes("--no-acc-scaling"),
     noSurvival: argv.includes("--no-survival"),
+    accConservative: argv.includes("--acc-conservative"),
   };
 }
 
@@ -304,7 +309,7 @@ async function main(): Promise<void> {
   const subjects = await selectSubjects(db, args);
   console.log(
     `[backtest] label=${args.label} rev=${gitRev} keyMode=${args.keyMode} cutDays=${args.cutDays} `
-    + `accScaling=${args.noAccScaling ? "off" : "on"} survival=${args.noSurvival ? "off" : "on"} `
+    + `accScaling=${args.noAccScaling ? "off" : args.accConservative ? "conservative" : "median"} survival=${args.noSurvival ? "off" : "on"} `
     + `subjects=${subjects.length} (>=${args.minEvents} events, span>=${args.minSpanDays}d) `
     + `farmed played_at null fraction=${round(nullFraction, 4)}`,
   );
@@ -364,6 +369,7 @@ async function main(): Promise<void> {
       limit: args.recLimit,
       noAccScaling: args.noAccScaling,
       noSurvival: args.noSurvival,
+      accConservativeBasis: args.accConservative,
       accModel,
     });
 

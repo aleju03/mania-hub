@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { exec } from "../../db.js";
 import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../../features/activity.js";
 import { enrichPayloadAvatarAccents } from "../../features/avatar-accents.js";
-import { getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu } from "../../features/player-profiles.js";
+import { getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, getPlayerReplayScores } from "../../features/player-profiles.js";
 import { getPlayerSkillBreakdown, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
@@ -11,7 +11,7 @@ import type { Db } from "../../db.js";
 import type { HttpContext } from "../context.js";
 import { createMapsResponseCache, pruneMapsResponseCache, serveMapsResponseCached, type MapsResponseCache } from "../maps-response-cache.js";
 import { prepareJsonResponse, type PreparedJsonResponse } from "../prepared-json.js";
-import { clampInteger } from "../request.js";
+import { clampInteger, clampLimit } from "../request.js";
 import { checkRate, negotiateEncoding, sendAccentEnrichedJson, sendJson } from "../respond.js";
 
 export async function handleProfileRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL, country: string): Promise<boolean> {
@@ -65,6 +65,13 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
         return true;
       }
       sendJson(req, res, ctx, 200, await getPlayerRecentScores(ctx.serveWriteDb ?? ctx.db, userId));
+      return true;
+    }
+    if (profileRoute.kind === "replay-scores") {
+      const limit = clampLimit(url.searchParams.get("limit"), 100, 200);
+      const offset = clampInteger(url.searchParams.get("offset"), 0, 1_000_000, 0);
+      res.setHeader("cache-control", "public, max-age=30, stale-while-revalidate=60");
+      sendJson(req, res, ctx, 200, await getPlayerReplayScores(ctx.db, userId, limit, offset));
       return true;
     }
     if (profileRoute.kind === "activity") {
@@ -141,8 +148,8 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
   return false;
 }
 
-function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays"; key: string } | null {
-  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|about|activity|activity-day|activity-availability|skills|skill-plays)$/.exec(pathname);
+function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays"; key: string } | null {
+  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|replay-scores|about|activity|activity-day|activity-availability|skills|skill-plays)$/.exec(pathname);
   if (!match) return null;
   let key: string;
   try {
@@ -152,7 +159,7 @@ function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snaps
   }
   return {
     key,
-    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays",
+    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays",
   };
 }
 

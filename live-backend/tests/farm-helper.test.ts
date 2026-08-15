@@ -2123,7 +2123,8 @@ describe("farm helper predicted-accuracy benchmark scaling", () => {
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_ACC);
 
     const prediction = predictPlayerAccuracy(model, { keyCount: 4, chartOverall: 24, family: "stream" })!;
-    const scale = computeAccBenchmarkScale(prediction, ACC_MODEL_PRIOR_TYPICAL_ACC);
+    // The serving basis is the median accuracy prediction (2026-08-15).
+    const scale = computeAccBenchmarkScale({ accConservative: prediction.accMedian }, ACC_MODEL_PRIOR_TYPICAL_ACC);
     expect(scale).toBeGreaterThan(0);
     expect(scale).toBeLessThan(1);
 
@@ -2150,8 +2151,9 @@ describe("farm helper predicted-accuracy benchmark scaling", () => {
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_ACC);
 
     const prediction = predictPlayerAccuracy(model, { keyCount: 4, chartOverall: 24, family: "stream" })!;
-    const storedScale = computeAccBenchmarkScale(prediction, 0.97);
-    const priorScale = computeAccBenchmarkScale(prediction, ACC_MODEL_PRIOR_TYPICAL_ACC);
+    // Same median basis as the serving path.
+    const storedScale = computeAccBenchmarkScale({ accConservative: prediction.accMedian }, 0.97);
+    const priorScale = computeAccBenchmarkScale({ accConservative: prediction.accMedian }, ACC_MODEL_PRIOR_TYPICAL_ACC);
     // The stored 97% typical accuracy discounts harder than the ~93.9% prior.
     expect(storedScale).toBeLessThan(priorScale);
     expect(rec?.benchmarkPp).toBeCloseTo(620 * storedScale, 1);

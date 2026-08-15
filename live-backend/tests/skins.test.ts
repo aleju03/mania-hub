@@ -1871,6 +1871,59 @@ describe("skin trait filters", () => {
     expect((await listSkins(db, {})).skins.every((skin) => skin.filterKeys === undefined)).toBe(true);
   });
 
+  it("fronts a generated fallback-bar preview for skins with unresolved tap art", async () => {
+    const circle = {
+      aspect: 1,
+      mask: "0169961019999991699999969999999999999999699999961999999101699610",
+      colors: ["#ffffff"],
+      accents: [],
+      sat: 0,
+    };
+    const roundedSquare = {
+      aspect: 1.0163934426229508,
+      mask: "0799997179999997999999999999999999999999999999997999999717999971",
+      colors: ["#a2a2a2"],
+      accents: [],
+      sat: 0,
+    };
+    const circleFallback = await createPublishedSkin({
+      ...OWNER,
+      name: "Circle with fallback bars",
+      keymodes: [4, 5, 6, 7, 8],
+      specialKeymodes: [8],
+      sha256: "cc".repeat(32),
+      visual: { v: 3, keymodes: { 4: circle }, fallbackKeymodes: [5, 6, 7, 8] },
+    });
+    const otherFallback = await createPublishedSkin({
+      ...OWNER,
+      name: "Other with fallback bars",
+      keymodes: [4, 5, 7],
+      sha256: "dd".repeat(32),
+      visual: { v: 3, keymodes: { 4: roundedSquare }, fallbackKeymodes: [5, 7] },
+    });
+    for (const [id, keymodes] of [[circleFallback, [4, 5, 6, 7, 8]], [otherFallback, [4, 5, 7]]] as const) {
+      for (const keys of keymodes) {
+        await upsertSkinKeymodePreview(db, id, {
+          keys,
+          key: `skins/${id}/preview-${keys}k.webp`,
+          url: `https://cdn.example/${id}/preview-${keys}k.webp`,
+          width: 1280,
+          height: 720,
+        }, keys === 4);
+      }
+    }
+
+    const bars = await listSkins(db, { noteShape: "bar", sort: "oldest" });
+    expect(bars.skins.map((skin) => [skin.name, skin.noteShape, skin.filterKeys])).toEqual([
+      ["Circle with fallback bars", "circle", 7],
+      ["Other with fallback bars", "other", 7],
+    ]);
+    expect(bars.skins.map((skin) => skin.noteShapes)).toEqual([
+      ["circle", "bar"],
+      ["other", "bar"],
+    ]);
+  });
+
   it("filters to skins with screenshots attached", async () => {
     const shot = await createPublishedSkin({ ...OWNER, name: "With shots", sha256: "aa".repeat(32) });
     await createPublishedSkin({ ...OWNER, name: "Without", sha256: "bb".repeat(32) });
@@ -1899,11 +1952,15 @@ describe("skin trait filters", () => {
         },
       },
     });
-    await exec(db, "update skins set note_shapes_json = '[]' where id = ?", [id]);
+    // Both columns are derived. A classifier calibration change must repair
+    // the old primary label as well as populate the mixed-shape array.
+    await exec(db, "update skins set note_shape = 'other', note_shapes_json = '[]' where id = ?", [id]);
 
     expect((await listSkins(db, { noteShape: "arrow" })).total).toBe(0);
     expect(await backfillSkinNoteShapes(db)).toBe(1);
-    expect((await listSkins(db, { noteShape: "arrow" })).skins.map((skin) => skin.id)).toEqual([id]);
+    const repaired = (await listSkins(db, { noteShape: "arrow" })).skins;
+    expect(repaired.map((skin) => skin.id)).toEqual([id]);
+    expect(repaired[0]?.noteShape).toBe("bar");
     expect(await backfillSkinNoteShapes(db)).toBe(0);
   });
 });

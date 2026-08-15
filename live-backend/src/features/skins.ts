@@ -848,11 +848,13 @@ export async function backfillSkinSlugs(db: Db): Promise<number> {
 }
 
 // note_shapes_json arrived after the original majority-only note_shape column.
-// Rebuild it cheaply from the already-stored visual digest: no R2 reads are
-// needed. This intentionally has no one-shot marker. During a rolling deploy,
-// an older process can still replace a skin without writing the new column;
-// comparing every digest on the next boot repairs that small compatibility
-// window while only writing rows whose derived value is actually stale.
+// Rebuild both derived columns cheaply from the already-stored visual digest:
+// no R2 reads are needed. Refreshing the scalar too lets classifier threshold
+// fixes repair existing rows instead of only affecting new uploads. This
+// intentionally has no one-shot marker. During a rolling deploy, an older
+// process can still replace a skin without writing the new column; comparing
+// every digest on the next boot repairs that small compatibility window while
+// only writing rows whose derived value is actually stale.
 export async function backfillSkinNoteShapes(db: Db): Promise<number> {
   const rows = (await exec(
     db,
@@ -868,9 +870,14 @@ export async function backfillSkinNoteShapes(db: Db): Promise<number> {
       : isSkinNoteShape(row.note_shape)
         ? [row.note_shape]
         : [];
+    const primary = detected[0] ?? (isSkinNoteShape(row.note_shape) ? row.note_shape : null);
     const serialized = JSON.stringify(shapes);
-    if (String(row.note_shapes_json ?? "[]") === serialized) continue;
-    await exec(db, "update skins set note_shapes_json = ? where id = ?", [serialized, String(row.id)]);
+    if (String(row.note_shape ?? "") === (primary ?? "") && String(row.note_shapes_json ?? "[]") === serialized) continue;
+    await exec(
+      db,
+      "update skins set note_shape = ?, note_shapes_json = ? where id = ?",
+      [primary, serialized, String(row.id)],
+    );
     updated += 1;
   }
   return updated;
@@ -1136,7 +1143,11 @@ function noteShapeFilterPreviewKeys(row: SkinRow, shape: SkinNoteShape): number 
   const matching = row.previews
     .map((preview) => {
       const art = row.visual?.keymodes[String(preview.keys)];
-      if (!art || classifyKeymodeNoteShape(art.aspect, art.mask, art.arrowLayout === true) !== shape) return null;
+      const authoredShape = art
+        ? classifyKeymodeNoteShape(art.aspect, art.mask, art.arrowLayout === true)
+        : null;
+      const isFallbackBar = shape === "bar" && row.visual?.fallbackKeymodes?.includes(preview.keys) === true;
+      if (authoredShape !== shape && !isFallbackBar) return null;
       return preview.keys;
     })
     .filter((keys): keys is number => keys != null);

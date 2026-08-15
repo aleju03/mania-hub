@@ -319,9 +319,15 @@ export function classifySkinNoteShapes(visual: SkinVisualSignature | null): Skin
     if (bucket) bucket.count += 1;
     else buckets.set(entry.shape, { count: 1, firstKeys: entry.keys });
   }
-  return [...buckets]
+  const shapes = [...buckets]
     .sort(([, left], [, right]) => right.count - left.count || left.firstKeys - right.firstKeys)
     .map(([shape]) => shape);
+  // Fallback bars describe what unresolved keymodes actually draw, but they
+  // should not outvote a skin's authored art for the primary label. A 4K
+  // circle skin with optional broken 5K-8K blocks is still recognised first
+  // by its circle while remaining discoverable under Bars too.
+  if ((visual.fallbackKeymodes?.length ?? 0) > 0 && !shapes.includes("bar")) shapes.push("bar");
+  return shapes;
 }
 
 // The catalog filter still needs one primary label. Keep its established
@@ -390,7 +396,10 @@ export function classifyKeymodeNoteShape(aspect: number, mask: string, arrowLayo
   ];
   if (
     corners <= 3.5 && horizontal <= 0.5 && vertical <= 0.5
-    && edgeMids.every((mid) => mid >= 6.5)
+    // Soft antialiasing can quantize a genuinely full edge midpoint down to
+    // 6 in the compact decile mask. Shoulders and area still keep diamonds
+    // and rounded squares out, so accept that half-step of raster variance.
+    && edgeMids.every((mid) => mid >= 6)
     && edgeShoulders.every((shoulder) => shoulder >= 3.5)
     && alphaCoverage <= 0.88
     && coverage >= 0.4 && coverage <= 0.9

@@ -92,6 +92,9 @@ const MARV_DIAMOND_MASK = "00288200029999202999999289999998899999992999999202999
 const CIRNO_ARROW_MASK = "0017710001899400189994318999999889999998189994310189940000177100";
 const MYU_ARROW_MASK = "0018810001899400189996418999999889999998199996410199940000188100";
 const CIRNO_CIRCLE_MASK = "0058850008999980599999958999999889999998599999960899999100588610";
+// life is a terrible thing nego_dnik edit: the 150px circle's antialiased top
+// and bottom edge midpoints quantize to 6 rather than 7 in the 8x8 digest.
+const NEGO_DNIK_CIRCLE_MASK = "0046640007999970699999969999999999999999699999961899998100466400";
 
 describe("classifyKeymodeNoteShape", () => {
   it("calls wide art a bar whatever its outline", () => {
@@ -107,6 +110,7 @@ describe("classifyKeymodeNoteShape", () => {
 
   it("recognises circles: empty corners, full edges, symmetric both ways", () => {
     expect(classifyKeymodeNoteShape(1, CIRCLE_MASK)).toBe("circle");
+    expect(classifyKeymodeNoteShape(0.9251700680272109, NEGO_DNIK_CIRCLE_MASK)).toBe("circle");
   });
 
   it("recognises arrows by their one-axis asymmetry, whichever way they point", () => {
@@ -176,6 +180,15 @@ describe("classifySkinNoteShape", () => {
       4: { aspect: 1, mask: CIRCLE_MASK },
       7: { aspect: 3, mask: FULL_MASK },
     });
+    expect(classifySkinNoteShape(mixed)).toBe("circle");
+    expect(classifySkinNoteShapes(mixed)).toEqual(["circle", "bar"]);
+  });
+
+  it("reports rendered fallback bars after the skin's authored shape", () => {
+    const mixed = {
+      ...visualOf({ 4: { aspect: 1, mask: CIRCLE_MASK } }),
+      fallbackKeymodes: [5, 6, 7, 8],
+    };
     expect(classifySkinNoteShape(mixed)).toBe("circle");
     expect(classifySkinNoteShapes(mixed)).toEqual(["circle", "bar"]);
   });

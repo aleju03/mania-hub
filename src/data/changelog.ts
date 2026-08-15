@@ -27,6 +27,13 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-15", text: "Collections show every dan logo in a pack's range on its cover, not just the last one", to: "/maps" },
+  { date: "2026-08-15", text: "Fixed many 4K maps showing a way lower MSD and dan estimate than they should since Aug 14. Affected maps are being recomputed", to: "/maps" },
+  { date: "2026-08-15", text: "Skins that mix circles and bars are now labeled correctly", to: "/skins" },
+  { date: "2026-08-15", text: "Farm helper: estimated pp gains and target scores are more realistic, they used to lowball what a map could give you", to: "/farm-helper" },
+  { date: "2026-08-15", text: "Farm helper: push acc is now skillboost. Skillboost maps are hidden by default until you achieve one of its scores; the skillboost tab still shows them", to: "/farm-helper" },
+  { date: "2026-08-15", text: "If you slice through the middle of a pack, the cards inside get sliced too. Imagine cutting a goat lol", to: "/packs" },
+  { date: "2026-08-14", text: "New skills tab on user pages: click on a skillset to see more" },
   { date: "2026-08-13", text: "Filter skins by note shape, lane cover, mania stage, screenshots, stable or lazer, and display resolution", to: "/skins" },
   { date: "2026-08-12", text: "You can now recycle cards from the pack you just opened: right-click one, or use Recycle all", to: "/packs" },
   { date: "2026-08-12", text: "See who is still missing from your collection: tap the count under your collection progress", to: "/packs" },

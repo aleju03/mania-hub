@@ -87,7 +87,7 @@ const REASON_LABELS: Record<LiveFarmHelperReason, string> = {
   improve: "improve",
   stale: "old pb",
   owned: "cleared",
-  push: "push acc",
+  push: "skillboost",
 };
 
 const SPEED_LABELS: Record<LiveFarmHelperSpeedBucket, string> = {

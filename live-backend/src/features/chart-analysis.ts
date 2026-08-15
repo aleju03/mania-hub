@@ -2053,3 +2053,219 @@ async function readAnalysisJobCounts(db: Db): Promise<{ queued: number; running:
   }
   return counts;
 }
+
+// ── One-shot MSD poisoning recovery sweep ────────────────────────────────────
+// Recovery from the 2026-08-14 MinaCalc wasm poisoning: a raw wasm throw on
+// beatmap 4038663 ("Hello (BPM) 2023" [4K] For SEXY CN Player Collab, 19.9
+// stars) left the shared 4K calc instance corrupted from 2026-08-14T17:44Z
+// until the eviction fix in vendor/leoblack/ett/calc.js, and every 4K MSD
+// computed on it came back as the calc's resting floor: Stream, Jumpstream,
+// Handstream, JackSpeed, Chordjack and Technical all identical (~9.63,
+// Overall ~10.16). The analysis job feeds its MSD into Companella, so those
+// rows' stored dan verdicts are junk too (the 7K/6K instance is a separate
+// cached module and stayed healthy). Healthy computes never produce
+// exactly-equal skillsets - the corpus-wide signature count matches the
+// poisoned-window count - so the sweep keys on the stored values themselves
+// instead of a time window: any ready row whose base or LN-tail MSD carries
+// the signature gets a full re-analysis, and a re-run only ever finds newly
+// poisoned rows. Same playbook as the sunny re-pin sweep above: chunked,
+// self-chaining, boot-seeded, done in meta.
+//
+// DT columns need their own path: the full re-analysis a matched row gets
+// deliberately preserves msd_dt_json / dan_dt_json, so a poisoned DT MSD would
+// survive it. Rows whose DT MSD carries the signature get the 1.5x mint redone
+// inline in the chunk (same mint as the DT-rate sweep above), and a chart the
+// mint can no longer rate has its DT columns nulled rather than kept as junk.
+export const MSD_POISON_RECOVERY_JOB = "recompute_msd_poison_sweep";
+const MSD_POISON_RECOVERY_META_KEY = "msd_poison_recovery_done:v1";
+const MSD_POISON_RECOVERY_CHUNK = 200;
+
+// json_extract as a scan filter is fine here for the same reason as the
+// note-BPM sweep above: chunked background work against a ~130k-row table.
+function msdPoisonSignatureSql(column: string): string {
+  return `(
+    json_extract(${column}, '$.values.Stream') > 0
+    and json_extract(${column}, '$.values.Stream') = json_extract(${column}, '$.values.Technical')
+    and json_extract(${column}, '$.values.Stream') = json_extract(${column}, '$.values.Chordjack')
+  )`;
+}
+
+export interface MsdPoisonRecoveryChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number[];
+  dtRecomputed: number[];
+  done: boolean;
+}
+
+export async function recomputeMsdPoisonChunk(
+  db: Db,
+  cursor: number,
+  limit = MSD_POISON_RECOVERY_CHUNK,
+): Promise<MsdPoisonRecoveryChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id,
+       case when ${msdPoisonSignatureSql("msd_json")} or ${msdPoisonSignatureSql("msd_ln_json")} then 1 else 0 end as base_poisoned,
+       case when ${msdPoisonSignatureSql("msd_dt_json")} then 1 else 0 end as dt_poisoned
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and beatmap_id > ?
+       and (${msdPoisonSignatureSql("msd_json")} or ${msdPoisonSignatureSql("msd_ln_json")} or ${msdPoisonSignatureSql("msd_dt_json")})
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const changed: number[] = [];
+  const dtRecomputed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    if (Number(row.base_poisoned) === 1) changed.push(beatmapId);
+    if (Number(row.dt_poisoned) === 1) {
+      await recomputePoisonedDtColumns(db, beatmapId);
+      dtRecomputed.push(beatmapId);
+      // The mint is a MinaCalc plus classifier burst; yield between charts
+      // like the DT-rate sweep so ingest/SSE keep moving. Poisoned DT rows
+      // are rare (DT columns only exist on DT-farmed charts), so a chunk
+      // stays overwhelmingly enqueue-only.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  }
+
+  return { nextCursor, scanned: rows.length, changed, dtRecomputed, done: rows.length < limit };
+}
+
+// Redo the 1.5x mint for one row whose stored DT MSD is the poisoned floor.
+// Same inputs as the DT-rate sweep's mint; when the chart can no longer be
+// rated (file gone, parser rejects it) the junk columns are nulled instead,
+// which readDtRateMsd already treats as no data.
+async function recomputePoisonedDtColumns(db: Db, beatmapId: number): Promise<void> {
+  const clearDtColumns = () => exec(
+    db,
+    `update beatmap_chart_analysis
+     set msd_dt_json = null, dan_dt_json = null
+     where beatmap_id = ? and analysis_version = ?`,
+    [beatmapId, CHART_ANALYSIS_VERSION],
+  );
+
+  const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+  if (!osuText) {
+    await clearDtColumns();
+    return;
+  }
+  try {
+    const map = parseManiaBeatmap(osuText);
+    if (map.keyCount !== 4 && map.keyCount !== 7) {
+      await clearDtColumns();
+      return;
+    }
+    const starRating = Number((await exec(
+      db,
+      "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
+      [beatmapId],
+    )).rows[0]?.difficulty_rating ?? 0);
+    const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(() => null);
+    if (!msd) {
+      await clearDtColumns();
+      return;
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const classification = await classifyChartWithCompanella(map, osuText, {
+      rate: DT_RATE,
+      starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
+      totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+      version: map.version,
+    }, { msdValues: msd.values });
+
+    const lean = leanClassification(classification);
+    const danDt = {
+      primaryLabel: lean.primary?.displayName ?? null,
+      primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
+      rawDan: lean.primary?.rawDan ?? null,
+    };
+    await exec(
+      db,
+      `update beatmap_chart_analysis
+       set msd_dt_json = json(?), dan_dt_json = json(?)
+       where beatmap_id = ? and analysis_version = ?`,
+      [json(msd), json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
+    );
+  } catch {
+    await clearDtColumns();
+  }
+}
+
+// Junk minted from poisoned MSD outside beatmap_chart_analysis has no stored
+// signature to key on, so the incident window does the targeting for the
+// one-shot cleanups that ride the seed below.
+const MSD_POISON_WINDOW_START = "2026-08-14T17:44";
+
+export async function ensureMsdPoisonRecoverySeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [MSD_POISON_RECOVERY_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [MSD_POISON_RECOVERY_JOB],
+  )).rows[0];
+  if (pending) return;
+  // Rows written after this boot come from a healthy instance; the upper
+  // bound keeps them if anything computes between listen and this seed.
+  const seededAt = nowIso();
+  // v13 dan estimates minted in the window came from Companella reading the
+  // floor MSD; a deleted row recomputes on the next request for it. The
+  // version stays a literal: the incident happened at 13, and rows minted at
+  // any later version postdate the fix.
+  await exec(
+    db,
+    "delete from dan_estimates where estimator_version = 13 and computed_at >= ? and computed_at < ?",
+    [MSD_POISON_WINDOW_START, seededAt],
+  );
+  // Skill ratings computed in the window folded floor per-play SSRs into the
+  // stored vector; a missing row recomputes on the next profile view, which
+  // reads better than serving deflated numbers until the player happens to
+  // set a new top play.
+  await exec(
+    db,
+    "delete from player_skill_ratings where updated_at >= ? and updated_at < ?",
+    [MSD_POISON_WINDOW_START, seededAt],
+  );
+  await enqueueMsdPoisonRecovery(queue, 0);
+}
+
+export async function runMsdPoisonRecoveryJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeMsdPoisonChunk(db, cursor);
+  // Each re-analysis upserts its own search-index row, so recovered MSD and
+  // verdicts reach /maps without a full index rebuild.
+  for (const beatmapId of result.changed) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [MSD_POISON_RECOVERY_META_KEY, json({ finishedAt: now }), now],
+    );
+    // Recovered verdicts must move between dan collections now, not on the
+    // next scheduled rotation.
+    await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+    return;
+  }
+  await enqueueMsdPoisonRecovery(queue, result.nextCursor);
+}
+
+async function enqueueMsdPoisonRecovery(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    MSD_POISON_RECOVERY_JOB,
+    `${MSD_POISON_RECOVERY_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}

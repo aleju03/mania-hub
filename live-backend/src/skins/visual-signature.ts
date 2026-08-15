@@ -77,6 +77,7 @@ export async function computeSkinVisualSignature(buffer: Buffer): Promise<SkinVi
   };
 
   const keymodes: Record<string, SkinKeymodeVisual> = {};
+  const fallbackKeymodes: number[] = [];
   for (const { keys, block } of blocks) {
     // One entry per distinct tap image, in column order: most skins alternate
     // two or three sprites across the columns.
@@ -87,6 +88,15 @@ export async function computeSkinVisualSignature(buffer: Buffer): Promise<SkinVi
       if (!resolved || seenFiles.has(resolved.key)) continue;
       seenFiles.add(resolved.key);
       files.push(resolved);
+    }
+    // A declared reference that is missing, with no default-named tap sprite
+    // to take its place, is not an unknown shape in play: stable supplies its
+    // flat default note and the catalog preview deliberately mirrors that with
+    // a rounded bar. Record the outcome without fabricating visual similarity
+    // data such as a mask or palette.
+    if (files.length === 0) {
+      fallbackKeymodes.push(keys);
+      continue;
     }
     let aspect: number | null = null;
     let mask: string | null = null;
@@ -117,8 +127,12 @@ export async function computeSkinVisualSignature(buffer: Buffer): Promise<SkinVi
       };
     }
   }
-  if (Object.keys(keymodes).length === 0) return null;
-  return { v: 3, keymodes };
+  if (Object.keys(keymodes).length === 0 && fallbackKeymodes.length === 0) return null;
+  return {
+    v: 3,
+    keymodes,
+    ...(fallbackKeymodes.length > 0 ? { fallbackKeymodes } : {}),
+  };
 }
 
 // A filename merely containing "arrow" is weak evidence: skins keep unused
@@ -358,7 +372,10 @@ async function analyzeNoteImage(file: JSZip.JSZipObject): Promise<AnalyzedNote |
 // for soft arrows whose outer alpha silhouette looks round; v5 required the
 // referenced sprite itself to have directional full-resolution geometry; v6
 // also gives exact 1x references precedence over unrelated nested @2x art.
-const BACKFILL_META_KEY = "skin_visual_signature_backfill:v6";
+// v7 records keymodes that visibly use the flat default because none of their
+// tap-note references resolve. Only rows with absent/incomplete signatures
+// need another R2 read; complete v6 signatures cannot contain such a mode.
+const BACKFILL_META_KEY = "skin_visual_signature_backfill:v7";
 
 // One-time digest of skins uploaded before signatures existed: re-reads each
 // stored .osk and records what its notes look like. Purely additive metadata,
@@ -374,9 +391,22 @@ export async function backfillSkinVisualSignatures(
   if (done) return 0;
   const rows = (await exec(
     db,
-    // Not conditioned on visual_json being null: a marker bump means the
-    // stored digests are the old format and every row re-digests.
-    "select id, osk_key from skins where status != 'pending' and osk_key is not null",
+    `select id, osk_key from skins
+     where status != 'pending' and osk_key is not null
+       and (
+         visual_json is null
+         or exists (
+           select 1 from json_each(skins.keymodes_json) declared
+           where not exists (
+             select 1 from json_each(skins.visual_json, '$.keymodes') analyzed
+             where cast(analyzed.key as integer) = cast(declared.value as integer)
+           )
+             and not exists (
+               select 1 from json_each(skins.visual_json, '$.fallbackKeymodes') fallback
+               where cast(fallback.value as integer) = cast(declared.value as integer)
+             )
+         )
+       )`,
   )).rows;
   let updated = 0;
   let failed = 0;

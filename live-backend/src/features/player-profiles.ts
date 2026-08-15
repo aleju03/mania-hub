@@ -76,6 +76,13 @@ export interface PlayerProfileSection {
   isStale: boolean;
 }
 
+export interface PlayerReplayScoresPage {
+  items: OscScore[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 interface ProfileSnapshotRow {
   user_id: number;
   username_key: string;
@@ -694,6 +701,47 @@ export async function getPlayerRecentScores(
     payload: await getTrackedProfileRecentScores(db, userId, PROFILE_TRACKED_RECENT_LIMIT),
     fetchedAt,
     isStale: false,
+  };
+}
+
+/**
+ * Replay-ready scores captured by the live tracker, newest first. A player can
+ * have one score_events row per tracked country, so page/count by the stable
+ * score identity rather than exposing duplicate runs.
+ */
+export async function getPlayerReplayScores(
+  db: Db,
+  userId: number,
+  limit = 100,
+  offset = 0,
+): Promise<PlayerReplayScoresPage> {
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const safeOffset = Math.max(0, Math.floor(offset));
+  const where = "user_id = ? and ruleset_id = 3 and has_replay = 1 and score_id > 0";
+  const total = Number((await exec(
+    db,
+    `select count(distinct score_identity) as count from score_events where ${where}`,
+    [userId],
+  )).rows[0]?.count ?? 0);
+  const rows = (await exec(
+    db,
+    `select score_json
+     from score_events
+     where ${where}
+     group by score_identity
+     order by max(ended_at) desc, max(id) desc
+     limit ? offset ?`,
+    [userId, safeLimit, safeOffset],
+  )).rows;
+  const scores = rows.flatMap((row) => {
+    const score = parseJson<OscScore | null>(row.score_json, null);
+    return score ? [score] : [];
+  });
+  return {
+    items: await hydrateScoresDisplayMetadata(db, scores),
+    total,
+    limit: safeLimit,
+    offset: safeOffset,
   };
 }
 

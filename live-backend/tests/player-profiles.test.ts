@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, getCachedPlayerProfileSnapshot, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
+import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, getCachedPlayerProfileSnapshot, getPlayerRecentScoresFromOsu, getPlayerReplayScores } from "../src/features/player-profiles.js";
 import type { OscScore } from "../src/shared/types.js";
 
 let dir = "";
@@ -787,6 +787,54 @@ describe("profile recent osu! hand-off", () => {
   });
 });
 
+describe("player replay scores", () => {
+  it("pages every tracked replay-ready score without duplicating countries", async () => {
+    const oldestReplay = score({
+      id: 41,
+      beatmapId: 141,
+      title: "Older replay",
+      pp: 40,
+      endedAt: "2026-08-12T01:00:00Z",
+      hasReplay: true,
+    });
+    const noReplay = score({
+      id: 42,
+      beatmapId: 142,
+      title: "No replay",
+      pp: 50,
+      endedAt: "2026-08-13T01:00:00Z",
+    });
+    const newestReplay = score({
+      id: 43,
+      beatmapId: 143,
+      title: "Newest replay",
+      pp: 60,
+      endedAt: "2026-08-14T01:00:00Z",
+      hasReplay: true,
+    });
+    await insertTrackedScore(oldestReplay);
+    await insertTrackedScore(noReplay);
+    await insertTrackedScore(newestReplay);
+    await exec(
+      db,
+      `insert into score_events
+       (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+       select score_id, score_identity, legacy_score_id, user_id, 'US', beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source
+       from score_events where country = 'CR' and score_id = ?`,
+      [oldestReplay.id],
+    );
+
+    const first = await getPlayerReplayScores(db, USER_ID, 1, 0);
+    const second = await getPlayerReplayScores(db, USER_ID, 1, 1);
+
+    expect(first.total).toBe(2);
+    expect(first.items.map((entry) => entry.id)).toEqual([newestReplay.id]);
+    expect(first.items[0].beatmapset?.title).toBe("Newest replay");
+    expect(second.total).toBe(2);
+    expect(second.items.map((entry) => entry.id)).toEqual([oldestReplay.id]);
+  });
+});
+
 async function insertTrackedScore(trackedScore: OscScore): Promise<void> {
   const endedAt = trackedScore.ended_at ?? trackedScore.created_at ?? new Date().toISOString();
   const beatmapId = trackedScore.beatmap_id ?? trackedScore.beatmap?.id;
@@ -795,7 +843,7 @@ async function insertTrackedScore(trackedScore: OscScore): Promise<void> {
     db,
     `insert into score_events
      (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
-     values (?, ?, ?, ?, 'CR', ?, 3, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, 'osc_socket')`,
+     values (?, ?, ?, ?, 'CR', ?, 3, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, 'osc_socket')`,
     [
       trackedScore.id,
       `official:${trackedScore.id}`,
@@ -808,6 +856,7 @@ async function insertTrackedScore(trackedScore: OscScore): Promise<void> {
       trackedScore.accuracy ?? null,
       trackedScore.rank ?? null,
       trackedScore.passed ? 1 : 0,
+      trackedScore.has_replay ? 1 : 0,
       endedAt,
       endedAt,
     ],
@@ -822,6 +871,7 @@ function score(options: {
   endedAt: string;
   bestId?: number | null;
   passed?: boolean;
+  hasReplay?: boolean;
 }): OscScore {
   return {
     id: options.id,
@@ -840,6 +890,7 @@ function score(options: {
     statistics: {},
     pp: options.pp,
     ended_at: options.endedAt,
+    has_replay: options.hasReplay,
     ranked: true,
     beatmap: {
       id: options.beatmapId,

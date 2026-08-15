@@ -45,6 +45,11 @@ export interface SkinKeymodeVisual {
 export interface SkinVisualSignature {
   v: 3;
   keymodes: Record<string, SkinKeymodeVisual>;
+  // Keymodes whose declared and default tap-note references resolve no file.
+  // Stable and our preview renderer both draw their flat default note there,
+  // so the trait classifier exposes Bars while visual similarity still has no
+  // invented sprite, colour, or mask to compare.
+  fallbackKeymodes?: number[];
 }
 
 export interface SkinSimilarityFacts {
@@ -283,10 +288,12 @@ function sameAuthor(a: string | null, b: string | null): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }
 
-// The read side of visual_json: anything that is not exactly a well-formed v3
+// The read side of visual_json: anything that is not a well-formed v3
 // signature reads as no signature (the earlier formats included, which the
 // bumped backfill re-digests), so a bad or outdated blob degrades to the
-// accent fallback instead of skewing scores.
+// accent fallback instead of skewing scores. fallbackKeymodes is an additive
+// v3 field: it describes the renderer's flat default without inventing visual
+// facts for similarity.
 export function normalizeSkinVisualSignature(value: unknown): SkinVisualSignature | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
@@ -299,8 +306,24 @@ export function normalizeSkinVisualSignature(value: unknown): SkinVisualSignatur
     if (!visual) return null;
     keymodes[key] = visual;
   }
-  if (Object.keys(keymodes).length === 0) return null;
-  return { v: 3, keymodes };
+  const fallbackKeymodes = normalizeFallbackKeymodes(raw.fallbackKeymodes, keymodes);
+  if (!fallbackKeymodes) return null;
+  if (Object.keys(keymodes).length === 0 && fallbackKeymodes.length === 0) return null;
+  return {
+    v: 3,
+    keymodes,
+    ...(fallbackKeymodes.length > 0 ? { fallbackKeymodes } : {}),
+  };
+}
+
+function normalizeFallbackKeymodes(value: unknown, keymodes: Record<string, SkinKeymodeVisual>): number[] | null {
+  if (value == null) return [];
+  if (!Array.isArray(value)) return null;
+  const normalized = value.map(Number);
+  if (normalized.some((keys) => !Number.isInteger(keys) || keys < 1 || keys > 10 || keymodes[String(keys)] != null)) {
+    return null;
+  }
+  return [...new Set(normalized)].sort((a, b) => a - b);
 }
 
 function normalizeKeymodeVisual(value: unknown): SkinKeymodeVisual | null {

@@ -23,7 +23,15 @@ and must NOT be overwritten on a re-copy:
   implementations, and `ett/index.js` is upstream's file plus a `lnTailTaps`
   option threaded through `analyzeEtternaFromText` into the calc (the backend's
   tail-aware SSR pass depends on it; dropping it silently zeroes the LN-tail
-  blend, caught by `live-backend/tests/player-skills.test.ts`).
+  blend, caught by `live-backend/tests/player-skills.test.ts`). `calc.js` also
+  guards against instance poisoning two ways: a compute throw (emscripten
+  surfaces C++ exceptions as bare numbers) evicts the cached wasm instance,
+  since the throw leaves MinaCalc's internal state corrupted and every later
+  compute on it returns the all-skillsets-equal floor; and a compute that
+  *returns* that floor gets one retry on a fresh instance, so corruption with
+  no observable throw self-heals too (a legitimate floor reproduces and is
+  accepted). This is the 2026-08-14 prod poisoning; the recovery sweep in
+  `live-backend/src/features/chart-analysis.ts` keys on the same signature.
 - `estimator/companellaEstimator.js` (`getOrtNamespace` divergence, see Companella).
 - The `ett/versions/minaclac-*.js` glue stays at the old pin `0b27cc8` bytes: our
   calc.js hands over `wasmBinary` and defines the CommonJS globals, so upstream's

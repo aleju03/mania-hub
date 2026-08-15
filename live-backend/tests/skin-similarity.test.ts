@@ -219,8 +219,14 @@ describe("normalizeSkinVisualSignature", () => {
     const multi: SkinVisualSignature = {
       v: 3,
       keymodes: { "4": { ...CIRCLE_ART, arrowLayout: true }, "6": BAR_ART },
+      fallbackKeymodes: [5, 7],
     };
     expect(normalizeSkinVisualSignature(JSON.parse(JSON.stringify(multi)))).toEqual(multi);
+    expect(normalizeSkinVisualSignature({ v: 3, keymodes: {}, fallbackKeymodes: [4] })).toEqual({
+      v: 3,
+      keymodes: {},
+      fallbackKeymodes: [4],
+    });
   });
 
   it("reads anything malformed as no signature at all, earlier formats included", () => {
@@ -241,5 +247,7 @@ describe("normalizeSkinVisualSignature", () => {
     expect(normalizeSkinVisualSignature({ v: 3, keymodes: { "4": { ...BAR_ART, colors: [] } } })).toBeNull();
     expect(normalizeSkinVisualSignature({ v: 3, keymodes: { "4": { ...BAR_ART, colors: ["#ffffff", "white"] } } })).toBeNull();
     expect(normalizeSkinVisualSignature({ v: 3, keymodes: { "4": { ...BAR_ART, arrowLayout: false } } })).toBeNull();
+    expect(normalizeSkinVisualSignature({ v: 3, keymodes: { "4": BAR_ART }, fallbackKeymodes: [4] })).toBeNull();
+    expect(normalizeSkinVisualSignature({ v: 3, keymodes: {}, fallbackKeymodes: [11] })).toBeNull();
   });
 });

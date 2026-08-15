@@ -11,6 +11,7 @@ import { formatAccuracy, formatPP, formatTimeAgo } from "#/lib/format";
 import {
   fetchLiveMapsPlayersSnapshot,
   fetchLivePlayerCachedProfileSnapshotDirect,
+  fetchLivePlayerReplayScoresDirect,
   isLiveBackendConfigured,
   LIVE_MAPS_PLAYERS_PAGE_SIZE,
   type LiveMapsDetailsPlayer,
@@ -20,7 +21,7 @@ import { searchPlayers } from "#/lib/player-search";
 import type { RecentReplayEntry } from "#/lib/replay-recent";
 import { parseReplayScoreInput } from "#/lib/replay-score-input";
 import { getSideBySideCandidateIssue, getSideBySideIssue } from "#/lib/replay-side-by-side";
-import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, scoreHasReplay } from "#/lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp, scoreHasReplay } from "#/lib/score";
 import type { OsuScore } from "#/lib/types";
 
 /* Setup screen for the Side by Side tab: pick the two runs, then watch them on
@@ -30,8 +31,9 @@ import type { OsuScore } from "#/lib/types";
 
    One card is active at a time and one search box fills it, because the ways
    people arrive here don't deserve a control each: type a name to browse that
-   player's runs (the backend already keeps every tracked player's top 200, so
-   nobody should have to go hunting for a score URL), paste a link you were
+   player's runs (the backend keeps their best scores plus replay-ready plays
+   captured by the tracker, so nobody should have to go hunting for a score
+   URL), paste a link you were
    sent, or take a row off the map the first pick locked in. Whatever is typed,
    the answer is a list of runs and picking one fills the active side. The pair
    rules live in replay-side-by-side.ts, so a row that can't work says why
@@ -60,6 +62,7 @@ const SLOT_META = [
 const PLAYER_SEARCH_DEBOUNCE_MS = 350;
 const SCORE_LOOKUP_DEBOUNCE_MS = 300;
 const PLAYER_SEARCH_MIN_LENGTH = 2;
+const PLAYER_REPLAY_SCORES_PAGE_SIZE = 100;
 
 interface PickerPlayer {
   id: number;
@@ -345,9 +348,13 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
   const [player, setPlayer] = useState<PickerPlayer | null>(null);
   const [players, setPlayers] = useState<PickerPlayer[] | null>(null);
   const [playersLoading, setPlayersLoading] = useState(false);
-  // Top plays come off the stored profile snapshot as whole scores; a locked
-  // map's rows come off the farmed board, which is thinner (see BoardRun).
+  // Best scores come off the profile snapshot and ordinary replay-ready plays
+  // come off retained tracker events. A locked map uses the thinner farmed
+  // board instead (see BoardRun).
   const [runs, setRuns] = useState<OsuScore[] | null>(null);
+  const [runsNextOffset, setRunsNextOffset] = useState(0);
+  const [runsTrackedTotal, setRunsTrackedTotal] = useState(0);
+  const [runsMoreLoading, setRunsMoreLoading] = useState(false);
   const [playerBoard, setPlayerBoard] = useState<BoardRun[] | null>(null);
   const [runsLoading, setRunsLoading] = useState(false);
   const [linkScore, setLinkScore] = useState<OsuScore | null>(null);
@@ -429,17 +436,23 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
     };
   }, [player, queryScoreId, trimmedQuery]);
 
-  // An open player's runs: their stored top plays while the map is still open,
-  // their row on the map's board once it is locked.
+  // An open player's runs: their stored best scores plus tracked replay-ready
+  // plays while the map is open, or their row on the map's board once locked.
   useEffect(() => {
     if (!player) {
       setRuns(null);
+      setRunsNextOffset(0);
+      setRunsTrackedTotal(0);
+      setRunsMoreLoading(false);
       setPlayerBoard(null);
       setRunsLoading(false);
       return;
     }
     const request = ++runsRequestRef.current;
     setRuns(null);
+    setRunsNextOffset(0);
+    setRunsTrackedTotal(0);
+    setRunsMoreLoading(false);
     setPlayerBoard(null);
     setRunsLoading(true);
     const load = anchorBeatmapId != null
@@ -447,14 +460,14 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
       // away rather than a page walk.
       ? fetchMapBoardRuns(anchorBeatmapId, player.username)
         .then((board) => setPlayerBoardIfCurrent(board.filter((run) => run.userId === player.id)))
-      : fetchPlayerTopPlays(player.id)
-        .then((scores) => setRunsIfCurrent(scores));
+      : fetchPlayerRuns(player.id)
+        .then((result) => setRunsIfCurrent(result));
 
-    function setRunsIfCurrent(scores: OsuScore[]) {
+    function setRunsIfCurrent(result: PlayerRunsPage) {
       if (runsRequestRef.current !== request) return;
-      // A top play whose map never made it into the projection can't be paired
-      // against anything, so it is not offered.
-      setRuns(scores.filter((score) => scoreHasReplay(score) && score.beatmap?.id != null));
+      setRuns(result.scores);
+      setRunsNextOffset(result.nextOffset);
+      setRunsTrackedTotal(result.trackedTotal);
     }
     function setPlayerBoardIfCurrent(board: BoardRun[]) {
       if (runsRequestRef.current !== request) return;
@@ -471,6 +484,26 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
         if (runsRequestRef.current === request) setRunsLoading(false);
       });
   }, [anchorBeatmapId, player]);
+
+  const loadMoreRuns = useCallback(() => {
+    if (!player || anchorBeatmapId != null || runsMoreLoading || runsNextOffset >= runsTrackedTotal) return;
+    const request = runsRequestRef.current;
+    setRunsMoreLoading(true);
+    fetchLivePlayerReplayScoresDirect(player.id, {
+      limit: PLAYER_REPLAY_SCORES_PAGE_SIZE,
+      offset: runsNextOffset,
+    })
+      .then((page) => {
+        if (runsRequestRef.current !== request) return;
+        setRuns((current) => mergePlayerRuns(current ?? [], page.items));
+        setRunsNextOffset(page.offset + page.limit);
+        setRunsTrackedTotal(page.total);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (runsRequestRef.current === request) setRunsMoreLoading(false);
+      });
+  }, [anchorBeatmapId, player, runsMoreLoading, runsNextOffset, runsTrackedTotal]);
 
   // One side picked is enough to know the map, so our own board for it is what
   // the picker shows by default from then on.
@@ -622,6 +655,8 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
           visibleRuns={visibleRuns}
           playerBoard={playerBoard}
           runsLoading={runsLoading}
+          hasMoreRuns={runsNextOffset < runsTrackedTotal}
+          runsMoreLoading={runsMoreLoading}
           players={players}
           playersLoading={playersLoading}
           candidates={candidates}
@@ -635,6 +670,7 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
           }}
           onPick={pick}
           onPickById={pickById}
+          onLoadMoreRuns={loadMoreRuns}
         />
       </div>
     </section>
@@ -655,6 +691,8 @@ function PickerBody({
   visibleRuns,
   playerBoard,
   runsLoading,
+  hasMoreRuns,
+  runsMoreLoading,
   players,
   playersLoading,
   candidates,
@@ -665,6 +703,7 @@ function PickerBody({
   onOpenPlayer,
   onPick,
   onPickById,
+  onLoadMoreRuns,
 }: {
   anchor: OsuScore | null;
   pickedIds: Set<number>;
@@ -679,6 +718,8 @@ function PickerBody({
   visibleRuns: OsuScore[];
   playerBoard: BoardRun[] | null;
   runsLoading: boolean;
+  hasMoreRuns: boolean;
+  runsMoreLoading: boolean;
   players: PickerPlayer[] | null;
   playersLoading: boolean;
   candidates: BoardRun[] | null;
@@ -689,6 +730,7 @@ function PickerBody({
   onOpenPlayer: (player: PickerPlayer) => void;
   onPick: (score: OsuScore) => void;
   onPickById: (scoreId: number) => void;
+  onLoadMoreRuns: () => void;
 }) {
   const anchorBeatmapId = anchor?.beatmap?.id ?? null;
   const useLabel = `Use as the ${slotLabel.toLowerCase()} run`;
@@ -793,16 +835,24 @@ function PickerBody({
       );
     }
     if (visibleRuns.length === 0) {
-      if (trimmedQuery && runs && runs.length > 0) return <Hint>Nothing of theirs matches "{trimmedQuery}".</Hint>;
-      return <Hint>We have no stored top plays for {player.username} yet.</Hint>;
+      if (trimmedQuery && runs && runs.length > 0) {
+        return (
+          <>
+            <Hint>Nothing in the loaded plays matches "{trimmedQuery}".</Hint>
+            {hasMoreRuns && <LoadMoreRuns busy={runsMoreLoading} onClick={onLoadMoreRuns} />}
+          </>
+        );
+      }
+      return <Hint>We have no replay-ready plays stored for {player.username} yet.</Hint>;
     }
     return (
       <>
-        <SectionLabel>Their top plays</SectionLabel>
+        <SectionLabel>{player.id === viewer?.id ? "Your plays" : "Their plays"}</SectionLabel>
         {visibleRuns.map((score) => scoreRow(score, {
           leading: mapCover(score),
           primary: mapTitle(score),
         }))}
+        {hasMoreRuns && <LoadMoreRuns busy={runsMoreLoading} onClick={onLoadMoreRuns} />}
       </>
     );
   }
@@ -883,7 +933,7 @@ function PickerBody({
               className="h-6 w-6 rounded-full object-cover ring-1 ring-white/10"
             />
             <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white">
-              My top plays
+              My plays
             </span>
           </button>
         </>
@@ -920,7 +970,7 @@ function PickerBody({
       )}
 
       {!viewer && recentEntries.length === 0 && (
-        <Hint>Search a player to browse their top plays, or paste a score link.</Hint>
+        <Hint>Search a player to browse their plays, or paste a score link.</Hint>
       )}
     </>
   );
@@ -1003,14 +1053,53 @@ function RowSkeleton() {
   );
 }
 
-/* The backend keeps every tracked player's top 200 as whole scores, mod
-   settings included, so these rows are pickable as they are. A player it has
-   never projected simply has nothing here: asking osu! for their bests would
-   spend the shared API budget on browsing. */
-async function fetchPlayerTopPlays(userId: number): Promise<OsuScore[]> {
-  if (!isLiveBackendConfigured()) return [];
-  const snapshot = await fetchLivePlayerCachedProfileSnapshotDirect(String(userId));
-  return snapshot?.bestScores ?? [];
+function LoadMoreRuns({ busy, onClick }: { busy: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onClick}
+      className="flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b5 hover:text-white disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+    >
+      {busy && <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" />}
+      {busy ? "Loading plays..." : "Load more plays"}
+    </button>
+  );
+}
+
+interface PlayerRunsPage {
+  scores: OsuScore[];
+  nextOffset: number;
+  trackedTotal: number;
+}
+
+/* Best scores remain useful even when they predate the tracker; retained
+   tracker events add every other replay-ready run. Both sources are stored
+   locally, so browsing never spends the shared osu! API budget. */
+async function fetchPlayerRuns(userId: number): Promise<PlayerRunsPage> {
+  if (!isLiveBackendConfigured()) return { scores: [], nextOffset: 0, trackedTotal: 0 };
+  const [snapshot, tracked] = await Promise.all([
+    fetchLivePlayerCachedProfileSnapshotDirect(String(userId)),
+    fetchLivePlayerReplayScoresDirect(userId, { limit: PLAYER_REPLAY_SCORES_PAGE_SIZE }),
+  ]);
+  return {
+    scores: mergePlayerRuns(tracked.items, snapshot?.bestScores ?? []),
+    nextOffset: tracked.offset + tracked.limit,
+    trackedTotal: tracked.total,
+  };
+}
+
+function mergePlayerRuns(current: OsuScore[], additions: OsuScore[]): OsuScore[] {
+  const byId = new Map<number, OsuScore>();
+  for (const score of [...current, ...additions]) {
+    if (score.id <= 0 || !scoreHasReplay(score) || score.beatmap?.id == null || byId.has(score.id)) continue;
+    byId.set(score.id, score);
+  }
+  const playedAt = (score: OsuScore) => {
+    const timestamp = Date.parse(getScoreTimestamp(score));
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  };
+  return [...byId.values()].sort((a, b) => playedAt(b) - playedAt(a));
 }
 
 /* Who among the players we track has a run on this map, from the farmed board

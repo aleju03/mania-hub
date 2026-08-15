@@ -135,10 +135,25 @@ describe("computeSkinVisualSignature", () => {
     expect(repeated?.keymodes["4"].arrowLayout).toBeUndefined();
   });
 
-  it("digests nothing without note art or skin.ini", async () => {
-    expect(await computeSkinVisualSignature(await buildOsk({ "skin.ini": DEFAULTS_INI }))).toBeNull();
+  it("records the flat bar fallback when a keymode resolves no tap-note art", async () => {
+    expect(await computeSkinVisualSignature(await buildOsk({ "skin.ini": DEFAULTS_INI }))).toEqual({
+      v: 3,
+      keymodes: {},
+      fallbackKeymodes: [4],
+    });
     expect(await computeSkinVisualSignature(await buildOsk({ "readme.txt": "hi" }))).toBeNull();
     expect(await computeSkinVisualSignature(Buffer.from("not a zip"))).toBeNull();
+  });
+
+  it("keeps missing fallback modes separate from real note-art signatures", async () => {
+    const signature = await computeSkinVisualSignature(await buildOsk({
+      "skin.ini": "[General]\nName: Mixed fallback\n\n"
+        + "[Mania]\nKeys: 4\nNoteImage0: round\n\n"
+        + "[Mania]\nKeys: 5\nNoteImage0: Orbs\\BLUE\nNoteImage1: Orbs\\WHITE\n",
+      "round.png": await circlePng(64, "#ffffff"),
+    }));
+    expect(Object.keys(signature?.keymodes ?? {})).toEqual(["4"]);
+    expect(signature?.fallbackKeymodes).toEqual([5]);
   });
 
   it("keeps computed bar and circle skins apart in the scoring", async () => {
@@ -179,7 +194,7 @@ describe("backfillSkinVisualSignatures", () => {
     if (dir) await rm(dir, { recursive: true, force: true });
   });
 
-  async function publishBare(name: string, sha: string): Promise<string> {
+  async function publishBare(name: string, sha: string, keymodes = [4]): Promise<string> {
     const created = await createPendingSkin(db, { ownerUserId: 1, ownerUsername: "delta", name });
     if (!created.ok) throw new Error("createPendingSkin failed");
     const row = await getSkin(db, created.id);
@@ -189,7 +204,7 @@ describe("backfillSkinVisualSignatures", () => {
       url: `https://cdn.example/${created.id}/skin.osk`,
       sizeBytes: 1024,
       sha256: sha,
-      keymodes: [4],
+      keymodes,
       specialKeymodes: [],
       accentColor: "#ff66aa",
       iniAuthor: null,
@@ -208,13 +223,27 @@ describe("backfillSkinVisualSignatures", () => {
   it("digests the existing catalog once, tolerating skins it cannot read", async () => {
     const digestible = await publishBare("Bars", "01".repeat(32));
     const unreadable = await publishBare("Gone", "02".repeat(32));
+    const mixedFallback = await publishBare("Circles and fallback bars", "03".repeat(32), [4, 5]);
     const osk = await buildBarOsk();
+    const mixedOsk = await buildOsk({
+      "skin.ini": "[General]\nName: Mixed fallback\n\n"
+        + "[Mania]\nKeys: 4\nNoteImage0: round\n\n"
+        + "[Mania]\nKeys: 5\nNoteImage0: Orbs\\BLUE\nNoteImage1: Orbs\\WHITE\n",
+      "round.png": await circlePng(64, "#ffffff"),
+    });
 
-    const readOsk = async (key: string) => (key.includes(digestible) ? osk : null);
-    expect(await backfillSkinVisualSignatures(db, readOsk)).toBe(1);
+    const readOsk = async (key: string) => key.includes(digestible)
+      ? osk
+      : key.includes(mixedFallback)
+        ? mixedOsk
+        : null;
+    expect(await backfillSkinVisualSignatures(db, readOsk)).toBe(2);
     expect((await getSkin(db, digestible))?.visual?.keymodes["4"].aspect).toBeCloseTo(4);
     expect((await getSkin(db, digestible))?.noteShape).toBe("bar");
     expect((await getSkin(db, unreadable))?.visual).toBeNull();
+    expect((await getSkin(db, mixedFallback))?.visual?.fallbackKeymodes).toEqual([5]);
+    const storedShapes = (await exec(db, "select note_shapes_json from skins where id = ?", [mixedFallback])).rows[0];
+    expect(JSON.parse(String(storedShapes?.note_shapes_json))).toEqual(["circle", "bar"]);
 
     // One skin failing does not stall the marker: the scan must not re-read
     // the whole catalog from R2 on every boot.

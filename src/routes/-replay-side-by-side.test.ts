@@ -159,11 +159,14 @@ describe("side by side tab", () => {
     expect(viewSource).toContain('window.addEventListener("orientationchange", onOrientationChange)');
   });
 
-  // Filling a side used to mean leaving to find a score URL, even though the
-  // backend already keeps every tracked player's top 200.
-  it("fills a side from a player's stored top plays, without a score link", () => {
+  // Filling a side used to mean leaving to find a score URL. Best scores cover
+  // old plays and the tracker adds ordinary runs whenever a replay exists.
+  it("fills a side from a player's stored replay-ready plays, without a score link", () => {
     expect(pickerSource).toContain("fetchLivePlayerCachedProfileSnapshotDirect(String(userId))");
-    expect(pickerSource).toContain("return snapshot?.bestScores ?? [];");
+    expect(pickerSource).toContain("fetchLivePlayerReplayScoresDirect(userId, { limit: PLAYER_REPLAY_SCORES_PAGE_SIZE })");
+    expect(pickerSource).toContain("scores: mergePlayerRuns(tracked.items, snapshot?.bestScores ?? [])");
+    expect(pickerSource).toContain("My plays");
+    expect(pickerSource).not.toContain("My top plays");
   });
 
   // Browsing must not spend the osu! API budget: only committing to a run does,

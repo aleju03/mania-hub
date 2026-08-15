@@ -318,6 +318,13 @@ export interface LivePlayerProfileSection<T> {
   isStale: boolean;
 }
 
+export interface LivePlayerReplayScoresPage {
+  items: OsuScore[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export type LivePlayerRecentSource = "tracked" | "osu";
 
 export interface LivePlayerAboutPayload {
@@ -1265,6 +1272,18 @@ export async function fetchLivePlayerRecentScoresDirect(
   return fetchLiveJson(`/api/profiles/${userId}/recent${query}`);
 }
 
+export async function fetchLivePlayerReplayScoresDirect(
+  userId: number,
+  options: { limit?: number; offset?: number } = {},
+): Promise<LivePlayerReplayScoresPage> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  const query = new URLSearchParams({
+    limit: String(options.limit ?? 100),
+    offset: String(options.offset ?? 0),
+  });
+  return fetchLiveJson(`/api/profiles/${userId}/replay-scores?${query.toString()}`);
+}
+
 export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePlayerProfileSection<LivePlayerAboutPayload>> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   return fetchLiveJson(`/api/profiles/${userId}/about`);
@@ -1449,6 +1468,11 @@ export interface LiveFarmHelperSnapshot {
   // False while the backend has not analyzed enough of this player's plays to
   // trust its models yet. Absent means ready (older backends don't send it).
   modelsReady?: boolean;
+  // Gain view only: false until the player has achieved (or come very close
+  // to) one of the skillboost targets a board suggested to them. The default
+  // list hides skillboost rows while false; the skillboost tab still shows
+  // them. Absent (older backends, popular view) means never hide.
+  pushUnlocked?: boolean;
   recs: LiveFarmHelperRec[];
   generatedAt: string;
 }

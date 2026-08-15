@@ -383,6 +383,24 @@ create table if not exists farm_helper_feedback (
   primary key (user_id, beatmap_id, speed_bucket)
 );
 
+-- Skillboost ("push") suggestion memory: one row per lane a served gain board
+-- suggested as a push target, frozen at first sight (subject_pp/target_pp are
+-- the values the first suggestion quoted). achieved_at is stamped once the
+-- player's score on the lane reaches the target or covers most of the gap to
+-- it; any achieved row unlocks the skillboost reason in the UI's default view.
+-- Epoch-ms timestamps. Never pruned by retention.
+create table if not exists farm_helper_push_targets (
+  user_id integer not null,
+  beatmap_id integer not null,
+  speed_bucket text not null,
+  target_pp real not null,
+  subject_pp real not null,
+  suggested_at integer not null,
+  achieved_at integer,
+  achieved_pp real,
+  primary key (user_id, beatmap_id, speed_bucket)
+);
+
 create table if not exists replay_video_exports (
   id text primary key,
   score_id integer,

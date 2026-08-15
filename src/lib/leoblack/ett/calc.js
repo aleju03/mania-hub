@@ -192,6 +192,20 @@ function mapOutputValues(rawEight) {
     return out;
 }
 
+// MinaCalc's resting floor: every non-Stamina skillset identical (~9.63,
+// Overall ~10.16). A healthy compute on a non-empty chart essentially never
+// produces this (zero exact matches across a ~130k-chart corpus outside the
+// 2026-08-14 poisoning), but a corrupted instance returns it for every chart.
+function isFloorOutput(values) {
+    const stream = Number(values?.Stream);
+    return stream > 0
+        && stream === values.Technical
+        && stream === values.Chordjack
+        && stream === values.Jumpstream
+        && stream === values.Handstream
+        && stream === values.JackSpeed;
+}
+
 function runOfficialWasm(module, {
     keycount,
     musicRate,
@@ -263,14 +277,40 @@ export async function analyzeEtternaFromText(osuText, {
         };
     }
 
-    const moduleInfo = await getWasmModule(etternaVersion, keycount);
-    const values = runOfficialWasm(moduleInfo.module, {
-        keycount,
-        musicRate,
-        scoreGoal,
-        rowMasks: masks,
-        rowTimes: seconds,
-    });
+    const computeOnce = async () => {
+        const moduleInfo = await getWasmModule(etternaVersion, keycount);
+        try {
+            return {
+                moduleInfo,
+                values: runOfficialWasm(moduleInfo.module, {
+                    keycount,
+                    musicRate,
+                    scoreGoal,
+                    rowMasks: masks,
+                    rowTimes: seconds,
+                }),
+            };
+        } catch (error) {
+            // A throw out of the wasm (emscripten surfaces uncaught C++
+            // exceptions as bare numbers) leaves the cached instance's calc
+            // state mid-compute, and every later compute on that instance
+            // returns the resting floor below. Evict the instance so the next
+            // call rebuilds a fresh one; this chart itself stays failed.
+            wasmModulePromiseByVersion.delete(moduleInfo.version);
+            throw error instanceof Error
+                ? error
+                : new Error(`minacalc compute threw: ${String(error)}`);
+        }
+    };
+
+    let { moduleInfo, values } = await computeOnce();
+    if (isFloorOutput(values)) {
+        // Corruption can in principle also happen without an observable throw,
+        // so a floor result gets one retry on a fresh instance: a legitimate
+        // floor reproduces and is accepted, a poisoned one comes back real.
+        wasmModulePromiseByVersion.delete(moduleInfo.version);
+        ({ moduleInfo, values } = await computeOnce());
+    }
 
     return {
         keycount,

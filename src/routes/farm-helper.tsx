@@ -14,7 +14,7 @@ import {
   Search,
   Check,
   ChevronDown,
-  Gauge,
+  Flame,
 } from "lucide-react";
 import {
   isLiveBackendConfigured,
@@ -239,12 +239,14 @@ const REASON_META: Record<
     Icon: Check,
   },
   push: {
-    label: "push acc",
-    accent: "bg-osu-purple",
-    text: "text-osu-purple",
-    soft: "bg-osu-purple/15",
-    wash: "bg-gradient-to-l from-osu-purple/20 to-transparent",
-    Icon: Gauge,
+    label: "skillboost",
+    // Red on purpose: the vivid red for accents and washes, the lighter red
+    // for text so the label stays readable at 10-11px on dark rows.
+    accent: "bg-osu-red",
+    text: "text-osu-red-light",
+    soft: "bg-osu-red/15",
+    wash: "bg-gradient-to-l from-osu-red/20 to-transparent",
+    Icon: Flame,
   },
 };
 
@@ -650,9 +652,19 @@ function FarmHelperPage() {
     );
   }, [visibleSnapshot, query]);
 
+  // Skillboost rows are earned into the default view: until the player lands
+  // (or nearly lands) one of the suggested targets, the backend reports
+  // pushUnlocked false and the everything tab leaves them to their own
+  // skillboost tab. An absent field (older backend, popular view) never hides.
+  const pushLocked = view === "gain" && visibleSnapshot?.pushUnlocked === false;
+
   const recs = useMemo(() => {
     const filtered =
-      reasonFilter === "all" ? queryFilteredRecs : queryFilteredRecs.filter((rec) => rec.reason === reasonFilter);
+      reasonFilter === "all"
+        ? pushLocked
+          ? queryFilteredRecs.filter((rec) => rec.reason !== "push")
+          : queryFilteredRecs
+        : queryFilteredRecs.filter((rec) => rec.reason === reasonFilter);
     const sorted = [...filtered];
     const direction = sortDir === "desc" ? 1 : -1;
     sorted.sort((a, b) => {
@@ -674,7 +686,7 @@ function FarmHelperPage() {
       return (bySelected || byGain || byFit || byPlayers || byStars) * direction;
     });
     return sorted;
-  }, [queryFilteredRecs, reasonFilter, sortMode, sortDir]);
+  }, [queryFilteredRecs, reasonFilter, sortMode, sortDir, pushLocked]);
 
   // Only meaningful when no client-side filter narrows the list; then recs is
   // exactly the server's (possibly truncated) slice and "X of Y" is honest.
@@ -760,6 +772,9 @@ function FarmHelperPage() {
   // Reason-tab counts follow the search box (fix: tabs must count what
   // clicking them will show); the rail guide describes the whole board.
   const tabCounts = countReasons(queryFilteredRecs);
+  // Locked skillboost rows are not in the everything view, so its count must
+  // not include them either. The skillboost tab keeps its own count.
+  if (pushLocked) tabCounts.all -= tabCounts.push;
   const boardCounts = visibleSnapshot ? countReasons(visibleSnapshot.recs) : null;
   // Whether the backend actually had a cohort to compare against: without one,
   // an empty board is missing data, not an achievement.
@@ -907,6 +922,26 @@ function FarmHelperPage() {
                           </button>
                         }
                       />
+                    ) : pushLocked && queryFilteredRecs.length > 0 ? (
+                      // Everything the board has is a locked skillboost row:
+                      // point at the tab instead of pretending it is empty.
+                      <EmptyNotice
+                        eyebrow="skillboost only"
+                        title="Only skillboost maps right now"
+                        body="Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
+                        action={
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigateFarmHelper({ reason: "push", page: 0 });
+                              setSelectedKey(null);
+                            }}
+                            className="rounded-lg bg-osu-b3/60 px-3 py-2 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
+                          >
+                            show skillboost
+                          </button>
+                        }
+                      />
                     ) : !hasCohortData ? (
                       // Empty because the cohort itself is empty: be honest
                       // instead of congratulating the player.
@@ -986,6 +1021,7 @@ function FarmHelperPage() {
                           refreshing={waitingForCurrentSnapshot}
                           counts={boardCounts}
                           hiddenByMarks={isOwner && view === "gain" ? visibleSnapshot?.feedbackHiddenCount ?? 0 : 0}
+                          pushLocked={pushLocked}
                         />
                         {marksManager ? <div className="mt-4">{marksManager}</div> : null}
                       </>
@@ -1045,8 +1081,15 @@ function SubjectBar({
   onChangePlayer: () => void;
 }) {
   const unit = gainUnitLabel(visibleSnapshot ?? snapshot);
-  const mapCount = visibleSnapshot?.recs.length ?? 0;
-  const biggest = visibleSnapshot ? maxGain(visibleSnapshot.recs) : 0;
+  // Locked skillboost rows are off the default view (and out of the server's
+  // headline total), so the map count and biggest-gain figures skip them too.
+  const boardRecs = visibleSnapshot
+    ? visibleSnapshot.view === "gain" && visibleSnapshot.pushUnlocked === false
+      ? visibleSnapshot.recs.filter((rec) => rec.reason !== "push")
+      : visibleSnapshot.recs
+    : [];
+  const mapCount = boardRecs.length;
+  const biggest = maxGain(boardRecs);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-osu-b3/25 bg-osu-b4">
@@ -1209,7 +1252,7 @@ function BoardToolbar({
     { value: "missing", label: "missing", dot: REASON_META.missing.accent },
     { value: "improve", label: "improve", dot: REASON_META.improve.accent },
     { value: "stale", label: "old pb", dot: REASON_META.stale.accent },
-    { value: "push", label: "push acc", dot: REASON_META.push.accent },
+    { value: "push", label: "skillboost", dot: REASON_META.push.accent },
   ];
 
   return (
@@ -1760,6 +1803,7 @@ function ReadingGuide({
   counts,
   refreshing = false,
   hiddenByMarks = 0,
+  pushLocked = false,
 }: {
   snapshot: LiveFarmHelperSnapshot;
   view: LiveFarmHelperView;
@@ -1771,6 +1815,8 @@ function ReadingGuide({
   refreshing?: boolean;
   /** Owner-only, gain view: lanes the player's too_hard marks removed from the board. */
   hiddenByMarks?: number;
+  /** Skillboost rows are off the everything view until the player lands one. */
+  pushLocked?: boolean;
 }) {
   const sample = snapshot.peerBand.count || snapshot.peerBand.farmDataCount;
   return (
@@ -1819,7 +1865,11 @@ function ReadingGuide({
             <GuideItem
               reason="push"
               count={counts?.push ?? null}
-              body="You already beat the players near you here, but a higher-acc rerun is still worth pp."
+              body={
+                pushLocked
+                  ? "You already beat the players near you here, but a higher-acc rerun is still worth pp. Hidden by default until you achieve one of its scores."
+                  : "You already beat the players near you here, but a higher-acc rerun is still worth pp."
+              }
             />
             {hiddenByMarks > 0 ? (
               <p className="text-[11px] leading-snug text-osu-orange">
@@ -2527,7 +2577,7 @@ function farmStatusLabel(rec: LiveFarmHelperRec): string {
   if (rec.reason === "owned") return "cleared";
   if (rec.reason === "missing") return rec.peerFraction >= 0.45 ? "common pick" : "missing";
   if (rec.reason === "stale") return "old pb";
-  if (rec.reason === "push") return "push acc";
+  if (rec.reason === "push") return "skillboost";
   if (rec.estimatedPpGain >= 70) return "large gap";
   return "improve";
 }
@@ -2712,7 +2762,7 @@ function comparisonBar(rec: LiveFarmHelperRec): { left: string; right: string; p
     const pushTarget = rec.benchmarkPp;
     return {
       left: `your ${formatPp(subjectPp)}pp`,
-      right: `acc push ${formatPp(pushTarget)}pp`,
+      right: `skillboost ${formatPp(pushTarget)}pp`,
       pct: pushTarget > 0 ? clampPct(Math.round((subjectPp / pushTarget) * 100)) : 4,
     };
   }

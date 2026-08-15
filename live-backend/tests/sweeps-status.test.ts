@@ -67,6 +67,7 @@ describe("sweeps status registry", () => {
       "ln-source-recompute",
       "sunny-repin-recompute",
       "sunny-repin-dt-recompute",
+      "msd-poison-recovery",
       "skill-baseline",
       "map-search-index",
       "skin-slug-backfill",

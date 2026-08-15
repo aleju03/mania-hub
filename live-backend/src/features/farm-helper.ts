@@ -159,6 +159,13 @@ export interface FarmHelperSnapshot {
   // Gain view only; omitted whenever no adjustment applied. Additive; the
   // frontend may ignore it.
   feedbackMarginAdjust?: Partial<Record<ConcreteFarmHelperKeyMode, number>>;
+  // Gain view only: false until the subject has achieved (or come very close
+  // to) one of the skillboost ("push") targets a board actually suggested to
+  // them (see reconcilePushTargets). The UI keeps push rows behind their own
+  // skillboost tab while false. Derived from public scores against publicly
+  // served suggestions, so it is not owner-scoped. Additive; absent on the
+  // popular browse, the backtest path, and older cached snapshots.
+  pushUnlocked?: boolean;
   recs: FarmHelperRec[];
   generatedAt: string;
 }
@@ -403,6 +410,13 @@ const PUSH_ACC_CEILING = 0.998;
 const PUSH_MIN_ACC_DELTA = 0.003;
 const PUSH_MAX_PER_RUN = 8;
 const PUSH_RANK_SCORE_FACTOR = 0.85;
+// "Achieved" for a stored skillboost suggestion: the lane's current pp reached
+// the suggested target, or covered at least this fraction of the pp gap
+// between the score the suggestion saw and its target. The gap is small by
+// construction (a fixed accuracy step), so plain closeness-to-target would be
+// satisfied by the starting score itself; progress through the gap is the
+// honest "very close" measure.
+const PUSH_ACHIEVED_GAP_RATIO = 0.75;
 // Continuous feasibility via the personal accuracy model (A8). Peer-derived
 // benchmarks (missing/improve/stale) are scaled by
 //   (5 * accYou - 4) / (5 * accTypical - 4)
@@ -410,8 +424,9 @@ const PUSH_RANK_SCORE_FACTOR = 0.85;
 // target becomes what THIS player would plausibly score, and charts the model
 // says they cannot hit accuracy on collapse in the gain ranking instead of
 // (only) being cliff-dropped by the hard feasibility gate. accYou is the
-// prediction's confidence-shaded accConservative: thin evidence discounts,
-// never inflates. accTypical is the candidate lane's stored peer accuracy
+// prediction's median accuracy (the conservative percentile lives on only as
+// the backtest's --acc-conservative arm; see computeAccBenchmarkScale for the
+// measured comparison). accTypical is the candidate lane's stored peer accuracy
 // (weighted median over the same wB kernel as the pp quantiles) once at least
 // ACC_TYPICAL_MIN_PEER_ACCS rows carry one; until the A9 columns fill it
 // falls back to the model's global prior at gap 0, which keeps the multiplier
@@ -857,6 +872,9 @@ export interface FarmHelperBacktestOptions {
   // Disables the A10 survival term (ranking discount + clear-risk label) for
   // A/B comparison.
   noSurvival?: boolean;
+  // Scales benchmarks on the pre-2026-08-15 conservative accuracy percentile
+  // instead of the median, for A/B comparison (see BuildCtx.accScaleBasis).
+  accConservativeBasis?: boolean;
   // Injects the subject's acc model (see BuildCtx.accModelOverride).
   accModel?: PlayerAccModel | null;
 }
@@ -905,6 +923,7 @@ export async function buildFarmHelperSnapshotForBacktest(
     asOf,
     disableAccScaling: options.noAccScaling === true,
     disableSurvival: options.noSurvival === true,
+    ...(options.accConservativeBasis === true ? { accScaleBasis: "conservative" as const } : {}),
     ...("accModel" in options ? { accModelOverride: options.accModel } : {}),
   });
 }
@@ -969,6 +988,11 @@ interface BuildCtx {
   // (survival stays null, no ranking discount, no clear-risk labels). Never
   // set on the HTTP path.
   disableSurvival?: boolean;
+  // Backtest A/B switch (--acc-conservative): restores the pre-2026-08-15
+  // confidence-shaded conservative percentile as the A8 scaling basis, so the
+  // two bases stay comparable in isolation. Never set on the HTTP path (the
+  // serving default is the median prediction; see the call site).
+  accScaleBasis?: "conservative";
   // Backtest-only model injection: when set (including an explicit null), the
   // snapshot uses this model instead of reading player_skill_ratings, so the
   // harness can serve a freshly fitted model on DBs whose skills job has not
@@ -1152,7 +1176,15 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
   };
 
   const merged = runs.flatMap((run) => run.scored);
-  if (merged.length === 0) return base;
+  if (merged.length === 0) {
+    // The achievement sweep still runs on an empty board: an achieved target
+    // is achieved whether or not anything currently qualifies.
+    if (!isPopular && ctx.asOf == null) {
+      base.pushUnlocked = await timeStage(ctx.timings, "fh_push_targets", () =>
+        reconcilePushTargets(db, ctx.writeDb ?? db, ctx.userId, subject, []));
+    }
+    return base;
+  }
   const rankTimings = ctx.timings;
   const rankStartedAt = rankTimings ? performance.now() : 0;
 
@@ -1214,19 +1246,31 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
 
   await timeStage(ctx.timings, "fh_top_peers", () => hydrateTopPeers(db, top));
 
+  // Skillboost suggestion memory + unlock state (gain view only, never on the
+  // backtest path: suggestions are live player state and the sweep writes).
+  let pushUnlocked: boolean | undefined;
+  if (!isPopular && ctx.asOf == null) {
+    pushUnlocked = await timeStage(ctx.timings, "fh_push_targets", () =>
+      reconcilePushTargets(db, ctx.writeDb ?? db, ctx.userId, subject, top.filter((rec) => rec.reason === "push")));
+  }
+
   // The headline total simulates farming everything shown at once against the
   // same baseline the per-rec gains used, so it can never exceed what the list
   // is collectively worth (a naive sum of per-rec gains explodes on short
-  // variant baselines: every rec claims the same top slots).
+  // variant baselines: every rec claims the same top slots). While skillboost
+  // is locked the UI hides push rows from the default view, so the headline
+  // must not count them either.
   const totalBaseline = base.gainBasis === "keymode" && keyMode !== "any"
     ? subject.modeBaselines[keyMode]
     : { entries: subject.baselineEntries, total: subject.baselineTotal };
+  const headlineRecs = pushUnlocked === false ? top.filter((rec) => rec.reason !== "push") : top;
 
   return {
     ...base,
-    totalPotentialPp: round2(estimateCombinedGain(totalBaseline.entries, totalBaseline.total, top)),
+    totalPotentialPp: round2(estimateCombinedGain(totalBaseline.entries, totalBaseline.total, headlineRecs)),
     totalQualifying: ranked.length,
     recs: top,
+    ...(pushUnlocked === undefined ? {} : { pushUnlocked }),
   };
 }
 
@@ -1614,9 +1658,19 @@ async function scoreCandidates(
       const prediction = predictPlayerAccuracy(accModel, { keyCount: meta.keys, chartOverall: laneOverall, family });
       if (prediction) {
         // "Too easy" trusts the player over the model on this lane: scale on
-        // the optimistic accP85 instead of the confidence-shaded conservative
-        // percentile, so the target and gain rise toward the player's claim.
-        const accBasis = laneFeedback === "too_easy" ? { accConservative: prediction.accP85 } : prediction;
+        // the optimistic accP85, so the target and gain rise toward the
+        // player's claim. Everywhere else the basis is the MEDIAN accuracy
+        // prediction (since 2026-08-15; the conservative percentile survives
+        // only as the backtest's --acc-conservative A/B arm): the (5*acc - 4)
+        // pp axis turns even a small conservative shave into a large target
+        // cut, which is how a map a player beats at the peer median got
+        // quoted at +1pp (see computeAccBenchmarkScale's comment for the
+        // measured comparison).
+        const accBasis = laneFeedback === "too_easy"
+          ? { accConservative: prediction.accP85 }
+          : ctx.accScaleBasis === "conservative"
+            ? prediction
+            : { accConservative: prediction.accMedian };
         accScale = computeAccBenchmarkScale(accBasis, typicalPeerAccuracy(agg.entries));
       }
     }
@@ -1871,15 +1925,105 @@ function computePushBenchmark(score: SubjectMapScore, bestAccuracy: number | nul
   return score.pp * (5 * targetAccuracy - 4) / (5 * accuracy - 4);
 }
 
+// Skillboost ("push") suggestion memory. Records every push lane the served
+// gain board suggests, frozen at first sight (later builds re-derive higher
+// targets from improved scores, and a drifting yardstick could never be
+// achieved), and sweeps the stored un-achieved rows against the subject's
+// current scores: reaching the suggested target, or covering most of the pp
+// gap toward it (PUSH_ACHIEVED_GAP_RATIO), stamps the row achieved. Any
+// achieved row - even for a lane that no longer pushes - reports the
+// skillboost reason as unlocked, which is what lets the UI move push rows
+// into the default view. The sweep must iterate the STORED rows rather than
+// the current recs, because achieving a target is exactly what removes its
+// lane from the push list. Reads run on the read connection, writes on
+// writeDb (the serving-path invariant), and both are best-effort: a storage
+// failure serves the board as still locked instead of failing the snapshot.
+async function reconcilePushTargets(
+  db: Db,
+  writeDb: Db,
+  userId: number,
+  subject: PreparedSubject,
+  pushRecs: Array<Pick<FarmHelperRec, "beatmapId" | "speedBucket" | "benchmarkPp" | "subjectPp">>,
+): Promise<boolean> {
+  let rows;
+  try {
+    rows = (await exec(
+      db,
+      "select beatmap_id, speed_bucket, target_pp, subject_pp, achieved_at from farm_helper_push_targets where user_id = ?",
+      [userId],
+    )).rows;
+  } catch (error) {
+    logWarn("farm_helper_push_targets_read_failed", {
+      user_id: userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+
+  let unlocked = false;
+  const known = new Set<string>();
+  const now = Date.now();
+  const statements: DbStatement[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    const speedBucket = String(row.speed_bucket) as ScoreSpeedBucket;
+    const lane = farmHelperLaneKey(beatmapId, speedBucket);
+    known.add(lane);
+    if (row.achieved_at != null) {
+      unlocked = true;
+      continue;
+    }
+    const current = subject.subjectByBeatmap.get(lane)?.pp;
+    if (current == null) continue;
+    const target = Number(row.target_pp);
+    const gap = target - Number(row.subject_pp);
+    const achieved = current >= target || (gap > 0 && current - Number(row.subject_pp) >= PUSH_ACHIEVED_GAP_RATIO * gap);
+    if (!achieved) continue;
+    unlocked = true;
+    statements.push({
+      sql: `update farm_helper_push_targets set achieved_at = ?, achieved_pp = ?
+            where user_id = ? and beatmap_id = ? and speed_bucket = ? and achieved_at is null`,
+      args: [now, current, userId, beatmapId, speedBucket],
+    });
+  }
+  for (const rec of pushRecs) {
+    if (known.has(farmHelperLaneKey(rec.beatmapId, rec.speedBucket))) continue;
+    statements.push({
+      sql: `insert or ignore into farm_helper_push_targets
+              (user_id, beatmap_id, speed_bucket, target_pp, subject_pp, suggested_at)
+            values (?, ?, ?, ?, ?, ?)`,
+      args: [userId, rec.beatmapId, rec.speedBucket, rec.benchmarkPp, rec.subjectPp ?? 0, now],
+    });
+  }
+  if (statements.length > 0) {
+    try {
+      await execBatch(writeDb, statements);
+    } catch (error) {
+      // The computed unlock state still serves: an achievement that failed to
+      // persist is re-detected (and re-written) by the next build.
+      logWarn("farm_helper_push_targets_write_failed", {
+        user_id: userId,
+        statements: statements.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return unlocked;
+}
+
 // The A8 benchmark multiplier: (5 * accYou - 4) / (5 * accTypical - 4), the
 // mania pp formula's accuracy factor ratio. accYou is the prediction's
-// confidence-shaded accConservative rather than accMedian: at low confidence
-// the median reverts toward the prior's on-level accuracy (multiplier ~1, no
-// discount at all), while the conservative percentile is the one choice
-// where thinner evidence always means a lower target. The 2026-07 backtest
-// A/B priced that safety at roughly one point of recall@100 (0.398 median
-// vs 0.388 conservative, baseline 0.406) with precision@25/50 flat within
-// noise. The result is clamped to [0, 1] so scaling only ever discounts,
+// accMedian (the caller passes it through the accConservative field). The
+// confidence-shaded conservative percentile was the basis until 2026-08-15;
+// it made thinner evidence always mean a lower target, but the pp-linear
+// axis amplifies that shave ~5x at high accuracy and the weighted top-play
+// curve amplifies it again, which is how maps players beat at the peer
+// median were quoted at +1pp. Two backtest A/Bs both sided with the median:
+// 2026-07 (recall@100 0.398 vs 0.388, precision flat) and 2026-08-15
+// (recall@100 0.335 vs 0.325, precision flat, pooled benchmark MAE 43.1pp
+// vs 48.3pp, ~5 more recs per subject surviving the gain floor). The
+// conservative arm stays reproducible via the backtest's --acc-conservative.
+// The result is clamped to [0, 1] so scaling only ever discounts,
 // and it floors at 0 once the predicted accuracy reaches 80% (where the pp
 // accuracy factor itself hits 0) - the candidate then drops on the
 // benchmark <= 0 check. A degenerate typical accuracy (<= 80%, impossible

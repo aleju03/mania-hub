@@ -369,6 +369,13 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     doneKey: "sunny_repin_dt_recompute_done:v1",
     jobType: "recompute_sunny_repin_dt_sweep",
   }),
+  chartAnalysisSweep({
+    id: "msd-poison-recovery",
+    label: "MSD poisoning recovery sweep",
+    description: "Re-analyzes rows whose stored MSD carries the all-skillsets-equal floor left by the 2026-08-14 corrupted wasm instance.",
+    doneKey: "msd_poison_recovery_done:v1",
+    jobType: "recompute_msd_poison_sweep",
+  }),
   {
     id: "skill-baseline",
     label: "Skill baseline fold",
