@@ -112,6 +112,38 @@ export interface BaselineCurves {
   users: Record<string, number>;
 }
 
+// Exact-scale population curves: quantiles of the stored exact ratings in
+// player_skill_ratings, one blob for the whole roster. These exist so the
+// served percentile ranks the SAME number the profile shows as its headline —
+// the approximate scale above made the two disagree whenever a player's
+// tracked-history plays (absent from the top-plays-only corpus) carried their
+// rating. Affordable only since the roster-wide drip finished: every member
+// has a stored exact rating, so the fold is a plain table scan, no wasm. The
+// approximate baseline stays for the farm helper's cohort vectors and as the
+// serving fallback until the first finalize writes this blob.
+export const EXACT_SKILL_CURVES_META_KEY = "skill_exact_curves:v1";
+
+// Per-(keymode, axis) curve entry. `median` is the raw population median the
+// display shrink uses; curve values are already shrunk with it, so subject
+// and population meet on exactly the displayed scale. The approximate curves
+// predate the field and fall back to their curve midpoint.
+interface AxisCurveEntry {
+  count: number;
+  curve: number[];
+  median?: number;
+}
+
+type AxisCurveMap = Record<string, AxisCurveEntry>;
+
+export interface ExactSkillCurves {
+  computedAt: string;
+  playerSkillsVersion: number;
+  minPlays: number;
+  // keyCount -> axis -> entry; axis is a skillset name or `pattern:{id}`.
+  curves: Record<string, Record<string, { count: number; curve: number[]; median: number }>>;
+  users: Record<string, number>;
+}
+
 export interface PlayerSkillAxisPercentile {
   // Share of the tracked population rating below the subject, 0-100.
   value: number;
@@ -466,6 +498,92 @@ function quantileCurve(sortedValues: number[], points = BASELINE_QUANTILE_POINTS
   return curve;
 }
 
+const EXACT_CURVES_USER_CHUNK = 500;
+
+/**
+ * Fold every roster member's stored exact ratings (modes_json) into
+ * per-(keymode, axis) quantile curves. Values entering a curve are the
+ * display-shrunk ratings — shrinkRating against the raw population median,
+ * exactly what decoratePlayerSkillBreakdown serves — so a percentile is a
+ * monotone function of the number on the page. Chunked with a breath per
+ * chunk; runs at the tail of the baseline job, never on the serving path.
+ */
+export async function buildExactSkillCurves(db: Db): Promise<ExactSkillCurves> {
+  const samples = new Map<number, Map<string, Array<{ value: number; plays: number }>>>();
+  const members = new Map<number, number>();
+  let cursor = 0;
+  for (;;) {
+    const rows = (await exec(
+      db,
+      `select user_id, modes_json from player_skill_ratings
+       where analysis_version = ? and status = 'ready' and user_id > ?
+         and user_id in (select distinct user_id from country_rosters)
+       order by user_id
+       limit ?`,
+      [PLAYER_SKILLS_VERSION, cursor, EXACT_CURVES_USER_CHUNK],
+    )).rows;
+    for (const row of rows) {
+      cursor = Math.max(cursor, Number(row.user_id));
+      const modes = parseJson<{ modes?: PlayerSkillModeBreakdown[] }>(String(row.modes_json ?? ""), {}).modes;
+      if (!Array.isArray(modes)) continue;
+      for (const mode of modes) {
+        const keyCount = Number(mode?.keyCount);
+        const analyzedPlays = Number(mode?.analyzedPlays);
+        if (!Number.isInteger(keyCount) || keyCount <= 0) continue;
+        if (!(analyzedPlays >= BASELINE_MIN_PLAYS)) continue;
+        let axes = samples.get(keyCount);
+        if (!axes) samples.set(keyCount, (axes = new Map()));
+        members.set(keyCount, (members.get(keyCount) ?? 0) + 1);
+        const push = (axis: string, value: number, plays: number) => {
+          if (!(value > 0)) return;
+          const list = axes!.get(axis);
+          if (list) list.push({ value, plays });
+          else axes!.set(axis, [{ value, plays }]);
+        };
+        for (const axis of percentileAxes(keyCount, mode.ratings ?? {})) {
+          push(axis, Number(mode.ratings?.[axis]), analyzedPlays);
+        }
+        for (const entry of mode.patterns ?? []) {
+          const plays = Number(entry?.plays);
+          if (!(plays >= BASELINE_PATTERN_MIN_PLAYS)) continue;
+          push(`pattern:${entry.id}`, Number(entry?.rating), plays);
+        }
+      }
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    if (rows.length < EXACT_CURVES_USER_CHUNK) break;
+  }
+
+  const curves: ExactSkillCurves["curves"] = {};
+  const users: Record<string, number> = {};
+  for (const [keyCount, axes] of samples) {
+    users[String(keyCount)] = members.get(keyCount) ?? 0;
+    const axisCurves: Record<string, { count: number; curve: number[]; median: number }> = {};
+    for (const [axis, list] of axes) {
+      if (list.length < BASELINE_MIN_USERS_PER_CURVE) continue;
+      const raw = list.map((sample) => sample.value).sort((a, b) => a - b);
+      const median = raw[Math.floor((raw.length - 1) / 2)];
+      const shrunk = list.map((sample) => shrinkRating(sample.value, sample.plays, median)).sort((a, b) => a - b);
+      axisCurves[axis] = { count: list.length, curve: quantileCurve(shrunk), median };
+    }
+    curves[String(keyCount)] = axisCurves;
+  }
+  return {
+    computedAt: nowIso(),
+    playerSkillsVersion: PLAYER_SKILLS_VERSION,
+    minPlays: BASELINE_MIN_PLAYS,
+    curves,
+    users,
+  };
+}
+
+// An exact blob with no populated keymode (empty dev DB, roster wiped) is
+// written anyway so the due-check settles, but serving treats it as absent
+// and keeps the approximate fallback.
+function exactCurvesUsable(curves: ExactSkillCurves | null): curves is ExactSkillCurves {
+  return curves != null && Object.values(curves.curves).some((axes) => Object.keys(axes).length > 0);
+}
+
 async function finalizeSkillBaseline(db: Db, runId: string): Promise<void> {
   const rows = (await exec(
     db,
@@ -521,11 +639,25 @@ async function finalizeSkillBaseline(db: Db, runId: string): Promise<void> {
      on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
     [SKILL_BASELINE_CURVES_META_KEY, json(blob), now],
   );
+  const exactCurves = await buildExactSkillCurves(db);
+  await exec(
+    db,
+    `insert into live_meta (key, value_json, updated_at) values (?, ?, ?)
+     on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
+    [EXACT_SKILL_CURVES_META_KEY, json(exactCurves), nowIso()],
+  );
   // Superseded-version rows are dead weight once the new curves are live.
   await exec(db, "delete from player_skill_baseline where baseline_version != ?", [SKILL_BASELINE_VERSION]);
   chartMapCache = null;
   curvesCache = null;
-  logInfo("skill_baseline_done", { run_id: runId, users: users, curve_keymodes: Object.keys(curves) });
+  exactCurvesCache = null;
+  logInfo("skill_baseline_done", {
+    run_id: runId,
+    users: users,
+    curve_keymodes: Object.keys(curves),
+    exact_users: exactCurves.users,
+    exact_keymodes: Object.keys(exactCurves.curves),
+  });
 }
 
 export async function runSkillBaselineJob(db: Db, queue: JobQueue, payload: { runId?: string; cursor?: number } | undefined): Promise<void> {
@@ -557,15 +689,23 @@ export async function enqueueSkillBaselineIfDue(db: Db, queue: JobQueue, interva
   const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [SKILL_BASELINE_CURVES_META_KEY])).rows[0];
   const stored = parseJson<BaselineCurves | null>(String(row?.value_json ?? ""), null);
   const computedAtMs = Date.parse(stored?.computedAt ?? "");
-  if (stored?.playerSkillsVersion === PLAYER_SKILLS_VERSION && Number.isFinite(computedAtMs) && Date.now() - computedAtMs < intervalMs) {
+  const approxFresh =
+    stored?.playerSkillsVersion === PLAYER_SKILLS_VERSION && Number.isFinite(computedAtMs) && Date.now() - computedAtMs < intervalMs;
+  // The exact curves ride the same chain: a missing or version-stale exact
+  // blob makes an otherwise-fresh run due again (one-time on the deploy that
+  // introduces them; afterwards both blobs refresh in the same finalize).
+  const exactRow = (await exec(db, "select value_json from live_meta where key = ? limit 1", [EXACT_SKILL_CURVES_META_KEY])).rows[0];
+  const exactStored = parseJson<ExactSkillCurves | null>(String(exactRow?.value_json ?? ""), null);
+  if (approxFresh && exactStored?.playerSkillsVersion === PLAYER_SKILLS_VERSION) {
     return false;
   }
   // After a PLAYER_SKILLS_VERSION bump this check fires immediately, but the
   // drip recomputes strongest players first, so curves rebuilt from its early
-  // arrivals would skew every percentile low for the whole refresh interval.
-  // Keep serving the previous version's curves until the new version covers
-  // the majority of rated players.
-  if (stored && stored.playerSkillsVersion !== PLAYER_SKILLS_VERSION) {
+  // arrivals would skew every percentile low for the whole refresh interval
+  // (the exact curves ARE those rows, so the same gate guards them). Keep
+  // serving the previous version's curves until the new version covers the
+  // majority of rated players.
+  if (stored || exactStored) {
     const counts = (await exec(
       db,
       "select sum(case when analysis_version = ? then 1 else 0 end) as current, count(*) as total from player_skill_ratings where status = 'ready'",
@@ -645,6 +785,16 @@ export async function readBaselineCurves(db: Db): Promise<BaselineCurves | null>
   return curves;
 }
 
+let exactCurvesCache: { readAt: number; curves: ExactSkillCurves | null } | null = null;
+
+export async function readExactSkillCurves(db: Db): Promise<ExactSkillCurves | null> {
+  if (exactCurvesCache && Date.now() - exactCurvesCache.readAt < CURVES_CACHE_TTL_MS) return exactCurvesCache.curves;
+  const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [EXACT_SKILL_CURVES_META_KEY])).rows[0];
+  const curves = parseJson<ExactSkillCurves | null>(String(row?.value_json ?? ""), null);
+  exactCurvesCache = { readAt: Date.now(), curves };
+  return curves;
+}
+
 function percentileFromCurve(curve: number[], value: number): number {
   if (curve.length === 0) return 0;
   if (value <= curve[0]) return 0;
@@ -689,14 +839,18 @@ function shrinkRating(value: number, plays: number, median: number | undefined):
   return Math.min(value, Math.round((value * weight + median * (1 - weight)) * 100) / 100);
 }
 
-function curveMedian(axisCurves: Record<string, { count: number; curve: number[] }> | undefined, axis: string): number | undefined {
-  const curve = axisCurves?.[axis]?.curve;
-  if (!curve || curve.length === 0) return undefined;
-  return curve[Math.floor((curve.length - 1) / 2)];
+function curveMedian(axisCurves: AxisCurveMap | undefined, axis: string): number | undefined {
+  const entry = axisCurves?.[axis];
+  if (!entry) return undefined;
+  // Exact curves carry the raw median their values were shrunk with; using it
+  // here keeps the subject's shrink identical to the population's. The
+  // approximate curves predate the field and fall back to the curve midpoint.
+  if (entry.median != null && entry.median > 0) return entry.median;
+  if (!entry.curve || entry.curve.length === 0) return undefined;
+  return entry.curve[Math.floor((entry.curve.length - 1) / 2)];
 }
 
-function shrinkMode(mode: PublicPlayerSkillMode, curves: BaselineCurves): PublicPlayerSkillMode {
-  const axisCurves = curves.curves[String(mode.keyCount)];
+function shrinkMode(mode: PublicPlayerSkillMode, axisCurves: AxisCurveMap | undefined): PublicPlayerSkillMode {
   const ratings: Record<string, number> = {};
   for (const [axis, value] of Object.entries(mode.ratings)) {
     ratings[axis] = shrinkRating(Number(value), mode.analyzedPlays, curveMedian(axisCurves, axis));
@@ -708,11 +862,13 @@ function shrinkMode(mode: PublicPlayerSkillMode, curves: BaselineCurves): Public
 }
 
 /**
- * Decorate an exact skill breakdown with population percentiles: the
- * subject's own approximate ratings (recomputed from their stored per-play
- * cache with the same formula the population used) interpolated into the
- * stored quantile curves. Bounded work: one live_meta read, one plays_json
- * read, one indexed chart lookup for <= top-plays-count beatmaps.
+ * Decorate an exact skill breakdown with population percentiles. Preferred
+ * path: the display-shrunk exact ratings interpolated into the exact-scale
+ * curves, so the percentile ranks precisely the number the page shows — one
+ * live_meta read, nothing else. Fallback (until the first finalize writes the
+ * exact blob): the subject's approximate ratings, recomputed from their
+ * stored per-play cache with the same formula the approximate population
+ * used, interpolated into the approximate curves.
  */
 export async function decoratePlayerSkillBreakdown(
   db: Db,
@@ -726,9 +882,37 @@ export async function decoratePlayerSkillBreakdown(
   );
   const base: PublicPlayerSkillBreakdown = { ...breakdown, modes: marked, baseline: null };
   if (breakdown.status !== "ready" || breakdown.modes.length === 0) return base;
+
+  const exact = await readExactSkillCurves(db);
+  if (exactCurvesUsable(exact)) {
+    const minPlays = Math.max(1, Number(exact.minPlays) || 0);
+    const modes: PublicPlayerSkillMode[] = marked.map((mode) => {
+      const axisCurves = exact.curves[String(mode.keyCount)];
+      const shrunk = shrinkMode(mode, axisCurves);
+      // The population only admits keymodes with minPlays+ analyzed plays;
+      // a subject below that floor gets no percentile.
+      if (!axisCurves || mode.analyzedPlays < minPlays) return shrunk;
+      const percentiles: Record<string, PlayerSkillAxisPercentile> = {};
+      for (const axis of percentileAxes(mode.keyCount, shrunk.ratings)) {
+        const axisCurve = axisCurves[axis];
+        const value = Number(shrunk.ratings[axis]);
+        if (!axisCurve || !(value > 0)) continue;
+        percentiles[axis] = { value: percentileFromCurve(axisCurve.curve, value), population: axisCurve.count };
+      }
+      for (const entry of shrunk.patterns ?? []) {
+        if (!(Number(entry.plays) >= BASELINE_PATTERN_MIN_PLAYS) || !(entry.rating > 0)) continue;
+        const axisCurve = axisCurves[`pattern:${entry.id}`];
+        if (!axisCurve) continue;
+        percentiles[`pattern:${entry.id}`] = { value: percentileFromCurve(axisCurve.curve, entry.rating), population: axisCurve.count };
+      }
+      return Object.keys(percentiles).length > 0 ? { ...shrunk, percentiles } : shrunk;
+    });
+    return { ...base, modes, baseline: { computedAt: exact.computedAt, users: exact.users } };
+  }
+
   const curves = await readBaselineCurves(db);
   if (!curves) return base;
-  base.modes = marked.map((mode) => shrinkMode(mode, curves));
+  base.modes = marked.map((mode) => shrinkMode(mode, curves.curves[String(mode.keyCount)]));
 
   const playsRow = (await exec(
     db,

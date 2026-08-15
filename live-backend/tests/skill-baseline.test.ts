@@ -7,6 +7,7 @@ import { JobQueue } from "../src/jobs/queue.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { PLAYER_SKILLS_VERSION, SKILL_RATING_SKILLSETS } from "../src/features/player-skills.js";
 import {
+  EXACT_SKILL_CURVES_META_KEY,
   SKILL_BASELINE_CURVES_META_KEY,
   SKILL_BASELINE_JOB,
   SKILL_BASELINE_VERSION,
@@ -16,6 +17,7 @@ import {
   runSkillBaselineJob,
   type BaselineChartEntry,
   type BaselineCurves,
+  type ExactSkillCurves,
 } from "../src/features/skill-baseline.js";
 
 async function withDb(run: (db: Awaited<ReturnType<typeof createDb>>) => Promise<void>): Promise<void> {
@@ -223,6 +225,145 @@ describe("skill baseline job", () => {
       expect(jobs).toHaveLength(1);
       // A pending chain link blocks a duplicate seed.
       expect(await enqueueSkillBaselineIfDue(db, queue)).toBe(false);
+    });
+  });
+});
+
+describe("exact skill curves", () => {
+  async function seedRatedRoster(db: Awaited<ReturnType<typeof createDb>>): Promise<void> {
+    const now = new Date().toISOString();
+    // 25 roster members with an exact Overall gradient across 4K and 7K plus
+    // a 4K pattern axis, all above the population min-plays floor.
+    for (let user = 0; user < 25; user += 1) {
+      const userId = 2000 + user;
+      await exec(
+        db,
+        "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', ?, ?, 'test', 1, ?)",
+        [userId, user + 1, now],
+      );
+      const summary = {
+        totalPlays: 120,
+        analyzedPlays: 120,
+        pendingPlays: 0,
+        unsupportedPlays: 0,
+        modes: [
+          {
+            keyCount: 4,
+            analyzedPlays: 100,
+            ratings: { Overall: 20 + user * 0.2, Stream: 18 + user * 0.2 },
+            patterns: [{ id: "stream", label: "Stream", rating: 19 + user * 0.2, plays: 12 }],
+          },
+          {
+            keyCount: 7,
+            analyzedPlays: 60,
+            ratings: { Overall: 21 + user * 0.2, Stream: 17 + user * 0.2 },
+            patterns: [],
+          },
+        ],
+      };
+      await exec(
+        db,
+        `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+         values (?, ?, 'ready', ?, ?, ?, ?)`,
+        [userId, PLAYER_SKILLS_VERSION, JSON.stringify(summary), JSON.stringify({ plays: [] }), now, now],
+      );
+    }
+  }
+
+  it("folds stored exact ratings into curves that rank the displayed rating", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      await seedRatedRoster(db);
+      await runSkillBaselineJob(db, queue, { runId: "exact-run", cursor: 0 });
+
+      const blobRow = (await exec(db, "select value_json from live_meta where key = ?", [EXACT_SKILL_CURVES_META_KEY])).rows[0];
+      const exact = parseJson<ExactSkillCurves | null>(String(blobRow?.value_json ?? ""), null);
+      expect(exact).not.toBeNull();
+      expect(exact!.playerSkillsVersion).toBe(PLAYER_SKILLS_VERSION);
+      expect(exact!.users["4"]).toBe(25);
+      expect(exact!.curves["4"].Overall.count).toBe(25);
+      expect(exact!.curves["4"].Overall.median).toBeGreaterThan(0);
+      expect(exact!.curves["4"].Stream).toBeDefined();
+      expect(exact!.curves["4"]["pattern:stream"].count).toBe(25);
+      // Non-4K keymodes publish Overall only: MinaCalc's skillset names are
+      // unreliable there, same rule as the approximate axes.
+      expect(exact!.curves["7"].Overall.count).toBe(25);
+      expect(exact!.curves["7"].Stream).toBeUndefined();
+
+      const breakdownFor = (overall: number, analyzedPlays: number) => ({
+        status: "ready" as const,
+        version: PLAYER_SKILLS_VERSION,
+        computedAt: new Date().toISOString(),
+        totalPlays: analyzedPlays,
+        analyzedPlays,
+        pendingPlays: 0,
+        unsupportedPlays: 0,
+        modes: [
+          {
+            keyCount: 4,
+            analyzedPlays,
+            ratings: { Overall: overall },
+            patterns: [
+              { id: "stream", label: "Stream", rating: overall, plays: 5 },
+              { id: "jack", label: "Jack", rating: overall, plays: 2 },
+            ],
+          },
+        ],
+      });
+
+      // The whole point of the exact scale: a higher headline rating can
+      // never show a worse standing. No plays_json row is needed - the
+      // percentile comes from the same ratings the breakdown carries.
+      const stronger = await decoratePlayerSkillBreakdown(db, 9001, breakdownFor(24.8, 250));
+      const weaker = await decoratePlayerSkillBreakdown(db, 9002, breakdownFor(21.0, 250));
+      expect(stronger.baseline?.users["4"]).toBe(25);
+      const strongPct = stronger.modes[0].percentiles!.Overall;
+      const weakPct = weaker.modes[0].percentiles!.Overall;
+      expect(strongPct.population).toBe(25);
+      expect(strongPct.value).toBeGreaterThan(weakPct.value);
+      // Pattern axes need the subject to have a rated pool of that pattern.
+      expect(stronger.modes[0].percentiles!["pattern:stream"]).toBeDefined();
+      expect(stronger.modes[0].percentiles!["pattern:jack"]).toBeUndefined();
+      // Displayed ratings stay evidence-shrunk (never above the raw value).
+      expect(stronger.modes[0].ratings.Overall).toBeLessThanOrEqual(24.8);
+
+      // A subject above the whole population pins to 100.
+      const top = await decoratePlayerSkillBreakdown(db, 9003, breakdownFor(40, 500));
+      expect(top.modes[0].percentiles!.Overall.value).toBe(100);
+
+      // Thin pools stay provisional and unranked.
+      const thin = await decoratePlayerSkillBreakdown(db, 9004, breakdownFor(24.8, 9));
+      expect(thin.modes[0].provisional).toBe(true);
+      expect(thin.modes[0].percentiles).toBeUndefined();
+
+      // Both blobs fresh at the current version: the due-check stays quiet.
+      expect(await enqueueSkillBaselineIfDue(db, queue)).toBe(false);
+    });
+  });
+
+  it("re-runs the chain once when only the approximate curves exist", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      await seedRatedRoster(db);
+      const now = new Date().toISOString();
+      const approxOnly: BaselineCurves = {
+        computedAt: now,
+        baselineVersion: SKILL_BASELINE_VERSION,
+        playerSkillsVersion: PLAYER_SKILLS_VERSION,
+        gamma: {},
+        accSlope: 1.09,
+        minPlays: 20,
+        curves: {},
+        users: {},
+      };
+      await exec(
+        db,
+        "insert into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+        [SKILL_BASELINE_CURVES_META_KEY, JSON.stringify(approxOnly), now],
+      );
+      // Fresh approximate curves alone are no longer enough: the missing
+      // exact blob makes the chain due (the deploy-transition case).
+      expect(await enqueueSkillBaselineIfDue(db, queue)).toBe(true);
     });
   });
 });
