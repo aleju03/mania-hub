@@ -586,7 +586,15 @@ export function RevealStage({
      stuck. */
   const [slowDraw, setSlowDraw] = useState(false);
   const [burst, setBurst] = useState<{ key: number; tier: ManiaCardTier; glowColor: RgbaColor } | null>(null);
-  const [cardBack, setCardBack] = useState<string | null>(null);
+  /* This stage normally replaces ShuffleStage while its identical stack is
+     already on screen. Starting at null and filling the cached URL in an
+     effect left one painted frame with no cards between the two components,
+     which read as the whole reveal disappearing and reappearing on phones.
+     Client-only mounts can take the already-warmed back in their first
+     render; the effect remains as the SSR-safe fallback. */
+  const [cardBack, setCardBack] = useState<string | null>(() =>
+    typeof document === "undefined" ? null : getCachedCardBackDataUrl(),
+  );
   const [skipping, setSkipping] = useState(false);
   /* Reveal-all row geometry; null while revealing one by one. scaleFrom is
      the stack-to-tile size ratio so the deal starts at full stack size. */
@@ -618,7 +626,7 @@ export function RevealStage({
     cancelledRef.current = false;
     const backCanvas = getCachedCardBackCanvas();
     backCanvasRef.current = backCanvas;
-    setCardBack(getCachedCardBackDataUrl());
+    setCardBack((current) => current ?? getCachedCardBackDataUrl());
     return () => {
       cancelledRef.current = true;
       rendererRef.current?.dispose({ deferGpuRelease: true });

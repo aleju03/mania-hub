@@ -13,7 +13,7 @@ import { enqueueGlobalFarmedBoardRepack, enqueueGlobalMapsRefreshIfDue, enqueueM
 import { cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
-import { ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureLnMsdSweepSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
+import { ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureLnMsdSweepSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-feedback.js";
@@ -449,6 +449,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       void ensureLnMsdSweepSeeded(app.db, app.queue).catch((error) => console.warn("[ln-msd-sweep] seed failed", error));
       void ensureNoteBpmRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[note-bpm-recompute] seed failed", error));
       void ensureMsdPoisonRecoverySeeded(app.db, app.queue).catch((error) => console.warn("[msd-poison-recovery] seed failed", error));
+      void ensureInverseClusterBpmRecoverySeeded(app.db, app.queue).catch((error) => console.warn("[inverse-cluster-bpm] seed failed", error));
+      void ensureNegativeTimeMsdRecoverySeeded(app.db, app.queue).catch((error) => console.warn("[negative-time-msd] seed failed", error));
       // Unlike the sweeps above this one consumes osu! API budget (one best-
       // scores call per user), so it also requires osu! API jobs to be enabled.
       // Guarded by its done key: post-completion boots schedule nothing.

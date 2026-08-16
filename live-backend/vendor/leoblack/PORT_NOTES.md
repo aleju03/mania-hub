@@ -32,7 +32,22 @@ and must NOT be overwritten on a re-copy:
   no observable throw self-heals too (a legitimate floor reproduces and is
   accepted). This is the 2026-08-14 prod poisoning; the recovery sweep in
   `live-backend/src/features/chart-analysis.ts` keys on the same signature.
+  `calc.js`'s `buildRows` also shifts a chart whose first row is negative to
+  start at zero (2026-08-16): osu! allows notes before the audio leads in,
+  and a negative row time walks MinaCalc's interval index out of bounds and
+  throws (prod chart 4038663, notes at -1050ms). Covered by
+  `live-backend/tests/negative-time-msd.test.ts`. Note MinaCalc's own "junk
+  file" guard is separate and intentional: absurd-density meme charts get
+  all-zero skillsets from the calc itself, which we store verbatim.
 - `estimator/companellaEstimator.js` (`getOrtNamespace` divergence, see Companella).
+- `patterns/clustering.js`: the mixed-BPM cluster pool no longer averages in the
+  MsPerBeat 0 sentinel that Density/Inverse windows carry (`resolvedMspb` in
+  `findPatterns.js`); only timed windows vote, and an all-sentinel pool stays
+  BPM 0. Upstream averages the zeros in, which read as four-digit BPMs
+  ("~4497BPM Mixed Inverse") with matching inflated importance on inverse-heavy
+  charts; still unfixed upstream as of 2026-08-16 (their `js/patterns` last
+  changed 2026-08-09). Covered by `live-backend/tests/leoblack-clustering.test.ts`;
+  the one-shot `recompute_inverse_cluster_bpm_sweep` re-analyzed stored rows.
 - The `ett/versions/minaclac-*.js` glue stays at the old pin `0b27cc8` bytes: our
   calc.js hands over `wasmBinary` and defines the CommonJS globals, so upstream's
   newer locateFile-based glue offers nothing and re-copying it would re-open the

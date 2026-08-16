@@ -12,6 +12,7 @@ import { getServerLiveBackendUrl } from "../../lib/live-backend";
 import { getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
 import {
+  getDisplayedAccuracy,
   getDisplayedRank,
   getDisplayedTotalScore,
   getManiaJudgementCounts,
@@ -793,6 +794,10 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
   const cover = pickBeatmapsetCover(score);
   const modsLabel = getModAcronyms(score.mods).join("");
   const displayedRank = getDisplayedRank(score);
+  // Stable plays are judged on the 300-weighted scale, but osu! reports the
+  // 305-weighted (rainbow-MAX) accuracy for them too, so read the same
+  // normalized value the replay page shows instead of the raw field.
+  const accuracy = getDisplayedAccuracy(score);
   const judgements = getManiaJudgementCounts(score.statistics);
   const totalScore = getDisplayedTotalScore(score);
   const maxCombo = score.max_combo ?? score.beatmap?.max_combo ?? null;
@@ -1170,7 +1175,7 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
               },
               [
                 ogStatCell("score", "SCORE", formatOgInt(totalScore)),
-                ogStatCell("acc", "ACCURACY", formatOgAcc(score.accuracy)),
+                ogStatCell("acc", "ACCURACY", formatOgAcc(accuracy)),
                 ogStatCell(
                   "combo",
                   "MAX COMBO",

@@ -23,7 +23,13 @@ and must NOT be overwritten on a re-copy:
   implementations, and `ett/index.js` is upstream's file plus a `lnTailTaps`
   option threaded through `analyzeEtternaFromText` into the calc (the backend's
   tail-aware SSR pass depends on it; dropping it silently zeroes the LN-tail
-  blend, caught by `live-backend/tests/player-skills.test.ts`).
+  blend, caught by `live-backend/tests/player-skills.test.ts`). `calc.js` also
+  evicts a wasm instance a compute threw out of and retries a floor result on
+  a fresh one (the 2026-08-14 poisoning guards), and shifts a chart whose
+  first row is negative to start at zero (2026-08-16: osu! allows notes
+  before the audio leads in, and a negative row time walks MinaCalc's
+  interval index out of bounds and throws; covered by
+  `live-backend/tests/negative-time-msd.test.ts`).
 - `estimator/companellaEstimator.js` (`getOrtNamespace` divergence, see Companella).
 - The `ett/versions/minaclac-*.js` glue stays at the old pin `0b27cc8` bytes: our
   calc.js hands over `wasmBinary` and defines the CommonJS globals, so upstream's

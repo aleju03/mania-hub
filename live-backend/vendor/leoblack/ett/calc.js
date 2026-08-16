@@ -92,10 +92,16 @@ function buildRows(chart, { lnTailTaps = false, minTailGapMs = 50 } = {}) {
     const masks = new Uint32Array(times.length);
     const seconds = new Float32Array(times.length);
 
+    // osu! allows notes before the audio leads in (negative timestamps), and a
+    // negative row time walks MinaCalc's interval index out of bounds, which
+    // throws a C++ exception out of the wasm. Only the gaps between rows carry
+    // difficulty, so shift such a chart to start at zero instead.
+    const offset = times.length > 0 && times[0] < 0 ? -times[0] : 0;
+
     for (let i = 0; i < times.length; i += 1) {
         const t = times[i];
         masks[i] = byTime.get(t) >>> 0;
-        seconds[i] = t / 1000;
+        seconds[i] = (t + offset) / 1000;
     }
 
     return { masks, seconds };

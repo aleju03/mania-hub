@@ -41,6 +41,42 @@ const card: RevealedCard = {
 afterEach(cleanup);
 
 describe("PackSummary", () => {
+  it("reserves pull-serial space before asynchronous mint details arrive", () => {
+    const { container, rerender } = render(
+      <PackSummary
+        cards={[card]}
+        onOpenAnother={() => {}}
+        onOpenNext={() => {}}
+        canOpenNext={false}
+        nextPackShardCost={null}
+        serials={null}
+        onRecycleCopies={() => 0}
+        reducedMotion={true}
+      />,
+    );
+
+    const emptySlot = container.querySelector('[data-pull-serial-slot="0"]');
+    expect(emptySlot?.classList.contains("min-h-8")).toBe(true);
+    expect(emptySlot?.textContent).toBe("");
+
+    rerender(
+      <PackSummary
+        cards={[card]}
+        onOpenAnother={() => {}}
+        onOpenNext={() => {}}
+        canOpenNext={false}
+        nextPackShardCost={null}
+        serials={new Map([["7", { serial: 3, mintedTotal: 8, isFirstGlobal: false }]])}
+        onRecycleCopies={() => 0}
+        reducedMotion={true}
+      />,
+    );
+
+    const filledSlot = container.querySelector('[data-pull-serial-slot="0"]');
+    expect(filledSlot?.classList.contains("min-h-8")).toBe(true);
+    expect(filledSlot?.textContent).toBe("3rd of 8 to pull this");
+  });
+
   it("lands cut cards at their recycled size before auto-recycling resolves", () => {
     const { container } = render(
       <PackSummary

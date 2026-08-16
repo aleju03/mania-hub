@@ -24,6 +24,30 @@ export function nf(value: number): string {
   return Math.round(value).toLocaleString();
 }
 
+/** Compact span between two timestamps ("45m", "6h", "12d", "3mo", "1y"). */
+export function goalSpanLabel(fromMs: number, toMs: number): string {
+  const mins = Math.max(0, Math.floor((toMs - fromMs) / 60000));
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d`;
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+  return `${Math.floor(days / 365)}y`;
+}
+
+/** How long an open goal has been standing, for the card's header line. */
+export function goalAgeLabel(createdAt: number, nowMs: number): string {
+  if (nowMs - createdAt < 60000) return "set just now";
+  return `set ${goalSpanLabel(createdAt, nowMs)} ago`;
+}
+
+/** How long a cleared goal took. Null when it was created and cleared inside a minute. */
+export function goalDurationLabel(goal: Pick<UserGoal, "createdAt" | "completedAt">): string | null {
+  if (goal.completedAt == null || goal.completedAt - goal.createdAt < 60000) return null;
+  return `took ${goalSpanLabel(goal.createdAt, goal.completedAt)}`;
+}
+
 export function describeGoal(goal: UserGoal): string {
   const map = goal.beatmapLabel ?? (goal.beatmapId ? `map #${goal.beatmapId}` : "a map");
   switch (goal.kind) {

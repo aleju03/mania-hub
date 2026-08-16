@@ -27,14 +27,19 @@ interface ShuffleStageProps {
 
 export function ShuffleStage({ reducedMotion, count }: ShuffleStageProps) {
   const windowActive = useWindowActive();
-  const [cardBack, setCardBack] = useState<string | null>(null);
+  /* Paint the cached back in the first client render. Waiting for the effect
+     produced a blank frame both after the pack tear and when this stage
+     handed the same stack to RevealStage. */
+  const [cardBack, setCardBack] = useState<string | null>(() =>
+    typeof document === "undefined" ? null : getCachedCardBackDataUrl(),
+  );
   const [cycle, setCycle] = useState(0);
   /* The draw is usually done before the first sweep finishes; past a few
      seconds, say why the shuffle is still going. */
   const [slow, setSlow] = useState(false);
 
   useEffect(() => {
-    setCardBack(getCachedCardBackDataUrl());
+    setCardBack((current) => current ?? getCachedCardBackDataUrl());
   }, []);
 
   useEffect(() => {

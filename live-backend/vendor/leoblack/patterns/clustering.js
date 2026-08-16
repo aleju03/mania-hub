@@ -21,17 +21,26 @@ function patternAmount(sortedStartsEnds) {
 
 function createClusterBuilder(value) {
     return {
-    SumMs: value,
+    SumMs: value > 0 ? value : 0,
+    TimedCount: value > 0 ? 1 : 0,
     OriginalMsPerBeat: value,
     Count: 1,
     BPM: null,
     add(v) {
             this.Count += 1;
-            this.SumMs += v;
+            if (v > 0) {
+        this.SumMs += v;
+        this.TimedCount += 1;
+            }
     },
     calculate() {
-            const average = this.SumMs / this.Count;
-            this.BPM = average <= 0 ? 0 : Math.round(60000.0 / average);
+            // Density/Inverse windows carry MsPerBeat 0 as a "no meaningful
+            // tempo" sentinel (resolvedMspb in findPatterns.js): their row
+            // gaps are LN tails landing milliseconds before the next head.
+            // Averaging the sentinel in dilutes a mixed pool toward zero and
+            // 60000/average explodes into four-digit BPMs, so only timed
+            // windows vote; a pool of nothing but sentinels stays BPM 0.
+            this.BPM = this.TimedCount === 0 ? 0 : Math.round(60000.0 / (this.SumMs / this.TimedCount));
     },
     get Value() {
             return this.BPM;

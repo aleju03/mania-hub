@@ -27,6 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-16", text: "Fixed LN maps showing an impossible pattern BPM, like 4497BPM Inverse on a 150BPM map. Affected maps are being recomputed", to: "/maps" },
   { date: "2026-08-15", text: "Collections show every dan logo in a pack's range on its cover, not just the last one", to: "/maps" },
   { date: "2026-08-15", text: "Fixed many maps showing a way lower MSD and dan estimate than they should since Aug 14. Affected maps and player skill ratings are being recomputed", to: "/maps" },
   { date: "2026-08-15", text: "Skins that mix circles and bars are now labeled correctly", to: "/skins" },

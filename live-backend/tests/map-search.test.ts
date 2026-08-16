@@ -389,6 +389,15 @@ describe("map search index", () => {
     await seedAnalysis(db, 8, { rawDan: 10, label: "10", msdValues: { Overall: 26 } });
     await seedMap(db, { beatmapId: 9, beatmapsetId: 90, cs: 4, primary: "stream", patterns: { stream: 0.9 } });
     await seedAnalysis(db, 9, { rawDan: 7.5, label: "7+", vibro: true, msdValues: { Overall: 20 } });
+    // Five legit low-MSD charts form the under-14 pack; the meme chart's 0.0
+    // MSD is MinaCalc's own "junk file" refusal and must not join them.
+    for (let i = 0; i < 5; i++) {
+      const beatmapId = 11 + i;
+      await seedMap(db, { beatmapId, beatmapsetId: beatmapId * 10, cs: 4, primary: "stream", patterns: { stream: 0.7 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 3, label: "3", msdValues: { Overall: 10 + i * 0.3, Stream: 10 + i * 0.3 } });
+    }
+    await seedMap(db, { beatmapId: 16, beatmapsetId: 160, cs: 4, primary: "stream", patterns: { stream: 0.9 } });
+    await seedAnalysis(db, 16, { rawDan: 3, label: "3", msdValues: { Overall: 0, Stream: 0 } });
     await buildAll(db);
     await rebuildMapCollections(db);
 
@@ -419,6 +428,12 @@ describe("map search index", () => {
     expect(msd).toBeTruthy();
     expect(msd!.axis).toBe("msd");
     expect(msd!.memberCount).toBe(6);
+
+    const m14 = await getMapCollection(db, "pattern:stream:4k:msd:m14minus");
+    expect(m14).toBeTruthy();
+    const m14Ids = m14!.items.map((item) => item.beatmapId);
+    expect(m14Ids).toEqual([11, 12, 13, 14, 15]);
+    expect(m14Ids).not.toContain(16);
   }, 30000);
 
   it("rotates membership per rebuild while retaining added_at, and drops stale recipes", async () => {

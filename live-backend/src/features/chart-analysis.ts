@@ -2269,3 +2269,137 @@ async function enqueueMsdPoisonRecovery(queue: JobQueue, cursor: number): Promis
     { priority: -10, replaceDone: true },
   );
 }
+
+// One-shot sweep for the inverse cluster BPM bug (fixed 2026-08-16 in
+// vendor/leoblack/patterns/clustering.js). Density/Inverse pattern windows
+// carry MsPerBeat 0 as a "no meaningful tempo" sentinel, but the mixed-BPM
+// cluster pool averaged those zeros in with real windows, so an inverse-heavy
+// chart's mixed Density cluster read as a four-digit BPM ("~4497BPM Mixed
+// Inverse") and its importance (amount x multiplier x BPM) inflated with it,
+// sorting the junk chip first on /maps. The wrong number is baked into
+// classification_json, so affected rows need a re-analysis; the signature (a
+// mixed Density cluster with a nonzero BPM) selects every row whose pool
+// could have contained sentinels. Rows whose pool had none re-store the same
+// clusters, and all-sentinel pools were already BPM 0 and are skipped. Same
+// playbook as the sweeps above: chunked, self-chaining, boot-seeded, done in
+// meta. Enqueue-only chunks; no inline recompute.
+export const INVERSE_CLUSTER_BPM_JOB = "recompute_inverse_cluster_bpm_sweep";
+const INVERSE_CLUSTER_BPM_META_KEY = "inverse_cluster_bpm_recovery_done:v1";
+const INVERSE_CLUSTER_BPM_CHUNK = 200;
+
+const INVERSE_CLUSTER_BPM_SIGNATURE_SQL = `exists (
+  select 1 from json_each(classification_json, '$.clusters') as cluster
+  where json_extract(cluster.value, '$.pattern') = 'Density'
+    and json_extract(cluster.value, '$.mixed') = 1
+    and json_extract(cluster.value, '$.bpm') > 0
+)`;
+
+export interface InverseClusterBpmChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number[];
+  done: boolean;
+}
+
+export async function recomputeInverseClusterBpmChunk(
+  db: Db,
+  cursor: number,
+  limit = INVERSE_CLUSTER_BPM_CHUNK,
+): Promise<InverseClusterBpmChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and beatmap_id > ?
+       and ${INVERSE_CLUSTER_BPM_SIGNATURE_SQL}
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const changed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    changed.push(beatmapId);
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureInverseClusterBpmRecoverySeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [INVERSE_CLUSTER_BPM_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [INVERSE_CLUSTER_BPM_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueInverseClusterBpmRecovery(queue, 0);
+}
+
+export async function runInverseClusterBpmRecoveryJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeInverseClusterBpmChunk(db, cursor);
+  // Each re-analysis upserts its own search-index row, so corrected cluster
+  // chips reach /maps without a full index rebuild. Collections key off the
+  // dan/MSD buckets, which cluster BPM never feeds - no rebuild needed.
+  for (const beatmapId of result.changed) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [INVERSE_CLUSTER_BPM_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueInverseClusterBpmRecovery(queue, result.nextCursor);
+}
+
+async function enqueueInverseClusterBpmRecovery(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    INVERSE_CLUSTER_BPM_JOB,
+    `${INVERSE_CLUSTER_BPM_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// One-shot heal for charts MinaCalc used to crash on (fixed 2026-08-16 in
+// vendor/leoblack/ett/calc.js): a note before the audio leads in (osu! allows
+// negative timestamps) walked the calc's interval index out of bounds and the
+// wasm threw, which computeMsd swallowed into a null MSD on an otherwise
+// ready row. The harness now shifts such charts to start at zero, so a
+// re-analysis stores real values. The signature (ready, MinaCalc-supported
+// keymode, no msd_json) matches exactly the charts that threw; every other
+// null-MSD row is an unsupported keymode. Small enough (one chart on prod)
+// to enqueue directly at boot, no chunked scanner; the done key keeps a
+// chart that still throws for some new reason from re-enqueueing every boot.
+const NEGATIVE_TIME_MSD_META_KEY = "negative_time_msd_recovery_done:v1";
+
+export async function ensureNegativeTimeMsdRecoverySeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [NEGATIVE_TIME_MSD_META_KEY])).rows[0];
+  if (done) return;
+  const rows = (await exec(
+    db,
+    `select beatmap_id from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready' and key_count in (4, 6, 7) and msd_json is null
+     order by beatmap_id`,
+    [CHART_ANALYSIS_VERSION],
+  )).rows;
+  for (const row of rows) await enqueueChartAnalysis(queue, Number(row.beatmap_id));
+  const now = nowIso();
+  await exec(
+    db,
+    "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+    [NEGATIVE_TIME_MSD_META_KEY, json({ finishedAt: now, enqueued: rows.length }), now],
+  );
+}

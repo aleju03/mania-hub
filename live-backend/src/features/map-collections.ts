@@ -297,6 +297,10 @@ function bucketConditions(recipe: CollectionRecipe): { clauses: string[]; args: 
   const column = recipe.axis === "dan" ? "raw_dan" : "msd_overall";
   const pad = recipe.axis === "dan" ? 0.5 : 0;
   const clauses = [`${column} is not null`];
+  // MSD 0 is MinaCalc's own "junk file" refusal on meme charts, stored
+  // verbatim; without this the under-14 bucket would admit a 500-star joke.
+  // Dan keeps 0: the 7K ladder legitimately starts at 0 dan.
+  if (recipe.axis === "msd") clauses.push(`${column} > 0`);
   const args: number[] = [];
   if (recipe.bucketLo != null) {
     clauses.push(`${column} >= ?`);

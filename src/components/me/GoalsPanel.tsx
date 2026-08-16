@@ -10,7 +10,7 @@ import { OsuLogo } from "../ui/OsuLogo";
 import { useAuth } from "../../lib/auth-context";
 import { getBeatmapsetForBeatmap, searchBeatmaps } from "../../lib/osu";
 import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
-import { describeGoal, GOAL_SPEED_LABELS, goalSpeedBucket, nf, trimZeros } from "../../lib/goal-format";
+import { describeGoal, goalAgeLabel, goalDurationLabel, GOAL_SPEED_LABELS, goalSpeedBucket, nf, trimZeros } from "../../lib/goal-format";
 import { isGoalDeleted, queueGoalDelete, subscribeGoalsChanged } from "../../lib/goal-toasts";
 import { playGoalDeletedSound } from "../../lib/ui-sounds";
 import {
@@ -254,6 +254,11 @@ function completedDetail(goal: UserGoal): string | null {
   if (goal.kind === "play_pp_count" && goal.completedValue != null) return `cleared ${date} · ${nf(goal.completedValue)} plays`;
   if (goal.kind === "reach_rank" && goal.completedValue != null) return `cleared ${date} · #${nf(goal.completedValue)}`;
   return `cleared ${date}`;
+}
+
+/** Exact set date, one hover away from the compact "set 12d ago" on the card. */
+function setOnTitle(createdAt: number): string {
+  return `Set on ${new Date(createdAt).toLocaleString()}`;
 }
 
 function beatmapHref(beatmapId: number | null | undefined): string | null {
@@ -1385,8 +1390,13 @@ function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () =
         />
       ) : (
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>
-            {meta.label}
+          <div className="flex items-baseline gap-2">
+            <span className="text-[10px] font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>
+              {meta.label}
+            </span>
+            <span className="truncate text-[10px] font-semibold text-osu-f1" title={setOnTitle(goal.createdAt)}>
+              {goalAgeLabel(goal.createdAt, Date.now())}
+            </span>
           </div>
           {href ? (
             <a
@@ -1591,6 +1601,7 @@ function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input
 function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: () => void; onAgain: () => void }) {
   const meta = goalMeta(goal.kind);
   const cover = coverUrl(goal.beatmapsetId);
+  const took = goalDurationLabel(goal);
   // reach_pp / play_pp_count can't be repeated (they only go up); "again" prefills the next milestone.
   const movesToNextMilestone = goal.kind === "reach_pp" || goal.kind === "play_pp_count";
   return (
@@ -1623,7 +1634,10 @@ function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: ()
             {describeGoal(goal)}
           </div>
         )}
-        <div className="mt-0.5 truncate text-[10.5px] font-semibold text-osu-green-light">{completedDetail(goal) ?? "cleared"}</div>
+        <div className="mt-0.5 truncate text-[10.5px] font-semibold text-osu-green-light" title={setOnTitle(goal.createdAt)}>
+          {completedDetail(goal) ?? "cleared"}
+          {took ? <span className="font-normal text-osu-f1"> · {took}</span> : null}
+        </div>
       </div>
       <button
         type="button"

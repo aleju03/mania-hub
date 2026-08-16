@@ -376,6 +376,13 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     doneKey: "msd_poison_recovery_done:v1",
     jobType: "recompute_msd_poison_sweep",
   }),
+  chartAnalysisSweep({
+    id: "inverse-cluster-bpm",
+    label: "Inverse cluster BPM sweep",
+    description: "Re-analyzes rows whose mixed Density pattern cluster stored a BPM inflated by inverse windows' zero-tempo sentinel.",
+    doneKey: "inverse_cluster_bpm_recovery_done:v1",
+    jobType: "recompute_inverse_cluster_bpm_sweep",
+  }),
   {
     id: "skill-baseline",
     label: "Skill baseline fold",

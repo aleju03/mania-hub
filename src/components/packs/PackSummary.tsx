@@ -732,7 +732,6 @@ export function PackSummary({
                 </div>
                 {(() => {
                   const mint = serials?.get(packCardKey(card.player.user.id, card.tier));
-                  if (!mint) return null;
                   // "First ever" is the server's call, not serial 1: a repull
                   // of a card you already hold hands back your old serial, so
                   // a serial-1 holding resurfacing months later must not read
@@ -740,19 +739,28 @@ export function PackSummary({
                   // short of first-global renders as a plain ordinal with the
                   // pull count ("1st of 97 to pull this"), so being an early
                   // number never masquerades as being the only one.
-                  const first = mint.isFirstGlobal;
+                  const first = mint?.isFirstGlobal ?? false;
                   // Being the newest holder makes the count repeat the serial
                   // ("61st of 61"), so drop the total in that case.
-                  const latest = mint.serial === mint.mintedTotal;
+                  const latest = mint ? mint.serial === mint.mintedTotal : false;
                   return (
                     <div
-                      className={`mt-0.5 text-[11px] tabular-nums ${first ? "font-bold text-amber-300" : "text-osu-f1"}`}
+                      /* Pull logging answers while the cards are flying into
+                         this grid. Reserve its possible two-line footprint
+                         before measuring the destination: otherwise a serial
+                         landing in row one pushes row two down underneath an
+                         already-running flight, and the cards snap to the new
+                         layout on the final frame. */
+                      className={`mt-0.5 min-h-8 text-[11px] leading-4 tabular-nums ${first ? "font-bold text-amber-300" : "text-osu-f1"}`}
+                      data-pull-serial-slot={position}
                     >
-                      {first
-                        ? "first ever to pull this"
-                        : latest
-                          ? `${formatOrdinal(mint.serial)} to pull this`
-                          : `${formatOrdinal(mint.serial)} of ${mint.mintedTotal.toLocaleString()} to pull this`}
+                      {mint
+                        ? first
+                          ? "first ever to pull this"
+                          : latest
+                            ? `${formatOrdinal(mint.serial)} to pull this`
+                            : `${formatOrdinal(mint.serial)} of ${mint.mintedTotal.toLocaleString()} to pull this`
+                        : null}
                     </div>
                   );
                 })()}
