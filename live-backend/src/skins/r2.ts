@@ -231,6 +231,7 @@ export async function readSkinObject(
       chunks.push(buffer);
     }
   } catch {
+    object.body.destroy();
     return null;
   }
   return Buffer.concat(chunks);

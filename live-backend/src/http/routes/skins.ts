@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { pipeline } from "node:stream";
 import { parseJson } from "../../db.js";
 import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, parseSkinsListSort, privateSkinSecretMatches, recordSkinDownload, recordSkinView, removeSkinScreenshot, replaceSkinOsk, setSkinAccent, setSkinCover, setSkinScreenshotLabels, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, updateSkinDetails, upsertSkinKeymodePreview, type SkinCoverTarget, type SkinRow } from "../../features/skins.js";
 import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../../features/user-replay-skins.js";
@@ -296,19 +297,26 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 404, { error: "not_found" });
       return true;
     }
+    // A client that gave up during the R2 round trip (a reload, or one
+    // impatient double-click) has already emitted "close", so a listener
+    // attached now would never fire and pipe() would strand the R2 stream —
+    // its S3 pool slot leaks with no TCP socket left to show for it. Fifty of
+    // those and every later R2 read in this process queues behind corpses
+    // (2026-08-16 outage). pipeline() destroys both ends on error or premature
+    // close in every ordering, including a destination that is already dead.
+    if (res.destroyed) {
+      object.body.destroy();
+      return true;
+    }
     sendCors(req, res, ctx);
     res.statusCode = 200;
     res.setHeader("content-type", object.contentType);
     if (object.contentLength != null) res.setHeader("content-length", String(object.contentLength));
     if (object.contentDisposition) res.setHeader("content-disposition", object.contentDisposition);
     res.setHeader("cache-control", cacheControl);
-    // pipe() drops the pipeline when the response dies but leaves the R2 stream
-    // open, so a cancelled .osk download (a reload, or one impatient
-    // double-click) keeps its socket checked out of the S3 pool for good. Fifty
-    // of those and every later R2 read in this process queues behind corpses.
-    res.on("close", () => object.body.destroy());
-    object.body.on("error", () => res.destroy());
-    object.body.pipe(res);
+    pipeline(object.body, res, () => {
+      object.body.destroy();
+    });
     return true;
   }
   if (url.pathname === "/api/replay-skin") {

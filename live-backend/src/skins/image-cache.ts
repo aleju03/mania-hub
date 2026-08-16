@@ -89,6 +89,7 @@ async function readAll(body: Readable): Promise<Buffer | null> {
       chunks.push(buffer);
     }
   } catch {
+    body.destroy();
     return null;
   }
   return Buffer.concat(chunks);
