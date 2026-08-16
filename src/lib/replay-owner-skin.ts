@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { getLiveBackendUrl } from "./live-backend";
-import { normalizeReplaySkinSettings } from "./replay-skin";
+import { REPLAY_SKIN_MAX_COLUMNS, normalizeReplaySkinSettings } from "./replay-skin";
 import type { ReplaySkinImageAsset, ReplaySkinSettings, ReplaySkinStageAssets } from "./replay-skin";
 import { extractSkinSoundsFromArchive, hasAnyImportedAssets, loadOskImageAssetByPath, openOskArchive } from "./replay-skin-import";
 import type { OskArchive } from "./replay-skin-import";
@@ -59,6 +59,15 @@ const STAGE_ASSET_KEYS = [
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeTargetKeyCount(value: number | undefined): number | null {
+  return typeof value === "number"
+    && Number.isInteger(value)
+    && value >= 1
+    && value <= REPLAY_SKIN_MAX_COLUMNS
+    ? value
+    : null;
 }
 
 // Imported assets carry base64 data URLs; the wire format keeps only the path
@@ -123,9 +132,21 @@ export function dehydrateReplaySkinSettings(settings: ReplaySkinSettings): Owner
 export async function rehydrateOwnerReplaySkinSettings(
   payload: unknown,
   archive: OskArchive,
+  targetKeyCount?: number,
 ): Promise<ReplaySkinSettings | null> {
   if (!isRecord(payload) || payload.v !== 1 || !isRecord(payload.settings)) return null;
   const settings = structuredClone(payload.settings);
+  // A replay draws one keymode. Published skins can carry profiles for every
+  // mode from 1K through 10K, including multi-megabyte Percy textures; decoding
+  // all of them for a 7K replay wastes browser/image/GPU memory that the stage
+  // can never use. Owner/editor call sites omit this and still rebuild the
+  // complete skin, while the watch path keeps only its exact profile.
+  const normalizedTargetKeyCount = normalizeTargetKeyCount(targetKeyCount);
+  if (normalizedTargetKeyCount != null && isRecord(settings.keymodeProfiles)) {
+    const key = String(normalizedTargetKeyCount);
+    const profile = settings.keymodeProfiles[key];
+    settings.keymodeProfiles = isRecord(profile) ? { [key]: profile } : {};
+  }
   const loads: Promise<void>[] = [];
   const loadInto = (holder: Record<string, unknown>, key: string) => {
     const raw = holder[key];
@@ -552,11 +573,12 @@ export async function loadOwnerReplaySkin(
   record: OwnerReplaySkinRecord,
   init?: RequestInit,
   access: OwnerReplaySkinAccess = "owner",
+  targetKeyCount?: number,
 ): Promise<LoadedOwnerReplaySkin | null> {
   try {
     const archive = await fetchRecordArchive(record, access, init);
     if (!archive) return null;
-    const settings = await rehydrateOwnerReplaySkinSettings(record.settings, archive);
+    const settings = await rehydrateOwnerReplaySkinSettings(record.settings, archive, targetKeyCount);
     if (!settings) return null;
     const sounds = await extractSkinSoundsFromArchive(archive);
     return { record, settings, sounds, archive };
@@ -579,18 +601,23 @@ export interface CachedOwnerReplaySkin {
 export async function loadOwnerReplaySkinCached(
   record: OwnerReplaySkinRecord,
   init?: RequestInit,
+  targetKeyCount?: number,
 ): Promise<CachedOwnerReplaySkin | null> {
   const { readCachedReplaySkin, writeCachedReplaySkin } = await import("./replay-skin-cache");
   // The bundle version moves when the player's .osk does, so a private skin
   // whose file was replaced without its settings being re-saved still lands on
   // a fresh cache entry instead of redrawing the old art.
-  const key = `owner:${record.skin.id}:${record.updatedAt}${record.bundleVersion ? `:${record.bundleVersion}` : ""}`;
+  const normalizedTargetKeyCount = normalizeTargetKeyCount(targetKeyCount);
+  // Keymode-scoped entries must not collide with the older complete-skin
+  // entry: a later replay in another mode needs its own decoded profile.
+  const keymodeSuffix = normalizedTargetKeyCount == null ? "" : `:keys-${normalizedTargetKeyCount}`;
+  const key = `owner:${record.skin.id}:${record.updatedAt}${record.bundleVersion ? `:${record.bundleVersion}` : ""}${keymodeSuffix}`;
   const cached = await readCachedReplaySkin(key).catch(() => null);
   if (cached) return { record, settings: normalizeReplaySkinSettings(cached.settings), sounds: cached.sounds };
 
   // The replay page's path: whoever is watching is not the owner, so a private
   // skin resolves through its bundle.
-  const loaded = await loadOwnerReplaySkin(record, init, "viewer");
+  const loaded = await loadOwnerReplaySkin(record, init, "viewer", normalizedTargetKeyCount ?? undefined);
   if (!loaded) return null;
   void writeCachedReplaySkin(key, { settings: loaded.settings, sounds: loaded.sounds }, Date.now()).catch(() => {});
   return { record: loaded.record, settings: loaded.settings, sounds: loaded.sounds };

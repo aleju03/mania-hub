@@ -149,6 +149,20 @@ describe("oversized skin texture cap", () => {
     expect(planTextureCap(4096, 4096)).toBeNull();
     expect(planTextureCap(138, 900)).toBeNull();
   });
+
+  it("supports the lower mobile cap without changing desktop imports", () => {
+    expect(planTextureCap(3000, 1800)).toBeNull();
+    expect(planTextureCap(3000, 1800, 2048)).toEqual({
+      width: 2048,
+      height: 1800,
+      crop: false,
+    });
+    expect(planTextureCap(138, 40000, 2048)).toEqual({
+      width: 138,
+      height: 2048,
+      crop: true,
+    });
+  });
 });
 
 // 1x1 transparent PNG.

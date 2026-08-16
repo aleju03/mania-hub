@@ -865,7 +865,9 @@ type SearchTokenFilter =
   // spans the literal's precision (2019, 2019-06, or 2019-06-15).
   | { kind: "date"; op: TokenOp; start: string; end: string }
   // Dan levels widen ±0.5 on raw_dan like the facet, and exclude vibro charts.
-  | { kind: "dan"; op: TokenOp; value: number };
+  | { kind: "dan"; op: TokenOp; value: number }
+  // Exact id match, from an `id=`/`set=` token or a pasted osu! beatmap link.
+  | { kind: "id"; column: "beatmap_id" | "beatmapset_id"; negate: boolean; value: number };
 
 export interface ParsedMapSearchText {
   terms: string[];
@@ -892,6 +894,15 @@ const TEXT_TOKEN_COLUMNS: Record<string, "title" | "artist" | "creator" | "versi
   difficulty: "version",
   diff: "version",
   version: "version",
+};
+
+const ID_TOKEN_COLUMNS: Record<string, "beatmap_id" | "beatmapset_id"> = {
+  id: "beatmap_id",
+  map: "beatmap_id",
+  beatmap: "beatmap_id",
+  set: "beatmapset_id",
+  mapset: "beatmapset_id",
+  beatmapset: "beatmapset_id",
 };
 
 // Token values -> index status column values ("ranked" folds in approved, same
@@ -964,6 +975,13 @@ function parseSearchToken(token: string): SearchTokenFilter | "drop" | null {
     if (seconds == null) return "drop";
     return { kind: "numeric", column: "length", op, value: seconds, step: 1 };
   }
+  const idColumn = ID_TOKEN_COLUMNS[key];
+  if (idColumn) {
+    if (op !== "=" && op !== "!=") return "drop";
+    const id = Number(value);
+    if (!Number.isSafeInteger(id) || id <= 0) return "drop";
+    return { kind: "id", column: idColumn, negate: op === "!=", value: id };
+  }
   const textColumn = TEXT_TOKEN_COLUMNS[key];
   if (textColumn) {
     if ((op !== "=" && op !== "!=") || !value) return "drop";
@@ -988,6 +1006,40 @@ function parseSearchToken(token: string): SearchTokenFilter | "drop" | null {
   return null;
 }
 
+// A pasted osu! beatmap link. The site spells the same map several ways, and
+// all of them end up here whole because a URL carries no spaces:
+//   osu.ppy.sh/beatmapsets/476394#mania/1018853  -> that difficulty
+//   osu.ppy.sh/beatmapsets/476394               -> every difficulty of the set
+//   osu.ppy.sh/b/3324832, /beatmaps/3324832     -> that difficulty
+//   osu.ppy.sh/s/476394                         -> the set
+// The host check is what keeps this from hijacking a plain text search that
+// happens to contain a slash; anything on ppy.sh that is not a beatmap link
+// stays a search term and finds nothing, same as before.
+const OSU_HOST_RE = /^(?:https?:\/\/)?(?:[\w-]+\.)*ppy\.sh\//i;
+const BEATMAP_PATH_RE = /\/(?:beatmaps|b)\/(\d+)/i;
+const BEATMAPSET_PATH_RE = /\/(?:beatmapsets|s)\/(\d+)/i;
+// The mode segment is whatever osu! put in the fragment (#mania/, #osu/), and
+// discussion links spell the same difficulty as /discussion/<id>.
+const BEATMAP_FRAGMENT_RE = /[#/][a-z]+\/(\d+)/i;
+
+function parseBeatmapLinkToken(token: string): SearchTokenFilter | null {
+  if (!OSU_HOST_RE.test(token)) return null;
+  const setMatch = BEATMAPSET_PATH_RE.exec(token);
+  if (setMatch) {
+    // A difficulty is pinned by the part after the set id, so only look there.
+    const diffMatch = BEATMAP_FRAGMENT_RE.exec(token.slice(setMatch.index + setMatch[0].length));
+    const raw = diffMatch?.[1] ?? setMatch[1];
+    const id = Number(raw);
+    if (!Number.isSafeInteger(id) || id <= 0) return null;
+    return { kind: "id", column: diffMatch ? "beatmap_id" : "beatmapset_id", negate: false, value: id };
+  }
+  const beatmapMatch = BEATMAP_PATH_RE.exec(token);
+  if (!beatmapMatch) return null;
+  const id = Number(beatmapMatch[1]);
+  if (!Number.isSafeInteger(id) || id <= 0) return null;
+  return { kind: "id", column: "beatmap_id", negate: false, value: id };
+}
+
 // Split the raw query into plain search terms and structured token filters.
 // Quotes group spaces into one unit, both for filter values and free text
 // (searching "big black" as a single phrase).
@@ -995,6 +1047,11 @@ export function parseMapSearchText(q: string): ParsedMapSearchText {
   const terms: string[] = [];
   const filters: SearchTokenFilter[] = [];
   for (const token of q.match(/(?:[^\s"]+|"[^"]*")+/g) ?? []) {
+    const link = parseBeatmapLinkToken(token);
+    if (link) {
+      if (filters.length < 12) filters.push(link);
+      continue;
+    }
     const filter = parseSearchToken(token);
     if (filter === "drop") continue;
     if (filter) {
@@ -1071,6 +1128,11 @@ function applyTokenFilter(filter: SearchTokenFilter, p: string, conditions: stri
     case "text": {
       conditions.push(`${p}${filter.column} ${filter.negate ? "not like" : "like"} ? escape '\\'`);
       args.push(`%${escapeLike(filter.value)}%`);
+      return;
+    }
+    case "id": {
+      conditions.push(`${p}${filter.column} ${filter.negate ? "!=" : "="} ?`);
+      args.push(filter.value);
       return;
     }
     case "status": {

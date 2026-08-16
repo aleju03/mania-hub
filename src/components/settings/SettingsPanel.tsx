@@ -139,11 +139,20 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   /* Same reason: the switch renders differently once the stored value is in. */
   const [spectatorNameShown, setSpectatorNameShown] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("skin");
+  // Reset throws away every setting on this browser, so one click is not
+  // enough: the button asks first and forgets the question on its own.
+  const [confirmingReset, setConfirmingReset] = useState(false);
 
   useEffect(() => {
     setCursorSettings(readCursorSettings());
     setSpectatorNameShown(readReplaySpectatorNameShown());
   }, []);
+
+  useEffect(() => {
+    if (!confirmingReset) return;
+    const timer = setTimeout(() => setConfirmingReset(false), 4000);
+    return () => clearTimeout(timer);
+  }, [confirmingReset]);
 
   // The stored settings are asset-free while a skin is applied, so rebuild the
   // decoded copy from the pointer on mount: the editor and its preview open on
@@ -217,14 +226,29 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     writeReplaySpectatorNameShown(false);
   };
 
+  // One button in one place: the confirm lives inside it, so nothing around it
+  // moves and the width is fixed for the longer of the two labels.
   const resetButton = (
     <button
       type="button"
-      onClick={resetReplaySettings}
-      className="group inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-[11px] font-bold text-osu-f1 transition-colors hover:border-osu-red/60 hover:bg-osu-red/10 hover:text-osu-red"
+      onClick={() => {
+        if (!confirmingReset) {
+          setConfirmingReset(true);
+          return;
+        }
+        resetReplaySettings();
+        setConfirmingReset(false);
+      }}
+      className={`group inline-flex h-8 w-[104px] cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-[11px] font-bold transition-colors ${
+        confirmingReset
+          ? "border-osu-red/60 bg-osu-red/15 text-osu-red-light hover:bg-osu-red/30"
+          : "border-osu-b3/60 bg-osu-b5/70 text-osu-f1 hover:border-osu-red/60 hover:bg-osu-red/10 hover:text-osu-red"
+      }`}
     >
-      <RotateCcw className="h-3 w-3 transition-transform group-hover:-rotate-180 duration-300" />
-      Reset all
+      <RotateCcw
+        className={`h-3 w-3 duration-300 ${confirmingReset ? "" : "transition-transform group-hover:-rotate-180"}`}
+      />
+      {confirmingReset ? "Sure?" : "Reset all"}
     </button>
   );
 

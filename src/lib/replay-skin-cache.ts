@@ -13,10 +13,9 @@ const INDEX_KEY = "index";
 const CACHE_MAX_ENTRIES = 4;
 // Bumped whenever the importer learns a new element, or corrects one it was
 // already reading: entries decoded by an older build carry the old answer, and
-// nothing else in the key would change. v5 re-decodes for the [Mania] slot-list
-// merge (a block that declares ColumnLineWidth twice kept the slots the shorter
-// list never reached, so cached skins still hold phantom column lines).
-const CACHE_VERSION = "v5";
+// nothing else in the key would change. v6 also re-decodes on mobile so the
+// adaptive 2048px texture cap replaces previously cached 4096px skin art.
+const CACHE_VERSION = "v6";
 
 function versionedKey(key: string): string {
   return `${CACHE_VERSION}:${key}`;

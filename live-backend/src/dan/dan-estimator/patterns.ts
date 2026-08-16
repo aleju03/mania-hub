@@ -468,6 +468,17 @@ export function analyzeManiaPatterns(
   } else if (metrics.keyCount === 6 || metrics.keyCount === 7) {
     const nonLnFlowGate = clamp01((0.3 - metrics.holdRatio) / 0.22);
     const nonLnPatternGate = clamp01((0.68 - metrics.holdRatio) / 0.56);
+    // Brackets are dense chords that move across the columns, so consecutive
+    // chords re-hitting their columns is evidence against the tag: a chordjack
+    // chart's chords are bracket-shaped row by row, and without this gate the
+    // detector saturated on exactly the files it should refuse (a 260BPM 7K CJ
+    // chart was the #1 "Bracket" play on profile skill cards). Measured over
+    // the stored bracket-tagged 6K/7K corpus (2026-08-16): jack-family cluster
+    // verdicts are ~0% below 0.4 overlap, 19% at 0.45-0.5, 56% at 0.55-0.6 and
+    // 94%+ from 0.75, while nearly every saturated (>=0.95) bracket score sat
+    // on a jack-family chart. The ramp starts above the chordstream population
+    // and is closed before the CJ majority band.
+    const bracketOverlapGate = clamp01((0.62 - metrics.chordColumnOverlapRatio) / 0.17);
     const wideChordstream = Math.max(
       chordstreamGate,
       minGate(pressure(chordRatio, 0.2, 0.62), pressure(metrics.chordSizeChangeRate, 0.18, 0.52)),
@@ -495,11 +506,11 @@ export function analyzeManiaPatterns(
         techScore,
         wideChordstream * minGate(pressure(metrics.rowPatternChangeRate, 0.38, 0.72), pressure(metrics.fastRowRatio, 0.08, 0.36)),
       ), dataConfidence, `chord changes ${compactPercent(metrics.chordSizeChangeRate)}, tech pressure ${metrics.techPressure.toFixed(1)}`),
-      hit("bracket", nonLnPatternGate * minGate(
+      hit("bracket", nonLnPatternGate * bracketOverlapGate * minGate(
         pressure(bracketRatio, 0.035, 0.18),
         pressure(chordRatio, 0.28, 0.62),
         pressure(stats.averageChordSize, 2.4, 4),
-      ), dataConfidence, `${compactPercent(bracketRatio)} bracket-like dense chord rows`),
+      ), dataConfidence, `${compactPercent(bracketRatio)} bracket-like dense chord rows, ${compactPercent(metrics.chordColumnOverlapRatio)} consecutive-chord column re-hits`),
       hit("chordstream", nonLnPatternGate * wideChordstream * clamp01((165 - metrics.jackPressure) / 130), dataConfidence, `${compactPercent(chordRatio)} chord rows mixed into stream`),
     );
   } else {

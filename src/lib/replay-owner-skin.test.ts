@@ -122,6 +122,31 @@ describe("owner replay skin dehydrate/rehydrate", () => {
     expect(profile.assets.judgements.hit300).toBeUndefined();
   });
 
+  it("decodes only the replay's active keymode for the watch path", async () => {
+    const source = settingsWithAssets();
+    source.keymodeProfiles["7"] = {
+      ...DEFAULT_REPLAY_SKIN_PROFILE,
+      assets: {
+        columns: Array.from({ length: 7 }, (_, index) => index === 0
+          ? { tap: importedAsset("note7.png", "mania/note7.png") }
+          : {}),
+        judgements: {},
+        combo: null,
+        stage: EMPTY_REPLAY_SKIN_STAGE_ASSETS,
+      },
+    };
+    const payload = dehydrateReplaySkinSettings(source);
+    const archive = await buildArchive(["mania/note1.png", "mania/note7.png"]);
+
+    const settings = await rehydrateOwnerReplaySkinSettings(payload, archive, 7);
+
+    expect(Object.keys(settings?.keymodeProfiles ?? {})).toEqual(["7"]);
+    expect(settings?.keymodeProfiles["7"].assets.columns[0].tap?.path).toBe("mania/note7.png");
+    // The unused 4K file was never inflated/decoded into the archive cache.
+    expect(archive.assetCache.has("mania/note1.png")).toBe(false);
+    expect(archive.assetCache.has("mania/note7.png")).toBe(true);
+  });
+
   it("decodes each archive path once and shares the result", async () => {
     const archive = await buildArchive(["mania/note1.png"]);
     const [first, second] = await Promise.all([

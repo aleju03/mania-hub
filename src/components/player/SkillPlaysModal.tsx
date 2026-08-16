@@ -15,10 +15,9 @@ import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 const SKILL_PLAYS_PAGE_SIZE = 50;
 
 function rateLabelFor(rate: number): string | null {
-  if (Math.abs(rate - 1.5) < 0.01) return "DT · 1.5x";
-  if (Math.abs(rate - 0.75) < 0.01) return "HT · 0.75x";
-  if (Math.abs(rate - 1) > 0.01) return `${rate.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}x`;
-  return null;
+  if (Math.abs(rate - 1) < 0.01) return null;
+  const value = rate.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return `${rate > 1 ? "DT" : "HT"} · ${value}x`;
 }
 
 interface SkillPlaysModalProps {

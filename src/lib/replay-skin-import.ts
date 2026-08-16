@@ -874,6 +874,7 @@ function buildAssetCandidates(reference: string): Array<{ path: string; mime: st
 async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<ReplaySkinImageAsset | undefined> {
   const data = await resolved.file.async("base64");
   if (!data) return undefined;
+  const textureCap = getSkinTextureCap();
   let src = `data:${resolved.mime};base64,${data}`;
   let size: { width: number; height: number } | null = null;
   let capped = false;
@@ -886,7 +887,7 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
     // Capped before the canvas, not after: these are the 138x40000 LN body
     // strips, and browsers refuse a canvas that tall outright (Chrome stops
     // at 32767), so transcoding one at full size produced nothing at all.
-    const plan = decoded ? planTextureCap(decoded.width, decoded.height) : null;
+    const plan = decoded ? planTextureCap(decoded.width, decoded.height, textureCap) : null;
     const transcoded = decoded ? rgbaToPngDataUrl(plan ? applyTextureCap(decoded, plan) : decoded) : null;
     if (decoded && transcoded) {
       src = transcoded;
@@ -895,7 +896,7 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
     }
   }
   if (!size) size = await readImageSize(src).catch(() => null);
-  const plan = capped || !size ? null : planTextureCap(size.width, size.height);
+  const plan = capped || !size ? null : planTextureCap(size.width, size.height, textureCap);
   if (plan) {
     const shrunk = await capImageDataUrl(src, size!, plan).catch(() => null);
     if (shrunk) {
@@ -919,6 +920,18 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
 // with invisible long notes. A canvas that big is refused outright well before
 // that, so the transcode of a renamed TIFF produces nothing at all.
 const MAX_SKIN_TEXTURE_PX = 4096;
+// A single 4096-square RGBA texture occupies roughly 64 MB before driver
+// overhead. Imported skin art is drawn into a phone-sized playfield, where a
+// 2048 cap is still comfortably above the useful resolution and quarters that
+// worst-case GPU allocation.
+const MOBILE_MAX_SKIN_TEXTURE_PX = 2048;
+
+function getSkinTextureCap(): number {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return MAX_SKIN_TEXTURE_PX;
+  return window.matchMedia("(pointer: coarse)").matches
+    ? MOBILE_MAX_SKIN_TEXTURE_PX
+    : MAX_SKIN_TEXTURE_PX;
+}
 
 // Past this ratio the art is a strip, not a picture, and the only strips this
 // long in a mania skin are Percy-style LN bodies.
@@ -945,13 +958,17 @@ interface TextureCapPlan {
 //
 // Anything that is not a strip has no such convention about where its art
 // sits, so it scales down instead and keeps all of it.
-export function planTextureCap(width: number, height: number): TextureCapPlan | null {
-  if (!(width > MAX_SKIN_TEXTURE_PX || height > MAX_SKIN_TEXTURE_PX)) return null;
+export function planTextureCap(
+  width: number,
+  height: number,
+  maxTexturePx = MAX_SKIN_TEXTURE_PX,
+): TextureCapPlan | null {
+  if (!(width > maxTexturePx || height > maxTexturePx)) return null;
   const longest = Math.max(width, height);
   const shortest = Math.max(1, Math.min(width, height));
   return {
-    width: Math.min(width, MAX_SKIN_TEXTURE_PX),
-    height: Math.min(height, MAX_SKIN_TEXTURE_PX),
+    width: Math.min(width, maxTexturePx),
+    height: Math.min(height, maxTexturePx),
     crop: longest / shortest >= TEXTURE_STRIP_ASPECT,
   };
 }

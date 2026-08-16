@@ -51,6 +51,9 @@
 
 html {
   scrollbar-gutter: stable;
+  color-scheme: dark;
+  /* Static fallback so the pre-CSS/pre-theme canvas is dark, not UA white. */
+  background-color: #1a1517;
 }
 
 @theme inline {

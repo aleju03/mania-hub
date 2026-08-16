@@ -1347,6 +1347,116 @@ async function enqueueChordjackTagRecompute(queue: JobQueue, cursor: number): Pr
   );
 }
 
+// One-shot sweep re-checking stored bracket-tagged verdicts against the
+// overlap-gated bracket detector: a chordjack chart's chords are bracket-shaped
+// row by row, so dense CJ files used to mint saturated bracket tags (and
+// "Bracket" primaries) off row shape alone. Same playbook as the chordjack tag
+// sweep above - re-run the analyzer from the cached .osu, and where the verdict
+// changed, enqueue a full re-analysis so the stored row and its search-index
+// entry re-mint. The gate only ever lowers the bracket score, so charts never
+// tagged bracket cannot change and the LIKE filter bounds the scan.
+export const BRACKET_TAG_RECOMPUTE_JOB = "recompute_bracket_tag_sweep";
+const BRACKET_TAG_META_KEY = "bracket_tag_recompute_done:v1";
+const BRACKET_TAG_CHUNK = 50;
+
+export interface BracketTagChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number[];
+  done: boolean;
+}
+
+export async function recomputeBracketTagChunk(
+  db: Db,
+  cursor: number,
+  limit = BRACKET_TAG_CHUNK,
+): Promise<BracketTagChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id, classification_json
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and key_count in (6, 7)
+       and classification_json like '%"bracket"%'
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const changed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const stored = parseJson<Pick<LeanChartClassification, "category" | "patterns"> | null>(row.classification_json, null);
+    if (!stored) continue;
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText) continue;
+    try {
+      const map = parseManiaBeatmap(osuText);
+      // Same analyzer inputs the full analysis job uses, so a matching verdict
+      // here means re-analysis would store the same tags.
+      const analysis = analyzeManiaPatterns(map, {
+        totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+        version: map.version,
+      });
+      const storedTags = [...new Set((stored.patterns ?? []).map((hit) => String(hit?.id ?? "")))].sort();
+      const freshTags = [...new Set(analysis.patterns.map((hit) => hit.id))].sort();
+      const storedCategory = stored.category ?? null;
+      const freshCategory = analysis.primary?.label ?? null;
+      if (storedTags.join(",") !== freshTags.join(",") || storedCategory !== freshCategory) {
+        changed.push(beatmapId);
+      }
+    } catch {
+      // A chart the analyzer rejects keeps its stored verdict; the full
+      // analysis job would fail the same way.
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureBracketTagRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [BRACKET_TAG_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [BRACKET_TAG_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueBracketTagRecompute(queue, 0);
+}
+
+export async function runBracketTagRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeBracketTagChunk(db, cursor);
+  // Each re-analysis upserts its own search-index row on completion, so the
+  // refreshed tags reach /maps without a full index rebuild.
+  for (const beatmapId of result.changed) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [BRACKET_TAG_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueBracketTagRecompute(queue, result.nextCursor);
+}
+
+async function enqueueBracketTagRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    BRACKET_TAG_RECOMPUTE_JOB,
+    `${BRACKET_TAG_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
 // ── One-shot rate-adjusted (DT / 1.5x) analysis sweep ─────────────────────────
 // Stored analysis is 1.0x only, so the farm helper's feasibility gate can only
 // screen normal-speed recs; DT recs bypass it and far-too-hard-under-1.5x maps

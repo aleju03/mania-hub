@@ -2472,7 +2472,7 @@ function ReplayViewer({
     }
     let cancelled = false;
     void fetchUserReplaySkin(ownerUserId)
-      .then((record) => (cancelled || !record ? null : loadOwnerReplaySkinCached(record)))
+      .then((record) => (cancelled || !record ? null : loadOwnerReplaySkinCached(record, undefined, replay.keyCount)))
       .then((loaded) => {
         if (cancelled) return;
         if (!loaded) {
@@ -2488,7 +2488,7 @@ function ReplayViewer({
     return () => {
       cancelled = true;
     };
-  }, [ownerUserId, ownerSkinPreferred, releaseOwnerSkinHold]);
+  }, [ownerUserId, ownerSkinPreferred, releaseOwnerSkinHold, replay.keyCount]);
 
   // What the stage actually renders: the player's skin while applied, the
   // viewer's own settings otherwise. The settings modal always edits the
@@ -3605,8 +3605,21 @@ function ReplayViewer({
             inputOverlayOnly: inputOverlayOnlyRef.current,
             inputOverlayColor: inputOverlayColorRef.current,
             inputOverlayKeyHistory: inputOverlayKeyHistoryRef.current,
-            onContextLost: () => updateReplayWatchBeaconContext({ webgl_context_lost: true }),
-            onContextRestored: () => updateReplayWatchBeaconContext({ webgl_context_restored: true }),
+            onContextLost: (wasPlaying) => {
+              updateReplayWatchBeaconContext({ webgl_context_lost: true });
+              // Keep React/audio state aligned with the renderer while Pixi
+              // waits for the browser to restore its GPU resources. Otherwise
+              // audio keeps running under a frozen canvas, and the 250ms end
+              // watcher can permanently disagree with the resumed renderer.
+              if (wasPlaying) {
+                audioRef.current?.pause();
+                setIsPlaying(false);
+              }
+            },
+            onContextRestored: (resumed) => {
+              updateReplayWatchBeaconContext({ webgl_context_restored: true });
+              if (resumed) setIsPlaying(true);
+            },
           },
         ) as ReplayRendererLike;
 

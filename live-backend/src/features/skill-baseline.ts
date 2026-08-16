@@ -9,7 +9,7 @@ import {
   SSR_CALC_GOAL_CAP,
   SSR_EXTRAPOLATION_BASE_GOAL,
   aggregateSsrs,
-  getRankedPlayRate,
+  getPlayRate,
   ssrGoalForScore,
   type PlayerSkillBreakdown,
   type PlayerSkillModeBreakdown,
@@ -413,7 +413,7 @@ function scoreToApproxPlay(score: OscScore, charts: Map<number, BaselineChartEnt
   if (!Number.isInteger(beatmapId) || beatmapId <= 0) return null;
   const entry = charts.get(beatmapId);
   if (!entry) return null;
-  const rate = getRankedPlayRate(score.mods);
+  const rate = getPlayRate(score.mods);
   if (rate == null) return null;
   const endedAtMs = Date.parse(String(score.ended_at ?? score.created_at ?? ""));
   return {

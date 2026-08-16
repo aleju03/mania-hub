@@ -171,6 +171,12 @@ const LN_BODY_FILLER_ROWS = 8;
 // height, so the taller redesigned stage adds lookahead rather than speed.
 const MOBILE_PORTRAIT_REFERENCE_HEIGHT = 430;
 const BACKGROUND_OVERSCAN_SCALE = 1.02;
+// A phone's replay stage is already physically small. Rendering it at the old
+// 1.5x backing resolution while also asking WebGL for MSAA spent substantially
+// more tile/VRAM memory for very little visible gain, which makes the renderer
+// an easier target for Android's GPU-process killer.
+const MOBILE_REPLAY_DPR_CAP = 1.25;
+const DESKTOP_REPLAY_DPR_CAP = 2;
 // Events crossed more than this far behind the playback clock (lag spikes,
 // tab switches) stay silent instead of firing as a burst.
 const HITSOUND_MAX_LATENESS_MS = 200;
@@ -364,8 +370,8 @@ interface RendererOptions {
   // Which hand owns the middle lane of an odd keymode in the L/R miss split.
   missThumbHand?: ReplayThumbHand;
   onOverlaySettingsChange?: (settings: ReplayOverlaySettings) => void;
-  onContextLost?: () => void;
-  onContextRestored?: () => void;
+  onContextLost?: (wasPlaying: boolean) => void;
+  onContextRestored?: (resumed: boolean) => void;
 }
 
 interface Layout {
@@ -627,10 +633,14 @@ export class ManiaReplayRenderer {
   private skinSettings: ReplaySkinSettings = DEFAULT_REPLAY_SKIN_SETTINGS;
   private overlaySettings: ReplayOverlaySettings = DEFAULT_REPLAY_OVERLAY_SETTINGS;
   private onOverlaySettingsChange: ((settings: ReplayOverlaySettings) => void) | null = null;
-  private onContextLost: (() => void) | null = null;
-  private onContextRestored: (() => void) | null = null;
+  private onContextLost: ((wasPlaying: boolean) => void) | null = null;
+  private onContextRestored: ((resumed: boolean) => void) | null = null;
   private handleContextLost: ((event: Event) => void) | null = null;
   private handleContextRestored: (() => void) | null = null;
+  // Pixi restores its buffers/textures when the browser restores WebGL, but
+  // this wrapper pauses its own RAF on loss. Remember whether that RAF must be
+  // restarted; otherwise a successfully restored replay stays frozen forever.
+  private resumeAfterContextRestore = false;
   // Wall-clock cost of the synchronous judgement simulation done in the
   // constructor; surfaced to crash diagnostics to catch main-thread hangs.
   private judgementBuildMs: number | null = null;
@@ -690,6 +700,7 @@ export class ManiaReplayRenderer {
   private cssWidth = 0;
   private cssHeight = 0;
   private dpr = 1;
+  private antialias = true;
   private fullscreenLayout = false;
 
   private externalClock: (() => { time: number; stalled: boolean } | null) | null = null;
@@ -986,7 +997,7 @@ export class ManiaReplayRenderer {
     const height = Math.max(1, this.cssHeight);
     const contextAttributes: WebGLContextAttributes = {
       alpha: true,
-      antialias: true,
+      antialias: this.antialias,
       premultipliedAlpha: true,
       stencil: true,
       powerPreference: "default",
@@ -1013,7 +1024,7 @@ export class ManiaReplayRenderer {
         height,
         resolution: this.dpr,
         autoDensity: true,
-        antialias: true,
+        antialias: this.antialias,
         backgroundAlpha: 0,
       });
       renderer = webglRenderer;
@@ -1025,7 +1036,7 @@ export class ManiaReplayRenderer {
         height,
         resolution: this.dpr,
         autoDensity: true,
-        antialias: true,
+        antialias: this.antialias,
         backgroundAlpha: 0,
       });
       renderer = canvasRenderer;
@@ -1038,7 +1049,7 @@ export class ManiaReplayRenderer {
       resolution: this.dpr,
       autoDensity: true,
       autoStart: false,
-      antialias: true,
+      antialias: this.antialias,
       backgroundAlpha: 0,
     };
     Application._plugins.forEach((plugin) => plugin.init.call(app, applicationOptions));
@@ -1055,13 +1066,24 @@ export class ManiaReplayRenderer {
     // crash diagnostics.
     this.handleContextLost = (event: Event) => {
       event.preventDefault();
+      const wasPlaying = this._isPlaying;
+      this.resumeAfterContextRestore ||= wasPlaying;
       this.pause();
       console.error("[replay] WebGL context lost");
-      this.onContextLost?.();
+      this.onContextLost?.(wasPlaying);
     };
     this.handleContextRestored = () => {
       console.warn("[replay] WebGL context restored");
-      this.onContextRestored?.();
+      if (this.destroyed) return;
+      const shouldResume = this.resumeAfterContextRestore;
+      this.resumeAfterContextRestore = false;
+      // Pixi's listener was installed during renderer.init(), before ours, so
+      // its contextChange pass has rebuilt GPU state by this point. Force the
+      // first upload even for a paused replay, or restart the RAF/audio-driven
+      // clock when the loss interrupted playback.
+      if (shouldResume) this.play();
+      else this.render(true);
+      this.onContextRestored?.(shouldResume);
     };
     this.canvas.addEventListener("webglcontextlost", this.handleContextLost);
     this.canvas.addEventListener("webglcontextrestored", this.handleContextRestored);
@@ -1652,8 +1674,11 @@ export class ManiaReplayRenderer {
     const rect = this.canvas.getBoundingClientRect();
     const parentRect = fullscreenParent?.getBoundingClientRect();
     const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
-    const dprCap = coarsePointer ? 1.5 : 2;
+    const dprCap = coarsePointer ? MOBILE_REPLAY_DPR_CAP : DESKTOP_REPLAY_DPR_CAP;
     this.dpr = Math.min(window.devicePixelRatio || 1, dprCap);
+    // MSAA allocates extra multisample renderbuffers. At 1.25x on a phone the
+    // backing canvas already smooths the playfield, so keep that VRAM instead.
+    this.antialias = !coarsePointer;
     this.cssWidth = Math.max(1, parentRect?.width ?? rect.width);
     this.cssHeight = Math.max(1, parentRect?.height ?? rect.height);
     if (fullscreenParent) {
@@ -6830,6 +6855,7 @@ export class ManiaReplayRenderer {
     if (this.destroyed) return;
     this.destroyed = true;
     this.pause();
+    this.resumeAfterContextRestore = false;
     this.canvas.style.visibility = "hidden";
     if (this.handleContextLost) {
       this.canvas.removeEventListener("webglcontextlost", this.handleContextLost);

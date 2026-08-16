@@ -27,6 +27,9 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-16", text: "Fixed chordjack maps getting tagged and rated as Bracket", to: "/maps" },
+  { date: "2026-08-16", text: "Map search now accepts pasted osu! map links", to: "/maps" },
+  { date: "2026-08-16", text: "Custom rate plays from lazer, like 1.15x, now count toward your skill rating", to: "/my-stats" },
   { date: "2026-08-16", text: "Fixed LN maps showing an impossible pattern BPM, like 4497BPM Inverse on a 150BPM map. Affected maps are being recomputed", to: "/maps" },
   { date: "2026-08-15", text: "Collections show every dan logo in a pack's range on its cover, not just the last one", to: "/maps" },
   { date: "2026-08-15", text: "Fixed many maps showing a way lower MSD and dan estimate than they should since Aug 14. Affected maps and player skill ratings are being recomputed", to: "/maps" },

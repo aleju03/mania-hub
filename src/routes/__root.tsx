@@ -347,6 +347,7 @@ export const Route = createRootRoute({
       { name: "description", content: DEFAULT_DESCRIPTION },
       { name: "robots", content: "index, follow" },
       { name: "theme-color", content: "#1a1517" },
+      { name: "color-scheme", content: "dark" },
     ],
     links: [
       { rel: "icon", type: "image/png", sizes: "256x256", href: SITE_FAVICON_HREF },

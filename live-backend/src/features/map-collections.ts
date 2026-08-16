@@ -30,16 +30,23 @@ const MIN_MEMBERS = 5;
 const MIN_LENGTH_SECONDS = 60;
 
 // Curation blocklist, matched against the index's lowercased search_text blob
-// (title/artist/creator/version). Collections only - search results and dan
-// classification are untouched. FNF rips are near-universally long vibro-jack
-// dumps ("funkin", "fnf", "agoti", plus the franchise composer), and a pack
-// that says "vibro" on the tin is a mash file even when its timing profile
-// dodges the detector (jumptrill-style vibro is indistinguishable from legit
-// jumptrills).
+// (title/artist/creator/version) plus the beatmapset's source field. Collections
+// only - search results and dan classification are untouched. FNF rips are
+// near-universally long vibro-jack dumps ("funkin", "fnf", "agoti", plus the
+// franchise composer), and a pack that says "vibro" on the tin is a mash file
+// even when its timing profile dodges the detector (jumptrill-style vibro is
+// indistinguishable from legit jumptrills). The source matters: FNF mod maps
+// name the character, not the franchise ("Tabi - Genocide" by Tenzu), and the
+// franchise usually only appears in source ("Friday Night Funkin'").
 const BLOCKED_SEARCH_TEXT: RegExp[] = [
   /vibro/i,
   /funkin/i,
   /\bfnf\b/i,
+  // FNF mod naming ("V.S. Tabi", "V.S Matt") for the rips whose source is
+  // empty too. Only the dotted form: bare "vs" belongs to collab artists
+  // (BlackYooh vs. siromaru, Gram vs. Camellia) and must stay allowed. Known
+  // cost: one Camellia diff named "7912 v.s 1804".
+  /\bv\.s\b/i,
   /agoti/i,
   /kawai sprite/i,
 ];
@@ -329,6 +336,16 @@ export async function rebuildMapCollections(db: Db): Promise<void> {
     const metric = columns.length > 1 ? `max(${columns.join(", ")})` : columns[0];
     const bucket = bucketConditions(recipe);
     const axisColumn = recipe.axis === "dan" ? "raw_dan" : "msd_overall";
+    // Jack packs also require the in-house analyzer to have found jack content.
+    // primary_pattern follows MinaCalc's peak while pattern_tags weigh the
+    // chart body, so a short unplayable burst can hand an otherwise-easy chart
+    // a perfect jack score (a dan-1 chart with one 258BPM chordjack burst
+    // topped this pool). Only the jack shelf can gate on agreement: the
+    // analyzer barely ever emits stream/stamina ids, but tags jack-family
+    // content on 99% of legit jack charts. Empty tags (no classification yet)
+    // stay eligible.
+    const jackTagClause =
+      recipe.pattern === "jack" ? " and (pattern_tags = '' or instr(pattern_tags, 'jack') > 0)" : "";
     // Vibro charts are excluded outright: both difficulty axes are unreliable
     // on them (same policy as the search dan filter).
     const rows = (await exec(
@@ -336,11 +353,28 @@ export async function rebuildMapCollections(db: Db): Promise<void> {
       `select beatmap_id, beatmapset_id, covers_json, title, search_text, ${metric} as metric, ${axisColumn} as axis_value
        from map_search_index
        where key_count = ? and primary_pattern in (${recipe.patterns.map(() => "?").join(", ")})
-         and vibro = 0 and length >= ? and ${bucket.clauses.join(" and ")}
+         and vibro = 0 and length >= ? and ${bucket.clauses.join(" and ")}${jackTagClause}
        order by ${metric} desc, play_count desc
        limit ?`,
       [recipe.keyCount, ...recipe.patterns, MIN_LENGTH_SECONDS, ...bucket.args, POOL_OVERFETCH],
     )).rows;
+
+    // The set's source joins the blocklist blob. Fetched per pool rather than
+    // joined into the scan above, so the metadata_json parse touches at most
+    // POOL_OVERFETCH rows instead of every candidate the sorter sees.
+    const setIds = [...new Set(rows.map((row) => intOr(row.beatmapset_id)).filter((id) => id > 0))];
+    const sourceBySet = new Map<number, string>();
+    if (setIds.length > 0) {
+      const sourceRows = (await exec(
+        db,
+        `select beatmapset_id, json_extract(metadata_json, '$.source') as source
+         from beatmapsets where beatmapset_id in (${setIds.map(() => "?").join(", ")})`,
+        setIds,
+      )).rows;
+      for (const sourceRow of sourceRows) {
+        if (sourceRow.source != null) sourceBySet.set(intOr(sourceRow.beatmapset_id), String(sourceRow.source));
+      }
+    }
 
     // Drop blocklisted uploads, then dedupe by set and by song (keeping the
     // highest-metric chart of each), then sample the rotation.
@@ -348,8 +382,8 @@ export async function rebuildMapCollections(db: Db): Promise<void> {
     const seenSongs = new Set<string>();
     const pool: Array<{ beatmapId: number; beatmapsetId: number; score: number; axisValue: number; hasCover: boolean }> = [];
     for (const row of rows) {
-      if (isBlockedSearchText(String(row.search_text ?? ""))) continue;
       const beatmapsetId = intOr(row.beatmapset_id);
+      if (isBlockedSearchText(`${String(row.search_text ?? "")} ${sourceBySet.get(beatmapsetId) ?? ""}`)) continue;
       if (beatmapsetId > 0 && seenSets.has(beatmapsetId)) continue;
       if (beatmapsetId > 0) seenSets.add(beatmapsetId);
       const song = songKey(row.title);

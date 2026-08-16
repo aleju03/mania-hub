@@ -23,6 +23,14 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("preferWebGLVersion: gl ? 2 : 1,");
     expect(source).toContain("const canvasRenderer = new CanvasRenderer();");
     expect(source).toContain('powerPreference: "default"');
+    expect(source).toContain("const wasPlaying = this._isPlaying;");
+    expect(source).toContain("this.resumeAfterContextRestore ||= wasPlaying;");
+    expect(source).toContain("this.onContextLost?.(wasPlaying);");
+    expect(source).toContain("if (shouldResume) this.play();");
+    expect(source).toContain("else this.render(true);");
+    expect(source).toContain("this.onContextRestored?.(shouldResume);");
+    expect(source).toContain("const MOBILE_REPLAY_DPR_CAP = 1.25;");
+    expect(source).toContain("this.antialias = !coarsePointer;");
     expect(source).toContain("app.renderer.context.extensions.loseContext = undefined;");
     expect(source.match(/destroyReplayPixiApplication\(/g)).toHaveLength(3);
   });

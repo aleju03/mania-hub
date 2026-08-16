@@ -342,6 +342,13 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     jobType: "recompute_chordjack_tag_sweep",
   }),
   chartAnalysisSweep({
+    id: "bracket-tag-recompute",
+    label: "Bracket tag recompute sweep",
+    description: "Re-derives bracket pattern tags on stored 6K/7K chart analyses after the chord-column overlap gate.",
+    doneKey: "bracket_tag_recompute_done:v1",
+    jobType: "recompute_bracket_tag_sweep",
+  }),
+  chartAnalysisSweep({
     id: "ln-msd-backfill",
     label: "LN-tail MSD backfill sweep",
     description: "Backfills tail-aware LN-adjusted MSD for every ready hold-bearing chart from the cached .osu corpus.",

@@ -36,9 +36,11 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // on ("your rating on chordstream charts"). The 4K card shows the native MSD
 // skillsets; 6K/7K show these pattern ratings instead.
 //
-// Rates come from ranked rate mods only: DT/NC is 1.5x, HT/DC is 0.75x. Custom
-// speed_change values are unranked (no pp), so a top play can never carry one;
-// if one shows up anyway it is skipped rather than mis-rated.
+// Rates come from the rate mods: DT/NC 1.5x and HT/DC 0.75x by default, or
+// the exact speed_change a lazer mod carries (MinaCalc takes the rate as a
+// plain float, so 1.15x is as computable as 1.5x). Custom rates earn no pp,
+// so they only ever arrive through tracked history, never the top-200. Wind
+// up/down and adaptive speed have no single rate and stay skipped.
 //
 // The score goal is an estimated Wife3 percent from the play's judgement
 // counts, not raw osu! accuracy: osu! accuracy weighs MAX and 300 identically,
@@ -351,19 +353,23 @@ interface StoredModesSummary {
 }
 
 /**
- * The music rate a ranked play was set at, or null when the play cannot be
- * rated honestly (custom speed_change, wind up/down style variable rates).
+ * The constant music rate a play was set at: the rate mod's default 1.5x or
+ * 0.75x, or the custom speed_change it carries. Null when no single rate
+ * exists (wind up/down, adaptive speed) or the speed value is corrupt, in
+ * which case the play is skipped rather than mis-rated.
  */
-export function getRankedPlayRate(mods: OsuMod[] | string[] | undefined): number | null {
+export function getPlayRate(mods: OsuMod[] | string[] | undefined): number | null {
   let rate = 1;
   for (const mod of mods ?? []) {
     const acronym = typeof mod === "string" ? mod : String(mod?.acronym ?? "");
     if (acronym === "DT" || acronym === "NC") {
-      if (hasCustomSpeed(mod, 1.5)) return null;
-      rate *= 1.5;
+      const speed = modSpeed(mod, 1.5);
+      if (speed == null) return null;
+      rate *= speed;
     } else if (acronym === "HT" || acronym === "DC") {
-      if (hasCustomSpeed(mod, 0.75)) return null;
-      rate *= 0.75;
+      const speed = modSpeed(mod, 0.75);
+      if (speed == null) return null;
+      rate *= speed;
     } else if (acronym === "WU" || acronym === "WD" || acronym === "AS") {
       return null;
     }
@@ -371,10 +377,13 @@ export function getRankedPlayRate(mods: OsuMod[] | string[] | undefined): number
   return Math.round(rate * 100) / 100;
 }
 
-function hasCustomSpeed(mod: OsuMod | string, defaultSpeed: number): boolean {
-  if (typeof mod === "string") return false;
-  const speed = Number(mod.settings?.speed_change ?? defaultSpeed);
-  return Number.isFinite(speed) && Math.abs(speed - defaultSpeed) > 1e-3;
+function modSpeed(mod: OsuMod | string, defaultSpeed: number): number | null {
+  if (typeof mod === "string") return defaultSpeed;
+  if (mod.settings?.speed_change == null) return defaultSpeed;
+  const speed = Number(mod.settings.speed_change);
+  // Lazer's own slider bounds; a value outside them is a corrupt payload,
+  // not a rate anyone played at.
+  return Number.isFinite(speed) && speed >= 0.5 && speed <= 2 ? speed : null;
 }
 
 export function ssrGoalForAccuracy(accuracy: number): number {
@@ -848,7 +857,7 @@ export async function computePlayerSkillRatings(
     }
     const info = infoByBeatmap.get(beatmapId);
     if (info?.vibro && !ppBackedChartIds.has(beatmapId)) return;
-    const rate = getRankedPlayRate(score.mods);
+    const rate = getPlayRate(score.mods);
     if (rate == null) {
       if (source === "top") unsupportedPlays += 1;
       return;

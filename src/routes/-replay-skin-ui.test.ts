@@ -165,7 +165,7 @@ describe("replay skin settings UI", () => {
     expect(prefs).toContain("window.dispatchEvent(new CustomEvent(REPLAY_OWNER_SKIN_CHANGE_EVENT, { detail: enabled }));");
     expect(routeSource).toContain("window.addEventListener(REPLAY_OWNER_SKIN_CHANGE_EVENT, sync);");
     expect(routeSource).toContain("if (!ownerUserId || !ownerSkinPreferred) {");
-    expect(routeSource).toContain("}, [ownerUserId, ownerSkinPreferred, releaseOwnerSkinHold]);");
+    expect(routeSource).toContain("}, [ownerUserId, ownerSkinPreferred, releaseOwnerSkinHold, replay.keyCount]);");
   });
 
   it("drops the built-in combo font picker when the skin ships digits", () => {
@@ -369,7 +369,7 @@ describe("replay skin settings UI", () => {
     expect(routeSource).toContain("if (ownerSkinReadyToRevealRef.current) releaseOwnerSkinHold();");
     // And the decoded result keeps, so later replays by that player skip the
     // download and the decode entirely.
-    expect(routeSource).toContain("loadOwnerReplaySkinCached(record)");
+    expect(routeSource).toContain("loadOwnerReplaySkinCached(record, undefined, replay.keyCount)");
     expect(ownerSource).toContain("export async function loadOwnerReplaySkinCached(");
     expect(ownerSource).toContain("readCachedReplaySkin(key)");
     expect(ownerSource).toContain("writeCachedReplaySkin(key,");

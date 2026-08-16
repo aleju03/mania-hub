@@ -312,7 +312,7 @@ describe("analyzeManiaPatterns", () => {
   it("detects 7K delay, bracket, chordstream, chordjack, and tech", () => {
     expect(patternIds(7, repeatRows([[0], [2], [4], [6], [3], [1]], 35))).toContain("delay");
     expect(analyzeManiaPatterns(makeMap(7, chordedDelayRows(), 55)).primary?.id).toBe("delay");
-    expect(patternIds(7, repeatRows([[1, 2, 4], [1, 2, 4], [2, 4, 5], [2, 4, 5]], 30))).toContain("bracket");
+    expect(patternIds(7, repeatRows([[0, 1, 2], [4, 5, 6], [1, 2, 3], [4, 5, 6]], 30))).toContain("bracket");
     expect(patternIds(7, repeatRows([[0], [1, 3], [2], [4, 6], [5], [1, 4]], 35))).toContain("chordstream");
     expect(patternIds(7, repeatRows([[0, 2, 4], [0, 2, 4], [1, 3, 5], [1, 3, 5]], 30))).toContain("chordjack");
     expect(patternIds(7, repeatRows([[0], [1, 3, 5], [2], [1, 2], [6], [0, 4, 5]], 35))).toContain("tech");
@@ -326,5 +326,15 @@ describe("analyzeManiaPatterns", () => {
     const ids = patternIds(7, repeatRows([[0, 1, 2], [4, 5, 6], [1, 2, 3], [4, 5, 6]], 30));
     expect(ids).toContain("bracket");
     expect(ids).not.toContain("chordjack");
+  });
+
+  it("does not tag chord-jacked bracket shapes as bracket", () => {
+    // The mirror case: bracket-shaped rows jacked in place. Consecutive
+    // chords re-hit their columns, which is chordjack; the shape-only bracket
+    // score used to saturate on dense CJ files (a 260BPM 7K chordjack chart
+    // topped a profile's Bracket skill list).
+    const ids = patternIds(7, repeatRows([[0, 1, 2], [0, 1, 2], [1, 2, 3], [1, 2, 3]], 30));
+    expect(ids).toContain("chordjack");
+    expect(ids).not.toContain("bracket");
   });
 });

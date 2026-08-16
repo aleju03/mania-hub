@@ -45,6 +45,8 @@ interface SeedMap {
   mode?: string;
   convert?: boolean;
   covers?: Record<string, string>;
+  /** Beatmapset source field, e.g. "Friday Night Funkin'". */
+  source?: string;
   primary: string;
   patterns: Record<string, number>;
 }
@@ -62,7 +64,7 @@ async function seedMap(db: Db, map: SeedMap): Promise<void> {
       map.creator ?? "Mapper",
       map.status ?? "ranked",
       json(map.covers ?? { card: `https://example/${map.beatmapsetId}.jpg` }),
-      json({ ranked_date: map.rankedDate ?? "2020-01-01T00:00:00Z" }),
+      json({ ranked_date: map.rankedDate ?? "2020-01-01T00:00:00Z", ...(map.source ? { source: map.source } : {}) }),
       now,
     ],
   );
@@ -496,6 +498,64 @@ describe("map search index", () => {
     expect(detail).toBeTruthy();
     expect(detail!.items.map((item) => item.beatmapId)).not.toContain(6);
     expect(detail!.items.length).toBe(5);
+  }, 30000);
+
+  it("keeps FNF rips and peak-only jack charts out of jack packs", async () => {
+    const db = await makeDb();
+    // Five legit low-dan jack charts anchor the pack; the analyzer tagged
+    // jack content on each.
+    for (let i = 0; i < 5; i++) {
+      const beatmapId = i + 1;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 1) * 10, cs: 4, primary: "jack", patterns: { jack: 0.8 } });
+      await seedAnalysis(db, beatmapId, {
+        rawDan: 1.5 + i * 0.2,
+        label: "2",
+        msdValues: { Overall: 9 + i * 0.2, JackSpeed: 9 + i * 0.2 },
+        patterns: [{ id: "jack", score: 0.8 }],
+      });
+    }
+    // FNF rip whose text names only the mod character; the franchise lives in
+    // the set's source field.
+    await seedMap(db, {
+      beatmapId: 6, beatmapsetId: 60, cs: 4, title: "Tabi - Genocide", artist: "Tenzu",
+      source: "Friday Night Funkin'", primary: "jack", patterns: { jack: 0.9 },
+    });
+    await seedAnalysis(db, 6, { rawDan: 2.5, label: "2", msdValues: { Overall: 9.5, JackSpeed: 9.5 }, patterns: [{ id: "jack", score: 0.9 }] });
+    // Sourceless FNF rip caught by the dotted "V.S." naming instead.
+    await seedMap(db, {
+      beatmapId: 7, beatmapsetId: 70, cs: 4, title: "Deathmatch", version: "[4K] V.S. Matt",
+      primary: "jack", patterns: { jack: 0.9 },
+    });
+    await seedAnalysis(db, 7, { rawDan: 2.5, label: "2", msdValues: { Overall: 9.5, JackSpeed: 9.5 }, patterns: [{ id: "jack", score: 0.9 }] });
+    // Collab-artist "vs." is not FNF and must survive.
+    await seedMap(db, {
+      beatmapId: 8, beatmapsetId: 80, cs: 4, title: "BLACK or WHITE?", artist: "BlackYooh vs. siromaru",
+      primary: "jack", patterns: { jack: 0.7 },
+    });
+    await seedAnalysis(db, 8, { rawDan: 2.8, label: "3", msdValues: { Overall: 9.9, JackSpeed: 9.9 }, patterns: [{ id: "jack", score: 0.7 }] });
+    // Peak-only jack: MinaCalc's JackSpeed tops on a single burst so the
+    // primary says jack, but the body-weighted analyzer found only stream.
+    await seedMap(db, {
+      beatmapId: 9, beatmapsetId: 90, cs: 4, title: "El rap del pana miguel",
+      primary: "stream", patterns: { stream: 0.35 },
+    });
+    await seedAnalysis(db, 9, { rawDan: 1.0, label: "1", msdValues: { Overall: 8.7, JackSpeed: 8.7, Stream: 5 }, patterns: [{ id: "stream", score: 0.35 }] });
+    // No classification tags at all stays eligible: absence of analysis is not
+    // evidence of disagreement.
+    await seedMap(db, { beatmapId: 10, beatmapsetId: 100, cs: 4, title: "Untagged", primary: "jack", patterns: { jack: 0.6 } });
+    await seedAnalysis(db, 10, { rawDan: 2.0, label: "2", msdValues: { Overall: 9.2, JackSpeed: 9.2 } });
+    await buildAll(db);
+    await rebuildMapCollections(db);
+
+    const detail = await getMapCollection(db, "pattern:jack:4k:dan:d3minus");
+    expect(detail).toBeTruthy();
+    const ids = detail!.items.map((item) => item.beatmapId);
+    expect(ids).not.toContain(6);
+    expect(ids).not.toContain(7);
+    expect(ids).not.toContain(9);
+    expect(ids).toContain(8);
+    expect(ids).toContain(10);
+    expect(ids.length).toBe(7);
   }, 30000);
 
   it("keeps never-uploaded (?0) covers out of the collage", async () => {

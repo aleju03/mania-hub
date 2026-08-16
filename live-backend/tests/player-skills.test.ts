@@ -9,8 +9,8 @@ import {
   computePlayerSkillRatings,
   estimateWifeAccuracy,
   getPlayerSkillBreakdown,
+  getPlayRate,
   getPlayerSkillPlays,
-  getRankedPlayRate,
   loadArchivedTrackedEvidence,
   loadBeatmapOds,
   ssrGoalForAccuracy,
@@ -146,22 +146,31 @@ function play(overrides: Partial<OscScore>): OscScore {
   };
 }
 
-describe("getRankedPlayRate", () => {
-  it("maps ranked rate mods and leaves everything else at 1x", () => {
-    expect(getRankedPlayRate([])).toBe(1);
-    expect(getRankedPlayRate([{ acronym: "MR" }, { acronym: "HD" }])).toBe(1);
-    expect(getRankedPlayRate([{ acronym: "DT" }])).toBe(1.5);
-    expect(getRankedPlayRate([{ acronym: "NC" }])).toBe(1.5);
-    expect(getRankedPlayRate([{ acronym: "HT" }])).toBe(0.75);
-    expect(getRankedPlayRate([{ acronym: "DC" }])).toBe(0.75);
-    expect(getRankedPlayRate(["DT", "HD"])).toBe(1.5);
+describe("getPlayRate", () => {
+  it("maps rate mods and leaves everything else at 1x", () => {
+    expect(getPlayRate([])).toBe(1);
+    expect(getPlayRate([{ acronym: "MR" }, { acronym: "HD" }])).toBe(1);
+    expect(getPlayRate([{ acronym: "DT" }])).toBe(1.5);
+    expect(getPlayRate([{ acronym: "NC" }])).toBe(1.5);
+    expect(getPlayRate([{ acronym: "HT" }])).toBe(0.75);
+    expect(getPlayRate([{ acronym: "DC" }])).toBe(0.75);
+    expect(getPlayRate(["DT", "HD"])).toBe(1.5);
   });
 
-  it("rejects custom and variable rates instead of mis-rating them", () => {
-    expect(getRankedPlayRate([{ acronym: "DT", settings: { speed_change: 1.1 } }])).toBeNull();
-    expect(getRankedPlayRate([{ acronym: "HT", settings: { speed_change: 0.9 } }])).toBeNull();
-    expect(getRankedPlayRate([{ acronym: "WU" }])).toBeNull();
-    expect(getRankedPlayRate([{ acronym: "DT", settings: { speed_change: 1.5 } }])).toBe(1.5);
+  it("returns the exact custom speed_change a lazer rate mod carries", () => {
+    expect(getPlayRate([{ acronym: "DT", settings: { speed_change: 1.1 } }])).toBe(1.1);
+    expect(getPlayRate([{ acronym: "DT", settings: { speed_change: 1.15 } }])).toBe(1.15);
+    expect(getPlayRate([{ acronym: "NC", settings: { speed_change: 1.5 } }])).toBe(1.5);
+    expect(getPlayRate([{ acronym: "HT", settings: { speed_change: 0.9 } }])).toBe(0.9);
+    expect(getPlayRate([{ acronym: "DC", settings: { speed_change: 0.88 } }])).toBe(0.88);
+  });
+
+  it("rejects variable rates and corrupt speeds instead of mis-rating them", () => {
+    expect(getPlayRate([{ acronym: "WU" }])).toBeNull();
+    expect(getPlayRate([{ acronym: "WD" }])).toBeNull();
+    expect(getPlayRate([{ acronym: "AS" }])).toBeNull();
+    expect(getPlayRate([{ acronym: "DT", settings: { speed_change: 37 } }])).toBeNull();
+    expect(getPlayRate([{ acronym: "HT", settings: { speed_change: Number.NaN } }])).toBeNull();
   });
 });
 
@@ -346,9 +355,11 @@ describe("computePlayerSkillRatings", () => {
       ];
       const result = await computePlayerSkillRatings(db, failingOsu, scores, []);
 
+      // The custom-rate DT play (1.2x) rates at its own (chart, rate) slot
+      // beside the 1x play on the same chart; only the std convert is out.
       expect(result.summary.totalPlays).toBe(4);
-      expect(result.summary.analyzedPlays).toBe(1);
-      expect(result.summary.unsupportedPlays).toBe(2);
+      expect(result.summary.analyzedPlays).toBe(2);
+      expect(result.summary.unsupportedPlays).toBe(1);
       expect(result.summary.pendingPlays).toBe(1);
       expect(result.summary.modes).toHaveLength(1);
       expect(result.summary.modes[0].keyCount).toBe(4);
@@ -357,18 +368,27 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
-  it("rates DT plays at 1.5x, above the same play at 1x", async () => {
+  it("rates DT plays at their real rate: 1.5x above 1.2x above 1x", async () => {
     await withDb(async (db) => {
       await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
 
       const nomod = await computePlayerSkillRatings(db, failingOsu, [play({ id: 1, beatmap_id: 101 })], []);
+      const custom = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 2, beatmap_id: 101, mods: [{ acronym: "DT", settings: { speed_change: 1.2 } }] })],
+        [],
+      );
       const dt = await computePlayerSkillRatings(
         db,
         failingOsu,
-        [play({ id: 2, beatmap_id: 101, mods: [{ acronym: "DT" }] })],
+        [play({ id: 3, beatmap_id: 101, mods: [{ acronym: "DT" }] })],
         [],
       );
+      expect(custom.plays[0].rate).toBe(1.2);
       expect(dt.plays[0].rate).toBe(1.5);
+      expect(custom.plays[0].values.Overall).toBeGreaterThan(nomod.plays[0].values.Overall);
+      expect(dt.plays[0].values.Overall).toBeGreaterThan(custom.plays[0].values.Overall);
       expect(dt.plays[0].values.Overall).toBeGreaterThan(nomod.plays[0].values.Overall * 1.2);
     });
   });
