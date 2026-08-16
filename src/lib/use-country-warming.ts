@@ -40,8 +40,9 @@ const TIER_RANK: Record<LiveCountryFeatureTier, number> = { indexed: 0, maps_war
 
 /**
  * A region's tier is derived, not activated: the best tier among its member
- * countries (one snipes-tier member is enough for the region's snipe feed to
- * mean something). Null when no member has a cached tier yet.
+ * countries, capped at "live". Snipes stays a per-country feature, so a
+ * snipes-tier member (e.g. CR in Central America) must not surface the Snipes
+ * tab on the region scope. Null when no member has a cached tier yet.
  */
 export function getRegionEffectiveTier(code: string): LiveCountryFeatureTier | null {
   const region = getRegionDef(code);
@@ -51,7 +52,7 @@ export function getRegionEffectiveTier(code: string): LiveCountryFeatureTier | n
     const tier = tierCache.get(countryScopeKey(country));
     if (tier && (!best || TIER_RANK[tier] > TIER_RANK[best])) best = tier;
   }
-  return best;
+  return best === "snipes" ? "live" : best;
 }
 
 export interface CountryWarmingState {

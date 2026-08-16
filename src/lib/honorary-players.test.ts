@@ -113,15 +113,17 @@ describe("honorary pack odds", () => {
      reason - ten whole-pool cards recycle for more than 30 once every card it
      deals is a duplicate. Elite went 100 -> 115 when TIER_SHARD_VALUES was
      buffed, because its top-10% slice tracks the ladder's upper half and would
-     otherwise have paid back ~96% of its own price. Repricing a pack is a
-     deliberate economy change, so it should have to come through here. */
+     otherwise pay back ~97% of its own price. Legend has more room above its
+     recycle return, so its premium price can come down without becoming an
+     income source. Repricing a pack is a deliberate economy change, so it
+     should have to come through here. */
   it("prices the shard packs above what their cards recycle for", () => {
     expect(packTypeById("standard").cost).toEqual({ kind: "charge" });
     expect(packTypeById("wild").cost).toEqual({ kind: "shards", amount: 45 });
     expect(packTypeById("4k").cost).toEqual({ kind: "shards", amount: 40 });
     expect(packTypeById("7k").cost).toEqual({ kind: "shards", amount: 60 });
     expect(packTypeById("elite").cost).toEqual({ kind: "shards", amount: 115 });
-    expect(packTypeById("legend").cost).toEqual({ kind: "shards", amount: 250 });
+    expect(packTypeById("legend").cost).toEqual({ kind: "shards", amount: 200 });
   });
 
   it("defines a chance for every pack type", () => {

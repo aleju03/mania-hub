@@ -45,7 +45,7 @@ export const PACK_DRAW_TYPES: ReadonlyMap<string, PackDrawTypeDef> = new Map(
       { id: "4k", cost: { kind: "shards", amount: 40 }, topFraction: 1, keys: 4, cardCount: 5, guaranteesNew: true, honoraryChance: 0.005, honoraryCascadeChance: HONORARY_CASCADE_CHANCE },
       { id: "7k", cost: { kind: "shards", amount: 60 }, topFraction: 1, keys: 7, cardCount: 5, guaranteesNew: true, honoraryChance: 0.005, honoraryCascadeChance: HONORARY_CASCADE_CHANCE },
       { id: "elite", cost: { kind: "shards", amount: 115 }, topFraction: 0.1, cardCount: 7, guaranteesNew: true, honoraryChance: 0.01, honoraryCascadeChance: HONORARY_CASCADE_CHANCE },
-      { id: "legend", cost: { kind: "shards", amount: 250 }, topFraction: 0.02, cardCount: 5, guaranteesNew: true, honoraryChance: 0.03, honoraryCascadeChance: 0 },
+      { id: "legend", cost: { kind: "shards", amount: 200 }, topFraction: 0.02, cardCount: 5, guaranteesNew: true, honoraryChance: 0.03, honoraryCascadeChance: 0 },
     ] satisfies PackDrawTypeDef[]
   ).map((type) => [type.id, type]),
 );

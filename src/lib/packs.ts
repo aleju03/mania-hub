@@ -189,7 +189,7 @@ export const PACK_TYPES: PackTypeDef[] = [
   {
     id: "legend",
     name: "Legend",
-    cost: { kind: "shards", amount: 250 },
+    cost: { kind: "shards", amount: 200 },
     topFraction: 0.02,
     cardCount: PACK_SIZE,
     guaranteesNew: true,

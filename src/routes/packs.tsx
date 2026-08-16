@@ -188,6 +188,13 @@ function canAffordPack(wallet: PackWallet | null, type: PackTypeDef): boolean {
   return wallet.shards >= type.cost.amount;
 }
 
+/* Once a slash commits, affordability describes the *next* pack. The pack
+   already on stage has been bought, and must stay mounted long enough for its
+   rip timer to hand the dealt cards to the reveal. */
+export function shouldKeepPackStageMounted(canOpen: boolean, cutCommitted: boolean): boolean {
+  return canOpen || cutCommitted;
+}
+
 /* Two different questions, so two different sets.
 
    `ownedUserIds` drives the ranked pool's "new cards first": holding any card
@@ -284,11 +291,15 @@ function PackTypeSelector({
   wallet,
   selectedId,
   thumbs,
+  locked,
   onSelect,
 }: {
   wallet: PackWallet | null;
   selectedId: PackTypeId;
   thumbs: Partial<Record<PackTypeId, string>>;
+  /* A committed slash already bought the selected pack. Keep its type stable
+     until PackStage hands it to the reveal. */
+  locked: boolean;
   onSelect: (id: PackTypeId) => void;
 }) {
   return (
@@ -305,11 +316,11 @@ function PackTypeSelector({
               key={type.id}
               type="button"
               onClick={() => {
-                if (affordable && !selected) onSelect(type.id);
+                if (!locked && affordable && !selected) onSelect(type.id);
               }}
-              disabled={!affordable && !selected}
+              disabled={locked || (!affordable && !selected)}
               className={`flex w-[78px] flex-col items-center sm:w-[116px] ${
-                affordable && !selected ? "cursor-pointer" : ""
+                !locked && affordable && !selected ? "cursor-pointer" : ""
               }`}
               aria-pressed={selected}
               aria-label={`${type.name} pack, ${type.blurb}`}
@@ -388,6 +399,12 @@ function PacksPage() {
   const [packId, setPackId] = useState(0);
   const [packTypeId, setPackTypeId] = useState<PackTypeId>("standard");
   const [cards, setCards] = useState<PackCardState[] | null>(null);
+  /* True from the instant the slash commits until PackStage's delayed
+     onOpened handoff. A fast server draw can spend the last affordable pack
+     during that gap; this keeps the opening stage mounted so its timer is not
+     cancelled by the post-spend affordability render. It also freezes the
+     type selector around the pack the server has already bought. */
+  const [cutCommitted, setCutCommitted] = useState(false);
   /* Non-null once a slash has gone through the pack's middle instead of its
      perforation: the cards were cut with it, so the reveal deals them in
      halves and the summary hands the whole ruined hand back for shards. */
@@ -548,6 +565,7 @@ function PacksPage() {
     preparedPackKeyRef.current = null;
     setCards(null);
     setDamage(null);
+    setCutCommitted(false);
     setDealError(false);
     serverIsNewRef.current = null;
     serverPaidRef.current = false;
@@ -600,6 +618,7 @@ function PacksPage() {
                stage shows the countdown or greys the pack on its own. */
             if (outcome.wallet) walletApi.applyServerWallet(outcome.wallet.payload, outcome.wallet.rev);
             autoOpenRef.current = false;
+            setCutCommitted(false);
             setPhase("pack");
             setPackId((id) => id + 1);
             return;
@@ -631,7 +650,10 @@ function PacksPage() {
         finishDeal(draw.players, draw.poolTotal);
       } catch {
         autoOpenRef.current = false;
-        if (!cancelled) setDealError(true);
+        if (!cancelled) {
+          setCutCommitted(false);
+          setDealError(true);
+        }
       }
     };
     /* Armed, not fired: only a pack somebody actually grabs costs a draw,
@@ -698,6 +720,7 @@ function PacksPage() {
        this same render, so the reveal would otherwise remount for one commit
        still holding the last pack's cut, and deal its ruined hand again. */
     setDamage(null);
+    setCutCommitted(false);
     autoOpenRef.current = false;
     // Keep the chosen pack type across packs while it stays affordable.
     if (!canAffordPack(walletApi.wallet, packTypeById(packTypeId))) setPackTypeId("standard");
@@ -714,6 +737,7 @@ function PacksPage() {
     setSummaryFlyFrom(null);
     setSerials(null);
     setDamage(null);
+    setCutCommitted(false);
     autoOpenRef.current = true;
     setPhase("reveal");
     setPackId((id) => id + 1);
@@ -724,6 +748,7 @@ function PacksPage() {
      browser here and the rip choreography runs over the round trip instead
      of in front of it. Anonymous wallets already dealt at the grab. */
   const handleCut = () => {
+    setCutCommitted(true);
     if (serverDeals()) dealTriggerRef.current?.();
   };
 
@@ -733,6 +758,15 @@ function PacksPage() {
        consume the next pack's freshly armed trigger. */
     if (packId !== packIdRef.current) return;
     setDamage(cutDamage);
+    setCutCommitted(false);
+    /* Its own line in the feed, next to the open: the blade went past the foil
+       and through the cards, so the whole hand came out in two pieces. */
+    if (cutDamage) {
+      track("pack_cut", {
+        pack_type: selectedType.id,
+        pack_username: auth.viewer?.username,
+      });
+    }
     const trigger = dealTriggerRef.current;
     if (serverDeals()) {
       /* The deal normally left at the cut, so the trigger is already consumed
@@ -745,6 +779,7 @@ function PacksPage() {
     }
     // The slash is the moment of purchase (anonymous wallets pay locally).
     if (!chargeForPack(selectedType)) {
+      setCutCommitted(false);
       setPackTypeId("standard");
       setPackId((id) => id + 1);
       return;
@@ -889,7 +924,7 @@ function PacksPage() {
                   >
                     {!wallet ? (
                       <div className="py-16 text-center text-[12px] text-osu-f1">Loading your collection...</div>
-                    ) : !canOpen ? (
+                    ) : !shouldKeepPackStageMounted(canOpen, cutCommitted) ? (
                       /* The wait is the only thing worth saying here: the
                          shelf below already greys out what the wallet cannot
                          pay for, so it needs no sentence explaining it. */
@@ -925,6 +960,7 @@ function PacksPage() {
                           wallet={wallet}
                           selectedId={packTypeId}
                           thumbs={packThumbs}
+                          locked={cutCommitted}
                           onSelect={setPackTypeId}
                         />
                       </div>

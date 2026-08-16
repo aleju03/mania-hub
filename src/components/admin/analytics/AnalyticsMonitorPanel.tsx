@@ -1,4 +1,4 @@
-import { BarChart3, RefreshCw, Radio } from "lucide-react";
+import { BarChart3, Crosshair, RefreshCw, Radio } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getLiveBackendUrl } from "../../../lib/live-backend";
 import { formatTimeAgo } from "../../../lib/format";
@@ -27,6 +27,7 @@ import {
   type AnalyticsRange,
 } from "../../../lib/analytics-monitor";
 import { getAnalyticsLiveTicket, getAnalyticsMonitorData } from "../../../lib/analytics-monitor-data";
+import { AnalyticsEventLookup } from "./AnalyticsEventLookup";
 import { AnalyticsInsights } from "./AnalyticsInsights";
 import { AnalyticsLiveBoard } from "./AnalyticsLiveBoard";
 import { AnalyticsPulse } from "./AnalyticsPulse";
@@ -35,7 +36,8 @@ import { AnalyticsStream } from "./AnalyticsStream";
 import { AnalyticsErrorBanner, AnalyticsInfoBanner, useTickingNow } from "./shared";
 
 const ANALYTICS_VIEW_STORAGE_KEY = "mh_monitor_view";
-type AnalyticsView = "live" | "insights";
+type AnalyticsView = "live" | "insights" | "lookup";
+const ANALYTICS_VIEWS: readonly AnalyticsView[] = ["live", "insights", "lookup"];
 
 export function AnalyticsMonitorPanel() {
   const [range, setRangeState] = useState<AnalyticsRange>(ANALYTICS_DEFAULT_RANGE_HOURS);
@@ -134,7 +136,7 @@ export function AnalyticsMonitorPanel() {
       const storedRange = parseAnalyticsRangeHours(window.localStorage.getItem(ANALYTICS_RANGE_STORAGE_KEY));
       if (storedRange) setRangeState(storedRange);
       const storedView = window.localStorage.getItem(ANALYTICS_VIEW_STORAGE_KEY);
-      if (storedView === "live" || storedView === "insights") setView(storedView);
+      if (ANALYTICS_VIEWS.includes(storedView as AnalyticsView)) setView(storedView as AnalyticsView);
     } catch {
       // ignore
     }
@@ -307,6 +309,13 @@ export function AnalyticsMonitorPanel() {
             label="Insights"
             hint="totals, sources and errors"
           />
+          <ViewButton
+            active={view === "lookup"}
+            onClick={() => selectView("lookup")}
+            icon={<Crosshair className="h-3.5 w-3.5" />}
+            label="Lookup"
+            hint="pick an event and see who fired it"
+          />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {liveFeedConnected ? (
@@ -345,7 +354,11 @@ export function AnalyticsMonitorPanel() {
         <AnalyticsInfoBanner message="The analytics store is still preparing this range; the view will fill in automatically." />
       ) : null}
 
-      {currentData ? (
+      {/* The lookup reads the store by event name, so it is not waiting on the
+          range scan the other two views are built from. */}
+      {view === "lookup" ? (
+        <AnalyticsEventLookup range={range} now={now} />
+      ) : currentData ? (
         <>
           <AnalyticsPulse data={currentData} range={range} onlineCountries={onlineCountries} />
           {view === "live" ? (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_COUNTRY_CODE } from "./country";
-import { getCachedCountryTier, seedCountryTierCache } from "./use-country-warming";
+import { getCachedCountryTier, getRegionEffectiveTier, seedCountryTierCache } from "./use-country-warming";
 
 describe("seedCountryTierCache", () => {
   it("keeps each country's own tier when the backend tracks a code the country list doesn't carry", () => {
@@ -24,5 +24,18 @@ describe("seedCountryTierCache", () => {
 
     expect(getCachedCountryTier("DE")).toBe("live");
     expect(getCachedCountryTier(" de ")).toBe("live");
+  });
+});
+
+describe("getRegionEffectiveTier", () => {
+  it("caps a region's tier at live even when a member country is snipes-tier", () => {
+    // Snipes is per-country; CR being snipes-tier must not put the Snipes tab
+    // on the Central America scope.
+    seedCountryTierCache([
+      { country: "CR", featureTier: "snipes" },
+      { country: "PA", featureTier: "indexed" },
+    ]);
+
+    expect(getRegionEffectiveTier("R-CAMERICA")).toBe("live");
   });
 });

@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseJson } from "../../db.js";
-import { MAX_VIEWER_EVENT_ROWS, MAX_VIEWER_ROWS } from "../../features/analytics.js";
+import { MAX_EVENT_LOOKUP_ROWS, MAX_VIEWER_EVENT_ROWS, MAX_VIEWER_ROWS } from "../../features/analytics.js";
 import { attachViewerRanks, normalizeAnalyticsViewerSort, sortRankedViewers } from "../../features/analytics-viewer-ranks.js";
 import { normalizeCountryParam } from "../abuse-guard.js";
 import type { HttpContext } from "../context.js";
@@ -134,6 +134,51 @@ export async function handleAnalyticsRoutes(req: IncomingMessage, res: ServerRes
       ? Math.min(MAX_VIEWER_EVENT_ROWS, Math.max(1, Math.round(requestedEvents)))
       : MAX_VIEWER_EVENT_ROWS;
     sendJson(req, res, ctx, 200, { viewerId, events: await ctx.analytics.getViewerEvents(viewerId, eventLimit) });
+    return true;
+  }
+  // The picker behind the event lookup: every event name the store has, so an
+  // admin can pick one without knowing how it is spelled in the code.
+  if (url.pathname === "/api/admin/analytics/event-catalog") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.analytics) {
+      sendJson(req, res, ctx, 404, { error: "analytics_disabled" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { events: await ctx.analytics.getEventCatalog() });
+    return true;
+  }
+  // Who fired one event, most recent first. The mirror image of viewer-events:
+  // that one asks what a player did, this one asks who did a thing.
+  if (url.pathname === "/api/admin/analytics/event-lookup") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.analytics) {
+      sendJson(req, res, ctx, 404, { error: "analytics_disabled" });
+      return true;
+    }
+    const event = (url.searchParams.get("event") ?? "").trim().slice(0, 120);
+    if (!event) {
+      sendJson(req, res, ctx, 400, { error: "invalid_event" });
+      return true;
+    }
+    const requestedLookup = Number(url.searchParams.get("limit") ?? MAX_EVENT_LOOKUP_ROWS);
+    const lookupLimit = Number.isFinite(requestedLookup)
+      ? Math.min(MAX_EVENT_LOOKUP_ROWS, Math.max(1, Math.round(requestedLookup)))
+      : MAX_EVENT_LOOKUP_ROWS;
+    const requestedSince = Number(url.searchParams.get("sinceTs"));
+    const sinceTs = Number.isFinite(requestedSince) && requestedSince > 0 ? Math.round(requestedSince) : 0;
+    // Both readings of the same window, in one call: the card offers people and
+    // raw firings as two tabs and switching between them is not worth a round trip.
+    const [people, occurrences] = await Promise.all([
+      ctx.analytics.getEventActors(event, { sinceTs, limit: lookupLimit }),
+      ctx.analytics.getEventOccurrences(event, { sinceTs, limit: lookupLimit }),
+    ]);
+    sendJson(req, res, ctx, 200, { event, sinceTs, people, occurrences });
     return true;
   }
   // Short-lived ticket for the admin browser's live SSE stream: EventSource

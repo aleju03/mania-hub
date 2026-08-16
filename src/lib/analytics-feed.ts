@@ -339,11 +339,15 @@ export function describeAnalyticsEvent(
       return describeCommunity(row, "submitted", row.communityId);
     case "skin_upload_failed":
       return { kind: "error", verb: "failed", subject: "a skin upload", detail: row.skinUploadError };
-    case "pack_open": {
+    /* A cut pack is also an open, so both lines land for the same pack: the
+       open records the spend, the cut records that the blade went through the
+       cards and the hand came out ruined. */
+    case "pack_open":
+    case "pack_cut": {
       const packType = formatAnalyticsPackType(row.packType);
       return {
         kind: "pack",
-        verb: "opened",
+        verb: row.event === "pack_cut" ? "cut through" : "opened",
         subject: `${/^[aeiou]/i.test(packType) ? "an" : "a"} ${packType} pack`,
         detail: row.packUsername ? `as ${row.packUsername}` : "as a guest",
       };

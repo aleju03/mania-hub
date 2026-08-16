@@ -94,12 +94,12 @@ const TIER_SHARD_VALUES: Record<ManiaCardTier, number> = {
   mythic: 27,
   ascendant: 36,
   worldClass: 48,
-  // A GOAT card is one of ten in the game; recycling one should be a real
-  // decision, not a rounding error next to World Class's 40. It used to be
-  // 1000, which was four Legend packs for a card the pack hands you for free
-  // once you hold the roster - see DUPLICATE_RECYCLE_RATE for why that
-  // mattered.
-  goat: 400,
+  // A GOAT card is one of a tiny honorary roster; recycling one should be a
+  // real decision, not a rounding error next to World Class's 48. It used to
+  // be 1000, enough to buy several Legend packs for a card the honorary slot
+  // hands you for free once you hold the roster - see DUPLICATE_RECYCLE_RATE
+  // for why that mattered.
+  goat: 500,
 };
 
 /* What a second copy is worth next to the first. A card you do not own yet is
@@ -113,7 +113,7 @@ const TIER_SHARD_VALUES: Record<ManiaCardTier, number> = {
    to be worth opening, and beating its price is exactly what made opening one
    an income source rather than a purchase. Halving the duplicate closes that
    loop: every pack type still returns less in shards than it costs (roughly
-   83% for Wild, 84% for Elite, 48% for Legend against the current pool), so
+   84% for Wild, 85% for Elite, 61% for Legend against the current pool), so
    shards flow in from charges and the arcade and drain out through packs,
    which is the direction the economy is supposed to run.
 

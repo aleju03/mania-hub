@@ -8,7 +8,7 @@ import { getHonoraryPullsReport, getSharedPackCard } from "../src/features/pack-
 import { seedCollectionCard } from "./helpers/pack-cards.js";
 
 // Collection cards are client-supplied and their tier is otherwise trusted.
-// GOAT recycles for 1000 shards, so a forged `tier: "goat"` would mint shards
+// GOAT recycles for 500 shards, so a forged `tier: "goat"` would mint shards
 // on demand. Only the honorary roster may hold it.
 
 let dir = "";

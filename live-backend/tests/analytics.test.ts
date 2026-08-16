@@ -382,6 +382,60 @@ describe("AnalyticsStore capture + monitor", () => {
     expect(await store.getViewerEvents(999)).toEqual([]);
   });
 
+  it("lists every event name it has recorded, most frequent first", async () => {
+    store.capture(pageview({ minutesAgo: 30 }), {});
+    store.capture(pageview({ minutesAgo: 20 }), {});
+    store.capture(pageview({ minutesAgo: 10, event: "changelog_open" }), {});
+    await store.flush();
+
+    const catalog = await store.getEventCatalog();
+    expect(catalog.map((entry) => entry.event)).toEqual(["$pageview", "changelog_open"]);
+    expect(catalog[0]).toMatchObject({ count: 2 });
+    expect(catalog[1]!.lastTs).toBeGreaterThan(catalog[0]!.lastTs);
+  });
+
+  it("answers who fired one event, one row per person, newest first", async () => {
+    const fired = (options: { distinctId: string; minutesAgo: number; viewerId?: number; username?: string; country?: string; path?: string }) =>
+      pageview({
+        event: "changelog_open",
+        distinctId: options.distinctId,
+        minutesAgo: options.minutesAgo,
+        path: options.path ?? "/",
+        properties: {
+          ...(options.viewerId ? { viewer_id: options.viewerId, viewer_username: options.username } : {}),
+          ...(options.country ? { $geoip_country_code: options.country } : {}),
+        },
+      });
+
+    // One signed-in player on two devices is one person; a signed-out visitor
+    // is only ever their device.
+    store.capture(fired({ distinctId: "phone", viewerId: 111, username: "juan", minutesAgo: 40, country: "cr" }), {});
+    store.capture(fired({ distinctId: "desktop", viewerId: 111, username: "juan", minutesAgo: 5, country: "cr" }), {});
+    store.capture(fired({ distinctId: "anon", minutesAgo: 20 }), {});
+    // Another event, a bot, and admin browsing all stay out of this lookup.
+    store.capture(pageview({ distinctId: "anon", minutesAgo: 1 }), {});
+    store.capture(fired({ distinctId: "crawler", minutesAgo: 2 }), { isBot: true });
+    store.capture(fired({ distinctId: "desktop", viewerId: 111, username: "juan", minutesAgo: 1, path: "/admin/live-backend" }), {});
+    await store.flush();
+
+    const people = await store.getEventActors("changelog_open");
+    expect(people).toHaveLength(2);
+    expect(people[0]).toMatchObject({ viewerId: 111, username: "juan", count: 2, country: "CR" });
+    expect(people[1]).toMatchObject({ viewerId: null, distinctId: "anon", count: 1 });
+    expect(people[0]!.lastTs).toBeGreaterThan(people[1]!.lastTs);
+
+    // The same window unrolled, in the feed's row shape.
+    const occurrences = await store.getEventOccurrences("changelog_open");
+    expect(occurrences.map((row) => row.distinctId)).toEqual(["desktop", "anon", "phone"]);
+    expect(occurrences.every((row) => row.event === "changelog_open")).toBe(true);
+
+    // A cutoff narrows both readings, and an event nobody fired is empty.
+    expect(await store.getEventActors("changelog_open", { sinceTs: NOW - 10 * 60_000 })).toHaveLength(1);
+    expect(await store.getEventOccurrences("changelog_open", { sinceTs: NOW - 10 * 60_000 })).toHaveLength(1);
+    expect(await store.getEventActors("never_fired")).toEqual([]);
+    expect(await store.getEventOccurrences("  ")).toEqual([]);
+  });
+
   it("seeds the roster from events already stored when the table is new", async () => {
     store.capture(pageview({ distinctId: "d1", minutesAgo: 90, properties: { viewer_username: "juan", viewer_id: 111 } }), {});
     store.capture(pageview({ distinctId: "d1", minutesAgo: 20, properties: { viewer_username: "juan", viewer_id: 111 } }), { geoCountry: "CR" });

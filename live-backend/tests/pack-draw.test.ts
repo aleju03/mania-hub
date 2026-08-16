@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Db } from "../src/db.js";
 import type { GlobalRankingEntry } from "../src/features/global-rankings.js";
-import { drawPackHand, PackPoolUnavailableError, type PackDrawDeps, type PackDrawSlot } from "../src/features/pack-draw.js";
+import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError, type PackDrawDeps, type PackDrawSlot } from "../src/features/pack-draw.js";
 import { HONORARY_USER_IDS } from "../src/features/pack-wallets.js";
 
 // The deps carry every read the draw performs, so no database is stood up.
@@ -60,6 +60,11 @@ function rankedIds(players: PackDrawSlot[]): number[] {
 }
 
 describe("drawPackHand", () => {
+  it("keeps the server's premium prices aligned with the client economy", () => {
+    expect(PACK_DRAW_TYPES.get("elite")?.cost).toEqual({ kind: "shards", amount: 115 });
+    expect(PACK_DRAW_TYPES.get("legend")?.cost).toEqual({ kind: "shards", amount: 200 });
+  });
+
   it("refuses an unknown pack type", async () => {
     const hand = await drawPackHand(db, { packType: "mystery", ownerUserId: 1 }, makeDeps(pool(200)));
     expect(hand).toBeNull();

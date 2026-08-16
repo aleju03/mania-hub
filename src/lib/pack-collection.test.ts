@@ -170,6 +170,11 @@ describe("pulls and recycling", () => {
     expect(duplicateShardValueForTier("common")).toBeGreaterThan(0);
   });
 
+  it("values a GOAT at 500 shards and its duplicate at half", () => {
+    expect(shardValueForTier("goat")).toBe(500);
+    expect(duplicateShardValueForTier("goat")).toBe(250);
+  });
+
   it("pays the same for a card whichever way it is recycled", () => {
     // Recycling everything has to price the duplicates the same way the
     // duplicates-only button does, or "recycle all" would be a strictly better

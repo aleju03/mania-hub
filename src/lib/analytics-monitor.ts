@@ -124,6 +124,41 @@ export interface AnalyticsViewerEventsResult {
 // backend ceiling.
 export const ANALYTICS_VIEWER_EVENTS_LIMIT = 300;
 
+/* One event name the store has recorded, with how often it ever has and when
+   it last did. The picker for the lookup below. */
+export interface AnalyticsEventCatalogEntry {
+  event: string;
+  count: number;
+  lastTs: number;
+}
+
+/* One person behind an event: a signed-in account, or the device a signed-out
+   visitor browsed on. The counts are over the lookup's window, not all time. */
+export interface AnalyticsEventActorRow {
+  actorKey: string;
+  viewerId: number | null;
+  username: string | null;
+  distinctId: string;
+  country: string | null;
+  path: string | null;
+  lastTs: number;
+  count: number;
+}
+
+/* Who fired one event, read two ways: folded to one row per person, and
+   unrolled to every firing. Empty is a real answer - events are pruned at the
+   store's retention while the event name itself stays in the catalog. */
+export interface AnalyticsEventLookupResult {
+  event: string;
+  sinceTs: number;
+  people: AnalyticsEventActorRow[];
+  occurrences: AnalyticsRecentEventRow[];
+}
+
+// Matches the backend ceiling on one event lookup.
+export const ANALYTICS_EVENT_LOOKUP_LIMIT = 300;
+export const ANALYTICS_EVENT_LOOKUP_STORAGE_KEY = "mh_monitor_lookup_event";
+
 export interface AnalyticsBounceStats {
   bounced: number;
   landers: number;

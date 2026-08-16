@@ -261,7 +261,7 @@ describe("GOAT cards alongside their player's ordinary card", () => {
     expect(remaining.cards[0].tier).toBe("goat");
 
     const goat = await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: `${BOJII}:goat` });
-    expect(goat.gained).toBe(400);
+    expect(goat.gained).toBe(500);
     expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).total).toBe(0);
   });
 });

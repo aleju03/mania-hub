@@ -50,6 +50,17 @@ export const MAX_VIEWER_ROWS = 20_000;
 /* One player's trail is read on demand from an admin click, so this is only a
    ceiling on how much of it a single request can pull back. */
 export const MAX_VIEWER_EVENT_ROWS = 300;
+/* The other direction: one event name, and who fired it. Same kind of ceiling
+   on a single request. */
+export const MAX_EVENT_LOOKUP_ROWS = 300;
+/* How far back one event lookup reads before grouping the people behind it. A
+   busy event (pack_open) has hundreds of thousands of rows and the question
+   asked of it is who fired it recently, not who ever did; the scan is bounded
+   so the answer costs the same for a rare event and a constant one. */
+const EVENT_ACTOR_SCAN_ROWS = 20_000;
+/* The picker's list of event names changes only when a new event ships, so a
+   short hold keeps tab switches off the group-by. */
+const EVENT_CATALOG_CACHE_TTL_MS = 30_000;
 const TIMELINE_BUCKETS = 48;
 // Mirrors the live per-visitor view window in features/skins.ts, so the
 // historical seed and everything counted after it are the same measure.
@@ -207,6 +218,27 @@ export interface AnalyticsViewerRow {
   country: string | null;
 }
 
+/* One event name the store has ever recorded, for the lookup's picker. */
+export interface AnalyticsEventCatalogEntry {
+  event: string;
+  count: number;
+  lastTs: number;
+}
+
+/* One person behind an event: a signed-in account, or the device a signed-out
+   visitor browsed on. `count` and `lastTs` are over the lookup's scan window,
+   not over all time. */
+export interface AnalyticsEventActorRow {
+  actorKey: string;
+  viewerId: number | null;
+  username: string | null;
+  distinctId: string;
+  country: string | null;
+  path: string | null;
+  lastTs: number;
+  count: number;
+}
+
 export interface AnalyticsValleyResponse {
   activeVisitors: number;
   recent: Array<{
@@ -306,6 +338,7 @@ export class AnalyticsStore {
   private flushing: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<(event: AnalyticsEventRecord) => void>();
   private readonly liveTickets = new Map<string, number>();
+  private eventCatalogCache: { at: number; entries: AnalyticsEventCatalogEntry[] } | null = null;
   private readonly monitorCache = new Map<string, { at: number; data: AnalyticsMonitorResponse }>();
   private readonly monitorInFlight = new Map<string, Promise<AnalyticsMonitorResponse>>();
 
@@ -622,6 +655,110 @@ export class AnalyticsStore {
         and (path is null or path not like '/admin/%')
       order by ts desc limit ?
     `, [Math.round(viewerId), capped])).rows;
+    return rows.map((row) => this.buildFeedEvent({
+      ts: Number(row.ts),
+      event: String(row.event ?? ""),
+      distinctId: String(row.distinct_id ?? ""),
+      host: null,
+      path: row.path == null ? null : String(row.path),
+      country: row.country == null ? null : String(row.country),
+      selectedCountry: row.selected_country == null ? null : String(row.selected_country),
+      viewerUsername: row.viewer_username == null ? null : String(row.viewer_username),
+      referringDomain: row.referring_domain == null ? null : String(row.referring_domain),
+      screenWidth: row.screen_width == null ? null : Number(row.screen_width),
+      viewportWidth: row.viewport_width == null ? null : Number(row.viewport_width),
+      isBot: false,
+      properties: parseJson<Record<string, unknown>>(row.props, {}),
+    }));
+  }
+
+  /* Every event name the store has recorded, most frequent first, each with
+     when it last happened. The picker for the event lookup below: "who opened
+     the changelog" starts by finding `changelog_open` in a list, and a name
+     nobody has fired in weeks has to stay in it, so this is not range-scoped.
+
+     One group-by over the (event, ts) index, which never touches the table, so
+     it stays cheap as the store grows. Bots are counted here and dropped from
+     the lookup itself: they are a rounding error against a name's total, and
+     excluding them would cost a row lookup per event in the store. */
+  async getEventCatalog(): Promise<AnalyticsEventCatalogEntry[]> {
+    await this.flush();
+    const cached = this.eventCatalogCache;
+    if (cached && Date.now() - cached.at < EVENT_CATALOG_CACHE_TTL_MS) return cached.entries;
+    const rows = (await exec(this.db, `
+      select event, count(*) as n, max(ts) as last_ts
+      from analytics_events
+      group by event
+      order by n desc, event asc
+    `)).rows;
+    const entries = rows.map((row) => ({
+      event: String(row.event ?? ""),
+      count: Number(row.n ?? 0),
+      lastTs: Number(row.last_ts ?? 0),
+    }));
+    this.eventCatalogCache = { at: Date.now(), entries };
+    return entries;
+  }
+
+  /* Who fired one event, newest first, one row per person. The inverse of
+     getViewerEvents: that one starts from a player, this one starts from the
+     thing that was done.
+
+     Signed-in visitors group by their osu! id, so the same person on a phone
+     and a desktop is one row; everyone else groups by device, which is as far
+     as a signed-out visitor can be identified. The scan window is bounded
+     (EVENT_ACTOR_SCAN_ROWS), so for a constant event this answers "the people
+     behind the most recent N firings" rather than every person who ever fired
+     it - which is the question the card asks. */
+  async getEventActors(event: string, options: { sinceTs?: number; limit?: number } = {}): Promise<AnalyticsEventActorRow[]> {
+    const name = event.trim();
+    if (!name) return [];
+    await this.flush();
+    const capped = Math.min(MAX_EVENT_LOOKUP_ROWS, Math.max(1, Math.round(options.limit ?? MAX_EVENT_LOOKUP_ROWS)));
+    const rows = (await exec(this.db, `
+      with recent as (
+        select ts, distinct_id, viewer_username, country, path,
+               cast(json_extract(props, '$.viewer_id') as integer) as viewer_id
+        from analytics_events
+        where event = ? and ts >= ? and is_bot = 0
+          and (path is null or path not like '/admin/%')
+        order by ts desc limit ?
+      )
+      select case when viewer_id is not null then 'u' || viewer_id else 'd' || distinct_id end as actor_key,
+             max(ts) as last_ts, count(*) as n, viewer_id, viewer_username, distinct_id, country, path
+      from recent
+      group by actor_key
+      order by last_ts desc limit ?
+    `, [name, Math.max(0, Math.round(options.sinceTs ?? 0)), EVENT_ACTOR_SCAN_ROWS, capped])).rows;
+    // One max() aggregate, so SQLite's bare-column rule makes the name, country
+    // and path come from that person's newest firing rather than an arbitrary one.
+    return rows.map((row) => ({
+      actorKey: String(row.actor_key ?? ""),
+      viewerId: row.viewer_id == null ? null : Number(row.viewer_id),
+      username: row.viewer_username == null ? null : String(row.viewer_username),
+      distinctId: String(row.distinct_id ?? ""),
+      country: row.country == null ? null : String(row.country),
+      path: row.path == null ? null : String(row.path),
+      lastTs: Number(row.last_ts ?? 0),
+      count: Number(row.n ?? 0),
+    }));
+  }
+
+  /* The same lookup unrolled: every firing of one event, newest first, in the
+     feed's row shape so the admin card can describe each one the way the
+     activity feed does. */
+  async getEventOccurrences(event: string, options: { sinceTs?: number; limit?: number } = {}): Promise<AnalyticsFeedEvent[]> {
+    const name = event.trim();
+    if (!name) return [];
+    await this.flush();
+    const capped = Math.min(MAX_EVENT_LOOKUP_ROWS, Math.max(1, Math.round(options.limit ?? MAX_EVENT_LOOKUP_ROWS)));
+    const rows = (await exec(this.db, `
+      select ts, event, path, country, selected_country, distinct_id, screen_width, viewport_width, viewer_username, referring_domain, props
+      from analytics_events
+      where event = ? and ts >= ? and is_bot = 0
+        and (path is null or path not like '/admin/%')
+      order by ts desc limit ?
+    `, [name, Math.max(0, Math.round(options.sinceTs ?? 0)), capped])).rows;
     return rows.map((row) => this.buildFeedEvent({
       ts: Number(row.ts),
       event: String(row.event ?? ""),

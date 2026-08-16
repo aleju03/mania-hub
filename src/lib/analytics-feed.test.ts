@@ -179,6 +179,12 @@ describe("describeAnalyticsEvent", () => {
       subject: "an Elite pack",
       detail: "as juan",
     });
+    expect(describeAnalyticsEvent(row({ event: "pack_cut", packType: "standard", packUsername: "juan" }))).toMatchObject({
+      kind: "pack",
+      verb: "cut through",
+      subject: "a Standard pack",
+      detail: "as juan",
+    });
     expect(describeAnalyticsEvent(row({ event: "skin_download", skinName: "Freedom Dive" }))).toMatchObject({
       kind: "skin",
       verb: "downloaded",

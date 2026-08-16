@@ -4,6 +4,7 @@ import { getServerLiveBackendUrl } from "./live-backend";
 import {
   ANALYTICS_COLD_RESPONSE_BUDGET_MS,
   ANALYTICS_DEFAULT_RANGE_HOURS,
+  ANALYTICS_EVENT_LOOKUP_LIMIT,
   ANALYTICS_RECENT_EVENTS_LIMIT,
   ANALYTICS_TIMELINE_BUCKETS,
   ANALYTICS_VIEWER_EVENTS_LIMIT,
@@ -11,6 +12,8 @@ import {
   getAnalyticsBucketMs,
   normalizeAnalyticsViewerSort,
   parseAnalyticsRangeHours,
+  type AnalyticsEventCatalogEntry,
+  type AnalyticsEventLookupResult,
   type AnalyticsMonitorData,
   type AnalyticsRange,
   type AnalyticsTimelineBucket,
@@ -192,6 +195,46 @@ export const getAnalyticsViewerEvents = createServerFn({ method: "POST" })
     });
     if (!response.ok) throw new Error(`Analytics viewer events failed (${response.status}).`);
     return await response.json() as AnalyticsViewerEventsResult;
+  });
+
+/* Every event name the store has recorded. Its own call because it is the
+   picker rather than the answer: it is read once when the lookup opens and
+   again only when the admin asks for a refresh. */
+export const getAnalyticsEventCatalog = createServerFn({ method: "POST" })
+  .handler(async (): Promise<AnalyticsEventCatalogEntry[]> => {
+    await requireAdminAccess("Analytics event catalog");
+    const base = getServerLiveBackendUrl();
+    const token = process.env.LIVE_ADMIN_TOKEN;
+    if (!base || !token) throw new Error("Configure LIVE_BACKEND_URL + LIVE_ADMIN_TOKEN in .env to use analytics monitoring.");
+    const response = await fetch(`${base}/api/admin/analytics/event-catalog`, {
+      headers: { authorization: `Bearer ${token}`, connection: "close" },
+    });
+    if (!response.ok) throw new Error(`Analytics event catalog failed (${response.status}).`);
+    const payload = await response.json() as { events?: AnalyticsEventCatalogEntry[] };
+    return payload.events ?? [];
+  });
+
+/* Who fired one event. The mirror of getAnalyticsViewerEvents: that one starts
+   from a player, this one starts from the thing that was done. */
+export const getAnalyticsEventLookup = createServerFn({ method: "POST" })
+  .validator((data: { event?: unknown; sinceTs?: unknown }) => {
+    const event = typeof data?.event === "string" ? data.event.trim().slice(0, 120) : "";
+    if (!event) throw new Error("An event name is required.");
+    const sinceTs = Number(data?.sinceTs);
+    return { event, sinceTs: Number.isFinite(sinceTs) && sinceTs > 0 ? Math.round(sinceTs) : 0 };
+  })
+  .handler(async ({ data }: { data: { event: string; sinceTs: number } }): Promise<AnalyticsEventLookupResult> => {
+    await requireAdminAccess("Analytics event lookup");
+    const base = getServerLiveBackendUrl();
+    const token = process.env.LIVE_ADMIN_TOKEN;
+    if (!base || !token) throw new Error("Configure LIVE_BACKEND_URL + LIVE_ADMIN_TOKEN in .env to use analytics monitoring.");
+    const params = new URLSearchParams({ event: data.event, limit: String(ANALYTICS_EVENT_LOOKUP_LIMIT) });
+    if (data.sinceTs > 0) params.set("sinceTs", String(data.sinceTs));
+    const response = await fetch(`${base}/api/admin/analytics/event-lookup?${params}`, {
+      headers: { authorization: `Bearer ${token}`, connection: "close" },
+    });
+    if (!response.ok) throw new Error(`Analytics event lookup failed (${response.status}).`);
+    return await response.json() as AnalyticsEventLookupResult;
   });
 
 /* Trades the admin session for a short-lived SSE ticket: EventSource can't

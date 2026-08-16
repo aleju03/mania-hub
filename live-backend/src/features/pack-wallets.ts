@@ -236,9 +236,9 @@ const TIER_SHARD_VALUES: Record<string, number> = {
   ascendant: 36,
   worldClass: 48,
   // Mirrors the frontend's table in src/lib/pack-collection.ts. GOAT came down
-  // from 1000, which was four Legend packs for a card the honorary slot hands
-  // out for free once the roster is complete.
-  goat: 400,
+  // from 1000, which bought several Legend packs for a card the honorary slot
+  // hands out for free once the roster is complete.
+  goat: 500,
   unrated: 1,
 };
 
@@ -365,7 +365,7 @@ const displayUsernameSql = `coalesce(nullif(${liveUserFieldSql("username")}, '')
 
    Collection cards arrive from the client and their tier is otherwise taken on
    trust, which was harmless when the rarest card recycled for 48 shards. GOAT
-   recycles for 400 (TIER_SHARD_VALUES in src/lib/pack-collection.ts), so an
+   recycles for 500 (TIER_SHARD_VALUES in src/lib/pack-collection.ts), so an
    unchecked `tier: "goat"` on any player is a shard printer: sync a forged
    card, recycle it, repeat. Membership is a fixed list of ids, so the check is
    exact and needs no tier index. */
@@ -1142,7 +1142,7 @@ export async function applyPackCollectionCardMint(
   const cardUserId = Number(row.card_user_id);
   if (!Number.isInteger(cardUserId) || cardUserId <= 0) return { applied: false, cardKey: null };
   // Same GOAT guard the wallet import applies: a claimed tier is otherwise
-  // taken on trust, and GOAT recycles for 400 shards.
+  // taken on trust, and GOAT recycles for 500 shards.
   const tier = claimedTier(mint, cardUserId);
   const currentTier = typeof row.tier === "string" ? row.tier : null;
   if (row.skills_id != null && tierRank(currentTier) >= tierRank(tier)) return { applied: false, cardKey };
