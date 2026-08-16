@@ -43,7 +43,12 @@ export function monitorCacheTtlMs(rangeHours: number): number {
    serving loop stalls every request and SSE write in the process. Short ranges
    stay inline — their scans are milliseconds, cheaper than a thread spawn. */
 const MONITOR_THREAD_MIN_RANGE_HOURS = 72;
-const MONITOR_THREAD_TIMEOUT_MS = 60_000;
+/* Generous, because nothing waits on it: the caller already answered from cache
+   and this only bounds how long a background recompute is believed. The widest
+   range (720h) scans a multi-hundred-MB file, and a timeout that fires while
+   that scan is legitimately still running buys nothing — the thread is off the
+   serving loop, and giving up on it only throws away the work. */
+const MONITOR_THREAD_TIMEOUT_MS = 300_000;
 /* Ceiling on one read of the signed-in roster. Not a display limit: the pp and
    rank sorts have to see every viewer to name the best of them. */
 export const MAX_VIEWER_ROWS = 20_000;
@@ -885,7 +890,7 @@ export class AnalyticsStore {
     if (hit && Date.now() - hit.at < monitorCacheTtlMs(rangeHours)) return hit.data;
     const inflight = this.monitorInFlight.get(key);
     if (inflight) return hit ? hit.data : inflight;
-    const promise = this.computeMonitorData(params)
+    const promise = this.computeMonitorData(params, hit != null)
       .then((data) => {
         if (this.monitorCache.size > 32) this.monitorCache.clear();
         this.monitorCache.set(key, { at: Date.now(), data });
@@ -905,7 +910,12 @@ export class AnalyticsStore {
     return promise;
   }
 
-  private async computeMonitorData(params: { rangeHours: number; recentCountry?: string | null; recentLimit?: number; now?: number }): Promise<AnalyticsMonitorResponse> {
+  private async computeMonitorData(
+    params: { rangeHours: number; recentCountry?: string | null; recentLimit?: number; now?: number },
+    // Whether the caller is holding a cached answer it can keep serving. Only a
+    // cold range is worth an inline scan; see the thread fallback below.
+    canServeStale = false,
+  ): Promise<AnalyticsMonitorResponse> {
     const resolved = {
       rangeHours: params.rangeHours,
       recentCountry: params.recentCountry,
@@ -917,15 +927,24 @@ export class AnalyticsStore {
     await this.flush();
     const rangeHours = Math.min(720, Math.max(1, Math.round(resolved.rangeHours || 24)));
     if (rangeHours >= MONITOR_THREAD_MIN_RANGE_HOURS && this.options.databaseUrl?.startsWith("file:") && !import.meta.url.endsWith(".ts")) {
+      let threadRan = true;
+      let data: AnalyticsMonitorResponse | null = null;
       try {
-        const data = await computeMonitorInThread(this.options.databaseUrl, this.options, resolved);
-        if (data) return data;
-        // The thread ran but failed (query error, timeout): inline reproduces
-        // the failure loudly, or answers correctly at the cost of one stutter.
-        logWarn("analytics_monitor_thread_fell_back_inline", { range_hours: rangeHours });
+        data = await computeMonitorInThread(this.options.databaseUrl, this.options, resolved);
       } catch {
         // The thread could not start (no compiled worker file: vitest, tsx dev),
         // where an inline scan of a small local database is the right substitute.
+        threadRan = false;
+      }
+      if (data) return data;
+      if (threadRan) {
+        // The thread ran but did not answer (query error, or a scan still going
+        // past the timeout). Rescanning inline would stall the serving loop for
+        // as long as the thread has already taken — precisely the stall the
+        // thread exists to prevent — so a caller with a cached answer keeps it
+        // and retries on the next poll. Only a cold range pays the inline scan.
+        if (canServeStale) throw new Error(`analytics monitor thread did not answer (range_hours=${rangeHours})`);
+        logWarn("analytics_monitor_thread_fell_back_inline", { range_hours: rangeHours });
       }
     }
     return computeMonitorSnapshot(this.db, this.options, resolved);
@@ -1306,11 +1325,16 @@ function computeMonitorInThread(
     worker.unref();
     let online = false;
     let settled = false;
+    /* Settling stops the parent waiting; it never kills the thread. A running
+       scan is inside a synchronous libsql call, and terminating it there leaves
+       a pending exception that the native binding asserts on, panicking Rust
+       and aborting this whole process (prod, 2026-08-16: a timed-out 720h scan
+       took the backend down for 66s). An unref'd thread that outlives its
+       answer costs one core until its query returns, then closes itself. */
     const settle = (value: AnalyticsMonitorResponse | null, spawnError?: unknown): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      void worker.terminate().catch(() => undefined);
       if (spawnError !== undefined) rejectPromise(spawnError instanceof Error ? spawnError : new Error(String(spawnError)));
       else resolvePromise(value);
     };
@@ -1321,6 +1345,9 @@ function computeMonitorInThread(
     });
     worker.on("message", (result: { ok: boolean; data?: AnalyticsMonitorResponse; error?: string }) => {
       if (!result.ok) logWarn("analytics_monitor_worker_failed", { error: result.error });
+      // A late answer is dropped, but it says the timeout is set too tight for
+      // the file this is scanning — the one thing worth hearing about it.
+      if (settled) logWarn("analytics_monitor_thread_answered_late", { range_hours: params.rangeHours });
       settle(result.ok ? result.data ?? null : null);
     });
     worker.on("error", (error) => {

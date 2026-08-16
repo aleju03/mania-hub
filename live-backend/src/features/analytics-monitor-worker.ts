@@ -6,7 +6,7 @@
 // concurrency with the main thread's batched writer, which flushes before the
 // thread is spawned) and posts back the finished, display-ready payload.
 import { parentPort, workerData } from "node:worker_threads";
-import { createDb } from "../db.js";
+import { createDb, type Db } from "../db.js";
 import { computeMonitorSnapshot, type AnalyticsMonitorResponse, type MonitorComputeOptions } from "./analytics.js";
 
 export interface MonitorScanInit {
@@ -24,12 +24,24 @@ if (!port) throw new Error("analytics-monitor-worker must run as a worker thread
 
 void (async () => {
   let result: MonitorScanResult;
+  let db: Db | null = null;
   try {
     const init = workerData as MonitorScanInit;
-    const db = await createDb({ databaseUrl: init.databaseUrl, sqliteCacheMb: 8, sqliteMmapMb: 0 });
+    db = await createDb({ databaseUrl: init.databaseUrl, sqliteCacheMb: 8, sqliteMmapMb: 0 });
     result = { ok: true, data: await computeMonitorSnapshot(db, init.options, init.params) };
   } catch (error) {
     result = { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
   port.postMessage(result);
+  // The thread ends itself rather than waiting to be terminated: a scan that
+  // outran the parent's patience is still inside a synchronous libsql call, and
+  // killing the thread there leaves a pending exception the native binding
+  // asserts on — a Rust panic that aborts the whole serving process, not just
+  // this thread. So the parent stops listening and this closes up on its own.
+  try {
+    db?.close();
+  } catch {
+    // The handle dies with the thread either way.
+  }
+  port.close();
 })();
