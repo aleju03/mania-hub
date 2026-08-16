@@ -61,17 +61,17 @@ describe("AnalyticsEventLookup", () => {
     getAnalyticsEventLookup.mockResolvedValue(LOOKUP);
     render(<AnalyticsEventLookup range={24} now={NOW} />);
 
-    await waitFor(() => expect(screen.getByText("changelog_open")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Changelog opened")).toBeTruthy());
     // Nothing is fetched until an event is picked.
     expect(getAnalyticsEventLookup).not.toHaveBeenCalled();
     expect(screen.getByText("Pick an event on the left.")).toBeTruthy();
 
-    fireEvent.click(screen.getByText("changelog_open"));
+    fireEvent.click(screen.getByText("Changelog opened"));
     await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
     expect(getAnalyticsEventLookup).toHaveBeenCalledWith({ data: { event: "changelog_open", sinceTs: 0 } });
     // One row per person, the signed-out one named for what it is.
     expect(screen.getByText("Guest")).toBeTruthy();
-    expect(screen.getByText("2 people fired changelog_open, everything still stored")).toBeTruthy();
+    expect(screen.getByText("Changelog opened · 2 people, everything still stored")).toBeTruthy();
     expect(screen.getByText("juan").closest("a")!.getAttribute("href")).toContain("/player/juan");
   });
 
@@ -80,8 +80,8 @@ describe("AnalyticsEventLookup", () => {
     getAnalyticsEventLookup.mockResolvedValue({ ...LOOKUP, people: [], occurrences: [] });
     render(<AnalyticsEventLookup range={24} now={NOW} />);
 
-    await waitFor(() => expect(screen.getByText("changelog_open")).toBeTruthy());
-    fireEvent.click(screen.getByText("changelog_open"));
+    await waitFor(() => expect(screen.getByText("Changelog opened")).toBeTruthy());
+    fireEvent.click(screen.getByText("Changelog opened"));
     await waitFor(() => expect(getAnalyticsEventLookup).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByText("Last 24h"));
@@ -90,7 +90,7 @@ describe("AnalyticsEventLookup", () => {
     expect(data.sinceTs).toBeGreaterThan(NOW - 25 * 3_600_000);
     expect(data.sinceTs).toBeLessThanOrEqual(NOW - 23 * 3_600_000);
     // An empty range is a real answer, and says which window it is empty for.
-    expect(screen.getByText("Nobody fired changelog_open in this range.")).toBeTruthy();
+    expect(screen.getByText("Nobody fired Changelog opened in this range.")).toBeTruthy();
   });
 
   it("unrolls the same window into every firing", async () => {
@@ -98,14 +98,14 @@ describe("AnalyticsEventLookup", () => {
     getAnalyticsEventLookup.mockResolvedValue(LOOKUP);
     render(<AnalyticsEventLookup range={24} now={NOW} />);
 
-    await waitFor(() => expect(screen.getByText("changelog_open")).toBeTruthy());
-    fireEvent.click(screen.getByText("changelog_open"));
+    await waitFor(() => expect(screen.getByText("Changelog opened")).toBeTruthy());
+    fireEvent.click(screen.getByText("Changelog opened"));
     await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
 
     fireEvent.click(screen.getByText("Firings"));
     // The feed's own sentence for the event, once per firing.
     await waitFor(() => expect(screen.getAllByText("the changelog")).toHaveLength(2));
-    expect(screen.getByText("2 firings of changelog_open, everything still stored")).toBeTruthy();
+    expect(screen.getByText("Changelog opened · 2 firings, everything still stored")).toBeTruthy();
     // Switching readings re-reads what is already in hand.
     expect(getAnalyticsEventLookup).toHaveBeenCalledTimes(1);
   });
@@ -115,11 +115,11 @@ describe("AnalyticsEventLookup", () => {
     getAnalyticsEventLookup.mockResolvedValue(LOOKUP);
     const first = render(<AnalyticsEventLookup range={24} now={NOW} />);
 
-    await waitFor(() => expect(screen.getByText("changelog_open")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Changelog opened")).toBeTruthy());
     fireEvent.change(screen.getByPlaceholderText("Find an event"), { target: { value: "pack" } });
-    expect(screen.queryByText("changelog_open")).toBeNull();
+    expect(screen.queryByText("Changelog opened")).toBeNull();
     fireEvent.change(screen.getByPlaceholderText("Find an event"), { target: { value: "" } });
-    fireEvent.click(screen.getByText("changelog_open"));
+    fireEvent.click(screen.getByText("Changelog opened"));
     await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
     first.unmount();
 
@@ -127,12 +127,43 @@ describe("AnalyticsEventLookup", () => {
     await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
   });
 
+  it("puts the most recently fired event at the top, however rare it is", async () => {
+    getAnalyticsEventCatalog.mockResolvedValue([...CATALOG, { event: "pack_cut", count: 2, lastTs: NOW - 5_000 }]);
+    render(<AnalyticsEventLookup range={24} now={NOW} />);
+
+    await waitFor(() => expect(screen.getByText("Pack cut open")).toBeTruthy());
+    const names = screen.getAllByRole("button").map((button) => button.textContent ?? "");
+    const cut = names.findIndex((text) => text.startsWith("Pack cut open"));
+    const opened = names.findIndex((text) => text.startsWith("Pack opened"));
+    expect(cut).toBeGreaterThanOrEqual(0);
+    expect(cut).toBeLessThan(opened);
+  });
+
+  it("names an event the feed has no sentence for instead of describing its page", async () => {
+    getAnalyticsEventCatalog.mockResolvedValue([{ event: "streak_run", count: 33_321, lastTs: NOW - 60_000 }]);
+    getAnalyticsEventLookup.mockResolvedValue({
+      event: "streak_run",
+      sinceTs: 0,
+      people: [],
+      occurrences: [firing({ event: "streak_run", path: "/packs", viewerUsername: "juan" })],
+    });
+    render(<AnalyticsEventLookup range={24} now={NOW} />);
+
+    await waitFor(() => expect(screen.getByText("Streak run")).toBeTruthy());
+    fireEvent.click(screen.getByText("Streak run"));
+    fireEvent.click(screen.getByText("Firings"));
+    // The event, not the page it happened on ("visited card packs").
+    await waitFor(() => expect(screen.getAllByText("Streak run").length).toBeGreaterThan(1));
+    expect(screen.queryByText("card packs")).toBeNull();
+    expect(screen.getByText("/packs")).toBeTruthy();
+  });
+
   it("drops a remembered event the store no longer has", async () => {
     window.localStorage.setItem("mh_monitor_lookup_event", "retired_event");
     getAnalyticsEventCatalog.mockResolvedValue(CATALOG);
     render(<AnalyticsEventLookup range={24} now={NOW} />);
 
-    await waitFor(() => expect(screen.getByText("changelog_open")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Changelog opened")).toBeTruthy());
     expect(getAnalyticsEventLookup).not.toHaveBeenCalled();
     expect(screen.getByText("Pick an event on the left.")).toBeTruthy();
   });

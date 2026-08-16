@@ -5,6 +5,7 @@ import { SectionCard } from "../SectionCard";
 import { getCountryName } from "../../../lib/country";
 import { formatNumber } from "../../../lib/format";
 import {
+  analyticsEventHasOwnDescription,
   analyticsEventHref,
   analyticsInspectionHref,
   buildAnalyticsReplayMapIndex,
@@ -18,6 +19,7 @@ import {
   ANALYTICS_EVENT_LOOKUP_LIMIT,
   ANALYTICS_EVENT_LOOKUP_STORAGE_KEY,
   clampAnalyticsRangeHours,
+  formatAnalyticsEventLabel,
   formatAnalyticsRangeLabel,
   type AnalyticsEventActorRow,
   type AnalyticsEventCatalogEntry,
@@ -121,10 +123,16 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
     }
   }, []);
 
+  /* Ordered by when each event last fired rather than by how often it ever
+     has: a rare event that just happened is what someone opening this card is
+     usually looking for, and sorting by total buried those at the bottom. */
   const events = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const entries = catalog ?? [];
-    return needle ? entries.filter((entry) => entry.event.toLowerCase().includes(needle)) : entries;
+    const entries = [...(catalog ?? [])].sort((a, b) => b.lastTs - a.lastTs);
+    if (!needle) return entries;
+    return entries.filter(
+      (entry) => entry.event.toLowerCase().includes(needle) || formatAnalyticsEventLabel(entry.event).toLowerCase().includes(needle),
+    );
   }, [catalog, query]);
 
   const rows = result == null ? [] : mode === "people" ? result.people : result.occurrences;
@@ -135,14 +143,15 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
   const replayMaps = useMemo(() => buildAnalyticsReplayMapIndex(result?.occurrences ?? []), [result]);
 
   const windowLabel = scoped ? formatAnalyticsRangeLabel(range).toLowerCase() : "everything still stored";
+  const selectedLabel = selected ? formatAnalyticsEventLabel(selected) : null;
   const subtitle = catalogError
     ? "could not load"
     : selected
       ? result == null
         ? "loading..."
         : mode === "people"
-          ? `${formatNumber(result.people.length)} ${result.people.length === 1 ? "person" : "people"} fired ${selected}, ${windowLabel}`
-          : `${formatNumber(result.occurrences.length)}${result.occurrences.length >= ANALYTICS_EVENT_LOOKUP_LIMIT ? "+" : ""} firings of ${selected}, ${windowLabel}`
+          ? `${selectedLabel} · ${formatNumber(result.people.length)} ${result.people.length === 1 ? "person" : "people"}, ${windowLabel}`
+          : `${selectedLabel} · ${formatNumber(result.occurrences.length)}${result.occurrences.length >= ANALYTICS_EVENT_LOOKUP_LIMIT ? "+" : ""} firings, ${windowLabel}`
       : "pick an event to see who fired it, most recent first";
 
   return (
@@ -199,12 +208,12 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
                     type="button"
                     onClick={() => select(entry.event)}
                     aria-pressed={selected === entry.event}
-                    title={`last fired ${new Date(entry.lastTs).toLocaleString()}`}
+                    title={`${entry.event} · last fired ${new Date(entry.lastTs).toLocaleString()}`}
                     className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-[100ms] ${
                       selected === entry.event ? "bg-osu-pink/20 text-white" : "text-osu-l2 hover:bg-osu-b3/40 hover:text-white"
                     }`}
                   >
-                    <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{entry.event}</span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{formatAnalyticsEventLabel(entry.event)}</span>
                     <span className="flex-shrink-0 font-mono text-[10px] text-osu-f1">{formatNumber(entry.count)}</span>
                     <span className="w-8 flex-shrink-0 text-right font-mono text-[10px] text-osu-f1">
                       {formatAnalyticsAgo(now - entry.lastTs)}
@@ -230,8 +239,8 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
               <AnalyticsEmptyMessage
                 text={
                   scoped
-                    ? `Nobody fired ${selected} in this range.`
-                    : `Nothing left in the retention window for ${selected}.`
+                    ? `Nobody fired ${selectedLabel} in this range.`
+                    : `Nothing left in the retention window for ${selectedLabel}.`
                 }
               />
             ) : (
@@ -339,7 +348,13 @@ function FiringRow({
   replayMaps: ReturnType<typeof buildAnalyticsReplayMapIndex>;
   now: number;
 }) {
-  const activity = describeAnalyticsEvent(row, replayMaps);
+  /* An event the feed has no sentence for falls through to the page it
+     happened on, which in a lookup describes the wrong thing: every streak_run
+     read as "visited card packs". Name it instead, and keep the page as the
+     dim half of the line. */
+  const activity = analyticsEventHasOwnDescription(row.event)
+    ? describeAnalyticsEvent(row, replayMaps)
+    : { kind: "visit" as const, verb: "fired", subject: formatAnalyticsEventLabel(row.event), detail: row.path || null };
   const style = ACTIVITY_KIND_STYLES[activity.kind];
   const href = analyticsEventHref(row);
   const body = (

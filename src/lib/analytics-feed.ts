@@ -291,12 +291,14 @@ function describeCommunity(row: AnalyticsRecentEventRow, verb: string, id: strin
   };
 }
 
-/* One captured row as a sentence the admin can skim: verb, subject, context. */
-export function describeAnalyticsEvent(
+/* What an event says about itself, before its page is consulted. Null for an
+   event this file has never been taught, which the caller can either describe
+   by page (the feed) or name outright (the event lookup, where describing a
+   streak_run as "visited card packs" would be describing the wrong thing). */
+function describeNamedAnalyticsEvent(
   row: AnalyticsRecentEventRow,
   replayMaps?: AnalyticsReplayMapIndex,
-): AnalyticsActivity {
-  // Explicit events first: they say more than the page they happened on.
+): AnalyticsActivity | null {
   switch (row.event) {
     case "changelog_open":
       return { kind: "visit", verb: "opened", subject: "the changelog", detail: null };
@@ -366,8 +368,26 @@ export function describeAnalyticsEvent(
     case "react_recoverable_error":
       return { kind: "error", verb: "hit", subject: "a page error", detail: row.path || null };
     default:
-      break;
+      return null;
   }
+}
+
+/* Whether the event carries its own meaning, or only the page it happened on.
+   A pageview is the page it happened on, so it counts as described. */
+export function analyticsEventHasOwnDescription(event: string): boolean {
+  if (event === "$pageview") return true;
+  return describeNamedAnalyticsEvent({ event } as AnalyticsRecentEventRow) != null;
+}
+
+/* One captured row as a sentence the admin can skim: verb, subject, context. */
+export function describeAnalyticsEvent(
+  row: AnalyticsRecentEventRow,
+  replayMaps?: AnalyticsReplayMapIndex,
+): AnalyticsActivity {
+  // What the event says about itself first: it says more than the page it
+  // happened on.
+  const named = describeNamedAnalyticsEvent(row, replayMaps);
+  if (named) return named;
 
   const path = row.path || "";
   const scope = formatAnalyticsSelectedScope(row.selectedCountry);

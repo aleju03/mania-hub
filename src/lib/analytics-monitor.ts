@@ -155,6 +155,54 @@ export interface AnalyticsEventLookupResult {
   occurrences: AnalyticsRecentEventRow[];
 }
 
+/* What the store's event names mean, for reading a list of them at a glance.
+   The names themselves are code identifiers and stay available on hover; only
+   the ones whose own name reads badly need an entry here, since anything
+   missing is humanized from itself (streak_run -> "Streak run"). */
+const ANALYTICS_EVENT_LABELS: Record<string, string> = {
+  $pageview: "Page views",
+  changelog_open: "Changelog opened",
+  community_join: "Server invite opened",
+  community_post_connect: "Discord connect clicked",
+  community_post_consent: "Post-a-server opened",
+  community_post_details: "Server details started",
+  community_post_no_servers: "No postable servers",
+  community_post_pick: "Server picker reached",
+  community_post_start: "Post-a-server opened",
+  community_post_submitted: "Server submitted",
+  dom_translate_conflict: "Page translator conflict",
+  map_opened: "Map opened",
+  osu_api_error: "osu! API error",
+  pack_cut: "Pack cut open",
+  pack_open: "Pack opened",
+  page_shared: "Page shared",
+  react_recoverable_error: "React error",
+  replay_load_slow: "Slow replay load",
+  replay_renderer_error: "Replay render error",
+  replay_upload_beatmap_missing: "Upload with no map",
+  replay_upload_community_beatmap: "Upload of a community map",
+  replay_upload_local_beatmap: "Upload of a local map",
+  replay_upload_shared_view: "Shared upload watched",
+  replay_upload_view: "Own upload watched",
+  replay_view: "Replay watched",
+  replay_watch_crash: "Replay viewer crash",
+  route_error: "Page error",
+  skin_download: "Skin downloaded",
+  skin_file_updated: "Skin build shipped",
+  skin_previews_edited: "Skin previews edited",
+  skin_upload_failed: "Skin upload failed",
+  skin_upload_published: "Skin published",
+  streak_run: "Streak run",
+};
+
+export function formatAnalyticsEventLabel(event: string): string {
+  const known = ANALYTICS_EVENT_LABELS[event];
+  if (known) return known;
+  const cleaned = event.replace(/^\$/, "").replace(/[_-]+/g, " ").trim();
+  if (!cleaned) return event;
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
 // Matches the backend ceiling on one event lookup.
 export const ANALYTICS_EVENT_LOOKUP_LIMIT = 300;
 export const ANALYTICS_EVENT_LOOKUP_STORAGE_KEY = "mh_monitor_lookup_event";
