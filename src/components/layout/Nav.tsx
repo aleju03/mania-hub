@@ -425,7 +425,7 @@ export function Nav() {
       return next;
     });
 
-  const renderMobileLink = (leaf: NavLeaf, opts?: { nested?: boolean }) => (
+  const renderMobileLink = (leaf: NavLeaf, opts?: { nested?: boolean; label?: string }) => (
     <Link
       key={leaf.id}
       to={leaf.to}
@@ -441,7 +441,31 @@ export function Nav() {
           : "border-transparent text-osu-pink-light hover:bg-osu-b4/50 hover:text-white"
       }`}
     >
-      {leaf.label}
+      {opts?.label ?? leaf.label}
+    </Link>
+  );
+
+  /* One tab in the desktop row. Also what a group renders as once everything
+     but one of its leaves is gated away: a dropdown holding a single item is a
+     link wearing a chevron, so it falls back to the group's own name pointing
+     at the page that is left (packs in production, where collections is
+     admin-only). */
+  const renderTopLink = (topId: string, leaf: NavLeaf, label: string) => (
+    <Link
+      key={topId}
+      ref={(el: HTMLAnchorElement | null) => {
+        if (el) linkRefs.current.set(topId, el);
+        else linkRefs.current.delete(topId);
+      }}
+      to={leaf.to}
+      search={linkSearch(leaf.id)}
+      preload={leaf.id === "tracker" ? false : "intent"}
+      draggable={false}
+      className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize whitespace-nowrap transition-colors duration-[120ms] ${
+        activeTopId === topId ? "text-white" : "text-osu-pink-light hover:text-white"
+      }`}
+    >
+      {label}
     </Link>
   );
 
@@ -622,28 +646,12 @@ export function Nav() {
               if (top.kind === "link") {
                 const leaf = NAV_LEAVES[top.id];
                 if (!isLeafVisible(leaf)) return null;
-                return (
-                  <Link
-                    key={top.id}
-                    ref={(el: HTMLAnchorElement | null) => {
-                      if (el) linkRefs.current.set(top.id, el);
-                      else linkRefs.current.delete(top.id);
-                    }}
-                    to={leaf.to}
-                    search={linkSearch(leaf.id)}
-                    preload={leaf.id === "tracker" ? false : "intent"}
-                    draggable={false}
-                    className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize whitespace-nowrap transition-colors duration-[120ms] ${
-                      activeTopId === top.id ? "text-white" : "text-osu-pink-light hover:text-white"
-                    }`}
-                  >
-                    {leaf.label}
-                  </Link>
-                );
+                return renderTopLink(top.id, leaf, leaf.label);
               }
 
               const groupItems = top.items.map((id) => NAV_LEAVES[id]).filter(isLeafVisible);
               if (groupItems.length === 0) return null;
+              if (groupItems.length === 1) return renderTopLink(top.id, groupItems[0], top.label);
               const open = openGroup === top.id;
               return (
                 <div
@@ -955,6 +963,7 @@ export function Nav() {
                   }
                   const groupItems = top.items.map((id) => NAV_LEAVES[id]).filter(isLeafVisible);
                   if (groupItems.length === 0) return null;
+                  if (groupItems.length === 1) return renderMobileLink(groupItems[0], { label: top.label });
                   const expanded = mobileOpenGroups.has(top.id);
                   return (
                     <div key={top.id}>
