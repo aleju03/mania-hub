@@ -144,6 +144,9 @@ export async function handleAdminPackCollectionRoutes(
       username: optionalString(raw.username),
       avatarUrl: optionalString(raw.avatarUrl),
       countryCode: optionalString(raw.countryCode),
+      // Absent keeps the row's motif, explicit null clears it; anything else is
+      // bounded by parseCardMotif before it reaches the column.
+      motif: raw.motif === undefined ? undefined : raw.motif ?? null,
       overwriteIdentity: raw.overwriteIdentity === true,
     };
     const outcome = await grantAdminPackCard(writeDb, user, grant);

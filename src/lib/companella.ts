@@ -1,7 +1,7 @@
 import type { ManiaBeatmap } from "./beatmap-parser";
-import { classifyChart, type ChartClassification, type ClassifyChartInput } from "./chart-classifier";
-import { getInputRate } from "./dan-estimator/labels";
-import type { CompanellaEstimate } from "./leoblack/estimator/companellaEstimator";
+import { classifyChart, type ChartClassification, type ClassifyChartInput } from "#dan/chart-classifier";
+import { getInputRate } from "#dan/dan-estimator/labels";
+import type { CompanellaEstimate } from "#leoblack/estimator/companellaEstimator";
 
 // Companella is LeoBlack's ONNX dan model: a 10-feature MLP over the eight
 // MinaCalc skillsets plus Interlude SR and Sunny SR. Mixed reaches for it on
@@ -47,9 +47,9 @@ export async function computeCompanellaEstimate(
     // twice already - see dd230f0 and b8a7554).
     const [{ analyzeEtternaFromText }, { calculateInterludeStar }, { classifyCompanellaDifficulty }] =
       await Promise.all([
-        import("./leoblack/ett/index.js"),
-        import("./leoblack/interlude/index.js"),
-        import("./leoblack/estimator/companellaEstimator.js"),
+        import("#leoblack/ett/index.js"),
+        import("#leoblack/interlude/index.js"),
+        import("#leoblack/estimator/companellaEstimator.js"),
       ]);
 
     // Deliberately the raw MinaCalc values, not our LN-tail-blended ones: the

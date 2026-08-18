@@ -28,6 +28,7 @@ import {
   tierRank,
   type PulledCard,
 } from "./pack-collection";
+import { getManiaCardTier, MANIA_CARD_TIER_THRESHOLDS } from "./maniacard";
 
 const T0 = 1_700_000_000_000;
 
@@ -495,5 +496,27 @@ describe("GOAT cards alongside their player's ordinary card", () => {
     const minted = applyCardMint(wallet, String(BOJII), { skills, tier: "goat", tierLabel: "GOAT" })!;
     expect(Object.keys(minted.cards)).toEqual([`${BOJII}:goat`]);
     expect(minted.cards[`${BOJII}:goat`].tier).toBe("goat");
+  });
+});
+
+/* Eternal is not a rung of the cardPower ladder: /admin/collections is the
+   only way onto a card and the only way off, which is why nothing here can
+   reach it by rating a player. */
+describe("the Eternal tier", () => {
+  it("sits between World Class and GOAT", () => {
+    expect(tierRank("eternal")).toBeGreaterThan(tierRank("worldClass"));
+    expect(tierRank("eternal")).toBeLessThan(tierRank("goat"));
+  });
+
+  it("recycles for more than any tier a pack can deal", () => {
+    expect(shardValueForTier("eternal")).toBeGreaterThan(shardValueForTier("worldClass"));
+    expect(shardValueForTier("eternal")).toBeLessThan(shardValueForTier("goat"));
+  });
+
+  it("is unreachable from card power, however high", () => {
+    for (const power of [0, 500, 700, 900, 10_000]) {
+      expect(getManiaCardTier(power)).not.toBe("eternal");
+    }
+    expect(MANIA_CARD_TIER_THRESHOLDS.some((rung) => rung.tier === "eternal")).toBe(false);
   });
 });

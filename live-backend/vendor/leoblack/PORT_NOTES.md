@@ -17,7 +17,7 @@ Only the UI-free calc layer is vendored (upstream `js/` minus `app/`, `debug/`,
 `js/app/vibro.js` but has no UI dependencies. Files that are ours, or ours-modified,
 and must NOT be overwritten on a re-copy:
 
-- The `.d.ts` files, this file, and the TS facades (`src/lib/leoblack-estimator.ts`,
+- The `.d.ts` files, this file, and the TS facades (`live-backend/src/dan/leoblack-estimator.ts`,
   `src/lib/chart-classifier.ts`).
 - The `ett/` harness: `calc.js` and `versions/index.js` are our isomorphic
   implementations, and `ett/index.js` is upstream's file plus a `lnTailTaps`

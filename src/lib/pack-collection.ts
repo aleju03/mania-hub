@@ -1,4 +1,5 @@
-import { getManiaCardTier, type ManiaCardTier, type ManiaSkills } from "./maniacard";
+import type { CardMotif } from "./card-motif";
+import { AWARDED_TIERS, getManiaCardTier, type ManiaCardTier, type ManiaSkills } from "./maniacard";
 
 // Pack economy: charges regenerate over time (one every 20 seconds, capped
 // at 5), duplicate cards recycle into shards, and shards buy the paid pack
@@ -24,6 +25,10 @@ export interface CollectedCard {
      cardTierLabel uses). Only ever set on a synced collection, so sanitizeCard
      drops it for the same reason it drops serial. */
   customLabel?: string | null;
+  /* Background art given to this one holding from /admin/collections: the card
+     floats this image instead of its tier's triangle flecks or starfield.
+     Server-side only, exactly like customLabel, so sanitizeCard drops it. */
+  motif?: CardMotif | null;
   /* Skills snapshot from the pull, enough to redraw the real card front
      offline (the texture pipeline needs no scores). Null for failed mints
      and cards collected before snapshots existed. */
@@ -78,6 +83,7 @@ const TIER_ORDER: ManiaCardTier[] = [
   "mythic",
   "ascendant",
   "worldClass",
+  "eternal",
   "goat",
 ];
 
@@ -99,6 +105,11 @@ const TIER_SHARD_VALUES: Record<ManiaCardTier, number> = {
   mythic: 27,
   ascendant: 36,
   worldClass: 48,
+  // Eternal is never dealt: it only exists on a card an admin minted by hand,
+  // so this is not a rung the ladder has to price against pack odds. It is set
+  // at half a GOAT so recycling one is the same kind of decision - a card
+  // nobody can pull back for you - without matching the honorary roster.
+  eternal: 250,
   // A GOAT card is one of a tiny honorary roster; recycling one should be a
   // real decision, not a rounding error next to World Class's 48. It used to
   // be 1000, enough to buy several Legend packs for a card the honorary slot
@@ -304,7 +315,20 @@ export function applyCardMint(
 ): PackWallet | null {
   const card = wallet.cards[key];
   if (!card || card.copies <= 0) return null;
-  if (card.skills && tierRank(card.tier) >= tierRank(mint.tier)) return null;
+  const outranksMint = tierRank(card.tier) >= tierRank(mint.tier);
+  if (card.skills && outranksMint) return null;
+  /* A skill-less card otherwise adopts the mint wholesale, lower tier and all,
+     because the freshly computed version is the only one that can actually be
+     drawn. Two exceptions, both about a mint that says nothing useful rather
+     than something lower: an awarded tier, which nothing recomputed from plays
+     can land on (granting an Eternal, which arrives with no snapshot, and
+     letting the collection's repair pass fill that snapshot in used to cost
+     the card its tier here and in the backend both, leaving the front to draw
+     whatever card power came out to), and a mint carrying no tier at all,
+     since a mint may relabel a card but not un-label one. */
+  if (outranksMint && card.tier !== null && (mint.tier === null || AWARDED_TIERS.has(card.tier))) {
+    return { ...wallet, cards: { ...wallet.cards, [key]: { ...card, skills: mint.skills } } };
+  }
   const minted: CollectedCard = { ...card, skills: mint.skills, tier: mint.tier, tierLabel: mint.tierLabel };
   const mintedKey = packCardKeyOf(minted);
   // A tierless legacy card whose player is on the roster mints as a GOAT, which

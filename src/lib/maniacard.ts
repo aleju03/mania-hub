@@ -47,6 +47,10 @@ export type ManiaCardTier =
   | "mythic"
   | "ascendant"
   | "worldClass"
+  // Hand-granted only. Never reachable via cardPower (getManiaCardTier can't
+  // return it) and never dealt by a pack: the only way onto a card is a mint
+  // from /admin/collections, which is also the only place it can be taken off.
+  | "eternal"
   // Honorary tier for the all-time greats. Never reachable via cardPower
   // (getManiaCardTier can't return it); assigned by player list.
   | "goat";
@@ -692,6 +696,14 @@ export const HONORARY_TIER_USER_IDS: ReadonlyMap<number, string> = new Map([
   [758406, "dressurf"],
 ]);
 
+/* The tiers a card is given rather than rated into. getManiaCardTier can never
+   return one, so nothing that recomputes a card from its plays can arrive at
+   one either - which is what makes them the exception to "a freshly minted
+   tier is the better answer": for these it is not a better answer, it is a
+   different card. Both mint paths (applyCardMint here, its backend twin in
+   pack-wallets.ts) refuse to talk one of these down. */
+export const AWARDED_TIERS: ReadonlySet<ManiaCardTier> = new Set<ManiaCardTier>(["eternal", "goat"]);
+
 export function getHonoraryTier(userId: number | null | undefined): ManiaCardTier | null {
   return userId != null && HONORARY_TIER_USER_IDS.has(userId) ? HONORARY_TIER : null;
 }
@@ -919,6 +931,20 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
       "linear-gradient(142deg, #ecfdf5 0%, #22c55e 30%, #052e16 66%, #020617 100%)",
     badgeHalo: "rgba(34,197,94,0.68)",
     badgeGlyphShadow: "rgba(2,44,34,0.58)",
+  },
+  eternal: {
+    label: "Eternal",
+    background: "from-black via-purple-950 to-zinc-950",
+    border: "border-purple-100/95",
+    glow: "shadow-[0_18px_88px_rgba(168,85,247,0.52)]",
+    edgeFill: "rgba(46, 16, 101, 0.97)",
+    glowColor: "rgba(192, 132, 252, 0.46)",
+    starColor: "text-purple-100",
+    badgeColor: "text-purple-50",
+    badgeGradient:
+      "linear-gradient(142deg, #f3e8ff 0%, #a855f7 32%, #4c1d95 68%, #0b0614 100%)",
+    badgeHalo: "rgba(168,85,247,0.7)",
+    badgeGlyphShadow: "rgba(46,16,101,0.58)",
   },
   goat: {
     label: "GOAT",

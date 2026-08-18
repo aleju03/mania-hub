@@ -1652,6 +1652,13 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
   if (!columns.includes("tier_label")) {
     await db.execute("alter table pack_collection_cards add column tier_label text");
   }
+  // The image this holding's card front floats in place of its tier's triangle
+  // flecks or starfield, as the bounded JSON of src/lib/card-motif.ts. Same
+  // ownership as the label above: /admin/collections writes it, the wallet
+  // sync never touches it, and a pulled card leaves it null.
+  if (!columns.includes("motif")) {
+    await db.execute("alter table pack_collection_cards add column motif text");
+  }
 }
 
 // The last username a wallet's pulls were recorded under. Durable, unlike the

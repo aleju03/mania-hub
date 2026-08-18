@@ -28,7 +28,11 @@ const NAV_LEAVES = {
   "top-plays": { id: "top-plays", to: "/top-plays", label: "top plays" },
   tracker: { id: "tracker", to: "/tracker", label: "tracker" },
   maps: { id: "maps", to: "/maps", label: "maps" },
-  packs: { id: "packs", to: "/packs", label: "packs" },
+  /* Listed before "packs" on purpose: the active-leaf lookup below is a
+     startsWith scan in this object's order, and /packs/collections also starts
+     with /packs, so the longer path has to be tested first. */
+  "pack-collections": { id: "pack-collections", to: "/packs/collections", label: "collections" },
+  packs: { id: "packs", to: "/packs", label: "open packs" },
   skins: { id: "skins", to: "/skins", label: "skins" },
   snipes: { id: "snipes", to: "/snipes", label: "snipes" },
   "farm-helper": { id: "farm-helper", to: "/farm-helper", label: "farm helper" },
@@ -50,7 +54,7 @@ const NAV_TOP: NavTop[] = [
   { kind: "link", id: "home" },
   { kind: "group", id: "players", label: "players", items: ["tracker", "rankings", "top-plays"] },
   { kind: "link", id: "maps" },
-  { kind: "link", id: "packs" },
+  { kind: "group", id: "packs", label: "packs", items: ["packs", "pack-collections"] },
   { kind: "link", id: "skins" },
   { kind: "link", id: "snipes" },
   /* Everything that is not one of the data surfaces above. Called "more" rather
@@ -165,6 +169,10 @@ export function Nav() {
     // Discord bot is dev-gated for now: visible in local dev and on the dev
     // preview host, hidden in production.
     if (leaf.id === "discord") return devMode;
+    /* Admin-gated while the collections page is still being built out. Same
+       flag the route's beforeLoad checks (canUseAdminFeatures), so the tab and
+       the page cannot disagree about who gets in; everyone else 404s. */
+    if (leaf.id === "pack-collections") return adminMode;
     if (leaf.id === "snipes") return showSnipesLink;
     return true;
   };
@@ -392,10 +400,17 @@ export function Nav() {
     closeGroupTimer.current = window.setTimeout(() => setOpenGroup(null), 120);
   };
 
+  /* A group whose own name is also a destination navigates on click and only
+     opens on hover, so making Packs a dropdown does not cost it its tab. */
   const handleGroupTriggerClick = (top: Extract<NavTop, { kind: "group" }>) => {
     if (top.id === "players") {
       setOpenGroup(null);
       navigate({ to: "/rankings", search: { country: selectedCountry, page: 1 } });
+      return;
+    }
+    if (top.id === "packs") {
+      setOpenGroup(null);
+      navigate({ to: "/packs" });
       return;
     }
 

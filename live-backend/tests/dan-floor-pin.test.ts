@@ -112,8 +112,7 @@ describe("roxy floor-pin guard", () => {
 
 // 4K LN verdicts come from the in-house kNN (LeoBlack's LN table is only the
 // fallback); its reference set includes the curated benchmark corpus so both
-// pack singles and segmented courses resolve through it. Mirrors the frontend
-// chart-classifier.test.ts block.
+// pack singles and segmented courses resolve through it.
 describe("4K LN verdict routing", () => {
   function buildLnOsu(title: string): string {
     // Four ~50s segments of dense chorded holds separated by 3s gaps: enough

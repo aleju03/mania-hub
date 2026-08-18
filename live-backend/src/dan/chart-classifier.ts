@@ -1,6 +1,5 @@
-// Ported from src/lib/chart-classifier.ts (frontend). Keep the two copies in
-// sync when the classifier changes; the vendored LeoBlack tree lives in
-// live-backend/vendor/leoblack.
+// Shared by the backend and the frontend (which reaches it through the #dan/*
+// alias); the vendored LeoBlack tree it drives lives in live-backend/vendor.
 import type { ManiaBeatmap } from "./beatmap-parser.js";
 import type { DanEstimate, DanEstimateInput, DanSkillFamily } from "./dan-estimator/types.js";
 import { analyzeManiaPatterns } from "./dan-estimator/patterns.js";
@@ -27,7 +26,7 @@ import { applyCompanellaToMixedResult, type LeoBlackReworkResult } from "../../v
 import type { CompanellaEstimate } from "../../vendor/leoblack/estimator/companellaEstimator.js";
 
 // The single chart classifier. Routes each chart to the best-performing engine
-// per the benchmark in src/lib/leoblack/PORT_NOTES.md:
+// per the benchmark in live-backend/vendor/leoblack/PORT_NOTES.md:
 //   4K RC        -> LeoBlack Mixed (Roxy/Azusa/Daniel/Sunny blend)
 //   4K LN        -> in-house LN kNN (falls back to LeoBlack's LN table)
 //   6K / 7K      -> LeoBlack Sunny star rating mapped through the 6K/7K dan tables

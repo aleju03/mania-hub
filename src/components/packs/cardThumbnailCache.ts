@@ -1,3 +1,4 @@
+import { cardMotifSignature } from "#/lib/card-motif";
 import { collectedCardTier, type CollectedCard } from "#/lib/pack-collection";
 import {
   fetchPackCardThumbnailBaseUrl,
@@ -13,9 +14,15 @@ export const COLLECTION_CARD_THUMB_WIDTH = 240;
 
 /* This version describes the pixels in a cached thumbnail, not the wider
    maniacard data model. Bump it whenever cardTexture/textureLayout changes in
-   a way that can change the rendered front while these inputs stay equal. */
+   a way that can change the rendered front while these inputs stay equal.
+
+   Bumping is expensive and global: it re-addresses all ~68k objects in the
+   shared R2 pool, so every card anyone looks at is re-rendered and re-uploaded
+   to produce the same bytes. A change that can only alter one kind of card
+   belongs in that card's signature below instead. */
 const CACHE_VERSION = "v2";
-const CACHE_NAME = `mania-hub-maniacard-thumbs-${CACHE_VERSION}`;
+const CACHE_NAME_PREFIX = "mania-hub-maniacard-thumbs-";
+const CACHE_NAME = `${CACHE_NAME_PREFIX}${CACHE_VERSION}`;
 const CACHE_ROUTE = "/__mania-card-thumbnails/";
 const MAX_MEMORY_THUMBNAILS = 180;
 const MAX_PERSISTED_THUMBNAILS = 900;
@@ -53,6 +60,38 @@ function cacheRequest(key: string): Request {
 
 function canUseCacheStorage(): boolean {
   return typeof window !== "undefined" && typeof caches !== "undefined";
+}
+
+let cacheOpen: Promise<Cache> | null = null;
+
+/* The thumbnail cache, with the buckets left behind by earlier CACHE_VERSIONs
+   dropped on the way. A bump renames the bucket rather than emptying it, and
+   nothing else ever looks at the old name again: without this, every bump
+   would leave a browser holding a few hundred megabytes of thumbnails of a
+   card front that is no longer drawn that way. */
+function openThumbnailCache(): Promise<Cache> {
+  if (!cacheOpen) {
+    cacheOpen = (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        for (const name of await caches.keys()) {
+          if (name.startsWith(CACHE_NAME_PREFIX) && name !== CACHE_NAME) await caches.delete(name);
+        }
+      } catch {
+        // Quota this frees is a bonus; the open cache is what was asked for.
+      }
+      return cache;
+    })().catch((error) => {
+      /* A failed open must not be remembered. This promise is the only handle
+         the page ever builds, so keeping a rejected one would turn the
+         persisted tier off for the rest of the visit over what is usually a
+         transient failure, and turn it off silently: both callers catch and
+         fall back to re-rendering the card. */
+      cacheOpen = null;
+      throw error;
+    });
+  }
+  return cacheOpen;
 }
 
 function isObjectUrl(url: string): boolean {
@@ -325,7 +364,7 @@ export function cardThumbnailKeyForData(data: ManiaCardReadyData, width = COLLEC
    UI behavior changed. The avatar render URL already carries osu!'s version
    token, making the raw source URL redundant here. */
 function getCardThumbnailRenderSignature(data: ManiaCardReadyData): string {
-  return [
+  const parts = [
     data.user.username,
     data.avatarUrl,
     data.tier,
@@ -334,7 +373,21 @@ function getCardThumbnailRenderSignature(data: ManiaCardReadyData): string {
     data.badgeGradientStops.map((stop) => `${stop.color}:${signatureNumber(stop.offset)}`).join(","),
     signatureNumber(data.skills.starAvg),
     data.stats.map((stat) => `${stat.label}:${signatureNumber(stat.value)}`).join(","),
-  ].join("|");
+  ];
+  /* Granted background art, appended only for the cards that float any.
+
+     It has to be in here at all because the pool is shared and keyed on the
+     card, not on the holder: two owners of the same player at the same
+     snapshot land on one object, so without this the holder who was given art
+     and the holder who was not would race for it, and whoever rendered first
+     would decide what the other one sees.
+
+     And it has to be appended rather than joined in unconditionally, or every
+     thumbnail in the pool changes address over a field that is empty for all
+     but a handful of cards. The leading token is the scatter's own version:
+     bump it when drawMotifPattern changes, and only cards with art re-render. */
+  if (data.motif) parts.push(`motif2:${cardMotifSignature(data.motif)}`);
+  return parts.join("|");
 }
 
 function signatureColor(color: { r: number; g: number; b: number; a: number }): string {
@@ -387,6 +440,7 @@ function buildCollectionCardKey(
       skills,
       tierOverride: collectedCardTier(card),
       labelOverride: card.customLabel,
+      motifOverride: card.motif,
     }),
     width,
   );
@@ -435,7 +489,7 @@ export async function loadPersistedCardThumbnail(key: string): Promise<string | 
 
   const load = (async () => {
     try {
-      const cache = await caches.open(CACHE_NAME);
+      const cache = await openThumbnailCache();
       const response = await cache.match(cacheRequest(key));
       if (!response) return null;
       const blob = await response.blob();
@@ -506,7 +560,7 @@ export async function rememberCardThumbnailBlob(key: string, blob: Blob): Promis
 
   if (canUseCacheStorage()) {
     try {
-      const cache = await caches.open(CACHE_NAME);
+      const cache = await openThumbnailCache();
       await cache.put(
         cacheRequest(key),
         new Response(blob, {

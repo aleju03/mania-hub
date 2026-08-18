@@ -5,6 +5,7 @@ import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import { buildRandomDrawQuery } from "./maps-random-draw-params";
 import type { LiveMapsRandomDrawParams } from "./maps-random-draw-params";
 import type { MyDataSkillBreakdown } from "./my-data";
+import type { ServerPackCollectionCard } from "./pack-wallet-sync";
 import type { ReplaySpectatorTicket } from "./replay-spectator";
 import { CrossTabEventSource, supportsCrossTabEventSource } from "./cross-tab-event-source";
 import { SharedEventSourcePool, type PoolableEventSource, type SharedEventSource } from "./shared-event-source";
@@ -2268,6 +2269,200 @@ export async function fetchLivePackCardStats(userIds: number[]): Promise<LivePac
 /* How the community holds one player's own card ("your card got pulled"). */
 export async function fetchLivePackPulledStats(userId: number): Promise<LivePackPulledStats> {
   return fetchLiveJson(`/api/packs/pulled-stats/${userId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Community collections (/packs/collections)
+// ---------------------------------------------------------------------------
+// The pack economy read as a whole rather than as one viewer's shelf. Public
+// and browser-direct, cached for a minute on the backend, so these are plain
+// fetches rather than server functions: every viewer gets the same page.
+// Mirrors live-backend/src/features/pack-community.ts.
+
+export interface LivePackCollector {
+  userId: number;
+  username: string;
+  countryCode: string | null;
+  avatarUrl: string;
+  /* Whether the backend has a users row for them. An untracked collector still
+     holds cards, they just have no country and no live profile behind them. */
+  tracked: boolean;
+  /* Cards is holdings (a player's GOAT and their ordinary card are two);
+     players is the distinct people on the shelf, which is what the pool ratio
+     is measured in. */
+  cards: number;
+  players: number;
+  copies: number;
+  goats: number;
+  duplicates: number;
+  recycled: number;
+  firstFinds: number;
+  /* Null on a wallet that predates the banked open count, which is not the
+     same as zero and must not be printed as one. */
+  packsOpened: number | null;
+  joinedAt: number;
+  lastPulledAt: number;
+  completion: LivePackCollectorCompletion;
+}
+
+/* The two sets a collection can actually complete: the live draw pool and the
+   honorary roster. Everything else about a collection is unbounded. */
+export interface LivePackCollectorCompletion {
+  poolTotal: number;
+  poolOwnedCount: number;
+  goatsOwned: number;
+  goatsTotal: number;
+}
+
+export interface LivePackCommunityCard {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  countryCode: string;
+  owners: number;
+  copies: number;
+  mintedTotal: number;
+}
+
+export interface LivePackCommunityTotals {
+  collectors: number;
+  packsOpened: number;
+  cardsMinted: number;
+  distinctHoldings: number;
+  playersCarded: number;
+  goatCardsMinted: number;
+  cardsRecycled: number;
+  poolTotal: number;
+  goatRosterSize: number;
+  firstPullAt: number | null;
+  tierCopies: Record<string, number>;
+  oneOfAKind: number;
+}
+
+export interface LivePackCommunityStats {
+  totals: LivePackCommunityTotals;
+  boards: {
+    packsOpened: LivePackCollector[];
+    biggestCollections: LivePackCollector[];
+    goatHolders: LivePackCollector[];
+    firstFinds: LivePackCollector[];
+    longestStanding: LivePackCollector[];
+    completion: LivePackCollector[];
+    rarestCards: LivePackCommunityCard[];
+    mostOwnedCards: LivePackCommunityCard[];
+  };
+  computedAt: number;
+}
+
+export type LivePackCollectorSort = "cards" | "copies" | "packs" | "goats" | "recent";
+
+export interface LivePackCollectorProfile {
+  collector: LivePackCollector;
+  completion: LivePackCollectorCompletion;
+  showcase: ServerPackCollectionCard[];
+  ranks: { cards: number; packsOpened: number | null };
+}
+
+export interface LivePackCollectorPage {
+  collectors: LivePackCollector[];
+  total: number;
+}
+
+export interface LivePackCommunityCollectionPage {
+  cards: ServerPackCollectionCard[];
+  total: number;
+  tierCounts: Record<string, number>;
+}
+
+/* One collector's chosen cards, as the showcase wall and their own page
+   render them. */
+/* Who a showcase belongs to. Narrower than LivePackCollector on purpose: the
+   wall prints a name and a card count, and the rest would cost the full
+   economy roll-up to compute. */
+export interface LivePackShowcaseCollector {
+  userId: number;
+  username: string;
+  countryCode: string | null;
+  avatarUrl: string;
+  tracked: boolean;
+  cards: number;
+  goats: number;
+}
+
+export interface LivePackShowcase {
+  collector: LivePackShowcaseCollector;
+  cards: ServerPackCollectionCard[];
+  updatedAt: number;
+}
+
+/* One collector's chosen cards on their own. What the viewer's own row reads:
+   it needs the cards, not the board ranks the collector profile carries, and
+   this one never waits on the cached economy roll-up. */
+export async function fetchLivePackShowcaseCards(userId: number, options: { fresh?: boolean } = {}): Promise<ServerPackCollectionCard[]> {
+  const query = new URLSearchParams({ userId: String(userId) });
+  // Skips the browser's short cache, for reading back a showcase just changed.
+  if (options.fresh) query.set("fresh", String(Date.now()));
+  const body = await fetchLiveJson<{ cards?: ServerPackCollectionCard[] }>(
+    `/api/packs/community/showcase?${query.toString()}`,
+  );
+  return Array.isArray(body.cards) ? body.cards : [];
+}
+
+/* The wall: collectors who have chosen cards to show, most recently changed
+   first. Paged over people, since a showcase is read as one person's row. */
+export async function fetchLivePackShowcases(options: { page?: number; pageSize?: number } = {}): Promise<{
+  showcases: LivePackShowcase[];
+  total: number;
+}> {
+  const query = new URLSearchParams();
+  if (options.page) query.set("page", String(options.page));
+  if (options.pageSize) query.set("pageSize", String(options.pageSize));
+  return fetchLiveJson(`/api/packs/community/showcases?${query.toString()}`);
+}
+
+/* The whole hub in one read: totals plus every record board. */
+export async function fetchLivePackCommunityStats(): Promise<LivePackCommunityStats> {
+  return fetchLiveJson("/api/packs/community/stats");
+}
+
+export async function fetchLivePackCollectors(options: {
+  page?: number;
+  pageSize?: number;
+  query?: string;
+  sort?: LivePackCollectorSort;
+} = {}): Promise<LivePackCollectorPage> {
+  const query = new URLSearchParams();
+  if (options.page) query.set("page", String(options.page));
+  if (options.pageSize) query.set("pageSize", String(options.pageSize));
+  if (options.query?.trim()) query.set("q", options.query.trim());
+  if (options.sort) query.set("sort", options.sort);
+  return fetchLiveJson(`/api/packs/community/collectors?${query.toString()}`);
+}
+
+/* One collector, addressed however the link that reached us named them. Throws
+   LiveBackendRequestError with a 404 for an account that has never opened a
+   pack, which the page reads as "no such collector" rather than as an outage. */
+export async function fetchLivePackCollector(spec: { userId?: number; username?: string }): Promise<LivePackCollectorProfile> {
+  const query = new URLSearchParams();
+  if (spec.userId) query.set("userId", String(spec.userId));
+  if (spec.username) query.set("username", spec.username);
+  return fetchLiveJson(`/api/packs/community/collector?${query.toString()}`);
+}
+
+export async function fetchLivePackCollectorCards(userId: number, options: {
+  page?: number;
+  pageSize?: number;
+  tier?: string;
+  query?: string;
+  sort?: "newest" | "rarity";
+} = {}): Promise<LivePackCommunityCollectionPage> {
+  const query = new URLSearchParams();
+  if (options.page) query.set("page", String(options.page));
+  if (options.pageSize) query.set("pageSize", String(options.pageSize));
+  if (options.tier && options.tier !== "all") query.set("tier", options.tier);
+  if (options.query?.trim()) query.set("q", options.query.trim());
+  if (options.sort === "newest") query.set("sort", "newest");
+  return fetchLiveJson(`/api/packs/community/collection/${userId}?${query.toString()}`);
 }
 
 /* The streak game's per-player question numbers (oldest top play, DT/7K

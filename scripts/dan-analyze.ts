@@ -9,9 +9,9 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { parseManiaBeatmap, type ManiaBeatmap } from "../src/lib/beatmap-parser.ts";
-import { estimateDan } from "../src/lib/dan-estimator.ts";
-import { getLnReferenceComparisonMetrics, getLnReferenceNeighbors } from "../src/lib/dan-estimator/ln.ts";
-import type { DanFeatureMetrics } from "../src/lib/dan-estimator/types.ts";
+import { estimateDan } from "#dan/dan-estimator";
+import { getLnReferenceComparisonMetrics, getLnReferenceNeighbors } from "#dan/dan-estimator/ln";
+import type { DanFeatureMetrics } from "#dan/dan-estimator/types";
 import {
   type BeatmapMeta,
   downloadBeatmapset,

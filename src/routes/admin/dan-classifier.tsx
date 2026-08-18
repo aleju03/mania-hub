@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseManiaBeatmap } from "#/lib/beatmap-parser";
 import { getDanImageSrc } from "#/lib/dan-images";
 import { classifyChartWithCompanella } from "#/lib/companella";
-import type { ChartClassification, DanVerdictHalf } from "#/lib/chart-classifier";
+import type { ChartClassification, DanVerdictHalf } from "#dan/chart-classifier";
 import { canUseAdminFeatures, canUseDevFeatures } from "#/lib/auth-shared";
 import {
   type DanBenchmarkFamily,
@@ -1146,7 +1146,7 @@ function MsdSection({ beatmapId, osuText, keyCount, rate }: {
     setState({ status: "loading", values: null, version: null, error: null });
     (async () => {
       try {
-        const { analyzeEtternaFromText } = await import("#/lib/leoblack/ett/index.js");
+        const { analyzeEtternaFromText } = await import("#leoblack/ett/index.js");
         const result = await analyzeEtternaFromText(osuText, { musicRate: rate, keyOverride: keyCount });
         if (cancelled) return;
         setState({ status: "ready", values: result.values, version: result.etternaVersion ?? null, error: null });

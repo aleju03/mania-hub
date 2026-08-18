@@ -121,6 +121,7 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
       skills,
       tierOverride: tier,
       labelOverride: shared.card.customLabel,
+      motifOverride: shared.card.motif,
     });
     let cancelled = false;
     // The 2D front renders first so something card-shaped is visible while

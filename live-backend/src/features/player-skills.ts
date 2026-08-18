@@ -3,7 +3,7 @@ import { exec, json, parseJson } from "../db.js";
 import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, isMsdSupportedKeyCount } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
-import { errorContext, logWarn } from "../logger.js";
+import { errorContext, logInfo, logWarn } from "../logger.js";
 import { CHART_ANALYSIS_VERSION, enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -1524,4 +1524,148 @@ function normalizeMode(mode: PlayerSkillModeBreakdown): PlayerSkillModeBreakdown
 function relabelDanSide(side: PlayerSkillDanSide | null | undefined, family: "rc" | "ln", keyCount: number): PlayerSkillDanSide | null {
   if (!side || !Number.isFinite(side.rawDan)) return null;
   return { ...side, label: danLabelFor(side.rawDan, family, keyCount) };
+}
+
+// One-shot sweep for the leftovers of the 2026-08-14 MinaCalc poisoning (the
+// incident window and the chart-side repair live in chart-analysis.ts, see
+// MSD_POISON_WINDOW_START and MSD_POISON_RECOVERY_JOB).
+//
+// Why a second sweep is needed. The chart repair's seed also deleted player
+// rows, but it selected them by time window (updated_at inside the incident),
+// and the chart repair itself is chunked: it only finished 2026-08-15T23:17Z.
+// Players who recomputed between the seed and that finish re-stored floor
+// SSRs against charts that had not been healed yet, stamping an updated_at
+// outside the deleted window. The per-play SSR reuse key (beatmapId + rate +
+// goal, in the reuse branch of the compute above) carries no chart-health
+// term, so every later recompute copies those values forward with a fresh
+// computed_at. They never expire on their own.
+//
+// So this sweep targets the stored signature rather than a time window, which
+// is precisely what the window missed.
+//
+// Poisoned plays are dropped from plays_json instead of the whole row being
+// deleted: the per-play SSR cache is the durable record for plays whose score
+// payload has aged out of the score_events retention window, so deleting a
+// row would permanently lose the good plays alongside the bad. Dropping only
+// the bad ones and backdating computed_at past READY_RECOMPUTE_TTL_MS makes
+// the row read as stale, and the next profile view re-rates exactly the
+// dropped plays against the healed charts.
+export const PLAYER_SKILL_POISON_JOB = "recompute_player_skill_poison_sweep";
+const PLAYER_SKILL_POISON_META_KEY = "player_skill_poison_recovery_done:v1";
+const PLAYER_SKILL_POISON_CHUNK = 200;
+
+// The same floor signature the chart sweep keys on (msdPoisonSignatureSql in
+// chart-analysis.ts): a frozen wasm instance hands back one value for every
+// skillset, so a positive Stream equal to both Technical and Chordjack is not
+// a rating any real chart produces.
+const PLAYER_SKILL_POISON_SIGNATURE_SQL = `exists (
+  select 1 from json_each(json_extract(plays_json, '$.plays')) as play
+  where json_extract(play.value, '$.values.Stream') > 0
+    and json_extract(play.value, '$.values.Stream') = json_extract(play.value, '$.values.Technical')
+    and json_extract(play.value, '$.values.Stream') = json_extract(play.value, '$.values.Chordjack')
+)`;
+
+export function isPoisonedPlayValues(values: Record<string, number> | undefined | null): boolean {
+  const stream = Number(values?.Stream ?? 0);
+  return stream > 0
+    && stream === Number(values?.Technical ?? 0)
+    && stream === Number(values?.Chordjack ?? 0);
+}
+
+export interface PlayerSkillPoisonChunkResult {
+  nextCursor: number;
+  scanned: number;
+  cleaned: number[];
+  droppedPlays: number;
+  done: boolean;
+}
+
+export async function recomputePlayerSkillPoisonChunk(
+  db: Db,
+  cursor: number,
+  limit = PLAYER_SKILL_POISON_CHUNK,
+): Promise<PlayerSkillPoisonChunkResult> {
+  const rows = (await exec(
+    db,
+    `select user_id, analysis_version, plays_json from player_skill_ratings
+     where user_id > ? and ${PLAYER_SKILL_POISON_SIGNATURE_SQL}
+     order by user_id
+     limit ?`,
+    [Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const cleaned: number[] = [];
+  let droppedPlays = 0;
+  // Far enough past the ready-row TTL that the next read enqueues a recompute,
+  // but still a plausible timestamp: the value is surfaced as computedAt, and
+  // an epoch date would render as a decade-old rating until the refresh lands.
+  const staleComputedAt = new Date(Date.now() - READY_RECOMPUTE_TTL_MS - 60_000).toISOString();
+
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    nextCursor = Math.max(nextCursor, userId);
+    const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row.plays_json ?? ""), null);
+    const plays = Array.isArray(stored?.plays) ? stored.plays : [];
+    const kept = plays.filter((play) => !isPoisonedPlayValues(play?.values));
+    const dropped = plays.length - kept.length;
+    // The SQL signature already selected this row, so a zero here means the
+    // JSON shape drifted from what the predicate matched; leave it alone
+    // rather than rewriting a row we did not understand.
+    if (dropped <= 0) continue;
+    droppedPlays += dropped;
+    cleaned.push(userId);
+    await exec(
+      db,
+      `update player_skill_ratings
+       set plays_json = json(?), computed_at = ?, updated_at = ?
+       where user_id = ? and analysis_version = ?`,
+      [json({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, Number(row.analysis_version)],
+    );
+  }
+
+  return { nextCursor, scanned: rows.length, cleaned, droppedPlays, done: rows.length < limit };
+}
+
+export async function ensurePlayerSkillPoisonRecoverySeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [PLAYER_SKILL_POISON_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [PLAYER_SKILL_POISON_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueuePlayerSkillPoisonRecovery(queue, 0);
+}
+
+export async function runPlayerSkillPoisonRecoveryJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputePlayerSkillPoisonChunk(db, cursor);
+  if (result.droppedPlays > 0) {
+    logInfo("player_skill_poison_stripped", { users: result.cleaned.length, plays: result.droppedPlays });
+  }
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [PLAYER_SKILL_POISON_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueuePlayerSkillPoisonRecovery(queue, result.nextCursor);
+}
+
+async function enqueuePlayerSkillPoisonRecovery(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    PLAYER_SKILL_POISON_JOB,
+    `${PLAYER_SKILL_POISON_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
 }

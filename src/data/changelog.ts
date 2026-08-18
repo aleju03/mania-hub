@@ -27,6 +27,10 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  // Held back until /packs/collections is out of its admin gate.
+  // { date: "2026-08-18", text: "Collections: show off your cards, browse anyone else's, and some pack stats", to: "/packs/collections" },
+  { date: "2026-08-18", text: "Made the player Dan Estimates feature visible to everyone on the Skills tab. Just know that I haven't even put in the effort to make sure its estimates are generally accurate, AND I haven't touched its implementation in over a month, but I will eventually..." },
+  { date: "2026-08-18", text: "The Skill rating formula is still being tuned, so ratings may change", to: "/my-stats" },
   { date: "2026-08-16", text: "Fixed chordjack maps getting tagged and rated as Bracket", to: "/maps" },
   { date: "2026-08-16", text: "Map search now accepts pasted osu! map links", to: "/maps" },
   { date: "2026-08-16", text: "Custom rate plays from lazer, like 1.15x, now count toward your skill rating", to: "/my-stats" },

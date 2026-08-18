@@ -1,5 +1,5 @@
 import type { ManiaBeatmap, ManiaNote } from "./beatmap-parser";
-import type { DanEstimate, DanEstimateInput, DanSkillFamily } from "./dan-estimator";
+import type { DanEstimate, DanEstimateInput, DanSkillFamily } from "#dan/dan-estimator";
 
 type DanielFactorName = "Pressing Intensity" | "Unevenness" | "Same-Column Pressure" | "Cross-Column Pressure";
 

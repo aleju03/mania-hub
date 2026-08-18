@@ -5,8 +5,8 @@ import {
   getPersistentCached,
   setPersistentCache
 } from "../api";
-import { estimateDan } from "../dan-estimator";
-import { DAN_ESTIMATE_CACHE_VERSION } from "../dan-estimator/cache-version";
+import { estimateDan } from "#dan/dan-estimator";
+import { DAN_ESTIMATE_CACHE_VERSION } from "#dan/dan-estimator/cache-version";
 import { parseCachedManiaBeatmap } from "../parsed-beatmap-cache";
 import type { LeanDanEstimate } from "../types";
 import { edgeCache } from "./server";

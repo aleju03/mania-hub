@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireTrueAdminAccess } from "./auth";
 import { getServerLiveBackendUrl } from "./live-backend";
 import { adminAuthHeaders } from "./live-backend-tokens";
+import type { CardMotif } from "./card-motif";
 import type { ManiaCardTier, ManiaSkills } from "./maniacard";
 
 /* Server fns for /admin/collections, the grant desk for the pack economy: hand
@@ -45,6 +46,9 @@ export interface AdminCollectionCard {
   /* Set only when this holding was given its own badge text, which is what the
      card art then prints in place of the tier's name. */
   customLabel?: string | null;
+  /* Set only when this holding was given background art: the card floats this
+     image instead of its tier's triangle flecks or starfield. */
+  motif?: CardMotif | null;
   skills: ManiaSkills | null;
   pp: number;
   globalRank: number;
@@ -93,6 +97,9 @@ export interface AdminCardGrantInput {
   username?: string;
   avatarUrl?: string;
   countryCode?: string;
+  /* Undefined keeps the holding's current background art, null clears it, an
+     object replaces it - the three states the form's motifMode maps onto. */
+  motif?: CardMotif | null;
   overwriteIdentity?: boolean;
 }
 

@@ -111,6 +111,7 @@ const TIER_TEXT_COLOR: Record<string, string> = {
   mythic: "text-red-200",
   ascendant: "text-white",
   worldClass: "text-emerald-200",
+  eternal: "text-purple-200",
   goat: "text-amber-200",
 };
 
@@ -124,6 +125,7 @@ const TIER_FILL_COLOR: Record<string, string> = {
   mythic: "rgb(248, 113, 113)",
   ascendant: "rgb(226, 232, 240)",
   worldClass: "rgb(110, 231, 183)",
+  eternal: "rgb(192, 132, 252)",
   goat: "rgb(251, 191, 36)",
 };
 

@@ -323,6 +323,17 @@ export function isHonoraryPlayer(id: number | null | undefined): boolean {
   return id != null && BY_ID.has(id);
 }
 
+/* The archived portrait for a roster member osu! no longer serves an avatar
+   for, as the same-origin path it is checked in under. Card surfaces have to
+   reapply it: they render from an identity row (the pack catalog, the users
+   row) that can only hold an absolute osu! URL, so the override never survives
+   the trip and a.ppy.sh answers those ids with the guest default. Null for
+   every member whose avatar still comes from a.ppy.sh. */
+export function honoraryAvatarUrl(id: number | null | undefined): string | null {
+  const url = honoraryPlayerById(id)?.avatarUrl;
+  return url?.startsWith("/") ? url : null;
+}
+
 /* Case, spacing and punctuation stripped, so a name typed from memory still
    finds the player. Mirrors nameKey in live-backend/src/features/goat-poll.ts —
    the two answer the same question ("is this the same person?") on either side

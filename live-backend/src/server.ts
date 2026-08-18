@@ -18,7 +18,7 @@ import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-feedback.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
-import { enqueuePlayerSkills, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
+import { enqueuePlayerSkills, ensurePlayerSkillPoisonRecoverySeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
@@ -453,6 +453,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       void ensureMsdPoisonRecoverySeeded(app.db, app.queue).catch((error) => console.warn("[msd-poison-recovery] seed failed", error));
       void ensureInverseClusterBpmRecoverySeeded(app.db, app.queue).catch((error) => console.warn("[inverse-cluster-bpm] seed failed", error));
       void ensureNegativeTimeMsdRecoverySeeded(app.db, app.queue).catch((error) => console.warn("[negative-time-msd] seed failed", error));
+      // Player-side leftovers of the same incident: the chart repair healed
+      // the charts, but per-play SSRs stored against them are copies and do
+      // not follow. Local DB work only, no osu! API budget.
+      void ensurePlayerSkillPoisonRecoverySeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-poison] seed failed", error));
       // Unlike the sweeps above this one consumes osu! API budget (one best-
       // scores call per user), so it also requires osu! API jobs to be enabled.
       // Guarded by its done key: post-completion boots schedule nothing.

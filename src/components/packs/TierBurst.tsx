@@ -13,6 +13,7 @@ const TIER_ORDER: ManiaCardTier[] = [
   "mythic",
   "ascendant",
   "worldClass",
+  "eternal",
   "goat",
 ];
 

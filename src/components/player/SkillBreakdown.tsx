@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../lib/my-data";
-import { useAuth } from "../../lib/auth-context";
 import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "../../lib/dan-images";
 import {
   formatTopShare,
@@ -63,11 +62,8 @@ function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode): string |
 }
 
 function DanChips({ mode }: { mode: MyDataSkillMode }) {
-  // Calibration preview: the dan formula is still being anchored against
-  // known players, so the chips stay admin-only until the owner trusts them.
-  const canSee = useAuth().canUseAdminFeatures;
   const dan = mode.dan;
-  if (!canSee || !dan) return null;
+  if (!dan) return null;
   // Non-4K LN sides label on the numbered/greek ladder backend-side (the 7K
   // LN dan series is named like rice), so every keymode shows its LN chip.
   const sides: Array<{ id: string; label: string; side: { rawDan: number; label: string; clears: number } | null }> = [

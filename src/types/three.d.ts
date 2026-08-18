@@ -157,21 +157,28 @@ declare module "three" {
   }
 
   export class Texture {
+    minFilter: unknown;
+    magFilter: unknown;
+    colorSpace: unknown;
+    wrapS: unknown;
+    wrapT: unknown;
+    generateMipmaps: boolean;
+    needsUpdate: boolean;
+    constructor(...args: any[]);
     dispose(): void;
   }
 
   export class CanvasTexture extends Texture {
     image: HTMLCanvasElement;
-    minFilter: unknown;
-    magFilter: unknown;
-    colorSpace: unknown;
     anisotropy: number;
-    needsUpdate: boolean;
-    constructor(...args: any[]);
   }
+
+  export class DataTexture extends Texture {}
 
   export const LinearFilter: unknown;
   export const SRGBColorSpace: unknown;
+  export const ClampToEdgeWrapping: unknown;
+  export const RGBAFormat: unknown;
   export const DoubleSide: unknown;
 }
 

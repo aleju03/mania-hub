@@ -1,6 +1,7 @@
 import type { InValue } from "@libsql/client";
 import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch, parseJson } from "../db.js";
+import { parseCardMotif, type CardMotif } from "./card-motif.js";
 
 // Synced maniacard pack wallets now keep economy metadata in pack_wallets and
 // collection cards in pack_collection_cards. The legacy blob shape is still
@@ -31,6 +32,10 @@ export interface StoredPackCard {
      deliberate choice: it is what the card art prints in place of the tier,
      the slot the honorary roster's cardTierLabel already uses. */
   customLabel?: string | null;
+  /* The image this holding floats in its card background in place of the
+     tier's triangle flecks or starfield. Granted from /admin/collections and
+     nowhere else; see card-motif.ts. */
+  motif?: CardMotif | null;
   skills: unknown | null;
   pp: number;
   globalRank: number;
@@ -241,6 +246,8 @@ const TIER_SHARD_VALUES: Record<string, number> = {
   mythic: 27,
   ascendant: 36,
   worldClass: 48,
+  // Hand-granted only, so it is not priced against pack odds; half a GOAT.
+  eternal: 250,
   // Mirrors the frontend's table in src/lib/pack-collection.ts. GOAT came down
   // from 1000, which bought several Legend packs for a card the honorary slot
   // hands out for free once the roster is complete.
@@ -275,7 +282,8 @@ const TIER_RANKS: Record<string, number> = {
   mythic: 6,
   ascendant: 7,
   worldClass: 8,
-  goat: 9,
+  eternal: 9,
+  goat: 10,
 };
 
 /* hasOwnProperty, not `TIER_RANKS[tier] ?? -1`: an inherited key ("constructor",
@@ -285,6 +293,12 @@ const TIER_RANKS: Record<string, number> = {
 export function tierRank(tier: string | null): number {
   return tier !== null && Object.prototype.hasOwnProperty.call(TIER_RANKS, tier) ? TIER_RANKS[tier] : -1;
 }
+
+/* Tiers a card is given rather than rated into, mirroring AWARDED_TIERS in
+   src/lib/maniacard.ts. No pass over a player's plays can produce one, so a
+   mint that recomputed a card is not a better answer for these and may not
+   talk one down. */
+const AWARDED_TIERS = new Set(["eternal", "goat"]);
 
 /* The only tiers that may be stored. Everything else is a card the server
    treats as unrated. */
@@ -414,6 +428,13 @@ function claimedTier(raw: { tier?: unknown }, userId: number): string | null {
   // or shard-value lookup.
   if (!isKnownTier(raw.tier)) return null;
   if (raw.tier === "goat" && !HONORARY_USER_IDS.has(userId)) return null;
+  // Eternal is hand-granted and nothing else: no pack deals it, so a wallet
+  // claiming one is either stale (it read a card an admin minted, which is
+  // fine - see below) or forged. Refusing every claim covers both, because the
+  // ownership upsert only ever lets a *better* tier overwrite the stored one:
+  // a real Eternal card outranks the unrated claim and survives the sync
+  // untouched, while a forged one never becomes a 250-shard recycle.
+  if (raw.tier === "eternal") return null;
   return raw.tier;
 }
 
@@ -947,6 +968,7 @@ function cardFromRow(row: Record<string, unknown>): StoredPackCard {
     tier: typeof row.tier === "string" ? row.tier : null,
     tierLabel: nonEmptyString(row.tier_label) ?? nonEmptyString(row.catalog_tier_label),
     customLabel: nonEmptyString(row.tier_label),
+    motif: parseCardMotif(row.motif),
     skills: row.skills_json ? parseJson<unknown | null>(String(row.skills_json), null) : null,
     pp: Number(row.pp) || 0,
     globalRank: Number(row.global_rank) || 0,
@@ -957,6 +979,27 @@ function cardFromRow(row: Record<string, unknown>): StoredPackCard {
     serial: Number(row.serial) > 0 ? Number(row.serial) : null,
     mintedTotal: Number(row.minted_total) || 0,
   };
+}
+
+/* Every motif URL any holding currently floats, deduped.
+
+   Read by the frontend's /api/card-motif proxy, which refuses to fetch a URL
+   that is not on this list. That is the whole reason the endpoint exists: the
+   proxy has to serve the image with CORS headers for the card canvas, and
+   without an allowlist it would be an open image proxy on our own domain.
+   Grants are the only writer and there are a handful of them, so the list is
+   tiny and the proxy can hold it in memory. */
+export async function listPackCardMotifUrls(db: Db): Promise<string[]> {
+  const rows = (await exec(
+    db,
+    "select distinct motif from pack_collection_cards where motif is not null and motif != ''",
+  )).rows;
+  const urls = new Set<string>();
+  for (const row of rows) {
+    const motif = parseCardMotif(row.motif);
+    if (motif) urls.add(motif.url);
+  }
+  return [...urls];
 }
 
 export async function getPackWallet(db: Db, userId: number): Promise<StoredPackWallet | null> {
@@ -1249,10 +1292,28 @@ export async function applyPackCollectionCardMint(
   if (!Number.isInteger(cardUserId) || cardUserId <= 0) return { applied: false, cardKey: null };
   // Same GOAT guard the wallet import applies: a claimed tier is otherwise
   // taken on trust, and GOAT recycles for 500 shards.
-  const tier = claimedTier(mint, cardUserId);
+  const claimed = claimedTier(mint, cardUserId);
   const currentTier = typeof row.tier === "string" ? row.tier : null;
-  if (row.skills_id != null && tierRank(currentTier) >= tierRank(tier)) return { applied: false, cardKey };
-  const tierLabel = tier === null ? null : (typeof mint.tierLabel === "string" ? mint.tierLabel.slice(0, 60) : null);
+  const outranksClaim = tierRank(currentTier) >= tierRank(claimed);
+  if (row.skills_id != null && outranksClaim) return { applied: false, cardKey };
+  /* A row with no snapshot otherwise takes the mint whole, lower tier and all,
+     since the freshly computed version is the only one that can actually be
+     drawn. Two exceptions, and both are about a claim that says nothing useful
+     rather than something lower:
+
+     - an AWARDED tier, which nothing recomputed from a player's plays can
+       arrive at. A granted Eternal lands with no snapshot, the collection's
+       repair pass mints one, and claimedTier refuses the "eternal" it sends
+       back, so folding the snapshot and the tier into one decision gave that
+       card its stat bars and took its rarity away in the same write;
+     - a claim of nothing at all, whether the mint sent no tier or sent one
+       this route refuses. A mint may relabel a card; it may not un-label one. */
+  const keepsCurrentTier =
+    outranksClaim && currentTier !== null && (claimed === null || AWARDED_TIERS.has(currentTier));
+  const tier = keepsCurrentTier ? currentTier : claimed;
+  // The label describes the tier the mint claimed, so it only travels with it.
+  const tierLabel =
+    tier !== null && tier === claimed ? (typeof mint.tierLabel === "string" ? mint.tierLabel.slice(0, 60) : null) : null;
   const skillsJson = JSON.stringify(skills);
   if (skillsJson.length > PACK_CARD_SKILLS_MAX_CHARS) return { applied: false, cardKey };
   const mintPp = Math.min(PACK_CARD_MAX_PP, Math.max(0, toFiniteNumber(mint.pp, 0)));

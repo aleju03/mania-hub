@@ -216,6 +216,7 @@ async function renderAlbumThumbnail(card: CollectedCard): Promise<string | null>
     skills: card.skills,
     tierOverride: collectedCardTier(card),
     labelOverride: card.customLabel,
+    motifOverride: card.motif,
   });
   const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
   const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));

@@ -3,7 +3,8 @@ import { parseJson } from "../../db.js";
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
 import { getPackCardCollectors, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
-import { applyPackCollectionCardMint, countMissingGoatCards, getPackCollectionPoolProgress, getPackShowcase, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot } from "../../features/pack-wallets.js";
+import { applyPackCollectionCardMint, countMissingGoatCards, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot } from "../../features/pack-wallets.js";
+import { getPackCollectorProfile, getPackCommunityStats, getPackShowcaseCards, listPackCollectors, listPackShowcases, normalizePackCollectorSort, PACK_COLLECTOR_PAGE_MAX_SIZE, resolvePackCollector } from "../../features/pack-community.js";
 import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError } from "../../features/pack-draw.js";
 import { logInfo } from "../../logger.js";
 import { getPackPoolMembership, getPackPoolRoster } from "../../features/global-rankings.js";
@@ -64,6 +65,21 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       return true;
     }
     sendJson(req, res, ctx, 202, await warmProfileSnapshots(ctx.serveWriteDb ?? ctx.db, ctx.osu, userIds));
+    return true;
+  }
+  if (url.pathname === "/api/packs/card-motifs") {
+    // The allowlist behind the frontend's /api/card-motif image proxy. Bridge
+    // only: it is not interesting to a browser, and it names every image any
+    // granted card carries.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!isBridge(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { urls: await listPackCardMotifUrls(ctx.db) });
     return true;
   }
   if (url.pathname === "/api/packs/cards") {
@@ -369,21 +385,120 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     sendJson(req, res, ctx, 200, shared);
     return true;
   }
-  const packShowcaseMatch = url.pathname.match(/^\/api\/packs\/showcase\/(\d+)$/);
-  if (packShowcaseMatch) {
-    // A collector's pinned shelf. Meant to be public (it exists to be seen),
-    // but admin-gated while the showcase design is still being judged: the
-    // frontend only renders the shelf for admins, and this keeps the shelves
-    // of everyone else unreadable in the meantime.
-    if (!isBridge(req, ctx)) {
-      sendJson(req, res, ctx, 401, { error: "unauthorized" });
-      return true;
-    }
+  /* The community read of the economy, behind /packs/collections. Public and
+     browser-direct: every viewer gets the same page, which is also why these
+     cache. Collections were always visible one card at a time (the pull ticker
+     names owners, /pull/{owner}/{card} is a durable public share); this is the
+     same data grouped by collector instead of by pull. */
+  if (url.pathname === "/api/packs/community/stats") {
     if (req.method !== "GET") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { cards: await getPackShowcase(ctx.db, Number(packShowcaseMatch[1])) });
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    res.setHeader("cache-control", "public, max-age=60");
+    await sendAccentEnrichedJson(req, res, ctx, 200, await getPackCommunityStats(ctx.db));
+    return true;
+  }
+  if (url.pathname === "/api/packs/community/showcases") {
+    // The wall of chosen cards. Short cache: this is the one surface a
+    // collector edits and then immediately reloads to look at.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const page = Math.max(0, Math.floor(Number(url.searchParams.get("page")) || 0));
+    const pageSize = Math.min(24, Math.max(1, Math.floor(Number(url.searchParams.get("pageSize")) || 12)));
+    res.setHeader("cache-control", "public, max-age=10");
+    await sendAccentEnrichedJson(req, res, ctx, 200, await listPackShowcases(ctx.db, { page, pageSize }));
+    return true;
+  }
+  if (url.pathname === "/api/packs/community/showcase") {
+    /* One collector's chosen cards. Split from the collector profile because
+       the viewer reading back their own row wants the cards and nothing else,
+       and the profile carries board ranks, which need the cached economy
+       roll-up and so can block on a cold rebuild. */
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const ownerUserId = Math.floor(Number(url.searchParams.get("userId")) || 0);
+    if (ownerUserId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    res.setHeader("cache-control", "public, max-age=10");
+    await sendAccentEnrichedJson(req, res, ctx, 200, { cards: await getPackShowcaseCards(ctx.db, ownerUserId) });
+    return true;
+  }
+  if (url.pathname === "/api/packs/community/collectors") {
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const page = Math.max(0, Math.floor(Number(url.searchParams.get("page")) || 0));
+    const pageSize = Math.min(
+      PACK_COLLECTOR_PAGE_MAX_SIZE,
+      Math.max(1, Math.floor(Number(url.searchParams.get("pageSize")) || 24)),
+    );
+    res.setHeader("cache-control", "public, max-age=60");
+    await sendAccentEnrichedJson(req, res, ctx, 200, await listPackCollectors(ctx.db, {
+      page,
+      pageSize,
+      query: url.searchParams.get("q"),
+      sort: normalizePackCollectorSort(url.searchParams.get("sort")),
+    }));
+    return true;
+  }
+  if (url.pathname === "/api/packs/community/collector") {
+    // Addressed by id or by name, since the shareable link carries whichever
+    // the visitor clicked. A name only resolves if something stored the pair.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const collectorUserId = await resolvePackCollector(ctx.db, {
+      userId: url.searchParams.get("userId"),
+      username: url.searchParams.get("username"),
+    });
+    const profile = collectorUserId ? await getPackCollectorProfile(ctx.db, collectorUserId) : null;
+    if (!profile) {
+      sendJson(req, res, ctx, 404, { error: "collector_not_found" });
+      return true;
+    }
+    res.setHeader("cache-control", "public, max-age=60");
+    await sendAccentEnrichedJson(req, res, ctx, 200, profile);
+    return true;
+  }
+  const packCommunityCollectionMatch = url.pathname.match(/^\/api\/packs\/community\/collection\/(\d+)$/);
+  if (packCommunityCollectionMatch) {
+    // The same paged read the owner's own grid uses, minus the recycle
+    // economics: what a card is worth in shards is the holder's business.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const ownerUserId = Number(packCommunityCollectionMatch[1]);
+    const page = Math.max(0, Math.floor(Number(url.searchParams.get("page")) || 0));
+    const pageSize = Math.min(
+      PACK_COLLECTION_MAX_PAGE_SIZE,
+      Math.max(1, Math.floor(Number(url.searchParams.get("pageSize")) || 24)),
+    );
+    const { duplicateShardTotal: _duplicates, filteredShardTotal: _filtered, ...collectionPage } =
+      await listPackCollectionCards(ctx.db, ownerUserId, {
+        page,
+        pageSize,
+        tier: url.searchParams.get("tier"),
+        query: url.searchParams.get("q"),
+        sort: url.searchParams.get("sort") === "newest" ? "newest" : null,
+      });
+    res.setHeader("cache-control", "public, max-age=60");
+    await sendAccentEnrichedJson(req, res, ctx, 200, collectionPage);
     return true;
   }
   if (url.pathname === "/api/packs/recent-pulls") {
@@ -580,8 +695,9 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
   if (packShowcaseWriteMatch) {
     // Server-to-server like the wallet: the frontend authenticates the osu!
     // login cookie and forwards the viewer's own id, so a user only ever
-    // edits their own shelf. Reads of *other* people's shelves go through the
-    // public /api/packs/showcase endpoint instead.
+    // edits their own showcase. This is the write path only; every read of a
+    // showcase, including your own, is public and browser-direct through
+    // /api/packs/community/{showcases,collector}.
     if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;

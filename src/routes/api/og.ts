@@ -36,7 +36,10 @@ import { readCurrentAuth } from "../../lib/auth-server";
 import { getCachedOgImage, putOgImage } from "../../lib/r2-cache";
 import { countryTopPlaysTitle, OG_IMAGE_VERSION } from "../../lib/seo";
 import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../lib/maniacard";
+import { honoraryAvatarUrl } from "../../lib/honorary-players";
 import type { ManiaCardTier } from "../../lib/maniacard";
+import { parseCardMotif, type CardMotif } from "../../lib/card-motif";
+import { readImageSize, sniffImageMime } from "../../lib/image-sniff";
 import { getCosmicTierPalette } from "../../lib/maniacard-cosmic";
 import type { CosmicTierPalette } from "../../lib/maniacard-cosmic";
 import {
@@ -1474,6 +1477,104 @@ function triangleOverlayDataUrl(w: number, height: number): string {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
 
+/* A granted card's background art, inlined so resvg never has to reach the
+   network mid-render.
+
+   Fetched here rather than pointed at: satori resolves remote images itself,
+   but a slow or dead host would then stall (or fail) the whole embed, and this
+   one is a URL somebody typed into an admin form. Bounded and cached for the
+   life of the process, like the laurel above - a motif URL names one picture,
+   and the handful of granted cards share very few of them. */
+const MOTIF_OG_MAX_BYTES = 2 * 1024 * 1024;
+const MOTIF_OG_TIMEOUT_MS = 4_000;
+interface InlinedMotif {
+  dataUrl: string;
+  /* Width over height, read straight from the header: satori will not measure
+     a data URL, so every copy is laid out from this. Falls back to square for
+     a format readImageSize does not parse. */
+  aspect: number;
+}
+
+const motifDataUrlCache = new Map<string, Promise<InlinedMotif | null>>();
+
+function cardMotifDataUrl(motif: CardMotif): Promise<InlinedMotif | null> {
+  const cached = motifDataUrlCache.get(motif.url);
+  if (cached) return cached;
+  const pending = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), MOTIF_OG_TIMEOUT_MS);
+    try {
+      const response = await fetch(motif.url, { redirect: "follow", signal: controller.signal });
+      if (!response.ok) return null;
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.length === 0 || buffer.length > MOTIF_OG_MAX_BYTES) return null;
+      const mime = sniffImageMime(buffer);
+      if (!mime) return null;
+      const size = readImageSize(buffer);
+      return {
+        dataUrl: `data:${mime};base64,${buffer.toString("base64")}`,
+        aspect: size && size.width > 0 && size.height > 0 ? size.width / size.height : 1,
+      };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  })();
+  motifDataUrlCache.set(motif.url, pending);
+  return pending;
+}
+
+/* The motif scattered over the card, one absolutely positioned img per copy.
+
+   Same jittered grid, sizes and per-copy alpha as drawMotifPattern in
+   maniacard3d/cardTexture.ts, which in turn mirrors the overlay shader's
+   drifting copies, on the same 1000x1400 texture space, so a card shared into
+   Discord scatters its art the way the card on the page does.
+   Emitted as elements rather than as one nested SVG because satori hands an
+   img straight to resvg, while a raster embedded inside an SVG that is itself
+   an img is a rasterizer path this endpoint has no reason to depend on. */
+function motifSpriteElements(motif: CardMotif, dataUrl: string, aspect: number, w: number, height: number) {
+  const sx = w / CARD_TEXTURE_WIDTH;
+  const sy = height / CARD_TEXTURE_HEIGHT;
+  const rand = (value: number) => {
+    const v = Math.sin(value) * 43758.5453123;
+    return v - Math.floor(v);
+  };
+  const cellWidth = CARD_TEXTURE_WIDTH / 3;
+  const cellHeight = CARD_TEXTURE_HEIGHT / 4;
+  const sprites = [];
+  for (let row = 0; row < 4; row += 1) {
+    for (let col = 0; col < 3; col += 1) {
+      const index = row * 13 + col;
+      const size = (86 + rand(index * 13.81 + 2.7) * 54) * motif.scale;
+      const spriteW = (aspect >= 1 ? size : size * aspect) * sx;
+      const spriteH = (aspect >= 1 ? size / aspect : size) * sy;
+      const cx = (col + 0.5 + (rand(index * 43.91 + 8.5) - 0.5) * 0.78) * cellWidth * sx;
+      const cy = (row + 0.5 + (rand(index * 29.37 + 12.4) - 0.5) * 0.78) * cellHeight * sy;
+      if (cx - spriteW / 2 < 6 || cx + spriteW / 2 > w - 6) continue;
+      if (cy - spriteH / 2 < 6 || cy + spriteH / 2 > height - 6) continue;
+      const rotation = (rand(index * 31.7 + 11.2) - 0.5) * 0.62;
+      sprites.push(
+        h("img", {
+          key: `motif${index}`,
+          src: dataUrl,
+          style: {
+            position: "absolute",
+            left: `${(cx - spriteW / 2).toFixed(1)}px`,
+            top: `${(cy - spriteH / 2).toFixed(1)}px`,
+            width: `${spriteW.toFixed(1)}px`,
+            height: `${spriteH.toFixed(1)}px`,
+            opacity: motif.opacity * (0.46 + rand(index * 5.21 + 1.3) * 0.32),
+            transform: `rotate(${((rotation * 180) / Math.PI).toFixed(2)}deg)`,
+          },
+        }),
+      );
+    }
+  }
+  return sprites;
+}
+
 // Portrait trading card matching the in-app maniacard front: the tier gradient
 // is the body (that colour IS the tier's identity, not decoration), with the
 // mania glyph badge, username plate, tier label, big avatar, the three skill
@@ -1537,7 +1638,7 @@ function svgGradientStops(stops: Array<[number, string]>): string {
     .join("");
 }
 
-function cosmicBackgroundDataUrl(palette: CosmicTierPalette): string {
+function cosmicBackgroundDataUrl(palette: CosmicTierPalette, starfield = true): string {
   const W = CARD_TEXTURE_WIDTH;
   const H = CARD_TEXTURE_HEIGHT;
   const rand = (value: number) => {
@@ -1623,7 +1724,9 @@ function cosmicBackgroundDataUrl(palette: CosmicTierPalette): string {
     `<rect width="${W}" height="${H}" fill="url(#foilA)"/>` +
     `<rect width="${W}" height="${H}" fill="url(#foilB)"/>` +
     `<rect width="${W}" height="${H}" fill="url(#aurora)"/>` +
-    stars +
+    // Dropped when the holding floats a motif: that image takes the place of
+    // this field, exactly as it does on the canvas card.
+    (starfield ? stars : "") +
     glints +
     // The canvas rim leans on a shadow blur for its bloom; resvg filters are a
     // gamble, so a wide soft pass under the crisp stroke stands in for it.
@@ -1672,6 +1775,13 @@ interface ManiaTierCardArt {
   label?: string | null;
   skills: { fingerControl: number; speed: number; accuracy: number; starAvg: number };
   laurelUrl?: string | null;
+  /* Background art for a holding that was granted some: the numbers, plus the
+     image already inlined by cardMotifDataUrl and its aspect ratio. All three
+     or none - a motif whose image did not load leaves the tier's own pattern
+     in place. */
+  motif?: CardMotif | null;
+  motifUrl?: string | null;
+  motifAspect?: number;
 }
 
 const MANIACARD_W = 720;
@@ -1697,6 +1807,10 @@ function maniaTierCardElement(art: ManiaTierCardArt) {
 
   const CARD_W = MANIACARD_W;
   const CARD_H = MANIACARD_H;
+  const motifSprites =
+    art.motif && art.motifUrl
+      ? motifSpriteElements(art.motif, art.motifUrl, art.motifAspect ?? 1, CARD_W, CARD_H)
+      : null;
   const textShadow = "0 2px 5px rgba(0,0,0,0.55)";
 
   return h(
@@ -1716,12 +1830,20 @@ function maniaTierCardElement(art: ManiaTierCardArt) {
       },
       [
         // Cosmic tiers get the starfield front in place of the tier gradient
-        // and its triangle flecks, the same swap the in-app card makes.
-        h("img", {
-          key: "tris",
-          src: cosmic ? cosmicBackgroundDataUrl(cosmic) : triangleOverlayDataUrl(CARD_W, CARD_H),
-          style: { position: "absolute", top: "0", left: "0", width: "100%", height: "100%" },
-        }),
+        // and its triangle flecks, the same swap the in-app card makes. A
+        // granted motif takes the place of whichever of the two this tier
+        // would have drawn, so the flecks go entirely and the cosmic base
+        // keeps everything but its stars.
+        motifSprites && !cosmic
+          ? null
+          : h("img", {
+              key: "tris",
+              src: cosmic
+                ? cosmicBackgroundDataUrl(cosmic, !motifSprites)
+                : triangleOverlayDataUrl(CARD_W, CARD_H),
+              style: { position: "absolute", top: "0", left: "0", width: "100%", height: "100%" },
+            }),
+        motifSprites,
         // GOAT's laurel, behind everything the card puts over it.
         art.laurelUrl
           ? h("img", {
@@ -1917,6 +2039,8 @@ interface SharedPackCardPayload {
        of the tier's name. The share image has to draw the same card the page
        does, or the preview says GOAT for a card that reads something else. */
     customLabel?: string | null;
+    /* And the background art it floats, for the same reason. */
+    motif?: unknown;
     skills?: {
       fingerControl?: number;
       speed?: number;
@@ -1963,7 +2087,9 @@ async function renderPulledCardOg(
   const style = MANIA_TIER_STYLES[tier];
   const art: ManiaTierCardArt = {
     username: card.username || "Unknown",
-    avatarUrl: card.avatarUrl || (card.userId ? `https://a.ppy.sh/${card.userId}` : ""),
+    // Same archived-portrait override the in-app card draws, so the share
+    // image is not the only place a deleted account still reads as a guest.
+    avatarUrl: ogAvatarUrl(request, honoraryAvatarUrl(card.userId) ?? card.avatarUrl, card.userId),
     tier,
     label: card.customLabel,
     skills: {
@@ -1974,6 +2100,16 @@ async function renderPulledCardOg(
     },
     laurelUrl: await cosmicLaurelDataUrl(request, tier),
   };
+  /* Re-parsed rather than trusted: this payload crossed a network hop, and the
+     numbers drive how large each copy is drawn. A motif whose image cannot be
+     fetched simply leaves the tier's own pattern in place. */
+  const motif = parseCardMotif(card.motif);
+  const inlinedMotif = motif ? await cardMotifDataUrl(motif) : null;
+  if (motif && inlinedMotif) {
+    art.motif = motif;
+    art.motifUrl = inlinedMotif.dataUrl;
+    art.motifAspect = inlinedMotif.aspect;
+  }
   const ownerName = payload.owner?.username || "a collector";
 
   const response = new ImageResponse(
@@ -4357,7 +4493,7 @@ function packCard(props: {
 async function renderPacksOg(request: Request): Promise<Response> {
   const [regularFont, heavyFont] = await loadOgFonts(request);
 
-  // Rarity ramp fanned left to right (five of the nine tiers, in
+  // Rarity ramp fanned left to right (five of the ten tiers, in
   // order), unlabelled: the colours carry the ramp and nothing names the
   // rarity on top. Tilts stay within ~7deg: Satori offsets images inside
   // rotated subtrees proportionally to the angle, so steeper fans smear

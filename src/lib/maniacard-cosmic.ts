@@ -48,6 +48,34 @@ export const COSMIC_TIERS: Partial<Record<ManiaCardTier, CosmicTierPalette>> = {
     rimGlow: "rgba(34,197,94,0.52)",
     glint: "rgba(220,252,231,0.88)",
   },
+  /* Eternal's front is a deep-space nebula: violet aurora over near-black,
+     with the star cores pulled toward white-lilac rather than the green
+     World Class uses. Hand-granted tier, so this is the only place its look is
+     described - see ManiaCardTier in maniacard.ts. */
+  eternal: {
+    base: [[0, "#05010e"], [0.38, "#0d0620"], [0.72, "#090318"], [1, "#000000"]],
+    foilA: ["rgba(192, 132, 252, 0.30)", "rgba(126, 34, 206, 0.15)"],
+    foilB: ["rgba(129, 140, 248, 0.18)", "rgba(88, 28, 135, 0.1)"],
+    aurora: [
+      "rgba(59, 7, 100, 0)",
+      "rgba(168, 85, 247, 0.14)",
+      "rgba(99, 102, 241, 0.09)",
+      "rgba(126, 34, 206, 0.11)",
+      "rgba(59, 7, 100, 0)",
+    ],
+    stars: ["255, 255, 255", "233, 213, 255", "199, 210, 254", "240, 171, 252"],
+    starTint: [0.86, 0.74, 1.0],
+    rainbow: 0.65,
+    rim: [
+      [0, "rgba(243,232,255,0.74)"],
+      [0.18, "rgba(168,85,247,0.9)"],
+      [0.5, "rgba(129,140,248,0.3)"],
+      [0.78, "rgba(126,34,206,0.76)"],
+      [1, "rgba(243,232,255,0.64)"],
+    ],
+    rimGlow: "rgba(168,85,247,0.55)",
+    glint: "rgba(243,232,255,0.9)",
+  },
   goat: {
     base: [[0, "#0c0a09"], [0.38, "#1a1006"], [0.72, "#120a03"], [1, "#000000"]],
     foilA: ["rgba(251, 191, 36, 0.30)", "rgba(217, 119, 6, 0.14)"],

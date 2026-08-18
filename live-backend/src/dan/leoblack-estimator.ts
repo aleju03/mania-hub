@@ -1,6 +1,5 @@
-// Ported from src/lib/leoblack-estimator.ts (frontend). Keep the two copies in
-// sync when the classifier changes; the vendored LeoBlack tree lives in
-// live-backend/vendor/leoblack.
+// Shared by the backend and the frontend (which reaches it through the #dan/*
+// alias); the vendored LeoBlack tree it drives lives in live-backend/vendor.
 import type { ManiaBeatmap } from "./beatmap-parser.js";
 import type { DanEstimate, DanEstimateInput, DanSkillFamily } from "./dan-estimator/types.js";
 import { extractDanFeatures } from "./dan-estimator/features.js";
@@ -19,7 +18,7 @@ import {
 import { PATTERNS_CONFIG } from "../../vendor/leoblack/patterns/config.js";
 import { detectVibroFromLongjackPattern } from "../../vendor/leoblack/vibro.js";
 
-// Maps the vendored LeoBlack "Mixed" estimator (src/lib/leoblack/) onto the app's
+// Maps the vendored LeoBlack "Mixed" estimator (live-backend/vendor/leoblack/) onto the app's
 // DanEstimate shape and label vocabulary (normal family: 1-10 then greek; LN family:
 // plain numbers), so it can run side by side with estimateDan/estimateDanielDan.
 

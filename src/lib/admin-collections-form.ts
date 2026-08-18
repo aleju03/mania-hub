@@ -1,4 +1,5 @@
 import type { AdminCardGrantInput } from "./admin-collections";
+import { parseCardMotif } from "./card-motif";
 import type { ManiaCardTier, ManiaSkills } from "./maniacard";
 
 /* The pure half of the grant form on /admin/collections: the shape the inputs
@@ -13,7 +14,7 @@ import type { ManiaCardTier, ManiaSkills } from "./maniacard";
 
 export const TIER_ORDER: ManiaCardTier[] = [
   "common", "rare", "elite", "superRare", "ultraRare",
-  "legendary", "mythic", "ascendant", "worldClass", "goat",
+  "legendary", "mythic", "ascendant", "worldClass", "eternal", "goat",
 ];
 
 /* Every number a maniacard front draws, in the order the card reads them: the
@@ -38,6 +39,14 @@ export const SKILL_FIELDS: Array<{ key: keyof ManiaSkills; label: string; step?:
 export interface CardForm {
   tier: string;
   tierLabel: string;
+  /* The image the card floats in its background in place of the tier's own
+     pattern, and how large and how strong each copy of it reads. Three states
+     for the same reason the skills snapshot has three: adding a copy to a card
+     that already floats something must not silently strip it. */
+  motifUrl: string;
+  motifScale: string;
+  motifOpacity: string;
+  motifMode: "keep" | "set" | "clear";
   copies: string;
   copiesMode: "add" | "set";
   recycledCopies: string;
@@ -63,6 +72,10 @@ export function emptyCardForm(): CardForm {
   return {
     tier: "unrated",
     tierLabel: "",
+    motifUrl: "",
+    motifScale: "1",
+    motifOpacity: "1",
+    motifMode: "keep",
     copies: "1",
     copiesMode: "add",
     recycledCopies: "",
@@ -101,6 +114,22 @@ export function numberOrUndefined(value: string): number | undefined {
   if (value.trim() === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/* What the form is asking to write into the motif slot: undefined for "leave
+   it", null for "take it off", a bounded motif for "float this". A set with an
+   unusable URL is treated as "leave it" rather than silently clearing art the
+   card already had. */
+export function formMotif(form: CardForm): AdminCardGrantInput["motif"] | undefined {
+  if (form.motifMode === "clear") return null;
+  if (form.motifMode !== "set") return undefined;
+  return (
+    parseCardMotif({
+      url: form.motifUrl,
+      scale: numberOrUndefined(form.motifScale) ?? 1,
+      opacity: numberOrUndefined(form.motifOpacity) ?? 1,
+    }) ?? undefined
+  );
 }
 
 export function formTier(form: CardForm): ManiaCardTier | null {
@@ -148,6 +177,7 @@ export function buildCardGrant(
     username: form.username.trim() || identity.username || undefined,
     avatarUrl: form.avatarUrl.trim() || identity.avatarUrl || undefined,
     countryCode: form.countryCode.trim() || identity.countryCode || undefined,
+    motif: formMotif(form),
     overwriteIdentity: form.overwriteIdentity,
   };
 }

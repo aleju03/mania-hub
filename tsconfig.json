@@ -8,7 +8,9 @@
     "baseUrl": ".",
     "paths": {
       "#/*": ["./src/*"],
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "#dan/*": ["./live-backend/src/dan/*"],
+      "#leoblack/*": ["./live-backend/vendor/leoblack/*"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],

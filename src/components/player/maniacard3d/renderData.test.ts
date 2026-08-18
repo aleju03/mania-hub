@@ -7,6 +7,7 @@ import {
   parseGradientStops,
 } from "./renderData";
 import type { OsuScore, OsuUser } from "#/lib/types";
+import { honoraryPlayerById } from "#/lib/honorary-players";
 
 const user = {
   id: 123,
@@ -50,6 +51,26 @@ describe("buildManiaCardRenderData", () => {
     expect(data.user.id).toBe(123);
     expect(data.user.username).toBe("PlayerWithAVeryLongName");
     expect(data.avatarUrl).toBe("/api/avatar?u=123");
+  });
+
+  /* A pack card of an archived player arrives with an empty avatar (the
+     catalog column only holds absolute osu! URLs) or with the guest default
+     osu! serves for the id, so the roster's checked-in portrait has to win
+     over both. */
+  test("draws an archived roster member from their checked-in portrait", () => {
+    const jakads = honoraryPlayerById(259972);
+    if (!jakads) throw new Error("expected Jakads on the honorary roster");
+
+    for (const avatar of ["", "https://osu.ppy.sh/images/layout/avatar-guest@2x.png"]) {
+      const data = buildManiaCardRenderData({
+        user: { ...user, id: jakads.id, avatar_url: avatar } as OsuUser,
+        scores: [score(6.2, 420)],
+      });
+
+      if (data.status !== "ready") throw new Error("expected ready data");
+      expect(data.avatarUrl).toBe(jakads.avatarUrl);
+      expect(data.avatarUrl.startsWith("/")).toBe(true);
+    }
   });
 
   // Card textures need the CORS proxy, so every thumbnail render is an origin

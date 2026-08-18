@@ -48,6 +48,29 @@ describe("cardThumbnailKeyForCollectionCard", () => {
     expect(cardThumbnailKeyForCollectionCard(makeCard())).toMatch(/^v2-w240-u4242-[a-f0-9]{16}$/);
   });
 
+  it("keeps the address a card without background art already has in the pool", () => {
+    /* Pinned, not derived: the R2 pool holds ~68k of these, addressed by this
+       hash. Any field added to the signature for all cards re-addresses every
+       one of them, and the whole pool is re-rendered and re-uploaded to
+       produce the same bytes. If this line has to change, that is the price,
+       and it should be a deliberate answer rather than a surprise. */
+    expect(cardThumbnailKeyForCollectionCard(makeCard())).toBe("v2-w240-u4242-18417ef331be097d");
+  });
+
+  it("gives a card its own address once it floats background art", () => {
+    // The pool is keyed on the card, not the holder, so two owners of the same
+    // player at the same snapshot share an object. Only this keeps the one who
+    // was granted art and the one who was not off each other's thumbnail.
+    const plain = cardThumbnailKeyForCollectionCard(makeCard());
+    const withArt = cardThumbnailKeyForCollectionCard(
+      makeCard({ motif: { url: "https://e.com/a.png", scale: 1, opacity: 1 } }),
+    );
+    const rescaled = cardThumbnailKeyForCollectionCard(
+      makeCard({ motif: { url: "https://e.com/a.png", scale: 2, opacity: 1 } }),
+    );
+    expect(new Set([plain, withArt, rescaled]).size).toBe(3);
+  });
+
   it("answers from the cache for a card object it has already seen", () => {
     const card = makeCard();
     const first = cardThumbnailKeyForCollectionCard(card);

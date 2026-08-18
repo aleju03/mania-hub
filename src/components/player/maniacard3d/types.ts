@@ -1,3 +1,4 @@
+import type { CardMotif } from "#/lib/card-motif";
 import type { ManiaCardTier, ManiaCardTierStyle, ManiaSkills, NextManiaCardTier } from "#/lib/maniacard";
 import type { OsuScore, OsuUser } from "#/lib/types";
 
@@ -45,6 +46,10 @@ export interface ManiaCardReadyData {
   edgeColor: RgbaColor;
   glowColor: RgbaColor;
   badgeGradientStops: GradientStop[];
+  /* Replaces whatever this tier would have floated in the background - the
+     triangle flecks, or the cosmic tiers' starfield - with one image. Only a
+     holding granted from /admin/collections has one. */
+  motif: CardMotif | null;
 }
 
 export interface ManiaCardEmptyData {
@@ -58,4 +63,5 @@ export interface ManiaCardRenderInput {
   user: ManiaCardPanelProps["user"];
   scores: OsuScore[];
   tierOverride?: ManiaCardTier;
+  motifOverride?: CardMotif | null;
 }

@@ -4,7 +4,7 @@ import type { LeanDanEstimate, LeanTrackerScore, OsuScore } from "#/lib/types";
 import { getDanEstimates } from "#/lib/osu";
 import { getScoreRate } from "#/lib/score";
 import { useAuth } from "#/lib/auth-context";
-import { DAN_ESTIMATE_CACHE_VERSION } from "#/lib/dan-estimator/cache-version";
+import { DAN_ESTIMATE_CACHE_VERSION } from "#dan/dan-estimator/cache-version";
 import { fetchLiveDanEstimates, isLiveBackendConfigured } from "#/lib/live-backend";
 
 // ── Batched fetcher ────────────────────────────────────────────────────────────

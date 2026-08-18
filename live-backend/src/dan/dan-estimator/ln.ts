@@ -248,15 +248,17 @@ function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: numbe
 }
 
 // The LN dan ladder is numeric 1-15 with +/- variants (14 = Yami, 15 = Yume
-// is the ceiling; the "LN 16/17" table rows are difficulty-table charts, not
-// dan courses) and it never extends into the rice ladder's greek levels.
+// is the course ceiling; raw ratings sufficiently beyond it display as 15+
+// rather than inventing a 16th dan). The "LN 16/17" table rows are
+// difficulty-table charts, not dan courses, and the ladder never extends into
+// the rice ladder's greek levels.
 // Exported so player-dan positioning labels its LN side on the same scale as
 // chart LN verdicts.
 export function parseLnDan(rawDan: number): { label: string; variant: string | null; displayName: string } {
   const level = Math.max(1, Math.min(15, Math.round(rawDan)));
   const offset = rawDan - level;
   const variant = level >= 15
-    ? (offset <= -0.7 ? "-" : null)
+    ? (offset <= -0.7 ? "-" : rawDan >= 15.45 ? "+" : null)
     : offset <= -0.7 ? "-" : offset >= 0.45 ? "+" : null;
   return {
     label: String(level),

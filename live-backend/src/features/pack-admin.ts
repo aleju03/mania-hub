@@ -1,6 +1,7 @@
 import type { InValue } from "@libsql/client";
 import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch } from "../db.js";
+import { parseCardMotif, serializeCardMotif } from "./card-motif.js";
 import {
   getOrCreatePackWallet,
   getPackCollectionCard,
@@ -159,10 +160,11 @@ export async function setAdminPackWalletEconomy(
    row that is being created). */
 export interface AdminPackCardGrant {
   cardUserId: number;
-  /* One of the ten stored tiers, or null for an unrated card. Unlike the sync
-     path, "goat" is accepted for any player: the roster guard exists to stop a
-     stranger minting a 500-shard card, and this caller is the person who owns
-     the roster. */
+  /* One of the eleven stored tiers, or null for an unrated card. Unlike the
+     sync path, "goat" is accepted for any player (the roster guard exists to
+     stop a stranger minting a 500-shard card, and this caller is the person
+     who owns the roster) and so is "eternal", which no other writer may set at
+     all: this desk is the only way onto a card and the only way back off. */
   tier: string | null;
   tierLabel?: string | null;
   copies?: number;
@@ -188,6 +190,11 @@ export interface AdminPackCardGrant {
   username?: string;
   avatarUrl?: string;
   countryCode?: string;
+  /* The image this holding's card floats in place of its tier's triangle
+     flecks or starfield. Absent leaves whatever the row had, null clears it,
+     an object sets it - the same three states the label takes, and for the
+     same reason: editing one field of a card must not wipe another. */
+  motif?: unknown;
   overwriteIdentity?: boolean;
 }
 
@@ -239,7 +246,7 @@ export async function grantAdminPackCard(
 
   const existing = (await exec(
     db,
-    `select tier, tier_label, skills_id, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at
+    `select tier, tier_label, motif, skills_id, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at
      from pack_collection_cards where owner_user_id = ? and card_key = ?`,
     [owner.userId, cardKey],
   )).rows[0];
@@ -284,6 +291,14 @@ export async function grantAdminPackCard(
      second-guess here: a label means an override, an empty one clears it, and
      an absent one leaves whatever the holding had. The exception is a repaint,
      which was asked for outright and so goes to the shared row instead. */
+  /* Unlike the label, a motif is never inherited from anywhere else: there is
+     no catalog-wide fallback, so "keep" means literally the text already in
+     the row, re-parsed so a value stored under older bounds cannot survive an
+     edit that touches the card. */
+  const motif =
+    grant.motif === undefined
+      ? serializeCardMotif(parseCardMotif(existing?.motif))
+      : serializeCardMotif(parseCardMotif(grant.motif));
   const heldLabel = nonEmptyString(existing?.tier_label);
   const ownerTierLabel =
     tierLabel === undefined
@@ -310,13 +325,14 @@ export async function grantAdminPackCard(
          is right for a mint arriving from a browser and wrong for a form whose
          entire job is to say what the row should read. */
       sql: `insert into pack_collection_cards (
-         owner_user_id, card_user_id, card_key, tier, tier_label, skills_id, pp, global_rank,
+         owner_user_id, card_user_id, card_key, tier, tier_label, motif, skills_id, pp, global_rank,
          copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
-       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(owner_user_id, card_key) do update set
          card_user_id = excluded.card_user_id,
          tier = excluded.tier,
          tier_label = excluded.tier_label,
+         motif = excluded.motif,
          skills_id = excluded.skills_id,
          pp = excluded.pp,
          global_rank = excluded.global_rank,
@@ -331,6 +347,7 @@ export async function grantAdminPackCard(
         cardKey,
         tier,
         ownerTierLabel,
+        motif,
         skillsId,
         pp,
         globalRank,

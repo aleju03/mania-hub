@@ -10,13 +10,13 @@
 
 import { readFile } from "node:fs/promises";
 import { parseManiaBeatmap, type ManiaBeatmap } from "../src/lib/beatmap-parser.ts";
-import { estimateDan } from "../src/lib/dan-estimator.ts";
-import { getLnReferenceComparisonMetrics, getLnReferenceNeighbors } from "../src/lib/dan-estimator/ln.ts";
+import { estimateDan } from "#dan/dan-estimator";
+import { getLnReferenceComparisonMetrics, getLnReferenceNeighbors } from "#dan/dan-estimator/ln";
 import { estimateDanielDan } from "../src/lib/daniel-estimator.ts";
-import { estimateLeoBlackDan } from "../src/lib/leoblack-estimator.ts";
-import { classifyChart } from "../src/lib/chart-classifier.ts";
+import { estimateLeoBlackDan } from "#dan/leoblack-estimator";
+import { classifyChart } from "#dan/chart-classifier";
 import { classifyChartWithCompanella } from "../src/lib/companella.ts";
-import type { DanEstimate, DanFeatureMetrics } from "../src/lib/dan-estimator/types.ts";
+import type { DanEstimate, DanFeatureMetrics } from "#dan/dan-estimator/types";
 import {
   type DanBenchmarkFamily,
   getBenchmarkBeatmapIds,

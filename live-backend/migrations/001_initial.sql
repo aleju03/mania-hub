@@ -686,6 +686,10 @@ create table if not exists pack_collection_cards (
   -- label in pack_cards. Only /admin/collections writes it; a pulled card
   -- leaves it null and reads the catalog's.
   tier_label text,
+  -- The image this holding floats in its card background in place of the
+  -- tier's triangle flecks or starfield, as bounded JSON (src/lib/card-motif.ts).
+  -- Written from /admin/collections only, never by a wallet sync.
+  motif text,
   primary key(owner_user_id, card_key)
 );
 create index if not exists idx_pack_collection_owner_tier

@@ -953,8 +953,9 @@ describe("getPlayerSkillBreakdown", () => {
       expect(byKeyCount.get(6)?.dan?.rc?.label).toBe("9++");
       expect(byKeyCount.get(6)?.dan?.ln?.label).toBe("finish");
       expect(byKeyCount.get(4)?.dan?.rc?.label).toBe("alpha++");
-      // The 4K LN ladder ends at 15 (Yume); there is no LN 16 dan.
-      expect(byKeyCount.get(4)?.dan?.ln?.label).toBe("15");
+      // The 4K LN ladder ends at 15 (Yume); above-ceiling ratings become 15+
+      // rather than inventing an LN 16 dan.
+      expect(byKeyCount.get(4)?.dan?.ln?.label).toBe("15+");
     });
   });
 });

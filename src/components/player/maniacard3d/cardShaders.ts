@@ -20,6 +20,13 @@ uniform vec3 uTierColor;
 // full rainbow (lower values pull it toward the tier color).
 uniform vec3 uStarTint;
 uniform float uRainbow;
+// A granted card floats an image where its tier would have drifted triangles
+// or stars: the sprite, how large one copy is in grid cells (aspect baked in),
+// how strongly it reads, and whether there is one at all.
+uniform sampler2D uMotif;
+uniform float uMotifOn;
+uniform vec2 uMotifSize;
+uniform float uMotifOpacity;
 uniform vec4 uAvatarMask;
 uniform vec2 uTextureSize;
 uniform float uAvatarRadius;
@@ -103,6 +110,65 @@ float starLayer(vec2 uv, vec2 grid, float drift, float time) {
   return (core + halo) * sparse * twinkle * mix(0.55, 1.0, random(id + vec2(9.9, 7.7)));
 }
 
+/* One copy of the motif, owned by grid cell id.
+
+   A jittered grid, which is the one placement that is both even and unruly:
+   every cell carries exactly one copy so no part of the card is left bare,
+   and each copy roams most of its own cell, tilts, and takes its own size, so
+   no two land in step. The triangles' rule (skip 42% of cells outright) is
+   what this must not do - at fleck size a missing cell is sparkle, at picture
+   size it is a hole.
+
+   Returns the sampled pixel: rgb tints the glow, a is the shape. */
+vec4 motifCell(vec2 p, vec2 id) {
+  float variant = random(id);
+  vec2 center = id + 0.5 + (vec2(
+    random(id + vec2(7.1, 2.9)),
+    random(id + vec2(3.7, 9.4))
+  ) - 0.5) * 0.78;
+  vec2 halfSize = uMotifSize * (0.76 + random(id + vec2(11.2, 5.8)) * 0.48) * 0.5;
+  /* Cells are square in card pixels (1000/3 by 1400/4.2), so an angle here is
+     a true rotation and not a shear. */
+  float angle = (random(id + vec2(4.3, 8.9)) - 0.5) * 0.62;
+  vec2 rel = p - center;
+  vec2 turned = vec2(rel.x * cos(angle) + rel.y * sin(angle), rel.y * cos(angle) - rel.x * sin(angle));
+  vec2 local = turned / max(halfSize, vec2(0.0001));
+  if (abs(local.x) > 1.0 || abs(local.y) > 1.0) return vec4(0.0);
+  /* Grid y and texture v both run up the card: the sprite texture is uploaded
+     flipped (three's default), so v = 1 is the picture's top row, and local.y
+     is +1 at the top of the quad. Negating either one lands the image on its
+     head. */
+  vec2 spriteUv = vec2(local.x, local.y) * 0.5 + 0.5;
+  vec4 texel = texture2D(uMotif, spriteUv);
+  /* Shape is alpha weighted by brightness, not alpha alone. A cut-out PNG is
+     the motif this was built for and alpha carries it, but a photograph or any
+     other fully opaque image has alpha 1 across the whole quad, and lighting
+     that as-is would drift a glowing rectangle over the card instead of a
+     picture. Luminance keeps its dark parts dark. */
+  float luma = dot(texel.rgb, vec3(0.299, 0.587, 0.114));
+  float shape = texel.a * (0.35 + 0.65 * luma);
+  /* Strength varies per copy, but not so far that a faint one reads as a gap
+     in the coverage. The colour stays the picture's own. */
+  return vec4(texel.rgb, shape * mix(0.62, 1.0, variant));
+}
+
+/* Strongest copy covering this fragment. Same 3x3 neighbourhood scan as the
+   triangles: a sprite is larger than its own cell, so a fragment can belong to
+   a neighbour's shape. */
+vec4 motifWave(vec2 uv, vec2 grid, float offset) {
+  vec2 p = uv * grid;
+  p.y -= offset;
+  vec2 id = floor(p);
+  vec4 best = vec4(0.0);
+  for (int dy = -1; dy <= 1; dy += 1) {
+    for (int dx = -1; dx <= 1; dx += 1) {
+      vec4 sampled = motifCell(p, id + vec2(float(dx), float(dy)));
+      if (sampled.a > best.a) best = sampled;
+    }
+  }
+  return best;
+}
+
 float roundedCardMask(vec2 uv) {
   vec2 halfSize = vec2(0.5, 0.5);
   float radius = 0.055;
@@ -132,9 +198,13 @@ void main() {
   float drift1 = sin(uTime * 0.35) * 0.18;
   float drift2 = cos(uTime * 0.27 + 1.3) * 0.18;
 
+  // A motif replaces the tier's own drifting layer rather than joining it, so
+  // both of those fade out by exactly as much as it fades in.
+  float patternGain = 1.0 - uMotifOn;
+
 #if MC_MEDIUM
-  float triangles = triangleWave(vUv, vec2(6.0, 8.0), uTime * 0.07) * (1.0 - uStarfield);
-  float stars = starLayer(vUv, vec2(6.0, 8.0), uTime * 0.065, uTime) * uStarfield;
+  float triangles = triangleWave(vUv, vec2(6.0, 8.0), uTime * 0.07) * (1.0 - uStarfield) * patternGain;
+  float stars = starLayer(vUv, vec2(6.0, 8.0), uTime * 0.065, uTime) * uStarfield * patternGain;
 #else
   // Twinkling sparkle layer (drifts slowly upward).
   float triangles = (triangleWave(vUv, vec2(7.0, 9.0), uTime * 0.09) * 0.58
@@ -146,7 +216,17 @@ void main() {
   float stars = (starLayer(vUv, vec2(6.0, 8.0), uTime * 0.085, uTime)
               + starLayer(vUv + vec2(0.37, 0.21), vec2(10.0, 14.0), uTime * 0.04, uTime) * 0.65)
               * uStarfield;
+
+  triangles *= patternGain;
+  stars *= patternGain;
 #endif
+
+  /* Drifts upward at the triangles' own pace on a coarser grid, because one
+     copy of a picture is several times a fleck. Skipped outright when there is
+     no motif: the branch is uniform across the draw, so it costs nothing on
+     the cards that do not have one. */
+  vec4 motifSample = uMotifOn > 0.5 ? motifWave(vUv, vec2(3.0, 4.2), uTime * 0.05) : vec4(0.0);
+  float motif = motifSample.a * uMotifOn * uMotifOpacity;
 
   // Primary beam: nearly vertical, like a Pokemon card tilted under a lamp.
   // Axis points roughly down-right, so the band sweeps top-left to bottom-right.
@@ -184,7 +264,7 @@ void main() {
 
   // Holo: tier-tinted rainbow, lit only where the bands pass.
   vec3 holo = screen(uTierColor * 0.42, rainbow * 0.85)
-              * (triangles * 0.32 + stars * 0.30 + bandWide * 0.75 + 0.10);
+              * (triangles * 0.32 + stars * 0.30 + motif * 0.30 + bandWide * 0.75 + 0.10);
 
   // Specular streak (white core along the beam).
   vec3 sweep = vec3(bandSharp * 0.62 + glare * 0.22);
@@ -193,13 +273,17 @@ void main() {
   // rainbow blobs.
   vec3 starGlow = uStarTint * stars * 0.55;
 
+  // The motif lights in its own colours, pulled a little toward the tier's
+  // star tint so a garish picture still belongs to the card it floats on.
+  vec3 motifGlow = mix(uStarTint, motifSample.rgb, 0.78) * motif * 0.5;
+
   float inAvatar = roundedRectMaskPx(vUv, uAvatarMask, uAvatarRadius, uTextureSize);
   float foilGain = mix(1.0, 0.30, inAvatar);
   float mask = roundedCardMask(vUv);
 
-  vec3 color = (holo + sweep + starGlow) * foilGain;
+  vec3 color = (holo + sweep + starGlow + motifGlow) * foilGain;
   float alpha = clamp(
-    (triangles * 0.12 + stars * 0.40 + bandWide * 0.30 + bandSharp * 0.26 + glare * 0.12) * foilGain * uIntensity,
+    (triangles * 0.12 + stars * 0.40 + motif * 0.34 + bandWide * 0.30 + bandSharp * 0.26 + glare * 0.12) * foilGain * uIntensity,
     0.0,
     0.55
   ) * mask;

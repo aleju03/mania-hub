@@ -1,5 +1,6 @@
 import { avatarImageSrc } from "#/components/ui/Avatar";
-import { honoraryPlayerById } from "#/lib/honorary-players";
+import { cardMotifSignature, type CardMotif } from "#/lib/card-motif";
+import { honoraryAvatarUrl, honoraryPlayerById } from "#/lib/honorary-players";
 import {
   computeManiaSkills,
   getHonoraryTier,
@@ -22,10 +23,16 @@ const EMPTY_CARD_MESSAGE = "Need at least one ranked play with full beatmap data
 /* The CORS-proxied avatar URL the card textures draw from. Exported so reveal
    flows can warm the browser cache before the texture pipeline needs it. */
 export function maniaCardAvatarUrl(user: { id: number; avatar_url?: string }): string {
+  // A pack card renders from the identity the catalog stored, which for the
+  // archived roster is empty or osu!'s guest default, so the checked-in
+  // portrait is reapplied here rather than on each surface. Same-origin, so it
+  // skips the proxy and is already CORS-safe for the canvas.
+  const archived = honoraryAvatarUrl(user.id);
+  if (archived) return archived;
   return avatarImageSrc(user.avatar_url, user.id, { proxy: true }) ?? `/api/avatar?u=${user.id}`;
 }
 
-export function buildManiaCardRenderData({ user, scores, tierOverride }: ManiaCardRenderInput): ManiaCardRenderData {
+export function buildManiaCardRenderData({ user, scores, tierOverride, motifOverride }: ManiaCardRenderInput): ManiaCardRenderData {
   const skills = computeManiaSkills(
     scores.map((score) => ({
       ...score,
@@ -37,7 +44,7 @@ export function buildManiaCardRenderData({ user, scores, tierOverride }: ManiaCa
     return { status: "empty", message: EMPTY_CARD_MESSAGE };
   }
 
-  return buildManiaCardRenderDataFromSkills({ user, skills, scores, tierOverride });
+  return buildManiaCardRenderDataFromSkills({ user, skills, scores, tierOverride, motifOverride });
 }
 
 /* Rebuilds renderable card data from an already computed skills snapshot.
@@ -50,6 +57,7 @@ export function buildManiaCardRenderDataFromSkills({
   scores = [],
   tierOverride,
   labelOverride,
+  motifOverride,
 }: {
   user: ManiaCardRenderInput["user"];
   skills: ManiaSkills;
@@ -60,6 +68,10 @@ export function buildManiaCardRenderDataFromSkills({
      one collector's own copy rather than the player: a GOAT card given to one
      person reading something else must not reword everyone else's. */
   labelOverride?: string | null;
+  /* Background art for one holding, from /admin/collections. Same shape of
+     override as the badge text above: it belongs to this collector's copy, so
+     it is passed in per card rather than read off the tier. */
+  motifOverride?: CardMotif | null;
 }): ManiaCardReadyData {
   const honoraryTier = getHonoraryTier(user.id);
   const tier = tierOverride ?? honoraryTier ?? getManiaCardTier(skills.cardPower);
@@ -96,6 +108,7 @@ export function buildManiaCardRenderDataFromSkills({
     edgeColor: parseCssRgba(tierStyle.edgeFill),
     glowColor: parseCssRgba(tierStyle.glowColor),
     badgeGradientStops: parseGradientStops(tierStyle.badgeGradient),
+    motif: motifOverride ?? null,
   };
 }
 
@@ -119,6 +132,7 @@ export function getManiaCardRenderDataSignature(data: ManiaCardRenderData): stri
     signatureColor(data.edgeColor),
     signatureColor(data.glowColor),
     data.badgeGradientStops.map((stop) => `${stop.color}:${signatureNumber(stop.offset)}`).join(","),
+    cardMotifSignature(data.motif),
   ].join("|");
 }
 

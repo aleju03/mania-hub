@@ -182,7 +182,12 @@ export class ManiaCardRenderer {
     this.readyTextureRequestId = 0;
     let textures: CardTextureSet;
     try {
-      textures = await createCardTextures(data, { textureScale: this.quality.textureScale });
+      // driftingMotif: the overlay below floats the granted image, so the
+      // front is painted without a still copy of it underneath.
+      textures = await createCardTextures(data, {
+        textureScale: this.quality.textureScale,
+        driftingMotif: true,
+      });
     } catch (error) {
       if (!this.disposed && requestId === this.dataRequestId) this.onError?.(error);
       return;
@@ -206,7 +211,10 @@ export class ManiaCardRenderer {
     back.rotation.y = Math.PI;
     this.backMesh = back;
 
-    this.overlay = new Mesh(createCardFaceGeometry(), createOverlayMaterial(data, textures.layout, this.quality.shaderQuality));
+    this.overlay = new Mesh(
+      createCardFaceGeometry(),
+      createOverlayMaterial(data, textures.layout, this.quality.shaderQuality, textures.motif),
+    );
     this.overlay.position.z = OVERLAY_Z_OFFSET;
 
     this.group.add(body, front, back, this.overlay);

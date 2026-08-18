@@ -21,7 +21,7 @@ Read the file matching the task before working on that area; do not read them al
 ## Structure
 
 - `src/routes/`: file-based routes (`createFileRoute`); shared shell/auth/country/theme/live bootstrap in `src/routes/__root.tsx`; API proxy routes in `src/routes/api/`; admin pages in `src/routes/admin/`. Files prefixed with `-` are tests, not routes; never hand-edit generated `src/routeTree.gen.ts`.
-- `src/components/` (feature folders), `src/store.ts` (Zustand store), `src/lib/` (server/data utilities, osu! API layer: `src/lib/osu.ts` facade over `src/lib/osu/`, dan estimator: `src/lib/dan-estimator/`).
+- `src/components/` (feature folders), `src/store.ts` (Zustand store), `src/lib/` (server/data utilities, osu! API layer: `src/lib/osu.ts` facade over `src/lib/osu/`). The dan estimator and the vendored LeoBlack engine are single copies owned by the backend, imported here through the `#dan/*` and `#leoblack/*` aliases; see CLAUDE.md before moving either.
 - `live-backend/src/`: `server.ts` (boot), `ingest/`, `osc/`, `jobs/` + `workers.ts`, `features/` (one module per surface), `http/`, `live/` (SSE), `discord/`, `dan/`, `replay-video/`; schema in `migrations/001_initial.sql`, later tables migrated in `db.ts`.
 - `scripts/`: dan benchmark, replay capture, ghost atlas, dev helpers. Static assets in `public/`.
 

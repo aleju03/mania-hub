@@ -165,6 +165,7 @@ export function CardSpotlight({
       skills: card.skills,
       tierOverride: collectedCardTier(card),
       labelOverride: card.customLabel,
+      motifOverride: card.motif,
     });
     const fallbackTo2d = () => {
       rendererRef.current?.dispose();

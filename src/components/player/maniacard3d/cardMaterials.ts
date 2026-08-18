@@ -1,7 +1,9 @@
 import {
   Color,
+  DataTexture,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  RGBAFormat,
   ShaderMaterial,
   Vector2,
   Vector3,
@@ -10,7 +12,7 @@ import {
 import type { Texture } from "three";
 import { CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH, type ShaderQuality } from "./layout";
 import { cardOverlayFragmentShader, cardOverlayVertexShader } from "./cardShaders";
-import { getCosmicTierPalette } from "./cardTexture";
+import { getCosmicTierPalette, type PreparedCardMotif } from "./cardTexture";
 import type { FaceLayout } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
 
@@ -20,6 +22,19 @@ export function createEdgeMaterial(data: ManiaCardReadyData) {
     roughness: 0.36,
     metalness: 0.18,
   });
+}
+
+/* Bound to uMotif on every card that has no motif of its own. A sampler must
+   point at something, and one shared transparent pixel is cheaper than making
+   the shader branch on a texture that is never read. */
+let emptyMotifTexture: DataTexture | null = null;
+
+function getEmptyMotifTexture(): DataTexture {
+  if (!emptyMotifTexture) {
+    emptyMotifTexture = new DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1, RGBAFormat);
+    emptyMotifTexture.needsUpdate = true;
+  }
+  return emptyMotifTexture;
 }
 
 export function createFaceMaterial(texture: Texture) {
@@ -34,6 +49,10 @@ export function createOverlayMaterial(
   data: ManiaCardReadyData,
   layout: FaceLayout,
   shaderQuality: ShaderQuality = "high",
+  /* The motif this card's front drew, already uploaded as a texture and sized
+     in grid cells. Null keeps the tier's own drifting layer, which is what
+     every un-granted card wants. */
+  motif: PreparedCardMotif | null = null,
 ) {
   const avatar = layout.masks.avatar;
   const cosmic = getCosmicTierPalette(data.tier);
@@ -55,6 +74,10 @@ export function createOverlayMaterial(
       uLight: { value: new Vector2(0.5, 0.38) },
       uTierColor: { value: new Vector3(data.glowColor.r / 255, data.glowColor.g / 255, data.glowColor.b / 255) },
       uStarTint: { value: new Vector3(...(cosmic?.starTint ?? [0.78, 1.0, 0.9])) },
+      uMotif: { value: motif?.texture ?? getEmptyMotifTexture() },
+      uMotifOn: { value: motif ? 1 : 0 },
+      uMotifSize: { value: new Vector2(motif?.cellWidth ?? 0.34, motif?.cellHeight ?? 0.34) },
+      uMotifOpacity: { value: motif?.opacity ?? 1 },
       uRainbow: { value: cosmic?.rainbow ?? 1 },
       uAvatarMask: {
         value: new Vector4(

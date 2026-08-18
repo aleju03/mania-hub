@@ -2547,13 +2547,21 @@ function farmStatusLabel(rec: LiveFarmHelperRec): string {
   return "improve";
 }
 
-// The player's pb on the map when it sits in a different speed lane than the
-// rec's. A lane with no score of theirs is not the same as a map they never
-// touched: peers farming a chart on HT put the HT lane on the board even for
-// someone holding an NM pb on it.
-function otherLaneBest(rec: LiveFarmHelperRec): { pp: number; label: string } | null {
+// The player's pb on the map when it was set under different mods than the row
+// is about. A row they have no score on is not the same as a map they never
+// touched: peers farming a chart with HT put that row on the board even for
+// someone holding a no-mod pb on it.
+function otherLaneBest(rec: LiveFarmHelperRec): { pp: number; label: string; speed: string } | null {
   if (rec.subjectPp != null || rec.subjectOtherLanePp == null) return null;
-  return { pp: rec.subjectOtherLanePp, label: speedBucketLabel(rec.subjectOtherLaneSpeed ?? "normal") };
+  const speed = rec.subjectOtherLaneSpeed ?? "normal";
+  return { pp: rec.subjectOtherLanePp, label: speedBucketLabel(speed), speed };
+}
+
+// Mods in words for a sentence. "NM" is the internal bucket name, not something
+// a player reads mid-sentence, so the no-mod case spells it out; the compact
+// stat cells keep the short badge form.
+function modsPhrase(speed: string): string {
+  return speed === "normal" ? "with no mods" : `with ${speedBucketLabel(speed)}`;
 }
 
 // What the "your best" stat can honestly show for a lane the board has no
@@ -2579,7 +2587,11 @@ function whySentence(rec: LiveFarmHelperRec): string {
   if (subjectPp == null) {
     const other = otherLaneBest(rec);
     if (other) {
-      return `${nearYou} farm this on ${speedBucketLabel(rec.speedBucket)}. Your best on the map is ${formatPp(other.pp)}pp on ${other.label}, and they average ${formatPp(rec.peerPpMedian)}pp on this lane.`;
+      // The row's own mods are already on the badge next to the title, so they
+      // are only worth naming here when they are what makes this row different
+      // from the score the player has.
+      const rowMods = rec.speedBucket === "normal" ? "" : ` ${modsPhrase(rec.speedBucket)}`;
+      return `${nearYou} farm this${rowMods} and average ${formatPp(rec.peerPpMedian)}pp. Your best on the map is ${formatPp(other.pp)}pp ${modsPhrase(other.speed)}.`;
     }
     return `${nearYou} farm this and it is not in your top plays. They average ${formatPp(rec.peerPpMedian)}pp on it.`;
   }

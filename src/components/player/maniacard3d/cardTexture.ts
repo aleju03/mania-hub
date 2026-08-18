@@ -1,8 +1,9 @@
-import { CanvasTexture, LinearFilter, SRGBColorSpace } from "three";
+import { CanvasTexture, ClampToEdgeWrapping, LinearFilter, SRGBColorSpace, Texture } from "three";
 import { CARD_CORNER_RADIUS, CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH } from "./layout";
 import { buildFaceLayout } from "./textureLayout";
 import type { FaceLayout } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
+import { cardMotifImageSrc, type CardMotif } from "#/lib/card-motif";
 import { COSMIC_TIERS } from "#/lib/maniacard-cosmic";
 import type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
@@ -29,11 +30,60 @@ const MANIA_GLYPH_D =
 export { getCosmicTierPalette } from "#/lib/maniacard-cosmic";
 export type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
+/* Everything the overlay shader needs to drift the granted image, resolved
+   once here so the material never touches an <img> or the motif's raw numbers.
+   Its texture is owned by the CardTextureSet and dies with it. */
+export interface PreparedCardMotif {
+  texture: Texture;
+  /** One copy's size in grid cells, with the image's aspect already applied. */
+  cellWidth: number;
+  cellHeight: number;
+  opacity: number;
+}
+
 export interface CardTextureSet {
   frontTexture: CanvasTexture;
   backTexture: CanvasTexture;
+  /** Set only when this card floats a motif and its image actually loaded. */
+  motif: PreparedCardMotif | null;
   layout: FaceLayout;
   dispose: () => void;
+}
+
+/* The granted image as a texture the overlay shader can sample.
+
+   No mipmaps and clamped on both axes: the sprite is drawn from one cell of a
+   jittered grid, so a wrapped edge would bleed the far side of the picture in
+   and a mip chain would blur it at exactly the sizes it is drawn at. */
+function createMotifTexture(image: HTMLImageElement): Texture {
+  const texture = new Texture(image);
+  texture.colorSpace = SRGBColorSpace;
+  texture.wrapS = ClampToEdgeWrapping;
+  texture.wrapT = ClampToEdgeWrapping;
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/* How much of a grid cell one drifting copy covers, with the image's own
+   proportions baked in so a wide picture stays wide. The shader's cells are
+   square in card pixels (1000/3 by 1400/4.2), so the longer side takes the
+   granted scale and the shorter one is divided down by the aspect. At 0.34 of
+   a cell a copy is about 113px on the 1000x1400 face, which leaves a clear
+   third of a cell between neighbours however they jitter. */
+function prepareCardMotif(motif: CardMotif, image: HTMLImageElement): PreparedCardMotif {
+  const width = image.naturalWidth || image.width || 1;
+  const height = image.naturalHeight || image.height || 1;
+  const aspect = width / height;
+  const base = 0.34 * motif.scale;
+  return {
+    texture: createMotifTexture(image),
+    cellWidth: aspect >= 1 ? base : base * aspect,
+    cellHeight: aspect >= 1 ? base / aspect : base,
+    opacity: motif.opacity,
+  };
 }
 
 /* Resolves once every weight in FONT_WEIGHTS is loaded, or once the timeout
@@ -60,8 +110,14 @@ export async function createCardTextures(
   data: ManiaCardReadyData,
   /* frontOnly leaves the back texture blank (it still exists and disposes the
      same): thumbnail snapshots read only the front, and the back's paint is
-     half the canvas work. */
-  options: { textureScale?: number; frontOnly?: boolean } = {},
+     half the canvas work.
+
+     driftingMotif says the overlay shader is going to float the granted image
+     itself, so the front must not also bake a still copy of it into the
+     canvas. Two sets of the same picture, one moving and one nailed down, is
+     just clutter. Callers with no shader (thumbnails) leave it off and get the
+     painted copies. */
+  options: { textureScale?: number; frontOnly?: boolean; driftingMotif?: boolean } = {},
 ): Promise<CardTextureSet> {
   // Before measuring, not just before drawing: the username is auto-sized from
   // its measured width, so Arial metrics would size it wrong even if the font
@@ -81,24 +137,34 @@ export async function createCardTextures(
     return front.measureText(text).width;
   };
   const layout = buildFaceLayout(data, measure);
-  const [avatar, laurel] = await Promise.all([
+  const [avatar, laurel, motif] = await Promise.all([
     loadImage(data.avatarUrl).catch(() => null),
     loadImage("/images/maniacard/laurel-wreath.svg").catch(() => null),
+    // A motif that will not load is simply not drawn: the card falls back to
+    // the flecks or starfield its tier already had, which is a card that looks
+    // ordinary rather than one that looks broken.
+    data.motif ? loadImage(cardMotifImageSrc(data.motif)).catch(() => null) : Promise.resolve(null),
   ]);
 
-  drawFront(front, data, layout, avatar, laurel);
+  drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true);
   if (!options.frontOnly) drawBack(back, data, layout, laurel);
 
   const frontTexture = toTexture(frontCanvas);
   const backTexture = toTexture(backCanvas);
+  /* The same image the front just painted, handed to the shader rather than
+     loaded twice. Null whenever the front fell back to its tier's own pattern,
+     which is what tells the shader to keep drifting triangles or stars. */
+  const preparedMotif = data.motif && motif ? prepareCardMotif(data.motif, motif) : null;
 
   return {
     frontTexture,
     backTexture,
+    motif: preparedMotif,
     layout,
     dispose: () => {
       frontTexture.dispose();
       backTexture.dispose();
+      preparedMotif?.texture.dispose();
     },
   };
 }
@@ -142,17 +208,30 @@ function drawFront(
   layout: FaceLayout,
   avatar: HTMLImageElement | null,
   laurel: HTMLImageElement | null,
+  motif: HTMLImageElement | null,
+  /* True when the overlay shader draws the drifting copies, so the only thing
+     the motif does here is take the tier's own pattern away. */
+  driftingMotif = false,
 ) {
+  /* A motif takes the place of whichever background pattern this tier would
+     have drawn - the triangle flecks below, or the cosmic starfield inside
+     drawCosmicBackground - rather than sitting on top of one. Everything else
+     about the tier (its wash, its rim, its laurel) is untouched: the card is
+     still its rarity, it just floats something else. */
+  const withMotif = data.motif !== null && motif !== null;
   context.save();
   clipCard(context);
-  drawTierBackground(context, data);
+  drawTierBackground(context, data, { starfield: !withMotif });
   // Cosmic tiers skip the triangle flecks entirely - their front is a clean
   // starfield (static here, drifting/twinkling in the overlay shader).
   const cosmic = COSMIC_TIERS[data.tier];
   if (cosmic) {
     if (cosmic.laurelWatermark) drawLaurelWatermark(context, data, laurel);
     drawCosmicFoilAccents(context, cosmic);
-  } else {
+  }
+  if (withMotif) {
+    if (!driftingMotif) drawMotifPattern(context, data.motif as CardMotif, motif as HTMLImageElement);
+  } else if (!cosmic) {
     drawTrianglePattern(context, 0.18);
   }
   drawModeBadge(context, data);
@@ -698,10 +777,14 @@ function drawLaurelHalf(context: CanvasRenderingContext2D, side: 1 | -1) {
   }
 }
 
-function drawTierBackground(context: CanvasRenderingContext2D, data: ManiaCardReadyData) {
+function drawTierBackground(
+  context: CanvasRenderingContext2D,
+  data: ManiaCardReadyData,
+  options: { starfield?: boolean } = {},
+) {
   const cosmic = COSMIC_TIERS[data.tier];
   if (cosmic) {
-    drawCosmicBackground(context, cosmic);
+    drawCosmicBackground(context, cosmic, options.starfield !== false);
     return;
   }
 
@@ -714,7 +797,7 @@ function drawTierBackground(context: CanvasRenderingContext2D, data: ManiaCardRe
   context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 }
 
-function drawCosmicBackground(context: CanvasRenderingContext2D, tier: CosmicTierPalette) {
+function drawCosmicBackground(context: CanvasRenderingContext2D, tier: CosmicTierPalette, starfield = true) {
   context.save();
 
   const base = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
@@ -745,7 +828,7 @@ function drawCosmicBackground(context: CanvasRenderingContext2D, tier: CosmicTie
   context.fillStyle = aurora;
   context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 
-  drawCosmicStarfield(context, tier.stars);
+  if (starfield) drawCosmicStarfield(context, tier.stars);
 
   context.restore();
 }
@@ -833,6 +916,69 @@ function drawLaurelWatermark(
   context.save();
   context.globalAlpha = 0.13;
   context.drawImage(tinted, cx - width / 2, cy - height / 2);
+  context.restore();
+}
+
+/* The granted image scattered where the tier's own flecks would be, for the
+   stills: thumbnails and anything else with no shader behind it. The 3D card
+   passes driftingMotif and never gets here, because the overlay floats the
+   same copies itself.
+
+   Grid, count and sizes are the overlay's, rewritten in the 1000x1400
+   texture's own pixels, so a still of a card scatters its art the way the
+   moving card does: a jittered 3 by 4 grid, one copy per cell with no cell
+   skipped, each roaming most of its own cell and taking its own tilt, size
+   and fade. Corners of the card are avoided as the triangles avoid them.
+
+   The image keeps its aspect ratio: a wide logo stays wide instead of being
+   squeezed into a square. */
+const MOTIF_COLUMNS = 3;
+const MOTIF_ROWS = 4;
+const MOTIF_JITTER = 0.78;
+const MOTIF_BASE_SIZE = 86;
+const MOTIF_SIZE_SPREAD = 54;
+
+function drawMotifPattern(context: CanvasRenderingContext2D, motif: CardMotif, image: HTMLImageElement) {
+  const naturalWidth = image.naturalWidth || image.width || 1;
+  const naturalHeight = image.naturalHeight || image.height || 1;
+  const aspect = naturalWidth / naturalHeight;
+
+  const fitsInsideCard = (x: number, y: number, width: number, height: number, rotation: number) => {
+    const halfW = width * 0.5;
+    const halfH = height * 0.5;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    for (const [vx, vy] of [[-halfW, -halfH], [halfW, -halfH], [halfW, halfH], [-halfW, halfH]]) {
+      if (!isInsideRoundedCard(x + vx * cos - vy * sin, y + vx * sin + vy * cos, 10)) return false;
+    }
+    return true;
+  };
+
+  const cellWidth = CARD_TEXTURE_WIDTH / MOTIF_COLUMNS;
+  const cellHeight = CARD_TEXTURE_HEIGHT / MOTIF_ROWS;
+
+  context.save();
+  for (let row = 0; row < MOTIF_ROWS; row += 1) {
+    for (let col = 0; col < MOTIF_COLUMNS; col += 1) {
+      const index = row * 13 + col;
+      const size = (MOTIF_BASE_SIZE + random01(index * 13.81 + 2.7) * MOTIF_SIZE_SPREAD) * motif.scale;
+      const width = aspect >= 1 ? size : size * aspect;
+      const height = aspect >= 1 ? size / aspect : size;
+      const x = (col + 0.5 + (random01(index * 43.91 + 8.5) - 0.5) * MOTIF_JITTER) * cellWidth;
+      const y = (row + 0.5 + (random01(index * 29.37 + 12.4) - 0.5) * MOTIF_JITTER) * cellHeight;
+      const rotation = (random01(index * 31.7 + 11.2) - 0.5) * 0.62;
+      if (!fitsInsideCard(x, y, width, height, rotation)) continue;
+      // save/restore per fleck rather than resetting the transform: the whole
+      // canvas is pre-scaled when a thumbnail draws at a fraction of texture
+      // size, and setTransform would throw that scale away mid-card.
+      context.save();
+      context.globalAlpha = motif.opacity * (0.46 + random01(index * 5.21 + 1.3) * 0.32);
+      context.translate(x, y);
+      context.rotate(rotation);
+      context.drawImage(image, -width / 2, -height / 2, width, height);
+      context.restore();
+    }
+  }
   context.restore();
 }
 

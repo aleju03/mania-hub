@@ -1,3 +1,9 @@
+// Single cache version for both sides. Until this module was deduplicated the
+// frontend kept its own copy that had drifted one behind (12 vs 13) while
+// describing the same four changes under lower numbers, so a bump applied to
+// one cache silently missed the other. The higher number won: keeping 13 leaves
+// the backend's stored estimates valid and costs the frontend one recompute.
+//
 // v10: LN kNN reference set extended with the curated benchmark corpus (ln.ts);
 // out-of-corpus charts no longer over-rate through the ln-pressure regression.
 // v11: upstream leoblack fix for the 4K LN interval table (osumania_map_analyser

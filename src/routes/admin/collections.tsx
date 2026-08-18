@@ -27,6 +27,7 @@ import {
   type CardForm,
 } from "../../lib/admin-collections-form";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
+import { normalizeCardMotifUrl } from "../../lib/card-motif";
 import { formatNumber } from "../../lib/format";
 import { fetchLivePackCardSnapshotDirect } from "../../lib/live-backend";
 import {
@@ -571,6 +572,10 @@ function GrantPanel({
   const [filling, setFilling] = useState(false);
 
   const patch = useCallback((next: Partial<CardForm>) => setForm((current) => ({ ...current, ...next })), []);
+  // Only https URLs are stored, so the preview refuses the same ones the grant
+  // would, rather than showing a picture that will never reach a card.
+  const motifPreviewUrl = normalizeCardMotifUrl(form.motifUrl);
+  const [motifBroken, setMotifBroken] = useState<string | null>(null);
   const setSkill = useCallback((key: string, value: string) => {
     setForm((current) => ({ ...current, skillsMode: "set", skills: { ...current.skills, [key]: value } }));
   }, []);
@@ -880,6 +885,77 @@ function GrantPanel({
         </div>
       </div>
 
+      {/* What the card floats behind everything else. Every tier already drifts
+          something (triangle flecks, or a starfield on the cosmic tiers); this
+          swaps that layer for one image on this collector's copy alone. */}
+      <div className="mt-3 pt-3 border-t border-osu-b3/20">
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-osu-f1">Background art</span>
+          <SelectMenu
+            value={form.motifMode}
+            options={[
+              { value: "keep", label: "Leave alone" },
+              { value: "set", label: "Float this image" },
+              { value: "clear", label: "Back to the tier's own" },
+            ]}
+            onChange={(value) => patch({ motifMode: value as CardForm["motifMode"] })}
+          />
+          <span className="text-[11px] text-osu-f1">Drifts in place of this tier's triangles or stars, on this copy only.</span>
+        </div>
+        <div className={`mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2.5 ${form.motifMode === "set" ? "" : "opacity-40"}`}>
+          <div className="col-span-2">
+            <span className={LABEL}>Image URL</span>
+            <input
+              value={form.motifUrl}
+              onChange={(event) => patch({ motifUrl: event.target.value, motifMode: "set" })}
+              placeholder="https://"
+              className={INPUT}
+            />
+          </div>
+          <div>
+            <span className={LABEL}>Scale</span>
+            <input
+              type="number"
+              step="0.05"
+              min={0.25}
+              max={4}
+              value={form.motifScale}
+              onChange={(event) => patch({ motifScale: event.target.value, motifMode: "set" })}
+              className={INPUT}
+            />
+          </div>
+          <div>
+            <span className={LABEL}>Opacity</span>
+            <input
+              type="number"
+              step="0.05"
+              min={0.05}
+              max={1}
+              value={form.motifOpacity}
+              onChange={(event) => patch({ motifOpacity: event.target.value, motifMode: "set" })}
+              className={INPUT}
+            />
+          </div>
+        </div>
+        {/* Straight off the source, not through /api/card-motif: the proxy only
+            serves images that are already on a card, so nothing would load here
+            until after the grant lands. */}
+        {form.motifMode === "set" && motifPreviewUrl ? (
+          <div className="mt-2 flex items-center gap-2">
+            <img
+              src={motifPreviewUrl}
+              alt=""
+              className="w-10 h-10 object-contain"
+              style={{ opacity: Number(form.motifOpacity) || 1 }}
+              onError={() => setMotifBroken(motifPreviewUrl)}
+            />
+            <span className="text-[11px] text-osu-f1">
+              {motifBroken === motifPreviewUrl ? "That URL did not load." : "Transparent PNGs read best."}
+            </span>
+          </div>
+        ) : null}
+      </div>
+
       <div className="mt-3 pt-3 border-t border-osu-b3/20 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <div>
           <span className={LABEL}>Serial</span>
@@ -1071,6 +1147,7 @@ function CollectionPanel({
                 ) : null}
                 <span className="text-[11px] text-osu-f1 tabular-nums">{formatNumber(Math.round(card.pp))}pp</span>
                 {card.skills ? null : <span className="text-[11px] text-osu-f1">no snapshot</span>}
+                {card.motif ? <span className="text-[11px] text-osu-f1">floats art</span> : null}
 
                 <button
                   disabled={removing === cardKey || busy}

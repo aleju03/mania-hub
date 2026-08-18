@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#/*": "./src/*"
+    "#/*": "./src/*",
+    "#dan/*": "./live-backend/src/dan/*",
+    "#leoblack/*": "./live-backend/vendor/leoblack/*"
   },
   "scripts": {
     "postinstall": "node scripts/prune-onnxruntime-web.mjs",

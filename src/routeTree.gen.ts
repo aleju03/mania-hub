@@ -47,6 +47,7 @@ import { Route as AdminTodosRouteImport } from './routes/admin/todos'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
 import { Route as ApiAvatarRouteImport } from './routes/api/avatar'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
+import { Route as ApiCardMotifRouteImport } from './routes/api/card-motif'
 import { Route as ApiCatboxUploadRouteImport } from './routes/api/catbox-upload'
 import { Route as ApiCommunityImageRouteImport } from './routes/api/community-image'
 import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
@@ -58,6 +59,7 @@ import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as CommunitiesIdRouteImport } from './routes/communities_.$id'
 import { Route as CommunitiesReviewRouteImport } from './routes/communities_.review'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
+import { Route as PacksCollectionsRouteImport } from './routes/packs_.collections'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ReplayUploadsRouteImport } from './routes/replay_.uploads'
 import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
@@ -266,6 +268,11 @@ const ApiBackgroundRoute = ApiBackgroundRouteImport.update({
   path: '/api/background',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCardMotifRoute = ApiCardMotifRouteImport.update({
+  id: '/api/card-motif',
+  path: '/api/card-motif',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCatboxUploadRoute = ApiCatboxUploadRouteImport.update({
   id: '/api/catbox-upload',
   path: '/api/catbox-upload',
@@ -319,6 +326,11 @@ const CommunitiesReviewRoute = CommunitiesReviewRouteImport.update({
 const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
   id: '/dev/opt-in-preview',
   path: '/dev/opt-in-preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PacksCollectionsRoute = PacksCollectionsRouteImport.update({
+  id: '/packs_/collections',
+  path: '/packs/collections',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
@@ -447,6 +459,7 @@ export interface FileRoutesByFullPath {
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/community-image': typeof ApiCommunityImageRoute
   '/api/favicon': typeof ApiFaviconRoute
@@ -458,6 +471,7 @@ export interface FileRoutesByFullPath {
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay/uploads': typeof ReplayUploadsRoute
   '/skins/$id': typeof SkinsIdRoute
@@ -515,6 +529,7 @@ export interface FileRoutesByTo {
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/community-image': typeof ApiCommunityImageRoute
   '/api/favicon': typeof ApiFaviconRoute
@@ -526,6 +541,7 @@ export interface FileRoutesByTo {
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay/uploads': typeof ReplayUploadsRoute
   '/skins/$id': typeof SkinsIdRoute
@@ -584,6 +600,7 @@ export interface FileRoutesById {
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/community-image': typeof ApiCommunityImageRoute
   '/api/favicon': typeof ApiFaviconRoute
@@ -595,6 +612,7 @@ export interface FileRoutesById {
   '/communities_/$id': typeof CommunitiesIdRoute
   '/communities_/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/packs_/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay_/uploads': typeof ReplayUploadsRoute
   '/skins_/$id': typeof SkinsIdRoute
@@ -654,6 +672,7 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
+    | '/api/card-motif'
     | '/api/catbox-upload'
     | '/api/community-image'
     | '/api/favicon'
@@ -665,6 +684,7 @@ export interface FileRouteTypes {
     | '/communities/$id'
     | '/communities/review'
     | '/dev/opt-in-preview'
+    | '/packs/collections'
     | '/player/$username'
     | '/replay/uploads'
     | '/skins/$id'
@@ -722,6 +742,7 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
+    | '/api/card-motif'
     | '/api/catbox-upload'
     | '/api/community-image'
     | '/api/favicon'
@@ -733,6 +754,7 @@ export interface FileRouteTypes {
     | '/communities/$id'
     | '/communities/review'
     | '/dev/opt-in-preview'
+    | '/packs/collections'
     | '/player/$username'
     | '/replay/uploads'
     | '/skins/$id'
@@ -790,6 +812,7 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
+    | '/api/card-motif'
     | '/api/catbox-upload'
     | '/api/community-image'
     | '/api/favicon'
@@ -801,6 +824,7 @@ export interface FileRouteTypes {
     | '/communities_/$id'
     | '/communities_/review'
     | '/dev/opt-in-preview'
+    | '/packs_/collections'
     | '/player/$username'
     | '/replay_/uploads'
     | '/skins_/$id'
@@ -859,6 +883,7 @@ export interface RootRouteChildren {
   ApiAudioRoute: typeof ApiAudioRoute
   ApiAvatarRoute: typeof ApiAvatarRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
+  ApiCardMotifRoute: typeof ApiCardMotifRoute
   ApiCatboxUploadRoute: typeof ApiCatboxUploadRoute
   ApiCommunityImageRoute: typeof ApiCommunityImageRoute
   ApiFaviconRoute: typeof ApiFaviconRoute
@@ -870,6 +895,7 @@ export interface RootRouteChildren {
   CommunitiesIdRoute: typeof CommunitiesIdRoute
   CommunitiesReviewRoute: typeof CommunitiesReviewRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
+  PacksCollectionsRoute: typeof PacksCollectionsRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
   ReplayUploadsRoute: typeof ReplayUploadsRoute
   SkinsIdRoute: typeof SkinsIdRoute
@@ -1149,6 +1175,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBackgroundRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/card-motif': {
+      id: '/api/card-motif'
+      path: '/api/card-motif'
+      fullPath: '/api/card-motif'
+      preLoaderRoute: typeof ApiCardMotifRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/catbox-upload': {
       id: '/api/catbox-upload'
       path: '/api/catbox-upload'
@@ -1224,6 +1257,13 @@ declare module '@tanstack/react-router' {
       path: '/dev/opt-in-preview'
       fullPath: '/dev/opt-in-preview'
       preLoaderRoute: typeof DevOptInPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/packs_/collections': {
+      id: '/packs_/collections'
+      path: '/packs/collections'
+      fullPath: '/packs/collections'
+      preLoaderRoute: typeof PacksCollectionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/player/$username': {
@@ -1443,6 +1483,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAudioRoute: ApiAudioRoute,
   ApiAvatarRoute: ApiAvatarRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,
+  ApiCardMotifRoute: ApiCardMotifRoute,
   ApiCatboxUploadRoute: ApiCatboxUploadRoute,
   ApiCommunityImageRoute: ApiCommunityImageRoute,
   ApiFaviconRoute: ApiFaviconRoute,
@@ -1454,6 +1495,7 @@ const rootRouteChildren: RootRouteChildren = {
   CommunitiesIdRoute: CommunitiesIdRoute,
   CommunitiesReviewRoute: CommunitiesReviewRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
+  PacksCollectionsRoute: PacksCollectionsRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
   ReplayUploadsRoute: ReplayUploadsRoute,
   SkinsIdRoute: SkinsIdRoute,

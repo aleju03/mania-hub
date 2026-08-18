@@ -12,6 +12,12 @@ import type {
   DanPrimaryFamily,
 } from "./dan-estimator/types.js";
 
+export {
+  analyzeManiaPatterns,
+  MANIA_PATTERN_ANALYZER_LABELS,
+  SUPPORTED_MANIA_PATTERN_IDS,
+} from "./dan-estimator/patterns.js";
+
 export type {
   DanEstimate,
   DanEstimateDebug,
@@ -23,6 +29,9 @@ export type {
   DanScoreContribution,
   DanScoringDebug,
   DanSkillFamily,
+  ManiaPatternAnalysis,
+  ManiaPatternHit,
+  ManiaPatternId,
 } from "./dan-estimator/types.js";
 
 interface NormalSkillSrAdjustment {

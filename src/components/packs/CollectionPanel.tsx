@@ -1,11 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search, Star } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuth } from "#/lib/auth-context";
-import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
+import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import {
-  collectedCardTier,
   duplicateShardTotal,
   duplicateShardValue,
   ownedCards,
@@ -16,45 +14,24 @@ import {
   type CollectedCard,
   type PackWallet,
 } from "#/lib/pack-collection";
-import { HONORARY_PLAYERS } from "#/lib/honorary-players";
+import { honoraryAvatarUrl, HONORARY_PLAYERS } from "#/lib/honorary-players";
 import {
-  fetchOwnPackShowcase,
   fetchServerPackCollectionMissing,
   fetchServerPackCollectionPage,
-  PACK_SHOWCASE_MAX_CARDS,
-  saveOwnPackShowcase,
   type ServerPackCollectionMissingPage,
   type ServerPackCollectionMissingPlayer,
   type ServerPackCollectionPage,
 } from "#/lib/pack-wallet-sync";
-import { fetchPackPlayerScores } from "#/lib/packs";
-import {
-  buildManiaCardRenderData,
-  buildManiaCardRenderDataFromSkills,
-} from "../player/maniacard3d/renderData";
 import { CountryFlag } from "../ui/CountryFlag";
 import { GOAT_ALBUM_CODE } from "./album/albumModel";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
-import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnapshot";
-import {
-  cardThumbnailKeyForCollectionCard,
-  cardThumbnailKeyForData,
-  claimCardThumbnailErrorFallback,
-  COLLECTION_CARD_THUMB_WIDTH,
-  forgetRemoteCardThumbnail,
-  getMemoryCardThumbnail,
-  loadPersistedCardThumbnail,
-  loadR2CardThumbnails,
-  noteCardThumbnailStored,
-  rememberCardThumbnailBlob,
-} from "./cardThumbnailCache";
+import { CollectionCardPlaceholder, CollectionCardTile, type CardMint } from "./CardTile";
+import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "./cardThumbnailCache";
+import { useCardThumbnails } from "./useCardThumbnails";
 import { playRecycleClink } from "./packSfx";
 
-export interface CardMint {
-  skills: ManiaSkills;
-  tier: ManiaCardTier | null;
-  tierLabel: string | null;
-}
+export type { CardMint };
+
 
 /* "untracked" is the pseudo-filter for owned players who left the draw pool;
    like "unrated" it rides the tier param, but the server resolves it by pool
@@ -117,10 +94,10 @@ interface LoadedServerCollectionPage {
 }
 
 const COLLECTION_PAGE_SIZE = 15;
-const skeletonThumbnailCache = new Map<ManiaCardTier | "neutral", string>();
 const serverCollectionPageCache = new Map<string, ServerPackCollectionPage>();
 const COLLECTION_TIER_ORDER: ManiaCardTier[] = [
   "goat",
+  "eternal",
   "worldClass",
   "ascendant",
   "mythic",
@@ -131,61 +108,6 @@ const COLLECTION_TIER_ORDER: ManiaCardTier[] = [
   "rare",
   "common",
 ];
-
-let activeRenders = 0;
-const renderQueue: Array<() => void> = [];
-async function throttleRender<T>(task: () => Promise<T>): Promise<T> {
-  if (activeRenders >= 2) await new Promise<void>((resolve) => renderQueue.push(resolve));
-  activeRenders += 1;
-  try {
-    return await task();
-  } finally {
-    activeRenders -= 1;
-    const next = renderQueue.shift();
-    if (next) {
-      /* Resolving here keeps the whole visible page in one microtask chain:
-         each canvas mint hands the main thread straight to the next before a
-         queued click can run. A task boundary preserves the two-wide render
-         bound while letting input and the streak-game handoff go first. */
-      window.setTimeout(next, 0);
-    }
-  }
-}
-
-function thumbnailKey(card: CollectedCard): string {
-  return cardThumbnailKeyForCollectionCard(card) ?? `${card.userId}:${card.tier ?? "unrated"}:plain`;
-}
-
-function cardUserForRender(card: CollectedCard) {
-  return {
-    id: card.userId,
-    username: card.username,
-    avatar_url: card.avatarUrl,
-    country_code: card.countryCode,
-    statistics: { global_rank: card.globalRank, pp: card.pp },
-  };
-}
-
-async function renderCollectionThumbnail(card: CollectedCard): Promise<{ key: string; url: string } | null> {
-  if (!card.skills) return null;
-  const data = buildManiaCardRenderDataFromSkills({
-    user: cardUserForRender(card),
-    skills: card.skills,
-    tierOverride: collectedCardTier(card),
-    labelOverride: card.customLabel,
-  });
-  const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
-  const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));
-  return { key, url: await rememberCardThumbnailBlob(key, blob) };
-}
-
-function pageSignature(cards: CollectedCard[]) {
-  return cards.map(thumbnailKey).join("|");
-}
-
-function resolveCollectionCardTier(card?: CollectedCard): ManiaCardTier {
-  return card ? collectedCardTier(card) : "common";
-}
 
 function placeholderTiersForPage({
   count,
@@ -376,177 +298,11 @@ function CollectionPager({
   );
 }
 
-/* Legacy cards (collected before skills snapshots existed) and failed mints
-   re-mint themselves when scrolled into view: fetch the player's plays once,
-   compute the skills, store them in the wallet. One attempt per session per
-   card, two in flight at a time. */
-const attemptedBackfills = new Set<string>();
-let activeBackfills = 0;
-const backfillQueue: Array<() => void> = [];
-async function throttleBackfill<T>(task: () => Promise<T>): Promise<T> {
-  if (activeBackfills >= 2) await new Promise<void>((resolve) => backfillQueue.push(resolve));
-  activeBackfills += 1;
-  try {
-    return await task();
-  } finally {
-    activeBackfills -= 1;
-    backfillQueue.shift()?.();
-  }
-}
-
-async function backfillCardMint(
-  card: CollectedCard,
-  onApplyMint: (cardKey: string, mint: CardMint) => boolean | Promise<boolean>,
-) {
-  const cardKey = packCardKeyOf(card);
-  if (attemptedBackfills.has(cardKey)) return;
-  attemptedBackfills.add(cardKey);
-  try {
-    const scores = await throttleBackfill(() => fetchPackPlayerScores(card.userId));
-    const data = buildManiaCardRenderData({
-      user: {
-        id: card.userId,
-        username: card.username,
-        avatar_url: card.avatarUrl,
-        country_code: card.countryCode,
-        statistics: { global_rank: card.globalRank, pp: card.pp },
-      },
-      scores,
-      // A card that already knows what it was minted at keeps that tier: the
-      // backfill is here to recover a missing skills snapshot, not to re-tier
-      // a card because its player has since joined the honorary roster.
-      tierOverride: card.tier ?? undefined,
-    });
-    if (data.status !== "ready") return;
-    await onApplyMint(cardKey, { skills: data.skills, tier: data.tier, tierLabel: data.tierStyle.label });
-  } catch {
-    // The sketch tile remains; another session can retry.
-    attemptedBackfills.delete(cardKey);
-  }
-}
-
 /* The vivid rgb triplet of a tier's palette (from its badge halo), used to
    tint the filter chips so they read as the tier instead of white pills. */
 function tierChipRgb(tier: ManiaCardTier): string {
   const match = MANIA_TIER_STYLES[tier].badgeHalo.match(/([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/);
   return match ? `${match[1]}, ${match[2]}, ${match[3]}` : "148, 163, 184";
-}
-
-function CollectionCardTile({
-  card,
-  thumbnail,
-  canBackfill,
-  onApplyMint,
-  onThumbnailError,
-}: {
-  card: CollectedCard;
-  thumbnail: string | null;
-  canBackfill: boolean;
-  onApplyMint: (cardKey: string, mint: CardMint) => boolean | Promise<boolean>;
-  onThumbnailError: (card: CollectedCard) => void;
-}) {
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  const previousThumbnailRef = useRef<string | null>(thumbnail);
-  const animateThumbnail = Boolean(thumbnail && !previousThumbnailRef.current);
-
-  useEffect(() => {
-    // Mid-sync the wallet does not yet know whether the repair belongs in
-    // localStorage or in the server rows, and a backfill only gets one attempt
-    // per card per session — so wait for the answer rather than burn it.
-    if (card.skills || !canBackfill) return;
-    let cancelled = false;
-    const work = () => {
-      if (!cancelled) void backfillCardMint(card, onApplyMint);
-    };
-    const host = hostRef.current;
-    if (!host || typeof IntersectionObserver !== "function") {
-      work();
-      return () => {
-        cancelled = true;
-      };
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          observer.disconnect();
-          void work();
-        }
-      },
-      { rootMargin: "300px" },
-    );
-    observer.observe(host);
-    return () => {
-      cancelled = true;
-      observer.disconnect();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [card.userId, card.skills, canBackfill]);
-
-  useEffect(() => {
-    previousThumbnailRef.current = thumbnail;
-  }, [thumbnail]);
-
-  return (
-    <div ref={hostRef} className="relative" style={{ aspectRatio: "5 / 7" }}>
-      <CollectionCardFacePlaceholder card={card} />
-      {thumbnail && (
-        <motion.img
-          key={thumbnail}
-          src={thumbnail}
-          alt={`${card.username} maniacard`}
-          className="absolute inset-0 h-full w-full rounded-[10px] object-cover"
-          initial={animateThumbnail ? { opacity: 0 } : false}
-          animate={{ opacity: 1 }}
-          transition={animateThumbnail ? { duration: 0.14, ease: "easeOut" } : { duration: 0 }}
-          draggable={false}
-          onLoad={(event) => noteCardThumbnailStored(card, event.currentTarget.src)}
-          onError={(event) => {
-            /* Only a remote pool URL can 404 (local renders are blob/data
-               URLs); fall back to rendering this card locally. */
-            if (/^https?:/.test(event.currentTarget.src)) onThumbnailError(card);
-          }}
-        />
-      )}
-      {card.copies > 1 && (
-        <span className="absolute right-1.5 top-1.5 rounded bg-black/70 px-1 py-px text-[10px] font-bold text-white tabular-nums">
-          x{card.copies}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card?: CollectedCard; tier?: ManiaCardTier | null }) {
-  // A null forcedTier is the rarity-less face; only an absent one falls back to
-  // the card's own tier.
-  const tier = forcedTier !== undefined ? forcedTier : resolveCollectionCardTier(card);
-  let thumbnail = skeletonThumbnailCache.get(tier ?? "neutral") ?? null;
-  if (!thumbnail) {
-    thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH);
-    if (thumbnail) skeletonThumbnailCache.set(tier ?? "neutral", thumbnail);
-  }
-  if (thumbnail) {
-    return (
-      <img
-        src={thumbnail}
-        alt=""
-        className="h-full w-full rounded-[10px] object-cover"
-        draggable={false}
-      />
-    );
-  }
-
-  const style = tier ? MANIA_TIER_STYLES[tier] : null;
-  return (
-    <div
-      className={`relative overflow-hidden rounded-[10px] border bg-gradient-to-br ${
-        style ? `${style.background} ${style.border}` : "from-osu-b3 via-osu-b4 to-osu-b5 border-osu-b3/40"
-      }`}
-      style={{ aspectRatio: "5 / 7" }}
-    >
-      <div className="absolute inset-0 bg-black/12" />
-    </div>
-  );
 }
 
 /* A pool player the collection has no card of. Deliberately not a card face:
@@ -581,17 +337,6 @@ function MissingPlayerPlaceholder() {
       className="rounded-[10px] border border-dashed border-white/8 bg-black/15"
       style={{ aspectRatio: "5 / 7" }}
     />
-  );
-}
-
-function CollectionCardPlaceholder({ tier }: { tier: ManiaCardTier | null }) {
-  return (
-    <div>
-      <div className="relative" style={{ aspectRatio: "5 / 7" }}>
-        <CollectionCardFacePlaceholder tier={tier} />
-      </div>
-      <div className="mx-auto mt-1.5 h-4 w-10 rounded bg-osu-b4/40" />
-    </div>
   );
 }
 
@@ -644,23 +389,6 @@ export function CollectionPanel({
      grid a pending page shows, which locally loads too fast to look at. */
   const [skeletonSim, setSkeletonSim] = useState<"off" | "cards" | "page">("off");
   const collectionControlsRef = useRef<HTMLDivElement | null>(null);
-  const [, setThumbnailRevision] = useState(0);
-  /* A tile's remote thumbnail 404ed (pool URLs carry no existence check, so a
-     lifecycle-expired object surfaces here): evict the dead URL so the tile
-     shows its placeholder, render the card locally, and let
-     rememberCardThumbnailBlob re-upload it for the next viewer. One attempt
-     per key per session; a failed render leaves the placeholder. */
-  const handleThumbnailError = useCallback((card: CollectedCard) => {
-    const key = cardThumbnailKeyForCollectionCard(card);
-    if (!key || !claimCardThumbnailErrorFallback(key)) return;
-    forgetRemoteCardThumbnail(key);
-    setThumbnailRevision((revision) => revision + 1);
-    renderCollectionThumbnail(card)
-      .then((thumbnail) => {
-        if (thumbnail) setThumbnailRevision((revision) => revision + 1);
-      })
-      .catch(() => {});
-  }, []);
   const [serverPage, setServerPage] = useState<LoadedServerCollectionPage | null>(() => {
     const initialRequest = {
       page: 0,
@@ -922,36 +650,6 @@ export function CollectionPanel({
       setTierFilter("all");
     }
   }, [tierFilter, useServerCollection, serverPoolProgress]);
-  // The profile showcase: which card keys this collector has pinned. Null
-  // until loaded; the pin menu item stays hidden until then. Synced wallets
-  // only, since the server validates pins against the server-side collection.
-  // Admin-gated for now, while the shelf design is still being judged.
-  const canUseShowcase = useAuth().canUseAdminFeatures;
-  const [showcaseKeys, setShowcaseKeys] = useState<string[] | null>(null);
-  useEffect(() => {
-    if (!useServerCollection || !canUseShowcase) {
-      setShowcaseKeys(null);
-      return;
-    }
-    let cancelled = false;
-    fetchOwnPackShowcase()
-      .then((keys) => {
-        if (!cancelled && keys) setShowcaseKeys(keys);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [useServerCollection, canUseShowcase]);
-  const toggleShowcasePin = (cardKey: string) => {
-    const current = showcaseKeys ?? [];
-    const next = current.includes(cardKey) ? current.filter((key) => key !== cardKey) : [...current, cardKey];
-    void saveOwnPackShowcase({ data: { cardKeys: next } })
-      .then((saved) => {
-        if (saved) setShowcaseKeys(saved);
-      })
-      .catch(() => {});
-  };
   const serverCollectionTotal = Object.values(serverTierCounts).reduce((sum, count) => sum + count, 0);
   const ownedTiers: Array<ManiaCardTier | null> = useServerCollection
     ? Object.keys(serverTierCounts)
@@ -985,7 +683,8 @@ export function CollectionPanel({
   const pageStart = currentPage * COLLECTION_PAGE_SIZE;
   const pageEnd = Math.min(filteredTotal, pageStart + COLLECTION_PAGE_SIZE);
   const pageCards = useServerCollection ? cards : visibleCards.slice(pageStart, pageEnd);
-  const currentPageSignature = pageSignature(pageCards);
+  // Faces for the page, filled in cheapest-source-first.
+  const { onThumbnailError: handleThumbnailError } = useCardThumbnails(pageCards);
   /* The missing list pages on its own index and shares the search box. Its
      last known total keeps the pager on screen while the next page loads,
      the same way the collection's counts do. */
@@ -1162,60 +861,6 @@ export function CollectionPanel({
     };
   }, [missingOpen, missingPageIndex, trimmedQuery, missingRequestKey, serverRefreshKey]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const cardsForPage = pageCards;
-    const signature = currentPageSignature;
-
-    if (!signature) {
-      return;
-    }
-
-    const missing = cardsForPage
-      .map((card) => ({ card, key: cardThumbnailKeyForCollectionCard(card) }))
-      .filter((entry): entry is { card: CollectedCard; key: string } =>
-        Boolean(entry.key && entry.card.skills && !getMemoryCardThumbnail(entry.key)),
-      );
-    if (missing.length === 0) return;
-
-    const run = async () => {
-      const remoteCandidates: Array<{ card: CollectedCard; key: string }> = [];
-      await Promise.all(missing.map(async ({ card, key }) => {
-        const cached = await loadPersistedCardThumbnail(key);
-        if (cancelled) return;
-        if (cached) setThumbnailRevision((revision) => revision + 1);
-        else remoteCandidates.push({ card, key });
-      }));
-      if (cancelled || remoteCandidates.length === 0) return;
-
-      const remoteUrls = await loadR2CardThumbnails(remoteCandidates.map((entry) => entry.key));
-      if (cancelled) return;
-      const toRender = remoteCandidates
-        .filter(({ key }) => {
-          if (!remoteUrls[key]) return true;
-          setThumbnailRevision((revision) => revision + 1);
-          return false;
-        })
-        .map(({ card }) => card);
-      if (toRender.length === 0) return;
-
-      await Promise.all(toRender.map(async (card) => {
-        try {
-          const thumbnail = await renderCollectionThumbnail(card);
-          if (cancelled || !thumbnail) return;
-          setThumbnailRevision((revision) => revision + 1);
-        } catch {
-          // The DOM fallback remains for this card.
-        }
-      }));
-    };
-    void run();
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPageSignature]);
 
   if (!wallet) return null;
 
@@ -1843,7 +1488,7 @@ export function CollectionPanel({
             data-select-keep=""
           >
             <div className="flex items-center gap-2 px-3 py-1.5">
-              <img src={menu.card.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" draggable={false} />
+              <img src={honoraryAvatarUrl(menu.card.userId) ?? menu.card.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" draggable={false} />
               <span className="truncate text-[12px] font-bold text-white">{menu.card.username}</span>
             </div>
             <div className="mx-2 my-1 h-px bg-osu-b3/40" />
@@ -1870,30 +1515,6 @@ export function CollectionPanel({
               <Check className="h-3 w-3" />
               Select cards...
             </button>
-            {showcaseKeys !== null && (() => {
-              const cardKey = packCardKeyOf(menu.card);
-              const pinned = showcaseKeys.includes(cardKey);
-              const full = !pinned && showcaseKeys.length >= PACK_SHOWCASE_MAX_CARDS;
-              return (
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={full}
-                  onClick={() => {
-                    toggleShowcasePin(cardKey);
-                    setMenu(null);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer disabled:cursor-default disabled:opacity-40"
-                >
-                  <Star className={`h-3 w-3 ${pinned ? "fill-current" : ""}`} />
-                  {pinned
-                    ? "Unpin from profile showcase"
-                    : full
-                      ? `Showcase is full (${PACK_SHOWCASE_MAX_CARDS})`
-                      : "Pin to profile showcase"}
-                </button>
-              );
-            })()}
             {menu.card.copies > 1 && (
               <button
                 type="button"

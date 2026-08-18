@@ -65,3 +65,41 @@ describe("createCardTextures", () => {
     expect(measured).toBeGreaterThan(awaited);
   });
 });
+
+describe("the granted background art", () => {
+  const read = (file: string) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8");
+
+  it("samples each drifting copy the right way up", () => {
+    /* The sprite texture is uploaded flipped (three's default, same as the
+       card face), and the shader's local y runs up the card, so the two agree
+       only if neither is negated. Negating one drew every card's art on its
+       head. */
+    const shaders = read("./cardShaders.ts");
+    expect(shaders).toContain("vec2 spriteUv = vec2(local.x, local.y) * 0.5 + 0.5;");
+    expect(shaders).not.toContain("0.5 - local.y");
+  });
+
+  it("fills every cell of its grid and lets each copy roam inside one", () => {
+    /* A jittered grid in all three renderers: even coverage without a visible
+       lattice. Both halves matter. Skipping cells the way the triangles do
+       (42% of them) leaves holes at picture size, and pinning each copy near
+       its cell centre turns the layer into wallpaper. */
+    const shaders = read("./cardShaders.ts");
+    expect(shaders).toContain("vec2 center = id + 0.5 + (vec2(");
+    expect(shaders).not.toContain("if (variant < 0.42) return vec4(0.0);");
+    for (const still of [read("./cardTexture.ts"), read("../../../routes/api/og.ts")]) {
+      expect(still).toMatch(/\(col \+ 0\.5 \+ \(/);
+      // The triangles' skip, which both files still use for their own flecks.
+      expect(still).not.toMatch(/\(index \* 19\.17 \+ 4\.2\) < 0\.42\) continue/);
+    }
+  });
+
+  it("paints still copies only where nothing can move them", () => {
+    // The 3D card's overlay floats the image itself; a second set painted into
+    // the front canvas would just sit there under the moving one.
+    expect(read("./ManiaCardRenderer.ts")).toContain("driftingMotif: true");
+    expect(read("./cardTexture.ts")).toContain("if (!driftingMotif) drawMotifPattern(");
+    // Thumbnails have no shader, so they keep the painted copies.
+    expect(read("../../packs/cardSnapshot.ts")).not.toContain("driftingMotif");
+  });
+});

@@ -2,6 +2,7 @@ import type { InValue } from "@libsql/client";
 import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch } from "../db.js";
 import { HONORARY_USER_IDS, packCardKey, tierRank, tierRankSql } from "./pack-wallets.js";
+import { parseCardMotif, type CardMotif } from "./card-motif.js";
 
 // Append-only log of pack pulls, the community layer on top of the per-owner
 // pack_collection_cards projection. What was pulled is self-reported by the
@@ -32,6 +33,10 @@ const NOTABLE_TIERS = new Set([
   "goat",
 ]);
 
+/* Tiers a pull may claim. "eternal" is deliberately absent: it is hand-granted
+   from /admin/collections and no pack can deal one, so a pull claiming it is
+   forged - and this list is what stands between that and "pulled Eternal
+   <anyone>" on the public feed, the live SSE stream and the share page. */
 const VALID_TIERS = new Set([
   "common",
   "rare",
@@ -576,6 +581,9 @@ export interface SharedPackCard {
        place of the tier's name, so the share page has to draw the same card
        its owner sees. */
     customLabel: string | null;
+    /* And the image that holding floats in its background, for the same
+       reason: a shared card has to look like the card its owner holds. */
+    motif: CardMotif | null;
     skills: unknown | null;
     pp: number;
     globalRank: number;
@@ -715,6 +723,7 @@ export async function getSharedPackCard(
       // The collector's own name for their copy wins over the shared one.
       tierLabel: nonEmptyString(row.tier_label) ?? nonEmptyString(row.catalog_tier_label),
       customLabel: nonEmptyString(row.tier_label),
+      motif: parseCardMotif(row.motif),
       skills,
       pp: Number(row.pp) || 0,
       globalRank: Number(row.global_rank) || 0,
