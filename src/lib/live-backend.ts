@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { CardMotif } from "./card-motif";
 import { requireAdminAccess, requireTrueAdminAccess } from "./auth";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import { buildRandomDrawQuery } from "./maps-random-draw-params";
@@ -1401,6 +1402,11 @@ export interface LiveFarmHelperRec {
   benchmarkPp: number;
   subjectPp: number | null;
   subjectPlayedAt: string | null;
+  // The player's best score on this beatmap in a different speed lane, when
+  // this lane has none of their own: a "missing" HT lane on a map they hold an
+  // NM pb on. Optional so older backends still parse.
+  subjectOtherLanePp?: number | null;
+  subjectOtherLaneSpeed?: LiveFarmHelperSpeedBucket | null;
   peerCount: number;
   peerSampleSize: number;
   peerFraction: number;
@@ -2380,6 +2386,10 @@ export interface LiveSharedPackCard {
     /* Badge text this one holding was given, printed on the card art in place
        of the tier's name. Null for every ordinary card. */
     customLabel: string | null;
+    /* And the image it floats in its background in place of the tier's own
+       pattern, for the same reason: a shared card has to look like the card
+       its owner holds. Null for every ordinary card. */
+    motif: CardMotif | null;
     skills: unknown | null;
     pp: number;
     globalRank: number;

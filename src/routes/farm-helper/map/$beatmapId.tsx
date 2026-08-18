@@ -40,6 +40,10 @@ type FarmMapContext = {
   gainUnit?: string;
   benchmark?: number;
   subjectPp?: number;
+  // The player's best score on the map in a different speed lane, when this
+  // lane has none of their own (see the board's otherLaneBest).
+  subjectOtherLanePp?: number;
+  subjectOtherLaneSpeed?: LiveFarmHelperSpeedBucket;
   peerCount?: number;
   peerSampleSize?: number;
   peerFraction?: number;
@@ -412,7 +416,7 @@ function FarmMapDetailPage() {
                             <div className="text-[10px] font-semibold text-osu-f1">of players near you farm this</div>
                           </div>
                           <div className="grid min-w-[150px] gap-1.5">
-                            <CompactRow label="your score" value={farmContext.subjectPp != null ? `${formatPp(farmContext.subjectPp)}pp` : "not played"} />
+                            <CompactRow label="your score" value={subjectScoreLabel(farmContext)} />
                           </div>
                         </div>
                       ) : (
@@ -426,7 +430,7 @@ function FarmMapDetailPage() {
                             </div>
                           </div>
                           <div className="grid min-w-[150px] gap-1.5">
-                            <CompactRow label="your score" value={farmContext?.subjectPp != null ? `${formatPp(farmContext.subjectPp)}pp` : "not played"} />
+                            <CompactRow label="your score" value={subjectScoreLabel(farmContext)} />
                             <CompactRow label="target" value={farmContext?.benchmark != null ? `${formatPp(farmContext.benchmark)}pp` : "unknown"} />
                             <CompactRow label="peers farming" value={farmContext?.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : "unknown"} />
                           </div>
@@ -1012,6 +1016,17 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
+// The board only sees the player's top plays, so a lane with no score of
+// theirs means "not in your top plays", never "never played" - and when their
+// pb on the map sits under other mods, name it instead of reporting a blank.
+function subjectScoreLabel(context: FarmMapContext | null): string {
+  if (context?.subjectPp != null) return `${formatPp(context.subjectPp)}pp`;
+  if (context?.subjectOtherLanePp != null) {
+    return `${formatPp(context.subjectOtherLanePp)}pp ${SPEED_LABELS[context.subjectOtherLaneSpeed ?? "normal"]}`;
+  }
+  return "not in top plays";
+}
+
 function readFarmMapContext(beatmapId: number, search: FarmMapSearch): FarmMapContext | null {
   const stored = readStoredFarmContext(beatmapId, search);
   if (!stored && !search.user && !search.key && !search.speed) return null;
@@ -1073,6 +1088,11 @@ function readStoredFarmContext(beatmapId: number, search: FarmMapSearch): FarmMa
       gainUnit: finiteString(data.gainUnit),
       benchmark: finiteNumber(data.benchmark),
       subjectPp: finiteNumber(data.subjectPp),
+      subjectOtherLanePp: finiteNumber(data.subjectOtherLanePp),
+      subjectOtherLaneSpeed:
+        data.subjectOtherLaneSpeed === "ht" || data.subjectOtherLaneSpeed === "normal" || data.subjectOtherLaneSpeed === "dt"
+          ? data.subjectOtherLaneSpeed
+          : undefined,
       peerCount: finiteNumber(data.peerCount),
       peerSampleSize: finiteNumber(data.peerSampleSize),
       peerFraction: finiteNumber(data.peerFraction),

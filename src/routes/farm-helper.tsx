@@ -1681,7 +1681,7 @@ function RecPreview({
                 <div className="text-right">
                   <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1">your best</div>
                   <div className="mt-0.5 text-[14px] font-bold tabular-nums text-osu-c1">
-                    {rec.subjectPp != null ? `${formatPp(rec.subjectPp)}pp` : "never played"}
+                    {subjectBestLabel(rec)}
                   </div>
                 </div>
               </div>
@@ -1864,7 +1864,7 @@ function ReadingGuide({
             <GuideItem
               reason="missing"
               count={counts?.missing ?? null}
-              body="Popular with the players around you, and you've never played it."
+              body="Popular with the players around you, and you have no top play on it with these mods."
             />
             <GuideItem
               reason="improve"
@@ -2497,6 +2497,8 @@ function buildFarmMapDetailContext(
     gainUnit,
     benchmark: Math.round(rec.benchmarkPp * 10) / 10,
     subjectPp: rec.subjectPp == null ? undefined : Math.round(rec.subjectPp * 10) / 10,
+    subjectOtherLanePp: rec.subjectOtherLanePp == null ? undefined : Math.round(rec.subjectOtherLanePp * 10) / 10,
+    subjectOtherLaneSpeed: rec.subjectOtherLaneSpeed ?? undefined,
     peerCount: rec.peerCount,
     peerSampleSize: rec.peerSampleSize,
     peerFraction: Math.round(rec.peerFraction * 1000) / 1000,
@@ -2545,19 +2547,41 @@ function farmStatusLabel(rec: LiveFarmHelperRec): string {
   return "improve";
 }
 
+// The player's pb on the map when it sits in a different speed lane than the
+// rec's. A lane with no score of theirs is not the same as a map they never
+// touched: peers farming a chart on HT put the HT lane on the board even for
+// someone holding an NM pb on it.
+function otherLaneBest(rec: LiveFarmHelperRec): { pp: number; label: string } | null {
+  if (rec.subjectPp != null || rec.subjectOtherLanePp == null) return null;
+  return { pp: rec.subjectOtherLanePp, label: speedBucketLabel(rec.subjectOtherLaneSpeed ?? "normal") };
+}
+
+// What the "your best" stat can honestly show for a lane the board has no
+// score of theirs on. The board only ever sees the player's top plays, so an
+// absent map means "not in your top plays", never "never played": a HT pb
+// worth more pp than a nomod one hides the nomod score from that window
+// entirely.
+function subjectBestLabel(rec: LiveFarmHelperRec): string {
+  if (rec.subjectPp != null) return `${formatPp(rec.subjectPp)}pp`;
+  const other = otherLaneBest(rec);
+  if (other) return `${formatPp(other.pp)}pp ${other.label}`;
+  return "not in top plays";
+}
+
 // One plain-language line explaining why this map is on the board. The
 // improve/stale/push/owned templates all quote the player's own score, so they
-// only run with a real one; a null subjectPp (never played) falls back to a
-// sentence that does not invent a 0pp best.
+// only run with a real one; a null subjectPp falls back to a sentence that
+// neither invents a 0pp best nor claims they never played the map.
 function whySentence(rec: LiveFarmHelperRec): string {
   const pct = Math.round(rec.peerFraction * 100);
   const nearYou = `${pct}% of the players around your pp`;
-  if (rec.reason === "missing") {
-    return `${nearYou} farm this and you have never played it. They average ${formatPp(rec.peerPpMedian)}pp on it.`;
-  }
   const subjectPp = rec.subjectPp;
   if (subjectPp == null) {
-    return `You haven't set a score here yet. ${nearYou} farm this, averaging ${formatPp(rec.peerPpMedian)}pp on it.`;
+    const other = otherLaneBest(rec);
+    if (other) {
+      return `${nearYou} farm this on ${speedBucketLabel(rec.speedBucket)}. Your best on the map is ${formatPp(other.pp)}pp on ${other.label}, and they average ${formatPp(rec.peerPpMedian)}pp on this lane.`;
+    }
+    return `${nearYou} farm this and it is not in your top plays. They average ${formatPp(rec.peerPpMedian)}pp on it.`;
   }
   if (rec.reason === "stale") {
     return `Your ${formatPp(subjectPp)}pp score is ${formatAge(rec.subjectPlayedAt)} old. The top quarter of players near you sits at ${formatPp(rec.peerPpP75)}pp.`;

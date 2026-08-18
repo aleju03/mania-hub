@@ -68,6 +68,16 @@ export interface FarmHelperRec {
   benchmarkPp: number;
   subjectPp: number | null;
   subjectPlayedAt: string | null;
+  // The subject's best score on this BEATMAP in a different speed lane, set
+  // only when this lane has no score of theirs. A "missing" lane is missing
+  // that lane, not the map: peers who farm a chart on HT put the HT lane on
+  // the board even for a player sitting on an NM pb, and without this the UI
+  // had no way to tell that apart from a chart they have genuinely never
+  // touched. Null when this lane is played, or when the map is absent from
+  // the subject's top plays entirely - which is the only absence we can see,
+  // so nothing downstream may phrase either case as "never played".
+  subjectOtherLanePp: number | null;
+  subjectOtherLaneSpeed: ScoreSpeedBucket | null;
   peerCount: number;
   peerSampleSize: number;
   peerFraction: number;
@@ -1016,6 +1026,10 @@ interface BuildCtx {
 interface PreparedSubject {
   rankedScores: OscScore[];
   subjectByBeatmap: Map<string, SubjectMapScore>;
+  // The subject's best score per BEATMAP, across every speed lane. The scoring
+  // loop reads it for the lane it is not scoring, so a rec can say which mod
+  // the player's existing pb on the map used (see FarmHelperRec.subjectOtherLanePp).
+  subjectBestByBeatmap: Map<number, { pp: number; speedBucket: ScoreSpeedBucket }>;
   baselineEntries: Array<{ pp: number; beatmapId: number }>;
   baselineTotal: number;
   // Keymode-local weighted lists (the subject's virtual variant-pp profiles).
@@ -1354,6 +1368,7 @@ function prepareSubject(
   variantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>,
 ): PreparedSubject {
   const subjectByBeatmap = new Map<string, SubjectMapScore>();
+  const subjectBestByBeatmap = new Map<number, { pp: number; speedBucket: ScoreSpeedBucket }>();
   const baselineEntries: Array<{ pp: number; beatmapId: number }> = [];
   const modeEntries: Record<ConcreteFarmHelperKeyMode, Array<{ pp: number; beatmapId: number }>> = { "4k": [], "7k": [] };
   let subjectTopPp = 0;
@@ -1372,6 +1387,9 @@ function prepareSubject(
       const keyMode = beatmapKeyMode(getScoreKeys(score));
       if (keyMode) modeEntries[keyMode].push(entry);
       const speedBucket = getScoreSpeedBucket(getModAcronyms(score.mods));
+      // rankedScores is pp-descending, so the first row for a beatmap is its
+      // best across every lane.
+      if (!subjectBestByBeatmap.has(beatmapId)) subjectBestByBeatmap.set(beatmapId, { pp, speedBucket });
       const subjectKey = farmHelperLaneKey(beatmapId, speedBucket);
       const endedAt = score.ended_at ?? null;
       const existing = subjectByBeatmap.get(subjectKey);
@@ -1418,7 +1436,7 @@ function prepareSubject(
     "7k": calculateSubjectKeyModeStats(rankedScores, "7k"),
   } satisfies Record<ConcreteFarmHelperKeyMode, ReturnType<typeof calculateSubjectKeyModeStats>>;
 
-  return { rankedScores, subjectByBeatmap, baselineEntries, baselineTotal, modeBaselines, subjectTopPp, subjectModeStatsByKey };
+  return { rankedScores, subjectByBeatmap, subjectBestByBeatmap, baselineEntries, baselineTotal, modeBaselines, subjectTopPp, subjectModeStatsByKey };
 }
 
 // One concrete-keymode pipeline: strict cohort, shape folding, farmed-map
@@ -1466,7 +1484,7 @@ async function buildModeRun(
   band.farmDataCount = peerFarmed.farmDataPeerCount;
   if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
 
-  const candidates = gateCandidates(peerFarmed, isPopular);
+  const candidates = gateCandidates(peerFarmed, isPopular, subject.subjectByBeatmap);
   ctx.timings?.count("candidates", candidates.length);
   if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
 
@@ -1507,7 +1525,7 @@ async function buildTotalPpRun(db: Db, subject: PreparedSubject, ctx: BuildCtx, 
   band.farmDataCount = peerFarmed.farmDataPeerCount;
   if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
 
-  const candidates = gateCandidates(peerFarmed, isPopular);
+  const candidates = gateCandidates(peerFarmed, isPopular, subject.subjectByBeatmap);
   ctx.timings?.count("candidates", candidates.length);
   if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
 
@@ -1726,6 +1744,9 @@ async function scoreCandidates(
     const familyTop = family != null ? familyTopPp?.get(family) : null;
     if (familyTop != null && familyTop > 0) cap = Math.min(cap, familyTop * MODE_TOP_PP_GROWTH_HEADROOM);
     const subjectScore = subject.subjectByBeatmap.get(laneKey) ?? null;
+    // Their pb on the map when it is in another lane than this one: the map is
+    // owned even though this lane reads "missing".
+    const otherLaneScore = subjectScore ? null : subject.subjectBestByBeatmap.get(agg.beatmapId) ?? null;
 
     // Peer play recency: when peers actually SET their scores (played_at).
     // updated_at is useless here - the periodic refresh rewrites it for every
@@ -1741,7 +1762,14 @@ async function scoreCandidates(
     let benchmark: number;
     if (!subjectScore) {
       reason = "missing";
-      const rawBenchmark = quantileOfDistribution(benchDistribution, MISSING_MAP_BENCHMARK_QUANTILE) * accScale;
+      // The discovery quantile is for a chart the subject has never touched.
+      // A lane they have no score on, on a map they DO hold in another lane,
+      // is not a discovery: quoting a sub-median target there advertises a
+      // number below a score they already own. Measure it against the peer
+      // median instead, the same quantile a played lane is measured against.
+      const rawBenchmark = otherLaneScore
+        ? scaledMedian
+        : quantileOfDistribution(benchDistribution, MISSING_MAP_BENCHMARK_QUANTILE) * accScale;
       // Over-cap drops in the gain view - unless the player claimed the lane
       // with a "too easy" mark: trusting the player (which raises accScale)
       // must never vanish the rec, so a marked lane clamps to the cap
@@ -1871,6 +1899,8 @@ async function scoreCandidates(
       benchmarkPp: round2(benchmark),
       subjectPp: subjectScore ? round2(subjectScore.pp) : null,
       subjectPlayedAt: subjectScore?.endedAt ?? null,
+      subjectOtherLanePp: otherLaneScore ? round2(otherLaneScore.pp) : null,
+      subjectOtherLaneSpeed: otherLaneScore?.speedBucket ?? null,
       peerCount: agg.entries.length,
       peerSampleSize,
       peerFraction: round2(peerFraction),
@@ -2167,10 +2197,12 @@ function computeFitBand(rankedScores: OscScore[], keyMode: FarmHelperKeyMode): F
 }
 
 // The peerFraction / popularity gate: a discovery-weight ratio floor over the
-// meaningful-sample denominator. Shared by every run.
+// meaningful-sample denominator. Shared by every run. `subjectLanes` is keyed by
+// farmHelperLaneKey (the subject's own scores), read only for membership.
 function gateCandidates(
   peerFarmed: PeerFarmedAggregation,
   isPopular: boolean,
+  subjectLanes: ReadonlyMap<string, unknown>,
 ): Array<{ agg: CandidateAgg; kernelFraction: number }> {
   const minPeerFraction = isPopular ? POPULAR_PEER_MIN_FRACTION : PEER_MIN_FRACTION;
   const candidates: Array<{ agg: CandidateAgg; kernelFraction: number }> = [];
@@ -2182,7 +2214,15 @@ function gateCandidates(
     // overflowing into the Math.min clamp.
     const numeratorWd = agg.entries.reduce((sum, e) => sum + (peerFarmed.eligibleIds.has(e.userId) ? e.wD : 0), 0);
     const kernelFraction = peerFarmed.eligibleWdSum > 0 ? Math.min(1, numeratorWd / peerFarmed.eligibleWdSum) : 0;
-    if (kernelFraction < minPeerFraction) continue;
+    // The fraction floor is a DISCOVERY filter ("is this chart worth putting
+    // in front of you"), so it must not apply to a lane the subject already
+    // farms. A chart their band mostly plays on HT would otherwise lose its
+    // nomod lane to the floor even though that is the lane holding the
+    // player's pp: both lanes disappear, one for being unpopular and the
+    // other for targeting a score they already beat, and a top-10 play of
+    // theirs vanishes from the board entirely. PEER_MIN_COUNT still applies,
+    // so a lane nobody near them plays stays out.
+    if (kernelFraction < minPeerFraction && !subjectLanes.has(farmHelperLaneKey(agg.beatmapId, agg.speedBucket))) continue;
     candidates.push({ agg, kernelFraction });
   }
   return candidates;
