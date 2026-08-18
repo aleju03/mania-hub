@@ -18,7 +18,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.stubEnv("VITE_LIVE_BACKEND_URL", "https://live.test");
-const { SkinCard, HOVER_VIEW_DWELL_MS } = await import("./SkinCard");
+const { SkinCard, SkinPreviewImage, HOVER_VIEW_DWELL_MS } = await import("./SkinCard");
 
 const SKIN: SkinSummary = {
   id: "6f1c0f6c-0000-4000-8000-000000000001",
@@ -201,5 +201,27 @@ describe("SkinCard grid views", () => {
     fireEvent(container.firstElementChild!, pointer("pointerover", "mouse"));
     vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS * 2);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// The cover a browse card shows is the same file the skin page it opens leads
+// with, so the second mount of that url must not start invisible: the fade is
+// for a picture arriving, not for one the reader was already looking at.
+describe("SkinPreviewImage", () => {
+  it("fades in a preview this session has not shown yet", () => {
+    render(<SkinPreviewImage src="https://cdn.test/cold.webp" alt="cold" className="cover" />);
+    expect(screen.getByAltText("cold").className).toContain("opacity-0");
+  });
+
+  it("mounts a preview it has already painted at full opacity", () => {
+    const { unmount } = render(<SkinPreviewImage src="https://cdn.test/warm.webp" alt="warm" className="cover" />);
+    const first = screen.getByAltText("warm");
+    expect(first.className).toContain("opacity-0");
+    fireEvent.load(first);
+    expect(first.className).toContain("opacity-100");
+    unmount();
+
+    render(<SkinPreviewImage src="https://cdn.test/warm.webp" alt="warm" className="cover" />);
+    expect(screen.getByAltText("warm").className).toContain("opacity-100");
   });
 });

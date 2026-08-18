@@ -215,6 +215,7 @@ async function renderAlbumThumbnail(card: CollectedCard): Promise<string | null>
     },
     skills: card.skills,
     tierOverride: collectedCardTier(card),
+    labelOverride: card.customLabel,
   });
   const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
   const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));
@@ -568,7 +569,7 @@ export function useFramePulse(): () => void {
    so they live out here rather than in either one. */
 export function albumCountText(counts: ReadonlyMap<string, number>, code: string): string {
   const count = counts.get(code) ?? 0;
-  return `${count.toLocaleString()} ${count === 1 ? "card" : "cards"}`;
+  return `${count.toLocaleString("en-US")} ${count === 1 ? "card" : "cards"}`;
 }
 
 export function albumSubtitle(code: string): string {
@@ -770,27 +771,27 @@ function PlayerPeek({ target, onClose }: { target: PlayerPeekTarget | null; onCl
             <CountryFlag code={entry.user.country_code} size="sm" decorative />
           </div>
           <div className="mt-0.5 text-[11px] text-osu-f1 tabular-nums">
-            {entry.global_rank ? `#${entry.global_rank.toLocaleString()} global` : "unranked"}
-            {entry.country_rank ? <> &middot; #{entry.country_rank.toLocaleString()} {entry.user.country_code}</> : null}
+            {entry.global_rank ? `#${entry.global_rank.toLocaleString("en-US")} global` : "unranked"}
+            {entry.country_rank ? <> &middot; #{entry.country_rank.toLocaleString("en-US")} {entry.user.country_code}</> : null}
           </div>
           <div className="mt-3 grid grid-cols-3 gap-1.5">
-            <PeekStat label="pp" value={Math.round(entry.pp).toLocaleString()} />
+            <PeekStat label="pp" value={Math.round(entry.pp).toLocaleString("en-US")} />
             <PeekStat
               label="accuracy"
               value={entry.hit_accuracy != null ? `${entry.hit_accuracy.toFixed(2)}%` : "?"}
             />
-            <PeekStat label="plays" value={entry.play_count != null ? entry.play_count.toLocaleString() : "?"} />
+            <PeekStat label="plays" value={entry.play_count != null ? entry.play_count.toLocaleString("en-US") : "?"} />
             {grades && (
               <>
-                <PeekStat label="SS" value={(grades.ssh + grades.ss).toLocaleString()} />
-                <PeekStat label="S" value={(grades.sh + grades.s).toLocaleString()} />
-                <PeekStat label="A" value={grades.a.toLocaleString()} />
+                <PeekStat label="SS" value={(grades.ssh + grades.ss).toLocaleString("en-US")} />
+                <PeekStat label="S" value={(grades.sh + grades.s).toLocaleString("en-US")} />
+                <PeekStat label="A" value={grades.a.toLocaleString("en-US")} />
               </>
             )}
           </div>
           {entry.ranked_score != null && (
             <div className="mt-2 text-[11px] text-osu-f1 tabular-nums">
-              Ranked score {entry.ranked_score.toLocaleString()}
+              Ranked score {entry.ranked_score.toLocaleString("en-US")}
             </div>
           )}
           <div className="mt-2 text-[11px] text-osu-f1">

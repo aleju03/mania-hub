@@ -306,14 +306,14 @@ function formatBytes(value: number): string {
 }
 
 function formatCount(value: number): string {
-  return new Intl.NumberFormat().format(value);
+  return new Intl.NumberFormat("en-US").format(value);
 }
 
 function formatDate(value: string | null): string {
   if (!value) return "unknown";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "unknown";
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);

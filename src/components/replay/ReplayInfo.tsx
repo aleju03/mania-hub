@@ -186,7 +186,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
         <div className="mt-3 grid grid-cols-4 gap-1.5">
           <MobileReplayStat label="Keys" value={`${replay.keyCount}K`} valueClassName="text-osu-yellow" compact />
           <MobileReplayStat label="Acc" value={`${shownAccuracy.toFixed(2)}%`} compact />
-          <MobileReplayStat label="Score" value={h.totalScore.toLocaleString()} valueClassName={`text-white${realOnlyDim}`} compact />
+          <MobileReplayStat label="Score" value={h.totalScore.toLocaleString("en-US")} valueClassName={`text-white${realOnlyDim}`} compact />
           <MobileReplayStat label="Combo" value={`${h.maxCombo}x`} valueClassName={`text-white${realOnlyDim}`} compact />
         </div>
         {(clientLabel || canToggleClient || playedDate || shownPp != null) && (
@@ -223,7 +223,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
           {beatmap && (
             <div className="shrink-0 text-right">
               <div className="text-[8px] uppercase tracking-wider text-osu-f1">Notes</div>
-              <div className="text-xs font-bold text-osu-f1">{beatmap.notes.length.toLocaleString()}</div>
+              <div className="text-xs font-bold text-osu-f1">{beatmap.notes.length.toLocaleString("en-US")}</div>
             </div>
           )}
         </div>
@@ -291,7 +291,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
               <StripStat label="Keys" valueClassName="text-osu-yellow">{replay.keyCount}K</StripStat>
               <StripStat label="Accuracy">{shownAccuracy.toFixed(2)}%<DeltaChip delta={accDelta} suffix="%" decimals={2} /></StripStat>
               {shownPp != null && <StripStat label="PP">{Math.round(shownPp)}pp<DeltaChip delta={ppDelta} suffix="pp" /></StripStat>}
-              <StripStat label="Score" valueClassName={`text-white${realOnlyDim}`} title={simActive ? "From the real play (not simulated)" : undefined}>{h.totalScore.toLocaleString()}</StripStat>
+              <StripStat label="Score" valueClassName={`text-white${realOnlyDim}`} title={simActive ? "From the real play (not simulated)" : undefined}>{h.totalScore.toLocaleString("en-US")}</StripStat>
               <StripStat label="Combo" valueClassName={`text-white${realOnlyDim}`} title={simActive ? "From the real play (not simulated)" : undefined}>{h.maxCombo}x</StripStat>
               {canToggleClient && onSelectClient ? (
                 <div>
@@ -308,7 +308,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
                   <span className="text-osu-yellow">{shownCounts.geki}</span><span className="text-white/40">/</span><span className="text-osu-blue">{shownCounts.c300}</span><span className="text-white/40">/</span><span className="text-osu-green-light">{shownCounts.katu}</span><span className="text-white/40">/</span><span className="text-osu-green">{shownCounts.c100}</span><span className="text-white/40">/</span><span className="text-osu-orange">{shownCounts.c50}</span><span className="text-white/40">/</span><span className="text-osu-red-light">{shownCounts.miss}</span>
                 </div>
               </div>
-              {beatmap && <StripStat label="Notes" valueClassName="text-white/80">{beatmap.notes.length.toLocaleString()}</StripStat>}
+              {beatmap && <StripStat label="Notes" valueClassName="text-white/80">{beatmap.notes.length.toLocaleString("en-US")}</StripStat>}
             </div>
           </div>
           {/* No Share here: the Visual Settings playbar inside the stage already

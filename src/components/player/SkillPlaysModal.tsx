@@ -9,15 +9,17 @@ import {
 } from "../../lib/live-backend";
 import { formatAccuracy, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { Skeleton } from "../ui/LoadingSkeleton";
+import { ModBadge } from "../ui/ModBadge";
 import { MapDetailModal } from "../maps/MapDetailModal";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
 const SKILL_PLAYS_PAGE_SIZE = 50;
 
-function rateLabelFor(rate: number): string | null {
+/** The badge a non-1.0x rate stands for: osu shows the speed mod with the rate
+ *  on its extender, so a 0.75x play reads as an HT badge tailed "0.75×". */
+function rateModFor(rate: number): { acronym: string; rate: number } | null {
   if (Math.abs(rate - 1) < 0.01) return null;
-  const value = rate.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-  return `${rate > 1 ? "DT" : "HT"} · ${value}x`;
+  return { acronym: rate > 1 ? "DT" : "HT", rate };
 }
 
 interface SkillPlaysModalProps {
@@ -237,7 +239,7 @@ export function SkillPlaysModal({
 
             {!loading && total > 0 ? (
               <footer className="shrink-0 border-t border-osu-b3/20 bg-osu-b4/70 px-4 py-2.5 text-center text-[10px] text-osu-f1">
-                Showing {items.length.toLocaleString()} of {total.toLocaleString()} rated {label} {total === 1 ? "play" : "plays"}
+                Showing {items.length.toLocaleString("en-US")} of {total.toLocaleString("en-US")} rated {label} {total === 1 ? "play" : "plays"}
               </footer>
             ) : null}
           </motion.div>
@@ -252,7 +254,7 @@ export function SkillPlaysModal({
             username,
             accuracy: detail.play.accuracy,
             pp: detail.play.pp,
-            rateLabel: rateLabelFor(detail.play.rate),
+            rateMod: rateModFor(detail.play.rate),
             playedAt: detail.play.playedAt,
             source: detail.play.source,
             rating: detail.play.rating,
@@ -280,7 +282,7 @@ function SkillPlayRow({
   opening: boolean;
   onOpen: () => void;
 }) {
-  const rateLabel = rateLabelFor(play.rate);
+  const rateMod = rateModFor(play.rate);
   return (
     <button
       type="button"
@@ -312,7 +314,7 @@ function SkillPlayRow({
             {play.artist}<span className="md:hidden"> · [{play.version}]</span>
           </span>
           <span className="rounded bg-osu-b3/35 px-1 py-0.5 font-bold text-osu-yellow">{play.keyCount}K</span>
-          {rateLabel ? <span className="rounded bg-osu-pink/15 px-1 py-0.5 font-semibold text-osu-pink-light">{rateLabel}</span> : null}
+          {rateMod ? <ModBadge mod={rateMod.acronym} rate={rateMod.rate} size={0.8} /> : null}
           <span>{play.source === "top" ? "profile top play" : "tracked history"}</span>
           {play.playedAt ? (
             <span className="hidden sm:inline" title={formatTimeAgoTooltip(play.playedAt)}>{formatTimeAgo(play.playedAt)}</span>

@@ -66,8 +66,11 @@ ${rows.join("\n")}
 
 // Every row is a bracket-shaped chord but consecutive chords never share a
 // column: the tag the overlap-gated bracket detector must keep.
+// Chords that overlap in column range but share no column: bracket content by
+// the analyzer's window. Full-hand alternation ([0,1,2] -> [4,5,6]) is not, the
+// column ranges never overlap, which makes it a roll.
 function buildBracketOsuFile(): string {
-  return build7kOsuFile([[0, 1, 2], [4, 5, 6], [1, 2, 3], [4, 5, 6]], "Bracket Tag Sweep Test");
+  return build7kOsuFile([[0, 1, 3], [2, 4, 5]], "Bracket Tag Sweep Test");
 }
 
 // Bracket-shaped rows jacked in place: consecutive chords re-hit their

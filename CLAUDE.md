@@ -46,6 +46,7 @@ Dan estimator: `src/lib/dan-estimator/` (features, scoring, family choice, LN su
 - Tailwind CSS v4 via `@tailwindcss/vite`; globals and theme CSS variables in `src/styles.css`. The theme is hue/saturation CSS custom properties applied before hydration. A custom `hover` variant avoids stuck hover states on touch devices.
 - Animations use framer-motion; 3D card code under `src/components/player/maniacard3d/` uses Three.js.
 - Tests are Vitest, colocated as `*.test.ts(x)` next to source (plus the `-`-prefixed files in `src/routes/`).
+- Always pass a locale to `toLocaleString`/`toLocaleDateString`/`Intl.*` (`"en-US"`, as `src/lib/format.ts` does). A bare call takes Node's locale when SSR renders it and the visitor's when the browser hydrates it, which is a recoverable-#418 hydration mismatch for anyone outside en-US. Enforced by `src/locale-formatting.test.ts`; a call that provably never renders during SSR can opt out with a `// locale-ok: <why>` note.
 - Backend logs are structured JSON via `src/logger.ts` (`logInfo`/`logWarn`); follow that instead of `console.log`.
 
 ## Config and Secrets

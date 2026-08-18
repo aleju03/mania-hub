@@ -14,6 +14,7 @@ import { Route as SplatRouteImport } from './routes/$'
 import { Route as BbcodeRouteImport } from './routes/bbcode'
 import { Route as CommunitiesRouteImport } from './routes/communities'
 import { Route as DiscordRouteImport } from './routes/discord'
+import { Route as DynamicRendersRouteImport } from './routes/dynamic-renders'
 import { Route as FarmHelperRouteImport } from './routes/farm-helper'
 import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as LegalRouteImport } from './routes/legal'
@@ -34,8 +35,10 @@ import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as ValleyRouteImport } from './routes/valley'
 import { Route as AdminBbcodeImagesRouteImport } from './routes/admin/bbcode-images'
+import { Route as AdminCollectionsRouteImport } from './routes/admin/collections'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
+import { Route as AdminDynamicRendersRouteImport } from './routes/admin/dynamic-renders'
 import { Route as AdminGhostRouteImport } from './routes/admin/ghost'
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
@@ -50,6 +53,7 @@ import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
 import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiOszRouteImport } from './routes/api/osz'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
+import { Route as ApiSignaturePreviewRouteImport } from './routes/api/signature-preview'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as CommunitiesIdRouteImport } from './routes/communities_.$id'
 import { Route as CommunitiesReviewRouteImport } from './routes/communities_.review'
@@ -70,6 +74,7 @@ import { Route as PullOwnerIdCardIdRouteImport } from './routes/pull/$ownerId/$c
 import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
 import { Route as ApiAuthDiscordCallbackRouteImport } from './routes/api/auth/discord/callback'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
+import { Route as ApiSignatureTokenVariantRouteImport } from './routes/api/signature/$token/$variant'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -94,6 +99,11 @@ const CommunitiesRoute = CommunitiesRouteImport.update({
 const DiscordRoute = DiscordRouteImport.update({
   id: '/discord',
   path: '/discord',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DynamicRendersRoute = DynamicRendersRouteImport.update({
+  id: '/dynamic-renders',
+  path: '/dynamic-renders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FarmHelperRoute = FarmHelperRouteImport.update({
@@ -196,6 +206,11 @@ const AdminBbcodeImagesRoute = AdminBbcodeImagesRouteImport.update({
   path: '/admin/bbcode-images',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminCollectionsRoute = AdminCollectionsRouteImport.update({
+  id: '/admin/collections',
+  path: '/admin/collections',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
   id: '/admin/dan-classifier',
   path: '/admin/dan-classifier',
@@ -204,6 +219,11 @@ const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
 const AdminDiscordRoute = AdminDiscordRouteImport.update({
   id: '/admin/discord',
   path: '/admin/discord',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDynamicRendersRoute = AdminDynamicRendersRouteImport.update({
+  id: '/admin/dynamic-renders',
+  path: '/admin/dynamic-renders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminGhostRoute = AdminGhostRouteImport.update({
@@ -274,6 +294,11 @@ const ApiOszRoute = ApiOszRouteImport.update({
 const ApiReplayUploadRoute = ApiReplayUploadRouteImport.update({
   id: '/api/replay-upload',
   path: '/api/replay-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSignaturePreviewRoute = ApiSignaturePreviewRouteImport.update({
+  id: '/api/signature-preview',
+  path: '/api/signature-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSyncRoute = ApiSyncRouteImport.update({
@@ -376,6 +401,12 @@ const ApiAuthOsuCallbackRoute = ApiAuthOsuCallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => ApiAuthOsuRoute,
 } as any)
+const ApiSignatureTokenVariantRoute =
+  ApiSignatureTokenVariantRouteImport.update({
+    id: '/api/signature/$token/$variant',
+    path: '/api/signature/$token/$variant',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -383,6 +414,7 @@ export interface FileRoutesByFullPath {
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
   '/discord': typeof DiscordRoute
+  '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/goals': typeof GoalsRoute
   '/legal': typeof LegalRoute
@@ -403,8 +435,10 @@ export interface FileRoutesByFullPath {
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
+  '/admin/collections': typeof AdminCollectionsRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
+  '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
   '/admin/ghost': typeof AdminGhostRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
@@ -419,6 +453,7 @@ export interface FileRoutesByFullPath {
   '/api/og': typeof ApiOgRoute
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
+  '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
@@ -439,6 +474,7 @@ export interface FileRoutesByFullPath {
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
+  '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -446,6 +482,7 @@ export interface FileRoutesByTo {
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
   '/discord': typeof DiscordRoute
+  '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/goals': typeof GoalsRoute
   '/legal': typeof LegalRoute
@@ -466,8 +503,10 @@ export interface FileRoutesByTo {
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
+  '/admin/collections': typeof AdminCollectionsRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
+  '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
   '/admin/ghost': typeof AdminGhostRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
@@ -482,6 +521,7 @@ export interface FileRoutesByTo {
   '/api/og': typeof ApiOgRoute
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
+  '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
@@ -502,6 +542,7 @@ export interface FileRoutesByTo {
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
+  '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -510,6 +551,7 @@ export interface FileRoutesById {
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
   '/discord': typeof DiscordRoute
+  '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/goals': typeof GoalsRoute
   '/legal': typeof LegalRoute
@@ -530,8 +572,10 @@ export interface FileRoutesById {
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
+  '/admin/collections': typeof AdminCollectionsRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
+  '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
   '/admin/ghost': typeof AdminGhostRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
@@ -546,6 +590,7 @@ export interface FileRoutesById {
   '/api/og': typeof ApiOgRoute
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
+  '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
   '/communities_/$id': typeof CommunitiesIdRoute
   '/communities_/review': typeof CommunitiesReviewRoute
@@ -566,6 +611,7 @@ export interface FileRoutesById {
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
+  '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -575,6 +621,7 @@ export interface FileRouteTypes {
     | '/bbcode'
     | '/communities'
     | '/discord'
+    | '/dynamic-renders'
     | '/farm-helper'
     | '/goals'
     | '/legal'
@@ -595,8 +642,10 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/valley'
     | '/admin/bbcode-images'
+    | '/admin/collections'
     | '/admin/dan-classifier'
     | '/admin/discord'
+    | '/admin/dynamic-renders'
     | '/admin/ghost'
     | '/admin/live-backend'
     | '/admin/og-preview'
@@ -611,6 +660,7 @@ export interface FileRouteTypes {
     | '/api/og'
     | '/api/osz'
     | '/api/replay-upload'
+    | '/api/signature-preview'
     | '/api/sync'
     | '/communities/$id'
     | '/communities/review'
@@ -631,6 +681,7 @@ export interface FileRouteTypes {
     | '/videos/$id/$filename'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
+    | '/api/signature/$token/$variant'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -638,6 +689,7 @@ export interface FileRouteTypes {
     | '/bbcode'
     | '/communities'
     | '/discord'
+    | '/dynamic-renders'
     | '/farm-helper'
     | '/goals'
     | '/legal'
@@ -658,8 +710,10 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/valley'
     | '/admin/bbcode-images'
+    | '/admin/collections'
     | '/admin/dan-classifier'
     | '/admin/discord'
+    | '/admin/dynamic-renders'
     | '/admin/ghost'
     | '/admin/live-backend'
     | '/admin/og-preview'
@@ -674,6 +728,7 @@ export interface FileRouteTypes {
     | '/api/og'
     | '/api/osz'
     | '/api/replay-upload'
+    | '/api/signature-preview'
     | '/api/sync'
     | '/communities/$id'
     | '/communities/review'
@@ -694,6 +749,7 @@ export interface FileRouteTypes {
     | '/videos/$id/$filename'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
+    | '/api/signature/$token/$variant'
   id:
     | '__root__'
     | '/'
@@ -701,6 +757,7 @@ export interface FileRouteTypes {
     | '/bbcode'
     | '/communities'
     | '/discord'
+    | '/dynamic-renders'
     | '/farm-helper'
     | '/goals'
     | '/legal'
@@ -721,8 +778,10 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/valley'
     | '/admin/bbcode-images'
+    | '/admin/collections'
     | '/admin/dan-classifier'
     | '/admin/discord'
+    | '/admin/dynamic-renders'
     | '/admin/ghost'
     | '/admin/live-backend'
     | '/admin/og-preview'
@@ -737,6 +796,7 @@ export interface FileRouteTypes {
     | '/api/og'
     | '/api/osz'
     | '/api/replay-upload'
+    | '/api/signature-preview'
     | '/api/sync'
     | '/communities_/$id'
     | '/communities_/review'
@@ -757,6 +817,7 @@ export interface FileRouteTypes {
     | '/videos/$id/$filename'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
+    | '/api/signature/$token/$variant'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -765,6 +826,7 @@ export interface RootRouteChildren {
   BbcodeRoute: typeof BbcodeRoute
   CommunitiesRoute: typeof CommunitiesRoute
   DiscordRoute: typeof DiscordRoute
+  DynamicRendersRoute: typeof DynamicRendersRoute
   FarmHelperRoute: typeof FarmHelperRouteWithChildren
   GoalsRoute: typeof GoalsRoute
   LegalRoute: typeof LegalRoute
@@ -785,8 +847,10 @@ export interface RootRouteChildren {
   TrackerRoute: typeof TrackerRoute
   ValleyRoute: typeof ValleyRoute
   AdminBbcodeImagesRoute: typeof AdminBbcodeImagesRoute
+  AdminCollectionsRoute: typeof AdminCollectionsRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
+  AdminDynamicRendersRoute: typeof AdminDynamicRendersRoute
   AdminGhostRoute: typeof AdminGhostRoute
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
@@ -801,6 +865,7 @@ export interface RootRouteChildren {
   ApiOgRoute: typeof ApiOgRoute
   ApiOszRoute: typeof ApiOszRoute
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
+  ApiSignaturePreviewRoute: typeof ApiSignaturePreviewRoute
   ApiSyncRoute: typeof ApiSyncRoute
   CommunitiesIdRoute: typeof CommunitiesIdRoute
   CommunitiesReviewRoute: typeof CommunitiesReviewRoute
@@ -813,6 +878,7 @@ export interface RootRouteChildren {
   ApiAuthOsuRoute: typeof ApiAuthOsuRouteWithChildren
   PullOwnerIdCardIdRoute: typeof PullOwnerIdCardIdRoute
   VideosIdFilenameRoute: typeof VideosIdFilenameRoute
+  ApiSignatureTokenVariantRoute: typeof ApiSignatureTokenVariantRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -850,6 +916,13 @@ declare module '@tanstack/react-router' {
       path: '/discord'
       fullPath: '/discord'
       preLoaderRoute: typeof DiscordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dynamic-renders': {
+      id: '/dynamic-renders'
+      path: '/dynamic-renders'
+      fullPath: '/dynamic-renders'
+      preLoaderRoute: typeof DynamicRendersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/farm-helper': {
@@ -992,6 +1065,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminBbcodeImagesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/collections': {
+      id: '/admin/collections'
+      path: '/admin/collections'
+      fullPath: '/admin/collections'
+      preLoaderRoute: typeof AdminCollectionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/dan-classifier': {
       id: '/admin/dan-classifier'
       path: '/admin/dan-classifier'
@@ -1004,6 +1084,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/discord'
       fullPath: '/admin/discord'
       preLoaderRoute: typeof AdminDiscordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/dynamic-renders': {
+      id: '/admin/dynamic-renders'
+      path: '/admin/dynamic-renders'
+      fullPath: '/admin/dynamic-renders'
+      preLoaderRoute: typeof AdminDynamicRendersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/ghost': {
@@ -1102,6 +1189,13 @@ declare module '@tanstack/react-router' {
       path: '/api/replay-upload'
       fullPath: '/api/replay-upload'
       preLoaderRoute: typeof ApiReplayUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/signature-preview': {
+      id: '/api/signature-preview'
+      path: '/api/signature-preview'
+      fullPath: '/api/signature-preview'
+      preLoaderRoute: typeof ApiSignaturePreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/sync': {
@@ -1244,6 +1338,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthOsuCallbackRouteImport
       parentRoute: typeof ApiAuthOsuRoute
     }
+    '/api/signature/$token/$variant': {
+      id: '/api/signature/$token/$variant'
+      path: '/api/signature/$token/$variant'
+      fullPath: '/api/signature/$token/$variant'
+      preLoaderRoute: typeof ApiSignatureTokenVariantRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1309,6 +1410,7 @@ const rootRouteChildren: RootRouteChildren = {
   BbcodeRoute: BbcodeRoute,
   CommunitiesRoute: CommunitiesRoute,
   DiscordRoute: DiscordRoute,
+  DynamicRendersRoute: DynamicRendersRoute,
   FarmHelperRoute: FarmHelperRouteWithChildren,
   GoalsRoute: GoalsRoute,
   LegalRoute: LegalRoute,
@@ -1329,8 +1431,10 @@ const rootRouteChildren: RootRouteChildren = {
   TrackerRoute: TrackerRoute,
   ValleyRoute: ValleyRoute,
   AdminBbcodeImagesRoute: AdminBbcodeImagesRoute,
+  AdminCollectionsRoute: AdminCollectionsRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminDiscordRoute: AdminDiscordRoute,
+  AdminDynamicRendersRoute: AdminDynamicRendersRoute,
   AdminGhostRoute: AdminGhostRoute,
   AdminLiveBackendRoute: AdminLiveBackendRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
@@ -1345,6 +1449,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiOgRoute: ApiOgRoute,
   ApiOszRoute: ApiOszRoute,
   ApiReplayUploadRoute: ApiReplayUploadRoute,
+  ApiSignaturePreviewRoute: ApiSignaturePreviewRoute,
   ApiSyncRoute: ApiSyncRoute,
   CommunitiesIdRoute: CommunitiesIdRoute,
   CommunitiesReviewRoute: CommunitiesReviewRoute,
@@ -1357,6 +1462,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthOsuRoute: ApiAuthOsuRouteWithChildren,
   PullOwnerIdCardIdRoute: PullOwnerIdCardIdRoute,
   VideosIdFilenameRoute: VideosIdFilenameRoute,
+  ApiSignatureTokenVariantRoute: ApiSignatureTokenVariantRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

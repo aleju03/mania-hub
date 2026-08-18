@@ -4,7 +4,8 @@
    become a key has to be the shape of a real osu! username - otherwise every
    junk string is a guaranteed cache miss, an osu! lookup and a render. */
 import { describe, expect, it } from "vitest";
-import { OgRenderGate, ogUsernameKey } from "./api/og";
+import { OgRenderGate } from "../lib/og-render";
+import { ogUsernameKey } from "./api/og";
 
 describe("ogUsernameKey", () => {
   it("accepts real osu! usernames and folds case and padding into one key", () => {

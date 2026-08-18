@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { BarChart3, ChevronDown, Globe, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
+import { BarChart3, ChevronDown, Globe, Image as ImageIcon, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -97,10 +97,12 @@ const ADMIN_TOOLS = [
   { to: "/admin/todos", label: "Todos", adminOnly: true },
   { to: "/admin/ghost", label: "Ghost", adminOnly: true },
   { to: "/admin/r2", label: "R2", adminOnly: true, search: { prefix: "replay-cache/" } },
+  { to: "/admin/collections", label: "Collections", adminOnly: true },
   { to: "/admin/bbcode-images", label: "BBCode images", adminOnly: true },
   { to: "/admin/discord", label: "Discord", adminOnly: true },
   { to: "/admin/dan-classifier", label: "Chart Patterns", adminOnly: false },
   { to: "/admin/og-preview", label: "OG preview", adminOnly: false },
+  { to: "/admin/dynamic-renders", label: "Dynamic renders", adminOnly: true },
 ] as const;
 
 type AdminTool = (typeof ADMIN_TOOLS)[number];
@@ -812,6 +814,17 @@ export function Nav() {
                         <Target className="h-3.5 w-3.5" />
                         Goals
                       </Link>
+                      {adminMode ? (
+                        <Link
+                          to="/dynamic-renders"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                          role="menuitem"
+                        >
+                          <ImageIcon className="h-3.5 w-3.5" />
+                          Dynamic Renders
+                        </Link>
+                      ) : null}
                       {/* Logout is a POST (the route rejects GET), so it needs a
                           form; `contents` keeps the button laid out as if it
                           were still a direct child of the menu. */}
@@ -1067,6 +1080,19 @@ export function Nav() {
                           <Target className="h-3.5 w-3.5 shrink-0 opacity-75" />
                           Goals
                         </Link>
+                        {adminMode ? (
+                          <Link
+                            to="/dynamic-renders"
+                            onClick={() => {
+                              setMobileAccountOpen(false);
+                              setMenuOpen(false);
+                            }}
+                            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
+                          >
+                            <ImageIcon className="h-3.5 w-3.5 shrink-0 opacity-75" />
+                            Dynamic Renders
+                          </Link>
+                        ) : null}
                         <form method="post" action={logoutHref} className="contents">
                           <button
                             type="submit"

@@ -69,6 +69,26 @@ export function danBareLabel(displayName: string): string {
   return displayName.replace(/[+-]+$/, "").trim().toLowerCase();
 }
 
+/** The tier suffix of a verdict display name: "10--" -> "--", "gamma+" -> "+", "9" -> "". */
+export function danTierSuffix(displayName: string): string {
+  return displayName.trim().match(/[+-]+$/)?.[0] ?? "";
+}
+
+// Where inside its level a verdict sits. The sign picks the hue - below the
+// level's middle reads cool, above it reads warm - and doubling the marker
+// pushes that hue further out, so "-" and "--" never read as two unrelated
+// things (a green "-" read as praise). Mid has no suffix, so no color.
+const DAN_TIER_COLORS: Record<string, string> = {
+  "--": "#4db8ff",
+  "-": "#7ac8ea",
+  "+": "#ffab74",
+  "++": "#ef6f7f",
+};
+
+export function danTierColor(suffix: string): string | null {
+  return DAN_TIER_COLORS[suffix] ?? null;
+}
+
 // ── Dan picker scale ─────────────────────────────────────────────────────────
 // The picker filters the classifier's numeric rawDan, which every family maps
 // onto its own course ladder: 4K reform 1..10 then alpha(11)..kappa(20), 4K LN

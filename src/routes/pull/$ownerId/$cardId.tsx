@@ -18,6 +18,10 @@ import { PACK_TYPES } from "../../../lib/packs";
 import { pageSeo, pullOgImagePath } from "../../../lib/seo";
 
 export const Route = createFileRoute("/pull/$ownerId/$cardId")({
+  validateSearch: (search: Record<string, unknown>): { pull?: number } => {
+    const pull = Math.floor(Number(search.pull) || 0);
+    return pull > 0 ? { pull } : {};
+  },
   head: ({ params, match }) => pageSeo({
     title: "Maniacard pull",
     description: "A maniacard pulled from a booster pack. Open your own packs and build a collection.",
@@ -116,6 +120,7 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
       },
       skills,
       tierOverride: tier,
+      labelOverride: shared.card.customLabel,
     });
     let cancelled = false;
     // The 2D front renders first so something card-shaped is visible while
@@ -200,6 +205,7 @@ type PullPageState =
 
 function PullPage() {
   const { ownerId, cardId } = Route.useParams();
+  const { pull } = Route.useSearch();
   const [state, setState] = useState<PullPageState>({ status: "loading" });
 
   useEffect(() => {
@@ -211,7 +217,7 @@ function PullPage() {
     }
     let cancelled = false;
     setState({ status: "loading" });
-    void fetchLivePackSharedCard(owner, card)
+    void fetchLivePackSharedCard(owner, card, pull)
       .then((shared) => {
         if (!cancelled) setState({ status: "ready", shared });
       })
@@ -221,7 +227,7 @@ function PullPage() {
     return () => {
       cancelled = true;
     };
-  }, [ownerId, cardId]);
+  }, [ownerId, cardId, pull]);
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -262,6 +268,11 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
   const accent = tierAccentRgb(tier);
   const tierLabel = shared.card.tierLabel ?? MANIA_TIER_STYLES[tier].label;
   const odds = shared.goatPull ? goatPullOdds(shared.goatPull.packType) : null;
+  const exactPull = shared.pullEvent && shared.pullEvent.pulledAt > 0 ? shared.pullEvent : null;
+  const displayedPullAt = exactPull?.pulledAt ?? shared.card.firstPulledAt;
+  const pullLabel = exactPull
+    ? exactPull.isNew ? "Pulled by" : "Pulled again by"
+    : "First collected by";
   return (
     <div className="flex flex-col items-center">
       <PulledCardArt shared={shared} />
@@ -281,10 +292,10 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           </span>
         </div>
         <div className="text-[12px] text-osu-f1 tabular-nums">
-          {Math.round(shared.card.pp).toLocaleString()}pp
-          {shared.card.globalRank > 0 && <> &middot; #{shared.card.globalRank.toLocaleString()} global</>}
+          {Math.round(shared.card.pp).toLocaleString("en-US")}pp
+          {shared.card.globalRank > 0 && <> &middot; #{shared.card.globalRank.toLocaleString("en-US")} global</>}
           {shared.owners > 0 && (
-            <> &middot; in {shared.owners.toLocaleString()} {shared.owners === 1 ? "collection" : "collections"}</>
+            <> &middot; in {shared.owners.toLocaleString("en-US")} {shared.owners === 1 ? "collection" : "collections"}</>
           )}
         </div>
         {typeof shared.serial === "number" && shared.serial > 0 && (
@@ -297,12 +308,12 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
             {formatOrdinal(shared.serial)} person to pull this card
             {shared.mintedTotal > 0 && shared.mintedTotal !== shared.serial && (
               // Skip the total when it just repeats the serial ("61st ... out of 61").
-              <span className="text-osu-f1"> out of {shared.mintedTotal.toLocaleString()}</span>
+              <span className="text-osu-f1"> out of {shared.mintedTotal.toLocaleString("en-US")}</span>
             )}
           </div>
         )}
         <div className="text-[12px] text-osu-f1">
-          Pulled by{" "}
+          {pullLabel}{" "}
           {shared.owner.username === UNKNOWN_OWNER_NAME ? (
             <span className="font-bold text-white">{shared.owner.username}</span>
           ) : (
@@ -314,8 +325,8 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
               {shared.owner.username}
             </Link>
           )}
-          {shared.card.firstPulledAt > 0 && (
-            <span className="tabular-nums"> on {formatDate(new Date(shared.card.firstPulledAt).toISOString())}</span>
+          {displayedPullAt > 0 && (
+            <span className="tabular-nums"> on {formatDate(new Date(displayedPullAt).toISOString())}</span>
           )}
           {shared.card.copies > 1 && <span className="tabular-nums"> &middot; x{shared.card.copies} copies</span>}
         </div>

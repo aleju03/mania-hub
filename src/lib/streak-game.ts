@@ -163,25 +163,25 @@ export const STREAK_METRIC_COPY: Record<StreakMetric, StreakMetricCopy> = {
     q: { prefix: "Does ", middle: " have more or fewer DT top plays than ", suffix: "?" },
     more: "More DT",
     less: "Fewer DT",
-    value: (v) => `${Math.round(v).toLocaleString()} DT top plays`,
+    value: (v) => `${Math.round(v).toLocaleString("en-US")} DT top plays`,
     unknown: "? DT top plays",
-    reveal: (name, v) => `${name} had ${Math.round(v).toLocaleString()} DT top plays.`,
+    reveal: (name, v) => `${name} had ${Math.round(v).toLocaleString("en-US")} DT top plays.`,
   },
   k7Top: {
     q: { prefix: "Does ", middle: " have more or fewer 7K top plays than ", suffix: "?" },
     more: "More 7K",
     less: "Fewer 7K",
-    value: (v) => `${Math.round(v).toLocaleString()} 7K top plays`,
+    value: (v) => `${Math.round(v).toLocaleString("en-US")} 7K top plays`,
     unknown: "? 7K top plays",
-    reveal: (name, v) => `${name} had ${Math.round(v).toLocaleString()} 7K top plays.`,
+    reveal: (name, v) => `${name} had ${Math.round(v).toLocaleString("en-US")} 7K top plays.`,
   },
   playTime: {
     q: { prefix: "Does ", middle: " have more or less playtime than ", suffix: "?" },
     more: "More playtime",
     less: "Less playtime",
-    value: (v) => `${Math.round(v).toLocaleString()} hours`,
+    value: (v) => `${Math.round(v).toLocaleString("en-US")} hours`,
     unknown: "? hours",
-    reveal: (name, v) => `${name} has ${Math.round(v).toLocaleString()} hours of playtime.`,
+    reveal: (name, v) => `${name} has ${Math.round(v).toLocaleString("en-US")} hours of playtime.`,
   },
   joined: {
     q: { prefix: "Did ", middle: " join osu! earlier or later than ", suffix: "?" },
@@ -195,17 +195,17 @@ export const STREAK_METRIC_COPY: Record<StreakMetric, StreakMetricCopy> = {
     q: { prefix: "Does ", middle: " have more or fewer followers than ", suffix: "?" },
     more: "More followers",
     less: "Fewer followers",
-    value: (v) => `${Math.round(v).toLocaleString()} followers`,
+    value: (v) => `${Math.round(v).toLocaleString("en-US")} followers`,
     unknown: "? followers",
-    reveal: (name, v) => `${name} has ${Math.round(v).toLocaleString()} followers.`,
+    reveal: (name, v) => `${name} has ${Math.round(v).toLocaleString("en-US")} followers.`,
   },
   replayViews: {
     q: { prefix: "Have ", middle: "'s replays been watched more or less than ", suffix: "'s?" },
     more: "More watched",
     less: "Less watched",
-    value: (v) => `${Math.round(v).toLocaleString()} replay views`,
+    value: (v) => `${Math.round(v).toLocaleString("en-US")} replay views`,
     unknown: "? replay views",
-    reveal: (name, v) => `${name}'s replays have ${Math.round(v).toLocaleString()} views.`,
+    reveal: (name, v) => `${name}'s replays have ${Math.round(v).toLocaleString("en-US")} views.`,
   },
 };
 
@@ -385,10 +385,10 @@ export function isStreakGuessCorrect(guess: StreakGuess, currentValue: number, n
 /* Play counts read plainly, ranked scores do not: nine digits of score is a
    number nobody can compare at a glance. */
 export function formatStreakValue(value: number, metric: StreakMetric): string {
-  if (metric === "plays") return Math.round(value).toLocaleString();
+  if (metric === "plays") return Math.round(value).toLocaleString("en-US");
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  return Math.round(value).toLocaleString();
+  return Math.round(value).toLocaleString("en-US");
 }
 
 export function readBestStreak(pool: StreakPool = "top"): number {

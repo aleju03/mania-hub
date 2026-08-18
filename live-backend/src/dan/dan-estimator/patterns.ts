@@ -59,7 +59,7 @@ interface RowPatternStats {
   threePlusRows: number;
   singleRows: number;
   repeatedChordRows: number;
-  bracketRows: number;
+  bracketWindowRows: number;
   averageChordSize: number;
 }
 
@@ -76,22 +76,15 @@ function rowColumns(rowNotes: ManiaNote[]): number[] {
   return [...new Set(rowNotes.map((note) => note.column))].sort((a, b) => a - b);
 }
 
-function adjacentPairCount(columns: number[]): number {
-  let pairs = 0;
-  for (let index = 1; index < columns.length; index++) {
-    if (columns[index] === columns[index - 1] + 1) pairs++;
-  }
-  return pairs;
+function isRollBetween(previous: number[], current: number[]): boolean {
+  if (!previous.length || !current.length) return false;
+  return previous[0] > current[current.length - 1] || previous[previous.length - 1] < current[0];
 }
 
-function hasMiddleAdjacentPair(columns: number[], keyCount: number): boolean {
-  const center = (keyCount - 1) / 2;
-  for (let index = 1; index < columns.length; index++) {
-    if (columns[index] !== columns[index - 1] + 1) continue;
-    const midpoint = (columns[index] + columns[index - 1]) / 2;
-    if (Math.abs(midpoint - center) <= 1.5) return true;
-  }
-  return false;
+function sharedColumnCount(previous: number[], current: number[]): number {
+  let shared = 0;
+  for (const column of current) if (previous.includes(column)) shared++;
+  return shared;
 }
 
 function getRowPatternStats(orderedRows: Array<[number, ManiaNote[]]>, keyCount: number): RowPatternStats {
@@ -102,9 +95,11 @@ function getRowPatternStats(orderedRows: Array<[number, ManiaNote[]]>, keyCount:
   let threePlusRows = 0;
   let singleRows = 0;
   let repeatedChordRows = 0;
-  let bracketRows = 0;
+  let bracketWindowRows = 0;
   let totalChordSize = 0;
   let previousChordMask: number | null = null;
+  let previousColumns: number[] = [];
+  let beforePreviousColumns: number[] = [];
 
   for (const [, rowNotes] of orderedRows) {
     const columns = rowColumns(rowNotes);
@@ -125,12 +120,31 @@ function getRowPatternStats(orderedRows: Array<[number, ManiaNote[]]>, keyCount:
     if (size === 3) threeNoteRows++;
     if (size >= 4) fourPlusRows++;
     if (size >= 3) threePlusRows++;
-    if (keyCount >= 6 && size >= 3) {
-      const adjacentPairs = adjacentPairCount(columns);
-      if (adjacentPairs >= 2 || (adjacentPairs >= 1 && hasMiddleAdjacentPair(columns, keyCount))) {
-        bracketRows++;
-      }
+    // Three chords in a row that neither jack nor roll. This is the vendored
+    // engine's own bracket primitive (CHORDSTREAM_7K_BRACKETS) with both of its
+    // size conditions dropped: it demands every row carry 3+ notes and their
+    // sum exceed 9, which between them refuse the two shapes brackets are
+    // actually charted in - runs of exactly-three-note chords (3+3+3 is not
+    // > 9) and two-note brackets. Measured 2026-08-17 over 361 charts whose
+    // mapper tags say bracket: a file at 37% two-note rows scored 0.018 under
+    // upstream's rule against 0.128 for its sibling by the same mapper with the
+    // same tags, and dropping the floors separates tagged charts from random
+    // 7K ones at AUC 0.79 (0.89 against chordjack-tagged) versus 0.72 / 0.74.
+    // Requiring the two-note rows to be same-hand adjacent pairs - the literal
+    // bracket shape - measured no better than upstream (0.73), which is the
+    // same result shape carries everywhere else in this detector.
+    if (
+      keyCount >= 6 && size >= 2
+      && beforePreviousColumns.length >= 2 && previousColumns.length >= 2
+      && !isRollBetween(beforePreviousColumns, previousColumns)
+      && !isRollBetween(previousColumns, columns)
+      && sharedColumnCount(beforePreviousColumns, previousColumns) === 0
+      && sharedColumnCount(previousColumns, columns) === 0
+    ) {
+      bracketWindowRows++;
     }
+    beforePreviousColumns = previousColumns;
+    previousColumns = columns;
   }
 
   return {
@@ -142,7 +156,7 @@ function getRowPatternStats(orderedRows: Array<[number, ManiaNote[]]>, keyCount:
     threePlusRows,
     singleRows,
     repeatedChordRows,
-    bracketRows,
+    bracketWindowRows,
     averageChordSize: chordRows ? totalChordSize / chordRows : 0,
   };
 }
@@ -286,7 +300,6 @@ export function analyzeManiaPatterns(
   const threePlusRatio = ratio(stats.threePlusRows, rowCount);
   const fourPlusRatio = ratio(stats.fourPlusRows, rowCount);
   const repeatedChordRatio = ratio(stats.repeatedChordRows, Math.max(1, stats.chordRows - 1));
-  const bracketRatio = ratio(stats.bracketRows, rowCount);
   const lowChordGate = clamp01((0.34 - chordRatio) / 0.3);
   const streamActivity = Math.max(
     pressure(metrics.streamPressure, 1.5, 5.5),
@@ -479,11 +492,40 @@ export function analyzeManiaPatterns(
     // on a jack-family chart. The ramp starts above the chordstream population
     // and is closed before the CJ majority band.
     const bracketOverlapGate = clamp01((0.62 - metrics.chordColumnOverlapRatio) / 0.17);
+    // Bracket content: how much of the chart is sustained chording that neither
+    // jacks nor rolls (getRowPatternStats' bracketWindowRows). Bracket *shape*
+    // is not usable on its own - on 7 columns a chord is adjacent-pair shaped
+    // mostly by chance, so mapper-labelled bracket charts carry 0.199
+    // bracket-shaped rows against 0.185 for random 7K charts (AUC 0.52), and
+    // chordjack files outscore real bracket files on it. This window is the
+    // only content term: the old row-shape and chord-size legs are gone, since
+    // both measure density and on a file of two-note brackets only ever
+    // subtracted true positives. What holds chordjack out is the overlap gate.
+    //
+    // Ramp measured 2026-08-17 against 361 charts whose mapper tags say bracket,
+    // 500 random 7K charts, 502 chordjack-tagged ones and the 92 main diffs of
+    // the BEST OF BRACKETS packs: at 0.18-0.38 the tag reaches every diff in
+    // those packs and 56.5% of tag-labelled charts, while random charts sit at
+    // 10.8% and chordjack-tagged ones at 2.0%.
+    const bracketWindowRatio = ratio(stats.bracketWindowRows, rowCount);
     const wideChordstream = Math.max(
       chordstreamGate,
       minGate(pressure(chordRatio, 0.2, 0.62), pressure(metrics.chordSizeChangeRate, 0.18, 0.52)),
     );
-    const delayScore = nonLnFlowGate * Math.max(
+    const chordjackScore = nonLnPatternGate * Math.max(
+      chordjackBase,
+      minGate(pressure(chordRatio, 0.34, 0.72), pressure(repeatedChordRatio, 0.04, 0.22)),
+    );
+    // Same veto the tech tag takes in player-skills, for the same reason: the
+    // delay ingredients are density, entropy and low repetition, all of which
+    // dense chordjack saturates, so CJ files scored delay on nothing but being
+    // hard. Measured 2026-08-16 over 250 delay-named and 700 random 7K charts,
+    // the veto costs zero delay-named charts their tag at every cutoff from
+    // 0.7 to 0.9 while dropping ones like "[7K] JACK Another" (delay 0.62,
+    // chordjack 1.00). Narrow ramp rather than a cliff, closed at the same 0.8
+    // TECH_TAG_CHORDJACK_VETO uses.
+    const delayChordjackVeto = clamp01((0.8 - chordjackScore) / 0.05);
+    const delayScore = nonLnFlowGate * delayChordjackVeto * Math.max(
       lowChordGate * streamActivity,
       minGate(
         pressure(metrics.sustainedNps10s, 14, 30),
@@ -498,19 +540,15 @@ export function analyzeManiaPatterns(
     );
     candidates.push(
       hit("delay", delayScore, dataConfidence, `${metrics.keyCount}K dense broken-stream flow, entropy ${metrics.rowIntervalEntropy.toFixed(1)}`),
-      hit("chordjack", nonLnPatternGate * Math.max(
-        chordjackBase,
-        minGate(pressure(chordRatio, 0.34, 0.72), pressure(repeatedChordRatio, 0.04, 0.22)),
-      ), dataConfidence, `${compactPercent(chordRatio)} chord rows, ${compactPercent(repeatedChordRatio)} repeated chord rows`),
+      hit("chordjack", chordjackScore, dataConfidence, `${compactPercent(chordRatio)} chord rows, ${compactPercent(repeatedChordRatio)} repeated chord rows`),
       hit("tech", nonLnPatternGate * Math.max(
         techScore,
         wideChordstream * minGate(pressure(metrics.rowPatternChangeRate, 0.38, 0.72), pressure(metrics.fastRowRatio, 0.08, 0.36)),
       ), dataConfidence, `chord changes ${compactPercent(metrics.chordSizeChangeRate)}, tech pressure ${metrics.techPressure.toFixed(1)}`),
       hit("bracket", nonLnPatternGate * bracketOverlapGate * minGate(
-        pressure(bracketRatio, 0.035, 0.18),
         pressure(chordRatio, 0.28, 0.62),
-        pressure(stats.averageChordSize, 2.4, 4),
-      ), dataConfidence, `${compactPercent(bracketRatio)} bracket-like dense chord rows, ${compactPercent(metrics.chordColumnOverlapRatio)} consecutive-chord column re-hits`),
+        pressure(bracketWindowRatio, 0.18, 0.38),
+      ), dataConfidence, `${compactPercent(bracketWindowRatio)} sustained non-jacking chord runs, ${compactPercent(metrics.chordColumnOverlapRatio)} consecutive-chord column re-hits`),
       hit("chordstream", nonLnPatternGate * wideChordstream * clamp01((165 - metrics.jackPressure) / 130), dataConfidence, `${compactPercent(chordRatio)} chord rows mixed into stream`),
     );
   } else {

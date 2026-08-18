@@ -127,6 +127,15 @@ function getAllowedRequestOrigin(request: Request): string | null {
   return `${proto}://${host}`;
 }
 
+/* The site's origin with no request to derive it from. Server functions that
+   have to name a public URL rather than answer one - a cache purge, for
+   instance - have no incoming Request to read a host off, and guessing from
+   the last request they happened to see would be worse than a configured
+   value. SITE_URL first, then the known primary. */
+export function getPrimarySiteOrigin(): string {
+  return getExplicitConfiguredOrigin() ?? PRIMARY_SITE_ORIGIN;
+}
+
 export function getCanonicalOrigin(request: Request): string {
   const explicit = getExplicitConfiguredOrigin();
   if (explicit) return explicit;

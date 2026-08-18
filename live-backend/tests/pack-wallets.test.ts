@@ -934,9 +934,12 @@ describe("wallet card field bounds", () => {
     // the ownership row joined to its variant.
     return (await exec(
       db,
+      // Both tables carry a tier_label now, and a duplicate result column
+      // resolves to the first, so the effective one is coalesced by hand.
       `select pack_collection_cards.*,
          pc.username as username, pc.avatar_url as avatar_url, pc.country_code as country_code,
-         pc.tier_label as tier_label, sk.skills_json as skills_json
+         coalesce(pack_collection_cards.tier_label, pc.tier_label) as effective_tier_label,
+         sk.skills_json as skills_json
        from pack_collection_cards
        left join pack_cards pc
          on pc.card_key = pack_collection_cards.card_key
@@ -956,7 +959,7 @@ describe("wallet card field bounds", () => {
     await savePackWallet(db, USER_ID, hostilePayload({ username: "n".repeat(500), tierLabel: "L".repeat(500) }), 0, 5000);
     const card = await storedCard();
     expect(String(card.username)).toHaveLength(40);
-    expect(String(card.tier_label)).toHaveLength(60);
+    expect(String(card.effective_tier_label)).toHaveLength(60);
   });
 
   it("drops a country code that is not two letters", async () => {

@@ -312,20 +312,33 @@ describe("analyzeManiaPatterns", () => {
   it("detects 7K delay, bracket, chordstream, chordjack, and tech", () => {
     expect(patternIds(7, repeatRows([[0], [2], [4], [6], [3], [1]], 35))).toContain("delay");
     expect(analyzeManiaPatterns(makeMap(7, chordedDelayRows(), 55)).primary?.id).toBe("delay");
-    expect(patternIds(7, repeatRows([[0, 1, 2], [4, 5, 6], [1, 2, 3], [4, 5, 6]], 30))).toContain("bracket");
+    expect(patternIds(7, repeatRows([[0, 1, 3], [2, 4, 5]], 60))).toContain("bracket");
     expect(patternIds(7, repeatRows([[0], [1, 3], [2], [4, 6], [5], [1, 4]], 35))).toContain("chordstream");
     expect(patternIds(7, repeatRows([[0, 2, 4], [0, 2, 4], [1, 3, 5], [1, 3, 5]], 30))).toContain("chordjack");
     expect(patternIds(7, repeatRows([[0], [1, 3, 5], [2], [1, 2], [6], [0, 4, 5]], 35))).toContain("tech");
   });
 
-  it("does not tag hand-alternating bracket files as chordjack", () => {
-    // Dense 7K bracket motion: every row is a hand chord, but consecutive
-    // chords never share a column - chord density without chord-jack
-    // repetition. The density-driven chordjack score used to fire on this
-    // shape (the two misclassified community reports).
-    const ids = patternIds(7, repeatRows([[0, 1, 2], [4, 5, 6], [1, 2, 3], [4, 5, 6]], 30));
-    expect(ids).toContain("bracket");
-    expect(ids).not.toContain("chordjack");
+  it("does not tag dense hand-alternating files as chordjack", () => {
+    // Dense 7K chord motion: every row is a hand chord, but consecutive chords
+    // never share a column - chord density without chord-jack repetition. The
+    // density-driven chordjack score used to fire on this shape (the two
+    // misclassified community reports).
+    expect(patternIds(7, repeatRows([[0, 1, 2], [4, 5, 6], [1, 2, 3], [4, 5, 6]], 30))).not.toContain("chordjack");
+  });
+
+  it("counts bracket content as chord runs that neither jack nor roll", () => {
+    // Interleaved chords: consecutive rows overlap in column range but share no
+    // column, which is the vendored engine's own bracket window.
+    expect(patternIds(7, repeatRows([[0, 1, 3], [2, 4, 5]], 60))).toContain("bracket");
+    // Hands jumping clean past each other is a roll, not bracket content: the
+    // column ranges never overlap.
+    expect(patternIds(7, repeatRows([[0, 1, 2], [4, 5, 6]], 60))).not.toContain("bracket");
+    // Chords that re-hit their columns are jacks, not bracket content.
+    expect(patternIds(7, repeatRows([[0, 1, 3], [0, 1, 3], [2, 4, 5], [2, 4, 5]], 30))).not.toContain("bracket");
+    // Two-note rows count. Upstream's primitive demands 3+ notes per row, which
+    // refused files built on two-note brackets: one such chart scored 0.018
+    // against 0.128 for its sibling by the same mapper carrying the same tags.
+    expect(patternIds(7, repeatRows([[0, 2], [1, 3]], 120))).toContain("bracket");
   });
 
   it("does not tag chord-jacked bracket shapes as bracket", () => {
@@ -336,5 +349,22 @@ describe("analyzeManiaPatterns", () => {
     const ids = patternIds(7, repeatRows([[0, 1, 2], [0, 1, 2], [1, 2, 3], [1, 2, 3]], 30));
     expect(ids).toContain("chordjack");
     expect(ids).not.toContain("bracket");
+  });
+
+  it("does not tag near-certain chordjack charts as delay", () => {
+    // Delay's ingredients are density, entropy and low row repetition, and
+    // dense chordjack saturates all three, so CJ files were scoring delay on
+    // nothing but being hard ("[7K] JACK Another" carried delay 0.62 with
+    // chordjack 1.00, and a CJ chart topped a profile's Delay skill list).
+    const rows = Array.from({ length: 320 }, (_, index) => {
+      const base = index % 4;
+      return [base, base + 1, base + 3].sort((a, b) => a - b);
+    });
+    const analysis = analyzeManiaPatterns(makeMap(7, rows, 40));
+    const score = (id: ManiaPatternId) => analysis.allPatterns.find((pattern) => pattern.id === id)?.score ?? 0;
+    expect(score("chordjack")).toBeGreaterThanOrEqual(0.8);
+    expect(score("delay")).toBe(0);
+    // The veto is aimed at chordjack, not at delay charts in general.
+    expect(analyzeManiaPatterns(makeMap(7, chordedDelayRows(), 55)).primary?.id).toBe("delay");
   });
 });

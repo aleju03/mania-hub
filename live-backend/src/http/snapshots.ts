@@ -20,6 +20,7 @@ import { handleCommunitiesRoutes } from "./routes/communities.js";
 import { handleSnapshotRoutes } from "./routes/snapshots.js";
 import { handleSystemRoutes } from "./routes/system.js";
 import { handleUserDataRoutes } from "./routes/user-data.js";
+import { handleSignatureRoutes } from "./routes/signatures.js";
 
 // Compatibility façade: this file was once the whole HTTP layer, and the server,
 // the live/SSE modules and the tests still import its public surface from here.
@@ -163,6 +164,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (await handleAnalyticsRoutes(req, res, ctx, url)) return true;
   if (await handleAdminRoutes(req, res, ctx, url, country)) return true;
   if (await handleUserDataRoutes(req, res, ctx, url)) return true;
+  if (await handleSignatureRoutes(req, res, ctx, url)) return true;
   if (await handleSnapshotRoutes(req, res, ctx, url, country)) return true;
   if (await handleAnalysisRoutes(req, res, ctx, url)) return true;
   if (await handleOsuProxyRoutes(req, res, ctx, url)) return true;

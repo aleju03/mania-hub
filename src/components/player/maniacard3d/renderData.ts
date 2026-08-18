@@ -49,11 +49,17 @@ export function buildManiaCardRenderDataFromSkills({
   skills,
   scores = [],
   tierOverride,
+  labelOverride,
 }: {
   user: ManiaCardRenderInput["user"];
   skills: ManiaSkills;
   scores?: ManiaCardRenderInput["scores"];
   tierOverride?: ManiaCardTier;
+  /* Badge text for one holding, from /admin/collections. Same slot the
+     honorary roster's cardTierLabel uses and wins over it, because it names
+     one collector's own copy rather than the player: a GOAT card given to one
+     person reading something else must not reword everyone else's. */
+  labelOverride?: string | null;
 }): ManiaCardReadyData {
   const honoraryTier = getHonoraryTier(user.id);
   const tier = tierOverride ?? honoraryTier ?? getManiaCardTier(skills.cardPower);
@@ -62,9 +68,8 @@ export function buildManiaCardRenderDataFromSkills({
   // player by, and a personalised badge. They apply to the card only - the
   // profile link keeps the real username - and never to a forced tier.
   const honorary = tier === honoraryTier ? honoraryPlayerById(user.id) : null;
-  const tierStyle = honorary?.cardTierLabel
-    ? { ...baseStyle, label: honorary.cardTierLabel }
-    : baseStyle;
+  const label = labelOverride?.trim() || honorary?.cardTierLabel;
+  const tierStyle = label ? { ...baseStyle, label } : baseStyle;
   const cardUser = honorary?.cardName ? { ...user, username: honorary.cardName } : user;
   // An honorary tier sits off the cardPower ladder, so there is nothing to
   // progress toward and the ladder strip stays hidden.

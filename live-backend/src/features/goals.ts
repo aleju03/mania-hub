@@ -637,7 +637,10 @@ export async function computeGoalProgress(db: Db, goal: UserGoal): Promise<GoalP
     case "reach_pp": {
       const pp = Number((await exec(db, "select pp from users where user_id = ?", [goal.userId])).rows[0]?.pp ?? 0);
       const target = goal.targetValue ?? 0;
-      return { current: pp || null, target: target || null, pct: pctTowards(goal.startValue, pp || null, target || null), detail: pp ? `now ${Math.round(pp).toLocaleString()}pp` : null };
+      // Pinned like the frontend's own formatting (src/lib/format.ts): this
+      // string is rendered next to browser-formatted numbers, so leaving the
+      // separator to the VPS's locale is what makes the pair disagree.
+      return { current: pp || null, target: target || null, pct: pctTowards(goal.startValue, pp || null, target || null), detail: pp ? `now ${Math.round(pp).toLocaleString("en-US")}pp` : null };
     }
     case "reach_rank": {
       const rank = await getUserRank(db, goal.userId, rankScopeOf(goal.targetGrade));
@@ -646,7 +649,7 @@ export async function computeGoalProgress(db: Db, goal: UserGoal): Promise<GoalP
         current: rank,
         target: target || null,
         pct: pctTowardsRank(goal.startValue, rank, target || null),
-        detail: rank != null ? `now #${Math.round(rank).toLocaleString()}` : "rank not tracked yet",
+        detail: rank != null ? `now #${Math.round(rank).toLocaleString("en-US")}` : "rank not tracked yet",
       };
     }
     case "play_pp": {

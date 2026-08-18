@@ -112,9 +112,9 @@ function ReviewCard({
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-osu-f1 tabular-nums">
             <span className="inline-flex items-center gap-1">
               <Users className="h-3 w-3" aria-hidden="true" />
-              {community.memberCount.toLocaleString()}
+              {community.memberCount.toLocaleString("en-US")}
             </span>
-            {community.onlineCount > 0 && <span>{community.onlineCount.toLocaleString()} online</span>}
+            {community.onlineCount > 0 && <span>{community.onlineCount.toLocaleString("en-US")} online</span>}
             {language && <span>{language}</span>}
             {/* Worth knowing before approving: a listing whose invite lapses
                 next week will quietly drop off the directory then. */}

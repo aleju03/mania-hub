@@ -2377,6 +2377,9 @@ export interface LiveSharedPackCard {
     countryCode: string;
     tier: string | null;
     tierLabel: string | null;
+    /* Badge text this one holding was given, printed on the card art in place
+       of the tier's name. Null for every ordinary card. */
+    customLabel: string | null;
     skills: unknown | null;
     pp: number;
     globalRank: number;
@@ -2392,6 +2395,10 @@ export interface LiveSharedPackCard {
      rather than trusting the field to be there. */
   serial: number | null;
   mintedTotal: number;
+  /* The exact recent event requested by a live-feed link. Optional so the
+     frontend remains compatible while the backend rolls out; null for plain
+     durable collection links and for an event that has aged out. */
+  pullEvent?: { id: number; pulledAt: number; isNew: boolean } | null;
   /* Set only when the pull log recorded this card arriving at the GOAT tier.
      Null for a card pulled out of the ranked pool before the player joined the
      honorary roster, and for pulls older than the log. */
@@ -2399,9 +2406,17 @@ export interface LiveSharedPackCard {
 }
 
 /* One owned card as a shareable artifact: backs the /pull/{owner}/{card}
-   permalink page. Throws on 404 (card recycled away or never synced). */
-export async function fetchLivePackSharedCard(ownerId: number, cardId: number): Promise<LiveSharedPackCard> {
-  return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${Math.floor(cardId)}`);
+   permalink page. A live-feed link includes pullId so a duplicate uses that
+   event's date instead of the holding's first date. Throws on 404 when the
+   card was recycled away or never synced. */
+export async function fetchLivePackSharedCard(
+  ownerId: number,
+  cardId: number,
+  pullId?: number,
+): Promise<LiveSharedPackCard> {
+  const normalizedPullId = Math.floor(Number(pullId) || 0);
+  const query = normalizedPullId > 0 ? `?pull=${normalizedPullId}` : "";
+  return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${Math.floor(cardId)}${query}`);
 }
 
 /* The public pull feed: notable-only by default (high mints and first-ever

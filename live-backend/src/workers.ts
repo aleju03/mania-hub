@@ -5,7 +5,7 @@ import { exec, json, parseJson, writeVariantPps } from "./db.js";
 import { AVATAR_ACCENT_JOB, computeAvatarAccentJob } from "./features/avatar-accents.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
-import { BRACKET_TAG_RECOMPUTE_JOB, CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, INVERSE_CLUSTER_BPM_JOB, LN_MSD_SWEEP_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, NOTE_BPM_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runBracketTagRecomputeJob, runChartAnalysisBackfillJob, runChordjackTagRecomputeJob, runCompanellaRecomputeJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runInverseClusterBpmRecoveryJob, runLnMsdSweepJob, runLnSourceRecomputeJob, runLnSubtypeRecomputeJob, runMsdPoisonRecoveryJob, runNoteBpmRecomputeJob, runSunnyRepinDtRecomputeJob, runSunnyRepinRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
+import { BRACKET_CONTENT_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, INVERSE_CLUSTER_BPM_JOB, LN_MSD_SWEEP_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, NOTE_BPM_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runBracketContentRecomputeJob, runBracketTagRecomputeJob, runChartAnalysisBackfillJob, runChordjackTagRecomputeJob, runCompanellaRecomputeJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runInverseClusterBpmRecoveryJob, runLnMsdSweepJob, runLnSourceRecomputeJob, runLnSubtypeRecomputeJob, runMsdPoisonRecoveryJob, runNoteBpmRecomputeJob, runSunnyRepinDtRecomputeJob, runSunnyRepinRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
@@ -163,7 +163,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // the work is local (cached .osu text), no osu! API pressure. Tunable via
     // CHART_ANALYSIS_LANE_INTERVAL_MS so a local backfill can run flat out.
     name: "chart-analysis",
-    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, NOTE_BPM_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB],
+    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, NOTE_BPM_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB],
     claimLimit: 1,
     intervalMs: readConfig().chartAnalysisLaneIntervalMs,
   },
@@ -388,7 +388,17 @@ export class WorkerRunner {
       }
       const retryDelayMs = getRetryDelayMs(job.type, job.attempts, error);
       await this.queue.fail(job.id, error, retryDelayMs);
-      logWarn("job_failed", { job_id: job.id, type: job.type, lane, worker_id: workerId, retry_delay_ms: retryDelayMs, ...errorContext(error) });
+      // A pending top-play confirmation is the queue's designed wait for a score
+      // osu! has not published into the player's best-200 yet, not a fault: it
+      // retries on its own backoff and gives up after a few attempts. Logged at
+      // warn it was ~99% of this service's warn volume (8k in three days), so it
+      // keeps the same event name and fields at info instead.
+      const failureContext = { job_id: job.id, type: job.type, lane, worker_id: workerId, retry_delay_ms: retryDelayMs, ...errorContext(error) };
+      if (error instanceof TopPlayConfirmationPendingError) {
+        logInfo("job_failed", failureContext);
+      } else {
+        logWarn("job_failed", failureContext);
+      }
       await this.events.append("job_status", null, { id: job.id, type: job.type, status: "failed" }, `job:${job.id}:failed:${job.attempts}`);
     } finally {
       const remaining = (this.activeJobs.get(lane) ?? []).filter((current) => current.id !== job.id);
@@ -644,6 +654,10 @@ export class WorkerRunner {
     }
     if (job.type === CHORDJACK_TAG_RECOMPUTE_JOB) {
       await runChordjackTagRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
+      return;
+    }
+    if (job.type === BRACKET_CONTENT_RECOMPUTE_JOB) {
+      await runBracketContentRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
       return;
     }
     if (job.type === BRACKET_TAG_RECOMPUTE_JOB) {

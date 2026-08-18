@@ -3683,6 +3683,31 @@ describe("live backend", () => {
     expect(getUserRecentScores).toHaveBeenCalledTimes(1);
   });
 
+  it("answers 404 when a profile names no live osu! account", async () => {
+    const { db, queue, events } = await setup();
+    const getUserByKey = vi.fn(async () => {
+      throw new OsuApiError(404, "/users/nobody-here");
+    });
+    const ctx = {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: {
+        getUserByKey,
+        getUserBestScoresWindow: vi.fn(async () => []),
+        limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) },
+      },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+
+    const snapshotResponse = mockRes();
+    await routeHttp(mockReq("GET", "/api/profiles/nobody-here/snapshot"), snapshotResponse.res, ctx);
+    expect(snapshotResponse.res.statusCode).toBe(404);
+    expect(JSON.parse(snapshotResponse.writes.join(""))).toMatchObject({ error: "profile_not_found" });
+    expect(getUserByKey).toHaveBeenCalled();
+  });
+
   it("serves the slim card view and memoizes cached-snapshot responses", async () => {
     const { db, queue, events } = await setup();
     const fetchedAt = new Date().toISOString();

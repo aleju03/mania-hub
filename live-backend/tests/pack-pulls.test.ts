@@ -437,6 +437,43 @@ describe("getSharedPackCard", () => {
     expect(shared?.owner.username).toBe("tracked-owner");
   });
 
+  it("attaches only the exact matching pull event requested by a feed link", async () => {
+    await seedCollectionCard(OWNER_ID, CARD_A, 1, "rare", 5_000, 20_000);
+    await recordPackPullEvents(
+      db,
+      OWNER_ID,
+      "opener",
+      "standard",
+      [pullCard(CARD_A, "rare")],
+      5_000,
+    );
+    const repeat = await recordPackPullEvents(
+      db,
+      OWNER_ID,
+      "opener",
+      "standard",
+      [pullCard(CARD_A, "rare", { isNew: false })],
+      20_000,
+    );
+    const unrelated = await recordPackPullEvents(
+      db,
+      OWNER_ID,
+      "opener",
+      "standard",
+      [pullCard(CARD_B, "rare")],
+      30_000,
+    );
+
+    const shared = await getSharedPackCard(db, OWNER_ID, CARD_A, repeat.eventIds[0]);
+    expect(shared?.card.firstPulledAt).toBe(5_000);
+    expect(shared?.pullEvent).toEqual({ id: repeat.eventIds[0], pulledAt: 20_000, isNew: false });
+
+    // A real event cannot be borrowed to put an unrelated timestamp on this
+    // card's permalink. Missing/pruned ids degrade to the durable holding.
+    expect((await getSharedPackCard(db, OWNER_ID, CARD_A, unrelated.eventIds[0]))?.pullEvent).toBeNull();
+    expect((await getSharedPackCard(db, OWNER_ID, CARD_A, 999_999))?.pullEvent).toBeNull();
+  });
+
   it("returns null for missing or fully recycled cards", async () => {
     expect(await getSharedPackCard(db, OWNER_ID, CARD_A)).toBeNull();
     await seedCollectionCard(OWNER_ID, CARD_B, 0);
@@ -627,5 +664,27 @@ describe("pack pull endpoints", () => {
     expect(found.body.owners).toBe(1);
     const missing = await call(mockReq("GET", `/api/packs/pulled-card/${OWNER_ID}/${CARD_B}`));
     expect(missing.status).toBe(404);
+  });
+
+  it("GET /api/packs/pulled-card includes the matching live-feed event", async () => {
+    await seedCollectionCard(OWNER_ID, CARD_A, 1, "rare", 5_000, 20_000);
+    const recorded = await recordPackPullEvents(
+      db,
+      OWNER_ID,
+      "opener",
+      "standard",
+      [pullCard(CARD_A, "rare", { isNew: false })],
+      20_000,
+    );
+    const response = await call(mockReq(
+      "GET",
+      `/api/packs/pulled-card/${OWNER_ID}/${CARD_A}?pull=${recorded.eventIds[0]}`,
+    ));
+    expect(response.status).toBe(200);
+    expect(response.body.pullEvent).toEqual({
+      id: recorded.eventIds[0],
+      pulledAt: 20_000,
+      isNew: false,
+    });
   });
 });

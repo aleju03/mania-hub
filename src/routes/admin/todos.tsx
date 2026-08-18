@@ -307,7 +307,7 @@ function errMessage(error: unknown): string {
 }
 
 function formatShortDate(ms: number): string {
-  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 const TEXTAREA_CLASS =

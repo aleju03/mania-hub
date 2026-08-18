@@ -622,7 +622,7 @@ export function GoatPoll() {
   const animatedRows = shown.length <= ANIMATED_ROWS_MAX;
   // The deadline in the reader's own timezone, for anyone who wants to plan
   // around it rather than watch a countdown. Same instant everywhere.
-  const endsLabel = new Date(board.closesAt).toLocaleString(undefined, {
+  const endsLabel = new Date(board.closesAt).toLocaleString("en-US", {
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",

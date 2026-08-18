@@ -854,7 +854,7 @@ function PacksPage() {
                 <div className="flex items-baseline gap-2 text-osu-f1">
                   <Recycle className="h-4 w-4 translate-y-[3px]" />
                   <span className="text-xl font-black leading-none text-white tabular-nums">
-                    {shards.toLocaleString()}
+                    {shards.toLocaleString("en-US")}
                   </span>
                   <span>shards</span>
                 </div>

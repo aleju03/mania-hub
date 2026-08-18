@@ -1573,7 +1573,7 @@ function MapFacts({ side, className = "" }: { side: SideBySideSide; className?: 
     ...(apiBeatmap?.drain != null ? [{ label: "HP", value: apiBeatmap.drain.toFixed(1) }] : []),
     ...(bpm != null ? [{ label: "BPM", value: String(Math.round(bpm * rate)) }] : []),
     ...(lengthSeconds != null ? [{ label: "Length", value: formatLength(lengthSeconds / rate) }] : []),
-    ...(side.beatmap ? [{ label: "Notes", value: side.beatmap.notes.length.toLocaleString() }] : []),
+    ...(side.beatmap ? [{ label: "Notes", value: side.beatmap.notes.length.toLocaleString("en-US") }] : []),
     ...(rate !== 1 ? [{ label: "Rate", value: `${rate}x` }] : []),
   ];
   return (

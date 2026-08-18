@@ -248,7 +248,7 @@ function progressPct(goal: UserGoal): number | null {
 
 function completedDetail(goal: UserGoal): string | null {
   if (goal.status !== "completed" || !goal.completedAt) return null;
-  const date = new Date(goal.completedAt).toLocaleDateString();
+  const date = new Date(goal.completedAt).toLocaleDateString("en-US");
   if (goal.kind === "accuracy" && goal.completedValue != null) return `cleared ${date} · ${(goal.completedValue * 100).toFixed(2)}%`;
   if ((goal.kind === "play_pp" || goal.kind === "reach_pp") && goal.completedValue != null) return `cleared ${date} · ${nf(goal.completedValue)}pp`;
   if (goal.kind === "play_pp_count" && goal.completedValue != null) return `cleared ${date} · ${nf(goal.completedValue)} plays`;
@@ -258,7 +258,7 @@ function completedDetail(goal: UserGoal): string | null {
 
 /** Exact set date, one hover away from the compact "set 12d ago" on the card. */
 function setOnTitle(createdAt: number): string {
-  return `Set on ${new Date(createdAt).toLocaleString()}`;
+  return `Set on ${new Date(createdAt).toLocaleString("en-US")}`;
 }
 
 function beatmapHref(beatmapId: number | null | undefined): string | null {

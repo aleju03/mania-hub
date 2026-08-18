@@ -6,6 +6,7 @@ import { getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbo
 import { getPlayerSkillBreakdown, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
+import { OsuApiError } from "../../osu/client.js";
 import type { OscScore } from "../../shared/types.js";
 import type { Db } from "../../db.js";
 import type { HttpContext } from "../context.js";
@@ -35,12 +36,25 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       // farm helper must keep the default -- the queue is the only way a stored
       // profile ever gets refreshed.
       const wantsRefresh = url.searchParams.get("refresh") !== "0";
-      await sendAccentEnrichedJson(req, res, ctx, 200, await getPlayerProfileSnapshot(
-        ctx.serveWriteDb ?? ctx.db,
-        ctx.osu,
-        profileRoute.key,
-        { queue: wantsRefresh ? ctx.serveWriteQueue ?? ctx.queue : null, lookupMode },
-      ));
+      let snapshot;
+      try {
+        snapshot = await getPlayerProfileSnapshot(
+          ctx.serveWriteDb ?? ctx.db,
+          ctx.osu,
+          profileRoute.key,
+          { queue: wantsRefresh ? ctx.serveWriteQueue ?? ctx.queue : null, lookupMode },
+        );
+      } catch (error) {
+        // A profile nobody has stored is minted inline from the osu! API, so a
+        // key naming no live account (deleted, renamed, a typo in the URL)
+        // surfaces here as a 404 OsuApiError. That is a miss, not a fault: it
+        // used to fall through to the server's catch-all as a 500 plus an
+        // http_unhandled_error warn.
+        if (!isOsuNotFound(error)) throw error;
+        sendJson(req, res, ctx, 404, { error: "profile_not_found" });
+        return true;
+      }
+      await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
       return true;
     }
     const userId = Number(profileRoute.key);
@@ -142,10 +156,23 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       return true;
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
-    sendJson(req, res, ctx, 200, await getPlayerAbout(ctx.serveWriteDb ?? ctx.db, ctx.osu, userId));
+    let about;
+    try {
+      about = await getPlayerAbout(ctx.serveWriteDb ?? ctx.db, ctx.osu, userId);
+    } catch (error) {
+      if (!isOsuNotFound(error)) throw error;
+      sendJson(req, res, ctx, 404, { error: "profile_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, about);
     return true;
   }
   return false;
+}
+
+/** An osu! account that does not exist (or no longer does) behind an inline fetch. */
+function isOsuNotFound(error: unknown): boolean {
+  return error instanceof OsuApiError && error.status === 404;
 }
 
 function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays"; key: string } | null {

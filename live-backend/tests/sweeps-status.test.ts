@@ -64,6 +64,7 @@ describe("sweeps status registry", () => {
       "companella-recompute",
       "chordjack-tag-recompute",
       "bracket-tag-recompute",
+      "bracket-content-recompute",
       "ln-msd-backfill",
       "ln-source-recompute",
       "sunny-repin-recompute",

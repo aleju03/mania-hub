@@ -3643,7 +3643,7 @@ export function BBCodeEditor({
 
       {/* Footer */}
       <div className="flex items-center gap-3 px-4 py-2 border-t border-osu-b3/30 text-[12px] text-osu-f1">
-        <span>{charCount.toLocaleString()} characters</span>
+        <span>{charCount.toLocaleString("en-US")} characters</span>
         <span className="hidden sm:inline">Draft autosaves locally</span>
         {pendingImageCount > 0 ? (
           <span className="text-osu-c1">

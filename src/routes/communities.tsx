@@ -563,7 +563,7 @@ function CommunitiesPage() {
                       role="status"
                       aria-live="polite"
                     >
-                      {total.toLocaleString()} {total === 1 ? "server" : "servers"}
+                      {total.toLocaleString("en-US")} {total === 1 ? "server" : "servers"}
                     </span>
                   )}
                 </FilterRow>

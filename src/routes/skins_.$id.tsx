@@ -23,6 +23,7 @@ import {
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
 import { canModerateSkinKeymodes, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, pingSkinView, readSkinsBrowseEntry, skinDownloadUrl, skinNoteShapeLabel, skinOskFileUrl, skinScreenshotLabel, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
+import { useScrollRestoreRef } from "../lib/use-scroll-restore";
 
 export const Route = createFileRoute("/skins_/$id")({
   loader: async ({ params }) => {
@@ -110,6 +111,10 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
     }
     void navigate({ to: "/skins", search: {} });
   };
+
+  // Opened from a scrolled grid, this page would otherwise paint its first
+  // frame at the offset the browser clamped into the shorter document.
+  const scrollRestoreRef = useScrollRestoreRef();
 
   // Canonicalize pre-slug links: a skin opened via its raw id gets its URL
   // swapped for the slug without a reload.
@@ -235,7 +240,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
     && (skin.keymodes.some((keys) => keys >= 2) || skin.screenshots.length > 0);
 
   return (
-    <div className="relative flex min-h-screen flex-col">
+    <div ref={scrollRestoreRef} className="relative flex min-h-screen flex-col">
       <div className="relative z-10 flex flex-1 flex-col overflow-clip">
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader
@@ -469,10 +474,10 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                     ) : (
                       <>
                         <FactRow label="Downloads">
-                          <span className="tabular-nums text-osu-l1">{skin.downloadCount.toLocaleString()}</span>
+                          <span className="tabular-nums text-osu-l1">{skin.downloadCount.toLocaleString("en-US")}</span>
                         </FactRow>
                         <FactRow label="Views">
-                          <span className="tabular-nums text-osu-l1">{(skin.viewCount ?? 0).toLocaleString()}</span>
+                          <span className="tabular-nums text-osu-l1">{(skin.viewCount ?? 0).toLocaleString("en-US")}</span>
                         </FactRow>
                       </>
                     )}
@@ -505,7 +510,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                     {skin.publishedAt && (
                       <FactRow label="Uploaded">
                         <span className="tabular-nums text-osu-l1" suppressHydrationWarning>
-                          {new Date(skin.publishedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                          {new Date(skin.publishedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
                         </span>
                       </FactRow>
                     )}
@@ -514,7 +519,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                     {skin.oskUpdatedAt && (
                       <FactRow label="File updated">
                         <span className="tabular-nums text-osu-l1" suppressHydrationWarning>
-                          {new Date(skin.oskUpdatedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                          {new Date(skin.oskUpdatedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
                         </span>
                       </FactRow>
                     )}

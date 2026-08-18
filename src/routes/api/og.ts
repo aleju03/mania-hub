@@ -1,8 +1,22 @@
 import { ImageResponse } from "@vercel/og";
 import { createFileRoute } from "@tanstack/react-router";
-import { waitUntil } from "@vercel/functions";
 import { createElement as h } from "react";
 import type { ReactNode } from "react";
+import {
+  clamp,
+  formatOgAcc,
+  formatOgInt,
+  getFont,
+  getNoteSpriteDataUrl,
+  isOgFallbackError,
+  loadOgFonts,
+  MAX_CONCURRENT_OG_RENDERS,
+  ogFontList,
+  OgFallbackError,
+  ogRenderGate,
+  pngResponse,
+  scheduleDetached,
+} from "../../lib/og-render";
 import {
   getCachedUser,
   getRankings,
@@ -35,40 +49,6 @@ import type { OsuCovers, OsuScore, OsuUser } from "../../lib/types";
 const WIDTH = 1200;
 const HEIGHT = 630;
 const MAX_TITLE_LEN = 38;
-const FONT_FETCH_TIMEOUT_MS = 10_000;
-
-const fontCache = new Map<string, Promise<ArrayBuffer>>();
-
-function clamp(value: string | null | undefined, max: number): string {
-  if (!value) return "";
-  const trimmed = value.trim();
-  if (trimmed.length <= max) return trimmed;
-  return `${trimmed.slice(0, max - 1)}...`;
-}
-
-function getFont(request: Request, fileName: string): Promise<ArrayBuffer> {
-  const url = new URL(`/fonts/${fileName}`, getAssetOrigin(request)).toString();
-  const cached = fontCache.get(url);
-  if (cached) return cached;
-
-  const promise = (async () => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FONT_FETCH_TIMEOUT_MS);
-    try {
-      const response = await fetch(url, { signal: controller.signal });
-      if (!response.ok) {
-        throw new Error(`Failed to load font ${fileName}: ${response.status}`);
-      }
-      return response.arrayBuffer();
-    } finally {
-      clearTimeout(timeout);
-    }
-  })();
-
-  fontCache.set(url, promise);
-  promise.catch(() => fontCache.delete(url));
-  return promise;
-}
 
 // Every OG URL carries v=OG_IMAGE_VERSION, so layout changes always mint new
 // URLs; a long shared-cache TTL is safe and keeps daily edge re-misses (a full
@@ -82,82 +62,14 @@ const OG_CACHE_HEADER = "public, max-age=86400, s-maxage=2592000, stale-while-re
 // a fast object read. Request query params must not expand R2 key cardinality.
 
 function ogImageResponse(buffer: Buffer): Response {
-  return new Response(buffer as unknown as BodyInit, {
-    status: 200,
-    headers: {
-      "Content-Type": "image/png",
-      "Content-Length": String(buffer.length),
-      "Cache-Control": OG_CACHE_HEADER,
-    },
-  });
+  return pngResponse(buffer, OG_CACHE_HEADER);
 }
 
 function scheduleOgStore(cacheKey: string, buffer: Buffer): void {
-  const store = putOgImage(cacheKey, buffer);
-  try {
-    waitUntil(store);
-  } catch {
-    // Not in a Vercel function context (e.g. local dev). putOgImage swallows
-    // its own errors, so letting it run detached is safe.
-    void store;
-  }
+  scheduleDetached(putOgImage(cacheKey, buffer));
 }
 
-/* Rasterization is the most expensive thing this box does, so two limits sit
-   around it. Renders of the same card collapse into one (a link posted in a
-   busy Discord unfurls from many crawlers at once, all missing the same key),
-   and no more than a couple run at a time - past that, callers are handed the
-   cached default card instead of queueing behind multi-second renders. That
-   keeps the 4 vCPUs available for serving pages no matter how many distinct
-   card identities someone asks for. */
-const MAX_CONCURRENT_OG_RENDERS = 2;
 const inFlightOgRenders = new Map<string, Promise<Response>>();
-
-/* A small hand-off semaphore, rather than a check followed by an increment.
-   The distinction matters on a cold default-card cache: the overflow request
-   may have to wait for one of the two active renders, but it must never become
-   a third render while doing so. Releasing directly hands the occupied slot to
-   the oldest waiter, so a new arrival cannot steal it between wake-up and the
-   waiter's continuation. */
-export class OgRenderGate {
-  private active = 0;
-  private readonly waiters: Array<() => void> = [];
-
-  constructor(private readonly limit: number) {}
-
-  get activeCount(): number {
-    return this.active;
-  }
-
-  async run<T>(task: () => Promise<T>): Promise<T> {
-    await this.acquire();
-    try {
-      return await task();
-    } finally {
-      this.release();
-    }
-  }
-
-  private acquire(): Promise<void> {
-    if (this.active < this.limit) {
-      this.active += 1;
-      return Promise.resolve();
-    }
-    return new Promise((resolve) => this.waiters.push(resolve));
-  }
-
-  private release(): void {
-    const next = this.waiters.shift();
-    if (next) {
-      // The slot stays counted as active while ownership is handed over.
-      next();
-      return;
-    }
-    this.active = Math.max(0, this.active - 1);
-  }
-}
-
-const ogRenderGate = new OgRenderGate(MAX_CONCURRENT_OG_RENDERS);
 
 function defaultOgCacheKey(): string {
   return `default:v${OG_IMAGE_VERSION}`;
@@ -224,45 +136,6 @@ async function readDevTierOverride(url: URL): Promise<ManiaCardTier | null> {
   } catch {
     return null;
   }
-}
-
-class OgFallbackError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "OgFallbackError";
-  }
-}
-
-function isOgFallbackError(error: unknown): error is OgFallbackError {
-  return error instanceof OgFallbackError;
-}
-
-async function loadOgFonts(request: Request): Promise<[ArrayBuffer, ArrayBuffer]> {
-  return Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
-  ]);
-}
-
-function ogFontList(regularFont: ArrayBuffer, heavyFont: ArrayBuffer) {
-  return [
-    { name: "Torus OG" as const, data: regularFont, style: "normal" as const, weight: 400 as const },
-    { name: "Torus OG" as const, data: heavyFont, style: "normal" as const, weight: 900 as const },
-  ];
-}
-
-function formatOgInt(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return "--";
-  return Math.round(value).toLocaleString("en-US");
-}
-
-function formatOgAcc(accuracy: number | null | undefined): string {
-  if (accuracy == null || !Number.isFinite(accuracy)) return "--";
-  // osu! API returns accuracy as 0-1 float for lazer scores and 0-100 for
-  // legacy, but the LeanRankingEntry ships it 0-1. OsuScore ships 0-1. Scale
-  // to percent.
-  const pct = accuracy <= 1 ? accuracy * 100 : accuracy;
-  return `${pct.toFixed(2)}%`;
 }
 
 // Mirrors src/components/ui/GradeImg.tsx so the OG and the in-app pages
@@ -1794,6 +1667,9 @@ interface ManiaTierCardArt {
   username: string;
   avatarUrl: string;
   tier: ManiaCardTier;
+  /* Overrides the tier's own name on the badge, for a holding that was given
+     one. Mirrors labelOverride in maniacard3d/renderData.ts. */
+  label?: string | null;
   skills: { fingerControl: number; speed: number; accuracy: number; starAvg: number };
   laurelUrl?: string | null;
 }
@@ -1926,7 +1802,7 @@ function maniaTierCardElement(art: ManiaTierCardArt) {
               textShadow: `0 0 22px ${style.glowColor}, 0 2px 5px rgba(0,0,0,0.6)`,
             },
           },
-          style.label,
+          art.label?.trim() || style.label,
         ),
         // Avatar.
         h(
@@ -2037,6 +1913,10 @@ interface SharedPackCardPayload {
     username?: string;
     avatarUrl?: string;
     tier?: string | null;
+    /* Badge text given to this one holding, which the card art prints instead
+       of the tier's name. The share image has to draw the same card the page
+       does, or the preview says GOAT for a card that reads something else. */
+    customLabel?: string | null;
     skills?: {
       fingerControl?: number;
       speed?: number;
@@ -2085,6 +1965,7 @@ async function renderPulledCardOg(
     username: card.username || "Unknown",
     avatarUrl: card.avatarUrl || (card.userId ? `https://a.ppy.sh/${card.userId}` : ""),
     tier,
+    label: card.customLabel,
     skills: {
       fingerControl: Number(skills.fingerControl),
       speed: Number(skills.speed),
@@ -4597,31 +4478,6 @@ const SKINS_OG_NOTES: SkinsOgNote[] = [
   { img: "arrow-up-pink", x: 748, y: 338, size: 78, rotate: 12, opacity: 0.95, trail: "rgba(255,131,192,0.3)" },
   { img: "circle-pink-glow", x: 1048, y: 442, size: 92, opacity: 0.95, lnHeight: 230 },
 ];
-
-/* Satori fetches every <img> itself; two dozen parallel self-requests
-   for the sprites is enough to get connections dropped (notes silently
-   missing, or the whole render dying on "socket hang up"). Prefetch
-   each unique sprite once, cache it, and hand satori data: URLs. */
-const noteSpriteCache = new Map<string, Promise<string>>();
-
-function getNoteSpriteDataUrl(origin: string, img: string): Promise<string> {
-  const url = new URL(`/images/notes/${img}.png`, origin).toString();
-  const cached = noteSpriteCache.get(url);
-  if (cached) return cached;
-
-  const promise = (async () => {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to load note sprite ${img}: ${response.status}`);
-    }
-    const buffer = Buffer.from(await response.arrayBuffer());
-    return `data:image/png;base64,${buffer.toString("base64")}`;
-  })();
-
-  noteSpriteCache.set(url, promise);
-  promise.catch(() => noteSpriteCache.delete(url));
-  return promise;
-}
 
 function skinsFallingNote(src: string, note: SkinsOgNote, key: string): ReactNode[] {
   const isBar = note.img.startsWith("bar");

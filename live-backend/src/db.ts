@@ -335,6 +335,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateUploadedReplays(target);
   await migrateDiscordCommunities(target);
   await migrateUserReplaySkins(target);
+  await migrateUserSignatures(target);
   await migrateAdminTodos(target);
   await migrateDanBenchmark(target);
   await migrateAvatarAccents(target);
@@ -1644,6 +1645,13 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
       skills_json text not null unique
     )
   `);
+  // One collector's own name for their copy, overriding the variant's shared
+  // label. Only /admin/collections writes it; a pulled card leaves it null and
+  // keeps reading the catalog's.
+  const columns = (await db.execute("pragma table_info(pack_collection_cards)")).rows.map((row) => String(row.name));
+  if (!columns.includes("tier_label")) {
+    await db.execute("alter table pack_collection_cards add column tier_label text");
+  }
 }
 
 // The last username a wallet's pulls were recorded under. Durable, unlike the
@@ -2267,6 +2275,56 @@ async function migrateUserReplaySkins(db: Db): Promise<void> {
       updated_at text not null
     )
   `);
+}
+
+async function migrateUserSignatures(db: Db): Promise<void> {
+  // Dynamic renders: the opt-in record behind a player's signature images.
+  // `token` addresses the renders in a URL the player pastes into an osu!
+  // profile, so it is unique and carries its own index; rotating it is the
+  // only way to revoke an embed already out in the world, and disabling keeps
+  // it so re-enabling restores the same URL. Timestamps are epoch ms (matching
+  // user_goals). `enabled_types_json` is per-type publication rather than one
+  // switch: with a single token, publishing a maniacard would otherwise make
+  // the goals URL constructible from it, so goals must be opted into on their
+  // own. Read by token on an image path, so no extra indexes. Durable:
+  // retention never prunes it, and a reaped token would break a pasted profile.
+  await db.execute(`
+    create table if not exists user_signatures (
+      user_id integer primary key,
+      token text not null unique,
+      enabled integer not null default 1,
+      enabled_types_json text not null default '["maniacard"]',
+      skills_key_count integer,
+      created_at integer not null,
+      updated_at integer not null,
+      rotated_at integer
+    )
+  `);
+  // Per-type look (background, accent, opacity, blur), authored on the
+  // /dynamic-renders page. It lives here rather than in the image URL because
+  // that URL is pasted once and never edited, and because a style that came
+  // from the request would let one URL mint unbounded stored renders. Stored
+  // opaquely: the frontend owns the option lists and normalizes both on write
+  // and on read, and this column's only job here is to feed the version hash.
+  const columns = (await db.execute("pragma table_info(user_signatures)")).rows.map((row) => String(row.name));
+  if (!columns.includes("style_json")) {
+    await db.execute("alter table user_signatures add column style_json text");
+  }
+  // The moderation kill switch, separate from `enabled` on purpose: `enabled`
+  // is the player's own switch and they can flip it back, so reusing it for a
+  // block would let the account undo the moderation. A blocked row refuses to
+  // resolve, so every image behind that token 404s no matter what the player
+  // does next.
+  if (!columns.includes("blocked_at")) {
+    await db.execute("alter table user_signatures add column blocked_at integer");
+  }
+  // How many times an admin has taken a background off this row. Clearing a
+  // picture is an undo rather than a penalty - the player can set another one
+  // straight away and is never told - so without a tally the escalation from
+  // "clear it" to "block them" depends on a moderator remembering faces.
+  if (!columns.includes("cleared_count")) {
+    await db.execute("alter table user_signatures add column cleared_count integer not null default 0");
+  }
 }
 
 async function migrateAdminTodos(db: Db): Promise<void> {

@@ -801,6 +801,7 @@ async function seedAnalysis(
     rawDan?: number;
     label?: string;
     family?: string;
+    category?: string;
     clusterCategory?: string;
     patterns?: Array<{ id: string; label?: string; score: number; confidence?: number }>;
   },
@@ -828,6 +829,7 @@ async function seedAnalysis(
           score: hit.score,
           confidence: hit.confidence ?? hit.score,
         })),
+        category: options.category ?? null,
         clusterCategory: options.clusterCategory ?? null,
       }),
       options.msdValues ? json({ etternaVersion: "0.72.3", values: options.msdValues }) : null,
@@ -975,6 +977,134 @@ describe("map search primary derivation", () => {
     expect(cjScoped.items.map((item) => item.beatmapId).sort()).toEqual([1, 2]);
     const byId = new Map(cjScoped.items.map((item) => [item.beatmapId, item] as const));
     expect(byId.get(1)?.patterns.chordjack).toBe(1);
+  });
+
+  it("re-labels 4K Technical primaries both other engines call a chordjack", async () => {
+    const db = await makeDb();
+    // CANDY CANES "stab stab stab" (896752): 511 straight quads at 169ms, so
+    // pure a chord wall that MinaCalc's downscalers bury its own Chordjack
+    // rating (11.14, lowest of the seven) and the ungated Technical residual
+    // wins the argmax. Both other engines name it.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "chordjack", patterns: { chordjack: 1, stamina: 0.8 } });
+    await seedAnalysis(db, 1, {
+      msdValues: { Overall: 16.39, Stream: 15.12, Jumpstream: 15.57, Handstream: 12.26, Stamina: 15.71, JackSpeed: 14.26, Chordjack: 11.14, Technical: 16.2 },
+      lnRatio: 0.0005,
+      category: "Quadstream",
+      clusterCategory: "Longjacks",
+      patterns: [{ id: "quadstream", score: 0.923 }, { id: "chordjack", score: 0.735 }],
+    });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    expect(all.items[0].primaryPattern).toBe("chordjack");
+    // The chip follows the primary, so the family a viewer reads and the family
+    // primaryPatternFamily() hands the farm helper stay the same one.
+    expect(all.items[0].patterns.chordjack).toBe(1);
+    // Tech clamps to what the analyzer measured: it detected none here.
+    expect(all.items[0].patterns.tech).toBeUndefined();
+
+    const techScoped = await getMapSearchPage(db, { ...baseQuery(), patterns: ["tech"] });
+    expect(techScoped.total).toBe(0);
+    const cjScoped = await getMapSearchPage(db, { ...baseQuery(), patterns: ["chordjack"] });
+    expect(cjScoped.total).toBe(1);
+  });
+
+  it("re-labels a quad-free triple-jack chart on the saturated-chordjack branch", async () => {
+    const db = await makeDb();
+    // 4K Patterns Training Pack "TRIPLE JACK" (1985905): every row a 3-note
+    // chord on the same columns, so there are no quad rows for the quadstream
+    // detector to see. A saturated chordjack read with no tech content reported
+    // stands in for it.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "chordjack", patterns: { chordjack: 1 } });
+    await seedAnalysis(db, 1, {
+      msdValues: { Overall: 17.72, Stream: 13.4, Jumpstream: 14.1, Handstream: 10.9, Stamina: 14.8, JackSpeed: 15.2, Chordjack: 16.69, Technical: 17.38 },
+      lnRatio: 0,
+      category: "Chordjack",
+      clusterCategory: "Longjacks",
+      patterns: [{ id: "chordjack", score: 0.91 }],
+    });
+    // Same shape but the analyzer also reported tech content, so the branch
+    // that stands in for a quadstream hit does not open.
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, primary: "chordjack", patterns: { chordjack: 1 } });
+    await seedAnalysis(db, 2, {
+      msdValues: { Overall: 17.72, Stream: 13.4, Jumpstream: 14.1, Handstream: 10.9, Stamina: 14.8, JackSpeed: 15.2, Chordjack: 16.69, Technical: 17.38 },
+      lnRatio: 0,
+      category: "Chordjack",
+      clusterCategory: "Longjacks",
+      patterns: [{ id: "chordjack", score: 0.91 }, { id: "tech", score: 0.44 }],
+    });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    const byId = new Map(all.items.flatMap((item) => item.diffs.length ? item.diffs.map((d) => [d.beatmapId, d] as const) : [[item.beatmapId, item] as const]));
+    expect(byId.get(1)?.primaryPattern).toBe("chordjack");
+    expect(byId.get(2)?.primaryPattern).toBe("tech");
+  });
+
+  it("keeps a 4K Technical primary when the chordjack read is not unanimous", async () => {
+    const db = await makeDb();
+    // Anchored jumpstream (687631 shape): one column held down while the other
+    // note walks, which the analyzer's chordjack gate counts as overlap even
+    // though two fingers never jack together. No quadstream hit, and the
+    // analyzer reports jumpstream and tech content beside its chordjack read,
+    // so neither branch opens and the Technical primary stands.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "tech", patterns: { tech: 1 } });
+    await seedAnalysis(db, 1, {
+      msdValues: { Overall: 21.4, Stream: 16.2, Jumpstream: 19.8, Handstream: 14.1, Stamina: 18.9, JackSpeed: 13.4, Chordjack: 18.2, Technical: 21.1 },
+      lnRatio: 0.02,
+      category: "Chordjack",
+      clusterCategory: "Longjacks Tech",
+      patterns: [{ id: "chordjack", score: 1 }, { id: "jumpstream", score: 1 }, { id: "tech", score: 0.52 }],
+    });
+    // Quad-dense chart the analyzer calls a chordjack, but LeoBlack's dominant
+    // cluster is a chordstream: the two engines disagree, so nothing moves.
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, primary: "tech", patterns: { tech: 1 } });
+    await seedAnalysis(db, 2, {
+      msdValues: { Overall: 18.1, Stream: 15.5, Jumpstream: 17.2, Handstream: 13.0, Stamina: 16.4, JackSpeed: 12.1, Chordjack: 11.9, Technical: 18.0 },
+      lnRatio: 0.01,
+      category: "Chordjack",
+      clusterCategory: "Jumpstream",
+      patterns: [{ id: "quadstream", score: 0.61 }, { id: "chordjack", score: 0.88 }],
+    });
+    // Split trill: the jack families are already ruled out as artifacts, and
+    // the re-label must not smuggle chordjack back in.
+    await seedMap(db, { beatmapId: 3, beatmapsetId: 30, primary: "tech", patterns: { tech: 1 } });
+    await seedAnalysis(db, 3, {
+      msdValues: { Overall: 15.4, Stream: 10.2, Jumpstream: 12.1, Handstream: 7.4, Stamina: 11.0, JackSpeed: 14.9, Chordjack: 9.1, Technical: 15.3 },
+      lnRatio: 0.03,
+      category: "Chordjack",
+      clusterCategory: "Split Trill",
+      patterns: [{ id: "quadstream", score: 0.7 }, { id: "chordjack", score: 0.9 }],
+    });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    const byId = new Map(all.items.flatMap((item) => item.diffs.length ? item.diffs.map((d) => [d.beatmapId, d] as const) : [[item.beatmapId, item] as const]));
+    expect(byId.get(1)?.primaryPattern).toBe("tech");
+    expect(byId.get(2)?.primaryPattern).toBe("tech");
+    expect(byId.get(3)?.primaryPattern).not.toBe("chordjack");
+    expect(byId.get(3)?.patterns.chordjack).toBeUndefined();
+
+    const cjScoped = await getMapSearchPage(db, { ...baseQuery(), patterns: ["chordjack"] });
+    expect(cjScoped.total).toBe(0);
+  });
+
+  it("still routes a re-labelled chordjack chart to LN when the classifier does", async () => {
+    const db = await makeDb();
+    // The lnRatio route runs after the re-label and outranks it, the same way
+    // it outranks every other MinaCalc primary.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "tech", patterns: { tech: 1 } });
+    await seedAnalysis(db, 1, {
+      msdValues: { Overall: 16.4, Stream: 15.1, Jumpstream: 15.6, Handstream: 12.3, Stamina: 15.7, JackSpeed: 14.3, Chordjack: 11.1, Technical: 16.2 },
+      lnRatio: 0.68,
+      category: "Quadstream",
+      clusterCategory: "Longjacks",
+      patterns: [{ id: "quadstream", score: 0.9 }, { id: "chordjack", score: 0.7 }],
+    });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    expect(all.items[0].primaryPattern).toBe("ln");
   });
 
   it("excludes vibro charts from dan-filtered searches only", async () => {

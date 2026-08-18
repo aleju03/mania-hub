@@ -1,32 +1,16 @@
 import { useCallback, useEffect, useRef } from "react";
 import { pathRoundRect } from "../../lib/canvas";
+import { canHoldNote, NOTE_SPRITES, noteSpritePath } from "../../lib/note-sprites";
 import { readCursorSettings, segmentHitsCircle, subscribeCursorSettings } from "../../lib/cursor";
 import { isWindowActive, subscribeWindowActivity } from "../../lib/window-activity";
 
-const NOTE_IMAGES: { src: string; aspect: "square" | "bar"; tint: string }[] = [
-  { src: "/images/notes/arrow-down-gray.png", aspect: "square", tint: "rgba(225, 225, 235, 0.36)" },
-  { src: "/images/notes/arrow-down-green.png", aspect: "square", tint: "rgba(166, 228, 120, 0.38)" },
-  { src: "/images/notes/arrow-left-gray.png", aspect: "square", tint: "rgba(225, 225, 235, 0.36)" },
-  { src: "/images/notes/arrow-left-pink.png", aspect: "square", tint: "rgba(255, 131, 192, 0.36)" },
-  { src: "/images/notes/arrow-right-gray.png", aspect: "square", tint: "rgba(225, 225, 235, 0.36)" },
-  { src: "/images/notes/arrow-right-green.png", aspect: "square", tint: "rgba(166, 228, 120, 0.38)" },
-  { src: "/images/notes/arrow-up-gray.png", aspect: "square", tint: "rgba(225, 225, 235, 0.36)" },
-  { src: "/images/notes/arrow-up-pink.png", aspect: "square", tint: "rgba(255, 131, 192, 0.36)" },
-  { src: "/images/notes/bar-blue.png", aspect: "bar", tint: "rgba(102, 186, 255, 0.36)" },
-  { src: "/images/notes/bar-gray.png", aspect: "bar", tint: "rgba(225, 225, 235, 0.34)" },
-  { src: "/images/notes/bar-red.png", aspect: "bar", tint: "rgba(255, 126, 126, 0.36)" },
-  { src: "/images/notes/bar-yellow.png", aspect: "bar", tint: "rgba(255, 214, 115, 0.36)" },
-  { src: "/images/notes/circle-blue.png", aspect: "square", tint: "rgba(102, 186, 255, 0.35)" },
-  { src: "/images/notes/circle-blue-light.png", aspect: "square", tint: "rgba(135, 214, 255, 0.35)" },
-  { src: "/images/notes/circle-gray.png", aspect: "square", tint: "rgba(225, 225, 235, 0.34)" },
-  { src: "/images/notes/circle-green.png", aspect: "square", tint: "rgba(166, 228, 120, 0.38)" },
-  { src: "/images/notes/circle-navy.png", aspect: "square", tint: "rgba(121, 148, 255, 0.3)" },
-  { src: "/images/notes/circle-pink.png", aspect: "square", tint: "rgba(255, 131, 192, 0.36)" },
-  { src: "/images/notes/circle-pink-glow.png", aspect: "square", tint: "rgba(255, 149, 206, 0.42)" },
-  { src: "/images/notes/circle-purple.png", aspect: "square", tint: "rgba(184, 146, 255, 0.34)" },
-  { src: "/images/notes/circle-violet.png", aspect: "square", tint: "rgba(174, 127, 255, 0.34)" },
-  { src: "/images/notes/circle-white.png", aspect: "square", tint: "rgba(245, 245, 250, 0.34)" },
-];
+// The roster lives in lib/note-sprites so the skins social card and the
+// signature backdrop drop the same rain this does.
+const NOTE_IMAGES = NOTE_SPRITES.map((sprite) => ({
+  src: noteSpritePath(sprite.name),
+  aspect: sprite.aspect,
+  tint: sprite.tint,
+}));
 
 interface FallingNote {
   x: number;
@@ -85,9 +69,7 @@ function getNoteImages(): HTMLImageElement[] {
   return cachedNoteImages;
 }
 
-const LN_ALLOWED_INDICES = NOTE_IMAGES.map((_, i) => i).filter(
-  (i) => !NOTE_IMAGES[i].src.includes("arrow-up") && !NOTE_IMAGES[i].src.includes("arrow-down"),
-);
+const LN_ALLOWED_INDICES = NOTE_SPRITES.map((_, i) => i).filter((i) => canHoldNote(NOTE_SPRITES[i]));
 
 function createNote(canvasW: number, canvasH: number, startAbove: boolean): FallingNote {
   const isLN = Math.random() < 0.05;
@@ -162,10 +144,12 @@ export function ManiaRain() {
     has: false,
   });
 
+  // Answers whether the canvas was actually resized, which is the same thing
+  // as whether its bitmap was just wiped.
   const ensureCanvasSize = useCallback((preservePositions: boolean) => {
     const canvas = canvasRef.current;
     const parent = canvas?.parentElement;
-    if (!canvas || !parent) return;
+    if (!canvas || !parent) return false;
 
     const rect = parent.getBoundingClientRect();
     const nextWidth = Math.max(1, Math.round(rect.width));
@@ -173,7 +157,7 @@ export function ManiaRain() {
     const previousWidth = canvas.width || nextWidth;
 
     if (canvas.width === nextWidth && canvas.height === nextHeight) {
-      return;
+      return false;
     }
 
     canvas.width = nextWidth;
@@ -197,7 +181,7 @@ export function ManiaRain() {
       }
 
       notesRef.current = notes;
-      return;
+      return true;
     }
 
     const scaleX = nextWidth / previousWidth;
@@ -214,6 +198,7 @@ export function ManiaRain() {
       size: note.size * Math.min(1.08, Math.max(0.92, scaleX)),
       lnHeight: note.lnHeight,
     }));
+    return true;
   }, []);
 
   useEffect(() => {
@@ -279,8 +264,15 @@ export function ManiaRain() {
     };
 
     const handleResize = () => {
-      ensureCanvasSize(true);
+      const resized = ensureCanvasSize(true);
       lastTimeRef.current = performance.now();
+      // Repaint now rather than waiting for the next animation frame. The
+      // observer below fires after this frame's animation callbacks have
+      // already drawn, so resizing wipes a canvas that is about to be painted
+      // and the frame reaches the screen with no notes on it. Every
+      // content-height change does this, and a skin page changes height two or
+      // three times as it opens.
+      if (resized) renderScene(0);
     };
 
     const stopAnimation = () => {
@@ -306,22 +298,16 @@ export function ManiaRain() {
       }
     };
 
-    animateRef.current = (time: number) => {
+    // One frame of drawing, advanced by dt seconds, kept separate from the
+    // animation callback so the resize path above can repaint on the spot.
+    // Returns false when there is nothing to draw on, which is the animation
+    // loop's cue to stop.
+    const renderScene = (dt: number): boolean => {
       const canvas = canvasRef.current;
-      if (!canvas) {
-        rafRef.current = null;
-        return;
-      }
+      if (!canvas) return false;
 
       const context = canvas.getContext("2d");
-      if (!context) {
-        rafRef.current = null;
-        return;
-      }
-
-      const rawDt = lastTimeRef.current == null ? 0.016 : (time - lastTimeRef.current) / 1000;
-      const dt = Math.min(0.05, Math.max(0.008, rawDt));
-      lastTimeRef.current = time;
+      if (!context) return false;
 
       context.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -444,6 +430,19 @@ export function ManiaRain() {
           drawFallbackNote(context, fragment.imgIndex, drawWidth, drawHeight, NOTE_IMAGES[fragment.imgIndex].tint);
         }
         context.restore();
+      }
+
+      return true;
+    };
+
+    animateRef.current = (time: number) => {
+      const rawDt = lastTimeRef.current == null ? 0.016 : (time - lastTimeRef.current) / 1000;
+      const dt = Math.min(0.05, Math.max(0.008, rawDt));
+      lastTimeRef.current = time;
+
+      if (!renderScene(dt)) {
+        rafRef.current = null;
+        return;
       }
 
       rafRef.current = requestAnimationFrame(animateRef.current);

@@ -22,9 +22,11 @@ export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // first and visibly corrected upward once the analysis fetch landed; r8:
 // non-4K chordjack primaries require the chart analyzer's corroboration - the
 // activity scorer's force-cap was minting phantom chordjack rows, 819 of 2204
-// 7K chordjack primaries were really LN or bracket/jumpstream files).
+// 7K chordjack primaries were really LN or bracket/jumpstream files; r9: a 4K
+// Technical primary that both other engines call a chordjack is re-labelled,
+// MinaCalc buries its own Chordjack rating on chord-wall files).
 // The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 8;
+const BUILD_REVISION = 9;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -231,6 +233,67 @@ function analyzerPatternScore(classification: { patterns?: unknown } | null, id:
 // Same "has this pattern" bar the exclude filters apply to pat_* scores.
 const CHORDJACK_CORROBORATION_MIN = 0.5;
 
+// MinaCalc's Technical is not a pattern detector, it is the residual: it tracks
+// the chart's base difficulty and wins the argmax whenever no shape-gated
+// skillset fires. And the skillsets it buries hardest are the jack pair on the
+// charts that are MOST purely jacked, because a chord that repeats the same
+// columns every row is maximally anchored and its downscalers exist to crush
+// exactly that. Measured on the vendored calc over one file's row timings
+// (896752, 511 straight quads at 169ms): all-quads scores Chordjack 11.14 /
+// Technical 16.20, while the same rows with one rotating column dropped score
+// Chordjack 19.11 / Technical 16.02, and halving the density drops Chordjack to
+// 3.86. So the chart indexed as "Tech" and left the Chordjack facet, with
+// Chordjack the lowest of its seven skillsets. A jacks-only chart is not tech in
+// the sense a player means it (no weaving streams, no shifting shapes), it is
+// just a chart both jack skillsets refused to score.
+//
+// Re-label only when both other engines call it a chordjack and neither is
+// guessing: the in-house analyzer's top-line category, LeoBlack's dominant
+// cluster, and either a reported quadstream hit or a saturated chordjack read
+// with no tech content reported at all. That last pair of riders is what
+// separates a chord wall from an anchored jumpstream - the analyzer's own
+// chordjack gate counts a single shared column as overlap, so a
+// "O..O / O.O. / OO.." file scores chordjack 1.0 without ever jacking two
+// fingers, while quadstream demands real 4-note rows at sustained density and
+// the second rider demands the analyzer see nothing tech-shaped to compete.
+// Absence of a hit is weak evidence either way (the analyzer's candidate list is
+// sliced to five), so this trades recall for precision on purpose: a missed
+// re-label leaves today's behaviour, a wrong one moves the chart between
+// collection shelves and changes what the farm helper recommends.
+//
+// Measured over the local corpus (95,069 4K charts with a cached .osu, chart
+// shape read straight off the notes): 469 of 26,355 4K Technical primaries flip.
+// Their share of adjacent chord pairs that re-hit 2+ columns has median 0.430,
+// against 0.454 for the charts MinaCalc already calls chordjack and 0.019 for
+// the Technical primaries that stay put - the flipped set lands squarely in the
+// population it joins and nowhere near the one it leaves. Playing the shortlist
+// agreed the re-label reads right on jacks-only files even where that share is
+// modest (Conflict 513058 at 0.127, I'm A Maid 2721673 at 0.112), because the
+// metric scores CHORDjacks and a single-column speedjack file scores low on it
+// while being just as far from tech. The known residual miss is the inverse, a
+// chart that is mostly jack but carries real stream sections (Grin "Grand
+// Piano", 1629039), which no signal in the stored analysis separates from the
+// files above.
+const TECH_RESIDUAL_CHORDJACK_CATEGORIES = new Set(["chordjack", "quadstream"]);
+const TECH_RESIDUAL_JACK_CLUSTERS = new Set(["chordjacks", "longjacks", "jacks", "quadstream"]);
+// The saturated-chordjack bar for the no-quadstream branch, which exists for
+// files jacked on triples rather than quads (the 4K Patterns Training Pack's
+// TRIPLE JACK / TRIPLE BASIC, ~90k plays each, are pure 3-note chord jacks that
+// carry no quad rows at all).
+const TECH_RESIDUAL_PURE_CHORDJACK_MIN = 0.9;
+
+// The analyzer's top-line chart category ("Quadstream", "Jumpstream", ...).
+function classificationCategory(classification: { category?: unknown } | null): string {
+  return classification && typeof classification.category === "string" ? classification.category.toLowerCase() : "";
+}
+
+// LeoBlack's dominant cluster name, minus the " Tech" suffix it appends for a
+// tech-flavoured variant of the same family ("Longjacks Tech" -> "longjacks").
+function clusterFamily(classification: { clusterCategory?: unknown } | null): string {
+  const raw = classification && typeof classification.clusterCategory === "string" ? classification.clusterCategory : "";
+  return raw.replace(/\s+Tech$/, "").toLowerCase();
+}
+
 // The chart's family identity, from the strongest available signal per row.
 //
 // The in-house activity scorer force-caps its chosen family to 1.0 and reads
@@ -247,7 +310,7 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
   const { primary, scores } = readPatternProfile(row.skills_json);
   let result = primary;
 
-  const classification = parseJson<{ lnRatio?: unknown; clusterCategory?: unknown; patterns?: unknown } | null>(row.ca_classification_json, null);
+  const classification = parseJson<{ lnRatio?: unknown; category?: unknown; clusterCategory?: unknown; patterns?: unknown } | null>(row.ca_classification_json, null);
   // MinaCalc reads split trills as jacks: each column repeats every second row,
   // which JackSpeed/Chordjack score as same-column speed even though the chart
   // never hits a column twice in a row (gdmem 3814262: 0.2% of row pairs share
@@ -270,6 +333,31 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
       if (top.value > 0) {
         for (const entry of values) scores[entry.family] = clamp01(entry.value / top.value);
         result = top.family;
+        // Technical won by default, not by detection: hand the chart to
+        // chordjack when the other two engines agree it is one. Skipped under
+        // splitTrill, which already ruled the jack families out as artifacts.
+        if (
+          result === "tech"
+          && !splitTrill
+          && classification != null
+          && TECH_RESIDUAL_CHORDJACK_CATEGORIES.has(classificationCategory(classification))
+          && TECH_RESIDUAL_JACK_CLUSTERS.has(clusterFamily(classification))
+          && (
+            analyzerPatternScore(classification, "quadstream") > 0
+            || (analyzerPatternScore(classification, "chordjack") >= TECH_RESIDUAL_PURE_CHORDJACK_MIN
+              && analyzerPatternScore(classification, "tech") <= 0)
+          )
+        ) {
+          result = "chordjack";
+          // The chips have to follow the primary or the family a viewer reads
+          // and the family primaryPatternFamily() hands the farm helper come
+          // out different. Chordjack takes the top slot MinaCalc's suppressed
+          // value cost it, and tech clamps to what the analyzer actually
+          // measured, the same way an uncorroborated non-4K chordjack clamps
+          // below.
+          scores.chordjack = 1;
+          scores.tech = Math.min(scores.tech, analyzerPatternScore(classification, "tech"));
+        }
       }
     }
   }

@@ -96,7 +96,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 // "March 2019" rather than a full date: nobody needs the day a Discord server
 // was made, and the month is the part that says whether it is old or new.
 function monthYear(date: Date): string {
-  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
 /*
@@ -433,10 +433,10 @@ function CommunityDetailPage() {
                     {/* Counts are Discord's own approximations, refreshed with
                         the invite every few hours. */}
                     <div className="grid grid-cols-2 gap-4">
-                      <Stat label="members" value={row.memberCount.toLocaleString()} />
-                      <Stat label="online" value={row.onlineCount.toLocaleString()} />
+                      <Stat label="members" value={row.memberCount.toLocaleString("en-US")} />
+                      <Stat label="online" value={row.onlineCount.toLocaleString("en-US")} />
                       {typeof row.boostCount === "number" && row.boostCount > 0 && (
-                        <Stat label="boosts" value={row.boostCount.toLocaleString()} />
+                        <Stat label="boosts" value={row.boostCount.toLocaleString("en-US")} />
                       )}
                     </div>
 

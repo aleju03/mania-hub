@@ -353,7 +353,7 @@ export function communityInviteExpiryLabel(iso: string | null | undefined): stri
   if (!iso) return null;
   const when = new Date(iso);
   if (Number.isNaN(when.getTime())) return null;
-  return when.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return when.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
 /* ------------------------------------------------------------ who it is for

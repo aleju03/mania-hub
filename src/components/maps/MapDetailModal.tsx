@@ -5,6 +5,7 @@ import { fetchLiveChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAn
 import type { MapsFavouriteBeatmapset } from "../../lib/types";
 import { formatAccuracy, formatDuration, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
+import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { PatternRadar } from "./PatternRadar";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
@@ -62,7 +63,7 @@ export interface MapDetailPlayContext {
   username: string;
   accuracy: number | null;
   pp: number | null;
-  rateLabel: string | null;
+  rateMod: { acronym: string; rate: number } | null;
   playedAt: string | null;
   source: "top" | "tracked";
   rating: number;
@@ -77,7 +78,12 @@ function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-lg bg-osu-b4/50 px-4 py-2.5">
         {play.accuracy != null && <Stat label="Accuracy" value={formatAccuracy(play.accuracy)} />}
         {play.pp != null && <Stat label="PP" value={formatPP(play.pp)} />}
-        {play.rateLabel && <Stat label="Rate" value={play.rateLabel} />}
+        {play.rateMod && (
+          <div className="flex flex-col">
+            <ModBadge mod={play.rateMod.acronym} rate={play.rateMod.rate} size={0.7} />
+            <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">Rate</span>
+          </div>
+        )}
         {play.playedAt && (
           <div className="flex flex-col" title={formatTimeAgoTooltip(play.playedAt)}>
             <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{formatTimeAgo(play.playedAt)}</span>

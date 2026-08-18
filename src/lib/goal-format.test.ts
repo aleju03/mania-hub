@@ -1,10 +1,27 @@
 import { describe, expect, it } from "vitest";
 
-import { goalAgeLabel, goalDurationLabel, goalSpanLabel } from "./goal-format";
+import { goalAgeLabel, goalDurationLabel, goalSpanLabel, nf } from "./goal-format";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
+
+/* The grouping is the point: this number is rendered on /goals during SSR and
+   again on hydration, so it has to read the same on both. That it cannot pick
+   the separator up from the ambient locale is enforced structurally in
+   src/locale-formatting.test.ts; this pins the output itself. */
+describe("nf", () => {
+  it("groups thousands with commas", () => {
+    expect(nf(12345)).toBe("12,345");
+    expect(nf(1234567)).toBe("1,234,567");
+    expect(nf(999)).toBe("999");
+  });
+
+  it("rounds to whole units", () => {
+    expect(nf(12345.6)).toBe("12,346");
+    expect(nf(0.4)).toBe("0");
+  });
+});
 
 describe("goalSpanLabel", () => {
   it("steps up through minutes, hours, days, months and years", () => {

@@ -26,7 +26,8 @@ import {
   type MyDataTrackedSort,
 } from "../../lib/my-data";
 import { openLiveEventSource } from "../../lib/live-backend";
-import { SkillBreakdownBody, qualifyingSkillModes, skillRatingAccent } from "../player/SkillBreakdown";
+import { SkillBreakdownBody } from "../player/SkillBreakdown";
+import { qualifyingSkillModes, skillRatingAccent } from "../../lib/skill-axes";
 import { getScoreTimestamp } from "../../lib/score";
 import { MeScoreRow } from "./MeScoreRow";
 import { ModBadge } from "../ui/ModBadge";
@@ -112,7 +113,7 @@ function formatDayRange(range: { startDay: string; endDay: string } | null | und
 }
 
 function compact(n: number): string {
-  return n >= 10_000 ? n.toLocaleString() : String(n);
+  return n >= 10_000 ? n.toLocaleString("en-US") : String(n);
 }
 
 function formatHour(h: number): string {
@@ -468,9 +469,9 @@ export function MyDataPanel() {
                 make React's commits over translated runs throw NotFoundError
                 (the /my-stats slice of the /packs crash in the analytics). */}
             <div translate="no" className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-osu-f1 tabular-nums">
-              {summary?.pp != null ? <span className="font-semibold text-osu-pink-light">{Math.round(summary.pp).toLocaleString()}pp</span> : null}
-              {summary?.globalRank != null ? <span>#{summary.globalRank.toLocaleString()} global</span> : null}
-              {summary?.countryRank != null && country ? <span>#{summary.countryRank.toLocaleString()} {country}</span> : null}
+              {summary?.pp != null ? <span className="font-semibold text-osu-pink-light">{Math.round(summary.pp).toLocaleString("en-US")}pp</span> : null}
+              {summary?.globalRank != null ? <span>#{summary.globalRank.toLocaleString("en-US")} global</span> : null}
+              {summary?.countryRank != null && country ? <span>#{summary.countryRank.toLocaleString("en-US")} {country}</span> : null}
             </div>
           </div>
           <div className="hidden shrink-0 gap-4 pb-0.5 pr-1 text-right sm:flex">
@@ -820,7 +821,7 @@ function Pagination({
     <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
       {/* translate="no": the total climbs live with every tracked play. */}
       <div translate="no" className="text-[10px] font-semibold text-osu-f1 tabular-nums">
-        {first}-{last} of {total.toLocaleString()}
+        {first}-{last} of {total.toLocaleString("en-US")}
       </div>
       <div className="flex items-center gap-1">
         <PaginationIconButton label="Previous page" disabled={loading || pageIndex === 0} onClick={() => go(pageIndex - 1)}>

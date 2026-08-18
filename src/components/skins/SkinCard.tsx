@@ -44,6 +44,29 @@ export function SkinKeymodeTags({ keymodes, specialKeymodes, overlay = false, ma
   );
 }
 
+// Previews this session has already put on screen. A card in the browse grid
+// and the hero on the skin page it opens are usually the same file, and the
+// fade below starts every fresh img at zero opacity: `complete` is still false
+// the moment React attaches the ref, even for a picture sitting in the memory
+// cache, because the fetch is queued as a task. So the cover you were just
+// looking at blinks out and fades back in on the page you opened. Remembering
+// what has painted keeps that one instant. Populated only from the ref and the
+// load handler, neither of which runs on the server, so SSR always renders the
+// un-faded markup the client's first pass expects.
+const PAINTED_PREVIEW_LIMIT = 400;
+const paintedPreviewUrls = new Set<string>();
+
+function markPreviewPainted(url: string) {
+  if (paintedPreviewUrls.has(url)) return;
+  // Oldest out first. Re-fading a preview scrolled past long ago is no worse
+  // than the fade it would have had anyway.
+  if (paintedPreviewUrls.size >= PAINTED_PREVIEW_LIMIT) {
+    const oldest = paintedPreviewUrls.values().next().value;
+    if (oldest !== undefined) paintedPreviewUrls.delete(oldest);
+  }
+  paintedPreviewUrls.add(url);
+}
+
 // Previews are lazy-loaded and land one at a time well after the markup around
 // them: fading them in stops the grid from snapping. Mount the img with a key
 // on its url so swapping which preview is shown starts the fade over. The ref
@@ -58,10 +81,13 @@ export function SkinPreviewImage({
   className,
   loading = "lazy",
 }: { src: string; alt: string; width?: number; height?: number; className: string; loading?: "lazy" | "eager" }) {
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(() => paintedPreviewUrls.has(src));
   const markLoaded = useCallback((node: HTMLImageElement | null) => {
-    if (node?.complete) setLoaded(true);
-  }, []);
+    if (node?.complete) {
+      markPreviewPainted(src);
+      setLoaded(true);
+    }
+  }, [src]);
   return (
     <img
       src={src}
@@ -70,7 +96,10 @@ export function SkinPreviewImage({
       height={height}
       loading={loading}
       ref={markLoaded}
-      onLoad={() => setLoaded(true)}
+      onLoad={() => {
+        markPreviewPainted(src);
+        setLoaded(true);
+      }}
       className={`${className} transition-[opacity,filter] duration-150 ${loaded ? "opacity-100" : "opacity-0"}`}
     />
   );
@@ -180,17 +209,17 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
                 the page itself spells both out. */}
             <span
               className="shrink-0 text-[11px] text-osu-f1"
-              aria-label={isPrivate ? undefined : `${downloadCount.toLocaleString()} downloads, ${viewCount.toLocaleString()} views`}
+              aria-label={isPrivate ? undefined : `${downloadCount.toLocaleString("en-US")} downloads, ${viewCount.toLocaleString("en-US")} views`}
             >
               {isPrivate ? (
                 "only you"
               ) : (
                 <span className="inline-flex items-center gap-2" aria-hidden="true">
-                  <span className="inline-flex items-center gap-1" title={`${downloadCount.toLocaleString()} downloads`}>
+                  <span className="inline-flex items-center gap-1" title={`${downloadCount.toLocaleString("en-US")} downloads`}>
                     <Download className="h-3 w-3" />
                     <span className="tabular-nums">{formatCompactCount(downloadCount)}</span>
                   </span>
-                  <span className="inline-flex items-center gap-1" title={`${viewCount.toLocaleString()} views`}>
+                  <span className="inline-flex items-center gap-1" title={`${viewCount.toLocaleString("en-US")} views`}>
                     <Eye className="h-3 w-3" />
                     <span className="tabular-nums">{formatCompactCount(viewCount)}</span>
                   </span>

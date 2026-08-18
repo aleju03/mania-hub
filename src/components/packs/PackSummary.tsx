@@ -728,7 +728,7 @@ export function PackSummary({
                       {card.tierLabel}
                     </span>
                   )}
-                  <span className="text-osu-f1 tabular-nums">#{card.player.globalRank.toLocaleString()}</span>
+                  <span className="text-osu-f1 tabular-nums">#{card.player.globalRank.toLocaleString("en-US")}</span>
                 </div>
                 {(() => {
                   const mint = serials?.get(packCardKey(card.player.user.id, card.tier));
@@ -759,7 +759,7 @@ export function PackSummary({
                           ? "first ever to pull this"
                           : latest
                             ? `${formatOrdinal(mint.serial)} to pull this`
-                            : `${formatOrdinal(mint.serial)} of ${mint.mintedTotal.toLocaleString()} to pull this`
+                            : `${formatOrdinal(mint.serial)} of ${mint.mintedTotal.toLocaleString("en-US")} to pull this`
                         : null}
                     </div>
                   );

@@ -83,12 +83,12 @@ function formatBytes(bytes: number): string {
 
 /** The header time, so a listing that was reused rather than re-walked shows it. */
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDate(iso: string | null): string {
   if (!iso) return "unknown date";
-  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
 function BbcodeImagesAdminPage() {

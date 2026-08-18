@@ -70,6 +70,7 @@ export function ShowcaseShelf({ userId }: { userId: number }) {
             },
             skills: card.skills,
             tierOverride: collectedCardTier(card as CollectedCard),
+            labelOverride: (card as CollectedCard).customLabel,
           });
           const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
           let url = getMemoryCardThumbnail(key) ?? (await loadPersistedCardThumbnail(key));

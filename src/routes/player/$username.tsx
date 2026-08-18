@@ -63,7 +63,8 @@ import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
 import { ShowcaseShelf } from "../../components/packs/ShowcaseShelf";
 import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../lib/maniacard";
-import { KeymodeScaleNote, SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "../../components/player/SkillBreakdown";
+import { KeymodeScaleNote, SkillBreakdownBody, SkillModePanel } from "../../components/player/SkillBreakdown";
+import { qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "../../lib/skill-axes";
 import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
@@ -1726,7 +1727,7 @@ export function PlayerProfilePage({
     heroMeta.push(
       // Relative to Date.now(), so SSR and hydration can land on different
       // sides of a minute boundary; let the client text win.
-      <span key="seen" title={new Date(user.last_visit).toLocaleString()} suppressHydrationWarning>
+      <span key="seen" title={new Date(user.last_visit).toLocaleString("en-US")} suppressHydrationWarning>
         Last seen {formatDetailedTimeAgo(user.last_visit)}
       </span>,
     );

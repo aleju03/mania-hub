@@ -20,8 +20,12 @@ export function trimZeros(s: string): string {
   return s.replace(/\.?0+$/, "");
 }
 
+// Pinned to en-US like the rest of the site's formatting (src/lib/format.ts):
+// a bare toLocaleString() takes Node's locale on the server and the browser's
+// on the client, so a visitor whose locale groups with dots hydrated "12.345"
+// over the SSR "12,345" -- the recoverable #418s on /goals' current-pp tile.
 export function nf(value: number): string {
-  return Math.round(value).toLocaleString();
+  return Math.round(value).toLocaleString("en-US");
 }
 
 /** Compact span between two timestamps ("45m", "6h", "12d", "3mo", "1y"). */

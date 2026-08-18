@@ -18,8 +18,13 @@ import {
 
 // Cache growth is bounded by R2 lifecycle rules configured per prefix (Cloudflare
 // dashboard or the S3 lifecycle API). As of 2026-08-04 the rules are: parsed/ 90d,
-// uploaded-replay-desc/ 90d, maniacards/ 90d, blob/ 90d, og/ 30d, and the default
-// multipart-abort (7d). Everything else (audio/, background/, replays/,
+// uploaded-replay-desc/ 90d, maniacards/ 90d, blob/ 90d, og/ 30d, signature/ 30d,
+// and the default multipart-abort (7d). signature/ needs one because its keys
+// carry a data version: every stat change writes a new object and orphans the
+// old one permanently, so without a rule the dead versions accumulate forever.
+// Expiry is safe there because the URL players paste points at our origin, not
+// at the object, so a swept render is a miss that re-renders.
+// Everything else (audio/, background/, replays/,
 // community-beatmaps/, uploaded-replays/, videos/) never expires; audio/ and
 // background/ are zero-byte pointers whose expired blobs read as misses and heal on
 // the next put. uploaded-replays/, community-beatmaps/, and videos/ hold user data
@@ -1011,6 +1016,101 @@ export async function putOgImage(cacheKey: string, buffer: Buffer): Promise<void
   } catch {
     // Best-effort: a failed store just means the next miss re-renders.
   }
+}
+
+/* Dynamic-render (signature) PNGs. Deliberately NOT the OG pair's TTL-on-read
+   model: a signature cache key carries the player's data version, so a stored
+   object is immutable for its key and there is nothing to expire. A version
+   change mints a different key rather than aging out the old one, which is
+   what makes an embed on an osu! profile update without a timer.
+
+   Stale keys are reaped by the `expire-signature-30d` lifecycle rule on this
+   prefix, which is safe here only because the pasted URL points at our origin
+   rather than at an R2 object: an expired object is a cache miss that
+   re-renders, not a broken image. (Contrast public-image-store.ts's bbcode/,
+   whose URLs address the object itself and must never get a rule.) */
+const SIGNATURE_IMAGE_CACHE_PREFIX = `${REPLAY_CACHE_PREFIX}signature/`;
+
+function getSignatureImageStorageKey(cacheKey: string): string {
+  return `${SIGNATURE_IMAGE_CACHE_PREFIX}${signatureImageDigest(cacheKey)}.png`;
+}
+
+/** The digest is also the ETag body, so both sides derive it here exactly once. */
+export function signatureImageDigest(cacheKey: string): string {
+  return crypto.createHash("sha256").update(cacheKey).digest("hex").slice(0, 32);
+}
+
+export async function getCachedSignatureImage(cacheKey: string): Promise<Buffer | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+
+  const storageKey = getSignatureImageStorageKey(cacheKey);
+  assertReplayCacheKey(storageKey);
+
+  try {
+    // One round trip, no HeadObject: with an immutable key there is no age to
+    // check, and this sits on the hot path of every embed that missed the edge.
+    const object = await r2.send(new GetObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+    }));
+    const buffer = await readObjectBody(object.Body);
+    return buffer.length > 0 ? buffer : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function putSignatureImage(cacheKey: string, buffer: Buffer): Promise<void> {
+  const r2 = getClient();
+  if (!r2 || buffer.length === 0) return;
+
+  const storageKey = getSignatureImageStorageKey(cacheKey);
+  assertReplayCacheKey(storageKey);
+
+  try {
+    await r2.send(new PutObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+      Body: buffer,
+      ContentType: OG_IMAGE_CONTENT_TYPE,
+      CacheControl: "public, max-age=31536000, immutable",
+    }));
+  } catch {
+    // Best-effort: a failed store just means the next miss re-renders.
+  }
+}
+
+/* Removes stored renders for good, rather than waiting on the 30-day lifecycle
+   rule. Once a signature is blocked the route refuses before it ever reads R2,
+   so these objects are already unreachable - this is for the case where
+   "unreachable" is not the same as "gone", and somebody needs the bytes off the
+   disk today.
+
+   Only the keys the caller names, which are the ones for the versions that were
+   live at the moment of the block. Renders under older versions are already
+   unaddressable (the URL resolves to the current version) and age out on their
+   own. Best-effort per key: one failure must not strand the rest. */
+export async function deleteSignatureImages(cacheKeys: string[]): Promise<number> {
+  const r2 = getClient();
+  if (!r2 || cacheKeys.length === 0) return 0;
+
+  let deleted = 0;
+  for (const cacheKey of cacheKeys) {
+    const storageKey = getSignatureImageStorageKey(cacheKey);
+    assertReplayCacheKey(storageKey);
+    try {
+      await r2.send(new DeleteObjectCommand({
+        Bucket: REPLAY_CACHE_BUCKET,
+        Key: storageKey,
+      }));
+      deleted += 1;
+    } catch {
+      // A key that was never written 404s here, which is the common case: a
+      // player rarely has all twelve variants rendered.
+    }
+  }
+  return deleted;
 }
 
 export async function getUploadedReplay(id: string): Promise<UploadedReplay | null> {

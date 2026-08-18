@@ -285,7 +285,7 @@ const ViewerRow = memo(function ViewerRow({ row, now }: { row: AnalyticsViewerRo
               </span>
             </span>
           </div>
-          <span className="w-10 flex-shrink-0 text-right font-mono text-[11px] text-osu-l2 sm:w-14" title={new Date(row.lastSeen).toLocaleString()}>
+          <span className="w-10 flex-shrink-0 text-right font-mono text-[11px] text-osu-l2 sm:w-14" title={new Date(row.lastSeen).toLocaleString("en-US")}>
             {formatAnalyticsAgo(now - row.lastSeen)}
           </span>
         </a>
@@ -398,7 +398,7 @@ function ActivityLine({
         {activity.verb} <span className={`text-white ${href ? "group-hover:underline" : ""}`}>{activity.subject}</span>
         {activity.detail ? <span className="text-osu-f1"> {activity.detail}</span> : null}
       </span>
-      <span className="mt-[3px] flex-shrink-0 font-mono text-[11px] text-osu-f1" title={new Date(event.ts).toLocaleString()}>
+      <span className="mt-[3px] flex-shrink-0 font-mono text-[11px] text-osu-f1" title={new Date(event.ts).toLocaleString("en-US")}>
         {formatAnalyticsAgo(now - event.ts)}
       </span>
     </>

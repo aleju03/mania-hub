@@ -36,3 +36,12 @@ export function bridgeAuthHeaders(json = false): Record<string, string> {
   if (token) headers.authorization = `Bearer ${token}`;
   return headers;
 }
+
+/** The same, for `/api/admin/*`. Never falls back to the bridge token: an
+    admin route must be opened by the admin credential or not at all. */
+export function adminAuthHeaders(json = false): Record<string, string> {
+  const headers: Record<string, string> = json ? { "content-type": "application/json" } : {};
+  const token = liveAdminToken();
+  if (token) headers.authorization = `Bearer ${token}`;
+  return headers;
+}

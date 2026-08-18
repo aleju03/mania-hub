@@ -208,7 +208,7 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
                     type="button"
                     onClick={() => select(entry.event)}
                     aria-pressed={selected === entry.event}
-                    title={`${entry.event} · last fired ${new Date(entry.lastTs).toLocaleString()}`}
+                    title={`${entry.event} · last fired ${new Date(entry.lastTs).toLocaleString("en-US")}`}
                     className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-[100ms] ${
                       selected === entry.event ? "bg-osu-pink/20 text-white" : "text-osu-l2 hover:bg-osu-b3/40 hover:text-white"
                     }`}
@@ -290,7 +290,7 @@ function ModeButton({ active, onClick, label, title }: { active: boolean; onClic
    their profile; a signed-out visitor is only ever the device they browsed on,
    so it says Guest and shows the id it is counted under. */
 function ActorRow({ row, now }: { row: AnalyticsEventActorRow; now: number }) {
-  const when = new Date(row.lastTs).toLocaleString();
+  const when = new Date(row.lastTs).toLocaleString("en-US");
   const body = (
     <>
       {row.viewerId ? (

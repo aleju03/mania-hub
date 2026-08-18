@@ -25,6 +25,12 @@ export interface StoredPackCard {
   countryCode: string;
   tier: string | null;
   tierLabel: string | null;
+  /* This holding's own badge text, when it was given one. Separate from
+     tierLabel (which coalesces to the variant's shared label, and for an
+     ordinary card is just the tier's name) because only this one is a
+     deliberate choice: it is what the card art prints in place of the tier,
+     the slot the honorary roster's cardTierLabel already uses. */
+  customLabel?: string | null;
   skills: unknown | null;
   pp: number;
   globalRank: number;
@@ -345,12 +351,17 @@ function catalogFieldSql(field: "username" | "avatar_url" | "country_code" | "ti
 
 /* The joined shape cardFromRow expects: the ownership row's own columns plus
    the variant's identity and the interned snapshot, under the names they had
-   when every one of them sat on pack_collection_cards itself. */
+   when every one of them sat on pack_collection_cards itself.
+
+   The label is the one field both rows can carry, so the catalog's is aliased
+   out of the way rather than shadowing `pack_collection_cards.*`: a collector
+   whose copy was given its own name reads that, everyone else reads the
+   variant's. */
 const CARD_SELECT_SQL = `select pack_collection_cards.*,
        pc.username as username,
        pc.avatar_url as avatar_url,
        pc.country_code as country_code,
-       pc.tier_label as tier_label,
+       pc.tier_label as catalog_tier_label,
        sk.skills_json as skills_json`;
 
 const CARD_CATALOG_JOIN_SQL = `left join pack_cards pc
@@ -418,19 +429,19 @@ function claimedTier(raw: { tier?: unknown }, userId: number): string | null {
    None of this makes the economy honest (the shard balance is client-authored
    by design, so a forged tier was never the cheap way to print shards); it
    bounds what a forged row can *display*. */
-const PACK_CARD_USERNAME_MAX_CHARS = 40;
-const PACK_CARD_TIER_LABEL_MAX_CHARS = 60;
-const PACK_CARD_AVATAR_URL_MAX_CHARS = 300;
+export const PACK_CARD_USERNAME_MAX_CHARS = 40;
+export const PACK_CARD_TIER_LABEL_MAX_CHARS = 60;
+export const PACK_CARD_AVATAR_URL_MAX_CHARS = 300;
 /* Absurdity ceilings, not play limits: real collections sit orders of
    magnitude below these, and past them a row is only a rendering problem. */
-const PACK_CARD_MAX_COPIES = 100_000;
-const PACK_CARD_MAX_PP = 1_000_000;
+export const PACK_CARD_MAX_COPIES = 100_000;
+export const PACK_CARD_MAX_PP = 1_000_000;
 
 /* Keeps a stored avatar to an https URL. Anything else - a javascript: or
    data: URI, a bare string - degrades to empty, and the read path then falls
    back to the users row (which is where a tracked player's avatar comes from
    anyway). */
-function normalizeAvatarUrl(value: unknown): string {
+export function normalizeAvatarUrl(value: unknown): string {
   if (typeof value !== "string" || value.length === 0 || value.length > PACK_CARD_AVATAR_URL_MAX_CHARS) return "";
   try {
     return new URL(value).protocol === "https:" ? value : "";
@@ -476,7 +487,7 @@ function normalizeCard(value: unknown, now: number): StoredPackCard | null {
 }
 
 /* Two letters or nothing: the value is rendered as a flag. */
-function normalizeCountryCode(value: string): string {
+export function normalizeCountryCode(value: string): string {
   const code = value.slice(0, 2).toUpperCase();
   return /^[A-Z]{2}$/.test(code) ? code : "";
 }
@@ -500,7 +511,7 @@ function defaultWalletPayload(now: number): string {
   });
 }
 
-async function getOrCreatePackWallet(db: Db, userId: number, now: number): Promise<StoredPackWallet> {
+export async function getOrCreatePackWallet(db: Db, userId: number, now: number): Promise<StoredPackWallet> {
   const existing = await getPackWallet(db, userId);
   if (existing) return existing;
   await exec(
@@ -535,10 +546,11 @@ export async function addWalletShards(db: Db, userId: number, gained: number, no
    The wallet's numbers (charges, shards, opened packs) used to be whatever
    the client last pushed; the server merely stored the blob. They are now
    written only here: the draw route spends through spendPackOpen, recycling
-   and the arcade grant through addWalletShards, and a client push can no
-   longer change any of it. The constants mirror src/lib/pack-collection.ts,
-   which still runs the same math for anonymous (browser-local) wallets and
-   for the signed-in regen countdown display. */
+   and the arcade grant through addWalletShards, the admin grant page through
+   setPackWalletEconomy, and a client push can no longer change any of it. The
+   constants mirror src/lib/pack-collection.ts, which still runs the same math
+   for anonymous (browser-local) wallets and for the signed-in regen countdown
+   display. */
 
 export const MAX_PACK_CHARGES = 5;
 export const PACK_CHARGE_REGEN_MS = 20_000;
@@ -591,6 +603,66 @@ export function settlePackWalletCharges(economy: PackWalletEconomy, now: number)
     lastRefillAt: charges >= MAX_PACK_CHARGES ? now : economy.lastRefillAt + gained * PACK_CHARGE_REGEN_MS,
   };
 }
+
+/* The owner's hand on the wallet, from /admin/collections. Every field is
+   optional and every one of them is a straight write, because that is the
+   whole point: this is the one path that is allowed to hand out shards nobody
+   earned. `shardsDelta` is applied on top of whatever `shards` resolved to and
+   exists so "give 500" is one call rather than a read the browser can lose a
+   race with; a negative delta takes shards away and floors at zero. */
+export interface PackWalletEconomyPatch {
+  shards?: number;
+  shardsDelta?: number;
+  shardsSpent?: number;
+  charges?: number;
+  openedPacks?: number;
+}
+
+export async function setPackWalletEconomy(
+  db: Db,
+  userId: number,
+  patch: PackWalletEconomyPatch,
+  now = Date.now(),
+): Promise<StoredPackWallet> {
+  const clampInt = (value: number, max: number) => Math.min(max, Math.max(0, Math.floor(toFiniteNumber(value, 0))));
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const wallet = await getOrCreatePackWallet(db, userId, now);
+    const parsed = parseJson<WalletPayload | null>(wallet.payload, null) ?? {};
+    // Settle first, so a grant does not quietly swallow the charges the player
+    // regenerated while the page was open.
+    const settled = settlePackWalletCharges(economyFromParsedPayload(parsed, now), now);
+    const shardsBase = patch.shards != null ? clampInt(patch.shards, WALLET_MAX_SHARDS) : settled.shards;
+    const next: PackWalletEconomy = {
+      ...settled,
+      shards: Math.min(
+        WALLET_MAX_SHARDS,
+        Math.max(0, shardsBase + Math.floor(toFiniteNumber(patch.shardsDelta ?? 0, 0))),
+      ),
+      shardsSpent: patch.shardsSpent != null ? clampInt(patch.shardsSpent, WALLET_MAX_SHARDS) : settled.shardsSpent,
+      charges: patch.charges != null ? clampInt(patch.charges, MAX_PACK_CHARGES) : settled.charges,
+      openedPacks: patch.openedPacks != null ? clampInt(patch.openedPacks, WALLET_MAX_OPENED_PACKS) : settled.openedPacks,
+    };
+    // Handing someone a part-full bar has to start its clock now, or the
+    // settle above would top it straight back up off the old stamp.
+    if (next.charges !== settled.charges && next.charges < MAX_PACK_CHARGES) next.lastRefillAt = now;
+    const nextPayload = JSON.stringify({ ...parsed, cards: {}, ...next });
+    const updated = await exec(
+      db,
+      "update pack_wallets set payload = ?, rev = ?, updated_at = ? where user_id = ? and rev = ?",
+      [nextPayload, wallet.rev + 1, now, userId, wallet.rev],
+    );
+    if (Number(updated.rowsAffected ?? 0) > 0) {
+      return { payload: nextPayload, rev: wallet.rev + 1, updatedAt: now };
+    }
+  }
+  throw new Error(`Pack wallet write kept conflicting for user ${userId}.`);
+}
+
+/* Ceilings for the admin writer above. Not a play balance - a hand-typed
+   number reaches this straight from a form, and these keep a slipped keystroke
+   from storing a shard count that overflows the display (or the JSON). */
+const WALLET_MAX_SHARDS = 100_000_000;
+const WALLET_MAX_OPENED_PACKS = 10_000_000;
 
 export type PackOpenSpendResult =
   | { ok: true; wallet: StoredPackWallet }
@@ -677,7 +749,7 @@ async function importCardsFromPayload(
    never seen before. Snapshots are immutable and shared, so an existing row is
    always reused: the same numbers minted for a hundred collectors cost one
    copy of the JSON, not a hundred. */
-async function internPackCardSkills(db: Db, rawPayloads: string[]): Promise<Map<string, number>> {
+export async function internPackCardSkills(db: Db, rawPayloads: string[]): Promise<Map<string, number>> {
   const ids = new Map<string, number>();
   const payloads = [...new Set(rawPayloads)];
   if (payloads.length === 0) return ids;
@@ -717,7 +789,7 @@ function skillsIdFor(card: StoredPackCard, skillsIds: Map<string, number>): numb
 
 /* The variant slot a card occupies in pack_cards. The catalog's tier column is
    part of its primary key, so an unrated card stores '' rather than null. */
-function packCardTierSlot(tier: string | null): string {
+export function packCardTierSlot(tier: string | null): string {
   return tier ?? "";
 }
 
@@ -873,7 +945,8 @@ function cardFromRow(row: Record<string, unknown>): StoredPackCard {
     avatarUrl: nonEmptyString(row.live_avatar_url) ?? String(row.avatar_url ?? ""),
     countryCode: nonEmptyString(row.live_country_code) ?? String(row.country_code ?? ""),
     tier: typeof row.tier === "string" ? row.tier : null,
-    tierLabel: typeof row.tier_label === "string" ? row.tier_label : null,
+    tierLabel: nonEmptyString(row.tier_label) ?? nonEmptyString(row.catalog_tier_label),
+    customLabel: nonEmptyString(row.tier_label),
     skills: row.skills_json ? parseJson<unknown | null>(String(row.skills_json), null) : null,
     pp: Number(row.pp) || 0,
     globalRank: Number(row.global_rank) || 0,
@@ -1029,6 +1102,39 @@ export async function listPackCollectionCards(
     duplicateShardTotal: Number(duplicateRow?.total) || 0,
     filteredShardTotal: Number(filteredShardRow?.total) || 0,
   };
+}
+
+/* One holding, in the exact shape the paged read hands back - identity
+   overlay, interned snapshot and serial included. Written as its own query
+   rather than a filter over listPackCollectionCards so reading a single card
+   back does not also compute that owner's tier counts and shard totals. Unlike
+   the paged read it does not require copies > 0, since the caller that wants
+   one card by key (the admin grant desk) wants to see a zeroed row too. */
+export async function getPackCollectionCard(
+  db: Db,
+  ownerUserId: number,
+  cardKey: string,
+): Promise<StoredPackCard | null> {
+  if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) return null;
+  const row = (await exec(
+    db,
+    `${CARD_SELECT_SQL},
+       ${liveUserFieldSql("username")} as live_username,
+       ${liveUserFieldSql("avatar_url")} as live_avatar_url,
+       ${liveUserFieldSql("country_code")} as live_country_code,
+       serials.serial as serial,
+       (select max(other.serial) from pack_card_serials other
+         where other.card_key = pack_collection_cards.card_key) as minted_total
+     from pack_collection_cards
+     ${CARD_CATALOG_JOIN_SQL}
+     left join pack_card_serials serials
+       on serials.card_key = pack_collection_cards.card_key
+       and serials.owner_user_id = pack_collection_cards.owner_user_id
+     where pack_collection_cards.owner_user_id = ? and pack_collection_cards.card_key = ?
+     limit 1`,
+    [ownerUserId, cardKey],
+  )).rows[0];
+  return row ? cardFromRow(row as Record<string, unknown>) : null;
 }
 
 /* The showcase shelf: up to five cards a collector pins to their public
@@ -1631,11 +1737,18 @@ export async function ensurePackCardCatalog(db: Db): Promise<boolean> {
   await exec(db, "drop table if exists pack_collection_cards_slim");
   await exec(
     db,
+    /* tier_label is declared here and filled with nothing on purpose. The fat
+       row's label was the variant's own name for every owner, and the catalog
+       has just taken it; the column on this side exists only for the per-owner
+       override /admin/collections writes. Declaring it matters because this
+       rebuild renames its table over pack_collection_cards, and the boot
+       migration that adds the column has already run by then. */
     `create table pack_collection_cards_slim (
        owner_user_id integer not null,
        card_user_id integer not null,
        card_key text not null,
        tier text,
+       tier_label text,
        skills_id integer,
        pp real not null,
        global_rank integer not null,

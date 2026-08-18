@@ -36,6 +36,13 @@ import {
   peekFarmHelperSnapshot,
   prefetchFarmHelperSnapshot,
 } from "../lib/farm-helper-snapshot-cache";
+import {
+  FARM_HELPER_RECENT_KEY,
+  readRecentPlayers,
+  recordRecentPlayer,
+  removeRecentPlayer,
+  type RecentPlayer,
+} from "../lib/recent-players";
 import { searchUsers } from "../lib/osu";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -315,7 +322,7 @@ function findKnownSubject(subjectKey: string | null, viewer: ReturnType<typeof u
   if (viewer && (String(viewer.id) === normalized || viewer.username.trim().toLowerCase() === normalized)) {
     return { userId: viewer.id, username: viewer.username, avatarUrl: viewer.avatarUrl };
   }
-  return readRecentPlayers().find(
+  return readRecentPlayers(FARM_HELPER_RECENT_KEY).find(
     (player) => String(player.userId) === normalized || player.username.trim().toLowerCase() === normalized,
   ) ?? null;
 }
@@ -461,7 +468,7 @@ function FarmHelperPage() {
           next.set(requestKey, data);
           return next;
         });
-        recordRecentPlayer({ userId: data.userId, username: data.username, avatarUrl: data.avatarUrl });
+        recordRecentPlayer(FARM_HELPER_RECENT_KEY, { userId: data.userId, username: data.username, avatarUrl: data.avatarUrl });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -1101,7 +1108,10 @@ function SubjectBar({
               style={{ backgroundImage: `url(${snapshot.coverUrl})` }}
               aria-hidden="true"
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-osu-b4 via-osu-b4/92 to-osu-b4/70" aria-hidden="true" />
+            {/* The gain block sits at the right end, so the scrim only thins to
+                88%: at 70% the cover washed out the "7K pp" unit and the map
+                count under it. */}
+            <div className="absolute inset-0 bg-gradient-to-r from-osu-b4 via-osu-b4/92 to-osu-b4/88" aria-hidden="true" />
           </>
         ) : null}
 
@@ -1164,7 +1174,7 @@ function SubjectBar({
               <>
                 <div className="text-2xl font-black leading-tight tabular-nums text-osu-pink">
                   +{formatPp(visibleSnapshot.totalPotentialPp)}
-                  <span className="ml-1.5 text-sm font-bold text-osu-pink/70">{unit}</span>
+                  <span className="ml-1.5 text-sm font-bold text-osu-pink/90">{unit}</span>
                 </div>
                 <div className="text-[11px] text-osu-f1">
                   across {formatPp(mapCount)} map{mapCount === 1 ? "" : "s"}
@@ -2169,12 +2179,12 @@ function PlayerPicker({ viewer, onPick, keyMode, view }: {
   const viewerId = viewer?.id;
 
   useIsoLayoutEffect(() => {
-    const list = readRecentPlayers();
+    const list = readRecentPlayers(FARM_HELPER_RECENT_KEY);
     setRecents(viewerId ? list.filter((p) => p.userId !== viewerId) : list);
   }, [viewerId]);
 
   const removeRecent = (userId: number) => {
-    removeRecentPlayer(userId);
+    removeRecentPlayer(FARM_HELPER_RECENT_KEY, userId);
     setRecents((prev) => prev.filter((p) => p.userId !== userId));
   };
 
@@ -2298,53 +2308,6 @@ function PickerLegend({ icon, label, body }: { icon: ReactNode; label: string; b
       <span className="text-osu-f1">{body}</span>
     </div>
   );
-}
-
-interface RecentPlayer {
-  userId: number;
-  username: string;
-  avatarUrl: string;
-}
-
-const RECENT_KEY = "mania-hub-farm-helper-recent-v1";
-const RECENT_MAX = 8;
-
-function readRecentPlayers(): RecentPlayer[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(RECENT_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter(
-        (p): p is RecentPlayer =>
-          !!p && typeof p === "object" && Number.isFinite(p.userId) && typeof p.username === "string" && p.username.length > 0,
-      )
-      .slice(0, RECENT_MAX);
-  } catch {
-    return [];
-  }
-}
-
-function recordRecentPlayer(player: RecentPlayer): void {
-  if (typeof window === "undefined" || !player.username) return;
-  try {
-    const existing = readRecentPlayers().filter((p) => p.userId !== player.userId);
-    window.localStorage.setItem(RECENT_KEY, JSON.stringify([player, ...existing].slice(0, RECENT_MAX)));
-  } catch {
-    /* ignore quota / serialization errors */
-  }
-}
-
-function removeRecentPlayer(userId: number): void {
-  if (typeof window === "undefined") return;
-  try {
-    const existing = readRecentPlayers().filter((p) => p.userId !== userId);
-    window.localStorage.setItem(RECENT_KEY, JSON.stringify(existing));
-  } catch {
-    /* ignore */
-  }
 }
 
 /* ------------------------------------------------------------------ */

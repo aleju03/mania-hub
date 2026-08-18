@@ -28,6 +28,7 @@ import { parseCountryFeatureTierParam, parseCountryStatusParam } from "../countr
 import { isAdmin, normalizeIdList, readBody } from "../request.js";
 import { sendJson } from "../respond.js";
 import { statusBody } from "../status-report.js";
+import { handleAdminPackCollectionRoutes } from "./pack-admin.js";
 
 export async function handleAdminRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL, country: string): Promise<boolean> {
   if (url.pathname === "/api/admin/status") {
@@ -215,6 +216,18 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
     }
     sendJson(req, res, ctx, result.removed ? 200 : 404, { ok: result.removed, ...result });
     return true;
+  }
+  if (url.pathname.startsWith("/api/admin/packs/collection")) {
+    /* The grant desk behind /admin/collections: read one collector's wallet and
+       cards, hand out shards, mint a card with every field chosen by hand, or
+       take one back. Deliberately admin-token gated rather than bridge gated -
+       every other pack write route is called on behalf of the signed-in player
+       whose data it touches, and these four are the opposite of that. */
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    return await handleAdminPackCollectionRoutes(req, res, ctx, url);
   }
   if (url.pathname === "/api/admin/goat-poll/voters") {
     /* Who voted for one nominee, and which way. The public board only carries a

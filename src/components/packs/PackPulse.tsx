@@ -245,7 +245,7 @@ function PulledStatsLine({ stats }: { stats: LivePackPulledStats }) {
       <span className="tabular-nums">
         {stats.owners === 1
           ? "1 person has your card"
-          : `${stats.owners.toLocaleString()} people have your card`}
+          : `${stats.owners.toLocaleString("en-US")} people have your card`}
       </span>
     </>
   );
@@ -575,12 +575,13 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                   transition={{ duration: 0.25 }}
                 >
                   {/* The rail itself stays anonymous (it shows what was pulled,
-                      not who pulled it), but each entry links to that pull's
-                      permalink so you can go look at the card that just landed.
-                      The pull page names the owner. */}
+                      not who pulled it), but each entry links to that exact
+                      event on the card's durable permalink. The pull page names
+                      the owner and can distinguish a new card from a duplicate. */}
                   <Link
                     to="/pull/$ownerId/$cardId"
                     params={{ ownerId: String(pull.ownerUserId), cardId: String(pull.cardUserId) }}
+                    search={{ pull: pull.id }}
                     className="pointer-events-auto -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-white/5 hover:opacity-100"
                     aria-label={`${pull.cardUsername} was pulled`}
                   >

@@ -172,6 +172,7 @@ async function renderCollectionThumbnail(card: CollectedCard): Promise<{ key: st
     user: cardUserForRender(card),
     skills: card.skills,
     tierOverride: collectedCardTier(card),
+    labelOverride: card.customLabel,
   });
   const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
   const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));
@@ -1239,8 +1240,8 @@ export function CollectionPanel({
                 pushes land; auto-translate's <font> rewrites detach the text
                 nodes React keeps updating. */}
             <span translate="no" className="text-[12px] text-osu-f1 tabular-nums">
-              {progressOwned.toLocaleString()}
-              {progressPool ? ` / ${progressPool.toLocaleString()}` : ""} players
+              {progressOwned.toLocaleString("en-US")}
+              {progressPool ? ` / ${progressPool.toLocaleString("en-US")}` : ""} players
             </span>
           </div>
           {progressPercent !== null && collectionTotal > 0 && (
@@ -1271,7 +1272,7 @@ export function CollectionPanel({
                     missingOpen ? "text-white" : "text-osu-pink-light hover:text-white"
                   }`}
                 >
-                  {missingOpen ? "back to collection" : `${missingCount.toLocaleString()} missing`}
+                  {missingOpen ? "back to collection" : `${missingCount.toLocaleString("en-US")} missing`}
                 </button>
               )}
             </div>
@@ -1288,7 +1289,7 @@ export function CollectionPanel({
               animate={{ scale: 1 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
             >
-              {wallet.shards.toLocaleString()}
+              {wallet.shards.toLocaleString("en-US")}
             </motion.span>
             shards
           </span>
@@ -1535,7 +1536,7 @@ export function CollectionPanel({
               translate="no"
               className="mt-4 block text-center text-[11px] text-osu-f1 transition-colors hover:text-white"
             >
-              plus {goatMissing.toLocaleString()} GOAT card{goatMissing === 1 ? "" : "s"} still missing
+              plus {goatMissing.toLocaleString("en-US")} GOAT card{goatMissing === 1 ? "" : "s"} still missing
             </Link>
           )}
         </>

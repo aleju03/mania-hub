@@ -164,6 +164,7 @@ export function CardSpotlight({
       },
       skills: card.skills,
       tierOverride: collectedCardTier(card),
+      labelOverride: card.customLabel,
     });
     const fallbackTo2d = () => {
       rendererRef.current?.dispose();
@@ -323,11 +324,11 @@ export function CardSpotlight({
                 )}
               </div>
               <div className="text-[12px] text-osu-f1 tabular-nums">
-                {Math.round(card.pp).toLocaleString()}pp
-                {card.globalRank > 0 && <> &middot; #{card.globalRank.toLocaleString()} global</>}
+                {Math.round(card.pp).toLocaleString("en-US")}pp
+                {card.globalRank > 0 && <> &middot; #{card.globalRank.toLocaleString("en-US")} global</>}
                 {card.copies > 1 && <> &middot; x{card.copies} copies</>}
                 {ownerCount !== null && ownerCount > 0 && (
-                  <> &middot; in {ownerCount.toLocaleString()} {ownerCount === 1 ? "collection" : "collections"}</>
+                  <> &middot; in {ownerCount.toLocaleString("en-US")} {ownerCount === 1 ? "collection" : "collections"}</>
                 )}
               </div>
               {card.serial ? (
@@ -341,7 +342,7 @@ export function CardSpotlight({
                   {formatOrdinal(card.serial)} person to pull this
                   {card.mintedTotal && card.mintedTotal !== card.serial ? (
                     // Skip the total when it just repeats the serial ("61st ... out of 61").
-                    <span className="text-osu-f1"> out of {card.mintedTotal.toLocaleString()}</span>
+                    <span className="text-osu-f1"> out of {card.mintedTotal.toLocaleString("en-US")}</span>
                   ) : null}
                 </div>
               ) : null}

@@ -16,6 +16,7 @@ import { TrackingToasts } from "../components/me/TrackingToasts";
 import { AuthContext } from "../lib/auth-context";
 import { getCurrentAuth } from "../lib/auth";
 import { InitialCountryContext } from "../lib/country-context";
+import { ANONYMOUS_AUTH_STATE } from "../lib/auth-shared";
 import type { AuthState } from "../lib/auth-shared";
 import {
   COUNTRY_AUTO_COOKIE_NAME,
@@ -132,15 +133,23 @@ const CLIENT_ROOT_CONTEXT_TTL_MS = 60_000;
 let clientRootSlowContextCache: { value: RootSlowContext; expiresAt: number } | null = null;
 let clientRootSlowContextPromise: Promise<RootSlowContext> | null = null;
 
+// A viewer is either signed in or not; there is no third state the shell can
+// render. The auth fetch failing (or a stale build's server-fn call resolving
+// to nothing) used to put `undefined` on the context and crash every consumer,
+// so anything that is not an auth state reads as anonymous here.
+function normalizeAuth(value: AuthState | null | undefined): AuthState {
+  return value && typeof value === "object" ? value : ANONYMOUS_AUTH_STATE;
+}
+
 function refreshClientRootSlowContext(): Promise<RootSlowContext> {
   if (!clientRootSlowContextPromise) {
     clientRootSlowContextPromise = Promise.all([
-      getCurrentAuth(),
+      getCurrentAuth().catch(() => ANONYMOUS_AUTH_STATE),
       fetchLiveBackendBootstrap(),
     ])
       .then(([auth, bootstrap]) => {
         const value = {
-          auth,
+          auth: normalizeAuth(auth),
           backendStatus: bootstrap.status,
           countryFeatures: bootstrap.countryFeatures,
         };
@@ -184,7 +193,7 @@ function consumeDehydratedRootSlowContext(): RootSlowContext | null {
   if (!value || typeof value !== "object" || typeof value.backendStatus !== "string") return null;
   delete window.__maniaHubRootSlowContext;
   const context: RootSlowContext = {
-    auth: value.auth,
+    auth: normalizeAuth(value.auth),
     backendStatus: value.backendStatus,
     countryFeatures: value.countryFeatures ?? null,
   };
@@ -331,7 +340,7 @@ async function getServerRootContext(): Promise<RootRouteContext> {
   return {
     initialCountry,
     origin,
-    auth,
+    auth: normalizeAuth(auth),
     backendStatus: bootstrap.status,
     countryFeatures: bootstrap.countryFeatures,
   };
@@ -563,7 +572,8 @@ function ChangelogFooterLink() {
 }
 
 function RootLayout() {
-  const { auth, initialCountry, backendStatus, countryFeatures } = Route.useRouteContext();
+  const { auth: rawAuth, initialCountry, backendStatus, countryFeatures } = Route.useRouteContext();
+  const auth = normalizeAuth(rawAuth);
   seedClientRootSlowContext({ auth, backendStatus, countryFeatures });
   seedCountryTierCache(countryFeatures?.countries);
   return (

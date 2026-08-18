@@ -554,7 +554,7 @@ export function CommunitySubmitModal({
                     <span className="mt-1 block text-[11px] leading-relaxed">
                       <span className="flex items-center gap-1.5 text-emerald-400">
                         <Check className="h-3 w-3 shrink-0" aria-hidden="true" />
-                        {inviteCheck.preview.name}, {inviteCheck.preview.memberCount.toLocaleString()} members
+                        {inviteCheck.preview.name}, {inviteCheck.preview.memberCount.toLocaleString("en-US")} members
                       </span>
                       {/* An expiring invite is allowed: it is a worse listing,
                           not an invalid one, and a listing whose link stops

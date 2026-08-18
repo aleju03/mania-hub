@@ -348,13 +348,20 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
   if (packPulledCardMatch) {
     // One owned card as a shareable artifact: backs the /pull/{owner}/{card}
     // permalink page and its OG image. Public; reads the durable collection
-    // row so the link outlives pull-event retention.
+    // row so the link outlives pull-event retention. A live-feed link can add
+    // ?pull={eventId} to recover that event's date while the log still has it.
     if (req.method !== "GET") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
     if (!checkRate(req, res, ctx, "publicApi")) return true;
-    const shared = await getSharedPackCard(ctx.db, Number(packPulledCardMatch[1]), Number(packPulledCardMatch[2]));
+    const pullEventId = Math.floor(Number(url.searchParams.get("pull")) || 0);
+    const shared = await getSharedPackCard(
+      ctx.db,
+      Number(packPulledCardMatch[1]),
+      Number(packPulledCardMatch[2]),
+      pullEventId > 0 ? pullEventId : null,
+    );
     if (!shared) {
       sendJson(req, res, ctx, 404, { error: "pulled_card_not_found" });
       return true;

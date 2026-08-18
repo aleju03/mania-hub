@@ -11,6 +11,7 @@ import { OsuLogo } from "../components/ui/OsuLogo";
 import { useAuth } from "../lib/auth-context";
 import { isAdmin } from "../lib/auth-shared";
 import { isLiveBackendConfigured } from "../lib/live-backend";
+import { useScrollRestoreRef } from "../lib/use-scroll-restore";
 import {
   fetchPrivateSkinsShelf,
   fetchSkinsListDirect,
@@ -475,8 +476,12 @@ function SkinsPage() {
     </a>
   ) : null;
 
+  // Stepping back from a skin would otherwise paint the grid at the top for a
+  // frame before the router puts it back where it was left.
+  const scrollRestoreRef = useScrollRestoreRef();
+
   return (
-    <div className="relative flex min-h-screen flex-col">
+    <div ref={scrollRestoreRef} className="relative flex min-h-screen flex-col">
       <div className="relative z-10 flex flex-1 flex-col overflow-clip">
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/skins.svg" title="osu!mania skins" right={headerAction} />
@@ -657,7 +662,7 @@ function SkinsPage() {
                       role="status"
                       aria-live="polite"
                     >
-                      {data.total.toLocaleString()} {data.total === 1 ? "skin" : "skins"}
+                      {data.total.toLocaleString("en-US")} {data.total === 1 ? "skin" : "skins"}
                     </span>
                   )}
                 </FilterRow>
@@ -685,8 +690,8 @@ function SkinsPage() {
                       <span className="text-[11px] text-osu-f1 tabular-nums">
                         {admin
                           ? privateTotal > privateSkins.length
-                            ? `${privateSkins.length} of ${privateTotal.toLocaleString()}, every uploader`
-                            : `${privateTotal.toLocaleString()} across every uploader`
+                            ? `${privateSkins.length} of ${privateTotal.toLocaleString("en-US")}, every uploader`
+                            : `${privateTotal.toLocaleString("en-US")} across every uploader`
                           : "only you can open these"}
                       </span>
                     )}

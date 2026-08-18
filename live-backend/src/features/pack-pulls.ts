@@ -572,6 +572,10 @@ export interface SharedPackCard {
     countryCode: string;
     tier: string | null;
     tierLabel: string | null;
+    /* The badge this one holding was given, if any: the card art prints it in
+       place of the tier's name, so the share page has to draw the same card
+       its owner sees. */
+    customLabel: string | null;
     skills: unknown | null;
     pp: number;
     globalRank: number;
@@ -585,6 +589,10 @@ export interface SharedPackCard {
   serial: number | null;
   /* Serials this card has ever handed out, recycled ones included. */
   mintedTotal: number;
+  /* A live-feed link can name the exact append-only event it came from. Plain
+     collection permalinks leave this null and keep describing the holding's
+     first acquisition. */
+  pullEvent: { id: number; pulledAt: number; isNew: boolean } | null;
   /* Set only when the pull log recorded this card arriving at the GOAT tier,
      which is the one case where the pack it came from is worth naming. Absent
      for a card pulled out of the ranked pool before the player joined the
@@ -604,6 +612,7 @@ export async function getSharedPackCard(
   db: Db,
   ownerUserId: number,
   cardUserId: number,
+  pullEventId?: number | null,
 ): Promise<SharedPackCard | null> {
   if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) return null;
   if (!Number.isInteger(cardUserId) || cardUserId <= 0) return null;
@@ -613,7 +622,7 @@ export async function getSharedPackCard(
        pc.username as username,
        pc.avatar_url as avatar_url,
        pc.country_code as country_code,
-       pc.tier_label as tier_label,
+       pc.tier_label as catalog_tier_label,
        sk.skills_json as skills_json,
        (select u.username from users u where u.user_id = pack_collection_cards.card_user_id) as live_username,
        (select u.avatar_url from users u where u.user_id = pack_collection_cards.card_user_id) as live_avatar_url,
@@ -678,6 +687,15 @@ export async function getSharedPackCard(
     [cardKey, ownerUserId, cardKey],
   )).rows[0];
   const serial = Number(mintRow?.serial) || 0;
+  const normalizedPullEventId = Math.floor(Number(pullEventId) || 0);
+  const pullEventRow = normalizedPullEventId > 0
+    ? (await exec(
+        db,
+        `select id, pulled_at, is_new from pack_pull_events
+         where id = ? and owner_user_id = ? and card_user_id = ?`,
+        [normalizedPullEventId, ownerUserId, cardUserId],
+      )).rows[0]
+    : undefined;
   let skills: unknown | null = null;
   if (typeof row.skills_json === "string" && row.skills_json) {
     try {
@@ -694,7 +712,9 @@ export async function getSharedPackCard(
       avatarUrl: nonEmptyString(row.live_avatar_url) ?? String(row.avatar_url ?? ""),
       countryCode: nonEmptyString(row.live_country_code) ?? String(row.country_code ?? ""),
       tier: typeof row.tier === "string" ? row.tier : null,
-      tierLabel: typeof row.tier_label === "string" ? row.tier_label : null,
+      // The collector's own name for their copy wins over the shared one.
+      tierLabel: nonEmptyString(row.tier_label) ?? nonEmptyString(row.catalog_tier_label),
+      customLabel: nonEmptyString(row.tier_label),
       skills,
       pp: Number(row.pp) || 0,
       globalRank: Number(row.global_rank) || 0,
@@ -704,6 +724,13 @@ export async function getSharedPackCard(
     owners: Number(ownersRow?.owners) || 0,
     serial: serial > 0 ? serial : null,
     mintedTotal: Number(mintRow?.minted_total) || 0,
+    pullEvent: pullEventRow
+      ? {
+          id: Number(pullEventRow.id),
+          pulledAt: Number(pullEventRow.pulled_at) || 0,
+          isNew: Number(pullEventRow.is_new) === 1,
+        }
+      : null,
     goatPull: goatRow
       ? { packType: String(goatRow.pack_type ?? ""), pulledAt: Number(goatRow.pulled_at) || 0 }
       : null,

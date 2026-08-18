@@ -86,7 +86,13 @@ export async function seedCardCatalogEntry(
 
 /* One owner's stored card as the old flat row: ownership columns joined to the
    variant's catalog face, so assertions can keep reading `username`,
-   `skills_json` and the rest off a single row. */
+   `skills_json` and the rest off a single row.
+
+   The ownership columns are listed rather than starred because both tables
+   carry a tier_label now, and a duplicate result column resolves to the first
+   one - which would hide the shared label behind the per-owner override's
+   null. `tier_label` here is what the card effectively reads, the same
+   coalesce cardFromRow applies. */
 export async function readStoredCard(
   db: Db,
   ownerUserId: number,
@@ -94,9 +100,15 @@ export async function readStoredCard(
 ): Promise<Record<string, unknown> | undefined> {
   return (await exec(
     db,
-    `select pack_collection_cards.*,
+    `select pack_collection_cards.owner_user_id, pack_collection_cards.card_user_id,
+       pack_collection_cards.card_key, pack_collection_cards.tier, pack_collection_cards.skills_id,
+       pack_collection_cards.pp, pack_collection_cards.global_rank, pack_collection_cards.copies,
+       pack_collection_cards.recycled_copies, pack_collection_cards.first_pulled_at,
+       pack_collection_cards.last_pulled_at, pack_collection_cards.updated_at,
+       pack_collection_cards.tier_label as owner_tier_label,
+       coalesce(pack_collection_cards.tier_label, pc.tier_label) as tier_label,
        pc.username as username, pc.avatar_url as avatar_url, pc.country_code as country_code,
-       pc.tier_label as tier_label, sk.skills_json as skills_json
+       sk.skills_json as skills_json
      from pack_collection_cards
      left join pack_cards pc
        on pc.card_key = pack_collection_cards.card_key

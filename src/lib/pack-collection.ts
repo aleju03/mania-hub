@@ -19,6 +19,11 @@ export interface CollectedCard {
   countryCode: string;
   tier: ManiaCardTier | null;
   tierLabel: string | null;
+  /* Badge text given to this one holding from /admin/collections, printed on
+     the card art in place of the tier's name (the slot honorary players'
+     cardTierLabel uses). Only ever set on a synced collection, so sanitizeCard
+     drops it for the same reason it drops serial. */
+  customLabel?: string | null;
   /* Skills snapshot from the pull, enough to redraw the real card front
      offline (the texture pipeline needs no scores). Null for failed mints
      and cards collected before snapshots existed. */

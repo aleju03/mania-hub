@@ -2,91 +2,25 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../lib/my-data";
 import { useAuth } from "../../lib/auth-context";
+import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "../../lib/dan-images";
+import {
+  formatTopShare,
+  radarAnchor,
+  radarLabelDy,
+  radarPoints,
+  ringPolygon,
+  RADAR_RINGS,
+  skillModeEntries,
+  SKILL_RADAR_PROFILE,
+  type SkillAxisEntry,
+} from "../../lib/skill-axes";
 
 // Shared renderer for the Etterna-style skill ratings: the My Data "Skill
 // rating" card (compact bars) and the public profile Skills tab (radar +
-// interactive bars) draw from the same breakdown shape, so axis metadata and
-// entry selection live here. Colors are per-skill site identity and stay
-// decorative: identity is always carried by the text label on the mark.
-
-// Etterna's skillset taxonomy (from the MinaCalc analysis), with colors from
-// the same palette the old pattern fingerprint used. Native for 4K only.
-export const MSD_SKILLSET_META: Array<{ key: string; label: string; color: string }> = [
-  { key: "Stream", label: "Stream", color: "#8f6bd8" },
-  { key: "Jumpstream", label: "Jumpstream", color: "#6f87d8" },
-  { key: "Handstream", label: "Handstream", color: "#b06bc0" },
-  { key: "Stamina", label: "Stamina", color: "#ad6b5d" },
-  { key: "JackSpeed", label: "Jackspeed", color: "#c66f84" },
-  { key: "Chordjack", label: "Chordjack", color: "#c59a5c" },
-  { key: "Technical", label: "Technical", color: "#83a86f" },
-];
-
-// Non-4K axes come from the in-house pattern detector instead (MinaCalc's
-// skillset names are 4K vocabulary): each value is the aggregate of the
-// player's Overall SSRs on charts tagged with that pattern. Family ids only;
-// subtypes (speedjack, lnrelease, ...) stay a maps-page concern.
-export const PATTERN_RATING_META: Array<{ key: string; label: string; color: string }> = [
-  { key: "chordstream", label: "Chordstream", color: "#5ab2f2" },
-  { key: "bracket", label: "Bracket", color: "#f3c24a" },
-  { key: "delay", label: "Delay", color: "#46c7b8" },
-  { key: "stream", label: "Stream", color: "#8f6bd8" },
-  { key: "jack", label: "Jack", color: "#ec6a9c" },
-  { key: "chordjack", label: "Chordjack", color: "#c59a5c" },
-  { key: "tech", label: "Tech", color: "#83cf6b" },
-  { key: "ln", label: "LN", color: "#f07474" },
-];
-
-// Drop trickle keymodes (a few stray plays in an off-keymode) so callers only
-// offer modes the player meaningfully plays; always keep at least the
-// dominant one.
-export function qualifyingSkillModes(skills: MyDataSkillBreakdown | null): MyDataSkillMode[] {
-  const modes = skills?.modes ?? [];
-  const qualifying = modes.filter((mode) => mode.analyzedPlays >= 3);
-  return qualifying.length > 0 ? qualifying : modes.slice(0, 1);
-}
-
-export interface SkillAxisEntry {
-  key: string;
-  label: string;
-  color: string;
-  value: number;
-  // The percentile lookup key: skillset name for MSD axes, `pattern:{id}` for
-  // pattern-derived axes.
-  axis: string;
-}
-
-// 4K speaks MinaCalc's native skillsets; other keymodes speak the in-house
-// pattern vocabulary (falling back to the MSD names while tags are missing).
-export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
-  if (mode.keyCount !== 4) {
-    const byId = new Map((mode.patterns ?? []).map((entry) => [entry.id, entry.rating]));
-    const patternEntries = PATTERN_RATING_META
-      .map((meta) => ({ ...meta, value: Number(byId.get(meta.key) ?? 0), axis: `pattern:${meta.key}` }))
-      .filter((entry) => entry.value >= 1)
-      .sort((a, b) => b.value - a.value);
-    if (patternEntries.length > 0) return patternEntries;
-  }
-  const entries: SkillAxisEntry[] = MSD_SKILLSET_META
-    .map((meta) => ({ ...meta, value: Number(mode.ratings[meta.key] ?? 0), axis: meta.key }))
-    // The 6K/7K calc engine returns ~0 for skillsets it does not rate
-    // (Technical); a 0.15 sliver next to 20+ bars is noise, not signal.
-    .filter((entry) => entry.value >= 1);
-  // Etterna's taxonomy has no LN skillset, so the 4K card grafts in the LN
-  // pattern axis (same rating scale: Overall SSRs on LN-tagged charts).
-  const ln = (mode.patterns ?? []).find((entry) => entry.id === "ln");
-  if (ln && ln.rating >= 1) entries.push({ key: "ln", label: "LN", color: "#f07474", value: ln.rating, axis: "pattern:ln" });
-  return entries.sort((a, b) => b.value - a.value);
-}
-
-export function skillRatingAccent(mode: MyDataSkillMode | null): string {
-  if (!mode) return "#8f6bd8";
-  return skillModeEntries(mode)[0]?.color ?? "#8f6bd8";
-}
-
-function formatTopShare(percentile: number): string {
-  const top = Math.max(1, Math.round(100 - percentile));
-  return `top ${top}%`;
-}
+// interactive bars) draw from the same breakdown shape. The axis metadata,
+// entry selection and radar geometry live in lib/skill-axes.ts so the
+// server-rendered dynamic-render images draw the same chart from the same
+// numbers; this file is only the React presentation of them.
 
 function formatDanChip(label: string): string {
   return /^\d/.test(label) ? `${label} dan` : label;
@@ -125,7 +59,7 @@ function ProvisionalChip({ mode }: { mode: MyDataSkillMode }) {
 function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode): string | undefined {
   const percentile = mode.percentiles?.[entry.axis];
   if (!percentile) return undefined;
-  return `${entry.label}: ${formatTopShare(percentile.value)} of ${percentile.population.toLocaleString()} tracked ${mode.keyCount}K mains`;
+  return `${entry.label}: ${formatTopShare(percentile.value)} of ${percentile.population.toLocaleString("en-US")} tracked ${mode.keyCount}K mains`;
 }
 
 function DanChips({ mode }: { mode: MyDataSkillMode }) {
@@ -143,17 +77,42 @@ function DanChips({ mode }: { mode: MyDataSkillMode }) {
   const visible = sides.filter((entry) => entry.side != null);
   if (visible.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {visible.map((entry) => (
-        <span
-          key={entry.id}
-          className="inline-flex items-baseline gap-1.5 rounded-md border border-osu-b3/40 bg-osu-b5/60 px-2 py-1"
-          title={`Backed by ${entry.side!.clears} qualifying clears (96%+ accuracy) on charts around this dan level`}
-        >
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-osu-f1">{entry.label}</span>
-          <span className="text-[12px] font-bold text-osu-l1">~{formatDanChip(entry.side!.label)}</span>
-        </span>
-      ))}
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {visible.map((entry) => {
+        const label = entry.side!.label;
+        // The course's own logo IS the level, same as the map dan badge; the
+        // tier suffix rides top-right like an exponent, colored by where in
+        // the level it sits. Keymodes without artwork fall back to the text.
+        const image = getDanImageSrc(danBareLabel(label), entry.id === "ln" ? "ln" : undefined, mode.keyCount);
+        const suffix = danTierSuffix(label);
+        return (
+          <span
+            key={entry.id}
+            className="inline-flex items-center gap-1.5"
+            title={`${entry.label} dan estimate: ~${formatDanChip(label)}, backed by ${entry.side!.clears} qualifying clears (96%+ accuracy) on charts around this dan level`}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-osu-f1">{entry.label}</span>
+            {image ? (
+              <span className="flex items-center gap-0.5">
+                <span className="text-[12px] leading-none text-osu-f1">~</span>
+                <span className="flex items-start gap-[2px] leading-none">
+                  <img src={image} alt={formatDanChip(label)} className="h-9 w-9 object-contain" />
+                  {suffix ? (
+                    <span
+                      className="mt-0.5 text-[14px] font-bold leading-none"
+                      style={{ color: danTierColor(suffix) ?? undefined }}
+                    >
+                      {suffix}
+                    </span>
+                  ) : null}
+                </span>
+              </span>
+            ) : (
+              <span className="text-[12px] font-bold text-osu-l1">~{formatDanChip(label)}</span>
+            )}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -227,7 +186,7 @@ export function SkillBreakdownBody({ skills, mode, own = false }: { skills: MyDa
       {overallPercentile ? (
         <div className="mb-2.5 text-[11px] text-osu-l2">
           <span className="font-semibold text-osu-pink-light">{formatTopShare(overallPercentile.value)}</span>
-          {" "}of {overallPercentile.population.toLocaleString()} tracked {mode!.keyCount}K mains
+          {" "}of {overallPercentile.population.toLocaleString("en-US")} tracked {mode!.keyCount}K mains
         </div>
       ) : (
         <div className="mb-2.5" />
@@ -298,64 +257,12 @@ function skillEmptyState(skills: MyDataSkillBreakdown | null, mode: MyDataSkillM
 
 // --- Full panel (profile Skills tab): radar + interactive bars ---
 
-// Wider than tall: the horizontal margin is what keeps long side labels
-// ("Chordstream") inside the viewBox instead of clipping at the edge.
-const RADAR_W = 344;
-const RADAR_H = 252;
-const RADAR_CX = RADAR_W / 2;
-const RADAR_CY = RADAR_H / 2;
-const RADAR_MAX_R = 84;
-const RADAR_LABEL_R = 100;
-const RADAR_RINGS = [0.25, 0.5, 0.75, 1];
-
-interface RadarPoint {
-  entry: SkillAxisEntry;
-  x: number;
-  y: number;
-  labelX: number;
-  labelY: number;
-  angle: number;
-}
-
-function radarPoints(entries: SkillAxisEntry[], max: number): RadarPoint[] {
-  return entries.map((entry, index) => {
-    const angle = -Math.PI / 2 + (index / entries.length) * Math.PI * 2;
-    const r = Math.max(0.06, entry.value / max) * RADAR_MAX_R;
-    return {
-      entry,
-      angle,
-      x: RADAR_CX + Math.cos(angle) * r,
-      y: RADAR_CY + Math.sin(angle) * r,
-      labelX: RADAR_CX + Math.cos(angle) * RADAR_LABEL_R,
-      labelY: RADAR_CY + Math.sin(angle) * RADAR_LABEL_R,
-    };
-  });
-}
-
-function ringPolygon(count: number, fraction: number): string {
-  return Array.from({ length: count }, (_, index) => {
-    const angle = -Math.PI / 2 + (index / count) * Math.PI * 2;
-    const r = fraction * RADAR_MAX_R;
-    return `${RADAR_CX + Math.cos(angle) * r},${RADAR_CY + Math.sin(angle) * r}`;
-  }).join(" ");
-}
-
-function radarAnchor(angle: number): "start" | "middle" | "end" {
-  const cos = Math.cos(angle);
-  if (cos > 0.35) return "start";
-  if (cos < -0.35) return "end";
-  return "middle";
-}
-
-// Vertical alignment via dy, not dominant-baseline (which headless/older
-// renderers drop for hanging text): above the point for north labels, below
-// for south, centered for the sides.
-function radarLabelDy(angle: number): number {
-  const sin = Math.sin(angle);
-  if (sin < -0.35) return -2;
-  if (sin > 0.35) return 9;
-  return 3.5;
-}
+const RADAR = SKILL_RADAR_PROFILE;
+const RADAR_W = RADAR.width;
+const RADAR_H = RADAR.height;
+const RADAR_CX = RADAR.cx;
+const RADAR_CY = RADAR.cy;
+const RADAR_MAX_R = RADAR.maxR;
 
 function SkillRadar({
   entries,
@@ -369,7 +276,7 @@ function SkillRadar({
   onHover: (key: string | null) => void;
 }) {
   const max = entries.reduce((best, entry) => Math.max(best, entry.value), 1);
-  const points = useMemo(() => radarPoints(entries, max), [entries, max]);
+  const points = useMemo(() => radarPoints(entries, max, RADAR), [entries, max]);
   const hoveredPoint = points.find((point) => point.entry.key === hovered) ?? null;
   return (
     <svg
@@ -380,7 +287,7 @@ function SkillRadar({
       onMouseLeave={() => onHover(null)}
     >
       {RADAR_RINGS.map((fraction) => (
-        <polygon key={fraction} points={ringPolygon(entries.length, fraction)} fill="none" className="stroke-osu-b3/30" strokeWidth={1} />
+        <polygon key={fraction} points={ringPolygon(entries.length, fraction, RADAR)} fill="none" className="stroke-osu-b3/30" strokeWidth={1} />
       ))}
       {points.map((point) => (
         <line
@@ -482,7 +389,7 @@ export function SkillModePanel({
           {overallPercentile ? (
             <div className="mt-1 text-[11px] text-osu-l2">
               <span className="font-semibold text-osu-pink-light">{formatTopShare(overallPercentile.value)}</span>
-              {" "}of {overallPercentile.population.toLocaleString()} tracked {mode.keyCount}K mains
+              {" "}of {overallPercentile.population.toLocaleString("en-US")} tracked {mode.keyCount}K mains
             </div>
           ) : null}
         </div>

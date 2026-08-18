@@ -449,7 +449,7 @@ function CardFace({
         <span className="truncate text-[14px] font-bold text-white">{player.username}</span>
         {/* Who they are is never the secret: the read is that rank tells you
             nothing about how much someone has played. */}
-        <span className="text-[11px] text-osu-f1 tabular-nums">#{player.globalRank.toLocaleString()}</span>
+        <span className="text-[11px] text-osu-f1 tabular-nums">#{player.globalRank.toLocaleString("en-US")}</span>
       </div>
       <div
         className={`mt-1 flex items-baseline justify-center gap-2 text-2xl font-bold tabular-nums sm:text-3xl ${
@@ -1340,7 +1340,7 @@ export function StreakGame({
                         cardBack={cardBack}
                         valueText={copy.value(leftValue)}
                         tone="neutral"
-                        caption={`${Math.round(round.left.player.pp).toLocaleString()}pp`}
+                        caption={`${Math.round(round.left.player.pp).toLocaleString("en-US")}pp`}
                       />
                     </motion.div>
                     <motion.div
@@ -1358,7 +1358,7 @@ export function StreakGame({
                         cardBack={cardBack}
                         valueText={revealed && round.rightValue !== null ? copy.value(counted) : copy.unknown}
                         tone={verdict ?? "neutral"}
-                        caption={`${Math.round(round.right.player.pp).toLocaleString()}pp`}
+                        caption={`${Math.round(round.right.player.pp).toLocaleString("en-US")}pp`}
                       />
                     </motion.div>
                   </AnimatePresence>

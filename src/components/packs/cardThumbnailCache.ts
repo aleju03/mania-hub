@@ -386,6 +386,7 @@ function buildCollectionCardKey(
       },
       skills,
       tierOverride: collectedCardTier(card),
+      labelOverride: card.customLabel,
     }),
     width,
   );

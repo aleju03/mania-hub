@@ -19,7 +19,7 @@ import { CommunityStatusNote } from "./CommunityStatusNote";
    /api/avatar exists apply here. */
 
 function memberLabel(count: number): string {
-  return count === 1 ? "1 member" : `${count.toLocaleString()} members`;
+  return count === 1 ? "1 member" : `${count.toLocaleString("en-US")} members`;
 }
 
 export function CommunityCard({
@@ -96,7 +96,7 @@ export function CommunityCard({
             {community.onlineCount > 0 && (
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
-                {community.onlineCount.toLocaleString()} online
+                {community.onlineCount.toLocaleString("en-US")} online
               </span>
             )}
           </div>

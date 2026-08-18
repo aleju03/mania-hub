@@ -339,7 +339,7 @@ function DiscordAdminPage() {
                       )}
                       <span className="min-w-0 flex-1 truncate text-[12px] text-osu-l2" title={guild.name}>{guild.name}</span>
                       {guild.memberCount != null ? (
-                        <span className="shrink-0 text-[10px] text-osu-l3">{guild.memberCount.toLocaleString()}</span>
+                        <span className="shrink-0 text-[10px] text-osu-l3">{guild.memberCount.toLocaleString("en-US")}</span>
                       ) : null}
                     </li>
                   ))}
@@ -420,7 +420,7 @@ function DiscordAdminPage() {
                   {[...status.recentInteractions].reverse().map((entry, index) => (
                     <li key={`${entry.at}-${index}`} className="flex items-center gap-2">
                       <code className="text-osu-pink-light">/{entry.command}</code>
-                      <span className="text-[10px] text-osu-l3">{new Date(entry.at).toLocaleTimeString()}</span>
+                      <span className="text-[10px] text-osu-l3">{new Date(entry.at).toLocaleTimeString("en-US")}</span>
                       {entry.guildId ? <span className="font-mono text-[10px] text-osu-l3">guild {entry.guildId}</span> : null}
                     </li>
                   ))}

@@ -682,6 +682,10 @@ create table if not exists pack_collection_cards (
   first_pulled_at integer not null,
   last_pulled_at integer not null,
   updated_at integer not null,
+  -- This collector's own name for their copy, overriding the variant's shared
+  -- label in pack_cards. Only /admin/collections writes it; a pulled card
+  -- leaves it null and reads the catalog's.
+  tier_label text,
   primary key(owner_user_id, card_key)
 );
 create index if not exists idx_pack_collection_owner_tier

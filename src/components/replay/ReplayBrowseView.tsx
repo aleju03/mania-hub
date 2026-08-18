@@ -1246,7 +1246,7 @@ function PlayerSuggestions({
             <div className="relative flex-1 min-w-0">
               <div className="text-base font-semibold text-white truncate">{player.username}</div>
               {player.global_rank != null && (
-                <div className="mt-1 text-xs text-osu-f1">#{player.global_rank.toLocaleString()}</div>
+                <div className="mt-1 text-xs text-osu-f1">#{player.global_rank.toLocaleString("en-US")}</div>
               )}
             </div>
           </motion.button>

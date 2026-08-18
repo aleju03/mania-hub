@@ -349,6 +349,13 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     jobType: "recompute_bracket_tag_sweep",
   }),
   chartAnalysisSweep({
+    id: "bracket-content-recompute",
+    label: "Bracket content recompute sweep",
+    description: "Re-derives bracket and delay tags on stored 6K/7K chart analyses after the bracket-window content term and the delay chordjack veto.",
+    doneKey: "bracket_content_recompute_done:v1",
+    jobType: "recompute_bracket_content_sweep",
+  }),
+  chartAnalysisSweep({
     id: "ln-msd-backfill",
     label: "LN-tail MSD backfill sweep",
     description: "Backfills tail-aware LN-adjusted MSD for every ready hold-bearing chart from the cached .osu corpus.",

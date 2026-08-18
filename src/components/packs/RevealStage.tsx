@@ -1435,10 +1435,10 @@ export function RevealStage({
                     or deleted before the stats existed); an invented "#10,000
                     0pp" reads as real data, so show nothing instead. */}
                 {current.player.user.statistics.global_rank !== null && (
-                  <span className="text-osu-f1 tabular-nums">#{current.player.globalRank.toLocaleString()}</span>
+                  <span className="text-osu-f1 tabular-nums">#{current.player.globalRank.toLocaleString("en-US")}</span>
                 )}
                 {current.player.pp > 0 && (
-                  <span className="text-osu-f1 tabular-nums">{Math.round(current.player.pp).toLocaleString()}pp</span>
+                  <span className="text-osu-f1 tabular-nums">{Math.round(current.player.pp).toLocaleString("en-US")}pp</span>
                 )}
               </div>
             </motion.div>
