@@ -6,6 +6,7 @@ import { DEFAULT_INITIAL_SCOPE, normalizeCountryScope } from "./lib/country";
 import { InitialCountryContext } from "./lib/country-context";
 import { readAutoCountryCookieClient, readCountryCookieClient, writeCountryCookieClient } from "./lib/country-cookie";
 import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
+import { useHydrated } from "./lib/use-hydrated";
 import type {
   OsuScore,
   RankingsResponse,
@@ -1130,11 +1131,23 @@ export function useSelectedCountry(): string {
   return hydrated ? fromStore : fromContext;
 }
 
+const EMPTY_HIDDEN_USER_IDS: ReadonlySet<number> = new Set<number>();
+
 // Hidden-player user ids as a Set for cheap membership checks while filtering
 // rankings/tracker/top-plays/snipes/home/maps. The Set is rebuilt only when the
 // hidden-users record actually changes, so consumers don't re-render on every
 // unrelated store update.
-export function useHiddenUserIds(): Set<number> {
+//
+// Empty during the hydration render, because the list is a browser-only pref the server never saw:
+// filtering a row out of an SSR-rendered board there shifts every name below it, React throws the
+// whole panel away over the text mismatch (#418) and re-acquires <html>, which costs a theme
+// repaint. Nothing flashes in by waiting - the unfiltered rows were already painted by the server
+// long before hydration, and a client-side navigation renders with this already true.
+export function useHiddenUserIds(): ReadonlySet<number> {
   const hiddenUsers = useAppStore((state) => state.hiddenUsers);
-  return useMemo(() => new Set(Object.keys(hiddenUsers).map(Number)), [hiddenUsers]);
+  const hydrated = useHydrated();
+  return useMemo(
+    () => (hydrated ? new Set(Object.keys(hiddenUsers).map(Number)) : EMPTY_HIDDEN_USER_IDS),
+    [hiddenUsers, hydrated],
+  );
 }
