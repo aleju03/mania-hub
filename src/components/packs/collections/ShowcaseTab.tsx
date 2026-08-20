@@ -1,5 +1,6 @@
 import { Pencil } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { track } from "#/lib/analytics";
 import { useAuth } from "#/lib/auth-context";
 import {
   fetchLivePackShowcaseCards,
@@ -74,6 +75,7 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
   const keys = cards?.map((card) => card.cardKey ?? String(card.userId)) ?? null;
 
   const save = useCallback(async (cardKeys: string[]) => {
+    track("packs_showcase_saved", { collections_cards: String(cardKeys.length) });
     await saveOwnPackShowcase({ data: { cardKeys } }).catch(() => null);
     setPicking(false);
     setReloadKey((current) => current + 1);
@@ -102,7 +104,10 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
         <SectionHeading>your showcase</SectionHeading>
         <button
           type="button"
-          onClick={() => setPicking(true)}
+          onClick={() => {
+            track("packs_showcase_edit");
+            setPicking(true);
+          }}
           className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white"
         >
           <Pencil size={12} />
@@ -139,7 +144,10 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
                once you have picked something, so a single opening says there
                is room without lining up four more empty boxes. */
             emptySlots={chosen.length < PACK_SHOWCASE_MAX_CARDS ? 1 : 0}
-            onEmptySlotClick={() => setPicking(true)}
+            onEmptySlotClick={() => {
+              track("packs_showcase_edit");
+              setPicking(true);
+            }}
           />
         </div>
       ) : null}
@@ -170,6 +178,16 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
      re-finding the pager every time you wanted the page after this one. */
   const [result, setResult] = useState<{ cards: LivePackShowcaseWallCard[]; total: number } | null>(null);
   const [failed, setFailed] = useState(false);
+
+  /* Turning a page of the wall. The first page is what the pageview already
+     says, and a save bouncing back to it is not a page turn either, so only a
+     move away from where the visitor was gets reported. */
+  const pagedTo = useRef(page);
+  useEffect(() => {
+    if (pagedTo.current === page) return;
+    pagedTo.current = page;
+    if (page > 0) track("packs_collections_wall", { collections_page: String(page + 1) });
+  }, [page]);
 
   useEffect(() => {
     let cancelled = false;

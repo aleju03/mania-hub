@@ -59,6 +59,14 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     communitiesPage: null,
     communityId: null,
     communityName: null,
+    collectionsCollector: null,
+    collectionsTab: null,
+    collectionsTier: null,
+    collectionsSort: null,
+    collectionsQuery: null,
+    collectionsPage: null,
+    collectionsCard: null,
+    collectionsCards: null,
     viewerUsername: null,
     referrer: null,
     ...overrides,
@@ -82,6 +90,83 @@ describe("describeAnalyticsEvent", () => {
       subject: "the changelog",
       detail: null,
     });
+  });
+
+  it("reads the collections page as a shelf or as a tab", () => {
+    expect(
+      describeAnalyticsEvent(row({ path: "/packs/collections", collectionsCollector: "manolo" })),
+    ).toEqual({ kind: "pack", verb: "viewed", subject: "manolo's collection", detail: null });
+    expect(describeAnalyticsEvent(row({ path: "/packs/collections", collectionsTab: "Stats" }))).toEqual({
+      kind: "pack",
+      verb: "browsed",
+      subject: "collections",
+      detail: "Stats",
+    });
+    // Captured before the property existed: the collector is still in the URL.
+    expect(
+      describeAnalyticsEvent(
+        row({ path: "/packs/collections", viewUrl: "https://mania-tracker.com/packs/collections?collector=jakads" }),
+      ),
+    ).toMatchObject({ subject: "jakads's collection" });
+  });
+
+  it("reads a move inside a shelf as the state it landed on", () => {
+    expect(
+      describeAnalyticsEvent(
+        row({
+          event: "packs_collections_shelf",
+          path: "/packs/collections",
+          collectionsCollector: "manolo",
+          collectionsTier: "GOAT",
+          collectionsSort: "newest first",
+          collectionsPage: "2",
+        }),
+      ),
+    ).toEqual({
+      kind: "pack",
+      verb: "filtered",
+      subject: "manolo's shelf",
+      detail: "GOAT · newest first · page 2",
+    });
+    // A search inside somebody's shelf is a search, so it buckets with them.
+    expect(
+      describeAnalyticsEvent(
+        row({
+          event: "packs_collections_shelf",
+          path: "/packs/collections",
+          collectionsCollector: "manolo",
+          collectionsQuery: "jakads",
+        }),
+      ),
+    ).toMatchObject({ kind: "search", subject: '"jakads"', detail: "in manolo's shelf" });
+  });
+
+  it("names a card by its player and the shelf it came off", () => {
+    expect(
+      describeAnalyticsEvent(
+        row({
+          event: "packs_collections_card",
+          path: "/packs/collections",
+          collectionsCard: "jakads",
+          collectionsTier: "Mythic",
+          collectionsCollector: "manolo",
+        }),
+      ),
+    ).toEqual({
+      kind: "pack",
+      verb: "opened",
+      subject: "jakads's card",
+      detail: "Mythic · on manolo's shelf",
+    });
+  });
+
+  it("counts the cards a showcase was saved with", () => {
+    expect(
+      describeAnalyticsEvent(row({ event: "packs_showcase_saved", path: "/packs/collections", collectionsCards: "1" })),
+    ).toMatchObject({ subject: "1 card on their showcase" });
+    expect(
+      describeAnalyticsEvent(row({ event: "packs_showcase_saved", path: "/packs/collections", collectionsCards: "4" })),
+    ).toMatchObject({ subject: "4 cards on their showcase" });
   });
 
   it("names the selected scope on country-scoped pages", () => {

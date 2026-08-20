@@ -57,6 +57,14 @@ export interface AnalyticsRecentEventRow {
   communitiesPage: string | null;
   communityId: string | null;
   communityName: string | null;
+  collectionsCollector: string | null;
+  collectionsTab: string | null;
+  collectionsTier: string | null;
+  collectionsSort: string | null;
+  collectionsQuery: string | null;
+  collectionsPage: string | null;
+  collectionsCard: string | null;
+  collectionsCards: string | null;
   viewerUsername: string | null;
   referrer: string | null;
 }
@@ -291,6 +299,55 @@ function describeCommunity(row: AnalyticsRecentEventRow, verb: string, id: strin
   };
 }
 
+/* The collections page's own lines. Its lists keep their filters in component
+   state rather than in the URL, so each move arrives as an event carrying the
+   state it landed on; the sentence reads that back the way the page shows it
+   ("filtered manolo's shelf · GOAT · newest first · page 2"). */
+function collectionsFacets(row: AnalyticsRecentEventRow): string | null {
+  return joinDetail([
+    row.collectionsTier,
+    row.collectionsSort,
+    row.collectionsPage ? `page ${row.collectionsPage}` : null,
+  ]);
+}
+
+function describeCollectionsShelf(row: AnalyticsRecentEventRow): AnalyticsActivity {
+  const whose = row.collectionsCollector ? `${row.collectionsCollector}'s shelf` : "a shelf";
+  if (row.collectionsQuery) {
+    return {
+      kind: "search",
+      verb: "searched",
+      subject: `"${row.collectionsQuery}"`,
+      detail: joinDetail([`in ${whose}`, collectionsFacets(row)]),
+    };
+  }
+  return { kind: "pack", verb: "filtered", subject: whose, detail: collectionsFacets(row) };
+}
+
+function describeCollectionsDirectory(row: AnalyticsRecentEventRow): AnalyticsActivity {
+  if (row.collectionsQuery) {
+    return {
+      kind: "search",
+      verb: "searched",
+      subject: `"${row.collectionsQuery}"`,
+      detail: joinDetail(["in collectors", collectionsFacets(row)]),
+    };
+  }
+  return { kind: "pack", verb: "browsed", subject: "the collector list", detail: collectionsFacets(row) };
+}
+
+function describeCollectionsCard(row: AnalyticsRecentEventRow): AnalyticsActivity {
+  return {
+    kind: "pack",
+    verb: "opened",
+    subject: row.collectionsCard ? `${row.collectionsCard}'s card` : "a card",
+    detail: joinDetail([
+      row.collectionsTier,
+      row.collectionsCollector ? `on ${row.collectionsCollector}'s shelf` : null,
+    ]),
+  };
+}
+
 /* What an event says about itself, before its page is consulted. Null for an
    event this file has never been taught, which the caller can either describe
    by page (the feed) or name outright (the event lookup, where describing a
@@ -339,6 +396,31 @@ function describeNamedAnalyticsEvent(
       return { kind: "community", verb: "started describing", subject: row.communityName || "a server", detail: null };
     case "community_post_submitted":
       return describeCommunity(row, "submitted", row.communityId);
+    // The collections page: three tabs, anyone's shelf, and the cards on both.
+    case "packs_collections_stats":
+      return { kind: "pack", verb: "read", subject: "the pack stats", detail: null };
+    case "packs_collections_shelf":
+      return describeCollectionsShelf(row);
+    case "packs_collections_directory":
+      return describeCollectionsDirectory(row);
+    case "packs_collections_wall":
+      return {
+        kind: "pack",
+        verb: "browsed",
+        subject: "the showcase wall",
+        detail: row.collectionsPage ? `page ${row.collectionsPage}` : null,
+      };
+    case "packs_collections_card":
+      return describeCollectionsCard(row);
+    case "packs_showcase_edit":
+      return { kind: "pack", verb: "opened", subject: "their showcase picker", detail: null };
+    case "packs_showcase_saved":
+      return {
+        kind: "pack",
+        verb: "put up",
+        subject: row.collectionsCards === "1" ? "1 card on their showcase" : `${row.collectionsCards ?? "0"} cards on their showcase`,
+        detail: null,
+      };
     case "skin_upload_failed":
       return { kind: "error", verb: "failed", subject: "a skin upload", detail: row.skinUploadError };
     /* A cut pack is also an open, so both lines land for the same pack: the
@@ -401,6 +483,15 @@ export function describeAnalyticsEvent(
       subject: row.skinName || row.skinRef || decodeURIComponent(path.slice("/skins/".length)) || "a skin",
       detail: row.skinKeymodes,
     };
+  }
+  if (path === "/packs/collections") {
+    // A collector in the URL is one shelf; without one it is whichever tab the
+    // visitor landed on, which is the showcase unless the URL says otherwise.
+    const collector = row.collectionsCollector || analyticsUrlParam(row.viewUrl, "collector");
+    if (collector) {
+      return { kind: "pack", verb: "viewed", subject: `${collector}'s collection`, detail: null };
+    }
+    return { kind: "pack", verb: "browsed", subject: "collections", detail: row.collectionsTab };
   }
   if (path === "/communities") return describeCommunitiesList(row);
   if (path === "/communities/review") {

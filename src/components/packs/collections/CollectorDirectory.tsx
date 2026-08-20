@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { track } from "#/lib/analytics";
+import { collectionsDirectoryProperties } from "#/lib/analytics-collections";
 import { formatNumber, formatTimeAgo } from "#/lib/format";
 import {
   fetchLivePackCollectors,
@@ -85,9 +87,17 @@ export function CollectorDirectory() {
   const [failed, setFailed] = useState(false);
   const debounced = useDebounced(query, 250);
 
-  useEffect(() => {
+  /* A search or a sort starts over at the first page. Done while rendering
+     rather than in an effect because an effect leaves one commit pairing the
+     new filter with the old page index, which is a request (and a tracked
+     move) spent on a page already on its way out. Same handling the shelf
+     uses. */
+  const filterKey = `${debounced}:${sort}`;
+  const [pagedFilter, setPagedFilter] = useState(filterKey);
+  if (pagedFilter !== filterKey) {
+    setPagedFilter(filterKey);
     setPage(0);
-  }, [debounced, sort]);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +113,18 @@ export function CollectorDirectory() {
       cancelled = true;
     };
   }, [debounced, sort, page]);
+
+  /* Searching, sorting and paging the list, reported as the state the move
+     landed on. The list as opened is skipped; the pageview already has it. */
+  const browseKey = `${debounced}:${sort}:${page}`;
+  const browsedKey = useRef(browseKey);
+  useEffect(() => {
+    if (browsedKey.current === browseKey) return;
+    browsedKey.current = browseKey;
+    track("packs_collections_directory", collectionsDirectoryProperties({ query: debounced, sort, page }));
+    // The key is the whole state; its parts are read off it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browseKey]);
 
   const total = result?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

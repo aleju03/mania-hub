@@ -25,6 +25,7 @@ export function ShowcaseCards({
   ownerUserId,
   emptySlots = 0,
   onEmptySlotClick,
+  onCardOpen,
   thumbnails,
 }: {
   cards: ServerPackCollectionCard[];
@@ -35,6 +36,9 @@ export function ShowcaseCards({
      draws these; on the wall an unfilled slot is nothing to say. */
   emptySlots?: number;
   onEmptySlotClick?: () => void;
+  /* Told which card was lifted, for the surfaces that report browsing (a
+     collector's shelf). The spotlight itself stays this row's business. */
+  onCardOpen?: (card: CollectedCard) => void;
   /* Passed by a surface that draws many rows at once (the wall) so all of
      their faces are resolved in one request instead of one per row. A row on
      its own loads its own. */
@@ -69,6 +73,7 @@ export function ShowcaseCards({
                   ownerUserId,
                 });
                 setLiftedCardKey(cardKey);
+                onCardOpen?.(card);
               }}
               style={liftedCardKey === cardKey ? { visibility: "hidden" } : undefined}
               className={`${SHOWCASE_SLOT_CLASS} cursor-pointer transition-transform duration-[120ms] hover:-translate-y-1`}

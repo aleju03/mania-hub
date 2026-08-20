@@ -155,6 +155,14 @@ export interface AnalyticsFeedEvent {
   communitiesPage: string | null;
   communityId: string | null;
   communityName: string | null;
+  collectionsCollector: string | null;
+  collectionsTab: string | null;
+  collectionsTier: string | null;
+  collectionsSort: string | null;
+  collectionsQuery: string | null;
+  collectionsPage: string | null;
+  collectionsCard: string | null;
+  collectionsCards: string | null;
   viewerUsername: string | null;
   referrer: string | null;
 }
@@ -1031,6 +1039,14 @@ export function buildMonitorFeedEvent(displayTimeZone: string, record: Analytics
     communitiesPage: str("communities_page"),
     communityId: str("community_id"),
     communityName: str("community_name"),
+    collectionsCollector: str("collections_collector"),
+    collectionsTab: str("collections_tab"),
+    collectionsTier: str("collections_tier"),
+    collectionsSort: str("collections_sort"),
+    collectionsQuery: str("collections_query"),
+    collectionsPage: str("collections_page"),
+    collectionsCard: str("collections_card"),
+    collectionsCards: str("collections_cards"),
     viewerUsername: record.viewerUsername,
     referrer: record.referringDomain,
   };

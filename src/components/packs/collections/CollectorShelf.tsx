@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { track } from "#/lib/analytics";
+import { collectionsCardProperties, collectionsShelfProperties } from "#/lib/analytics-collections";
 import { formatNumber, formatOrdinal, formatTimeAgo } from "#/lib/format";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
@@ -417,6 +419,32 @@ export function CollectorShelf({ collector, tab }: {
      one is being read, so a turn lands on cards rather than on sketches. */
   useCardThumbnails(prefetched);
 
+  /* Every move inside the shelf, for the admin activity feed: the sort, the
+     tier chips, the player search, the pager. What is reported is the state
+     the move landed on rather than which control was touched, so one line
+     says what the visitor is looking at. The shelf as opened is skipped: the
+     pageview already recorded that, and a filter change is one event because
+     the reset to page one happens in the same render. */
+  const browseKey = `${tier}:${sort}:${debounced}:${page}`;
+  const browsedKey = useRef(browseKey);
+  useEffect(() => {
+    if (browsedKey.current === browseKey) return;
+    browsedKey.current = browseKey;
+    track(
+      "packs_collections_shelf",
+      collectionsShelfProperties({
+        collector: profile?.collector.username ?? collector,
+        tierLabel: TIER_FILTERS.find((filter) => filter.id === tier)?.label ?? null,
+        sort,
+        query: debounced,
+        page,
+      }),
+    );
+    // The key is the whole state; the rest is read off it and would only fire
+    // the same event again when the collector's name lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browseKey]);
+
   if (missing) {
     return (
       <div className="py-20 text-center">
@@ -501,7 +529,20 @@ export function CollectorShelf({ collector, tab }: {
         <Section className="mt-10">
           <SectionHeading>showcase</SectionHeading>
           <div className="mt-3">
-            <ShowcaseCards cards={profile.showcase} ownerUserId={profile.collector.userId} />
+            <ShowcaseCards
+              cards={profile.showcase}
+              ownerUserId={profile.collector.userId}
+              onCardOpen={(card) =>
+                track(
+                  "packs_collections_card",
+                  collectionsCardProperties({
+                    player: card.username,
+                    tierLabel: card.tierLabel,
+                    collector: profile.collector.username,
+                  }),
+                )
+              }
+            />
           </div>
         </Section>
       )}
@@ -569,6 +610,14 @@ export function CollectorShelf({ collector, tab }: {
           onSpotlight={(target, cardKey) => {
             setSpotlight({ ...target, ownerUserId: profile.collector.userId });
             setLiftedCardKey(cardKey);
+            track(
+              "packs_collections_card",
+              collectionsCardProperties({
+                player: target.card.username,
+                tierLabel: target.card.tierLabel,
+                collector: profile.collector.username,
+              }),
+            );
           }}
         />
 

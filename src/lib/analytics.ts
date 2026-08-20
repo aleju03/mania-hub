@@ -1,3 +1,4 @@
+import { getCollectionsPageviewProperties } from "./analytics-collections";
 import {
   getCommunitiesPageviewProperties,
   getCommunityDetailPageviewProperties,
@@ -215,6 +216,10 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
     Object.assign(props, getCommunitiesPageviewProperties(params));
   } else if (pathname.startsWith("/communities/")) {
     Object.assign(props, getCommunityDetailPageviewProperties(pathname));
+  } else if (pathname === "/packs/collections") {
+    // Whose collection was opened, or which of the three tabs was on screen:
+    // the path alone cannot tell a shelf from the showcase wall.
+    Object.assign(props, getCollectionsPageviewProperties(params));
   } else if (pathname === "/rankings") {
     const page = params.get("page");
     if (page) props.rankings_page = page;

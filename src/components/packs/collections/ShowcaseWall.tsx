@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { track } from "#/lib/analytics";
+import { collectionsCardProperties } from "#/lib/analytics-collections";
 import type { CollectedCard } from "#/lib/pack-collection";
 import { packCardKeyOf } from "#/lib/pack-collection";
 import type { LivePackShowcaseWallCard } from "#/lib/live-backend";
@@ -55,6 +57,14 @@ export function ShowcaseWallGrid({ entries }: { entries: LivePackShowcaseWallCar
                   },
                 });
                 setLiftedId(tileId);
+                track(
+                  "packs_collections_card",
+                  collectionsCardProperties({
+                    player: card.username,
+                    tierLabel: card.tierLabel,
+                    collector: entry.collector.username,
+                  }),
+                );
               }}
               style={liftedId === tileId ? { visibility: "hidden" } : undefined}
               className="w-full cursor-pointer transition-transform duration-[120ms] hover:-translate-y-1"
