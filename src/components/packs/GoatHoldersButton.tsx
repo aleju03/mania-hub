@@ -114,10 +114,10 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
       transition={{ duration: 0.2 }}
     >
       {/* A bottom sheet on phones (thumb reach, full width) and a centered
-          card from sm up. translate="no": all names, counts and time-agos —
-          auto-translate's <font> rewrites crash React commits over them. */}
+          card from sm up. The sheet used to carry translate="no" as crash
+          armor; dom-translate-guard.ts absorbs that now, so the labels and
+          prose translate and only the name spans below opt out. */}
       <motion.div
-        translate="no"
         className="modal-card-mobile-safe relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border border-osu-b3/20 bg-osu-b4 shadow-[0_12px_60px_rgba(0,0,0,0.7)] sm:max-h-[85vh] sm:w-[520px] sm:rounded-2xl cursor-default"
         onClick={(event) => event.stopPropagation()}
         initial={{ opacity: 0, y: 16 }}
@@ -166,12 +166,13 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
                       params={{ ownerId: String(latest.ownerUserId), cardId: String(latest.cardUserId) }}
                       target="_blank"
                       rel="noopener noreferrer"
+                      translate="no"
                       className="font-bold text-white underline-offset-2 hover:underline"
                     >
                       {latest.ownerUsername}
                     </Link>
                     <span className="text-[13px] text-osu-f1">pulled</span>
-                    <span className="font-bold text-amber-200">
+                    <span translate="no" className="font-bold text-amber-200">
                       {honoraryLabel(latest.cardUserId) ?? latest.cardUsername ?? `#${latest.cardUserId}`}
                     </span>
                     <span className="text-[13px] text-osu-f1">{timeAgo(latest.pulledAt)}</span>
@@ -193,6 +194,7 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
                           params={{ username: collector.username }}
                           target="_blank"
                           rel="noopener noreferrer"
+                          translate="no"
                           className="min-w-0 flex-1 truncate text-[13px] font-bold text-white underline-offset-2 hover:underline"
                         >
                           {collector.username}
@@ -255,7 +257,7 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
                       {undiscovered.map((player, index) => (
                         <Fragment key={player.id}>
                           {index > 0 ? <span className="text-osu-f1"> &middot; </span> : null}
-                          <span>{player.cardName ?? player.username}</span>
+                          <span translate="no">{player.cardName ?? player.username}</span>
                         </Fragment>
                       ))}
                     </div>
@@ -308,7 +310,7 @@ function GoatHolderRow({
           aria-hidden="true"
         />
         <CountryFlag code={player.countryCode} size="sm" />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-white">{label}</span>
+        <span translate="no" className="min-w-0 flex-1 truncate text-[13px] font-bold text-white">{label}</span>
         {/* The timestamp is the first thing to go when the row gets tight; it
             reappears per holder once the row is open. */}
         <span className="hidden flex-shrink-0 text-[11px] text-osu-f1 sm:inline">{timeAgo(pulls.lastPulledAt)}</span>
@@ -331,6 +333,7 @@ function GoatHolderRow({
                 target="_blank"
                 rel="noopener noreferrer"
                 title={`Open ${owner.username}'s pull of ${label}`}
+                translate="no"
                 className="min-w-0 flex-1 truncate text-osu-l2/80 underline-offset-2 transition-colors hover:text-white hover:underline"
               >
                 {owner.username}

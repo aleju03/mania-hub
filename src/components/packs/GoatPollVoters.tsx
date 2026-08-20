@@ -45,6 +45,7 @@ function VoterRow({ voter, nominator }: { voter: GoatPollVoter; nominator: boole
         href={`https://osu.ppy.sh/users/${voter.userId}`}
         target="_blank"
         rel="noreferrer noopener"
+        translate="no"
         className="min-w-0 truncate text-[12px] font-semibold text-osu-c1/85 transition-colors hover:text-osu-pink"
       >
         {/* No name anywhere the backend can look means an account that has never
@@ -137,9 +138,10 @@ export function GoatPollVotersModal({
             role="dialog"
             aria-modal="true"
             aria-label={`Votes for ${nominee.username}`}
-            // translate="no": names, tallies and time-agos that update live
-            // while open; auto-translate's <font> rewrites crash React commits.
-            translate="no"
+            // This dialog used to carry translate="no" as crash armor against
+            // auto-translate's <font> rewrites; dom-translate-guard.ts absorbs
+            // that now, so the status prose translates and only the name spans
+            // opt out.
             initial={{ opacity: 0, y: 8, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.99 }}
@@ -160,7 +162,7 @@ export function GoatPollVotersModal({
                 </span>
               )}
               <span className="flex min-w-0 flex-col leading-tight">
-                <span className="truncate text-sm font-bold text-white">{nominee.username}</span>
+                <span translate="no" className="truncate text-sm font-bold text-white">{nominee.username}</span>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
                   {nominee.up} up · {nominee.down} down
                 </span>

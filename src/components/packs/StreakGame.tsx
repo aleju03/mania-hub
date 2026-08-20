@@ -1260,23 +1260,22 @@ export function StreakGame({
                 about is not on the table any more, and leaving it up reads as
                 a live question nobody is allowed to answer. */}
             <div className={`flex flex-col items-center ${error ? "hidden" : ""}`}>
-              {/* translate="no": this sentence interleaves bare text with the
-                  two name spans and is structurally replaced every round —
-                  browser auto-translate merges and reorders exactly this kind
-                  of run into <font> wrappers, and React's next commit over it
-                  throws NotFoundError. */}
-              <div translate="no" className="max-w-[580px] text-center text-[17px] leading-snug text-white sm:text-xl">
+              {/* The question prose is the game, so it stays translatable
+                  (dom-translate-guard.ts survives the <font> rewrites that used
+                  to make this subtree crash React); only the two name spans
+                  below opt out, since usernames are identity, not copy. */}
+              <div className="max-w-[580px] text-center text-[17px] leading-snug text-white sm:text-xl">
                 {round && copy ? (
                   <>
                     {copy.q.prefix}
                     {/* The tier colour is only known once the card behind the
                         name mints, so it eases in with the flip instead of
                         snapping white to gold under the reader. */}
-                    <span className="inline-block font-bold" style={{ ...NAME_TINT, ...round.right.nameStyle }}>
+                    <span translate="no" className="inline-block font-bold" style={{ ...NAME_TINT, ...round.right.nameStyle }}>
                       {round.right.player.username}
                     </span>
                     {copy.q.middle}
-                    <span className="inline-block font-bold" style={{ ...NAME_TINT, ...round.left.nameStyle }}>
+                    <span translate="no" className="inline-block font-bold" style={{ ...NAME_TINT, ...round.left.nameStyle }}>
                       {round.left.player.username}
                     </span>
                     {copy.q.suffix}
@@ -1288,9 +1287,10 @@ export function StreakGame({
               {blitz && clockDeadline !== null && !over && (
                 <RoundClock key={clockDeadline} deadlineAt={clockDeadline} frozen={revealed} />
               )}
-              {/* translate="no": both spans mount/unmount as runs start and
-                  end, over numbers auto-translate likes to rewrite. */}
-              <div translate="no" className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-osu-f1">
+              {/* This line is instructions ("next bonus at N in a row"), so it
+                  stays translatable; dom-translate-guard.ts survives the
+                  mount/unmount churn that used to crash commits over it. */}
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-osu-f1">
                 {!over && (
                   <span>
                     next bonus at {nextStreakMilestone(streak).at} in a row

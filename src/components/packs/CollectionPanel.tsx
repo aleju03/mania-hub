@@ -902,11 +902,11 @@ export function CollectionPanel({
               </span>
               {/* The one place a collector asks "who am I still missing?", so
                   the answer hangs off the number that raised the question.
-                  translate="no" for the same reason the count above carries
-                  it: this label rewrites as wallet pushes land. */}
+                  It's a real label ("N missing"), so it stays translatable;
+                  dom-translate-guard.ts survives the rewrites as wallet
+                  pushes land. */}
               {useServerCollection && (missingCount > 0 || missingOpen) && (
                 <button
-                  translate="no"
                   type="button"
                   onClick={() => {
                     setShowMissing((open) => !open);
@@ -1178,7 +1178,6 @@ export function CollectionPanel({
                  it. Jumping to the top first would land the reader on the
                  pack opener; the album view scrolls itself into frame. */
               resetScroll={false}
-              translate="no"
               className="mt-4 block text-center text-[11px] text-osu-f1 transition-colors hover:text-white"
             >
               plus {goatMissing.toLocaleString("en-US")} GOAT card{goatMissing === 1 ? "" : "s"} still missing
