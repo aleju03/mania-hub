@@ -448,6 +448,34 @@ function parseArgs(argv: string[]): CliOptions {
   };
 }
 
+// Same table as stableModBitmaskToMods in src/lib/replay-upload.ts (which this
+// script cannot import: its module graph uses extensionless paths that plain
+// node type-stripping rejects). Judgement-relevant bits only.
+const STABLE_MOD_BITS: Array<{ bit: number; acronym: string }> = [
+  { bit: 1 << 0, acronym: "NF" },
+  { bit: 1 << 1, acronym: "EZ" },
+  { bit: 1 << 3, acronym: "HD" },
+  { bit: 1 << 4, acronym: "HR" },
+  { bit: 1 << 5, acronym: "SD" },
+  { bit: 1 << 6, acronym: "DT" },
+  { bit: 1 << 8, acronym: "HT" },
+  { bit: 1 << 9, acronym: "NC" },
+  { bit: 1 << 10, acronym: "FL" },
+  { bit: 1 << 14, acronym: "PF" },
+  { bit: 1 << 20, acronym: "FI" },
+  { bit: 1 << 29, acronym: "SV2" },
+  { bit: 1 << 30, acronym: "MR" },
+];
+
+function modsFromStableBitmask(rawMods: number): string[] {
+  const mods = STABLE_MOD_BITS
+    .filter((mod) => (rawMods & mod.bit) !== 0)
+    .map((mod) => mod.acronym);
+  if (mods.includes("NC")) return mods.filter((mod) => mod !== "DT");
+  if (mods.includes("PF")) return mods.filter((mod) => mod !== "SD");
+  return mods;
+}
+
 function parseModList(raw: string): string[] {
   const value = raw.trim().toUpperCase();
   if (!value || value === "NM") return [];
@@ -924,7 +952,13 @@ async function simulateLocal(options: CliOptions) {
   const beatmap = parseManiaBeatmap(beatmapContent);
   const decoded = await new ScoreDecoder().decodeFromBuffer(replayBuffer);
   const frames = decodeFrames(decoded);
-  const mods = options.mods ?? parseModList(String(decoded.info?.mods ?? ""));
+  // osu-parsers leaves info.mods null unless a ruleset is attached; the legacy
+  // bitfield in rawMods is what a stable .osr actually carries.
+  const rawMods = Number(decoded.info?.rawMods ?? 0) || 0;
+  const mods = options.mods
+    ?? (rawMods !== 0
+      ? modsFromStableBitmask(rawMods)
+      : parseModList(String(decoded.info?.mods ?? "")));
   const ruleset = getManiaReplayRuleset(options.isLazer, mods, false);
   const notes = applyManiaReplayModsToNotes(beatmap.notes, beatmap.keyCount, mods);
   const windows = getManiaReplayHitWindows(beatmap.od, ruleset);

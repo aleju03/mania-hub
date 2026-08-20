@@ -1163,7 +1163,13 @@ export function simulateManiaReplayJudgements(
   const stablePreHeadReleaseMissRecoveryMaxHeadOffset = options.stablePreHeadReleaseMissRecoveryMaxHeadOffset;
   const stablePreHeadReleaseMissRecoveryMaxNextNoteGap = options.stablePreHeadReleaseMissRecoveryMaxNextNoteGap;
   const stablePreHeadReleaseMissRecoveryMaxTailOffset = options.stablePreHeadReleaseMissRecoveryMaxTailOffset ?? -200;
-  const stablePreHeadReleaseMissRecoveryMinNextNextNoteGap = options.stablePreHeadReleaseMissRecoveryMinNextNextNoteGap;
+  // Consumption only fires when the note after next leaves a real gap: inside
+  // a continuing dense chain the recovery press stays with the chain. The
+  // 2026-08-20 4K full-LN +DT capture needs no consumption anywhere in its
+  // 75ms noodle chains, while the consuming events the rule was validated on
+  // (7K NC, 4K Cyber Attack) all precede a next-next gap of ~110ms or more;
+  // thresholds in (75, 110] score identically across all seven captures.
+  const stablePreHeadReleaseMissRecoveryMinNextNextNoteGap = options.stablePreHeadReleaseMissRecoveryMinNextNextNoteGap ?? 100;
   const stablePreHeadReleaseMissesAtHead = options.stablePreHeadReleaseMissesAtHead ?? true;
   const stablePreserveLongNoteScoringPressAfterBreak = options.stablePreserveLongNoteScoringPressAfterBreak ?? false;
   const stablePreserveLongNoteScoringPressAfterTailBreak = options.stablePreserveLongNoteScoringPressAfterTailBreak ?? false;
