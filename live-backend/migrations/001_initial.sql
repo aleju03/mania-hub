@@ -696,11 +696,11 @@ create table if not exists pack_collection_cards (
   -- Written from /admin/collections only, never by a wallet sync.
   motif text,
   -- When /admin/collections handed this holding out, for the holdings it did.
-  -- Null on a pulled card, which is the whole point of the column: a granted
-  -- card is minted a serial like any other, so without this the only thing
-  -- left to say about it was that its holder was the Nth person to pull it,
-  -- which they were not. Set once, when the grant creates the row; editing a
-  -- card somebody pulled does not claim it was given to them.
+  -- Null on an ordinary pulled card; a positive value is when it was given.
+  -- Zero is an internal "known pulled" sentinel for a pulled card an admin
+  -- edit moved onto a variant key while the final legacy scan might still be
+  -- running. Readers expose both null and zero as pulled. This is set once:
+  -- editing a pull cannot claim it was given, or clear a real grant's stamp.
   granted_at integer,
   primary key(owner_user_id, card_key)
 );
@@ -805,6 +805,11 @@ create table if not exists pack_card_serials (
   owner_user_id integer not null,
   serial integer not null,
   minted_at integer not null,
+  -- A server draw owns the serial immediately, before the browser reports the
+  -- client-computed tier to the community pull log. The pending bit lets that
+  -- later report still determine first-global correctly. Imports, grants and
+  -- pre-column rows have no report coming and stay at the settled default.
+  pull_report_pending integer not null default 0,
   primary key(card_key, owner_user_id)
 );
 create index if not exists idx_pack_card_serials_card

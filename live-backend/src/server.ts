@@ -215,16 +215,15 @@ export async function createApp() {
     // stamps. Seeds the catalog and rebuilds the table slim once on a database
     // from before the split; a no-op on every boot after.
     await bootWrite("split_pack_card_catalog", () => ensurePackCardCatalog(db));
-    // Card serials arrived after people had been collecting for months, so the
-    // mint registry is seeded from the collections themselves (each row knows
-    // when its owner first pulled the card). It only fills gaps, but the gaps
-    // are found by scanning every holding, hence bootSweep.
-    await bootSweep(db, "backfill_pack_card_serials", "pack_card_serials_backfill:v1", () => backfillPackCardSerials(db));
+    // Card serials arrived after people had been collecting for months. Every
+    // holding writer now mints one transactionally; this one final legacy pass
+    // seeds rows created before that invariant, then never scans again.
+    await bootRepairOnce(db, "backfill_pack_card_serials", "pack_card_serials_backfill:v2", () => backfillPackCardSerials(db));
     // Cards handed out from /admin/collections used to share their player's
     // ordinary key, which made a one-off indistinguishable from a pulled card
-    // by anything but its columns. Moves each onto its own ":v<n>" key. Also a
-    // full scan for what is usually nothing, so also on the daily interval.
-    await bootSweep(db, "variant_pack_card_keys", "pack_card_variant_keys:v1", () => ensurePackCardVariantKeys(db));
+    // by anything but its columns. Admin edits now move customized derived
+    // cards transactionally; this final legacy pass moves the old rows once.
+    await bootRepairOnce(db, "variant_pack_card_keys", "pack_card_variant_keys:v2", () => ensurePackCardVariantKeys(db));
     // Pack duels were dropped as a mode, so the prototype's table and its share
     // of the arcade ledger go with it. A no-op on every boot after the first,
     // and on any database created since the schema stopped declaring it.
@@ -652,39 +651,27 @@ async function bootWrite(step: string, run: () => Promise<unknown>): Promise<voi
   }
 }
 
-// A boot repair that still has to run - a later write can still leave it work -
-// but whose only way to find that work is a full scan of a millions-of-rows
-// table. Both of the ones below sweep pack_collection_cards, and neither
-// predicate can use an index, so a busy afternoon of deploys paid for the same
-// several-second scan five times over and found nothing five times.
-//
-// An interval rather than a one-shot marker, because neither of these is
-// one-shot: a later write can still leave either one work to do. What the
-// interval costs is delay - a repair used to land on the next boot, which is
-// sooner than a day during a burst of deploys and much later than one when
-// there is no deploy for a week. Both are bookkeeping (a serial not handed out
-// yet, a granted holding still sharing its player's key), so a day is fine.
-// The stamp lands only after the sweep returns, so a boot that loses one to
-// SQLITE_BUSY retries on the next boot rather than waiting out the interval.
-const BOOT_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1_000;
-
-async function bootSweep(
+// A final full-table repair for rows written before a new invariant existed.
+// The live write paths now maintain both invariants transactionally, so these
+// are true one-shot migrations rather than maintenance coupled to restarts.
+// The marker lands only after success: SQLITE_BUSY is nonfatal through
+// bootWrite, leaves it absent, and the next boot retries.
+async function bootRepairOnce(
   db: Awaited<ReturnType<typeof createDb>>,
   step: string,
   metaKey: string,
   run: () => Promise<number>,
 ): Promise<void> {
   await bootWrite(step, async () => {
-    const lastRow = (await exec(db, "select updated_at from live_meta where key = ? limit 1", [metaKey])).rows[0];
-    const lastAt = lastRow ? Date.parse(String(lastRow.updated_at)) : Number.NaN;
-    if (Number.isFinite(lastAt) && Date.now() - lastAt < BOOT_SWEEP_INTERVAL_MS) return;
+    const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [metaKey])).rows[0];
+    if (done) return;
     const repaired = await run();
     await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [
       metaKey,
       JSON.stringify({ repaired }),
       new Date().toISOString(),
     ]);
-    if (repaired > 0) logInfo("boot_sweep_repaired", { step, repaired });
+    if (repaired > 0) logInfo("boot_legacy_repair_done", { step, repaired });
   });
 }
 

@@ -1057,7 +1057,7 @@ function GrantPanel({
             block
             value={form.serialMode}
             options={[
-              { value: "keep", label: "Leave alone" },
+              { value: "keep", label: "Keep / auto-mint" },
               { value: "mint", label: "Mint the next one" },
               { value: "set", label: "Exact number" },
             ]}

@@ -1665,6 +1665,13 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
   if (!columns.includes("granted_at")) {
     await db.execute("alter table pack_collection_cards add column granted_at integer");
   }
+  const serialColumns = (await db.execute("pragma table_info(pack_card_serials)")).rows.map((row) => String(row.name));
+  if (!serialColumns.includes("pull_report_pending")) {
+    // A constant default makes this a metadata-only ALTER on existing SQLite
+    // databases. Every serial already present predates write-time minting and
+    // is therefore settled; only new server draws explicitly write 1.
+    await db.execute("alter table pack_card_serials add column pull_report_pending integer not null default 0");
+  }
   // Dropped rather than declared: (owner_user_id, minted_at desc) was built for
   // a "this collector's mints, newest first" read nobody ever wrote. minted_at
   // is inserted and never read back, and every query against pack_card_serials

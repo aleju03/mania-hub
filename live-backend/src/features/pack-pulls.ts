@@ -3,6 +3,7 @@ import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch } from "../db.js";
 import { HONORARY_USER_IDS, normalizePackCardKey, packCardKey, packCardKeyUserId, tierRank, tierRankSql } from "./pack-wallets.js";
 import { parseCardMotif, type CardMotif } from "./card-motif.js";
+import { mintPackCardSerialStatement, settlePackCardPullReportStatement } from "./pack-serials.js";
 
 // Append-only log of pack pulls, the community layer on top of the per-owner
 // pack_collection_cards projection. What was pulled is self-reported by the
@@ -166,27 +167,6 @@ function liveUserFieldSql(idColumn: string, field: "username" | "avatar_url"): s
   return `(select u.${field} from users u where u.user_id = pack_pull_events.${idColumn})`;
 }
 
-/* Hands this owner their serial for a card, or leaves the one they already
-   hold, as a statement so a pull can batch it with its event insert. The
-   number is computed inside the insert rather than read first and written
-   after, so two pulls landing together cannot claim the same serial, and the
-   (card, owner) primary key makes a repeat pull a no-op: a duplicate never
-   renumbers you, and neither does recycling and repulling. The registry keeps
-   a row for every serial ever handed out, recycled ones included, which is
-   what makes max(serial) the honest denominator for "#7 of 132". */
-function packCardSerialInsertStatement(
-  cardKey: string,
-  cardUserId: number,
-  ownerUserId: number,
-  now: number,
-): DbStatement {
-  return {
-    sql: `insert or ignore into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at)
-     select ?, ?, ?, coalesce((select max(serial) from pack_card_serials where card_key = ?), 0) + 1, ?`,
-    args: [cardKey, cardUserId, ownerUserId, cardKey, now],
-  };
-}
-
 /* Seeds the mint registry from the collections that already exist.
 
    Serials were added long after people started collecting, and an empty
@@ -202,13 +182,9 @@ function packCardSerialInsertStatement(
    the first run against a registry that is still empty that is simply 1..N in
    historical order. Returns how many serials it wrote.
 
-   Still load-bearing rather than a one-off: a serial is minted when the client
-   reports its pull, and the copy itself arrives earlier and by another route
-   (mintDealtPackCards, the wallet sync, the one-time import). A browser closed
-   between the two, or a card for a player recordPackPullEvents drops, leaves a
-   holding with no serial, and this is what hands it one. Its only way to find
-   those is a full scan of pack_collection_cards, so server.ts runs it on a
-   daily interval rather than on every boot. */
+   This is legacy repair only now. Every path that can create a holding mints
+   its serial in the same write batch, so server.ts runs this once for rows
+   that predate that invariant and never scans the collection again. */
 export async function backfillPackCardSerials(db: Db, now = Date.now()): Promise<number> {
   const written = await exec(
     db,
@@ -299,16 +275,18 @@ export async function recordPackPullEvents(
     return { recorded: 0, mints: [], eventIds: [] };
   }
 
-  // First-global means nobody, anywhere, holds or ever pulled this card: no
-  // serial ever minted and no other owner's collection row (the caller's own
-  // row may already exist when the wallet sync raced this call). "This card"
+  // First-global means nobody, anywhere, held or ever pulled this card before
+  // this hand. A server draw now mints this owner's serial with the holding,
+  // before the client reports its tier here, so that one pending serial is not
+  // prior history. Every settled serial is, as is another owner's collection
+  // row. "This card"
   // is the card key, not the player — a GOAT card is its own card — so when a
   // circulating player joins the honorary roster, the first GOAT pull of them
   // reads as a first even though their ordinary card has owners everywhere.
-  // The serial registry is the durable record of every logged pull (and is
-  // seeded from collections at boot), so it answers this where the pull log
-  // cannot: pull events are pruned on a short retention now, and an event
-  // aging out must not resurrect "first". Both facts are read set-based here
+  // The serial registry is the durable record of every signed-in holding (and
+  // was seeded from legacy collections once), so it answers this where the
+  // pull log cannot: pull events are pruned on a short retention now, and an
+  // event aging out must not resurrect "first". Both facts are read set-based here
   // so every write below can travel in one batch; `seenInPull` stands in for
   // the read-after-write the old per-card loop got for free, so the same card
   // twice in one pack is still only first-global once. Two owners racing over
@@ -321,8 +299,9 @@ export async function recordPackPullEvents(
     (await exec(
       db,
       `select distinct card_key from pack_card_serials
-       where card_key in (${[...pulledKeys].map(() => "?").join(", ")})`,
-      [...pulledKeys] as InValue[],
+       where card_key in (${[...pulledKeys].map(() => "?").join(", ")})
+         and not (owner_user_id = ? and pull_report_pending != 0)`,
+      [...pulledKeys, ownerUserId] as InValue[],
     )).rows.map((row) => String(row.card_key)),
   );
   const anyUnproven = [...pulledKeys].some((key) => !withPriorSerials.has(key));
@@ -370,10 +349,12 @@ export async function recordPackPullEvents(
         now,
       ],
     });
-    // Serials are only handed out here, so they exist for signed-in collectors
-    // (the only ones whose pulls are logged). An anonymous wallet's cards are
-    // unserialled until that browser logs in and pulls them again.
-    statements.push(packCardSerialInsertStatement(cardKey, card.userId, ownerUserId, now));
+    // Modern server draws already minted this serial with the holding. The
+    // insert remains for old clients/direct calls and is idempotent; settling
+    // the pending bit in this same batch makes event retention unable to
+    // resurrect a later duplicate as first-global.
+    statements.push(mintPackCardSerialStatement(cardKey, card.userId, ownerUserId, now));
+    statements.push(settlePackCardPullReportStatement(cardKey, ownerUserId));
   }
   // Remember the name these pulls were recorded under on the wallet row, which
   // is durable; the pull rows themselves are pruned, and the collector-name

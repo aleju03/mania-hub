@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { seedCollectionCard } from "./helpers/pack-cards.js";
 import {
+  mintDealtPackCards,
+  type DealtPackCardSlot,
+} from "../src/features/pack-wallets.js";
+import {
   backfillPackCardSerials,
   getPackCardSerials,
   getSharedPackCard,
@@ -47,6 +51,64 @@ async function pull(ownerUserId: number, tier: string | null, now = Date.now()) 
 }
 
 describe("pack card serials", () => {
+  it("migrates existing serials as settled without rewriting their numbers", async () => {
+    await exec(db, "drop table pack_card_serials");
+    await exec(db, `create table pack_card_serials (
+      card_key text not null,
+      card_user_id integer not null,
+      owner_user_id integer not null,
+      serial integer not null,
+      minted_at integer not null,
+      primary key(card_key, owner_user_id)
+    )`);
+    await exec(
+      db,
+      "insert into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at) values (?, ?, ?, 7, 1000)",
+      [String(CARD), CARD, OWNER],
+    );
+
+    await migrate(db);
+    const row = (await exec(
+      db,
+      "select serial, pull_report_pending from pack_card_serials where card_key = ? and owner_user_id = ?",
+      [String(CARD), OWNER],
+    )).rows[0];
+    expect([Number(row?.serial), Number(row?.pull_report_pending)]).toEqual([7, 0]);
+  });
+
+  it("mints with the dealt holding and preserves first-global until the pull report settles", async () => {
+    const slot: DealtPackCardSlot = {
+      userId: CARD,
+      tier: null,
+      username: `player${CARD}`,
+      avatarUrl: "",
+      countryCode: "CR",
+      pp: 10_000,
+      globalRank: 50,
+    };
+    await mintDealtPackCards(db, OWNER, [slot], 1_000);
+
+    const before = (await exec(
+      db,
+      "select serial, pull_report_pending from pack_card_serials where card_key = ? and owner_user_id = ?",
+      [String(CARD), OWNER],
+    )).rows[0];
+    expect([Number(before?.serial), Number(before?.pull_report_pending)]).toEqual([1, 1]);
+
+    const reported = await pull(OWNER, "rare", 2_000);
+    expect(reported.mints[0]).toMatchObject({ serial: 1, isFirstGlobal: true });
+    expect(Number((await exec(
+      db,
+      "select pull_report_pending from pack_card_serials where card_key = ? and owner_user_id = ?",
+      [String(CARD), OWNER],
+    )).rows[0]?.pull_report_pending)).toBe(0);
+
+    // The durable settled bit, not retention of the event, prevents a later
+    // duplicate from announcing the same card as first again.
+    await exec(db, "delete from pack_pull_events");
+    expect((await pull(OWNER, "rare", 3_000)).mints[0].isFirstGlobal).toBe(false);
+  });
+
   it("hands out mint order in the order cards are first pulled", async () => {
     const first = await pull(OWNER, "rare");
     const second = await pull(OTHER_OWNER, "rare");

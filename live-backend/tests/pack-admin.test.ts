@@ -109,6 +109,9 @@ describe("granting a card", () => {
       lastPulledAt: 1_700_000_500_000,
     });
     expect(outcome.result.card?.skills).toEqual(skills);
+    // A positive holding is born with its serial even when the form leaves the
+    // serial control at its default "keep" setting.
+    expect(outcome.result.card?.serial).toBe(1);
   });
 
   it("adds copies by default and replaces them in set mode", async () => {
@@ -279,6 +282,39 @@ describe("granted cards as their own collectible", () => {
     expect((await getPackCollectionCard(db, OWNER_ID, first.result.cardKey))?.customLabel).toBe("Manolo");
     // No stray left behind at the number the second grant would have minted.
     expect(await getPackCollectionCard(db, OWNER_ID, `${CARD_USER_ID}:v2`)).toBeNull();
+  });
+
+  it("moves a customized pulled card and all of its references immediately", async () => {
+    await seedCollectionCard(db, OWNER_ID, CARD_USER_ID, { tier: "rare", copies: 2 });
+    await exec(
+      db,
+      `insert into pack_card_serials (
+         card_key, card_user_id, owner_user_id, serial, minted_at, pull_report_pending
+       ) values (?, ?, ?, 4, 1000, 0)`,
+      [String(CARD_USER_ID), CARD_USER_ID, OWNER_ID],
+    );
+    await exec(
+      db,
+      "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, 0, ?, 1000)",
+      [OWNER_ID, String(CARD_USER_ID)],
+    );
+
+    const outcome = await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      cardKey: String(CARD_USER_ID),
+      tier: "rare",
+      tierLabel: "Handmade",
+    });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.result).toMatchObject({ cardKey: `${CARD_USER_ID}:v1`, created: false });
+    expect(outcome.result.card).toMatchObject({ copies: 2, customLabel: "Handmade", serial: 4, grantedAt: null });
+    expect(await getPackCollectionCard(db, OWNER_ID, String(CARD_USER_ID))).toBeNull();
+    expect(String((await exec(
+      db,
+      "select card_key from pack_showcase_cards where owner_user_id = ? and position = 0",
+      [OWNER_ID],
+    )).rows[0]?.card_key)).toBe(`${CARD_USER_ID}:v1`);
   });
 
   it("refuses a key belonging to another player", async () => {

@@ -3,6 +3,7 @@ import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch, parseJson } from "../db.js";
 import { parseCardMotif, type CardMotif } from "./card-motif.js";
 import { logInfo } from "../logger.js";
+import { mintPackCardSerialStatement } from "./pack-serials.js";
 
 // Synced maniacard pack wallets now keep economy metadata in pack_wallets and
 // collection cards in pack_collection_cards. The legacy blob shape is still
@@ -50,9 +51,9 @@ export interface StoredPackCard {
      pull it, which they were not. */
   grantedAt?: number | null;
   /* Mint order for this owner (#1 pulled the card first, anywhere), and how
-     many serials the card has ever handed out. Null on cards whose pulls were
-     never logged: anonymous wallets, and everything from before the registry.
-     See pack_card_serials in pack-pulls.ts. */
+     many serials the card has ever handed out. Modern signed-in holdings mint
+     this transactionally with the card; null is only a legacy/directly seeded
+     row that predates the invariant. See pack_card_serials in pack-pulls.ts. */
   serial?: number | null;
   mintedTotal?: number;
 }
@@ -490,6 +491,45 @@ export function normalizePackCardKey(value: unknown): string | null {
   return variant > 0 ? packCardVariantKey(userId, variant) : null;
 }
 
+/* References owned by one holding follow it when its key changes. The serial
+   insert-before-delete form also handles a destination the owner already
+   holds: that card's existing serial wins, while the obsolete source serial
+   is removed. A showcase likewise keeps at most one pin for the destination. */
+export function movePackCardKeyReferencesStatements(
+  ownerUserId: number,
+  oldKey: string,
+  newKey: string,
+): DbStatement[] {
+  if (oldKey === newKey) return [];
+  return [
+    {
+      sql: `insert or ignore into pack_card_serials (
+              card_key, card_user_id, owner_user_id, serial, minted_at, pull_report_pending
+            )
+            select ?, card_user_id, owner_user_id, serial, minted_at, pull_report_pending
+            from pack_card_serials where card_key = ? and owner_user_id = ?`,
+      args: [newKey, oldKey, ownerUserId],
+    },
+    {
+      sql: "delete from pack_card_serials where card_key = ? and owner_user_id = ?",
+      args: [oldKey, ownerUserId],
+    },
+    {
+      sql: `delete from pack_showcase_cards
+            where owner_user_id = ? and card_key = ?
+              and exists (
+                select 1 from pack_showcase_cards target
+                where target.owner_user_id = ? and target.card_key = ?
+              )`,
+      args: [ownerUserId, oldKey, ownerUserId, newKey],
+    },
+    {
+      sql: "update pack_showcase_cards set card_key = ? where owner_user_id = ? and card_key = ?",
+      args: [newKey, ownerUserId, oldKey],
+    },
+  ];
+}
+
 function claimedTier(raw: { tier?: unknown }, userId: number): string | null {
   // A rejected claim falls back to unrated (1 shard) rather than erroring, so a
   // stale or hand-edited local wallet still syncs. Anything outside the real
@@ -841,10 +881,7 @@ async function importCardsFromPayload(
     db,
     cards.filter((card) => card.skills != null).map((card) => JSON.stringify(card.skills)),
   );
-  await execBatch(db, [
-    ...(await packCardIdentityStatements(db, cards, now)),
-    ...cards.map((card) => packOwnershipUpsertStatement(userId, card, now, mode, skillsIds)),
-  ]);
+  await writeImportedPackCards(db, userId, cards, now, mode, skillsIds);
 }
 
 /* The granted cards this collector holds, by key. Only the ":v<n>" ones: the
@@ -920,9 +957,9 @@ function storedCardKey(card: StoredPackCard): string {
 
 const IN_CHUNK = 500;
 
-function chunked<T>(values: T[]): T[][] {
+function chunked<T>(values: T[], size = IN_CHUNK): T[][] {
   const chunks: T[][] = [];
-  for (let i = 0; i < values.length; i += IN_CHUNK) chunks.push(values.slice(i, i + IN_CHUNK));
+  for (let i = 0; i < values.length; i += size) chunks.push(values.slice(i, i + size));
   return chunks;
 }
 
@@ -1056,6 +1093,38 @@ function packOwnershipUpsertStatement(
       now,
     ],
   };
+}
+
+/* Imports can carry thousands of cards, while db.ts deliberately caps one
+   libsql batch at 500 statements. Keep each ownership insert beside its serial
+   insert inside a bounded transaction so even a crash between chunks cannot
+   create the gap the old boot sweep repaired. Identity may add one statement
+   per card, hence 150 rather than the generic 500-row read chunk. */
+async function writeImportedPackCards(
+  db: Db,
+  ownerUserId: number,
+  cards: StoredPackCard[],
+  now: number,
+  mode: PackWalletCardImportMode,
+  skillsIds: Map<string, number>,
+): Promise<void> {
+  for (const batch of chunked(cards, 150)) {
+    const ownershipAndSerials = batch.flatMap((card) => [
+      packOwnershipUpsertStatement(ownerUserId, card, now, mode, skillsIds),
+      ...(card.copies > 0
+        ? [mintPackCardSerialStatement(
+            storedCardKey(card),
+            card.userId,
+            ownerUserId,
+            card.firstPulledAt > 0 ? card.firstPulledAt : now,
+          )]
+        : []),
+    ]);
+    await execBatch(db, [
+      ...(await packCardIdentityStatements(db, batch, now)),
+      ...ownershipAndSerials,
+    ]);
+  }
 }
 
 function nonEmptyString(value: unknown): string | null {
@@ -1586,6 +1655,7 @@ export async function applyPackCollectionCardMint(
       sql: "delete from pack_collection_cards where owner_user_id = ? and card_key = ?",
       args: [ownerUserId, cardKey],
     },
+    ...movePackCardKeyReferencesStatements(ownerUserId, cardKey, nextKey),
     ...faceNumberStatement(nextKey),
   );
   await execBatch(db, statements);
@@ -1775,6 +1845,16 @@ export async function mintDealtPackCards(
     ...honorary.map(honoraryIdentityStatement),
     ...ranked.map((card) => packOwnershipUpsertStatement(ownerUserId, card, now, "delta", new Map())),
     ...honorary.map(goatOwnershipStatement),
+    // The serial is part of accepting the hand, not of the browser's later
+    // community report. The pending bit preserves first-global until that
+    // report lands and is settled in pack-pulls.ts.
+    ...cards.map((card) => mintPackCardSerialStatement(
+      packCardKey(card.userId, card.tier),
+      card.userId,
+      ownerUserId,
+      now,
+      { pullReportPending: true },
+    )),
   ]);
   return isNewByCardKey;
 }
@@ -1876,12 +1956,10 @@ export async function mergeImportedPackWallet(
       db,
       cards.filter((card) => card.skills != null).map((card) => JSON.stringify(card.skills)),
     );
-    await execBatch(db, [
-      ...(await packCardIdentityStatements(db, cards, now)),
-      // Snapshot mode, so a retried merge (crash between this batch and the
-      // wallet write below) converges instead of double-counting copies.
-      ...cards.map((card) => packOwnershipUpsertStatement(userId, card, now, "snapshot", skillsIds)),
-    ]);
+    // Snapshot mode, so a retried merge (crash between a card chunk and the
+    // wallet write below) converges instead of double-counting copies. Each
+    // ownership row and serial are atomic within their bounded chunk.
+    await writeImportedPackCards(db, userId, cards, now, "snapshot", skillsIds);
   }
 
   const grantedShards = Math.min(Math.max(0, Math.floor(toFiniteNumber(claimed.shards, 0))), WALLET_IMPORT_MAX_SHARDS);
@@ -1933,12 +2011,10 @@ export async function mergeImportedPackWallet(
  * Grouped by what was granted, not by holder: two collectors handed the same
  * card land on one variant, which is the same rule the desk mints under.
  *
- * Not a one-off, for one narrow reason: /admin/collections resolves a variant
- * key itself when it mints a card, but an edit that names a holding writes to
- * the key it named, so labelling a card somebody pulled still lands a
- * customized holding on a plain key for this to move. That is rare and neither
- * predicate below can use an index, so server.ts runs this on a daily interval
- * rather than scanning millions of holdings on every boot. */
+ * Legacy-only now: /admin/collections moves a named derived holding and all of
+ * its references in the same transaction when an edit customizes it. Neither
+ * predicate below can use an index, so server.ts runs this once for rows that
+ * predate that invariant and records a permanent completion marker. */
 export async function ensurePackCardVariantKeys(db: Db): Promise<number> {
   const grantOnly = [...GRANT_ONLY_TIERS].map((tier) => `'${tier}'`).join(", ") || "''";
   /* Two repairs in one scan, since neither predicate has an index and the

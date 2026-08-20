@@ -140,6 +140,7 @@ describe("mintDealtPackCards", () => {
       pp: 9000,
       globalRank: 123,
     });
+    expect(page.cards.map((card) => card.serial)).toEqual([1, 1]);
   });
 
   it("counts a repulled card as a duplicate and refreshes its numbers", async () => {
@@ -250,6 +251,7 @@ describe("mergeImportedPackWallet", () => {
     const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
     expect(page.total).toBe(2);
     expect(page.cards.map((card) => card.userId).sort()).toEqual([42, HONORARY].sort());
+    expect(page.cards.every((card) => card.serial !== null)).toBe(true);
 
     const economy = await economyOf(USER_ID);
     expect(economy.shards).toBe(120);

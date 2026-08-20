@@ -8,7 +8,9 @@ import {
   internPackCardSkills,
   isCustomizedPackCard,
   isKnownTier,
+  isPackCardVariantKey,
   listPackCollectionCards,
+  movePackCardKeyReferencesStatements,
   normalizeAvatarUrl,
   normalizeCountryCode,
   normalizePackCardKey,
@@ -29,6 +31,7 @@ import {
   PACK_CARD_TIER_LABEL_MAX_CHARS,
   PACK_CARD_USERNAME_MAX_CHARS,
 } from "./pack-wallets.js";
+import { mintPackCardSerialStatement } from "./pack-serials.js";
 
 /* The owner's grant desk behind /admin/collections: hand anyone shards, or
    mint them a card with every field on it chosen by hand.
@@ -186,8 +189,9 @@ export interface AdminPackCardGrant {
   clearSkills?: boolean;
   firstPulledAt?: number;
   lastPulledAt?: number;
-  /* "keep" leaves the mint registry alone, "mint" hands out the next serial
-     for this card if the owner has none yet, "set" writes an exact one. */
+  /* "keep" preserves an existing number (and auto-mints one for a positive
+     holding missing it), "mint" explicitly asks for the next serial, and
+     "set" writes an exact one. */
   serialMode?: "keep" | "mint" | "set";
   serial?: number;
   /* The card's face. Only consulted for a variant the catalog has never seen,
@@ -229,7 +233,8 @@ function nonEmptyString(value: unknown): string | null {
 async function readGrantHolding(db: Db, ownerUserId: number, cardKey: string) {
   return (await exec(
     db,
-    `select tier, tier_label, motif, skills_id, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at
+    `select tier, tier_label, motif, skills_id, pp, global_rank, copies, recycled_copies,
+       first_pulled_at, last_pulled_at, granted_at
      from pack_collection_cards where owner_user_id = ? and card_key = ?`,
     [ownerUserId, cardKey],
   )).rows[0];
@@ -268,8 +273,8 @@ export async function grantAdminPackCard(
     if (skillsJson.length > PACK_CARD_SKILLS_MAX_CHARS) return { ok: false, error: "bad_skills" };
   }
 
-  let cardKey = requestedKey ?? packCardKey(cardUserId, tier);
-  let existing = await readGrantHolding(db, owner.userId, cardKey);
+  const initialKey = requestedKey ?? packCardKey(cardUserId, tier);
+  const initialHolding = await readGrantHolding(db, owner.userId, initialKey);
   const tierLabel =
     grant.tierLabel === undefined
       ? undefined
@@ -292,9 +297,9 @@ export async function grantAdminPackCard(
      edit that touches the card. */
   const motif =
     grant.motif === undefined
-      ? serializeCardMotif(parseCardMotif(existing?.motif))
+      ? serializeCardMotif(parseCardMotif(initialHolding?.motif))
       : serializeCardMotif(parseCardMotif(grant.motif));
-  const heldLabel = nonEmptyString(existing?.tier_label);
+  const heldLabel = nonEmptyString(initialHolding?.tier_label);
   const ownerTierLabel =
     tierLabel === undefined
       ? heldLabel
@@ -309,19 +314,21 @@ export async function grantAdminPackCard(
      number. Granting the same card to a second collector therefore puts them
      both in the one collectible, and changing any of the three makes another.
 
-     Only when the desk did not name a holding: an edit says which card it
-     means, and must be able to change a badge without leaving the old card
-     behind. */
-  if (requestedKey === null) {
-    const customization = { tier, tierLabel: ownerTierLabel, motif };
-    if (isCustomizedPackCard(customization)) {
-      const variantKey = await resolvePackCardVariantKey(db, cardUserId, customization);
-      if (variantKey !== cardKey) {
-        cardKey = variantKey;
-        existing = await readGrantHolding(db, owner.userId, cardKey);
-      }
-    }
+     An edit of an existing variant keeps that variant's identity: fixing its
+     badge must not mint a sibling. An edit of a derived ordinary/GOAT holding
+     is different: once it gains a custom badge, motif or grant-only tier it
+     no longer is that shared card, so the holding and its references move to
+     the resolved variant in this same transaction. */
+  const customization = { tier, tierLabel: ownerTierLabel, motif };
+  let cardKey = initialKey;
+  if (isCustomizedPackCard(customization) && (requestedKey === null || !isPackCardVariantKey(initialKey))) {
+    cardKey = await resolvePackCardVariantKey(db, cardUserId, customization);
   }
+  const targetHolding = cardKey === initialKey
+    ? initialHolding
+    : await readGrantHolding(db, owner.userId, cardKey);
+  const moveFromKey = requestedKey !== null && Boolean(initialHolding) && cardKey !== initialKey ? initialKey : null;
+  const existing = moveFromKey ? initialHolding : targetHolding;
   const created = !existing;
 
   const heldCopies = Number(existing?.copies) || 0;
@@ -347,6 +354,42 @@ export async function grantAdminPackCard(
   if (skillsJson !== null) skillsId = (await internPackCardSkills(db, [skillsJson])).get(skillsJson) ?? null;
   else if (grant.clearSkills) skillsId = null;
 
+  /* A move can converge onto a variant this collector already holds. Merge
+     the two holdings rather than dropping either one's copies. The explicit
+     form values describe the edited source; an empty source face falls back
+     to the destination's already-frozen one in the conflict clause below. */
+  const movingHolding = moveFromKey !== null;
+  const ownershipConflictSql = movingHolding
+    ? `card_user_id = excluded.card_user_id,
+       tier = excluded.tier,
+       tier_label = excluded.tier_label,
+       motif = excluded.motif,
+       skills_id = coalesce(excluded.skills_id, pack_collection_cards.skills_id),
+       pp = case when excluded.pp > 0 then excluded.pp else pack_collection_cards.pp end,
+       global_rank = case when excluded.global_rank > 0 then excluded.global_rank else pack_collection_cards.global_rank end,
+       copies = min(${PACK_CARD_MAX_COPIES}, pack_collection_cards.copies + excluded.copies),
+       recycled_copies = min(${PACK_CARD_MAX_COPIES}, pack_collection_cards.recycled_copies + excluded.recycled_copies),
+       first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
+       last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
+       updated_at = excluded.updated_at,
+       granted_at = coalesce(pack_collection_cards.granted_at, excluded.granted_at)`
+    : `card_user_id = excluded.card_user_id,
+       tier = excluded.tier,
+       tier_label = excluded.tier_label,
+       motif = excluded.motif,
+       skills_id = excluded.skills_id,
+       pp = excluded.pp,
+       global_rank = excluded.global_rank,
+       copies = excluded.copies,
+       recycled_copies = excluded.recycled_copies,
+       first_pulled_at = excluded.first_pulled_at,
+       last_pulled_at = excluded.last_pulled_at,
+       updated_at = excluded.updated_at,
+       /* Only ever set, never cleared: editing a card the desk granted leaves
+          it granted, and editing one somebody pulled leaves the column null
+          rather than claiming it was handed to them. */
+       granted_at = coalesce(pack_collection_cards.granted_at, excluded.granted_at)`;
+
   const statements: DbStatement[] = [
     ...(await cardIdentityStatements(db, {
       cardKey,
@@ -369,22 +412,7 @@ export async function grantAdminPackCard(
          copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, granted_at
        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(owner_user_id, card_key) do update set
-         card_user_id = excluded.card_user_id,
-         tier = excluded.tier,
-         tier_label = excluded.tier_label,
-         motif = excluded.motif,
-         skills_id = excluded.skills_id,
-         pp = excluded.pp,
-         global_rank = excluded.global_rank,
-         copies = excluded.copies,
-         recycled_copies = excluded.recycled_copies,
-         first_pulled_at = excluded.first_pulled_at,
-         last_pulled_at = excluded.last_pulled_at,
-         updated_at = excluded.updated_at,
-         /* Only ever set, never cleared: editing a card the desk granted leaves
-            it granted, and editing one somebody pulled leaves the column null
-            rather than claiming it was handed to them. */
-         granted_at = coalesce(pack_collection_cards.granted_at, excluded.granted_at)`,
+         ${ownershipConflictSql}`,
       args: [
         owner.userId,
         cardUserId,
@@ -401,15 +429,24 @@ export async function grantAdminPackCard(
         lastPulledAt,
         now,
         /* Only a grant that creates the holding claims it was given. Editing a
-           card somebody pulled passes null here, and the conflict clause
-           coalesces, so neither direction can rewrite what already happened:
+           card somebody pulled passes the internal known-pulled sentinel; the
+           conflict clause means neither direction can rewrite what happened:
            an edit cannot turn a pull into a gift, and it cannot turn a gift
            back into a pull. Dated like the pull stamp it stands in for, so an
            admin backdating a grant backdates both. */
-        created ? firstPulledAt : null,
+        movingHolding
+          // Readers expose 0 as null, but the concurrent final legacy scan
+          // only stamps SQL null and therefore cannot misclassify this move.
+          ? (Number(existing?.granted_at) > 0 ? Number(existing?.granted_at) : 0)
+          : created ? firstPulledAt : null,
       ],
     },
-    ...serialStatements(cardKey, cardUserId, owner.userId, grant, now),
+    ...(moveFromKey ? movePackCardKeyReferencesStatements(owner.userId, moveFromKey, cardKey) : []),
+    ...(moveFromKey ? [{
+      sql: "delete from pack_collection_cards where owner_user_id = ? and card_key = ?",
+      args: [owner.userId, moveFromKey],
+    } satisfies DbStatement] : []),
+    ...serialStatements(cardKey, cardUserId, owner.userId, grant, now, copies > 0),
   ];
   await execBatch(db, statements);
   await getOrCreatePackWallet(db, owner.userId, now);
@@ -512,24 +549,26 @@ function serialStatements(
   ownerUserId: number,
   grant: AdminPackCardGrant,
   now: number,
+  ensureSerial: boolean,
 ): DbStatement[] {
-  if (grant.serialMode === "mint") {
-    // Same insert-and-compute the pull log uses, so a granted serial cannot
-    // collide with one a real pull is claiming at the same moment.
-    return [{
-      sql: `insert or ignore into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at)
-            select ?, ?, ?, coalesce((select max(serial) from pack_card_serials where card_key = ?), 0) + 1, ?`,
-      args: [cardKey, cardUserId, ownerUserId, cardKey, now],
-    }];
-  }
   if (grant.serialMode === "set") {
     const serial = clampInt(grant.serial, 1, PACK_CARD_MAX_SERIAL, 1);
     return [{
-      sql: `insert into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at)
-            values (?, ?, ?, ?, ?)
-            on conflict(card_key, owner_user_id) do update set serial = excluded.serial, minted_at = excluded.minted_at`,
+      sql: `insert into pack_card_serials (
+              card_key, card_user_id, owner_user_id, serial, minted_at, pull_report_pending
+            ) values (?, ?, ?, ?, ?, 0)
+            on conflict(card_key, owner_user_id) do update set
+              serial = excluded.serial,
+              minted_at = excluded.minted_at,
+              pull_report_pending = 0`,
       args: [cardKey, cardUserId, ownerUserId, serial, now],
     }];
+  }
+  // "Leave alone" means preserve an existing number. A positive holding may
+  // not remain unserialled, so a create (or a legacy row the desk touches)
+  // still gets the next one; insert-or-ignore keeps an existing one verbatim.
+  if (grant.serialMode === "mint" || ensureSerial) {
+    return [mintPackCardSerialStatement(cardKey, cardUserId, ownerUserId, now)];
   }
   return [];
 }
