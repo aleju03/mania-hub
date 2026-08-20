@@ -148,13 +148,26 @@ describe("skin sitemap entries", () => {
     expect((await fetchSkinSitemapEntries())[0].path).toBe("/skins/id-1");
   });
 
-  it("prefers the .osk update over the publish date for lastmod", async () => {
+  it("dates a page from the later of the .osk update and the day it was listed", async () => {
     globalThis.fetch = respondWithPages([{
       skins: [skin(1, { oskUpdatedAt: "2026-08-09T10:00:00.000Z" })],
       total: 1,
     }]) as unknown as typeof fetch;
 
     expect((await fetchSkinSitemapEntries())[0].lastmod).toBe("2026-08-09T10:00:00.000Z");
+
+    // A skin uploaded in January and made public today is new to a crawler:
+    // the file it has been carrying since February is not the later fact.
+    globalThis.fetch = respondWithPages([{
+      skins: [skin(2, {
+        publishedAt: "2026-01-05T00:00:00.000Z",
+        oskUpdatedAt: "2026-02-01T00:00:00.000Z",
+        listedAt: "2026-08-18T09:00:00.000Z",
+      })],
+      total: 1,
+    }]) as unknown as typeof fetch;
+
+    expect((await fetchSkinSitemapEntries())[0].lastmod).toBe("2026-08-18T09:00:00.000Z");
   });
 
   it("keeps the pages it already walked when one fails mid-walk", async () => {

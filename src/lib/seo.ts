@@ -77,8 +77,8 @@ export function replayOgImagePath(scoreId: number): string {
 
 /* Pull permalink OG: the pulled maniacard rendered at its minted tier with a
    "pulled by" footer. 720x1080 portrait, like the maniacard OG. */
-export function pullOgImagePath(ownerId: number, cardId: number): string {
-  return kindOgImagePath("pull", { owner: String(ownerId), card: String(cardId) });
+export function pullOgImagePath(ownerId: number, cardKey: string | number): string {
+  return kindOgImagePath("pull", { owner: String(ownerId), card: String(cardKey) });
 }
 
 export const DEFAULT_OG_IMAGE_PATH = ogImagePath();

@@ -84,6 +84,21 @@ describe("SkinCard", () => {
     expect(screen.queryByText("Aleju03")).toBeNull();
   });
 
+  it("ages off the day the skin reached the catalog, not the day it was uploaded", () => {
+    const uploaded = new Date(Date.now() - 40 * 86400_000).toISOString();
+    const listed = new Date(Date.now() - 2 * 86400_000).toISOString();
+
+    // A skin uploaded private and made public two days ago is two days old on
+    // the grid, which is the order the newest sort just put it in.
+    const { container } = render(<SkinCard skin={{ ...SKIN, publishedAt: uploaded, listedAt: listed }} />);
+    expect(container.textContent).toContain("2d ago");
+    cleanup();
+
+    // A summary cached before the field existed still has a date to show.
+    const older = render(<SkinCard skin={{ ...SKIN, publishedAt: uploaded, listedAt: undefined }} />);
+    expect(older.container.textContent).toContain("1mo ago");
+  });
+
   it("names the uploader on the moderation shelf, where every uploader's skins are mixed", () => {
     const { container } = render(<SkinCard skin={{ ...SKIN, author: null }} showUploader />);
     expect(screen.getByText("Aleju03")).toBeTruthy();

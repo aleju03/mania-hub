@@ -13,8 +13,15 @@ import type { ReactElement, ReactNode } from "react";
 import { getServerLiveBackendUrl } from "../../../lib/live-backend";
 import { bridgeAuthHeaders } from "../../../lib/live-backend-tokens";
 import { clamp, loadOgFonts, ogAvatarUrl, ogFontList } from "../../../lib/og-render";
+import {
+  cosmicLaurelDataUrl,
+  maniaTierCardElement,
+  MANIACARD_H,
+  MANIACARD_W,
+} from "../../../lib/maniacard-art";
 import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../../lib/maniacard";
 import type { ManiaSkills } from "../../../lib/maniacard";
+import { formatDate } from "../../../lib/format";
 import { describeGoal, nf, trimZeros } from "../../../lib/goal-format";
 import type { UserGoal } from "../../../lib/goals";
 import {
@@ -39,11 +46,12 @@ import {
   styleUsesTier,
   type SignatureStyle,
 } from "../../../lib/signature-style";
-import { backgroundImageDataUrl, type SignatureBackgroundSources } from "./-backgrounds";
+import { avatarSquareDataUrl, backgroundImageDataUrl, beatmapCoverBandDataUrl, type SignatureBackgroundSources } from "./-backgrounds";
 import { cosmicStarsDataUrl, signatureArtLayers, tierFlecksDataUrl } from "./-art";
 import { getCosmicTierPalette } from "../../../lib/maniacard-cosmic";
 import type { ResolvedSignature } from "../../../lib/signature-resolve";
-import type { OsuScore } from "../../../lib/types";
+import { buildPpCumulativeDistribution, calculateUserProfileInsights } from "../../../lib/profile-insights";
+import type { InsightScoreSnapshot, OsuScore, UserProfileInsights } from "../../../lib/types";
 
 const SURFACE = "#120d15";
 const TEXT_DIM = "#9c8fa8";
@@ -111,6 +119,14 @@ function hexAlpha(hex: string, alpha: number): string {
 
 // --- shared chrome -----------------------------------------------------
 
+/* The card body. Transparent by default, and that is the whole meaning of the
+   "None" background: these are pasted onto an osu! profile that already has a
+   colour behind them, so a render that paints its own dark rectangle is a
+   patch on the page rather than part of it. Every other background paints an
+   opaque layer over this, so nothing else changes.
+
+   SURFACE is still the compositing base an image background fades toward -
+   there the picture is the background, and it has to end up opaque. */
 function frame(width: number, height: number, children: ReactNode[], background?: string): ReactElement {
   return h(
     "div",
@@ -121,7 +137,7 @@ function frame(width: number, height: number, children: ReactNode[], background?
         display: "flex",
         position: "relative",
         overflow: "hidden",
-        background: background ?? SURFACE,
+        background: background ?? "transparent",
         fontFamily: '"Torus OG"',
         color: "#ffffff",
       },
@@ -183,14 +199,35 @@ async function styleLayers(
 
 /* `onBright` because the default is faint white, which on a Legendary front is
    white on gold - the mark disappears exactly where the background is
-   loudest. */
-function wordmark(right = 16, bottom = 12, onBright = false): ReactNode {
+   loudest.
+
+   Null when the player turned it off. Every layout puts the mark in its
+   children array unconditionally and lets this decide, so nothing can end up
+   with a mark that ignores the setting. */
+function wordmark(style: SignatureStyle, right = 16, bottom = 12, onBright = false): ReactNode {
+  if (!style.watermark) return null;
   return h("div", {
     key: "mark",
     style: {
       position: "absolute", right: `${right}px`, bottom: `${bottom}px`,
       fontSize: "11px",
       color: onBright ? "rgba(0,0,0,0.34)" : "rgba(255,255,255,0.28)",
+      letterSpacing: "0.02em",
+    },
+  }, "mania-tracker.com");
+}
+
+/* The same mark, on the header line. A layout whose bottom-right corner is
+   already spoken for - the insights ones end on the top play's pp - would
+   otherwise print it straight through the number the image exists to show. */
+function headerWordmark(style: SignatureStyle, right = 16, top = 14): ReactNode {
+  if (!style.watermark) return null;
+  return h("div", {
+    key: "mark",
+    style: {
+      position: "absolute", right: `${right}px`, top: `${top}px`,
+      fontSize: "11px",
+      color: "rgba(255,255,255,0.28)",
       letterSpacing: "0.02em",
     },
   }, "mania-tracker.com");
@@ -223,7 +260,7 @@ export async function renderPlate(ctx: SignatureRenderContext, message: string):
       }, clamp(ctx.resolved.username, 24)),
       h("div", { key: "msg", style: { fontSize: "14px", color: TEXT_DIM, lineHeight: 1.35 } }, message),
     ]),
-    wordmark(),
+    wordmark(ctx.style),
   ]));
 }
 
@@ -260,7 +297,7 @@ function bar(width: number, pct: number, color: string, height = 8): ReactNode {
 
 // --- maniacard ---------------------------------------------------------
 
-interface ManiacardSnapshot {
+interface ProfileSnapshot {
   user?: {
     id?: number;
     username?: string;
@@ -274,7 +311,7 @@ interface ManiacardSnapshot {
 
 /* Both background images come off the profile payload: the osu! banner the
    player set, and the cover of the map behind their best play. */
-function backgroundSourcesFrom(snapshot: ManiacardSnapshot | null): SignatureBackgroundSources {
+function backgroundSourcesFrom(snapshot: ProfileSnapshot | null): SignatureBackgroundSources {
   const covers = snapshot?.bestScores?.[0]?.beatmapset?.covers;
   return {
     coverUrl: snapshot?.user?.cover_url ?? null,
@@ -282,33 +319,76 @@ function backgroundSourcesFrom(snapshot: ManiacardSnapshot | null): SignatureBac
   };
 }
 
-/* Only the maniacard layouts read the profile for their own content. The other
-   three fetch it solely to resolve a background, so this stays behind the
-   check - a signature styled "None" costs no extra call. It is one indexed
-   read on the backend, and it happens once per version like everything else on
-   this path. */
+/* Only the maniacard and insights layouts read the profile for their own
+   content, and both already hold the payload by the time they need a
+   background. The other three fetch it solely to resolve one, so this stays
+   behind the check - a signature styled "None" costs no extra call. It is one
+   indexed read on the backend, and it happens once per version like everything
+   else on this path. */
 async function fetchBackgroundSources(ctx: SignatureRenderContext): Promise<SignatureBackgroundSources> {
   // A custom url needs no profile read at all - the address is already in the
   // style.
   if (!styleNeedsProfileImage(ctx.style)) return {};
-  return backgroundSourcesFrom(await fetchManiacard(ctx.resolved.userId).catch(() => null));
+  return backgroundSourcesFrom(await fetchProfileSnapshot(ctx.resolved.userId).catch(() => null));
 }
 
 /* cached-snapshot, not /snapshot: /snapshot queues a background osu! refresh,
    and an anonymous image fetch from a stranger's browser must not drive osu!
    API spend. It also keeps the pixels consistent with the version they are
    keyed under. */
-async function fetchManiacard(userId: number): Promise<ManiacardSnapshot | null> {
+async function fetchProfileSnapshot(userId: number): Promise<ProfileSnapshot | null> {
   const base = getServerLiveBackendUrl();
   if (!base) return null;
   const response = await fetch(`${base}/api/profiles/${userId}/cached-snapshot`);
   if (!response.ok) return null;
-  return (await response.json()) as ManiacardSnapshot;
+  return (await response.json()) as ProfileSnapshot;
+}
+
+/* The card itself, rather than a signature-shaped reading of it: the same
+   element tree /api/og rasterizes for a share image and the Discord command
+   replies with, so what someone embeds on their profile is the card they see
+   on the page.
+ *
+ * Drawn at the card's own 720x1008 and scaled down, because every coordinate
+ * in that tree is absolute against that size - satori has no layout scale, and
+ * re-tuning a second copy of those numbers is exactly how the flat card and
+ * the real one drift apart.
+ *
+ * The per-type background and accent do not reach this one. There is nothing
+ * for them to act on: the card front is opaque, edge to edge, and the design
+ * declares `ownArt` so the page hides those controls instead of offering
+ * settings that do nothing. */
+async function renderManiacardFront(
+  ctx: SignatureRenderContext,
+  user: { id?: number; username?: string; avatar_url?: string },
+  skills: ManiaSkills,
+  tier: ReturnType<typeof getManiaCardTier>,
+): Promise<Buffer> {
+  const spec = signatureDesign(ctx.type, ctx.design)!;
+  const [[regularFont, heavyFont], laurelUrl] = await Promise.all([
+    loadOgFonts(ctx.request),
+    cosmicLaurelDataUrl(ctx.request, tier).catch(() => null),
+  ]);
+  const response = new ImageResponse(
+    maniaTierCardElement({
+      username: clamp(user.username || ctx.resolved.username, 20),
+      avatarUrl: ogAvatarUrl(ctx.request, user.avatar_url, user.id),
+      tier,
+      skills,
+      laurelUrl,
+    }),
+    { width: MANIACARD_W, height: MANIACARD_H, fonts: ogFontList(regularFont, heavyFont) },
+  );
+  const { default: sharp } = await import("sharp");
+  return sharp(Buffer.from(await response.arrayBuffer()))
+    .resize(spec.width, spec.height, { fit: "fill" })
+    .png()
+    .toBuffer();
 }
 
 async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
   const spec = signatureDesign(ctx.type, ctx.design)!;
-  const snapshot = await fetchManiacard(ctx.resolved.userId);
+  const snapshot = await fetchProfileSnapshot(ctx.resolved.userId);
   const user = snapshot?.user;
   const scores = snapshot?.bestScores ?? [];
   const skills = user
@@ -320,6 +400,8 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
   if (!user || !skills) return renderPlate(ctx, "No ranked mania plays tracked yet.");
 
   const tier = getManiaCardTier(skills.cardPower);
+  if (ctx.design === 4) return renderManiacardFront(ctx, user, skills, tier);
+
   const style = MANIA_TIER_STYLES[tier];
   const background = await styleLayers(ctx, spec, backgroundSourcesFrom(snapshot));
   const tierBacked = !background.custom && styleUsesTier(ctx.style);
@@ -388,7 +470,7 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
           ? tierPanel([statBlock("Card power", String(Math.round(skills.cardPower)), dim)], "power", "8px 14px", 12)
           : statBlock("Card power", String(Math.round(skills.cardPower)), dim),
       ]),
-      wordmark(12, 8, tierBacked),
+      wordmark(ctx.style, 12, 8, tierBacked),
     ]));
   }
 
@@ -488,7 +570,7 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
           style: { display: "flex", flexDirection: "column", gap: "10px", flex: 1, minWidth: "0" },
         }, bannerStatRows),
     ]),
-    wordmark(16, 12, tierBacked),
+    wordmark(ctx.style, 16, 12, tierBacked),
   ]));
 }
 
@@ -733,7 +815,7 @@ async function renderGoals(ctx: SignatureRenderContext): Promise<Buffer> {
           ? h("div", { key: "d", style: { fontSize: "12px", color: dim } }, clamp(goal.progress.detail, 60))
           : h("div", { key: "d" }),
       ]),
-      wordmark(12, 8),
+      wordmark(ctx.style, 12, 8),
     ]));
   }
 
@@ -765,7 +847,7 @@ async function renderGoals(ctx: SignatureRenderContext): Promise<Buffer> {
         completed > 0 ? h("span", { key: "done" }, `${completed} completed`) : h("span", { key: "done" }),
       ]),
     ]),
-    wordmark(),
+    wordmark(ctx.style),
   ]));
 }
 
@@ -965,7 +1047,7 @@ async function renderSkills(ctx: SignatureRenderContext): Promise<Buffer> {
         ]),
         ...axisRows(6, spec.width - 48 - 104 - 44 - 58 - 30),
       ]),
-      wordmark(12, 8),
+      wordmark(ctx.style, 12, 8),
     ]));
   }
 
@@ -1003,7 +1085,7 @@ async function renderSkills(ctx: SignatureRenderContext): Promise<Buffer> {
         ...axisRows(4, spec.width - radarWidth - 104 - 44 - 58 - 76),
       ]),
     ]),
-    wordmark(),
+    wordmark(ctx.style),
   ]));
 }
 
@@ -1109,7 +1191,6 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
         // default would read as a status colour rather than a choice.
         style: { fontSize: "24px", fontWeight: 900, color: accentHex(ctx.style, "#ffffff") },
       }, `~${formatDanChip(entry.side.label)}`),
-      h("div", { key: "c", style: { fontSize: "11px", color: dim } }, `${entry.side.clears} clears`),
     ]),
   ]);
 
@@ -1151,7 +1232,581 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
       key: "name",
       style: { position: "absolute", left: "16px", bottom: "12px", fontSize: "12px", color: dim },
     }, clamp(ctx.resolved.username, 22)),
-    wordmark(),
+    wordmark(ctx.style),
+  ]));
+}
+
+// --- insights ----------------------------------------------------------
+
+/* The profile page's stat panel, as an image: key split, most used mod,
+   median BPM, pp range, and the newest top play.
+ *
+ * The oldest top play is not here on purpose. It is the one reading on that
+ * panel that never changes - by definition the play that will still be the
+ * oldest next year - so on a surface whose whole promise is "it redraws when
+ * your stats change" it is the line that never would.
+ *
+ * The numbers come from calculateUserProfileInsights over the same cached
+ * top-play window the profile page computes them from, so the image and the
+ * page cannot disagree about what a player's split or median is. */
+
+/* Keymode colours, matching KeySplitCard. Fixed hues rather than the theme's:
+   osu-pink is derived from --theme-hue, so a split painted with it collapses
+   onto 4K's blue on a blue theme, and keymode identity has to read the same
+   everywhere. */
+const KEY_MODE_COLORS: Record<number, string> = {
+  4: "#66ccff", 5: "#b3d944", 6: "#aa88ff", 7: "#ff8e5d", 8: "#ffcc22", 9: "#ed7887", 10: "#88b300",
+};
+
+/* The cover band's height. One number for both layouts that carry it: it sets
+   the card's shape, the size the cover is resized to, and how much room the
+   layout above it has left, so the three cannot drift apart. */
+const TOP_PLAY_CARD_HEIGHT = 78;
+
+function keyModeColor(keyCount: number): string {
+  return KEY_MODE_COLORS[keyCount] ?? "#ffffff";
+}
+
+/* Like bar(), but the track is divided rather than filled: each keymode gets
+   its share in its own colour. Widths are floored and the last segment takes
+   the remainder, so rounding cannot leave a sliver of track showing at the
+   end of a split that adds up to 100%. */
+function segmentedBar(
+  width: number,
+  segments: Array<{ pct: number; color: string }>,
+  height = 6,
+): ReactNode {
+  let used = 0;
+  const drawn = segments.map((segment, index) => {
+    const span = index === segments.length - 1
+      ? Math.max(0, width - used)
+      : Math.floor((Math.max(0, segment.pct) / 100) * width);
+    used += span;
+    return { span, color: segment.color };
+  });
+  return h("div", {
+    style: {
+      display: "flex", width: `${width}px`, height: `${height}px`,
+      borderRadius: `${height / 2}px`, background: "rgba(255,255,255,0.10)", overflow: "hidden",
+    },
+  }, drawn.map((segment, index) => h("div", {
+    key: String(index),
+    style: { width: `${segment.span}px`, height: "100%", background: segment.color },
+  })));
+}
+
+/* One reading. The cells sit in a row divided by hairlines rather than in four
+   bordered boxes, which is how the profile page draws them: four boxes would
+   be four objects where the page has one. */
+function insightCell(
+  key: string,
+  label: string,
+  dim: string,
+  value: ReactNode,
+  footer: ReactNode,
+  width: number,
+  first: boolean,
+): ReactNode {
+  return h("div", {
+    key,
+    style: {
+      display: "flex", flexDirection: "column", width: `${width}px`, minWidth: "0",
+      ...(first ? {} : { borderLeft: "1px solid rgba(255,255,255,0.12)", paddingLeft: "16px" }),
+    },
+  }, [
+    h("div", {
+      key: "l",
+      style: { fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: dim },
+    }, label),
+    h("div", { key: "v", style: { display: "flex", marginTop: "9px" } }, [value]),
+    h("div", { key: "f", style: { display: "flex", marginTop: "auto", paddingTop: "10px" } }, [footer]),
+  ]);
+}
+
+function insightMissing(text: string, dim: string): ReactNode {
+  return h("div", { key: "none", style: { fontSize: "14px", color: dim } }, text);
+}
+
+function keySplitValue(insights: UserProfileInsights): ReactNode {
+  if (insights.keySplit.length === 0) return h("div", { key: "v" });
+  if (insights.keySplit.length === 1) {
+    const only = insights.keySplit[0]!;
+    return h("div", {
+      key: "v",
+      style: { fontSize: "26px", fontWeight: 900, lineHeight: 1, color: keyModeColor(only.keyCount) },
+    }, `${only.keyCount}K only`);
+  }
+  const dominant = insights.keySplit.reduce((top, entry) => Math.max(top, entry.count), 0);
+  return h("div", {
+    key: "v",
+    style: { display: "flex", alignItems: "baseline", gap: "9px" },
+  }, insights.keySplit.map((entry) => {
+    const color = keyModeColor(entry.keyCount);
+    const lead = entry.count === dominant;
+    return h("div", {
+      key: String(entry.keyCount),
+      style: { display: "flex", alignItems: "baseline" },
+    }, [
+      h("div", {
+        key: "p",
+        style: { fontSize: lead ? "26px" : "17px", fontWeight: 900, lineHeight: 1, color },
+      }, String(Math.round((entry.count / insights.sampleSize) * 100))),
+      h("div", {
+        key: "s",
+        style: { fontSize: lead ? "13px" : "11px", fontWeight: 900, lineHeight: 1, color },
+      }, "%"),
+      h("div", {
+        key: "k",
+        style: { marginLeft: "3px", fontSize: "11px", fontWeight: 700, color },
+      }, `${entry.keyCount}K`),
+    ]);
+  }));
+}
+
+/* The four readings, at the widths they are actually drawn at. Fixed rather
+   than flex:1 because the bars inside them need a pixel width - satori has no
+   percentage sizing to fall back on. */
+function insightCells(
+  insights: UserProfileInsights,
+  totalWidth: number,
+  accent: string,
+  dim: string,
+): ReactNode[] {
+  const cellWidth = Math.floor(totalWidth / 4);
+  const barWidth = cellWidth - 22;
+  const mod = insights.mostUsedMod;
+  const modPct = mod && mod.total > 0 ? Math.round((mod.count / mod.total) * 100) : 0;
+
+  return [
+    insightCell(
+      "keys",
+      "Key split",
+      dim,
+      keySplitValue(insights),
+      insights.keySplit.length > 1
+        ? segmentedBar(barWidth, insights.keySplit.map((entry) => ({
+          pct: (entry.count / insights.sampleSize) * 100,
+          color: keyModeColor(entry.keyCount),
+        })))
+        : h("div", { key: "f" }),
+      cellWidth,
+      true,
+    ),
+    insightCell(
+      "mod",
+      "Most used mod",
+      dim,
+      mod
+        ? h("div", { key: "v", style: { fontSize: "26px", fontWeight: 900, lineHeight: 1 } }, mod.label)
+        : insightMissing("No mod preference", dim),
+      mod
+        ? h("div", { key: "f", style: { display: "flex", alignItems: "center", gap: "8px" } }, [
+          bar(barWidth - 40, modPct, accent, 4),
+          h("div", { key: "p", style: { fontSize: "10px", color: dim } }, `${modPct}%`),
+        ])
+        : h("div", { key: "f" }),
+      cellWidth,
+      false,
+    ),
+    insightCell(
+      "bpm",
+      "Median BPM",
+      dim,
+      insights.medianBpm != null
+        ? h("div", { key: "v", style: { display: "flex", alignItems: "baseline", gap: "5px" } }, [
+          h("div", { key: "n", style: { fontSize: "26px", fontWeight: 900, lineHeight: 1 } }, String(Math.round(insights.medianBpm))),
+          h("div", { key: "u", style: { fontSize: "11px", fontWeight: 700, color: dim } }, "BPM"),
+        ])
+        : insightMissing("-", dim),
+      insights.bpmRange
+        ? h("div", { key: "f", style: { fontSize: "11px", color: dim } },
+          `${Math.round(insights.bpmRange.min)} to ${Math.round(insights.bpmRange.max)}`)
+        : h("div", { key: "f" }),
+      cellWidth,
+      false,
+    ),
+    insightCell(
+      "pp",
+      "PP range",
+      dim,
+      insights.ppRange
+        ? h("div", { key: "v", style: { display: "flex", alignItems: "baseline", gap: "5px" } }, [
+          h("div", { key: "t", style: { fontSize: "26px", fontWeight: 900, lineHeight: 1, color: accent } }, String(Math.round(insights.ppRange.top))),
+          h("div", { key: "s", style: { fontSize: "11px", color: dim } }, "to"),
+          h("div", { key: "b", style: { fontSize: "26px", fontWeight: 900, lineHeight: 1 } }, String(Math.round(insights.ppRange.bottom))),
+        ])
+        : insightMissing("-", dim),
+      insights.ppRange
+        ? h("div", { key: "f", style: { fontSize: "11px", color: dim } },
+          `${nf(insights.ppRange.top - insights.ppRange.bottom)}pp spread`)
+        : h("div", { key: "f" }),
+      cellWidth,
+      false,
+    ),
+  ];
+}
+
+/* The newest top play, on its own beatmap cover - which is how the profile
+   page draws this card, and without it the row is just four lines of text
+   where the page has a picture.
+ *
+ * Dated absolutely rather than as "1d ago": a render is stored under a version
+ * derived from the player's data, so nothing re-draws it while only the clock
+ * moves, and a relative date baked into the object would sit on a profile
+ * saying "1d ago" for a month. */
+function topPlayCard(
+  snapshot: InsightScoreSnapshot,
+  cover: string | null,
+  accent: string,
+  dim: string,
+  width: number,
+  height: number,
+  compact = false,
+): ReactNode {
+  const meta = [
+    snapshot.mods.length > 0 ? snapshot.mods.join(" ") : null,
+    snapshot.date ? formatDate(snapshot.date) : null,
+  ].filter(Boolean).join("  ·  ");
+  /* Clamped to the layout, and nowrap besides. A map title is arbitrary
+     length: on the card width it would otherwise wrap onto a second line and
+     push the artist and the date off the bottom edge, which is a layout that
+     silently loses information rather than one that truncates. */
+  const line = { whiteSpace: "nowrap" as const, overflow: "hidden" as const };
+  /* The cover is dimmed on the way in, so text on it is legible everywhere.
+     This is the page's own left-to-right wash on top of that, which is what
+     keeps the words end of the card darker than the artwork end. */
+  const onCover = cover != null;
+  const label = onCover ? "rgba(255,255,255,0.55)" : dim;
+  const secondary = onCover ? TEXT_DIM_ON_ART : dim;
+
+  return h("div", {
+    key: "play",
+    style: {
+      display: "flex", position: "relative", overflow: "hidden",
+      width: `${width}px`, height: `${height}px`, borderRadius: "12px",
+    },
+  }, [
+    onCover
+      ? h("img", {
+        key: "cover",
+        src: cover,
+        width,
+        height,
+        style: { position: "absolute", top: "0", left: "0", width: `${width}px`, height: `${height}px` },
+      })
+      : h("div", { key: "cover" }),
+    onCover
+      ? h("div", {
+        key: "scrim",
+        style: {
+          position: "absolute", ...FILL,
+          background: "linear-gradient(90deg, rgba(0,0,0,0.60) 0%, rgba(0,0,0,0.24) 55%, rgba(0,0,0,0.46) 100%)",
+        },
+      })
+      : h("div", { key: "scrim" }),
+    h("div", {
+      key: "row",
+      style: {
+        display: "flex", alignItems: "center", gap: "16px",
+        width: "100%", height: "100%", padding: onCover ? "0 16px" : "0",
+      },
+    }, [
+      h("div", { key: "text", style: { display: "flex", flexDirection: "column", gap: "3px", flex: 1, minWidth: "0" } }, [
+        h("div", {
+          key: "l",
+          style: { fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: label },
+        }, "Newest top play"),
+        h("div", {
+          key: "t",
+          style: { ...line, fontSize: "16px", fontWeight: 900, lineHeight: 1.15 },
+        }, clamp(snapshot.title, compact ? 28 : 44)),
+        h("div", { key: "a", style: { ...line, fontSize: "11px", color: secondary } },
+          clamp(`${snapshot.artist} [${snapshot.version}]`, compact ? 40 : 56)),
+        meta ? h("div", { key: "m", style: { fontSize: "10.5px", color: secondary } }, meta) : h("div", { key: "m" }),
+      ]),
+      snapshot.pp != null
+        ? h("div", { key: "pp", style: { display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 } }, [
+          h("div", { key: "v", style: { fontSize: "30px", fontWeight: 900, lineHeight: 1, color: accent } }, String(Math.round(snapshot.pp))),
+          h("div", {
+            key: "l",
+            style: { marginTop: "3px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: secondary },
+          }, "pp"),
+        ])
+        : h("div", { key: "pp" }),
+    ]),
+  ]);
+}
+
+/** Label / value line, for the tall layout where four cells in a row would be
+    22px wide each. */
+function insightLine(key: string, label: string, value: ReactNode, dim: string): ReactNode {
+  return h("div", {
+    key,
+    style: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "12px" },
+  }, [
+    h("div", {
+      key: "l",
+      style: { fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: dim },
+    }, label),
+    value,
+  ]);
+}
+
+/* The profile's cumulative pp colours, as hex. The page names them through CSS
+   custom properties, which satori cannot resolve, and osu-pink-light is
+   theme-derived anyway - a render has no theme to read. */
+const PP_LADDER_COLORS = ["#aa88ff", "#ff99cc", "#ff8e5d", "#ffcc22", "#66ccff", "#b3d944"];
+
+/* The player's portrait beside their name. A rounded square rather than a
+   circle: these renders get pasted into an osu! profile, which already draws
+   the circular avatar at the top of the page, and a second circle a few
+   hundred pixels under it reads as the same element twice. */
+function avatarBox(src: string, size: number): ReactNode {
+  return h("img", {
+    key: "pfp",
+    src,
+    width: size,
+    height: size,
+    style: {
+      width: `${size}px`,
+      height: `${size}px`,
+      borderRadius: `${Math.round(size / 3.5)}px`,
+      objectFit: "cover",
+    },
+  });
+}
+
+/* Every insights header lays out the same way whether or not the portrait
+   loaded, so the name block is its own row and the avatar is prepended when
+   there is one. */
+function insightsHeader(avatar: ReactNode | null, name: ReactNode[], gap: string): ReactNode {
+  return h("div", {
+    key: "head",
+    style: { display: "flex", alignItems: "center", gap },
+  }, [
+    ...(avatar ? [avatar] : []),
+    h("div", { key: "who", style: { display: "flex", alignItems: "baseline", gap: "10px" } }, name),
+  ]);
+}
+
+/* A fixed-size image cannot scroll, and the ladder is as long as the player's
+   own pp spread - 12 rungs for someone whose top play is a thousand pp above
+   their worst. Thinning takes every other rung rather than cutting the bottom
+   off, so the ladder still spans the whole range and only its resolution
+   drops. Halving the rungs is exactly what doubling the step would do. */
+function fitPpLadder<T>(rows: T[], max: number): T[] {
+  let fitted = rows;
+  while (fitted.length > max) fitted = fitted.filter((_, index) => index % 2 === 0);
+  return fitted;
+}
+
+async function renderInsightsPpLadder(
+  ctx: SignatureRenderContext,
+  scores: OsuScore[],
+  insights: UserProfileInsights,
+  background: Awaited<ReturnType<typeof styleLayers>>,
+  accent: string,
+  dim: string,
+  avatar: ReactNode | null,
+): Promise<Buffer> {
+  const spec = signatureDesign(ctx.type, ctx.design)!;
+  const ladder = fitPpLadder(buildPpCumulativeDistribution(scores), 9);
+  if (ladder.length === 0) return renderPlate(ctx, "No ranked mania plays tracked yet.");
+
+  const inner = spec.width - 48;
+  const labelWidth = 46;
+  const countWidth = 62;
+  const barWidth = inner - labelWidth - countWidth - 20;
+  const total = ladder[0]!.total;
+  /* Scaled against the largest rung rather than against the total. The bottom
+     rung is every play by definition, so a bar drawn as a share of the total
+     would leave the top of the ladder as a row of slivers. */
+  const widest = ladder.reduce((max, row) => Math.max(max, row.count), 1);
+
+  return renderPng(ctx, frame(spec.width, spec.height, [
+    ...background.layers,
+    h("div", {
+      key: "body",
+      style: { display: "flex", flexDirection: "column", gap: "10px", padding: "18px 24px 14px", width: "100%" },
+    }, [
+      insightsHeader(avatar, [
+        h("div", { key: "n", style: { fontSize: "17px", fontWeight: 900 } }, clamp(ctx.resolved.username, 20)),
+        h("div", {
+          key: "l",
+          style: { fontSize: "10px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: dim },
+        }, "PP distribution"),
+      ], "9px"),
+      insights.ppRange
+        ? h("div", { key: "range", style: { display: "flex", alignItems: "baseline", gap: "6px" } }, [
+          h("div", { key: "t", style: { fontSize: "22px", fontWeight: 900, lineHeight: 1, color: accent } }, String(Math.round(insights.ppRange.top))),
+          h("div", { key: "s", style: { fontSize: "11px", color: dim } }, "to"),
+          h("div", { key: "b", style: { fontSize: "22px", fontWeight: 900, lineHeight: 1 } }, String(Math.round(insights.ppRange.bottom))),
+          h("div", { key: "u", style: { fontSize: "11px", color: dim } }, "pp"),
+        ])
+        : h("div", { key: "range" }),
+      h("div", {
+        key: "rows",
+        style: { display: "flex", flexDirection: "column", gap: "7px", flex: 1, justifyContent: "center" },
+      }, ladder.map((row, index) => h("div", {
+        key: String(row.threshold),
+        style: { display: "flex", alignItems: "center", gap: "10px" },
+      }, [
+        h("div", {
+          key: "l",
+          style: { width: `${labelWidth}px`, fontSize: "12px", fontWeight: 700, color: "rgba(255,255,255,0.82)", flexShrink: 0 },
+        }, `${row.threshold}+`),
+        /* Auto keeps the profile's own ladder of colours, which is what makes
+           the chart read as a gradient down the range rather than as one
+           block. A chosen accent paints every rung, because a player who
+           picked a colour picked it for the whole picture. */
+        bar(barWidth, (row.count / widest) * 100, accentHex(ctx.style, PP_LADDER_COLORS[index % PP_LADDER_COLORS.length]!), 7),
+        h("div", {
+          key: "c",
+          style: { display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: "5px", width: `${countWidth}px`, flexShrink: 0 },
+        }, [
+          h("div", { key: "n", style: { fontSize: "13px", fontWeight: 900 } }, String(row.count)),
+          h("div", { key: "p", style: { fontSize: "10px", color: dim } },
+            `${Math.round((row.count / total) * 100)}%`),
+        ]),
+      ]))),
+    ]),
+    wordmark(ctx.style),
+  ]));
+}
+
+async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
+  const spec = signatureDesign(ctx.type, ctx.design)!;
+  const snapshot = await fetchProfileSnapshot(ctx.resolved.userId);
+  const insights = calculateUserProfileInsights(snapshot?.bestScores ?? []);
+  if (insights.sampleSize === 0) return renderPlate(ctx, "No ranked mania plays tracked yet.");
+
+  /* Sized per layout because there is no scaling here: the portrait is drawn
+     at the pixels it is fetched at, and each of these headers has a different
+     amount of height to give it. The strip carries no name, so it fetches
+     nothing. */
+  const avatarSize = ctx.design === 1 ? 28 : ctx.design === 3 ? 26 : ctx.design === 4 ? 24 : 0;
+  const [background, avatarSrc] = await Promise.all([
+    styleLayers(ctx, spec, backgroundSourcesFrom(snapshot)),
+    avatarSize
+      ? avatarSquareDataUrl(snapshot?.user?.avatar_url ?? `https://a.ppy.sh/${ctx.resolved.userId}`, avatarSize)
+      : null,
+  ]);
+  const avatar = avatarSrc ? avatarBox(avatarSrc, avatarSize) : null;
+  const accent = accentHex(ctx.style, ACCENT);
+  const dim = background.custom ? TEXT_DIM_ON_ART : TEXT_DIM;
+  if (ctx.design === 4) {
+    // Mania only, the same filter calculateUserProfileInsights opens with - a
+    // stored top-play window can carry other rulesets, and a std play in the
+    // ladder would put a rung under plays this render never counted.
+    const mania = (snapshot?.bestScores ?? []).filter((score) => score.beatmap?.mode === "mania");
+    return renderInsightsPpLadder(ctx, mania, insights, background, accent, dim, avatar);
+  }
+
+  const play = insights.newestTopPlay;
+  const inner = spec.width - (ctx.design === 3 ? 48 : 56);
+  /* Design 2 carries no top play, so it pays for no cover: this is a fetch and
+     a sharp pass, cheap once per version and pointless every time. */
+  const cover = play && ctx.design !== 2
+    ? await beatmapCoverBandDataUrl(play.coverUrl, inner, TOP_PLAY_CARD_HEIGHT)
+    : null;
+
+  if (ctx.design === 2) {
+    // Stats only, at a strip height. No name on this one: it is the layout for
+    // a player who wants the readings and nothing else, and it is going on the
+    // profile that already says whose it is.
+    return renderPng(ctx, frame(spec.width, spec.height, [
+      ...background.layers,
+      h("div", {
+        key: "body",
+        style: { display: "flex", alignItems: "stretch", padding: "18px 28px", width: "100%" },
+      }, insightCells(insights, inner, accent, dim)),
+      wordmark(ctx.style, 12, 8),
+    ]));
+  }
+
+  if (ctx.design === 3) {
+    const modPct = insights.mostUsedMod && insights.mostUsedMod.total > 0
+      ? Math.round((insights.mostUsedMod.count / insights.mostUsedMod.total) * 100)
+      : 0;
+    return renderPng(ctx, frame(spec.width, spec.height, [
+      ...background.layers,
+      h("div", {
+        key: "body",
+        style: { display: "flex", flexDirection: "column", gap: "12px", padding: "20px 24px 16px", width: "100%" },
+      }, [
+        insightsHeader(avatar, [
+          h("div", { key: "n", style: { fontSize: "17px", fontWeight: 900 } }, clamp(ctx.resolved.username, 18)),
+          h("div", {
+            key: "l",
+            style: { fontSize: "10px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: dim },
+          }, "Profile stats"),
+        ], "9px"),
+        h("div", { key: "keys", style: { display: "flex", flexDirection: "column", gap: "9px" } }, [
+          keySplitValue(insights),
+          insights.keySplit.length > 1
+            ? segmentedBar(inner, insights.keySplit.map((entry) => ({
+              pct: (entry.count / insights.sampleSize) * 100,
+              color: keyModeColor(entry.keyCount),
+            })))
+            : h("div", { key: "bar" }),
+        ]),
+        h("div", { key: "lines", style: { display: "flex", flexDirection: "column", gap: "8px" } }, [
+          insightLine("mod", "Most used mod", h("div", {
+            key: "v",
+            style: { display: "flex", alignItems: "baseline", gap: "6px" },
+          }, [
+            h("div", { key: "n", style: { fontSize: "17px", fontWeight: 900 } }, insights.mostUsedMod?.label ?? "-"),
+            insights.mostUsedMod
+              ? h("div", { key: "p", style: { fontSize: "11px", color: dim } }, `${modPct}%`)
+              : h("div", { key: "p" }),
+          ]), dim),
+          insightLine("bpm", "Median BPM", h("div", {
+            key: "v",
+            style: { fontSize: "17px", fontWeight: 900 },
+          }, insights.medianBpm != null ? String(Math.round(insights.medianBpm)) : "-"), dim),
+          insightLine("pp", "PP range", h("div", {
+            key: "v",
+            style: { display: "flex", alignItems: "baseline", gap: "5px" },
+          }, insights.ppRange ? [
+            h("div", { key: "t", style: { fontSize: "17px", fontWeight: 900, color: accent } }, String(Math.round(insights.ppRange.top))),
+            h("div", { key: "s", style: { fontSize: "11px", color: dim } }, "to"),
+            h("div", { key: "b", style: { fontSize: "17px", fontWeight: 900 } }, String(Math.round(insights.ppRange.bottom))),
+          ] : [h("div", { key: "t", style: { fontSize: "17px", fontWeight: 900 } }, "-")]), dim),
+        ]),
+        play
+          ? h("div", { key: "playwrap", style: { display: "flex", marginTop: "auto" } }, [
+            topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, true),
+          ])
+          : h("div", { key: "playwrap" }),
+      ]),
+      headerWordmark(ctx.style),
+    ]));
+  }
+
+  // Design 1: the four readings over the newest top play, which is the profile
+  // panel's own arrangement minus the row this render leaves out.
+  return renderPng(ctx, frame(spec.width, spec.height, [
+    ...background.layers,
+    h("div", {
+      key: "body",
+      style: { display: "flex", flexDirection: "column", gap: "14px", padding: "16px 28px 14px", width: "100%" },
+    }, [
+      insightsHeader(avatar, [
+        h("div", { key: "n", style: { fontSize: "17px", fontWeight: 900 } }, clamp(ctx.resolved.username, 24)),
+        h("div", {
+          key: "l",
+          style: { fontSize: "10px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: dim },
+        }, "Profile stats"),
+      ], "10px"),
+      h("div", { key: "cells", style: { display: "flex", alignItems: "stretch", height: "62px" } },
+        insightCells(insights, inner, accent, dim)),
+      play
+        ? h("div", { key: "playwrap", style: { display: "flex", marginTop: "auto" } }, [
+          topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT),
+        ])
+        : h("div", { key: "playwrap" }),
+    ]),
+    headerWordmark(ctx.style),
   ]));
 }
 
@@ -1163,6 +1818,7 @@ export async function renderSignature(ctx: SignatureRenderContext): Promise<Buff
     case "goals": return renderGoals(ctx);
     case "skills": return renderSkills(ctx);
     case "dan": return renderDan(ctx);
+    case "insights": return renderInsights(ctx);
   }
 }
 

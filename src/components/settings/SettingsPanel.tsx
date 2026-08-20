@@ -83,6 +83,7 @@ import {
 } from "../../lib/cursor";
 import type { CursorSettings } from "../../lib/cursor";
 import { useAppStore } from "../../store";
+import { Switch } from "../ui/Switch";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
@@ -529,26 +530,6 @@ function ColorSwatchRow({ value, onChange }: { value: string; onChange: (color: 
         </div>
       ) : null}
     </div>
-  );
-}
-
-function Switch({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border p-0.5 transition-colors ${
-        checked ? "border-osu-pink bg-osu-pink" : "border-osu-b3/60 bg-osu-b5/80"
-      }`}
-    >
-      <span
-        className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-          checked ? "translate-x-4" : "translate-x-0"
-        }`}
-      />
-    </button>
   );
 }
 

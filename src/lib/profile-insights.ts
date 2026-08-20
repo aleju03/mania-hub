@@ -78,6 +78,47 @@ export function buildPpDistribution(ppValues: number[]): UserProfileInsights["pp
   return buckets;
 }
 
+/* The cumulative ladder behind the profile's "Cumulative" pp view: how many
+   top plays sit at or above each threshold, walking down from the player's
+   best. Beside buildPpDistribution rather than in the profile route, because
+   the dynamic render draws the same ladder and two copies of a bucketing rule
+   drift the moment one of them is tuned. */
+function getPpCumulativeDistributionStep(top: number): number {
+  return top < 250 ? 50 : 100;
+}
+
+export interface PpCumulativeDistributionRow {
+  threshold: number;
+  count: number;
+  total: number;
+}
+
+export function buildPpCumulativeDistribution(scores: OsuScore[]): PpCumulativeDistributionRow[] {
+  const ppValues = scores
+    .map((score) => score.pp)
+    .filter((pp): pp is number => typeof pp === "number" && Number.isFinite(pp))
+    .sort((a, b) => b - a);
+
+  if (!ppValues.length) return [];
+
+  const top = ppValues[0];
+  const bottom = ppValues[ppValues.length - 1];
+  const step = getPpCumulativeDistributionStep(top);
+  const maxThreshold = Math.max(0, Math.floor(top / step) * step);
+  const minThreshold = Math.max(0, Math.floor(bottom / step) * step);
+  const rows: PpCumulativeDistributionRow[] = [];
+  let count = 0;
+
+  for (let threshold = maxThreshold; threshold >= minThreshold; threshold -= step) {
+    while (count < ppValues.length && ppValues[count] >= threshold) {
+      count += 1;
+    }
+    rows.push({ threshold, count, total: ppValues.length });
+  }
+
+  return rows;
+}
+
 function scoreToSnapshot(score: OsuScore): InsightScoreSnapshot {
   const display = getScoreDisplayValues(score);
 

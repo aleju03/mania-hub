@@ -391,8 +391,11 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                         <Avatar userId={skin.ownerUserId} size={16} shape="circle" />
                         {skin.ownerUsername}
                       </Link>
-                      {skin.publishedAt && (
-                        <span suppressHydrationWarning>{formatTimeAgo(skin.publishedAt)}</span>
+                      {/* Reads as the browse card does: time in the catalog,
+                          not time since the upload. The exact upload date is a
+                          fact row further down. */}
+                      {(skin.listedAt ?? skin.publishedAt) && (
+                        <span suppressHydrationWarning>{formatTimeAgo(skin.listedAt ?? skin.publishedAt!)}</span>
                       )}
                     </div>
                     {skin.description && (

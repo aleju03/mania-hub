@@ -21,8 +21,9 @@ export interface ServerPackWallet {
 
 export interface ServerPackCollectionCard {
   userId: number;
-  /* Wallet key ("<id>" or "<id>:goat"), so a player's GOAT and their ordinary
-     card stay distinct. Server rows always carry it. */
+  /* Wallet key ("<id>", "<id>:goat", or "<id>:v<n>" for a card the grant desk
+     handed out), so every card of one player a collector holds stays distinct.
+     Server rows always carry it. */
   cardKey?: string;
   username: string;
   avatarUrl: string;
@@ -44,6 +45,8 @@ export interface ServerPackCollectionCard {
      total. Server-side only: a browser-local wallet has no serials. */
   serial?: number | null;
   mintedTotal?: number;
+  /* When the grant desk handed this holding out, null for a pulled one. */
+  grantedAt?: number | null;
 }
 
 /* Progress against the current draw pool: owned players still pullable over
@@ -301,11 +304,14 @@ export const saveOwnPackShowcase = createServerFn({ method: "POST" })
 /* Normalizes a wallet card key, rejecting anything that is not a player id
    with an optional ":goat" suffix. */
 function sanitizeCardKey(value: string): string | null {
-  const match = /^(\d+)(:goat)?$/.exec(value.trim());
+  const match = /^(\d+)(:goat|:v\d{1,6})?$/.exec(value.trim());
   if (!match) return null;
   const userId = Math.floor(Number(match[1]));
   if (!Number.isInteger(userId) || userId <= 0) return null;
-  return match[2] ? `${userId}:goat` : String(userId);
+  if (!match[2]) return String(userId);
+  if (match[2] === ":goat") return `${userId}:goat`;
+  const variant = Math.floor(Number(match[2].slice(2)));
+  return variant > 0 ? `${userId}:v${variant}` : null;
 }
 
 /* What the pull log minted: the serial this account now holds each card at,

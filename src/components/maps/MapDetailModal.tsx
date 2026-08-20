@@ -9,6 +9,7 @@ import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { PatternRadar } from "./PatternRadar";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
+import { Skeleton } from "../ui/LoadingSkeleton";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import {
   PATTERN_COLOR,
@@ -108,6 +109,39 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="flex flex-col">
       <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{value}</span>
       <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{label}</span>
+    </div>
+  );
+}
+
+// A Stat whose value the stub does not carry yet: the label is already true, so
+// only the number waits. Same 16px value height, so nothing moves when it lands.
+function PendingStat({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col">
+      <Skeleton className="h-4 w-10" />
+      <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{label}</span>
+    </div>
+  );
+}
+
+// The MSD strip's frame while the entry is in flight. Every play in a skill
+// list is rated, so this block is coming for all of them; holding its shape
+// keeps the modal from resizing under the cursor when the numbers arrive.
+function PendingMsdBlock() {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">MSD</span>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-osu-b4/40 px-3.5 py-2.5">
+        <div className="flex min-h-10 items-center gap-4 sm:border-r sm:border-white/10 sm:pr-5">
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <Skeleton className="h-[18px] w-12" />
+        </div>
+        <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-[14px] w-11" />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -283,10 +317,16 @@ export function MapDetailModal({
   entry,
   onClose,
   play,
+  status = "ready",
 }: {
   entry: LiveMapSearchEntry | null;
   onClose: () => void;
   play?: MapDetailPlayContext | null;
+  // "pending" means `entry` is the stub a list already had in hand (title,
+  // cover, keys) and the catalog entry is still in flight, so the modal opens
+  // on the click and the fields the stub cannot fill render as loading rather
+  // than as zeroes. "missing"/"error": that fetch is done and brought nothing.
+  status?: "ready" | "pending" | "missing" | "error";
 }) {
   // Which diff of the set is in focus; defaults to the entry's representative.
   const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
@@ -308,13 +348,23 @@ export function MapDetailModal({
 
   useBodyScrollLock(entry != null);
 
+  const pending = status === "pending";
+  // Only a real catalog entry carries stars, bpm, length, play counts and the
+  // set's other diffs. A stub has zeroes there, so those blocks either wait
+  // (pending) or stay out (a chart the catalog does not have).
+  const numbersKnown = status === "ready";
   const diffs = useMemo(() => (entry ? entryDiffs(entry) : []), [entry]);
   const mixedKeys = useMemo(() => new Set(diffs.map((diff) => diff.keyCount)).size > 1, [diffs]);
   const active = diffs.find((diff) => diff.beatmapId === selectedDiffId) ?? entry;
 
+  // A tracked play can name a chart the catalog never indexed, and a stub built
+  // from a play row may not know the set either; both leave the set id at 0.
+  const setKnown = entry != null && entry.beatmapsetId > 0;
+  // Never from a stub: its diffs carry no star rating, and the panel's own
+  // footer would show the map as 0.00 stars.
   const previewSet = useMemo(
-    () => (entry && diffs.length > 0 ? buildPreviewBeatmapset(entry, diffs) : null),
-    [entry, diffs],
+    () => (entry && setKnown && numbersKnown && diffs.length > 0 ? buildPreviewBeatmapset(entry, diffs) : null),
+    [entry, setKnown, numbersKnown, diffs],
   );
 
   const patterns = useMemo(
@@ -360,7 +410,7 @@ export function MapDetailModal({
   // dropped frame on phones can't paint the content see-through mid-fade.
   return createPortal(
     <AnimatePresence>
-      {entry && active && previewSet && (
+      {entry && active && (
         <motion.div
           key="map-detail"
           className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6"
@@ -401,8 +451,17 @@ export function MapDetailModal({
                 <div className="absolute inset-x-0 bottom-0 p-3.5 pr-12">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">{active.keyCount}K</span>
-                    <StarRatingBadge stars={active.stars} />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-white/70">{active.status}</span>
+                    {numbersKnown ? (
+                      <>
+                        <StarRatingBadge stars={active.stars} />
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-white/70">{active.status}</span>
+                      </>
+                    ) : pending ? (
+                      // A skeleton's tint is invisible against the banner art,
+                      // so the star badge's place is held in the banner's own
+                      // language instead.
+                      <span className="inline-flex h-[14px] w-[52px] rounded-full bg-black/50" aria-hidden="true" />
+                    ) : null}
                   </div>
                   <h2 className="mt-1 text-[17px] font-bold text-white leading-tight truncate drop-shadow">{entry.title}</h2>
                   <p className="text-[11px] text-white/75 truncate">
@@ -443,20 +502,38 @@ export function MapDetailModal({
                 )}
 
                 {/* Stats */}
-                <div className="grid grid-cols-4 gap-2 rounded-lg bg-osu-b4/50 px-4 py-2.5">
-                  <Stat label="BPM" value={String(Math.round(active.bpm))} />
-                  <Stat label="Length" value={formatDuration(active.length)} />
-                  <Stat label="Plays" value={formatNumber(active.playCount)} />
-                  <Stat label="LN notes" value={formatNumber(active.lnCount)} />
-                </div>
+                {numbersKnown || pending ? (
+                  <div className="grid grid-cols-4 gap-2 rounded-lg bg-osu-b4/50 px-4 py-2.5">
+                    {numbersKnown ? (
+                      <>
+                        <Stat label="BPM" value={String(Math.round(active.bpm))} />
+                        <Stat label="Length" value={formatDuration(active.length)} />
+                        <Stat label="Plays" value={formatNumber(active.playCount)} />
+                        <Stat label="LN notes" value={formatNumber(active.lnCount)} />
+                      </>
+                    ) : (
+                      ["BPM", "Length", "Plays", "LN notes"].map((label) => <PendingStat key={label} label={label} />)
+                    )}
+                  </div>
+                ) : null}
 
                 {/* The play this modal was opened from, while its diff is the
                     active one (it says nothing about the set's other diffs). */}
                 {play && play.beatmapId === active.beatmapId && <PlayContextBlock play={play} />}
 
+                {/* The catalog entry brought nothing back: say so where its
+                    numbers would have been, the osu! link below still works. */}
+                {status === "missing" || status === "error" ? (
+                  <span className="text-[11.5px] text-osu-f1">
+                    {status === "missing"
+                      ? "This chart is not in the map catalog, so there is nothing to show beyond the play itself."
+                      : "Could not load the map details."}
+                  </span>
+                ) : null}
+
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
-                {active.msd ? <MsdBlock entry={active} msdLn={activeAnalysis?.msdLn ?? null} /> : null}
+                {active.msd ? <MsdBlock entry={active} msdLn={activeAnalysis?.msdLn ?? null} /> : pending ? <PendingMsdBlock /> : null}
                 <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
 
                 {/* Detected subfamily tags from the in-house analyzer: chart
@@ -502,18 +579,23 @@ export function MapDetailModal({
                   </div>
                 )}
 
-                {/* Chart preview */}
-                <ChartPreviewPanel
-                  beatmapset={previewSet}
-                  selectedBeatmapId={active.beatmapId}
-                  className="h-[300px] rounded-lg"
-                  flatBackdrop
-                />
+                {/* Chart preview, held as an empty box of its own height while
+                    the entry is in flight so it lands without moving. */}
+                {previewSet ? (
+                  <ChartPreviewPanel
+                    beatmapset={previewSet}
+                    selectedBeatmapId={active.beatmapId}
+                    className="h-[300px] rounded-lg"
+                    flatBackdrop
+                  />
+                ) : pending ? (
+                  <div className="h-[300px] shrink-0 rounded-lg bg-osu-b4/30" aria-hidden="true" />
+                ) : null}
 
                 {/* Actions */}
                 <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
                   <a
-                    href={osuBeatmapUrl(active)}
+                    href={setKnown ? osuBeatmapUrl(active) : `https://osu.ppy.sh/beatmaps/${active.beatmapId}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-pink px-3 py-2 text-[12px] font-bold text-white hover:bg-osu-pink-light transition-colors sm:justify-start sm:px-3"
@@ -525,24 +607,30 @@ export function MapDetailModal({
                       <line x1="10" y1="14" x2="21" y2="3" />
                     </svg>
                   </a>
-                  <a
-                    href={oszDownloadUrl(entry.beatmapsetId)}
-                    className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:justify-start sm:px-3"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
-                      <path d="M12 3v10" />
-                      <path d="m7 10 5 4 5-4" />
-                      <path d="M5 20h14" />
-                    </svg>
-                    Download .osz
-                  </a>
-                  <a
-                    href={osuDirectUrl(entry.beatmapsetId)}
-                    className="hidden items-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:inline-flex"
-                  >
-                    <OsuLogo className="h-3.5 w-3.5" />
-                    Open in osu!
-                  </a>
+                  {/* Both need the set id, which a chart outside the catalog
+                      does not have; the osu! link above resolves it instead. */}
+                  {setKnown ? (
+                    <>
+                      <a
+                        href={oszDownloadUrl(entry.beatmapsetId)}
+                        className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:justify-start sm:px-3"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
+                          <path d="M12 3v10" />
+                          <path d="m7 10 5 4 5-4" />
+                          <path d="M5 20h14" />
+                        </svg>
+                        Download .osz
+                      </a>
+                      <a
+                        href={osuDirectUrl(entry.beatmapsetId)}
+                        className="hidden items-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:inline-flex"
+                      >
+                        <OsuLogo className="h-3.5 w-3.5" />
+                        Open in osu!
+                      </a>
+                    </>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {

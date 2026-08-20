@@ -6,13 +6,15 @@ import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { seedCollectionCard as seedCard } from "./helpers/pack-cards.js";
+import { seedCardCatalogEntry, seedCollectionCard as seedCard } from "./helpers/pack-cards.js";
+import { packCardVariantKey } from "../src/features/pack-wallets.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
 import {
   getPackCardCollectors,
+  getPackCardKeyStats,
   getPackCardStats,
   getPackPulledStats,
   getSharedPackCard,
@@ -30,6 +32,7 @@ let events: LiveEventLog;
 
 const OWNER_ID = 100;
 const OTHER_OWNER_ID = 200;
+const THIRD_OWNER_ID = 300;
 const CARD_A = 1;
 const CARD_B = 2;
 /* A real entry from HONORARY_USER_IDS: the only players who can be pulled as
@@ -83,6 +86,40 @@ async function seedCollectionCard(
   lastPulledAt = 2000,
 ): Promise<void> {
   await seedCard(db, ownerUserId, cardUserId, { copies, tier, firstPulledAt, lastPulledAt });
+}
+
+/* A holding the way /admin/collections mints one: its own card key, a tier no
+   pack can deal, and the badge and background art that belong to that key.
+   Written directly rather than through the seed helper, since the collector
+   may also hold the player's ordinary card, which is the whole point. */
+async function seedCustomHolding(
+  ownerUserId: number,
+  cardUserId: number,
+  copies = 1,
+  overrides: { variant?: number; tier?: string; tierLabel?: string | null; motif?: string | null } = {},
+): Promise<void> {
+  const {
+    variant = 1,
+    tier = "eternal",
+    tierLabel = "Mano",
+    motif = '{"url":"https://example.test/motif.png"}',
+  } = overrides;
+  const cardKey = packCardVariantKey(cardUserId, variant);
+  await seedCardCatalogEntry(db, cardUserId, { tier, tierLabel });
+  await exec(
+    db,
+    `insert or replace into pack_cards (card_key, tier, card_user_id, username, avatar_url, country_code, tier_label, updated_at)
+     values (?, ?, ?, ?, '', 'CR', ?, 2000)`,
+    [cardKey, tier, cardUserId, `player${cardUserId}`, tierLabel],
+  );
+  await exec(
+    db,
+    `insert into pack_collection_cards (
+       owner_user_id, card_user_id, card_key, tier, tier_label, motif, skills_id, pp, global_rank,
+       copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
+     ) values (?, ?, ?, ?, ?, ?, null, 1000, 500, ?, 0, 1000, 2000, 2000)`,
+    [ownerUserId, cardUserId, cardKey, tier, tierLabel, motif, copies],
+  );
 }
 
 describe("recordPackPullEvents", () => {
@@ -270,6 +307,62 @@ describe("getPackCardStats", () => {
       { userId: 999, owners: 0, copies: 0 },
     ]);
   });
+
+  it("counts every card of a player together, since an id names no card", async () => {
+    await seedCollectionCard(OWNER_ID, CARD_A, 1, "rare");
+    await seedCustomHolding(OTHER_OWNER_ID, CARD_A);
+    expect(await getPackCardStats(db, [CARD_A])).toEqual([{ userId: CARD_A, owners: 2, copies: 2 }]);
+  });
+});
+
+describe("getPackCardKeyStats", () => {
+  it("counts the collectors of one card rather than of its player", async () => {
+    // Two collectors pulled the player, at two tiers, because the tier is
+    // frozen at each pull; a third was handed a card of their own.
+    await seedCollectionCard(OWNER_ID, CARD_A, 1, "rare");
+    await seedCollectionCard(OTHER_OWNER_ID, CARD_A, 2, "superRare");
+    await seedCustomHolding(THIRD_OWNER_ID, CARD_A);
+
+    expect(await getPackCardKeyStats(db, [String(CARD_A), packCardVariantKey(CARD_A, 1)])).toEqual([
+      // The two pulls are one card between them, tier drift and all.
+      { cardKey: String(CARD_A), userId: CARD_A, owners: 2, copies: 3 },
+      { cardKey: packCardVariantKey(CARD_A, 1), userId: CARD_A, owners: 1, copies: 1 },
+    ]);
+  });
+
+  it("answers for the card asked about even when its holder holds another of the player", async () => {
+    /* The bug this exists for: a collector who was granted a card and also
+       pulled the player's ordinary one. Nothing about the collector can say
+       which of the two is on screen, so the key does. */
+    await seedCollectionCard(OWNER_ID, CARD_A, 1, "superRare");
+    await seedCustomHolding(OWNER_ID, CARD_A);
+    for (let owner = OTHER_OWNER_ID; owner < OTHER_OWNER_ID + 5; owner += 1) {
+      await seedCollectionCard(owner, CARD_A, 1, "superRare");
+    }
+    expect(await getPackCardKeyStats(db, [String(CARD_A)])).toEqual([
+      { cardKey: String(CARD_A), userId: CARD_A, owners: 6, copies: 6 },
+    ]);
+    expect(await getPackCardKeyStats(db, [packCardVariantKey(CARD_A, 1)])).toEqual([
+      { cardKey: packCardVariantKey(CARD_A, 1), userId: CARD_A, owners: 1, copies: 1 },
+    ]);
+  });
+
+  it("counts holders of one granted card together, and two grants apart", async () => {
+    await seedCustomHolding(OWNER_ID, CARD_A, 2, { variant: 1 });
+    await seedCustomHolding(OTHER_OWNER_ID, CARD_A, 1, { variant: 1 });
+    await seedCustomHolding(THIRD_OWNER_ID, CARD_A, 1, { variant: 2, tierLabel: "Duo" });
+    expect(await getPackCardKeyStats(db, [packCardVariantKey(CARD_A, 1), packCardVariantKey(CARD_A, 2)])).toEqual([
+      { cardKey: packCardVariantKey(CARD_A, 1), userId: CARD_A, owners: 2, copies: 3 },
+      { cardKey: packCardVariantKey(CARD_A, 2), userId: CARD_A, owners: 1, copies: 1 },
+    ]);
+  });
+
+  it("answers zero for a card nobody holds, and nothing for a key that is not one", async () => {
+    expect(await getPackCardKeyStats(db, [`${CARD_B}:goat`])).toEqual([
+      { cardKey: `${CARD_B}:goat`, userId: CARD_B, owners: 0, copies: 0 },
+    ]);
+    expect(await getPackCardKeyStats(db, ["nonsense", "0", `${CARD_A}:v0`])).toEqual([]);
+  });
 });
 
 describe("getPackPulledStats", () => {
@@ -428,6 +521,22 @@ describe("getSharedPackCard", () => {
     expect(shared?.card.tier).toBe("rare");
     expect(shared?.card.copies).toBe(2);
     expect(shared?.owners).toBe(2);
+  });
+
+  it("serves a granted card under its own key, counted on its own", async () => {
+    await seedCollectionCard(OWNER_ID, CARD_A, 1, "rare");
+    await seedCollectionCard(OTHER_OWNER_ID, CARD_A, 1, "superRare");
+    await seedCustomHolding(THIRD_OWNER_ID, CARD_A);
+    const key = packCardVariantKey(CARD_A, 1);
+    const granted = await getSharedPackCard(db, THIRD_OWNER_ID, key);
+    expect(granted?.card.tier).toBe("eternal");
+    expect(granted?.card.customLabel).toBe("Mano");
+    expect(granted?.owners).toBe(1);
+    // The pulls beside it are one card between them, and asking for a key its
+    // holder does not have falls back to the card they do hold.
+    expect((await getSharedPackCard(db, OWNER_ID, CARD_A))?.owners).toBe(2);
+    expect((await getSharedPackCard(db, THIRD_OWNER_ID, CARD_A))?.card.tier).toBe("eternal");
+    expect((await getSharedPackCard(db, OWNER_ID, key))?.card.tier).toBe("rare");
   });
 
   it("prefers the live users row for the owner name", async () => {
@@ -635,6 +744,26 @@ describe("pack pull endpoints", () => {
       { userId: CARD_A, owners: 2, copies: 3 },
       { userId: CARD_B, owners: 0, copies: 0 },
     ]);
+  });
+
+  it("GET /api/packs/card-stats counts named cards rather than their player", async () => {
+    await seedCollectionCard(OWNER_ID, CARD_A, 1, "rare");
+    await seedCustomHolding(OTHER_OWNER_ID, CARD_A);
+    const granted = `${CARD_A}%3Av1`;
+    const response = await call(mockReq("GET", `/api/packs/card-stats?keys=${CARD_A},${granted}`));
+    expect(response.status).toBe(200);
+    expect(response.body.cards).toEqual([
+      { cardKey: String(CARD_A), userId: CARD_A, owners: 1, copies: 1 },
+      { cardKey: `${CARD_A}:v1`, userId: CARD_A, owners: 1, copies: 1 },
+    ]);
+
+    // Ids still answer for the player as a whole, which is all a hand of
+    // freshly revealed cards can ask about.
+    const byId = await call(mockReq("GET", `/api/packs/card-stats?ids=${CARD_A}`));
+    expect(byId.body.cards).toEqual([{ userId: CARD_A, owners: 2, copies: 2 }]);
+
+    const bad = await call(mockReq("GET", "/api/packs/card-stats?keys=nonsense"));
+    expect(bad.status).toBe(400);
   });
 
   it("GET /api/packs/card-stats without ids is a 400", async () => {

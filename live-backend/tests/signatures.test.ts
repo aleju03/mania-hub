@@ -99,8 +99,11 @@ describe("signature opt-in", () => {
   });
 
   it("normalizes the type list and drops junk", () => {
-    expect(normalizeSignatureTypes(["goals", "nonsense", "maniacard", "goals"]))
-      .toEqual(["maniacard", "goals"]);
+    // Deduped and put back in declaration order, which is the order the page
+    // shows them in - so a reorder there reorders a stored list on its next
+    // write rather than leaving the two disagreeing.
+    expect(normalizeSignatureTypes(["maniacard", "nonsense", "goals", "maniacard"]))
+      .toEqual(["goals", "maniacard"]);
     expect(normalizeSignatureTypes("not an array")).toEqual([]);
     expect(normalizeSignatureTypes([])).toEqual([]);
   });
@@ -108,7 +111,7 @@ describe("signature opt-in", () => {
 
 describe("signature versions", () => {
   beforeEach(async () => {
-    await enableUserSignature(db, USER, ["maniacard", "goals", "skills", "dan"], null);
+    await enableUserSignature(db, USER, ["maniacard", "goals", "skills", "dan", "insights"], null);
   });
 
   it("is stable while nothing changes", async () => {
@@ -182,6 +185,50 @@ describe("signature versions", () => {
     const before = await versions();
     await exec(db, "update users set pp = 5000, updated_at = ? where user_id = ?", ["2026-02-01T00:00:00Z", USER]);
     expect((await versions()).goals).not.toBe(before.goals);
+  });
+
+  /* An insights render names the player's NEWEST top play, and projectTopPlays
+     overlays live score events onto the stored window - so that line can be
+     right before the snapshot row is rewritten. Without the event stamp the
+     one reading the image exists for would be the last to move. */
+  it("moves the insights version when a score event lands", async () => {
+    const before = await versions();
+    await exec(
+      db,
+      `insert into score_events
+         (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json,
+          passed, is_lazer, has_replay, ended_at, received_at, source)
+       values (1, 'score:1', ?, 'CR', 5, 3, '{}', 1, 1, 0, ?, ?, 'test')`,
+      [USER, "2026-02-01T00:00:00Z", "2026-02-01T00:00:00Z"],
+    );
+    const after = await versions();
+    expect(after.insights).not.toBe(before.insights);
+    // The same play does not move a maniacard: card power comes off the
+    // stored top-play window, not off the event stream.
+    expect(after.maniacard).toBe(before.maniacard);
+  });
+
+  it("moves the insights version when the top-play window is refreshed", async () => {
+    const before = await versions();
+    await exec(
+      db,
+      "update users set top_scores_refreshed_at = ? where user_id = ?",
+      ["2026-02-01T00:00:00Z", USER],
+    );
+    expect((await versions()).insights).not.toBe(before.insights);
+  });
+
+  it("does not move the insights version when only a goal changes", async () => {
+    const before = await versions();
+    await exec(
+      db,
+      `insert into user_goals (id, user_id, kind, status, created_at, updated_at)
+       values ('g3', ?, 'reach_pp', 'open', 1000, 1000)`,
+      [USER],
+    );
+    const after = await versions();
+    expect(after.goals).not.toBe(before.goals);
+    expect(after.insights).toBe(before.insights);
   });
 
   it("does not move any version when a different player's data changes", async () => {

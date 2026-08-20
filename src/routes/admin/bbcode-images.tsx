@@ -245,6 +245,11 @@ function BbcodeImagesAdminPage() {
   const uploaders = audit?.uploaders ?? [];
   const needChecking = uploaders.filter((uploader) => uploader.state !== "checked");
   const anyBusy = loading || busy || checkingId !== null || sweep !== null;
+  const pending = audit ? audit.coverage.total - audit.coverage.checked : 0;
+  const checkedUploaderIds = useMemo(
+    () => new Set(uploaders.filter((uploader) => uploader.state === "checked").map((uploader) => uploader.userId)),
+    [uploaders],
+  );
 
   return (
     <div className="flex-1">
@@ -379,6 +384,8 @@ function BbcodeImagesAdminPage() {
                         key={row.key}
                         row={row}
                         checked={selected.has(row.key)}
+                        pending={pending}
+                        ownerChecked={row.uploaderId !== null && checkedUploaderIds.has(row.uploaderId)}
                         onToggle={() => toggle(row.key)}
                         usernameFor={usernameFor}
                       />
@@ -535,28 +542,69 @@ function Empty({ text }: { text: string }) {
 function ImageRow({
   row,
   checked,
+  pending,
+  ownerChecked,
   onToggle,
   usernameFor,
 }: {
   row: BbcodeImageRow;
   checked: boolean;
+  /** Uploaders still without a current profile read; until that is 0 nothing is deletable. */
+  pending: number;
+  /** Whether this image's own uploader is among the profiles already read. */
+  ownerChecked: boolean;
   onToggle: () => void;
   usernameFor: (userId: number | null) => string | null;
 }) {
   const selectable = row.status === "unused";
   const uploader = usernameFor(row.uploaderId);
   const users = row.usedBy.map((id) => usernameFor(id) ?? `#${id}`);
+  // No uploader in the metadata means no profile can ever clear this one, so it
+  // must not read as "checking will resolve it".
+  const orphan = row.status === "unknown" && row.uploaderId === null;
+
+  const label = row.status !== "unknown"
+    ? STATUS_LABEL[row.status]
+    : orphan
+      ? "no uploader"
+      : pending > 0
+        ? `${pending} left to check`
+        : STATUS_LABEL.unknown;
+
+  // The one thing a check just bought for this row: its own uploader's page
+  // does not embed it. It still takes every other uploader to call it unused.
+  // The uploader is named on the right of the row already, so this says what
+  // the check found rather than repeating who it was about.
+  const note = users.length > 0
+    ? users.join(", ")
+    : orphan
+      ? "no profile can clear it"
+      : ownerChecked
+        ? "not on the uploader's profile"
+        : null;
+
+  const reason = row.status === "in-use"
+    ? "Still embedded on a profile."
+    : orphan
+      ? "No uploader is recorded for this image, so no profile can clear it."
+      : `${pending} uploader profile${pending === 1 ? "" : "s"} still to check.`;
 
   return (
     <div className="flex items-center gap-3 px-3 py-2.5">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onToggle}
-        disabled={!selectable}
-        title={selectable ? "Select for deletion" : "Only unused images can be deleted"}
-        className="h-4 w-4 flex-shrink-0 accent-osu-pink cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
-      />
+      {selectable ? (
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onToggle}
+          title="Select for deletion"
+          className="h-4 w-4 flex-shrink-0 accent-osu-pink cursor-pointer"
+        />
+      ) : (
+        // A disabled checkbox here is a row of blocked cursors with the reason
+        // buried in a tooltip; a placeholder holds the column without inviting
+        // the click, and the badge beside it says what is missing.
+        <span aria-hidden title={reason} className="h-4 w-4 flex-shrink-0 rounded-sm border border-osu-b3/40" />
+      )}
       {row.url ? (
         <a href={row.url} target="_blank" rel="noreferrer" className="flex-shrink-0">
           <img
@@ -573,11 +621,9 @@ function ImageRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${STATUS_CLASS[row.status]}`}>
-            {STATUS_LABEL[row.status]}
+            {label}
           </span>
-          {users.length > 0 ? (
-            <span className="truncate text-[12px] text-osu-l2">{users.join(", ")}</span>
-          ) : null}
+          {note ? <span className="truncate text-[12px] text-osu-l2">{note}</span> : null}
         </div>
         <div className="mt-0.5 truncate font-mono text-[11px] text-osu-f1">{row.fileName}</div>
       </div>

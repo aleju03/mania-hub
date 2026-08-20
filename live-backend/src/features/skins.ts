@@ -135,6 +135,9 @@ export interface SkinRow {
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
+  // When the skin first became visible to everyone else, which is not the
+  // upload date for anything uploaded private. Null while it never has been.
+  listedAt: string | null;
 }
 
 export interface SkinSummary {
@@ -180,7 +183,12 @@ export interface SkinSummary {
   oskUpdatedAt: string | null;
   status: "pending" | "published" | "hidden";
   visibility: SkinVisibility;
+  // When the .osk was uploaded, and when the skin first reached the catalog.
+  // They are the same date for a skin uploaded public; a skin that spent its
+  // first weeks private carries the later listing date, which is the one the
+  // browse cards age off and the newest sort orders by.
   publishedAt: string | null;
+  listedAt: string | null;
 }
 
 // Enough to point the uploader at the skin that already carries these bytes.
@@ -786,12 +794,16 @@ export async function finishSkin(db: Db, id: string, token: string, recipes?: un
   }
   const now = nowIso();
   const slug = row.slug ?? await uniqueSkinSlug(db, row.name, id);
+  // A public upload reaches the catalog the moment it publishes, so both
+  // stamps are this instant. A private one is not listed by publishing: its
+  // listed_at stays null until the uploader turns it public.
+  const listedAt = row.visibility === "private" ? null : now;
   await exec(
     db,
     `update skins set
-       status = 'published', slug = ?, published_at = ?, upload_token = null, token_expires_at = null, updated_at = ?
+       status = 'published', slug = ?, published_at = ?, listed_at = ?, upload_token = null, token_expires_at = null, updated_at = ?
      where id = ?`,
-    [slug, now, now, id],
+    [slug, now, listedAt, now, id],
   );
   const published = await getSkin(db, id);
   // The ticket holder is the uploader, so a private skin comes back whole -
@@ -943,17 +955,24 @@ export async function getSkinByRef(db: Db, ref: string): Promise<SkinRow | null>
 
 export type SkinsListSort = "newest" | "oldest" | "downloads" | "downloads-asc" | "size" | "size-asc";
 
+// How recent a skin is, for every sort that orders or ties on recency: the day
+// it reached the catalog, not the day its file was uploaded. Only a skin that
+// spent time private tells the two apart, and for that one the upload date is
+// the wrong answer - it would enter the browse page already weeks deep. The
+// fallback covers the private shelf, whose rows have never been listed at all.
+const LISTED_AT_SQL = "coalesce(listed_at, published_at)";
+
 // A row with no stored .osk and one never published carry a null in the column
 // being sorted on. Null orders below every value in SQLite, so descending drops
 // them to the bottom by itself and only the ascending halves need the null test
 // to keep them off the top.
 const SKINS_ORDER_SQL: Record<SkinsListSort, string> = {
-  newest: "published_at desc, created_at desc",
-  oldest: "published_at is null, published_at asc, created_at asc",
-  downloads: "download_count desc, published_at desc, created_at desc",
-  "downloads-asc": "download_count asc, published_at desc, created_at desc",
-  size: "osk_size_bytes desc, published_at desc, created_at desc",
-  "size-asc": "osk_size_bytes is null, osk_size_bytes asc, published_at desc, created_at desc",
+  newest: `${LISTED_AT_SQL} desc, created_at desc`,
+  oldest: `${LISTED_AT_SQL} is null, ${LISTED_AT_SQL} asc, created_at asc`,
+  downloads: `download_count desc, ${LISTED_AT_SQL} desc, created_at desc`,
+  "downloads-asc": `download_count asc, ${LISTED_AT_SQL} desc, created_at desc`,
+  size: `osk_size_bytes desc, ${LISTED_AT_SQL} desc, created_at desc`,
+  "size-asc": `osk_size_bytes is null, osk_size_bytes asc, ${LISTED_AT_SQL} desc, created_at desc`,
 };
 
 /** The list sort a query string asked for; anything unknown means newest. */
@@ -1435,11 +1454,20 @@ export async function setSkinVisibility(
   if (!row || row.status === "pending") return { ok: false, error: "not_found" };
   if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
   if (row.visibility === visibility) return { ok: true, skin: row, changed: false };
+  const now = nowIso();
   const secret = visibility === "private" ? newPrivateSkinSecret() : null;
+  // Turning public for the first time is when the skin enters the catalog, and
+  // the browse page's newest sort reads that date rather than the upload one -
+  // otherwise a skin that was private for three weeks arrives three weeks deep
+  // and nobody sees it. Only the first listing stamps: a skin pulled back
+  // private and put up again keeps its original date, so the toggle is not a
+  // bump button. Null stays null while private, so the shelf can tell a skin
+  // the catalog has never seen from one that has.
+  const listedAt = visibility === "public" ? row.listedAt ?? now : row.listedAt;
   await exec(
     db,
-    "update skins set visibility = ?, private_secret = ?, updated_at = ? where id = ?",
-    [visibility, secret, nowIso(), id],
+    "update skins set visibility = ?, private_secret = ?, listed_at = ?, updated_at = ? where id = ?",
+    [visibility, secret, listedAt, now, id],
   );
   const updated = await getSkin(db, id);
   return updated ? { ok: true, skin: updated, changed: true } : { ok: false, error: "not_found" };
@@ -1524,6 +1552,7 @@ export function toSkinSummary(row: SkinRow, options?: { asOwner?: boolean; inclu
     status: row.status,
     visibility: row.visibility,
     publishedAt: row.publishedAt,
+    listedAt: row.listedAt,
   };
   if (row.visibility !== "private") return summary;
   if (options?.asOwner) {
@@ -1620,6 +1649,7 @@ function rowToSkin(row: Record<string, unknown>): SkinRow {
     createdAt: String(row.created_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
     publishedAt: textOrNull(row.published_at),
+    listedAt: textOrNull(row.listed_at),
   };
 }
 

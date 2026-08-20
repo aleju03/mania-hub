@@ -2,6 +2,7 @@ import type { InValue } from "@libsql/client";
 import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch, parseJson } from "../db.js";
 import { parseCardMotif, type CardMotif } from "./card-motif.js";
+import { logInfo } from "../logger.js";
 
 // Synced maniacard pack wallets now keep economy metadata in pack_wallets and
 // collection cards in pack_collection_cards. The legacy blob shape is still
@@ -43,6 +44,11 @@ export interface StoredPackCard {
   recycledCopies: number;
   firstPulledAt: number;
   lastPulledAt: number;
+  /* When /admin/collections handed this holding out, null for one that was
+     pulled. A granted card is minted a serial like any other, so this is the
+     only thing that stops a surface saying its holder was the Nth person to
+     pull it, which they were not. */
+  grantedAt?: number | null;
   /* Mint order for this owner (#1 pulled the card first, anywhere), and how
      many serials the card has ever handed out. Null on cards whose pulls were
      never logged: anonymous wallets, and everything from before the registry.
@@ -300,6 +306,29 @@ export function tierRank(tier: string | null): number {
    talk one down. */
 const AWARDED_TIERS = new Set(["eternal", "goat"]);
 
+/* Of those two, the one no pack can deal: the honorary slot deals GOAT, while
+   "eternal" only ever comes off the grant desk. So a holding at one of these
+   is by construction a card somebody was given rather than pulled, which is
+   what makes it its own collectible. Mirrors VALID_TIERS in pack-pulls.ts (the
+   list a pull may claim); pack-wallets.test.ts holds the two to being exact
+   complements so neither can drift. */
+export const GRANT_ONLY_TIERS: ReadonlySet<string> = new Set(["eternal"]);
+
+/* The three fields the grant desk can give one holding, and the whole of what
+   separates one granted card from another. Read off an ownership row. */
+export interface PackCardCustomization {
+  tier: string | null;
+  tierLabel: string | null;
+  motif: string | null;
+}
+
+/* Whether a holding is a granted card rather than a pulled one. Its own tier,
+   its own badge or its own background art each make it one. */
+export function isCustomizedPackCard(card: PackCardCustomization): boolean {
+  if (card.tier !== null && GRANT_ONLY_TIERS.has(card.tier)) return true;
+  return Boolean(card.tierLabel) || Boolean(card.motif);
+}
+
 /* The only tiers that may be stored. Everything else is a card the server
    treats as unrated. */
 export function isKnownTier(tier: unknown): tier is string {
@@ -410,15 +439,55 @@ export function packCardKey(cardUserId: number, tier: string | null): string {
   return tier === "goat" ? `${cardUserId}:goat` : String(cardUserId);
 }
 
+/* The third key form, and the only one no tier can be derived from.
+ *
+ * A ":v<n>" key addresses one hand-granted card of a player: a tier no pack
+ * deals, a badge, a background art, or any combination the grant desk chose.
+ * The number is the player's, not the collector's, so the same card handed to
+ * three people is one collectible three collections hold - which is the whole
+ * point of giving it a key of its own instead of matching on its columns.
+ *
+ * No pack, mint or wallet sync may produce one: every one of those derives its
+ * key from a tier, and only /admin/collections mints a variant number. That is
+ * what keeps a forged wallet from inventing a card nobody granted. */
+const VARIANT_KEY_PATTERN = /^(\d+):v(\d+)$/;
+
+export function packCardVariantKey(cardUserId: number, variant: number): string {
+  return `${cardUserId}:v${variant}`;
+}
+
+export function isPackCardVariantKey(key: string): boolean {
+  return VARIANT_KEY_PATTERN.test(key);
+}
+
+/* The player a key belongs to, 0 for anything that is not a key. Every form
+   starts with the player id, which is what lets a route take a key where it
+   used to take an id. */
+export function packCardKeyUserId(key: string): number {
+  const userId = Math.floor(Number(key.split(":")[0]));
+  return Number.isInteger(userId) && userId > 0 ? userId : 0;
+}
+
+/* The variant number in a key, or 0 for the two derived forms. */
+export function packCardVariantNumber(key: string): number {
+  const match = VARIANT_KEY_PATTERN.exec(key);
+  return match ? Number(match[2]) : 0;
+}
+
 /* Accepts a client-supplied key, rejecting anything that is not a player id
-   with an optional ":goat" suffix. */
+   with an optional ":goat" or ":v<n>" suffix. Bounded digits on the variant so
+   a key stays a key: the routes that take one address a row, and an unbounded
+   number is just a long string to store and compare. */
 export function normalizePackCardKey(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const match = /^(\d+)(:goat)?$/.exec(value.trim());
+  const match = /^(\d+)(:goat|:v\d{1,6})?$/.exec(value.trim());
   if (!match) return null;
   const userId = Math.floor(Number(match[1]));
   if (!Number.isInteger(userId) || userId <= 0) return null;
-  return match[2] ? `${userId}:goat` : String(userId);
+  if (!match[2]) return String(userId);
+  if (match[2] === ":goat") return `${userId}:goat`;
+  const variant = Math.floor(Number(match[2].slice(2)));
+  return variant > 0 ? packCardVariantKey(userId, variant) : null;
 }
 
 function claimedTier(raw: { tier?: unknown }, userId: number): string | null {
@@ -749,9 +818,21 @@ async function importCardsFromPayload(
   const parsed = parseJson<WalletPayload | null>(payload, null);
   if (!parsed?.cards || typeof parsed.cards !== "object") return;
 
-  const cards = Object.values(parsed.cards)
-    .map((card) => normalizeCard(card, now))
-    .filter((card): card is StoredPackCard => Boolean(card));
+  /* A wallet is keyed by card key, so the browser says which holding each card
+     is - including the granted ones, whose ":v<n>" key no tier can be derived
+     from. Believed only for a key this collector already holds: the desk mints
+     those, and a browser that could name a new one could mint itself a card
+     nobody granted. Everything else keeps deriving its key from the tier, so a
+     forged key falls back to the player's ordinary card rather than being
+     refused (a wallet edited by hand still syncs, exactly as before). */
+  const entries = Object.entries(parsed.cards)
+    .map(([key, value]) => ({ claimed: normalizePackCardKey(key), card: normalizeCard(value, now) }))
+    .filter((entry): entry is { claimed: string | null; card: StoredPackCard } => entry.card !== null);
+  const granted = entries.some((entry) => entry.claimed !== null && isPackCardVariantKey(entry.claimed));
+  const held = granted ? await listOwnedVariantKeys(db, userId) : new Set<string>();
+  const cards = entries.map(({ claimed, card }) =>
+    claimed !== null && held.has(claimed) ? { ...card, cardKey: claimed } : card,
+  );
   if (cards.length === 0) return;
   // Interning happens first because the ownership rows need the ids it hands
   // back; the rest goes down as one batch, so an import costs one write-lock
@@ -764,6 +845,22 @@ async function importCardsFromPayload(
     ...(await packCardIdentityStatements(db, cards, now)),
     ...cards.map((card) => packOwnershipUpsertStatement(userId, card, now, mode, skillsIds)),
   ]);
+}
+
+/* The granted cards this collector holds, by key. Only the ":v<n>" ones: the
+   two derived forms need no lookup, since a tier produces them. */
+async function listOwnedVariantKeys(db: Db, ownerUserId: number): Promise<Set<string>> {
+  const rows = (await exec(
+    db,
+    "select card_key from pack_collection_cards where owner_user_id = ? and card_key like '%:v%'",
+    [ownerUserId],
+  )).rows;
+  const keys = new Set<string>();
+  for (const row of rows) {
+    const key = typeof row.card_key === "string" ? row.card_key : "";
+    if (isPackCardVariantKey(key)) keys.add(key);
+  }
+  return keys;
 }
 
 /* Maps each skills snapshot to its interned id, minting rows for snapshots
@@ -814,6 +911,13 @@ export function packCardTierSlot(tier: string | null): string {
   return tier ?? "";
 }
 
+/* Where a card is stored: the key it already sits on when the caller resolved
+   one, else the key its tier derives. Only the wallet import resolves one, and
+   only for a granted card the collector is known to hold. */
+function storedCardKey(card: StoredPackCard): string {
+  return card.cardKey ?? packCardKey(card.userId, card.tier);
+}
+
 const IN_CHUNK = 500;
 
 function chunked<T>(values: T[]): T[][] {
@@ -835,11 +939,11 @@ function chunked<T>(values: T[]): T[][] {
 async function packCardIdentityStatements(db: Db, cards: StoredPackCard[], now: number): Promise<DbStatement[]> {
   const byVariant = new Map<string, StoredPackCard>();
   for (const card of cards) {
-    byVariant.set(`${packCardKey(card.userId, card.tier)}|${packCardTierSlot(card.tier)}`, card);
+    byVariant.set(`${storedCardKey(card)}|${packCardTierSlot(card.tier)}`, card);
   }
 
   const known = new Set<string>();
-  const cardKeys = [...new Set([...byVariant.values()].map((card) => packCardKey(card.userId, card.tier)))];
+  const cardKeys = [...new Set([...byVariant.values()].map(storedCardKey))];
   for (const keys of chunked(cardKeys)) {
     const rows = (await exec(
       db,
@@ -876,7 +980,7 @@ async function packCardIdentityStatements(db: Db, cards: StoredPackCard[], now: 
          card_key, tier, card_user_id, username, avatar_url, country_code, tier_label, updated_at
        ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
-        packCardKey(card.userId, card.tier),
+        storedCardKey(card),
         packCardTierSlot(card.tier),
         card.userId,
         vouched?.username || card.username,
@@ -940,7 +1044,7 @@ function packOwnershipUpsertStatement(
     args: [
       ownerUserId,
       card.userId,
-      packCardKey(card.userId, card.tier),
+      storedCardKey(card),
       card.tier,
       skillsIdFor(card, skillsIds),
       card.pp,
@@ -976,6 +1080,7 @@ function cardFromRow(row: Record<string, unknown>): StoredPackCard {
     recycledCopies: Number(row.recycled_copies) || 0,
     firstPulledAt: Number(row.first_pulled_at) || 0,
     lastPulledAt: Number(row.last_pulled_at) || 0,
+    grantedAt: Number(row.granted_at) > 0 ? Number(row.granted_at) : null,
     serial: Number(row.serial) > 0 ? Number(row.serial) : null,
     mintedTotal: Number(row.minted_total) || 0,
   };
@@ -1238,14 +1343,85 @@ export async function setPackShowcase(db: Db, ownerUserId: number, cardKeys: unk
     kept = requested.filter((key) => owned.has(key)).slice(0, PACK_SHOWCASE_MAX_CARDS);
   }
   const now = Date.now();
+  /* A card that was already on the shelf keeps the stamp it went up with. The
+     wall is ordered by it, so it has to mean "when this card was chosen": if
+     the whole shelf were restamped, reordering your five would refloat all
+     five, and dropping one card would drag the other four back to the front
+     with it. */
+  const stampedAt = new Map(
+    (await exec(
+      db,
+      "select card_key, updated_at from pack_showcase_cards where owner_user_id = ?",
+      [ownerUserId],
+    )).rows.map((row) => [String(row.card_key), Number(row.updated_at) || now]),
+  );
   await execBatch(db, [
     { sql: "delete from pack_showcase_cards where owner_user_id = ?", args: [ownerUserId] },
     ...kept.map((key, position) => ({
       sql: "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, ?, ?, ?)",
-      args: [ownerUserId, position, key, now] as InValue[],
+      args: [ownerUserId, position, key, stampedAt.get(key) ?? now] as InValue[],
     })),
   ]);
   return kept;
+}
+
+/* The showcase wall, one row per chosen card rather than one per collector.
+   Most recently chosen first, which with the stamp above means the card that
+   most recently went up, not the shelf most recently touched.
+
+   Paged over the cards because that is what the page shows: a gallery you
+   browse, where whose card it is comes out of inspecting it. The table holds
+   at most five rows per collector, so the sort is over thousands of rows even
+   with every collector on the site taking part. */
+export interface ShowcasedCard {
+  ownerUserId: number;
+  showcasedAt: number;
+  card: StoredPackCard;
+}
+
+export async function listShowcasedCards(
+  db: Db,
+  options: { page: number; pageSize: number },
+): Promise<{ cards: ShowcasedCard[]; total: number }> {
+  const pageSize = Math.min(60, Math.max(1, Math.floor(options.pageSize) || 1));
+  const page = Math.max(0, Math.floor(options.page) || 0);
+  // Pins whose card has since been fully recycled draw nothing, so they are
+  // not counted either; otherwise the last page could come back empty.
+  const joinSql = `from pack_showcase_cards
+     join pack_collection_cards
+       on pack_collection_cards.owner_user_id = pack_showcase_cards.owner_user_id
+       and pack_collection_cards.card_key = pack_showcase_cards.card_key
+       and pack_collection_cards.copies > 0`;
+  const total = Number((await exec(db, `select count(*) as total ${joinSql}`)).rows[0]?.total) || 0;
+  if (total === 0) return { cards: [], total: 0 };
+  const rows = (await exec(
+    db,
+    `${CARD_SELECT_SQL},
+       ${liveUserFieldSql("username")} as live_username,
+       ${liveUserFieldSql("avatar_url")} as live_avatar_url,
+       ${liveUserFieldSql("country_code")} as live_country_code,
+       serials.serial as serial,
+       (select max(other.serial) from pack_card_serials other
+         where other.card_key = pack_collection_cards.card_key) as minted_total,
+       pack_showcase_cards.updated_at as showcased_at
+     ${joinSql}
+     ${CARD_CATALOG_JOIN_SQL}
+     left join pack_card_serials serials
+       on serials.card_key = pack_collection_cards.card_key
+       and serials.owner_user_id = pack_collection_cards.owner_user_id
+     order by pack_showcase_cards.updated_at desc,
+       pack_showcase_cards.owner_user_id asc, pack_showcase_cards.position asc
+     limit ? offset ?`,
+    [pageSize, page * pageSize],
+  )).rows;
+  return {
+    cards: rows.map((row) => ({
+      ownerUserId: Number(row.owner_user_id),
+      showcasedAt: Number(row.showcased_at) || 0,
+      card: cardFromRow(row as Record<string, unknown>),
+    })),
+    total,
+  };
 }
 
 /**
@@ -1329,7 +1505,12 @@ export async function applyPackCollectionCardMint(
         }]
       : [];
 
-  const nextKey = packCardKey(cardUserId, tier);
+  /* A granted card stays on its own key. Every other row's key is derived from
+     its tier, so a mint that changes the tier moves the row; a variant number
+     is not derivable, and following that rule here would fold a hand-granted
+     card into the player's ordinary one the first time the collection's repair
+     pass minted it a snapshot. */
+  const nextKey = isPackCardVariantKey(cardKey) ? cardKey : packCardKey(cardUserId, tier);
   const tierSlot = packCardTierSlot(tier);
   const skillsId = (await internPackCardSkills(db, [skillsJson])).get(skillsJson) ?? null;
   const statements: DbStatement[] = [
@@ -1409,6 +1590,55 @@ export async function applyPackCollectionCardMint(
   );
   await execBatch(db, statements);
   return { applied: true, cardKey: nextKey };
+}
+
+/* The key a granted card should live under, given what the desk is granting.
+ *
+ * A customization the player already has a variant for reuses that variant's
+ * number, wherever it is held: handing the same card to a second collector has
+ * to put them both in the same collectible, or "in N collections" is back to
+ * counting nothing. Anything new mints the next number for that player.
+ *
+ * Matching is on the three granted fields exactly, nulls included, which is
+ * why it compares the stored text rather than a parsed motif: two grants are
+ * the same card when the desk wrote the same thing. */
+export async function resolvePackCardVariantKey(
+  db: Db,
+  cardUserId: number,
+  customization: PackCardCustomization,
+): Promise<string> {
+  const prefix = `${cardUserId}:v`;
+  const match = (await exec(
+    db,
+    `select card_key from pack_collection_cards
+     where card_user_id = ? and card_key like ?
+       and tier is ? and tier_label is ? and motif is ?
+     order by card_key asc limit 1`,
+    [cardUserId, `${prefix}%`, customization.tier, customization.tierLabel, customization.motif],
+  )).rows[0];
+  const existing = typeof match?.card_key === "string" ? match.card_key : null;
+  if (existing && isPackCardVariantKey(existing)) return existing;
+  return packCardVariantKey(cardUserId, await nextPackCardVariantNumber(db, cardUserId));
+}
+
+/* One past the highest variant number this player has ever had, counting the
+   catalog as well as the collections: a variant whose only holder recycled it
+   away keeps its number rather than handing it to a different card. */
+async function nextPackCardVariantNumber(db: Db, cardUserId: number): Promise<number> {
+  const prefix = `${cardUserId}:v`;
+  const rows = (await exec(
+    db,
+    `select card_key from pack_collection_cards where card_user_id = ? and card_key like ?
+     union
+     select card_key from pack_cards where card_user_id = ? and card_key like ?`,
+    [cardUserId, `${prefix}%`, cardUserId, `${prefix}%`],
+  )).rows;
+  let highest = 0;
+  for (const row of rows) {
+    const key = typeof row.card_key === "string" ? row.card_key : "";
+    highest = Math.max(highest, packCardVariantNumber(key));
+  }
+  return highest + 1;
 }
 
 /* A skills snapshot is a handful of named numbers; anything larger is not one. */
@@ -1694,6 +1924,101 @@ export async function mergeImportedPackWallet(
    Guarded on the column rather than a marker: the check is a pragma read, and
    tying it to the schema means a restored or hand-repaired database can never
    skip a rebuild it actually needs. */
+/* Granted cards predate variant keys, so the ones already handed out sit on
+   the player's ordinary key, where they are indistinguishable from a pulled
+   card by anything but their columns. Moves each onto a variant key once, with
+   its serial and its showcase slot, so every surface can address a card by key
+   from here on and nothing has to match on tier, badge and art to guess.
+ *
+ * Grouped by what was granted, not by holder: two collectors handed the same
+ * card land on one variant, which is the same rule the desk mints under.
+ * Writes nothing on a database with no granted cards, which is every boot
+ * after the first. */
+export async function ensurePackCardVariantKeys(db: Db): Promise<number> {
+  const grantOnly = [...GRANT_ONLY_TIERS].map((tier) => `'${tier}'`).join(", ") || "''";
+  /* Two repairs in one scan, since neither predicate has an index and the
+     table is millions of rows: the holdings still on a plain key, and the ones
+     already moved but granted before there was a column saying so. */
+  const rows = (await exec(
+    db,
+    `select owner_user_id, card_user_id, card_key, tier, tier_label, motif, first_pulled_at
+     from pack_collection_cards
+     where (card_key not like '%:%'
+             and (tier_label is not null or motif is not null or tier in (${grantOnly})))
+        or (card_key like '%:v%' and granted_at is null)
+     order by card_user_id asc, owner_user_id asc`,
+  )).rows;
+  if (rows.length === 0) return 0;
+
+  const statements: DbStatement[] = [];
+  const now = Date.now();
+  /* Numbers handed out inside this pass, so two holders of the same grant get
+     the same key and two different grants of one player do not collide. */
+  const assigned = new Map<string, string>();
+  const nextByPlayer = new Map<number, number>();
+  for (const row of rows) {
+    const cardUserId = Number(row.card_user_id);
+    const ownerUserId = Number(row.owner_user_id);
+    const oldKey = String(row.card_key);
+    const tier = typeof row.tier === "string" ? row.tier : null;
+    const tierLabel = typeof row.tier_label === "string" ? row.tier_label : null;
+    const motif = typeof row.motif === "string" ? row.motif : null;
+    /* A card only the desk can have handed out, dated by the pull it stands
+       in for, so nothing downstream says its holder pulled it. */
+    const grantedAt = Number(row.first_pulled_at) || now;
+    if (isPackCardVariantKey(oldKey)) {
+      statements.push({
+        sql: "update pack_collection_cards set granted_at = ? where owner_user_id = ? and card_key = ? and granted_at is null",
+        args: [grantedAt, ownerUserId, oldKey],
+      });
+      continue;
+    }
+    const signature = `${cardUserId}|${tier ?? ""}|${tierLabel ?? ""}|${motif ?? ""}`;
+    let newKey = assigned.get(signature);
+    if (!newKey) {
+      let next = nextByPlayer.get(cardUserId);
+      if (next === undefined) next = await nextPackCardVariantNumber(db, cardUserId);
+      newKey = packCardVariantKey(cardUserId, next);
+      nextByPlayer.set(cardUserId, next + 1);
+      assigned.set(signature, newKey);
+      statements.push({
+        // The variant's face, copied off the key it is leaving rather than
+        // invented: the ordinary key's catalog row stays where it is, since
+        // every collector who pulled this player still reads it.
+        sql: `insert or ignore into pack_cards (
+                card_key, tier, card_user_id, username, avatar_url, country_code, tier_label, updated_at
+              )
+              select ?, tier, card_user_id, username, avatar_url, country_code, tier_label, ?
+              from pack_cards where card_key = ? and tier = ?`,
+        args: [newKey, now, oldKey, packCardTierSlot(tier)],
+      });
+    }
+    statements.push(
+      {
+        sql: `update pack_collection_cards set card_key = ?, updated_at = ?, granted_at = coalesce(granted_at, ?)
+              where owner_user_id = ? and card_key = ?`,
+        args: [newKey, now, grantedAt, ownerUserId, oldKey],
+      },
+      {
+        // The mint order follows the card, not the key it used to sit on.
+        sql: "update pack_card_serials set card_key = ? where card_key = ? and owner_user_id = ?",
+        args: [newKey, oldKey, ownerUserId],
+      },
+      {
+        sql: "update pack_showcase_cards set card_key = ? where owner_user_id = ? and card_key = ?",
+        args: [newKey, ownerUserId, oldKey],
+      },
+    );
+  }
+  await execBatch(db, statements);
+  logInfo("pack_card_variant_keys_backfilled", {
+    holdings: rows.length,
+    variants: assigned.size,
+    detail: "moved hand-granted holdings onto their own card keys",
+  });
+  return rows.length;
+}
+
 export async function ensurePackCollectionCardKeys(db: Db): Promise<boolean> {
   const columns = (await exec(db, "pragma table_info(pack_collection_cards)")).rows;
   if (columns.length === 0) return false;

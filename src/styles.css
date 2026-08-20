@@ -188,6 +188,14 @@ html[data-custom-cursor="true"] * {
 }
 .score-enter { animation: score-in 240ms ease-out; }
 
+/* Dynamic renders resolving: the page has no skeleton, so whatever the settings
+   turn out to be - the pitch or the editor - arrives on a fade and a short rise
+   instead of appearing mid-frame. */
+@keyframes signature-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+.signature-enter { animation: signature-in 320ms cubic-bezier(0.22, 1, 0.36, 1); }
+
 :root[data-window-active="false"] .animate-spin,
 :root[data-window-active="false"] .animate-pulse,
 :root[data-window-active="false"] .animate-ping,

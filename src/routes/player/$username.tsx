@@ -66,7 +66,7 @@ import { KeymodeScaleNote, SkillBreakdownBody, SkillModePanel } from "../../comp
 import { qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "../../lib/skill-axes";
 import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
-import { buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
+import { buildPpCumulativeDistribution, buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
 import {
   playedWithinOnlineWindow,
   readPlayerRecentPlay,
@@ -471,11 +471,6 @@ type BestPpSort = "pp-desc" | "pp-asc";
 type BestAgeSort = "newest" | "oldest";
 type BestSort = BestPpSort | BestAgeSort;
 type PpDistributionMode = "bands" | "cumulative";
-type PpCumulativeDistributionRow = {
-  threshold: number;
-  count: number;
-  total: number;
-};
 const PP_DISTRIBUTION_MODE_STORAGE_KEY = "mania-hub-pp-distribution-mode-v1";
 
 function isPpDistributionMode(value: unknown): value is PpDistributionMode {
@@ -733,36 +728,6 @@ function getScoreListSignature(scores: OsuScore[]): string {
 
 function scoreListsAreEquivalent(a: OsuScore[], b: OsuScore[]): boolean {
   return a.length === b.length && getScoreListSignature(a) === getScoreListSignature(b);
-}
-
-function getPpCumulativeDistributionStep(top: number): number {
-  return top < 250 ? 50 : 100;
-}
-
-function buildPpCumulativeDistribution(scores: OsuScore[]): PpCumulativeDistributionRow[] {
-  const ppValues = scores
-    .map((score) => score.pp)
-    .filter((pp): pp is number => typeof pp === "number" && Number.isFinite(pp))
-    .sort((a, b) => b - a);
-
-  if (!ppValues.length) return [];
-
-  const top = ppValues[0];
-  const bottom = ppValues[ppValues.length - 1];
-  const step = getPpCumulativeDistributionStep(top);
-  const maxThreshold = Math.max(0, Math.floor(top / step) * step);
-  const minThreshold = Math.max(0, Math.floor(bottom / step) * step);
-  const rows: PpCumulativeDistributionRow[] = [];
-  let count = 0;
-
-  for (let threshold = maxThreshold; threshold >= minThreshold; threshold -= step) {
-    while (count < ppValues.length && ppValues[count] >= threshold) {
-      count += 1;
-    }
-    rows.push({ threshold, count, total: ppValues.length });
-  }
-
-  return rows;
 }
 
 function profileUsersAreEquivalent(a: OsuUser | null, b: OsuUser): boolean {

@@ -16,7 +16,15 @@ import { CardSpotlight, type CardSpotlightTarget } from "../CardSpotlight";
 import { CollectionCardPlaceholder, CollectionCardTile } from "../CardTile";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "../cardThumbnailCache";
 import { useCardThumbnails } from "../useCardThumbnails";
-import { Section, SectionHeading, SkeletonBlock, StatSkeleton } from "./chrome";
+import {
+  HeadingCount,
+  HeadingSkeleton,
+  NoteSkeleton,
+  Section,
+  SectionHeading,
+  SkeletonBlock,
+  StatSkeleton,
+} from "./chrome";
 import { useDebounced } from "./useDebounced";
 import { ShowcaseCards } from "./ShowcaseCards";
 
@@ -326,19 +334,37 @@ export function CollectorShelf({ collector, tab }: {
           <div className="flex items-center gap-3">
             <SkeletonBlock className="h-[52px] w-[52px] rounded-full" />
             <div>
-              <SkeletonBlock className="h-4 w-32" />
-              <SkeletonBlock className="mt-2 h-2.5 w-24" />
+              <SkeletonBlock className="h-5 w-32" />
+              <NoteSkeleton className="mt-0.5" />
             </div>
           </div>
           <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
-            {[0, 1, 2, 3].map((index) => <StatSkeleton key={index} />)}
+            {[0, 1, 2, 3].map((index) => <StatSkeleton key={index} variant="shelf" withHint />)}
           </div>
+          <NoteSkeleton width="w-80" className="mt-5" />
         </div>
+        {/* The card section's own chrome, at the height it renders it at: the
+            heading and the search box on one row, the tier filters under it,
+            then a full page of cards. Leaving them out dropped the whole grid
+            down the page the moment the cards arrived. */}
         <div className="mt-10">
-          <SkeletonBlock className="h-2.5 w-24" />
-          <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-6">
-            {Array.from({ length: 12 }, (_, index) => <CollectionCardPlaceholder key={index} tier={null} />)}
+          <div className="flex h-8 items-center gap-4">
+            <HeadingSkeleton width="w-24" />
+            <SkeletonBlock className="h-8 min-w-[160px] flex-1 rounded-lg sm:max-w-[220px]" />
           </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {[0, 1, 2, 3, 4, 5].map((index) => (
+              <SkeletonBlock key={index} className="h-[25px] w-16 rounded-full" />
+            ))}
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-6">
+            {Array.from({ length: PAGE_SIZE }, (_, index) => (
+              <CollectionCardPlaceholder key={index} tier={null} />
+            ))}
+          </div>
+          {/* The pager's row, held open for the same reason the directory
+              holds its own. */}
+          <div className="mt-4 h-[26px]" />
         </div>
       </div>
     );
@@ -360,7 +386,7 @@ export function CollectorShelf({ collector, tab }: {
         <Section className="mt-10">
           <SectionHeading>showcase</SectionHeading>
           <div className="mt-3">
-            <ShowcaseCards cards={profile.showcase} />
+            <ShowcaseCards cards={profile.showcase} ownerUserId={profile.collector.userId} />
           </div>
         </Section>
       )}
@@ -369,7 +395,7 @@ export function CollectorShelf({ collector, tab }: {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <SectionHeading>
             every card
-            <span translate="no" className="ml-1.5 text-osu-f1/70 tabular-nums">{formatNumber(total)}</span>
+            <HeadingCount value={cardPage ? total : null} />
           </SectionHeading>
           <label className="relative flex min-w-[160px] flex-1 items-center sm:max-w-[220px]">
             <Search size={13} className="pointer-events-none absolute left-2 text-osu-f1" />
@@ -426,7 +452,7 @@ export function CollectorShelf({ collector, tab }: {
           loading={cardsLoading}
           liftedCardKey={liftedCardKey}
           onSpotlight={(target, cardKey) => {
-            setSpotlight(target);
+            setSpotlight({ ...target, ownerUserId: profile.collector.userId });
             setLiftedCardKey(cardKey);
           }}
         />

@@ -87,7 +87,9 @@ describe("the granted background art", () => {
     const shaders = read("./cardShaders.ts");
     expect(shaders).toContain("vec2 center = id + 0.5 + (vec2(");
     expect(shaders).not.toContain("if (variant < 0.42) return vec4(0.0);");
-    for (const still of [read("./cardTexture.ts"), read("../../../routes/api/og.ts")]) {
+    // The flat card front moved out of routes/api/og.ts and into lib, where
+    // every surface that draws one now reads it from.
+    for (const still of [read("./cardTexture.ts"), read("../../../lib/maniacard-art.ts")]) {
       expect(still).toMatch(/\(col \+ 0\.5 \+ \(/);
       // The triangles' skip, which both files still use for their own flecks.
       expect(still).not.toMatch(/\(index \* 19\.17 \+ 4\.2\) < 0\.42\) continue/);

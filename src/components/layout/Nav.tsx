@@ -158,6 +158,7 @@ export function Nav() {
     <img src="/images/icons/ninja.svg" alt="Ninja" draggable={false} className="h-4 w-4" />
   );
   const devToolsTitle = adminMode ? "Admin tools" : "Dev tools";
+  const adminTools = adminToolsFor(adminMode);
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
@@ -742,25 +743,32 @@ export function Nav() {
                      down the page. The dividers are borders on the cells rather
                      than a grid gap, because a gap is a hole - the menu's own
                      background does not paint there and the page reads through
-                     the seams. */
+                     the seams. An odd number of tools would leave the last row
+                     half empty, so the final one takes the whole width and
+                     centers, instead of dangling in the left column. */
                   <div
                     className="absolute right-0 top-full mt-2 w-56 grid grid-cols-2 rounded-lg bg-osu-b5 border border-osu-b3/50 shadow-xl overflow-hidden z-[80]"
                     role="menu"
                   >
-                    {adminToolsFor(adminMode).map((tool, index) => (
-                      <Link
-                        key={tool.to}
-                        to={tool.to}
-                        search={adminToolSearch(tool)}
-                        onClick={() => setAdminMenuOpen(false)}
-                        className={`px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors ${
-                          index > 1 ? "border-t border-osu-b3/30" : ""
-                        } ${index % 2 === 1 ? "border-l border-osu-b3/30" : ""}`}
-                        role="menuitem"
-                      >
-                        {tool.label}
-                      </Link>
-                    ))}
+                    {adminTools.map((tool, index) => {
+                      const full = index === adminTools.length - 1 && adminTools.length % 2 === 1;
+                      return (
+                        <Link
+                          key={tool.to}
+                          to={tool.to}
+                          search={adminToolSearch(tool)}
+                          onClick={() => setAdminMenuOpen(false)}
+                          className={`px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors ${
+                            index > 1 ? "border-t border-osu-b3/30" : ""
+                          } ${index % 2 === 1 ? "border-l border-osu-b3/30" : ""} ${
+                            full ? "col-span-2 text-center" : ""
+                          }`}
+                          role="menuitem"
+                        >
+                          {tool.label}
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1164,7 +1172,7 @@ export function Nav() {
                   {/* Same list, same order, two across: the drawer is already
                       long by the time it reaches this. */}
                   <div className="grid grid-cols-2 gap-2">
-                    {adminToolsFor(adminMode).map((tool) => (
+                    {adminTools.map((tool) => (
                       <Link
                         key={tool.to}
                         to={tool.to}

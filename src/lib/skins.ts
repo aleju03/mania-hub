@@ -101,7 +101,15 @@ export interface SkinSummary {
   // backend asks for, so it is only ever filled in for the owner - a redacted
   // copy has them all null.
   visibility: SkinVisibility;
+  // When the .osk was uploaded. The date shown as "Uploaded" on the skin page,
+  // and the one to keep using for anything about the file itself.
   publishedAt: string | null;
+  // When the skin first reached the catalog, which is a later date for one
+  // uploaded private and made public afterwards. This is what /skins orders
+  // its newest sort by and what the cards age off, so a skin made public today
+  // reads as today's. Optional: summaries cached before the field existed lack
+  // it, and it is null on a skin that has never been public.
+  listedAt?: string | null;
 }
 
 export type SkinVisibility = "public" | "private";
@@ -402,9 +410,15 @@ export async function fetchSkinSitemapEntries(): Promise<SkinSitemapEntry[]> {
       // noindex and 404s for everyone but its uploader. The sitemap must never
       // be the thing that hands a crawler one of those URLs.
       if (skin.visibility === "private") continue;
+      // The later of the two dates that change what a crawler finds here: a
+      // replaced .osk, and the day the page became reachable at all. A skin
+      // uploaded months ago and made public today is new to a crawler, so
+      // dating it from the upload would announce it as stale on arrival.
+      const listed = skin.listedAt ?? skin.publishedAt;
+      const replaced = skin.oskUpdatedAt;
       entries.push({
         path: `/skins/${skin.slug ?? skin.id}`,
-        lastmod: skin.oskUpdatedAt ?? skin.publishedAt,
+        lastmod: replaced && (!listed || replaced > listed) ? replaced : listed,
       });
     }
     if (skins.length < SKIN_LIST_MAX_PAGE_SIZE || seen >= (body.total ?? 0)) break;

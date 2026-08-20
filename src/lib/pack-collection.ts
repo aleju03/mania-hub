@@ -15,6 +15,12 @@ export const PACK_OPEN_SHARD_REWARD = 2;
 
 export interface CollectedCard {
   userId: number;
+  /* The key this holding lives under, when it cannot be derived from the tier:
+     a card /admin/collections handed out is its own collectible ("<id>:v<n>")
+     rather than a copy of the player's ordinary card, and only the server can
+     mint that number. Server rows always carry it; a browser-local wallet
+     derives its keys and leaves this unset. */
+  cardKey?: string;
   username: string;
   avatarUrl: string;
   countryCode: string;
@@ -48,6 +54,11 @@ export interface CollectedCard {
      into localStorage. */
   serial?: number | null;
   mintedTotal?: number;
+  /* When /admin/collections handed this card to its holder, null or absent for
+     one that was pulled. A granted card is minted a serial like any other, so
+     this is the only thing stopping a surface calling its holder the Nth
+     person to pull it. Server-only, like the two above. */
+  grantedAt?: number | null;
 }
 
 export interface PackWallet {
@@ -192,20 +203,37 @@ export function collectedCardTier(card: {
    a World Class card its owner may want to keep (or recycle separately).
 
    Only the GOAT variant takes a suffix, so every key an existing wallet has
-   already written stays byte-identical and nothing has to be migrated. */
+   already written stays byte-identical and nothing has to be migrated.
+
+   A third form exists that this cannot produce: "<id>:v<n>", a card the grant
+   desk handed out. It is not derivable from anything the browser knows, which
+   is the point - it is minted server-side and carried on the card itself. */
 export function packCardKey(userId: number, tier: ManiaCardTier | null): string {
   return tier === "goat" ? `${userId}:goat` : String(userId);
 }
 
-export function packCardKeyOf(card: { userId: number; tier: ManiaCardTier | null }): string {
-  return packCardKey(card.userId, card.tier);
+/* A card's own key wins over the derived one, so a granted card stays the card
+   it is through a re-mint, a recycle or a re-key of the wallet. */
+export function packCardKeyOf(card: { userId: number; tier: ManiaCardTier | null; cardKey?: string }): string {
+  return card.cardKey ?? packCardKey(card.userId, card.tier);
 }
 
-export function parsePackCardKey(key: string): { userId: number; goat: boolean } | null {
-  const goat = key.endsWith(":goat");
-  const userId = Number(goat ? key.slice(0, -":goat".length) : key);
+export function parsePackCardKey(key: string): { userId: number; goat: boolean; variant: number } | null {
+  const match = /^(\d+)(?::(goat|v\d{1,6}))?$/.exec(key);
+  if (!match) return null;
+  const userId = Number(match[1]);
   if (!Number.isInteger(userId) || userId <= 0) return null;
-  return { userId, goat };
+  const suffix = match[2] ?? "";
+  const variant = suffix.startsWith("v") ? Number(suffix.slice(1)) : 0;
+  if (suffix.startsWith("v") && variant <= 0) return null;
+  return { userId, goat: suffix === "goat", variant };
+}
+
+/* Whether a key addresses a card the grant desk minted rather than one a pack
+   dealt. Callers that only ever handle their own wallet can ignore this; the
+   surfaces that address a card by URL cannot. */
+export function isGrantedCardKey(key: string): boolean {
+  return (parsePackCardKey(key)?.variant ?? 0) > 0;
 }
 
 export function createEmptyWallet(now: number): PackWallet {
@@ -595,8 +623,15 @@ function sanitizeCard(value: unknown): CollectedCard | null {
   if (!value || typeof value !== "object") return null;
   const card = value as Partial<CollectedCard>;
   if (!isFiniteNumber(card.userId) || typeof card.username !== "string") return null;
+  const cardKey = typeof card.cardKey === "string" ? parsePackCardKey(card.cardKey) : null;
   return {
     userId: card.userId,
+    /* Kept through localStorage, unlike the other server-only fields: it is
+       this card's identity rather than a fact about it, and dropping it would
+       collapse a granted card onto the player's ordinary one the next time the
+       wallet was read back. Re-parsed so a hand-edited key cannot be anything
+       but a key of this card's own player. */
+    ...(cardKey && cardKey.userId === card.userId ? { cardKey: card.cardKey } : {}),
     username: card.username,
     avatarUrl: typeof card.avatarUrl === "string" ? card.avatarUrl : "",
     countryCode: typeof card.countryCode === "string" ? card.countryCode : "",

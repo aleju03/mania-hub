@@ -37,6 +37,12 @@ export const SKILL_FIELDS: Array<{ key: keyof ManiaSkills; label: string; step?:
 ];
 
 export interface CardForm {
+  /* The card being edited, when the form was loaded from one the collector
+     already holds. Empty means the grant is about the player: an ordinary card
+     writes their ordinary one, and anything customized - its own tier, a
+     badge, background art - becomes a card of its own instead of painting over
+     what they have. */
+  cardKey: string;
   tier: string;
   tierLabel: string;
   /* The image the card floats in its background in place of the tier's own
@@ -70,6 +76,7 @@ export interface CardForm {
 
 export function emptyCardForm(): CardForm {
   return {
+    cardKey: "",
     tier: "unrated",
     tierLabel: "",
     motifUrl: "",
@@ -154,6 +161,7 @@ export function buildCardGrant(
   const tier = formTier(form);
   return {
     cardUserId: identity.cardUserId,
+    ...(form.cardKey ? { cardKey: form.cardKey } : {}),
     tier,
     /* Only ever a label somebody typed. Sending the tier's own name when the
        box is empty would make it indistinguishable from a deliberate one, and
@@ -179,5 +187,55 @@ export function buildCardGrant(
     countryCode: form.countryCode.trim() || identity.countryCode || undefined,
     motif: formMotif(form),
     overwriteIdentity: form.overwriteIdentity,
+  };
+}
+
+
+/* The form as it reads one card the collector already holds, so editing it
+   changes that card instead of minting another beside it. Every field is
+   loaded, since a blank box means "leave alone" and the desk should be looking
+   at what the card actually says. Copies are shown in set mode for the same
+   reason: an edit that means to leave a count alone must not add to it. */
+export function cardFormFromHolding(card: {
+  cardKey?: string;
+  userId: number;
+  tier: ManiaCardTier | null;
+  customLabel?: string | null;
+  motif?: { url: string; scale?: number; opacity?: number } | null;
+  skills: ManiaSkills | null;
+  pp: number;
+  globalRank: number;
+  copies: number;
+  recycledCopies: number;
+  firstPulledAt: number;
+  lastPulledAt: number;
+  serial?: number | null;
+}): CardForm {
+  const skills: Record<string, string> = {};
+  for (const field of SKILL_FIELDS) {
+    const value = card.skills?.[field.key];
+    if (typeof value === "number" && Number.isFinite(value)) skills[field.key] = String(value);
+  }
+  return {
+    ...emptyCardForm(),
+    cardKey: card.cardKey ?? String(card.userId),
+    tier: card.tier ?? "unrated",
+    tierLabel: card.customLabel ?? "",
+    motifUrl: card.motif?.url ?? "",
+    motifScale: card.motif?.scale != null ? String(card.motif.scale) : "1",
+    motifOpacity: card.motif?.opacity != null ? String(card.motif.opacity) : "1",
+    motifMode: "keep",
+    copies: String(card.copies),
+    copiesMode: "set",
+    recycledCopies: String(card.recycledCopies),
+    pp: card.pp ? String(Math.round(card.pp)) : "",
+    globalRank: card.globalRank ? String(card.globalRank) : "",
+    skills,
+    archetype: typeof card.skills?.archetype === "string" ? card.skills.archetype : "",
+    skillsMode: "keep",
+    firstPulledAt: card.firstPulledAt ? toLocalInput(card.firstPulledAt) : "",
+    lastPulledAt: card.lastPulledAt ? toLocalInput(card.lastPulledAt) : "",
+    serialMode: "keep",
+    serial: card.serial ? String(card.serial) : "",
   };
 }

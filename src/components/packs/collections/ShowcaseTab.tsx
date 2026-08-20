@@ -1,44 +1,46 @@
-import { Link } from "@tanstack/react-router";
 import { Pencil } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "#/lib/auth-context";
-import type { CollectedCard } from "#/lib/pack-collection";
-import { formatNumber, formatTimeAgo } from "#/lib/format";
 import {
   fetchLivePackShowcaseCards,
-  fetchLivePackShowcases,
+  fetchLivePackShowcaseWall,
   isLiveBackendConfigured,
-  type LivePackShowcase,
+  type LivePackShowcaseWallCard,
 } from "#/lib/live-backend";
 import {
   PACK_SHOWCASE_MAX_CARDS,
   saveOwnPackShowcase,
   type ServerPackCollectionCard,
 } from "#/lib/pack-wallet-sync";
-import { CountryFlag } from "../../ui/CountryFlag";
-import { Section, SectionHeading, ShowcaseRowSkeleton } from "./chrome";
+import { Section, SectionHeading, ShowcaseRowSkeleton, SkeletonBlock } from "./chrome";
 import { ShowcaseCards } from "./ShowcaseCards";
 import { ShowcasePickerHost } from "./ShowcasePicker";
-import { useCardThumbnails } from "../useCardThumbnails";
+import { ShowcaseWallGrid } from "./ShowcaseWall";
 
 /* The front of the collections page: the cards people chose to show.
  *
  * Your own row sits on top with the slots you have not filled, because the
  * point of the page is that you can put something on it, not just read it.
- * Everyone else's follows, most recently changed first, so the wall moves. */
+ * Under it the wall, which is a gallery rather than a directory: every card
+ * anyone chose, most recently chosen first, with nothing written over it. */
 
-const WALL_PAGE_SIZE = 12;
+const WALL_PAGE_SIZE = 40;
 
 export function ShowcaseTab() {
+  /* Saving your showcase changes the wall under it, and the wall used to fetch
+     on page change alone, so the card you had just put up was not there until
+     you reloaded the page. */
+  const [savedAt, setSavedAt] = useState(0);
+  const onSaved = useCallback(() => setSavedAt(Date.now()), []);
   return (
     <div className="space-y-10">
-      <YourShowcase />
-      <ShowcaseWall />
+      <YourShowcase onSaved={onSaved} />
+      <ShowcaseWall reloadKey={savedAt} />
     </div>
   );
 }
 
-function YourShowcase() {
+function YourShowcase({ onSaved }: { onSaved: () => void }) {
   const auth = useAuth();
   const viewer = auth.viewer;
   const [cards, setCards] = useState<ServerPackCollectionCard[] | null>(null);
@@ -76,7 +78,8 @@ function YourShowcase() {
     await saveOwnPackShowcase({ data: { cardKeys } }).catch(() => null);
     setPicking(false);
     setReloadKey((current) => current + 1);
-  }, []);
+    onSaved();
+  }, [onSaved]);
 
   if (!viewer) {
     return (
@@ -93,7 +96,6 @@ function YourShowcase() {
   }
 
   const chosen = cards ?? [];
-  const emptySlots = Math.max(0, PACK_SHOWCASE_MAX_CARDS - chosen.length);
 
   return (
     <Section>
@@ -108,15 +110,25 @@ function YourShowcase() {
           Edit
         </button>
       </div>
+      {/* An empty shelf draws nothing at all: no card-shaped holes, and no
+          second button telling you to fill them. It cost the height of a row
+          of cards to say nothing, above a page that is entirely cards, and
+          Edit already opens the picker. */}
       {cards === null ? (
+        <SkeletonBlock className="mt-3 h-3 w-40" />
+      ) : chosen.length > 0 ? (
         <div className="mt-3">
-          <ShowcaseRowSkeleton cards={PACK_SHOWCASE_MAX_CARDS} />
+          <ShowcaseCards
+            cards={chosen}
+            ownerUserId={viewer.id}
+            /* One slot, not every one left. The row is already card-height
+               once you have picked something, so a single opening says there
+               is room without lining up four more empty boxes. */
+            emptySlots={chosen.length < PACK_SHOWCASE_MAX_CARDS ? 1 : 0}
+            onEmptySlotClick={() => setPicking(true)}
+          />
         </div>
-      ) : (
-        <div className="mt-3">
-          <ShowcaseCards cards={chosen} emptySlots={emptySlots} onEmptySlotClick={() => setPicking(true)} />
-        </div>
-      )}
+      ) : null}
       <ShowcasePickerHost
         open={picking}
         userId={viewer.id}
@@ -128,16 +140,31 @@ function YourShowcase() {
   );
 }
 
-function ShowcaseWall() {
-  const viewerId = useAuth().viewer?.id ?? null;
+function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
   const [page, setPage] = useState(0);
-  const [result, setResult] = useState<{ showcases: LivePackShowcase[]; total: number } | null>(null);
+  /* A card you just picked sorts to the front, which is page one, so a save
+     takes you back there. Adjusted during render rather than in an effect so
+     the fetch below runs once, for the page it settles on. */
+  const [seenReload, setSeenReload] = useState(reloadKey);
+  if (seenReload !== reloadKey) {
+    setSeenReload(reloadKey);
+    setPage(0);
+  }
+  /* Paging from a button under a grid four rows tall otherwise leaves you at
+     the bottom of the next page, looking at its last row with everything above
+     already scrolled past. Same handling the collection's own pager uses. */
+  const headerRef = useRef<HTMLDivElement>(null);
+  const goToPage = useCallback((next: number) => {
+    setPage(next);
+    headerRef.current?.scrollIntoView({ block: "start" });
+  }, []);
+  const [result, setResult] = useState<{ cards: LivePackShowcaseWallCard[]; total: number } | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setFailed(false);
-    fetchLivePackShowcases({ page, pageSize: WALL_PAGE_SIZE })
+    fetchLivePackShowcaseWall({ page, pageSize: WALL_PAGE_SIZE, fresh: reloadKey > 0 })
       .then((next) => {
         if (!cancelled) setResult(next);
       })
@@ -147,20 +174,7 @@ function ShowcaseWall() {
     return () => {
       cancelled = true;
     };
-  }, [page]);
-
-  // Your own row is already at the top of the page; showing it twice reads as
-  // a bug rather than as emphasis.
-  const others = useMemo(
-    () => (result?.showcases ?? []).filter((entry) => entry.collector.userId !== viewerId),
-    [result, viewerId],
-  );
-  /* Every face on the wall in one lookup. Left to each row, a dozen rows made
-     a dozen requests for what one batch answers, since the cache behind them
-     is shared anyway. */
-  const thumbnails = useCardThumbnails(
-    useMemo(() => others.flatMap((entry) => entry.cards as CollectedCard[]), [others]),
-  );
+  }, [page, reloadKey]);
 
   if (failed) {
     return (
@@ -173,20 +187,21 @@ function ShowcaseWall() {
 
   if (!result) {
     return (
-      <div className="space-y-8">
-        {[0, 1].map((index) => (
-          <ShowcaseRowSkeleton key={index} cards={5} withHeader />
-        ))}
-      </div>
+      <Section>
+        <SectionHeading>showcases</SectionHeading>
+        <div className="mt-3">
+          <ShowcaseRowSkeleton cards={WALL_PAGE_SIZE} />
+        </div>
+      </Section>
     );
   }
 
-  if (others.length === 0) {
+  if (result.cards.length === 0) {
     return (
       <Section>
         <SectionHeading>showcases</SectionHeading>
         <p className="mt-2 text-[12px] text-osu-f1">
-          Nobody else has picked cards yet. Yours would be the first.
+          Nobody has picked cards yet. Yours would be the first.
         </p>
       </Section>
     );
@@ -195,53 +210,23 @@ function ShowcaseWall() {
   const totalPages = Math.max(1, Math.ceil(result.total / WALL_PAGE_SIZE));
 
   return (
-    <div>
-      {/* A hairline where one person's cards end and the next person's begin.
-          The only rule the wall needs, and cheaper than a box each. */}
-      {others.map((entry) => (
-        <div key={entry.collector.userId} className="border-t border-osu-b3/20 py-6 first:border-t-0 first:pt-0">
-          <div className="flex items-center gap-2.5">
-            <img
-              src={entry.collector.avatarUrl}
-              alt=""
-              width={26}
-              height={26}
-              loading="lazy"
-              className="h-[26px] w-[26px] shrink-0 rounded-full object-cover"
-              draggable={false}
-            />
-            {entry.collector.countryCode ? (
-              <CountryFlag code={entry.collector.countryCode} size="xs" decorative className="shrink-0" />
-            ) : null}
-            <Link
-              to="/packs/collections"
-              search={{ collector: entry.collector.username || String(entry.collector.userId) }}
-              preload="intent"
-              className="min-w-0 truncate text-[14px] font-bold text-white transition-colors hover:text-osu-pink-light"
-            >
-              {entry.collector.username}
-            </Link>
-            <span className="ml-auto shrink-0 text-[11px] text-osu-f1 tabular-nums">
-              {formatNumber(entry.collector.cards)} cards
-            </span>
-            {entry.updatedAt > 0 && (
-              <span className="hidden shrink-0 text-[11px] text-osu-f1 sm:block">
-                {formatTimeAgo(new Date(entry.updatedAt).toISOString())}
-              </span>
-            )}
-          </div>
-          <div className="mt-3">
-            <ShowcaseCards cards={entry.cards} thumbnails={thumbnails} />
-          </div>
-        </div>
-      ))}
+    <Section>
+      <div ref={headerRef} className="flex scroll-mt-[76px] items-baseline gap-3">
+        <SectionHeading>showcases</SectionHeading>
+        <span className="ml-auto shrink-0 text-[11px] text-osu-f1 tabular-nums">
+          {result.total.toLocaleString("en-US")} {result.total === 1 ? "card" : "cards"}
+        </span>
+      </div>
+      <div className="mt-3">
+        <ShowcaseWallGrid entries={result.cards} />
+      </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 text-[12px]">
+        <div className="mt-6 flex items-center justify-center gap-3 text-[12px]">
           <button
             type="button"
             disabled={page === 0}
-            onClick={() => setPage(page - 1)}
+            onClick={() => goToPage(page - 1)}
             className="cursor-pointer px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
           >
             Previous
@@ -252,13 +237,13 @@ function ShowcaseWall() {
           <button
             type="button"
             disabled={page >= totalPages - 1}
-            onClick={() => setPage(page + 1)}
+            onClick={() => goToPage(page + 1)}
             className="cursor-pointer px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
           >
             Next
           </button>
         </div>
       )}
-    </div>
+    </Section>
   );
 }

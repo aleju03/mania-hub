@@ -21,11 +21,15 @@ const NO_CARDS: CollectedCard[] = [];
 
 export function ShowcaseCards({
   cards,
+  ownerUserId,
   emptySlots = 0,
   onEmptySlotClick,
   thumbnails,
 }: {
   cards: ServerPackCollectionCard[];
+  /* Whose showcase this is, so the spotlight can say how many collections
+     hold the card in front of it rather than how many hold the player. */
+  ownerUserId?: number | null;
   /* Placeholders the owner can click to add a card. Only their own showcase
      draws these; on the wall an unfilled slot is nothing to say. */
   emptySlots?: number;
@@ -61,6 +65,7 @@ export function ShowcaseCards({
                   card,
                   thumbnail,
                   rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+                  ownerUserId,
                 });
                 setLiftedCardKey(cardKey);
               }}

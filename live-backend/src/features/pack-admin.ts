@@ -6,13 +6,16 @@ import {
   getOrCreatePackWallet,
   getPackCollectionCard,
   internPackCardSkills,
+  isCustomizedPackCard,
   isKnownTier,
   listPackCollectionCards,
   normalizeAvatarUrl,
   normalizeCountryCode,
   normalizePackCardKey,
   packCardKey,
+  packCardKeyUserId,
   packCardTierSlot,
+  resolvePackCardVariantKey,
   packWalletEconomy,
   settlePackWalletCharges,
   setPackWalletEconomy,
@@ -160,6 +163,10 @@ export async function setAdminPackWalletEconomy(
    row that is being created). */
 export interface AdminPackCardGrant {
   cardUserId: number;
+  /* The holding this grant edits, when the desk listed it. Absent grants
+     against the player: an ordinary card writes their ordinary key, and
+     anything customized mints or reuses a variant key of its own. */
+  cardKey?: string;
   /* One of the eleven stored tiers, or null for an unrated card. Unlike the
      sync path, "goat" is accepted for any player (the roster guard exists to
      stop a stranger minting a 500-shard card, and this caller is the person
@@ -206,7 +213,7 @@ export interface AdminPackCardGrantResult {
 
 export type AdminPackCardGrantOutcome =
   | { ok: true; result: AdminPackCardGrantResult }
-  | { ok: false; error: "bad_card_user" | "bad_tier" | "bad_skills" };
+  | { ok: false; error: "bad_card_user" | "bad_tier" | "bad_skills" | "bad_card_key" };
 
 /* A skills snapshot is a handful of named numbers; the sync path caps the same
    blob at 2000 chars and so does this one, because both end up on a public
@@ -216,6 +223,16 @@ const PACK_CARD_MAX_SERIAL = 10_000_000;
 
 function nonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/* The row a grant is about to write over, or nothing when it is minting one. */
+async function readGrantHolding(db: Db, ownerUserId: number, cardKey: string) {
+  return (await exec(
+    db,
+    `select tier, tier_label, motif, skills_id, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at
+     from pack_collection_cards where owner_user_id = ? and card_key = ?`,
+    [ownerUserId, cardKey],
+  )).rows[0];
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
@@ -234,8 +251,15 @@ export async function grantAdminPackCard(
   if (!Number.isInteger(cardUserId) || cardUserId <= 0) return { ok: false, error: "bad_card_user" };
   if (grant.tier !== null && !isKnownTier(grant.tier)) return { ok: false, error: "bad_tier" };
   const tier = grant.tier;
-  const cardKey = packCardKey(cardUserId, tier);
   const tierSlot = packCardTierSlot(tier);
+  /* The holding to write, when the desk is editing one it already listed
+     rather than granting against a player. Without it a grant that customizes
+     anything mints a card instead of editing one, so this is what makes a typo
+     in a badge fixable. */
+  const requestedKey = grant.cardKey === undefined ? null : normalizePackCardKey(grant.cardKey);
+  if (grant.cardKey !== undefined && (requestedKey === null || packCardKeyUserId(requestedKey) !== cardUserId)) {
+    return { ok: false, error: "bad_card_key" };
+  }
 
   let skillsJson: string | null = null;
   if (grant.skills != null) {
@@ -244,37 +268,8 @@ export async function grantAdminPackCard(
     if (skillsJson.length > PACK_CARD_SKILLS_MAX_CHARS) return { ok: false, error: "bad_skills" };
   }
 
-  const existing = (await exec(
-    db,
-    `select tier, tier_label, motif, skills_id, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at
-     from pack_collection_cards where owner_user_id = ? and card_key = ?`,
-    [owner.userId, cardKey],
-  )).rows[0];
-  const created = !existing;
-
-  const heldCopies = Number(existing?.copies) || 0;
-  const copiesInput = grant.copies == null ? (created ? 1 : 0) : clampInt(grant.copies, -PACK_CARD_MAX_COPIES, PACK_CARD_MAX_COPIES, 0);
-  const copies =
-    grant.copiesMode === "set"
-      ? clampInt(copiesInput, 0, PACK_CARD_MAX_COPIES, heldCopies)
-      : clampInt(heldCopies + copiesInput, 0, PACK_CARD_MAX_COPIES, heldCopies);
-  const recycledCopies =
-    grant.recycledCopies == null
-      ? Number(existing?.recycled_copies) || 0
-      : clampInt(grant.recycledCopies, 0, PACK_CARD_MAX_COPIES, 0);
-  const pp = grant.pp == null ? Number(existing?.pp) || 0 : Math.min(PACK_CARD_MAX_PP, Math.max(0, Number(grant.pp) || 0));
-  const globalRank =
-    grant.globalRank == null ? Number(existing?.global_rank) || 0 : clampInt(grant.globalRank, 0, Number.MAX_SAFE_INTEGER, 0);
-  // A pull cannot have happened in the future: sorting and the "newest" view
-  // both read these, and one future stamp pins a card to the top forever.
-  const clampStamp = (value: unknown, fallback: number) => clampInt(value, 0, now, fallback);
-  const firstPulledAt = clampStamp(grant.firstPulledAt, Number(existing?.first_pulled_at) || now);
-  const lastPulledAt = clampStamp(grant.lastPulledAt, Number(existing?.last_pulled_at) || now);
-
-  let skillsId: number | null = existing ? (existing.skills_id == null ? null : Number(existing.skills_id)) : null;
-  if (skillsJson !== null) skillsId = (await internPackCardSkills(db, [skillsJson])).get(skillsJson) ?? null;
-  else if (grant.clearSkills) skillsId = null;
-
+  let cardKey = requestedKey ?? packCardKey(cardUserId, tier);
+  let existing = await readGrantHolding(db, owner.userId, cardKey);
   const tierLabel =
     grant.tierLabel === undefined
       ? undefined
@@ -307,6 +302,51 @@ export async function grantAdminPackCard(
         ? tierLabel
         : null;
 
+  /* What the desk is handing over, as the card it makes: its own tier, its own
+     badge, its own art. Anything customized is a collectible of its own rather
+     than a copy of the player's ordinary card, so it lands on a variant key -
+     the one an identical grant already minted, wherever it is held, or a fresh
+     number. Granting the same card to a second collector therefore puts them
+     both in the one collectible, and changing any of the three makes another.
+
+     Only when the desk did not name a holding: an edit says which card it
+     means, and must be able to change a badge without leaving the old card
+     behind. */
+  if (requestedKey === null) {
+    const customization = { tier, tierLabel: ownerTierLabel, motif };
+    if (isCustomizedPackCard(customization)) {
+      const variantKey = await resolvePackCardVariantKey(db, cardUserId, customization);
+      if (variantKey !== cardKey) {
+        cardKey = variantKey;
+        existing = await readGrantHolding(db, owner.userId, cardKey);
+      }
+    }
+  }
+  const created = !existing;
+
+  const heldCopies = Number(existing?.copies) || 0;
+  const copiesInput = grant.copies == null ? (created ? 1 : 0) : clampInt(grant.copies, -PACK_CARD_MAX_COPIES, PACK_CARD_MAX_COPIES, 0);
+  const copies =
+    grant.copiesMode === "set"
+      ? clampInt(copiesInput, 0, PACK_CARD_MAX_COPIES, heldCopies)
+      : clampInt(heldCopies + copiesInput, 0, PACK_CARD_MAX_COPIES, heldCopies);
+  const recycledCopies =
+    grant.recycledCopies == null
+      ? Number(existing?.recycled_copies) || 0
+      : clampInt(grant.recycledCopies, 0, PACK_CARD_MAX_COPIES, 0);
+  const pp = grant.pp == null ? Number(existing?.pp) || 0 : Math.min(PACK_CARD_MAX_PP, Math.max(0, Number(grant.pp) || 0));
+  const globalRank =
+    grant.globalRank == null ? Number(existing?.global_rank) || 0 : clampInt(grant.globalRank, 0, Number.MAX_SAFE_INTEGER, 0);
+  // A pull cannot have happened in the future: sorting and the "newest" view
+  // both read these, and one future stamp pins a card to the top forever.
+  const clampStamp = (value: unknown, fallback: number) => clampInt(value, 0, now, fallback);
+  const firstPulledAt = clampStamp(grant.firstPulledAt, Number(existing?.first_pulled_at) || now);
+  const lastPulledAt = clampStamp(grant.lastPulledAt, Number(existing?.last_pulled_at) || now);
+
+  let skillsId: number | null = existing ? (existing.skills_id == null ? null : Number(existing.skills_id)) : null;
+  if (skillsJson !== null) skillsId = (await internPackCardSkills(db, [skillsJson])).get(skillsJson) ?? null;
+  else if (grant.clearSkills) skillsId = null;
+
   const statements: DbStatement[] = [
     ...(await cardIdentityStatements(db, {
       cardKey,
@@ -326,8 +366,8 @@ export async function grantAdminPackCard(
          entire job is to say what the row should read. */
       sql: `insert into pack_collection_cards (
          owner_user_id, card_user_id, card_key, tier, tier_label, motif, skills_id, pp, global_rank,
-         copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
-       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, granted_at
+       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(owner_user_id, card_key) do update set
          card_user_id = excluded.card_user_id,
          tier = excluded.tier,
@@ -340,7 +380,11 @@ export async function grantAdminPackCard(
          recycled_copies = excluded.recycled_copies,
          first_pulled_at = excluded.first_pulled_at,
          last_pulled_at = excluded.last_pulled_at,
-         updated_at = excluded.updated_at`,
+         updated_at = excluded.updated_at,
+         /* Only ever set, never cleared: editing a card the desk granted leaves
+            it granted, and editing one somebody pulled leaves the column null
+            rather than claiming it was handed to them. */
+         granted_at = coalesce(pack_collection_cards.granted_at, excluded.granted_at)`,
       args: [
         owner.userId,
         cardUserId,
@@ -356,6 +400,13 @@ export async function grantAdminPackCard(
         firstPulledAt,
         lastPulledAt,
         now,
+        /* Only a grant that creates the holding claims it was given. Editing a
+           card somebody pulled passes null here, and the conflict clause
+           coalesces, so neither direction can rewrite what already happened:
+           an edit cannot turn a pull into a gift, and it cannot turn a gift
+           back into a pull. Dated like the pull stamp it stands in for, so an
+           admin backdating a grant backdates both. */
+        created ? firstPulledAt : null,
       ],
     },
     ...serialStatements(cardKey, cardUserId, owner.userId, grant, now),

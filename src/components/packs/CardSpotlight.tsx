@@ -4,10 +4,10 @@ import { Check, Share2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "#/lib/auth-context";
-import { formatOrdinal } from "#/lib/format";
+import { formatDate, formatOrdinal } from "#/lib/format";
 import { fetchLivePackCardStats, isLiveBackendConfigured } from "#/lib/live-backend";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
-import { collectedCardTier, type CollectedCard } from "#/lib/pack-collection";
+import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
 import { buildManiaCardRenderDataFromSkills } from "../player/maniacard3d/renderData";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -22,6 +22,14 @@ export interface CardSpotlightTarget {
   /* Where the clicked tile sat, so the card can lift out of the grid and
      land back in it on close. */
   rect: { top: number; left: number; width: number; height: number };
+  /* Whose copy this is, for surfaces that show somebody else's cards. Left
+     unset on the viewer's own collection, where it is the viewer. It decides
+     what "in N collections" counts: a holding /admin/collections gave its own
+     tier, badge or background art is a collectible of its own. */
+  ownerUserId?: number | null;
+  /* Who chose to put this card on the showcase wall, where the tiles carry no
+     name of their own and finding this out is the point of opening one. */
+  showcasedBy?: { userId: number; username: string; avatarUrl: string; countryCode: string | null } | null;
 }
 
 /* The WebGL card fills the host's height divided by the renderer's 1.05
@@ -75,13 +83,21 @@ export function CardSpotlight({
   const reducedMotion = prefersReducedMotion();
   const viewerId = useAuth().viewer?.id ?? null;
 
-  /* Community context: how many collections hold this card. */
+  /* Community context: how many collections hold this card. Asked for by key,
+     so a collector who holds a player's ordinary card and a granted one is
+     told about the card in front of them rather than about the player. */
+  const cardOwnerId = target?.ownerUserId ?? viewerId;
+  const showcasedBy = target?.showcasedBy ?? null;
+  /* The day the holder got it, however they got it. Shown on every card: a
+     pull with no date said only how it ranked, which is the less interesting
+     half of where a card came from. */
+  const gotAt = target ? (target.card.grantedAt || target.card.firstPulledAt || 0) : 0;
+  const spotlightCardKey = target ? packCardKeyOf(target.card) : null;
   useEffect(() => {
     setOwnerCount(null);
-    const cardUserId = target?.card.userId;
-    if (!cardUserId || !isLiveBackendConfigured()) return;
+    if (!spotlightCardKey || !isLiveBackendConfigured()) return;
     let cancelled = false;
-    void fetchLivePackCardStats([cardUserId])
+    void fetchLivePackCardStats([spotlightCardKey])
       .then((stats) => {
         if (!cancelled) setOwnerCount(stats[0]?.owners ?? null);
       })
@@ -89,18 +105,21 @@ export function CardSpotlight({
     return () => {
       cancelled = true;
     };
-  }, [target?.card.userId]);
+  }, [spotlightCardKey]);
 
   useEffect(() => {
     setShareCopied(false);
   }, [target?.card.userId]);
 
   const shareCard = async (card: CollectedCard) => {
-    // Signed-in collectors share the pull itself (/pull/{owner}/{card}: their
-    // minted card, "pulled by them", with an OG embed). Local-only wallets
-    // have no server row to link, so those share the player's card page.
-    const url = viewerId
-      ? `${window.location.origin}/pull/${viewerId}/${card.userId}`
+    /* Signed-in collectors share the pull itself (/pull/{owner}/{card}: their
+       minted card, "pulled by them", with an OG embed). Local-only wallets
+       have no server row to link, so those share the player's card page.
+       Addressed by card key, so a collector holding a player's ordinary card,
+       their GOAT and a granted one shares the card they are looking at rather
+       than whichever of the three ranks highest. */
+    const url = cardOwnerId
+      ? `${window.location.origin}/pull/${cardOwnerId}/${packCardKeyOf(card)}`
       : `${window.location.origin}/player/${encodeURIComponent(card.username)}/maniacard`;
     try {
       await navigator.clipboard.writeText(url);
@@ -186,7 +205,10 @@ export function CardSpotlight({
           mobile: isMobileViewport(),
           reducedMotion: prefersReducedMotion(),
           devicePixelRatio: window.devicePixelRatio || 1,
-          // A steady card in a modal; touch drag still tilts it.
+          // Keep the inspected card's foil alive between touches without
+          // opting mobile into the more expensive desktop quality profile.
+          continuousIdle: true,
+          // Touch drag still tilts it, but the modal does not follow the gyro.
           gyro: false,
           onReady: () => {
             if (!cancelled) setCanvasReady(true);
@@ -332,19 +354,65 @@ export function CardSpotlight({
                   <> &middot; in {ownerCount.toLocaleString("en-US")} {ownerCount === 1 ? "collection" : "collections"}</>
                 )}
               </div>
-              {card.serial ? (
-                // Pull order, only known for a synced collection: the registry
-                // that hands out these numbers lives on the server. Plain
-                // ordinal, not "first ever": this describes a holding, and a
-                // serial-1 card may by now sit in hundreds of collections.
-                <div
-                  className={`text-[12px] tabular-nums ${card.serial === 1 ? "font-bold text-amber-300" : "text-osu-f1"}`}
-                >
-                  {formatOrdinal(card.serial)} person to pull this
-                  {card.mintedTotal && card.mintedTotal !== card.serial ? (
-                    // Skip the total when it just repeats the serial ("61st ... out of 61").
-                    <span className="text-osu-f1"> out of {card.mintedTotal.toLocaleString("en-US")}</span>
+              {/* How this holding came to be, in one line.
+               *
+               * A card the grant desk handed out was never pulled, and it is
+               * minted a serial like any other, so left to the serial alone it
+               * claimed its holder was the Nth person to pull something nobody
+               * pulled. `grantedAt` is what tells the two apart.
+               *
+               * Said in the holder's name wherever there is one. Unattributed
+               * it read as the viewer's own pull, which on a wall of other
+               * people's cards is the wrong person every time. */}
+              {gotAt > 0 || card.serial ? (
+                <div className="mt-1 flex items-center gap-1.5 text-[12px] text-osu-f1">
+                  {showcasedBy ? (
+                    <img
+                      src={showcasedBy.avatarUrl}
+                      alt=""
+                      width={18}
+                      height={18}
+                      loading="lazy"
+                      className="h-[18px] w-[18px] shrink-0 rounded-full object-cover"
+                      draggable={false}
+                    />
                   ) : null}
+                  <span>
+                    {showcasedBy ? (
+                      <Link
+                        to="/packs/collections"
+                        search={{ collector: showcasedBy.username || String(showcasedBy.userId) }}
+                        preload="intent"
+                        className="font-semibold text-white transition-colors hover:text-osu-pink-light"
+                      >
+                        {showcasedBy.username}
+                      </Link>
+                    ) : null}
+                    {/* "Obtained" rather than "was given": how a card that
+                        never came out of a pack came to be somebody's is not
+                        the card's business to announce. */}
+                    {card.grantedAt
+                      ? showcasedBy
+                        ? " obtained this card"
+                        : "Obtained"
+                      : showcasedBy
+                        ? " pulled this"
+                        : "Pulled"}
+                    {gotAt > 0 ? ` on ${formatDate(new Date(gotAt).toISOString())}` : ""}
+                    {!card.grantedAt && card.serial ? (
+                      <>
+                        ,{" "}
+                        <span className={`tabular-nums ${card.serial === 1 ? "font-bold text-amber-300" : ""}`}>
+                          {formatOrdinal(card.serial)}
+                          {card.mintedTotal && card.mintedTotal !== card.serial
+                            // Skip the total when it just repeats the serial ("61st of 61").
+                            ? ` of ${card.mintedTotal.toLocaleString("en-US")}`
+                            : ""}
+                          {" to pull it"}
+                        </span>
+                      </>
+                    ) : null}
+                  </span>
                 </div>
               ) : null}
               <div className="mt-1.5 flex items-center gap-2">

@@ -160,3 +160,68 @@ export function playGoalDeletedSound(): void {
     osc.stop(t0 + 0.12);
   });
 }
+
+/**
+ * "Write landed" for the admin desks: two quick rising sine notes (B5 then F#6) with a short ring -
+ * a plain confirmation tick, smaller and drier than the goal-cleared ta-da, since granting a card
+ * is a chore being done rather than a milestone. ~0.3s.
+ */
+export function playAdminActionSound(): void {
+  withAudioContext((ctx) => {
+    const t0 = ctx.currentTime + 0.02;
+    const master = ctx.createGain();
+    master.gain.value = 0.11;
+    master.connect(ctx.destination);
+
+    const notes: Array<{ frequency: number; offset: number; ring: number }> = [
+      { frequency: 987.77, offset: 0, ring: 0.1 },
+      { frequency: 1479.98, offset: 0.07, ring: 0.28 },
+    ];
+    for (const note of notes) {
+      const start = t0 + note.offset;
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = note.frequency;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.5, start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + note.ring);
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start(start);
+      osc.stop(start + note.ring + 0.05);
+    }
+  });
+}
+
+/**
+ * "Write refused": the same two notes falling instead of rising (F#5 then C#5), the second held a
+ * little longer. Quiet and short - it marks a failed action, it is not an alarm. ~0.35s.
+ */
+export function playAdminActionFailedSound(): void {
+  withAudioContext((ctx) => {
+    const t0 = ctx.currentTime + 0.02;
+    const master = ctx.createGain();
+    master.gain.value = 0.1;
+    master.connect(ctx.destination);
+
+    const notes: Array<{ frequency: number; offset: number; ring: number }> = [
+      { frequency: 739.99, offset: 0, ring: 0.12 },
+      { frequency: 554.37, offset: 0.09, ring: 0.32 },
+    ];
+    for (const note of notes) {
+      const start = t0 + note.offset;
+      const osc = ctx.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.value = note.frequency;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.45, start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + note.ring);
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start(start);
+      osc.stop(start + note.ring + 0.05);
+    }
+  });
+}

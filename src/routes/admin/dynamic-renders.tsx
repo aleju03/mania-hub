@@ -1,6 +1,7 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 
+import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import { Skeleton } from "../../components/ui/LoadingSkeleton";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import {
@@ -110,6 +111,7 @@ function DynamicRendersAdminPage() {
   const [rows, setRows] = useState<SignatureAdminRow[] | null>(null);
   const [customOnly, setCustomOnly] = useState(true);
   const [busy, setBusy] = useState(0);
+  const [blockAsk, setBlockAsk] = useState<SignatureAdminRow | null>(null);
 
   const load = useCallback(async (only: boolean) => {
     try {
@@ -250,12 +252,13 @@ function DynamicRendersAdminPage() {
                     <button
                       disabled={busy === row.userId}
                       onClick={() => {
-                        if (!row.blockedAt && !confirm(
-                          `Block ${row.username || row.userId}'s signature? Every image they have already pasted stops loading.`,
-                        )) return;
-                        void act(row.userId, () => setSignatureBlocked({
-                          data: { userId: row.userId, blocked: !row.blockedAt },
-                        }));
+                        // Unblocking restores what the player had, so only the
+                        // switch that breaks their images asks first.
+                        if (row.blockedAt) {
+                          void act(row.userId, () => setSignatureBlocked({ data: { userId: row.userId, blocked: false } }));
+                          return;
+                        }
+                        setBlockAsk(row);
                       }}
                       className={`px-2.5 py-1 rounded-md border text-[11px] transition-colors duration-[120ms] disabled:opacity-50 cursor-pointer ${
                         row.blockedAt
@@ -272,6 +275,19 @@ function DynamicRendersAdminPage() {
           )}
         </div>
       </div>
+
+      {blockAsk ? (
+        <ConfirmModal
+          title={`Block ${blockAsk.username || blockAsk.userId}'s renders?`}
+          body="Every image they have already pasted stops loading, and they cannot turn it back on."
+          confirmLabel="Block"
+          danger
+          onConfirm={() => void act(blockAsk.userId, () => setSignatureBlocked({
+            data: { userId: blockAsk.userId, blocked: true },
+          }))}
+          onClose={() => setBlockAsk(null)}
+        />
+      ) : null}
     </div>
   );
 }

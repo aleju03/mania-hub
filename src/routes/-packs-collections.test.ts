@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { Route } from "./packs_.collections";
+import { mergePulls, Route, withLivePulls } from "./packs_.collections";
 
 const validateSearch = Route.options.validateSearch as (
   search: Record<string, unknown>,
@@ -111,5 +111,86 @@ describe("collections nav entry", () => {
 
   it("groups both pages under one Packs dropdown", () => {
     expect(nav).toContain('{ kind: "group", id: "packs", label: "packs", items: ["packs", "pack-collections"] }');
+  });
+});
+
+describe("live pack totals", () => {
+  const stats = {
+    computedAt: 1000,
+    totals: { packsOpened: 10, cardsMinted: 50, distinctHoldings: 40, collectors: 3, playersCarded: 20 },
+    boards: {},
+  } as unknown as Parameters<typeof withLivePulls>[0];
+
+  const pull = (id: number, ownerUserId: number, pulledAt: number, isNew = false) =>
+    ({ id, ownerUserId, pulledAt, isNew });
+
+  it("counts a hand as one pack, however many cards it dealt", () => {
+    /* Every card of a pack is its own event sharing an owner and a pull stamp,
+       so counting events would call a five-card pack five packs. */
+    const live = withLivePulls(stats, [
+      pull(1, 7, 2000, true),
+      pull(2, 7, 2000, true),
+      pull(3, 7, 2000),
+      pull(4, 7, 2000),
+      pull(5, 7, 2000),
+    ]);
+    expect(live.totals.packsOpened).toBe(11);
+    // A copy per card, but a holding only where the card was new to them.
+    expect(live.totals.cardsMinted).toBe(55);
+    expect(live.totals.distinctHoldings).toBe(42);
+  });
+
+  it("separates two collectors pulling at the same instant", () => {
+    const live = withLivePulls(stats, [pull(1, 7, 2000), pull(2, 8, 2000)]);
+    expect(live.totals.packsOpened).toBe(12);
+  });
+
+  it("ignores pulls the snapshot already counted, so a refresh cannot double count", () => {
+    const live = withLivePulls(stats, [pull(1, 7, 900), pull(2, 7, 1000), pull(3, 7, 1001)]);
+    expect(live.totals.packsOpened).toBe(11);
+    expect(live.totals.cardsMinted).toBe(51);
+  });
+
+  it("hands back the snapshot untouched when nothing has happened since", () => {
+    expect(withLivePulls(stats, [])).toBe(stats);
+    expect(withLivePulls(stats, [pull(1, 7, 500)])).toBe(stats);
+  });
+
+  it("leaves the totals a pull cannot move exactly to the snapshot", () => {
+    const live = withLivePulls(stats, [pull(1, 7, 2000, true)]);
+    expect(live.totals.collectors).toBe(3);
+    expect(live.totals.playersCarded).toBe(20);
+  });
+});
+
+describe("catching up on a fresh load", () => {
+  const entry = (id: number, ownerUserId: number, pulledAt: number, isNew = false) =>
+    ({ id, ownerUserId, pulledAt, isNew }) as unknown as Parameters<typeof mergePulls>[1][number];
+
+  it("picks up the pulls that landed after the totals were computed", () => {
+    // A reload has no stream history, so without this the page drops back to
+    // whatever the totals said and the number somebody watched go up goes down.
+    const merged = mergePulls([], [entry(1, 7, 1500), entry(2, 8, 1600)], 1000);
+    expect(merged.map((pull) => pull.id)).toEqual([1, 2]);
+  });
+
+  it("drops what the totals already counted", () => {
+    expect(mergePulls([], [entry(1, 7, 900), entry(2, 7, 1000)], 1000)).toEqual([]);
+  });
+
+  it("does not count a pull twice when the feed and the stream overlap", () => {
+    const live = [{ id: 1, ownerUserId: 7, pulledAt: 1500, isNew: false }];
+    const merged = mergePulls(live, [entry(1, 7, 1500), entry(2, 7, 1500)], 1000);
+    expect(merged.map((pull) => pull.id)).toEqual([1, 2]);
+  });
+
+  it("hands back the same list when the feed adds nothing", () => {
+    const live = [{ id: 1, ownerUserId: 7, pulledAt: 1500, isNew: false }];
+    expect(mergePulls(live, [entry(1, 7, 1500)], 1000)).toBe(live);
+  });
+
+  it("skips a malformed entry rather than counting a pull with no stamp", () => {
+    const broken = { id: null, ownerUserId: 7, pulledAt: null } as unknown as Parameters<typeof mergePulls>[1][number];
+    expect(mergePulls([], [broken, entry(2, 7, 1500)], 1000).map((pull) => pull.id)).toEqual([2]);
   });
 });

@@ -1,7 +1,7 @@
 import type { InValue } from "@libsql/client";
 import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch } from "../db.js";
-import { HONORARY_USER_IDS, packCardKey, tierRank, tierRankSql } from "./pack-wallets.js";
+import { HONORARY_USER_IDS, normalizePackCardKey, packCardKey, packCardKeyUserId, tierRank, tierRankSql } from "./pack-wallets.js";
 import { parseCardMotif, type CardMotif } from "./card-motif.js";
 
 // Append-only log of pack pulls, the community layer on top of the per-owner
@@ -37,7 +37,7 @@ const NOTABLE_TIERS = new Set([
    from /admin/collections and no pack can deal one, so a pull claiming it is
    forged - and this list is what stands between that and "pulled Eternal
    <anyone>" on the public feed, the live SSE stream and the share page. */
-const VALID_TIERS = new Set([
+export const VALID_TIERS: ReadonlySet<string> = new Set([
   "common",
   "rare",
   "elite",
@@ -77,6 +77,11 @@ export interface PackCardStats {
   userId: number;
   owners: number;
   copies: number;
+}
+
+/* One card's collectors, rather than one player's. */
+export interface PackCardKeyStats extends PackCardStats {
+  cardKey: string;
 }
 
 /* What a logged pull minted: the serial this owner now holds the card at, and
@@ -387,10 +392,38 @@ export async function recordPackPullEvents(
   return { recorded: pending.length, mints, eventIds };
 }
 
+/* How many collections hold one card, counted the way the cards themselves are
+ * identified: by key.
+ *
+ * A player's ordinary card, their GOAT and each card the grant desk handed out
+ * are separate collectibles that happen to share a face, so each is counted
+ * against the collectors holding that key rather than against everyone who
+ * holds anything of that player. The tier is deliberately not part of it: it
+ * is frozen at each owner's pull, so one ordinary card sits at two tiers
+ * across its holders and is still the one card they all pulled. */
+async function countKeyHoldings(db: Db, cardKey: string): Promise<{ owners: number; copies: number }> {
+  // card_user_id carries the seek (see getPackCardKeyStats): on its own the key
+  // predicate reads the whole table.
+  const row = (await exec(
+    db,
+    `select count(distinct owner_user_id) as owners, coalesce(sum(copies), 0) as copies
+     from pack_collection_cards
+     where card_user_id = ? and card_key = ? and copies > 0`,
+    [packCardKeyUserId(cardKey), cardKey],
+  )).rows[0];
+  return { owners: Number(row?.owners) || 0, copies: Number(row?.copies) || 0 };
+}
+
 /* Community ownership counts for a hand of cards ("owned by N collectors").
    Reads only the durable collection projection, so counts are right even for
-   cards pulled before the event log existed. */
-export async function getPackCardStats(db: Db, cardUserIds: number[]): Promise<PackCardStats[]> {
+   cards pulled before the event log existed. Naming the collector whose copies
+   these are counts the card they actually hold; without one there is nothing
+   to say which of a player's cards is meant, so every copy of that player is
+   counted together. */
+export async function getPackCardStats(
+  db: Db,
+  cardUserIds: number[],
+): Promise<PackCardStats[]> {
   const ids = [...new Set(cardUserIds.map((id) => Math.floor(Number(id) || 0)).filter((id) => id > 0))]
     .slice(0, PACK_PULL_MAX_CARDS_PER_EVENT);
   if (ids.length === 0) return [];
@@ -408,6 +441,46 @@ export async function getPackCardStats(db: Db, cardUserIds: number[]): Promise<P
     const row = byId.get(userId);
     return {
       userId,
+      owners: Number(row?.owners) || 0,
+      copies: Number(row?.copies) || 0,
+    };
+  });
+}
+
+/* The same counts for named cards rather than named players, which is what a
+   surface showing one card asks: the collectors holding that key.
+
+   The caller passes the key because it is the only one that knows which card
+   is on screen. Resolving it here from the owner instead would have to guess -
+   and a collector holding a player's ordinary card and a granted one has two
+   cards no rule can choose between, so the guess is wrong half the time. */
+export async function getPackCardKeyStats(db: Db, cardKeys: string[]): Promise<PackCardKeyStats[]> {
+  const keys: string[] = [];
+  for (const raw of cardKeys) {
+    const key = normalizePackCardKey(raw);
+    if (key !== null && !keys.includes(key)) keys.push(key);
+  }
+  const wanted = keys.slice(0, PACK_PULL_MAX_CARDS_PER_EVENT);
+  if (wanted.length === 0) return [];
+  // Narrowed by player as well as by key. No index leads with card_key, so the
+  // key predicate alone scans every holding in the table; the player it belongs
+  // to is the first half of the key anyway, and card_user_id does lead one.
+  const players = [...new Set(wanted.map((key) => packCardKeyUserId(key)))];
+  const rows = (await exec(
+    db,
+    `select card_key, count(distinct owner_user_id) as owners, coalesce(sum(copies), 0) as copies
+     from pack_collection_cards
+     where card_user_id in (${players.map(() => "?").join(", ")})
+       and card_key in (${wanted.map(() => "?").join(", ")}) and copies > 0
+     group by card_key`,
+    [...players, ...wanted] as InValue[],
+  )).rows;
+  const byKey = new Map(rows.map((row) => [String(row.card_key), row]));
+  return wanted.map((cardKey) => {
+    const row = byKey.get(cardKey);
+    return {
+      cardKey,
+      userId: packCardKeyUserId(cardKey),
       owners: Number(row?.owners) || 0,
       copies: Number(row?.copies) || 0,
     };
@@ -612,17 +685,25 @@ export interface SharedPackCard {
    /pull/{owner}/{card} permalink and its OG image. Reads the durable
    collection row (with the minted tier and skills snapshot), so share links
    outlive pull-event retention; they only die if the card is fully
-   recycled. */
-/* The permalink addresses a player, not a card key, so an owner holding both
-   a player's ordinary card and their GOAT resolves to the GOAT: it is the
-   rarer pull and the one worth sharing. */
+   recycled.
+ *
+ * The permalink addresses a card key, so each of a collector's cards of one
+ * player - their ordinary pull, their GOAT, every card the grant desk handed
+ * them - has a link of its own. A bare player id is still a key (the ordinary
+ * card's), and when the collector does not hold that one it falls back to
+ * their highest-tier holding of the player: that is what every link shared
+ * before keys were addressable meant, and what a link to a card since moved
+ * onto a variant key should still find. */
 export async function getSharedPackCard(
   db: Db,
   ownerUserId: number,
-  cardUserId: number,
+  card: string | number,
   pullEventId?: number | null,
 ): Promise<SharedPackCard | null> {
   if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) return null;
+  const cardKeyRequested = normalizePackCardKey(typeof card === "number" ? String(card) : card);
+  if (cardKeyRequested === null) return null;
+  const cardUserId = packCardKeyUserId(cardKeyRequested);
   if (!Number.isInteger(cardUserId) || cardUserId <= 0) return null;
   const row = (await exec(
     db,
@@ -643,9 +724,9 @@ export async function getSharedPackCard(
      left join pack_card_skills sk on sk.id = pack_collection_cards.skills_id
      where pack_collection_cards.owner_user_id = ? and pack_collection_cards.card_user_id = ?
        and pack_collection_cards.copies > 0
-     order by ${tierRankSql("pack_collection_cards.tier")} desc
+     order by (pack_collection_cards.card_key = ?) desc, ${tierRankSql("pack_collection_cards.tier")} desc
      limit 1`,
-    [ownerUserId, cardUserId],
+    [ownerUserId, cardUserId, cardKeyRequested],
   )).rows[0];
   if (!row) return null;
   // The owner may not be a tracked player (no users row); the wallet then
@@ -664,11 +745,12 @@ export async function getSharedPackCard(
     )).rows[0];
     ownerUsername = nonEmptyString(fallbackRow?.owner_username);
   }
-  const ownersRow = (await exec(
-    db,
-    "select count(distinct owner_user_id) as owners from pack_collection_cards where card_user_id = ? and copies > 0",
-    [cardUserId],
-  )).rows[0];
+  // The permalink resolved a key, and "in N collections" is about that card:
+  // the collectors holding it, not everyone holding something of the player.
+  const cardKey = typeof row.card_key === "string" && row.card_key
+    ? row.card_key
+    : packCardKey(cardUserId, typeof row.tier === "string" ? row.tier : null);
+  const holdings = await countKeyHoldings(db, cardKey);
   // The first time this owner pulled this card as a GOAT. Earliest rather than
   // latest: a later duplicate says nothing the first one didn't. The honorary
   // check is repeated here rather than left to the write path, so rows logged
@@ -682,11 +764,8 @@ export async function getSharedPackCard(
         [ownerUserId, cardUserId],
       )).rows[0]
     : undefined;
-  // The permalink resolved a player to whichever card key the owner holds at
-  // the higher tier, so the serial has to be looked up under that same key.
-  const cardKey = typeof row.card_key === "string" && row.card_key
-    ? row.card_key
-    : packCardKey(cardUserId, typeof row.tier === "string" ? row.tier : null);
+  // Mint order is per card key, so it is read under the key the permalink
+  // resolved to rather than under the player.
   const mintRow = (await exec(
     db,
     `select
@@ -730,7 +809,7 @@ export async function getSharedPackCard(
       copies: Number(row.copies) || 0,
       firstPulledAt: Number(row.first_pulled_at) || 0,
     },
-    owners: Number(ownersRow?.owners) || 0,
+    owners: holdings.owners,
     serial: serial > 0 ? serial : null,
     mintedTotal: Number(mintRow?.minted_total) || 0,
     pullEvent: pullEventRow

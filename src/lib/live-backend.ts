@@ -1845,16 +1845,79 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
 
 // Single set entry for /maps?map=<beatmapId> share links; the requested diff is
 // the representative and `diffs` carries the whole set. Null when the map is
-// unknown to the catalog (or the backend is unreachable).
-export async function fetchLiveMapSearchEntry(beatmapId: number): Promise<LiveMapSearchEntry | null> {
+// unknown to the catalog; throws when the backend could not answer at all, so a
+// caller that shows a "not in the catalog" state can tell the two apart.
+async function requestLiveMapSearchEntry(beatmapId: number): Promise<LiveMapSearchEntry | null> {
   try {
     const result = await fetchLiveJson<{ entry: LiveMapSearchEntry }>(
       `/api/snapshots/map-search-entry?beatmapId=${Math.floor(beatmapId)}`,
     );
     return result.entry ?? null;
+  } catch (error) {
+    if (error instanceof LiveBackendRequestError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/** Never throws: null covers both an unknown map and an unreachable backend. */
+export async function fetchLiveMapSearchEntry(beatmapId: number): Promise<LiveMapSearchEntry | null> {
+  try {
+    return await requestLiveMapSearchEntry(beatmapId);
   } catch {
     return null;
   }
+}
+
+// A detail entry only changes when a chart-analysis pass rewrites it, and the
+// endpoint already answers `max-age=300`, so the same window in memory lets a
+// list prefetch the entry on hover and reopen a map without a round trip. Only
+// answered requests land here: a failed one must be free to be retried.
+const MAP_SEARCH_ENTRY_TTL_MS = 5 * 60_000;
+const MAP_SEARCH_ENTRY_CACHE_MAX = 120;
+const mapSearchEntryCache = new Map<number, { at: number; entry: LiveMapSearchEntry | null }>();
+const mapSearchEntryInFlight = new Map<number, Promise<LiveMapSearchEntry | null>>();
+
+/** The memoized entry, or undefined when it has to be fetched. */
+export function peekLiveMapSearchEntry(beatmapId: number): LiveMapSearchEntry | null | undefined {
+  const id = Math.floor(beatmapId);
+  const hit = mapSearchEntryCache.get(id);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > MAP_SEARCH_ENTRY_TTL_MS) {
+    mapSearchEntryCache.delete(id);
+    return undefined;
+  }
+  return hit.entry;
+}
+
+/** Memoized `fetchLiveMapSearchEntry`, deduped while a request is in flight.
+ *  Throws like `requestLiveMapSearchEntry`. */
+export function loadLiveMapSearchEntry(beatmapId: number): Promise<LiveMapSearchEntry | null> {
+  const id = Math.floor(beatmapId);
+  const cached = peekLiveMapSearchEntry(id);
+  if (cached !== undefined) return Promise.resolve(cached);
+  const inFlight = mapSearchEntryInFlight.get(id);
+  if (inFlight) return inFlight;
+  const request = requestLiveMapSearchEntry(id)
+    .then((entry) => {
+      // Insertion-ordered, so the first key is the oldest write.
+      if (mapSearchEntryCache.size >= MAP_SEARCH_ENTRY_CACHE_MAX) {
+        const oldest = mapSearchEntryCache.keys().next();
+        if (!oldest.done) mapSearchEntryCache.delete(oldest.value);
+      }
+      mapSearchEntryCache.set(id, { at: Date.now(), entry });
+      return entry;
+    })
+    .finally(() => {
+      mapSearchEntryInFlight.delete(id);
+    });
+  mapSearchEntryInFlight.set(id, request);
+  return request;
+}
+
+/** Warm the memo ahead of a click (hover, focus); failures stay silent. */
+export function prefetchLiveMapSearchEntry(beatmapId: number): void {
+  if (peekLiveMapSearchEntry(beatmapId) !== undefined) return;
+  void loadLiveMapSearchEntry(beatmapId).catch(() => {});
 }
 
 export async function fetchLiveMapCollections(opts?: { fresh?: boolean }): Promise<LiveMapCollectionsResult> {
@@ -2226,6 +2289,9 @@ export async function warmLivePackPlayers(userIds: number[]): Promise<void> {
 }
 
 export interface LivePackCardStats {
+  /* The card these collectors hold, echoed back so a hand of answers can be
+     matched to the cards that asked. */
+  cardKey: string;
   userId: number;
   owners: number;
   copies: number;
@@ -2254,14 +2320,15 @@ export interface LivePackPullFeedEntry {
   pulledAt: number;
 }
 
-/* Community ownership counts for a hand of cards ("owned by N collectors"). */
-export async function fetchLivePackCardStats(userIds: number[]): Promise<LivePackCardStats[]> {
-  const uniqueUserIds = [...new Set(userIds)]
-    .filter((id) => Number.isInteger(id) && id > 0)
-    .slice(0, 10);
-  if (uniqueUserIds.length === 0) return [];
+/* Community ownership counts for a hand of cards ("owned by N collectors").
+   Addressed by card key, because that is what a card is: a player's ordinary
+   card, their GOAT and each one the grant desk handed out are counted apart,
+   and only the caller looking at a card knows which of them is on screen. */
+export async function fetchLivePackCardStats(cardKeys: string[]): Promise<LivePackCardStats[]> {
+  const uniqueKeys = [...new Set(cardKeys)].filter((key) => key.length > 0).slice(0, 10);
+  if (uniqueKeys.length === 0) return [];
   const body = await fetchLiveJson<{ cards?: LivePackCardStats[] }>(
-    `/api/packs/card-stats?ids=${uniqueUserIds.join(",")}`,
+    `/api/packs/card-stats?keys=${uniqueKeys.map(encodeURIComponent).join(",")}`,
   );
   return Array.isArray(body.cards) ? body.cards : [];
 }
@@ -2389,10 +2456,11 @@ export interface LivePackShowcaseCollector {
   goats: number;
 }
 
-export interface LivePackShowcase {
+/* One tile on the wall: a card, and who put it there. */
+export interface LivePackShowcaseWallCard {
+  card: ServerPackCollectionCard;
   collector: LivePackShowcaseCollector;
-  cards: ServerPackCollectionCard[];
-  updatedAt: number;
+  showcasedAt: number;
 }
 
 /* One collector's chosen cards on their own. What the viewer's own row reads:
@@ -2408,15 +2476,23 @@ export async function fetchLivePackShowcaseCards(userId: number, options: { fres
   return Array.isArray(body.cards) ? body.cards : [];
 }
 
-/* The wall: collectors who have chosen cards to show, most recently changed
-   first. Paged over people, since a showcase is read as one person's row. */
-export async function fetchLivePackShowcases(options: { page?: number; pageSize?: number } = {}): Promise<{
-  showcases: LivePackShowcase[];
+/* The wall: the cards people chose to show, most recently chosen first. Paged
+   over cards rather than over people, because the page is a gallery and the
+   owner is what inspecting a tile tells you. */
+export async function fetchLivePackShowcaseWall(options: {
+  page?: number;
+  pageSize?: number;
+  fresh?: boolean;
+} = {}): Promise<{
+  cards: LivePackShowcaseWallCard[];
   total: number;
 }> {
   const query = new URLSearchParams();
   if (options.page) query.set("page", String(options.page));
   if (options.pageSize) query.set("pageSize", String(options.pageSize));
+  // Skips the browser's ten-second cache, for the read straight after a save:
+  // the whole point of the wall is that you put something on it and see it.
+  if (options.fresh) query.set("fresh", String(Date.now()));
   return fetchLiveJson(`/api/packs/community/showcases?${query.toString()}`);
 }
 
@@ -2616,12 +2692,15 @@ export interface LiveSharedPackCard {
    card was recycled away or never synced. */
 export async function fetchLivePackSharedCard(
   ownerId: number,
-  cardId: number,
+  /* A card key: the player's id for their ordinary card, "<id>:goat", or
+     "<id>:v<n>" for one the grant desk handed out. A collector holding several
+     cards of one player has a link to each. */
+  cardKey: string | number,
   pullId?: number,
 ): Promise<LiveSharedPackCard> {
   const normalizedPullId = Math.floor(Number(pullId) || 0);
   const query = normalizedPullId > 0 ? `?pull=${normalizedPullId}` : "";
-  return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${Math.floor(cardId)}${query}`);
+  return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${encodeURIComponent(cardKey)}${query}`);
 }
 
 /* The public pull feed: notable-only by default (high mints and first-ever

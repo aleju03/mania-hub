@@ -1647,6 +1647,39 @@ describe("private skins", () => {
     expect(await recordSkinDownload(db, secret, "1.1.1.1")).toBeNull();
   });
 
+  it("enters the catalog on the day it turns public, not the day it was uploaded", async () => {
+    // Uploaded in January and kept private, so publishing listed nothing.
+    const uploaded = "2026-01-01T00:00:00.000Z";
+    const buried = await createPublishedSkin({ ...OWNER, name: "Long Private", sha256: "1a".repeat(32), visibility: "private" });
+    await exec(db, "update skins set created_at = ?, published_at = ? where id = ?", [uploaded, uploaded, buried]);
+    expect((await getSkin(db, buried))!.listedAt).toBeNull();
+
+    // A public upload from February, which every browser has already scrolled
+    // past by the time the private one is offered to them.
+    const since = "2026-02-01T00:00:00.000Z";
+    const meanwhile = await createPublishedSkin({ ownerUserId: 202, ownerUsername: "echo", name: "Uploaded Since", sha256: "2b".repeat(32) });
+    expect((await getSkin(db, meanwhile))!.listedAt).toBe((await getSkin(db, meanwhile))!.publishedAt);
+    await exec(db, "update skins set created_at = ?, published_at = ?, listed_at = ? where id = ?", [since, since, since, meanwhile]);
+
+    expect((await setSkinVisibility(db, buried, "public", OWNER.ownerUserId)).ok).toBe(true);
+    const listed = (await getSkin(db, buried))!;
+    // The upload date is the upload date; only the listing is today.
+    expect(listed.publishedAt).toBe(uploaded);
+    expect(listed.listedAt! > since).toBe(true);
+
+    // So it opens the browse page instead of arriving a month deep, and the
+    // oldest sort agrees with it rather than with the .osk's age.
+    expect((await listSkins(db, {})).skins.map((skin) => skin.name)).toEqual(["Long Private", "Uploaded Since"]);
+    expect((await listSkins(db, { sort: "oldest" })).skins.map((skin) => skin.name)).toEqual(["Uploaded Since", "Long Private"]);
+
+    // Pulling it back and putting it up again is not a way to bump it: the
+    // date it first reached the catalog is the one that stands.
+    expect((await setSkinVisibility(db, buried, "private", OWNER.ownerUserId)).ok).toBe(true);
+    expect((await getSkin(db, buried))!.listedAt).toBe(listed.listedAt);
+    expect((await setSkinVisibility(db, buried, "public", OWNER.ownerUserId)).ok).toBe(true);
+    expect((await getSkin(db, buried))!.listedAt).toBe(listed.listedAt);
+  });
+
   it("hands a true admin every uploader's private skins, whole", async () => {
     const mine = await createPublishedSkin({ ...OWNER, name: "Mine Only", visibility: "private" });
     const theirs = await createPublishedSkin({ ownerUserId: 202, ownerUsername: "echo", name: "Theirs Only", visibility: "private" });

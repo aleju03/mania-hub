@@ -246,10 +246,13 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
                 </span>
               </>
             ) : null}
-            {skin.publishedAt && (
+            {/* How long the skin has been on /skins, which is not how old the
+                file is once it spent its first weeks private. Same date the
+                newest sort puts it in order by. */}
+            {(skin.listedAt ?? skin.publishedAt) && (
               <>
                 {(skin.author || showUploader) && <span aria-hidden="true">·</span>}
-                <span className="shrink-0" suppressHydrationWarning>{formatTimeAgo(skin.publishedAt)}</span>
+                <span className="shrink-0" suppressHydrationWarning>{formatTimeAgo(skin.listedAt ?? skin.publishedAt!)}</span>
               </>
             )}
             {skin.oskSizeBytes ? (

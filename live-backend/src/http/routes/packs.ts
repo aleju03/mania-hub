@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseJson } from "../../db.js";
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
-import { getPackCardCollectors, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
+import { getPackCardCollectors, getPackCardKeyStats, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
 import { applyPackCollectionCardMint, countMissingGoatCards, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot } from "../../features/pack-wallets.js";
-import { getPackCollectorProfile, getPackCommunityStats, getPackShowcaseCards, listPackCollectors, listPackShowcases, normalizePackCollectorSort, PACK_COLLECTOR_PAGE_MAX_SIZE, resolvePackCollector } from "../../features/pack-community.js";
+import { getPackCollectorProfile, getPackCommunityStats, getPackShowcaseCards, listPackCollectors, listPackShowcaseWall, normalizePackCollectorSort, PACK_COLLECTOR_PAGE_MAX_SIZE, resolvePackCollector } from "../../features/pack-community.js";
 import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError } from "../../features/pack-draw.js";
 import { logInfo } from "../../logger.js";
 import { getPackPoolMembership, getPackPoolRoster } from "../../features/global-rankings.js";
@@ -280,11 +280,25 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
   if (url.pathname === "/api/packs/card-stats") {
     // Community ownership counts for a hand of revealed cards. Public and
     // cheap (one grouped indexed count over pack_collection_cards).
+    //
+    // `keys` counts named cards ("in N collections" under one card), `ids`
+    // counts every card of a player together, which is all that can be said
+    // when the caller has a player and not a card.
     if (req.method !== "GET") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
     if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const rawKeys = (url.searchParams.get("keys") ?? "").split(",").filter((raw) => raw.length > 0);
+    if (rawKeys.length > 0) {
+      const cards = await getPackCardKeyStats(ctx.db, rawKeys);
+      if (cards.length === 0) {
+        sendJson(req, res, ctx, 400, { error: "invalid_card_keys" });
+        return true;
+      }
+      sendJson(req, res, ctx, 200, { cards });
+      return true;
+    }
     const ids = (url.searchParams.get("ids") ?? "")
       .split(",")
       .map((raw) => Math.floor(Number(raw) || 0))
@@ -360,7 +374,10 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     sendJson(req, res, ctx, 200, await getPackCardCollectors(ctx.db, cardUserId));
     return true;
   }
-  const packPulledCardMatch = url.pathname.match(/^\/api\/packs\/pulled-card\/(\d+)\/(\d+)$/);
+  // The card segment is a card key ("123", "123:goat", "123:v2"), so it also
+  // matches a percent-encoded colon: a browser that encodes the path segment
+  // and one that does not both address the same card.
+  const packPulledCardMatch = url.pathname.match(/^\/api\/packs\/pulled-card\/(\d+)\/([\d]+(?::|%3[Aa])?[a-z0-9]*)$/);
   if (packPulledCardMatch) {
     // One owned card as a shareable artifact: backs the /pull/{owner}/{card}
     // permalink page and its OG image. Public; reads the durable collection
@@ -375,7 +392,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     const shared = await getSharedPackCard(
       ctx.db,
       Number(packPulledCardMatch[1]),
-      Number(packPulledCardMatch[2]),
+      decodeURIComponent(packPulledCardMatch[2]),
       pullEventId > 0 ? pullEventId : null,
     );
     if (!shared) {
@@ -396,22 +413,26 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       return true;
     }
     if (!checkRate(req, res, ctx, "publicApi")) return true;
-    res.setHeader("cache-control", "public, max-age=60");
+    /* Shorter than the boards deserve, because of the four numbers at the top:
+       they are maintained on a twenty-second clock now, and a minute of browser
+       cache on top of that is what made somebody who had just watched the packs
+       counter tick up see it drop back on reload. */
+    res.setHeader("cache-control", "public, max-age=15");
     await sendAccentEnrichedJson(req, res, ctx, 200, await getPackCommunityStats(ctx.db));
     return true;
   }
   if (url.pathname === "/api/packs/community/showcases") {
-    // The wall of chosen cards. Short cache: this is the one surface a
-    // collector edits and then immediately reloads to look at.
+    // The wall of chosen cards, one tile per card. Short cache: this is the one
+    // surface a collector edits and then immediately reloads to look at.
     if (req.method !== "GET") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
     if (!checkRate(req, res, ctx, "publicApi")) return true;
     const page = Math.max(0, Math.floor(Number(url.searchParams.get("page")) || 0));
-    const pageSize = Math.min(24, Math.max(1, Math.floor(Number(url.searchParams.get("pageSize")) || 12)));
+    const pageSize = Math.min(60, Math.max(1, Math.floor(Number(url.searchParams.get("pageSize")) || 40)));
     res.setHeader("cache-control", "public, max-age=10");
-    await sendAccentEnrichedJson(req, res, ctx, 200, await listPackShowcases(ctx.db, { page, pageSize }));
+    await sendAccentEnrichedJson(req, res, ctx, 200, await listPackShowcaseWall(ctx.db, { page, pageSize }));
     return true;
   }
   if (url.pathname === "/api/packs/community/showcase") {

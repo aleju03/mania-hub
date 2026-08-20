@@ -2,6 +2,8 @@ import { dbHealth, exec, getSqliteBusyRetryStats, parseJson, type Db } from "../
 import { getCountryRegistry, isGlobalCountry } from "../countries.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../features/activity.js";
 import { getBeatmapOsuFileBackfillStatus } from "../features/beatmap-osu-file-backfill.js";
+import { packCommunitySnapshotStatus } from "../features/pack-community.js";
+import { packCommunityThreadStatus } from "../features/pack-community-thread.js";
 import { readJobMemoryMetric, readRuntimeStatus, type RuntimeStatusSnapshot } from "../live/runtime-status.js";
 import type { OscStatus } from "../osc/client.js";
 import { getDbDiskUsage, getLocalDbStorage, getStorageFootprint } from "../retention.js";
@@ -214,6 +216,8 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
       ? {
         // Asking for the thread's status must never be what constructs it.
         mapsSnapshotThread: mapsSnapshotThreadStatus(ctx.config),
+        packCommunityThread: packCommunityThreadStatus(ctx.config),
+        packCommunitySnapshots: packCommunitySnapshotStatus(ctx.db),
         responseCaches: mapsResponseCacheMetrics(ctx.db),
         disk: disk ?? null,
         storagePaths: storagePaths ?? null,

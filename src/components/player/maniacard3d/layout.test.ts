@@ -64,6 +64,33 @@ describe("resolveQualityProfile", () => {
     });
   });
 
+  test("keeps a foreground mobile card animating at mobile quality", () => {
+    expect(resolveQualityProfile({
+      mobile: true,
+      reducedMotion: false,
+      devicePixelRatio: 3,
+      continuousIdle: true,
+    })).toEqual({
+      pixelRatio: 1.25,
+      textureScale: 0.75,
+      antialias: false,
+      adaptiveIdle: false,
+      shaderQuality: "medium",
+      idleMotion: "continuous",
+    });
+  });
+
+  test("lets reduced motion override a continuous idle request", () => {
+    expect(resolveQualityProfile({
+      mobile: true,
+      reducedMotion: true,
+      devicePixelRatio: 3,
+      continuousIdle: true,
+    })).toMatchObject({
+      idleMotion: "off",
+    });
+  });
+
   test("keeps desktop shader motion without mobile adaptive throttling", () => {
     expect(resolveQualityProfile({ mobile: false, reducedMotion: false, devicePixelRatio: 2 })).toMatchObject({
       adaptiveIdle: false,

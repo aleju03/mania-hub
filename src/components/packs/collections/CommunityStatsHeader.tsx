@@ -1,7 +1,8 @@
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { formatNumber } from "#/lib/format";
 import type { LivePackCommunityTotals } from "#/lib/live-backend";
-import { Section, SectionHeading, StatSkeleton } from "./chrome";
+import { HeadingSkeleton, NoteSkeleton, Section, SectionHeading, SkeletonBlock, StatSkeleton } from "./chrome";
+import { CountingNumber } from "./CountingNumber";
 
 /* The size of the game, in the numbers people actually ask for, plus the
    rarity table underneath. No captions explaining what a pack is: anyone
@@ -21,13 +22,17 @@ const TIER_ORDER: ManiaCardTier[] = [
   "common",
 ];
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+/* Counted rather than swapped: the totals a pull moves are advanced off the
+   live pull stream, so these change under the reader. tabular-nums is what
+   keeps the count from shuffling the digits sideways while it runs. */
+function Stat({ label, value, hint }: { label: string; value: number; hint?: string }) {
   return (
     <div>
       <div className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">{label}</div>
-      <div translate="no" className="mt-1 text-3xl font-black leading-none text-white tabular-nums sm:text-4xl">
-        {value}
-      </div>
+      <CountingNumber
+        value={value}
+        className="mt-1 block text-3xl font-black leading-none text-white tabular-nums sm:text-4xl"
+      />
       {hint ? <div className="mt-1 text-[11px] text-osu-f1 tabular-nums">{hint}</div> : null}
     </div>
   );
@@ -35,8 +40,31 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 
 export function CommunityStatsSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
-      {[0, 1, 2, 3].map((index) => <StatSkeleton key={index} />)}
+    <div className="space-y-10">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
+        {/* Only the last stat carries a hint, and a grid row is as tall as its
+            tallest cell, so that one line has to be reserved here too. */}
+        {[0, 1, 2, 3].map((index) => <StatSkeleton key={index} withHint={index === 3} />)}
+      </div>
+      {/* The rarity table belongs to this header. Leaving it out of the
+          skeleton pushed the record boards a section's worth down the page the
+          moment the numbers landed. Each label is reserved at the width its
+          tier's name takes, so the run wraps where the real one does. */}
+      <div>
+        <HeadingSkeleton />
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2">
+          {TIER_ORDER.map((tier) => (
+            <div key={tier} className="flex h-[23px] items-center gap-1.5">
+              {/* Six pixels a character is what the 11px labels measure, and
+                  w-11 is the six-figure count next to them: near enough that
+                  the run wraps onto the second line where the real one does. */}
+              <SkeletonBlock className="h-2.5" style={{ width: MANIA_TIER_STYLES[tier].label.length * 6 }} />
+              <SkeletonBlock className="h-3 w-11" />
+            </div>
+          ))}
+        </div>
+        <NoteSkeleton width="w-72" className="mt-3" />
+      </div>
     </div>
   );
 }
@@ -51,12 +79,15 @@ export function CommunityStatsHeader({ totals }: { totals: LivePackCommunityTota
     <div className="space-y-10">
       <Section>
         <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
-          <Stat label="packs opened" value={formatNumber(totals.packsOpened)} />
-          <Stat label="cards minted" value={formatNumber(totals.cardsMinted)} />
-          <Stat label="collectors" value={formatNumber(totals.collectors)} />
+          <Stat label="packs opened" value={totals.packsOpened} />
+          {/* Every copy anyone holds, duplicates counted. Not "minted": that is
+              collectible-trade jargon for making a copy, which reads here as a
+              mapper's name and tells nobody what the number is. */}
+          <Stat label="cards collected" value={totals.cardsMinted} />
+          <Stat label="collectors" value={totals.collectors} />
           <Stat
             label="players carded"
-            value={formatNumber(totals.playersCarded)}
+            value={totals.playersCarded}
             hint={totals.poolTotal > 0 ? `of ${formatNumber(totals.poolTotal)} pullable` : undefined}
           />
         </div>

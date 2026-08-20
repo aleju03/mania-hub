@@ -124,6 +124,9 @@ export async function handleAdminPackCollectionRoutes(
     const raw = (body.card && typeof body.card === "object" ? body.card : {}) as Record<string, unknown>;
     const grant: AdminPackCardGrant = {
       cardUserId: Math.floor(Number(raw.cardUserId)),
+      // The holding to edit, when the desk listed one. Absent grants against
+      // the player, which mints a card of its own for anything customized.
+      cardKey: optionalString(raw.cardKey),
       // Absent and explicit null both mean unrated; only a real string is a
       // tier claim, and pack-admin rejects one that is not a known tier.
       tier: typeof raw.tier === "string" && raw.tier.length > 0 ? raw.tier : null,

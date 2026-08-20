@@ -14,6 +14,7 @@ import {
 } from "../../../lib/live-backend";
 import { HONORARY_PACK_POOL } from "../../../lib/honorary-players";
 import { getManiaCardTier, MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "../../../lib/maniacard";
+import { parsePackCardKey } from "../../../lib/pack-collection";
 import { PACK_TYPES } from "../../../lib/packs";
 import { pageSeo, pullOgImagePath } from "../../../lib/seo";
 
@@ -27,7 +28,7 @@ export const Route = createFileRoute("/pull/$ownerId/$cardId")({
     description: "A maniacard pulled from a booster pack. Open your own packs and build a collection.",
     path: `/pull/${params.ownerId}/${params.cardId}`,
     origin: match.context.origin,
-    image: pullOgImagePath(Number(params.ownerId), Number(params.cardId)),
+    image: pullOgImagePath(Number(params.ownerId), params.cardId),
     imageWidth: 720,
     imageHeight: 1080,
   }),
@@ -211,14 +212,20 @@ function PullPage() {
 
   useEffect(() => {
     const owner = Number(ownerId);
-    const card = Number(cardId);
-    if (!isLiveBackendConfigured() || !Number.isInteger(owner) || owner <= 0 || !Number.isInteger(card) || card <= 0) {
+    /* The path segment is a card key, so each card a collector holds of one
+       player has a permalink of its own: their pull, their GOAT, and every one
+       the grant desk handed them. A bare player id still addresses the
+       ordinary card, and the backend falls back to whatever card of that
+       player they do hold, which is what every link shared before keys were
+       addressable meant. */
+    const card = parsePackCardKey(cardId);
+    if (!isLiveBackendConfigured() || !Number.isInteger(owner) || owner <= 0 || !card) {
       setState({ status: "missing" });
       return;
     }
     let cancelled = false;
     setState({ status: "loading" });
-    void fetchLivePackSharedCard(owner, card, pull)
+    void fetchLivePackSharedCard(owner, cardId, pull)
       .then((shared) => {
         if (!cancelled) setState({ status: "ready", shared });
       })

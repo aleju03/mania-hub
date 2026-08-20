@@ -690,6 +690,13 @@ create table if not exists pack_collection_cards (
   -- tier's triangle flecks or starfield, as bounded JSON (src/lib/card-motif.ts).
   -- Written from /admin/collections only, never by a wallet sync.
   motif text,
+  -- When /admin/collections handed this holding out, for the holdings it did.
+  -- Null on a pulled card, which is the whole point of the column: a granted
+  -- card is minted a serial like any other, so without this the only thing
+  -- left to say about it was that its holder was the Nth person to pull it,
+  -- which they were not. Set once, when the grant creates the row; editing a
+  -- card somebody pulled does not claim it was given to them.
+  granted_at integer,
   primary key(owner_user_id, card_key)
 );
 create index if not exists idx_pack_collection_owner_tier
@@ -782,6 +789,64 @@ create index if not exists idx_pack_card_serials_card
   on pack_card_serials(card_key, serial);
 create index if not exists idx_pack_card_serials_owner
   on pack_card_serials(owner_user_id, minted_at desc);
+-- Whoever found a card first, anywhere: one row per card key ever minted, which
+-- is thousands where the table itself is hundreds of thousands. Without this the
+-- first-finds board reads every serial ever handed out to count a few of them.
+create index if not exists idx_pack_card_serials_first_finds
+  on pack_card_serials(owner_user_id) where serial = 1;
+
+-- The maintained roll-up behind /packs/collections. Grouping
+-- pack_collection_cards by collector and by card is two full scans of millions
+-- of rows (~12 seconds against production, and libsql runs them synchronously),
+-- and the answer changes only where somebody pulled or recycled something. So
+-- the counts are kept here instead - one row per collector, one per carded
+-- player - and the triggers in features/pack-community-rollups.ts record which
+-- of them a write touched, for the reconciler to recompute owner-scoped.
+--
+-- Nothing durable lives here: every column is derivable from
+-- pack_collection_cards, and a stale or missing table only costs the page a
+-- full scan.
+create table if not exists pack_community_owner_stats (
+  owner_user_id integer primary key,
+  -- Holdings, distinct players, and copies: a collector's GOAT and their
+  -- ordinary card are two holdings of one player, so both are kept.
+  cards integer not null,
+  players integer not null,
+  copies integer not null,
+  duplicates integer not null,
+  recycled integer not null,
+  goats integer not null,
+  joined_at integer not null,
+  last_pulled_at integer not null,
+  updated_at integer not null
+);
+
+-- Copies in circulation per tier, per collector. Kept apart from the row above
+-- rather than as JSON on it so the site-wide tier table is one group-by over
+-- ten thousand rows instead of a scan of millions.
+create table if not exists pack_community_owner_tier_stats (
+  owner_user_id integer not null,
+  tier text not null,
+  copies integer not null,
+  primary key(owner_user_id, tier)
+);
+
+create table if not exists pack_community_card_stats (
+  card_user_id integer primary key,
+  owners integer not null,
+  copies integer not null,
+  updated_at integer not null
+);
+
+-- What a write touched and the reconciler has not caught up with yet. Bounded
+-- by the number of collectors and carded players however busy the table gets,
+-- since a second pull by the same collector re-marks the same row.
+create table if not exists pack_community_dirty_owners (
+  owner_user_id integer primary key
+);
+create table if not exists pack_community_dirty_cards (
+  card_user_id integer primary key
+);
 
 -- What the pack arcade (the higher-or-lower streak game) has paid an account
 -- today, which is the only thing standing between a scripted client and free

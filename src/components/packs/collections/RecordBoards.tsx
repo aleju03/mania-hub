@@ -110,11 +110,17 @@ function Board({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+/* What the boards below come back as: eight of them, ten rows each
+   (PACK_COMMUNITY_BOARD_SIZE on the backend). The skeleton draws that shape
+   exactly, so the page under it is already the height it will be. */
+const BOARD_COUNT = 8;
+const BOARD_ROWS = 10;
+
 export function RecordBoardsSkeleton() {
   return (
     <div className="grid gap-x-10 gap-y-10 md:grid-cols-2">
-      {[0, 1, 2, 3].map((index) => (
-        <BoardSkeleton key={index} rows={index < 2 ? 8 : 5} />
+      {Array.from({ length: BOARD_COUNT }, (_, index) => (
+        <BoardSkeleton key={index} rows={BOARD_ROWS} />
       ))}
     </div>
   );
@@ -220,13 +226,13 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
         ))}
       </Board>
 
-      <Board title="cards almost everyone has">
+      <Board title="most collected cards">
         {boards.mostOwnedCards.map((card, index) => (
           <CardRow
             key={card.userId}
             card={card}
             index={index}
-            value={`${formatNumber(card.owners)} shelves`}
+            value={`${formatNumber(card.owners)} collections`}
           />
         ))}
       </Board>

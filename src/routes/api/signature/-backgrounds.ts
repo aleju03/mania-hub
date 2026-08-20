@@ -80,6 +80,20 @@ export interface SignatureBackgroundSources {
   mapUrl?: string | null;
 }
 
+/* The osu! sources arrive from an API response rather than from the player, so
+   they get held to the hosts they are supposed to come from. A drifting
+   upstream field should not become an arbitrary fetch. */
+function allowedOsuImageUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return null;
+    return ALLOWED_IMAGE_HOSTS.has(url.hostname) ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 function sourceUrlFor(style: SignatureStyle, sources: SignatureBackgroundSources): string | null {
   if (styleIsCustomImage(style)) {
     // Already shape-checked (https, no credentials, length capped) by
@@ -87,17 +101,84 @@ function sourceUrlFor(style: SignatureStyle, sources: SignatureBackgroundSources
     // the transport's problem, not this function's.
     return style.imageUrl;
   }
-  const raw = style.background === "cover" ? sources.coverUrl
+  return allowedOsuImageUrl(style.background === "cover" ? sources.coverUrl
     : style.background === "map" ? sources.mapUrl
-    : null;
-  if (!raw) return null;
+    : null);
+}
+
+/* How far down a cover is pulled before white text goes on it, matching the
+   brightness-[0.38] the profile page dims these same covers to. Fixed rather
+   than measured the way a full-card background is: this band always carries
+   the same four lines of white text, and the player has no slider here to
+   compensate with if it came back too bright. */
+const COVER_BAND_BRIGHTNESS = 0.34;
+
+/** The beatmap cover behind one row, rather than behind a whole card.
+ *
+ *  Not backgroundImageDataUrl: that one paints a whole layout from the style
+ *  the player picked, and this is a fixed band inside a layout whose own
+ *  background may already be something else entirely. Same pinned transport
+ *  and same host allowlist, since the address still comes off an API payload.
+ *
+ *  Null on any failure, like every background here: the row draws flat and the
+ *  render still says what it exists to say. */
+export async function beatmapCoverBandDataUrl(
+  rawUrl: string | null | undefined,
+  width: number,
+  height: number,
+): Promise<string | null> {
+  const url = allowedOsuImageUrl(rawUrl);
+  if (!url) return null;
+  const bytes = await fetchSource(url);
+  if (!bytes) return null;
+
   try {
-    const url = new URL(raw);
-    if (url.protocol !== "https:") return null;
-    // The osu! sources arrive from an API response rather than from the player,
-    // so they get held to the hosts they are supposed to come from. A drifting
-    // upstream field should not become an arbitrary fetch.
-    return ALLOWED_IMAGE_HOSTS.has(url.hostname) ? url.toString() : null;
+    const { default: sharp } = await import("sharp");
+    const out = await sharp(bytes, { failOn: "none" })
+      // A 900x250 cover squeezed into a strip crops to the artwork rather than
+      // to whichever corner happened to be in the middle.
+      .resize(width, height, { fit: "cover", position: "attention" })
+      .modulate({ brightness: COVER_BAND_BRIGHTNESS })
+      /* PNG, unlike the full-card background above. Dimming a cover to a third
+         of its brightness compresses it into the bottom of the range, where
+         JPEG has the fewest levels to spend - a smooth sky came out visibly
+         blocked, and the render it is baked into is a lossless PNG that then
+         preserves those blocks forever. This costs a bigger data URL inside
+         one render and nothing at all in what gets stored. */
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    return `data:image/png;base64,${out.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
+/** The player's osu! avatar, square and already the size it is drawn at.
+ *
+ *  Fetched here rather than handed to satori as a url, for the same reasons as
+ *  the cover band: the address comes off an API payload, so it goes through the
+ *  same pinned transport and host allowlist, and a fetch that fails returns
+ *  null instead of taking the whole render down with it. The header then draws
+ *  without a portrait, which is the layout it had before there was one. */
+export async function avatarSquareDataUrl(
+  rawUrl: string | null | undefined,
+  size: number,
+): Promise<string | null> {
+  const url = allowedOsuImageUrl(rawUrl);
+  if (!url) return null;
+  const bytes = await fetchSource(url);
+  if (!bytes) return null;
+
+  try {
+    const { default: sharp } = await import("sharp");
+    const out = await sharp(bytes, { failOn: "none" })
+      // Resized here rather than by the renderer: satori scales an oversized
+      // source with a box filter, and an osu! avatar is 256px going into a
+      // 28px square.
+      .resize(size, size, { fit: "cover" })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    return `data:image/png;base64,${out.toString("base64")}`;
   } catch {
     return null;
   }
@@ -196,7 +277,13 @@ export async function backgroundImageDataUrl(
       }]);
     }
 
-    const out = await pipeline.jpeg({ quality: 74, mozjpeg: true }).toBuffer();
+    /* Quality 90, not the 74 this started at. A background is the largest
+       smooth-gradient area in any render, which is exactly what a mid-quality
+       JPEG blocks, and the render it lands in is a lossless PNG that keeps
+       every block forever. Still JPEG rather than lossless: the same layer as
+       a PNG is ~18x the bytes handed to satori, for a difference nobody can
+       see at this quality. */
+    const out = await pipeline.jpeg({ quality: 90, mozjpeg: true }).toBuffer();
     return `data:image/jpeg;base64,${out.toString("base64")}`;
   } catch {
     return null;

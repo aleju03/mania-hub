@@ -7,7 +7,12 @@ import {
   applyPackCollectionCardMint,
   countMissingGoatCards,
   ensurePackCardCatalog,
+  ensurePackCardVariantKeys,
   ensurePackCollectionCardKeys,
+  GRANT_ONLY_TIERS,
+  isPackCardVariantKey,
+  normalizePackCardKey,
+  packCardVariantKey,
   getPackCollectionPoolProgress,
   getPackShowcase,
   HONORARY_USER_IDS,
@@ -19,6 +24,7 @@ import {
   savePackWallet,
   setPackShowcase,
 } from "../src/features/pack-wallets.js";
+import { VALID_TIERS as PULLABLE_TIERS } from "../src/features/pack-pulls.js";
 import { seedCollectionCard } from "./helpers/pack-cards.js";
 
 let dir = "";
@@ -510,6 +516,33 @@ describe("pack showcase", () => {
     expect(await getPackShowcase(db, 777)).toEqual([]);
     expect(await setPackShowcase(db, 777, ["41"])).toEqual([]);
   });
+
+  it("keeps the stamp a card went up with, and only stamps the ones that are new", async () => {
+    /* The wall sorts on this, so it has to mean "when this card was chosen".
+       Restamping the whole shelf on every save would refloat five cards for
+       one change, and reordering the shelf would refloat them for none. */
+    await seedCollection([41, 42, 43]);
+    await setPackShowcase(db, USER_ID, ["41", "42"]);
+    const first = await stamps();
+    expect(new Set(Object.values(first)).size).toBe(1);
+
+    await setPackShowcase(db, USER_ID, ["42", "43", "41"]);
+    const second = await stamps();
+
+    // 41 and 42 were already up, in either order; only 43 is new.
+    expect(second["41"]).toBe(first["41"]);
+    expect(second["42"]).toBe(first["42"]);
+    expect(second["43"]).toBeGreaterThanOrEqual(first["41"]);
+  });
+
+  async function stamps(): Promise<Record<string, number>> {
+    const rows = (await exec(
+      db,
+      "select card_key, updated_at from pack_showcase_cards where owner_user_id = ?",
+      [USER_ID],
+    )).rows;
+    return Object.fromEntries(rows.map((row) => [String(row.card_key), Number(row.updated_at)]));
+  }
 });
 
 /* Snapshots are shared between collections but owned by neither: two players
@@ -991,5 +1024,126 @@ describe("wallet card field bounds", () => {
   it("caps an absurd copy count", async () => {
     await savePackWallet(db, USER_ID, hostilePayload({ copies: 5_000_000 }), 0, 5000);
     expect(Number((await storedCard()).copies)).toBe(100_000);
+  });
+});
+
+
+describe("granted card keys", () => {
+  /* Every card a collector holds is addressable on its own: the player's
+     ordinary card, their GOAT, and each one the grant desk handed out. Only
+     the first two are derived from a tier, which is what a browser can compute
+     and therefore what a browser may claim. */
+  it("accepts the three key forms and nothing else", () => {
+    expect(normalizePackCardKey("42")).toBe("42");
+    expect(normalizePackCardKey("42:goat")).toBe("42:goat");
+    expect(normalizePackCardKey("42:v3")).toBe("42:v3");
+    // Leading zeros normalize, so one card cannot be addressed two ways.
+    expect(normalizePackCardKey("042:v03")).toBe("42:v3");
+    for (const bad of ["42:v0", "42:v", "42:vx", "42:v1234567", "42:goat:v1", "42:V1", ":v1", "42:"]) {
+      expect(normalizePackCardKey(bad)).toBeNull();
+    }
+  });
+
+  it("tells a granted key from a derived one", () => {
+    expect(isPackCardVariantKey(packCardVariantKey(42, 2))).toBe(true);
+    expect(isPackCardVariantKey("42")).toBe(false);
+    expect(isPackCardVariantKey("42:goat")).toBe(false);
+  });
+
+  it("names only tiers no pack can deal", () => {
+    // The complement of pack-pulls' VALID_TIERS: a tier a pull may claim is
+    // one a collector can reach without the desk, so holding it says nothing
+    // about the card being a one-off. If the two ever overlap, an ordinary
+    // pull would start minting itself a card key of its own.
+    for (const tier of GRANT_ONLY_TIERS) expect(PULLABLE_TIERS.has(tier)).toBe(false);
+    expect([...GRANT_ONLY_TIERS]).toEqual(["eternal"]);
+  });
+
+  it("moves cards granted before keys existed onto their own", async () => {
+    /* The state the backfill exists for: an Eternal and a badge sitting on the
+       player's ordinary key, indistinguishable from a pulled card except by
+       its columns, with a serial and a showcase slot pointing at that key. */
+    await seedCollectionCard(db, USER_ID, 42, { tier: "eternal", copies: 1 });
+    await exec(
+      db,
+      "update pack_collection_cards set tier_label = 'Mano', motif = '{\"url\":\"https://x.test/a.png\"}' where owner_user_id = ? and card_key = '42'",
+      [USER_ID],
+    );
+    await exec(
+      db,
+      "insert into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at) values ('42', 42, ?, 1, 1000)",
+      [USER_ID],
+    );
+    await exec(
+      db,
+      "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, 0, '42', 1000)",
+      [USER_ID],
+    );
+    // A second collector was handed the same card, and a third pulled the
+    // ordinary one.
+    await seedCollectionCard(db, USER_ID + 1, 42, { tier: "eternal", copies: 1 });
+    await exec(
+      db,
+      "update pack_collection_cards set tier_label = 'Mano', motif = '{\"url\":\"https://x.test/a.png\"}' where owner_user_id = ? and card_key = '42'",
+      [USER_ID + 1],
+    );
+    await seedCollectionCard(db, USER_ID + 2, 42, { tier: "rare", copies: 2 });
+
+    expect(await ensurePackCardVariantKeys(db)).toBe(2);
+
+    // One key for the one card, both holders on it.
+    const granted = (await exec(
+      db,
+      "select owner_user_id from pack_collection_cards where card_key = '42:v1' order by owner_user_id asc",
+    )).rows;
+    expect(granted.map((row) => Number(row.owner_user_id))).toEqual([USER_ID, USER_ID + 1]);
+    // The pulled card stays where it is.
+    expect(Number((await exec(db, "select count(*) as held from pack_collection_cards where card_key = '42'")).rows[0]?.held)).toBe(1);
+    // And the mint order and the showcase slot followed the card.
+    expect(Number((await exec(db, "select serial from pack_card_serials where card_key = '42:v1' and owner_user_id = ?", [USER_ID])).rows[0]?.serial)).toBe(1);
+    expect(String((await exec(db, "select card_key from pack_showcase_cards where owner_user_id = ?", [USER_ID])).rows[0]?.card_key)).toBe("42:v1");
+    // The variant has a face of its own, copied off the key it left.
+    expect(Number((await exec(db, "select count(*) as faces from pack_cards where card_key = '42:v1'")).rows[0]?.faces)).toBe(1);
+
+    // Nothing left to move.
+    expect(await ensurePackCardVariantKeys(db)).toBe(0);
+  });
+
+  it("marks the cards it moves as given, and the ones already moved too", async () => {
+    /* Both halves of the same scan: a grant still on a plain key, and one
+       already on a variant key from before the column existed. Neither was
+       pulled, and both are minted serials, so without the stamp every surface
+       would go on calling their holders the Nth to pull them. */
+    await exec(db, `insert into pack_collection_cards (
+        owner_user_id, card_user_id, card_key, tier, tier_label, motif, skills_id,
+        pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
+      ) values (?, ?, ?, 'eternal', 'Mano', null, null, 0, 0, 1, 0, 4000, 4000, 4000)`,
+      [USER_ID, 900, "900"]);
+    await exec(db, `insert into pack_collection_cards (
+        owner_user_id, card_user_id, card_key, tier, tier_label, motif, skills_id,
+        pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
+      ) values (?, ?, ?, 'eternal', null, null, null, 0, 0, 1, 0, 7000, 7000, 7000)`,
+      [USER_ID, 901, "901:v1"]);
+
+    await ensurePackCardVariantKeys(db);
+
+    const rows = (await exec(
+      db,
+      "select card_key, granted_at from pack_collection_cards where owner_user_id = ? order by card_user_id",
+      [USER_ID],
+    )).rows;
+    expect(rows.map((row) => [String(row.card_key), Number(row.granted_at)])).toEqual([
+      ["900:v1", 4000],
+      ["901:v1", 7000],
+    ]);
+  });
+
+  it("lets the holder recycle a granted card like any other", async () => {
+    await seedCollectionCard(db, USER_ID, 42, { tier: "eternal", copies: 1 });
+    await exec(db, "update pack_collection_cards set card_key = '42:v1', tier_label = 'Mano' where owner_user_id = ?", [USER_ID]);
+    const recycled = await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: "42:v1" });
+    // Eternal's own shard value, not the unrated floor an unreachable key pays.
+    expect(recycled.gained).toBe(250);
+    expect(Number((await exec(db, "select copies from pack_collection_cards where owner_user_id = ? and card_key = '42:v1'", [USER_ID])).rows[0]?.copies)).toBe(0);
   });
 });

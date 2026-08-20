@@ -93,7 +93,9 @@ describe("granting a card", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.result.created).toBe(true);
-    expect(outcome.result.cardKey).toBe(String(CARD_USER_ID));
+    // A typed badge is a card of its own, so the desk minted it a key rather
+    // than writing over the player's ordinary card.
+    expect(outcome.result.cardKey).toBe(`${CARD_USER_ID}:v1`);
     expect(outcome.result.card).toMatchObject({
       tier: "worldClass",
       tierLabel: "World Class",
@@ -178,6 +180,141 @@ describe("granting a card", () => {
   });
 });
 
+describe("granted cards as their own collectible", () => {
+  /* The desk is the only writer that can mint a card key, and what it mints on
+     is the card it is describing: its own tier, its own badge, its own art.
+     Same card to a second collector, same key; anything different, a new one. */
+  it("mints a key for a customized grant and leaves the ordinary card alone", async () => {
+    await seedCollectionCard(db, OWNER_ID, CARD_USER_ID, { tier: "rare", copies: 2 });
+
+    const outcome = await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "eternal", copies: 1 });
+    expect(outcome.ok && outcome.result.cardKey).toBe(`${CARD_USER_ID}:v1`);
+    expect(outcome.ok && outcome.result.created).toBe(true);
+    // Their pulled card is untouched, and both are theirs.
+    expect((await getPackCollectionCard(db, OWNER_ID, String(CARD_USER_ID)))?.copies).toBe(2);
+    expect((await getPackCollectionCard(db, OWNER_ID, `${CARD_USER_ID}:v1`))?.tier).toBe("eternal");
+  });
+
+  it("marks a granted holding as given rather than pulled, and dates it", async () => {
+    /* A grant mints a serial like a pull does, so without this the only thing
+       left to say about the card was that its holder was the Nth person to
+       pull it. They were not; nobody pulled it. */
+    const outcome = await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "eternal", copies: 1 });
+    const key = outcome.ok ? outcome.result.cardKey : "";
+    const granted = await getPackCollectionCard(db, OWNER_ID, key);
+    expect(granted?.grantedAt).toBeGreaterThan(0);
+    // Dated by the pull stamp it stands in for, so backdating a grant backdates both.
+    expect(granted?.grantedAt).toBe(granted?.firstPulledAt);
+  });
+
+  it("leaves a pulled card unmarked, even after the desk edits it", async () => {
+    await seedCollectionCard(db, OWNER_ID, CARD_USER_ID, { tier: "rare", copies: 2 });
+
+    await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      cardKey: String(CARD_USER_ID),
+      tier: "rare",
+      copies: 5,
+      copiesMode: "set",
+    });
+
+    const edited = await getPackCollectionCard(db, OWNER_ID, String(CARD_USER_ID));
+    expect(edited?.copies).toBe(5);
+    // Editing somebody's pulled card does not turn it into a card they were given.
+    expect(edited?.grantedAt ?? null).toBeNull();
+  });
+
+  it("backdates the marker with the grant", async () => {
+    const backdated = 1_600_000_000_000;
+    const outcome = await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      tier: "eternal",
+      firstPulledAt: backdated,
+    });
+    const key = outcome.ok ? outcome.result.cardKey : "";
+    expect((await getPackCollectionCard(db, OWNER_ID, key))?.grantedAt).toBe(backdated);
+  });
+
+  it("puts a second collector handed the same card on the same key", async () => {
+    const motif = { url: "https://example.com/a.png" };
+    const first = await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "eternal", tierLabel: "Mano", motif });
+    const second = await grantAdminPackCard(db, { ...owner, userId: OWNER_ID + 1 }, {
+      cardUserId: CARD_USER_ID,
+      tier: "eternal",
+      tierLabel: "Mano",
+      motif,
+    });
+    expect(first.ok && second.ok && second.result.cardKey).toBe(first.ok ? first.result.cardKey : "");
+    expect(second.ok && second.result.created).toBe(true);
+  });
+
+  it("mints another key when the tier, the badge or the art differs", async () => {
+    const base = { cardUserId: CARD_USER_ID, tier: "eternal", tierLabel: "Mano" } as const;
+    const first = await grantAdminPackCard(db, owner, { ...base });
+    const label = await grantAdminPackCard(db, owner, { ...base, tierLabel: "Duo" });
+    const art = await grantAdminPackCard(db, owner, { ...base, motif: { url: "https://example.com/a.png" } });
+    const tier = await grantAdminPackCard(db, owner, { ...base, tier: "goat" });
+    const keys = [first, label, art, tier].map((outcome) => (outcome.ok ? outcome.result.cardKey : ""));
+    expect(keys).toEqual([
+      `${CARD_USER_ID}:v1`,
+      `${CARD_USER_ID}:v2`,
+      `${CARD_USER_ID}:v3`,
+      `${CARD_USER_ID}:v4`,
+    ]);
+    expect(new Set(keys).size).toBe(4);
+  });
+
+  it("edits the card it was pointed at rather than minting beside it", async () => {
+    const first = await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "eternal", tierLabel: "Mano" });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const fixed = await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      cardKey: first.result.cardKey,
+      tier: "eternal",
+      tierLabel: "Manolo",
+    });
+    expect(fixed.ok && fixed.result.cardKey).toBe(first.result.cardKey);
+    expect(fixed.ok && fixed.result.created).toBe(false);
+    expect((await getPackCollectionCard(db, OWNER_ID, first.result.cardKey))?.customLabel).toBe("Manolo");
+    // No stray left behind at the number the second grant would have minted.
+    expect(await getPackCollectionCard(db, OWNER_ID, `${CARD_USER_ID}:v2`)).toBeNull();
+  });
+
+  it("refuses a key belonging to another player", async () => {
+    const outcome = await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      cardKey: `${CARD_USER_ID + 1}:v1`,
+      tier: "eternal",
+    });
+    expect(outcome.ok).toBe(false);
+    expect(!outcome.ok && outcome.error).toBe("bad_card_key");
+  });
+
+  it("keeps an uncustomized grant on the player's ordinary card", async () => {
+    const outcome = await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "worldClass", copies: 1 });
+    expect(outcome.ok && outcome.result.cardKey).toBe(String(CARD_USER_ID));
+  });
+
+  it("gives each granted card its own mint order", async () => {
+    const first = await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      tier: "eternal",
+      tierLabel: "Mano",
+      serialMode: "mint",
+    });
+    const second = await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      tier: "eternal",
+      tierLabel: "Duo",
+      serialMode: "mint",
+    });
+    // Two cards, each minting its own #1, rather than one card minting #2.
+    expect(first.ok && first.result.card?.serial).toBe(1);
+    expect(second.ok && second.result.card?.serial).toBe(1);
+  });
+});
+
 describe("granted card identity", () => {
   it("prefers the users row over whatever the form typed", async () => {
     await seedUser(CARD_USER_ID, "Fullerene-", "JP");
@@ -235,8 +372,10 @@ describe("granted card identity", () => {
     // The card art reads customLabel and nothing else, so a label matching the
     // variant's still has to land per owner or it would never be printed.
     await seedCollectionCard(db, OWNER_ID + 1, CARD_USER_ID, { tier: "goat", tierLabel: "Mano" });
-    await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "goat", tierLabel: "Mano" });
-    expect((await getPackCollectionCard(db, OWNER_ID, `${CARD_USER_ID}:goat`))?.customLabel).toBe("Mano");
+    const outcome = await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "goat", tierLabel: "Mano" });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect((await getPackCollectionCard(db, OWNER_ID, outcome.result.cardKey))?.customLabel).toBe("Mano");
   });
 
   it("stores no override for a card that was given no label of its own", async () => {
@@ -249,15 +388,31 @@ describe("granted card identity", () => {
   });
 
   it("clears a label that was there before when the box is emptied", async () => {
-    await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "rare", tierLabel: "Handmade" });
-    await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "rare", tierLabel: null });
-    expect((await getPackCollectionCard(db, OWNER_ID, String(CARD_USER_ID)))?.customLabel).toBeNull();
+    const first = await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "rare", tierLabel: "Handmade" });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    // Editing that card, named by its key: without one the grant would be
+    // about the player's ordinary card and leave this badge where it is.
+    await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      cardKey: first.result.cardKey,
+      tier: "rare",
+      tierLabel: null,
+    });
+    expect((await getPackCollectionCard(db, OWNER_ID, first.result.cardKey))?.customLabel).toBeNull();
   });
 
   it("keeps a label the grant did not mention", async () => {
-    await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "rare", tierLabel: "Handmade" });
-    await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "rare", copies: 1 });
-    expect((await getPackCollectionCard(db, OWNER_ID, String(CARD_USER_ID)))?.customLabel).toBe("Handmade");
+    const first = await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "rare", tierLabel: "Handmade" });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      cardKey: first.result.cardKey,
+      tier: "rare",
+      copies: 1,
+    });
+    expect((await getPackCollectionCard(db, OWNER_ID, first.result.cardKey))?.customLabel).toBe("Handmade");
   });
 
   it("repaints the shared label instead when the overwrite is asked for", async () => {
@@ -284,10 +439,12 @@ describe("granted card identity", () => {
     // Nothing here can tell a label describing the tier from one describing
     // this collector, so the shared row stays blank and the first real pull's
     // mint pass fills the tier's own name in.
-    await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "rare", tierLabel: "Handmade" });
-    const row = (await exec(db, "select tier_label from pack_cards where card_key = ?", [String(CARD_USER_ID)])).rows[0];
+    const outcome = await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "rare", tierLabel: "Handmade" });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    const row = (await exec(db, "select tier_label from pack_cards where card_key = ?", [outcome.result.cardKey])).rows[0];
     expect(row?.tier_label).toBeNull();
-    expect((await getPackCollectionCard(db, OWNER_ID, String(CARD_USER_ID)))?.tierLabel).toBe("Handmade");
+    expect((await getPackCollectionCard(db, OWNER_ID, outcome.result.cardKey))?.tierLabel).toBe("Handmade");
   });
 
   it("borrows the face from another variant of the same player", async () => {

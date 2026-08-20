@@ -11,6 +11,7 @@ export interface QualityInput {
   mobile: boolean;
   reducedMotion: boolean;
   devicePixelRatio: number;
+  continuousIdle?: boolean;
 }
 
 export interface QualityProfile {
@@ -67,9 +68,9 @@ export function resolveQualityProfile(input: QualityInput): QualityProfile {
       pixelRatio: clamp(input.devicePixelRatio, 1, 1.25),
       textureScale: 0.75,
       antialias: false,
-      adaptiveIdle: true,
+      adaptiveIdle: !input.continuousIdle,
       shaderQuality: "medium",
-      idleMotion: "wake-on-input",
+      idleMotion: input.continuousIdle ? "continuous" : "wake-on-input",
     };
   }
 

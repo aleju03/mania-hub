@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -6,14 +6,20 @@ import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { seedCollectionCard } from "./helpers/pack-cards.js";
 import {
   getPackCollector,
-  listPackShowcases,
+  listPackShowcaseWall,
   getPackCollectorProfile,
   getPackCommunityStats,
   listPackCollectors,
   normalizePackCollectorSort,
   orderByCompletion,
+  packCommunitySnapshotStatus,
+  registerPackCommunitySnapshots,
   resolvePackCollector,
 } from "../src/features/pack-community.js";
+import {
+  ensurePackCommunityRollupTriggers,
+  reconcilePackCommunityRollups,
+} from "../src/features/pack-community-rollups.js";
 import { HONORARY_USER_IDS } from "../src/features/pack-wallets.js";
 
 let dir = "";
@@ -180,6 +186,58 @@ describe("pack community stats", () => {
     expect((await getPackCommunityStats(db, 1_400_000)).totals.distinctHoldings).toBe(2);
   });
 
+  it("moves the totals on a pull while the boards stay on the snapshot they were built from", async () => {
+    /* The point of the split: the four numbers at the top are cheap enough to
+       re-read every twenty seconds off the maintained tables, so what somebody
+       watched tick up live is still there when they reload. The boards under
+       them keep their own two-minute clock. */
+    await seedCollector(BIG, "bigcollector", { openedPacks: 3 });
+    await seedCollectionCard(db, BIG, 11);
+    await ensurePackCommunityRollupTriggers(db);
+    await reconcilePackCommunityRollups(db, { now: 1_000_000 });
+
+    const first = await getPackCommunityStats(db, 1_000_000);
+    expect(first.totals).toMatchObject({ packsOpened: 3, distinctHoldings: 1 });
+    expect(first.computedAt).toBe(1_000_000);
+
+    // A pack opened: another banked open on the wallet and a card on the shelf.
+    await exec(db, "update pack_wallets set payload = ? where user_id = ?", [JSON.stringify({ openedPacks: 4 }), BIG]);
+    await seedCollectionCard(db, BIG, 12);
+    await reconcilePackCommunityRollups(db, { now: 1_000_100 });
+
+    /* Past the totals' lifetime and well inside the collector snapshot's. The
+       first read after expiry is handed what was already in hand, same as the
+       snapshots. */
+    await getPackCommunityStats(db, 1_030_000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const second = await getPackCommunityStats(db, 1_030_000);
+
+    expect(second.totals).toMatchObject({ packsOpened: 4, distinctHoldings: 2 });
+    // The clock the page counts live pulls from is the totals' own, or it would
+    // count the ones already in them a second time.
+    expect(second.computedAt).toBe(1_030_000);
+    // The boards are still the ones built a moment ago, card and all.
+    expect(second.boards.biggestCollections[0]).toMatchObject({ cards: 1 });
+  });
+
+  it("keeps the snapshot's totals, and its clock, where the roll-up is not usable", async () => {
+    // Nothing armed the triggers, so the stored counts cannot be trusted and
+    // the only other way to answer is the scans. The totals stay whatever the
+    // cached snapshot worked out.
+    await seedCollector(BIG, "bigcollector", { openedPacks: 3 });
+    await seedCollectionCard(db, BIG, 11);
+    const first = await getPackCommunityStats(db, 1_000_000);
+    expect(first.totals.packsOpened).toBe(3);
+
+    await exec(db, "update pack_wallets set payload = ? where user_id = ?", [JSON.stringify({ openedPacks: 9 }), BIG]);
+    await getPackCommunityStats(db, 1_030_000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const second = await getPackCommunityStats(db, 1_030_000);
+
+    expect(second.totals.packsOpened).toBe(3);
+    expect(second.computedAt).toBe(1_000_000);
+  });
+
   it("counts only roster GOATs toward the roster, so a granted one cannot pass it", async () => {
     await seedCollector(BIG, "bigcollector");
     // /admin/collections can mint a GOAT for a player off the honorary roster.
@@ -318,43 +376,82 @@ describe("pack collector profile", () => {
 });
 
 describe("showcase wall", () => {
-  it("lists the collectors who chose cards, most recently changed first", async () => {
+  it("is one tile per card, most recently chosen first, whoever chose it", async () => {
+    /* Not one row per collector: the card is the unit, so a collector who put
+       up two cards is two tiles and they sort independently of each other. */
     await seedCollector(BIG, "bigcollector");
     await seedCollector(SMALL, "smallcollector");
     await seedCollectionCard(db, BIG, 11, { tier: "rare" });
-    await seedCollectionCard(db, BIG, 12, { tier: "goat" });
-    await seedCollectionCard(db, SMALL, 11, { tier: "rare" });
+    await seedCollectionCard(db, BIG, 12, { tier: "epic" });
+    await seedCollectionCard(db, SMALL, 13, { tier: "rare" });
     await exec(
       db,
       "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, 0, ?, 1000)",
       [BIG, "11"],
+    );
+    await exec(
+      db,
+      "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, 1, ?, 9000)",
+      [BIG, "12"],
     );
     await exec(
       db,
       "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, 0, ?, 5000)",
-      [SMALL, "11"],
+      [SMALL, "13"],
     );
 
-    const wall = await listPackShowcases(db, { page: 0, pageSize: 10 });
+    const wall = await listPackShowcaseWall(db, { page: 0, pageSize: 10 });
 
-    expect(wall.total).toBe(2);
-    expect(wall.showcases.map((entry) => entry.collector.userId)).toEqual([SMALL, BIG]);
-    expect(wall.showcases[1].cards.map((card) => card.userId)).toEqual([11]);
+    expect(wall.total).toBe(3);
+    expect(wall.cards.map((entry) => [entry.collector.userId, entry.card.userId])).toEqual([
+      [BIG, 12],
+      [SMALL, 13],
+      [BIG, 11],
+    ]);
+    expect(wall.cards[0].showcasedAt).toBe(9000);
   });
 
-  it("drops a showcase whose cards were all recycled away", async () => {
+  it("pages over cards rather than over collectors", async () => {
+    await seedCollector(BIG, "bigcollector");
+    for (const [index, cardId] of [11, 12, 13].entries()) {
+      await seedCollectionCard(db, BIG, cardId, { tier: "rare" });
+      await exec(
+        db,
+        "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, ?, ?, ?)",
+        [BIG, index, String(cardId), 1000 + index],
+      );
+    }
+
+    const first = await listPackShowcaseWall(db, { page: 0, pageSize: 2 });
+    const second = await listPackShowcaseWall(db, { page: 1, pageSize: 2 });
+
+    // One collector, three tiles, two pages: the person is not the page unit.
+    expect(first.total).toBe(3);
+    expect(first.cards.map((entry) => entry.card.userId)).toEqual([13, 12]);
+    expect(second.cards.map((entry) => entry.card.userId)).toEqual([11]);
+  });
+
+  it("leaves out a card that was recycled away, and does not count it either", async () => {
     await seedCollector(BIG, "bigcollector");
     await seedCollectionCard(db, BIG, 11, { copies: 0, tier: "rare" });
+    await seedCollectionCard(db, BIG, 12, { tier: "rare" });
     await exec(
       db,
       "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, 0, ?, 1000)",
       [BIG, "11"],
     );
+    await exec(
+      db,
+      "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, 1, ?, 2000)",
+      [BIG, "12"],
+    );
 
-    const wall = await listPackShowcases(db, { page: 0, pageSize: 10 });
+    const wall = await listPackShowcaseWall(db, { page: 0, pageSize: 10 });
 
-    // The row is still counted, since it is still a row, but it draws nothing.
-    expect(wall.showcases).toEqual([]);
+    // Counted as well as hidden: a pin that draws nothing would otherwise pad
+    // the total and leave the last page short.
+    expect(wall.total).toBe(1);
+    expect(wall.cards.map((entry) => entry.card.userId)).toEqual([12]);
   });
 
   it("describes the collectors it shows without building the economy roll-up", async () => {
@@ -370,9 +467,9 @@ describe("showcase wall", () => {
       [BIG, "11"],
     );
 
-    const wall = await listPackShowcases(db, { page: 0, pageSize: 10 });
+    const wall = await listPackShowcaseWall(db, { page: 0, pageSize: 10 });
 
-    expect(wall.showcases[0].collector).toEqual({
+    expect(wall.cards[0].collector).toEqual({
       userId: BIG,
       username: "bigcollector",
       countryCode: "CR",
@@ -392,9 +489,9 @@ describe("showcase wall", () => {
       [UNTRACKED, "11"],
     );
 
-    const wall = await listPackShowcases(db, { page: 0, pageSize: 10 });
+    const wall = await listPackShowcaseWall(db, { page: 0, pageSize: 10 });
 
-    expect(wall.showcases[0].collector).toMatchObject({
+    expect(wall.cards[0].collector).toMatchObject({
       username: "ghostcollector",
       tracked: false,
       countryCode: null,
@@ -404,7 +501,7 @@ describe("showcase wall", () => {
   it("has nothing to show before anyone picks a card", async () => {
     await seedCollector(BIG, "bigcollector");
     await seedCollectionCard(db, BIG, 11);
-    expect(await listPackShowcases(db, { page: 0, pageSize: 10 })).toEqual({ showcases: [], total: 0 });
+    expect(await listPackShowcaseWall(db, { page: 0, pageSize: 10 })).toEqual({ cards: [], total: 0 });
   });
 });
 
@@ -424,5 +521,62 @@ describe("completion ordering", () => {
     ]);
 
     expect(ordered.map((entry) => entry.userId)).toEqual([2, 4, 3, 1]);
+  });
+});
+
+/* The snapshot is written next to the database after every successful build, so
+   a restart serves the last good one instead of making its first visitor sit
+   through a cold scan. That was the whole shape of the 25-second load on
+   /packs/collections: the process had restarted three minutes earlier and the
+   first read of the endpoint paid for both roll-ups. */
+describe("snapshot disk cache", () => {
+  const COLLECTOR_TTL_MS = 2 * 60_000;
+
+  async function waitForCacheFiles(): Promise<string[]> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const written = (await readdir(dir)).filter((name) => name.startsWith("pack-community-"));
+      if (written.length >= 2) return written;
+      await new Promise((done) => setTimeout(done, 10));
+    }
+    return (await readdir(dir)).filter((name) => name.startsWith("pack-community-"));
+  }
+
+  it("serves a restarted process the snapshot the last one left on disk", async () => {
+    registerPackCommunitySnapshots(db, { databaseUrl: `file:${join(dir, "test.db")}` });
+    await seedCollector(BIG, "bigcollector");
+    await seedCollectionCard(db, BIG, 11);
+    expect((await getPackCommunityStats(db)).totals.distinctHoldings).toBe(1);
+    expect(await waitForCacheFiles()).toHaveLength(2);
+
+    // A card pulled after that snapshot was written. A restarted process must
+    // answer from the file rather than scan for it, which is what makes the
+    // first read after a deploy cost nothing.
+    await seedCollectionCard(db, BIG, 12);
+    const restarted = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+    registerPackCommunitySnapshots(restarted, { databaseUrl: `file:${join(dir, "test.db")}` });
+
+    /* Inside the collector lifetime the restored snapshot is simply the answer:
+       nothing rebuilds, and the second card is not there yet. */
+    expect((await getPackCommunityStats(restarted)).totals.distinctHoldings).toBe(1);
+    expect(packCommunitySnapshotStatus(restarted).collector.source).toBe("disk");
+
+    /* Past it, the restored snapshot is what the reader is handed while the
+       rebuild runs, rather than what they wait behind. */
+    const past = Date.now() + COLLECTOR_TTL_MS + 1;
+    expect((await getPackCommunityStats(restarted, past)).totals.distinctHoldings).toBe(1);
+    await new Promise((done) => setTimeout(done, 100));
+    expect((await getPackCommunityStats(restarted, past)).totals.distinctHoldings).toBe(2);
+    restarted.close();
+  });
+
+  it("keeps building in memory when nothing registered a cache directory", async () => {
+    await seedCollector(BIG, "bigcollector");
+    await seedCollectionCard(db, BIG, 11);
+    expect((await getPackCommunityStats(db)).totals.distinctHoldings).toBe(1);
+    expect(packCommunitySnapshotStatus(db)).toMatchObject({
+      diskCache: false,
+      collector: { source: "inline" },
+    });
+    expect((await readdir(dir)).filter((name) => name.startsWith("pack-community-"))).toEqual([]);
   });
 });

@@ -81,6 +81,10 @@ export interface AdminCollectionOverview {
    which is what makes this form usable as an edit as well as a grant. */
 export interface AdminCardGrantInput {
   cardUserId: number;
+  /* The holding this grant edits. Absent means "against the player", which
+     mints a card of its own for anything customized rather than writing over
+     one they already hold. */
+  cardKey?: string;
   tier: ManiaCardTier | null;
   tierLabel?: string | null;
   copies?: number;

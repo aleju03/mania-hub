@@ -17,7 +17,7 @@ import { randomBytes, createHash } from "node:crypto";
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
 
-export const SIGNATURE_TYPES = ["maniacard", "goals", "skills", "dan"] as const;
+export const SIGNATURE_TYPES = ["insights", "goals", "skills", "dan", "maniacard"] as const;
 export type SignatureType = (typeof SIGNATURE_TYPES)[number];
 
 export interface SignatureRecord {
@@ -391,8 +391,19 @@ async function buildVersions(
     "g", goalRow?.open_count, goalRow?.newest, userStamp, topScoresStamp, lastScoreRow?.ended_at,
     styleStamp(styles, "goals"),
   ]);
+  /* Same top-play window the maniacard reads, plus the last score event. The
+     card power a maniacard prints is a slow aggregate, but an insights render
+     names the player's NEWEST top play - and projectTopPlays overlays live
+     score events onto the stored window, so that line can be right before the
+     snapshot itself is rewritten. Without the event stamp the one reading the
+     image exists to show would be the last to move. No pp: nothing here is
+     computed from it. */
+  const insights = hashVersion([
+    "i", snapshotRow?.updated_at, userStamp, topScoresStamp, lastScoreRow?.ended_at,
+    styleStamp(styles, "insights"),
+  ]);
 
-  return { maniacard, goals, skills, dan };
+  return { maniacard, goals, skills, dan, insights };
 }
 
 export async function resolveSignatureToken(db: Db, token: string): Promise<ResolvedSignature | null> {

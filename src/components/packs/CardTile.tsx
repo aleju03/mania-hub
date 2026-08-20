@@ -191,6 +191,7 @@ export function CollectionCardTile({
   canBackfill,
   onApplyMint,
   onThumbnailError,
+  showCopies = true,
 }: {
   card: CollectedCard;
   thumbnail: string | null;
@@ -200,6 +201,10 @@ export function CollectionCardTile({
   canBackfill: boolean;
   onApplyMint: (cardKey: string, mint: CardMint) => boolean | Promise<boolean>;
   onThumbnailError: (card: CollectedCard) => void;
+  /* How many copies the holder has is a fact about their shelf, not about the
+     card. A gallery of other people's cards turns it off: there it reads as
+     though several tiles had been stacked into one. */
+  showCopies?: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const previousThumbnailRef = useRef<string | null>(thumbnail);
@@ -263,7 +268,7 @@ export function CollectionCardTile({
           }}
         />
       )}
-      {card.copies > 1 && (
+      {showCopies && card.copies > 1 && (
         <span className="absolute right-1.5 top-1.5 rounded bg-black/70 px-1 py-px text-[10px] font-bold text-white tabular-nums">
           x{card.copies}
         </span>

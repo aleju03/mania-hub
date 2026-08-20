@@ -236,10 +236,15 @@ async function eraseSignatureCopies(userId: number, purge: SignaturePurgeTarget 
 
   const urls: string[] = [];
   const cacheKeys: string[] = [];
+  const origin = getPrimarySiteOrigin();
   for (const type of shared.SIGNATURE_TYPES) {
     const version = purge.versions?.[type];
     for (const design of shared.signatureDesigns(type)) {
-      urls.push(`${getPrimarySiteOrigin()}${shared.signatureImagePath(purge.token, type, design.design)}`);
+      urls.push(`${origin}${shared.signatureImagePath(purge.token, type, design.design)}`);
+      /* And the numbered address the same layout answered on before slugs.
+         An edge copy is keyed by url, so a render pasted under the old shape
+         would survive a block that only named the new one. */
+      urls.push(`${origin}/api/signature/${purge.token}/${shared.legacySignatureVariantSlug(type, design.design)}`);
       if (version) cacheKeys.push(route.signatureCacheKey(userId, type, design.design, version));
     }
   }

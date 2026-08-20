@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import {
-  fetchLiveMapSearchEntry,
   fetchLivePlayerSkillPlaysDirect,
+  loadLiveMapSearchEntry,
+  peekLiveMapSearchEntry,
+  prefetchLiveMapSearchEntry,
   type LiveMapSearchEntry,
   type LivePlayerSkillPlay,
 } from "../../lib/live-backend";
@@ -20,6 +22,31 @@ const SKILL_PLAYS_PAGE_SIZE = 50;
 function rateModFor(rate: number): { acronym: string; rate: number } | null {
   if (Math.abs(rate - 1) < 0.01) return null;
   return { acronym: rate > 1 ? "DT" : "HT", rate };
+}
+
+// What the play row already knows, shaped as a map entry so the detail modal
+// can mount on the click instead of after the catalog round trip. Everything
+// the row does not carry (stars, bpm, the set's other diffs, MSD) stays at its
+// empty value and renders as pending until the real entry replaces this.
+function stubEntry(play: LivePlayerSkillPlay): LiveMapSearchEntry {
+  return {
+    beatmapId: play.beatmapId,
+    beatmapsetId: play.beatmapsetId ?? 0,
+    title: play.title,
+    artist: play.artist,
+    creator: play.creator ?? "",
+    version: play.version,
+    status: "",
+    keyCount: play.keyCount,
+    stars: 0,
+    bpm: 0,
+    length: 0,
+    playCount: 0,
+    lnCount: 0,
+    primaryPattern: "",
+    patterns: {},
+    covers: play.coverUrl ? { card: play.coverUrl } : null,
+  };
 }
 
 interface SkillPlaysModalProps {
@@ -47,9 +74,12 @@ export function SkillPlaysModal({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  // The map-detail view for a clicked play, stacked on top of this list.
-  const [detail, setDetail] = useState<{ play: LivePlayerSkillPlay; entry: LiveMapSearchEntry } | null>(null);
-  const [detailLoadingId, setDetailLoadingId] = useState<number | null>(null);
+  // The map-detail view for a clicked play, stacked on top of this list. It
+  // opens on the click with what the row knows and upgrades in place when the
+  // catalog entry lands, so the round trip never sits between the two.
+  const [detail, setDetail] = useState<
+    { play: LivePlayerSkillPlay; entry: LiveMapSearchEntry; status: "ready" | "pending" | "missing" | "error" } | null
+  >(null);
   const mountedRef = useRef(true);
 
   // Ref-counted with the map-detail modal's own lock, so stacking is safe.
@@ -117,22 +147,35 @@ export function SkillPlaysModal({
     }
   };
 
-  const openDetail = async (play: LivePlayerSkillPlay) => {
-    if (detailLoadingId != null) return;
-    setDetailLoadingId(play.beatmapId);
-    try {
-      const entry = await fetchLiveMapSearchEntry(play.beatmapId);
-      if (!mountedRef.current) return;
-      if (entry) {
-        setDetail({ play, entry });
-      } else {
-        // Chart unknown to the map catalog (a graveyarded tracked play): the
-        // osu! page is the only detail view there is.
-        window.open(`https://osu.ppy.sh/beatmaps/${play.beatmapId}`, "_blank", "noopener");
-      }
-    } finally {
-      if (mountedRef.current) setDetailLoadingId(null);
+  const openDetail = (play: LivePlayerSkillPlay) => {
+    // A hovered (or already opened) row answers from memory, so the modal opens
+    // complete; otherwise the stub carries it until the request lands.
+    const cached = peekLiveMapSearchEntry(play.beatmapId);
+    if (cached !== undefined) {
+      setDetail({ play, entry: cached ?? stubEntry(play), status: cached ? "ready" : "missing" });
+      return;
     }
+    setDetail({ play, entry: stubEntry(play), status: "pending" });
+    loadLiveMapSearchEntry(play.beatmapId)
+      .then((entry) => {
+        if (!mountedRef.current) return;
+        // A second click while this was in flight owns the modal now.
+        setDetail((current) => (
+          current && current.play.beatmapId === play.beatmapId && current.status === "pending"
+            // Chart unknown to the map catalog (a graveyarded tracked play):
+            // the stub plus the osu! link is the whole detail view there is.
+            ? { play, entry: entry ?? current.entry, status: entry ? "ready" : "missing" }
+            : current
+        ));
+      })
+      .catch(() => {
+        if (!mountedRef.current) return;
+        setDetail((current) => (
+          current && current.play.beatmapId === play.beatmapId && current.status === "pending"
+            ? { ...current, status: "error" }
+            : current
+        ));
+      });
   };
 
   return (
@@ -210,8 +253,8 @@ export function SkillPlaysModal({
                       position={index + 1}
                       label={label}
                       color={color}
-                      opening={detailLoadingId === play.beatmapId}
-                      onOpen={() => void openDetail(play)}
+                      onOpen={() => openDetail(play)}
+                      onPrefetch={() => prefetchLiveMapSearchEntry(play.beatmapId)}
                     />
                   ))}
                 </div>
@@ -248,6 +291,7 @@ export function SkillPlaysModal({
       {detail ? (
         <MapDetailModal
           entry={detail.entry}
+          status={detail.status}
           onClose={() => setDetail(null)}
           play={{
             beatmapId: detail.play.beatmapId,
@@ -272,23 +316,26 @@ function SkillPlayRow({
   position,
   label,
   color,
-  opening,
   onOpen,
+  onPrefetch,
 }: {
   play: LivePlayerSkillPlay;
   position: number;
   label: string;
   color: string;
-  opening: boolean;
   onOpen: () => void;
+  // Warms the catalog entry ahead of the click; pointing at a row (or tabbing
+  // to it) buys more than the request costs, so the modal usually opens whole.
+  onPrefetch: () => void;
 }) {
   const rateMod = rateModFor(play.rate);
   return (
     <button
       type="button"
       onClick={onOpen}
-      aria-busy={opening || undefined}
-      className={`group flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-xl border border-transparent bg-osu-b4/55 px-2 py-2 text-left transition-colors hover:border-osu-b3/30 hover:bg-osu-b4 sm:gap-3 sm:px-3${opening ? " opacity-60" : ""}`}
+      onPointerEnter={onPrefetch}
+      onFocus={onPrefetch}
+      className="group flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-xl border border-transparent bg-osu-b4/55 px-2 py-2 text-left transition-colors hover:border-osu-b3/30 hover:bg-osu-b4 sm:gap-3 sm:px-3"
       title="View map details"
     >
       <span className="w-6 shrink-0 text-right text-[11px] font-bold tabular-nums text-osu-f1 sm:w-7 sm:text-xs">{position}.</span>

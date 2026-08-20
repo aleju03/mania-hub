@@ -8,7 +8,7 @@ import {
   type LivePackCollectorSort,
 } from "#/lib/live-backend";
 import { CountryFlag } from "../../ui/CountryFlag";
-import { ListSurface, RowSkeleton, SectionHeading } from "./chrome";
+import { HeadingCount, ListSurface, RowSkeleton, SectionHeading } from "./chrome";
 import { useDebounced } from "./useDebounced";
 
 /* Everyone who has ever opened a pack, searchable. The boards are the ten
@@ -112,9 +112,7 @@ export function CollectorDirectory() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <SectionHeading>
           every collector
-          {result ? (
-            <span translate="no" className="ml-1.5 text-osu-f1/70 tabular-nums">{formatNumber(total)}</span>
-          ) : null}
+          <HeadingCount value={result ? total : null} />
         </SectionHeading>
         <label className="relative flex min-w-[180px] flex-1 items-center sm:max-w-[260px]">
           <Search size={13} className="pointer-events-none absolute left-2 text-osu-f1" />
@@ -149,7 +147,7 @@ export function CollectorDirectory() {
         {failed ? (
           <div className="py-10 text-center text-[12px] text-osu-f1">Could not load the collector list.</div>
         ) : !result ? (
-          Array.from({ length: 10 }, (_, index) => <RowSkeleton key={index} />)
+          Array.from({ length: PAGE_SIZE }, (_, index) => <RowSkeleton key={index} variant="directory" />)
         ) : result.collectors.length === 0 ? (
           <div className="py-10 text-center text-[12px] text-osu-f1">
             {debounced ? `Nobody here is called "${debounced}".` : "Nobody has opened a pack yet."}
@@ -160,6 +158,12 @@ export function CollectorDirectory() {
           ))
         )}
       </div>
+
+      {/* The pager's row is held open while the rows load. A page is 24 of a
+          few thousand collectors, so it is all but certain to be there, and
+          the surface would otherwise grow by its height the moment they
+          land. */}
+      {!result && <div className="mt-3 h-[26px]" />}
 
       {totalPages > 1 && (
         <div className="mt-3 flex items-center justify-center gap-3 text-[12px]">

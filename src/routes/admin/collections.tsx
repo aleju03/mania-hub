@@ -2,6 +2,7 @@ import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Trash2, Wand2, X } from "lucide-react";
 
+import { AdminToasts, hideAdminToast, showAdminToast } from "../../components/admin/AdminToasts";
 import { SectionCard } from "../../components/admin/SectionCard";
 import { Avatar, avatarImageSrc } from "../../components/ui/Avatar";
 import { CountryFlag } from "../../components/ui/CountryFlag";
@@ -18,6 +19,7 @@ import {
 } from "../../lib/admin-collections";
 import {
   buildCardGrant,
+  cardFormFromHolding,
   emptyCardForm,
   formTier,
   numberOrUndefined,
@@ -130,8 +132,12 @@ function CollectionsAdminPage() {
   const [target, setTarget] = useState<PlayerRef | null>(null);
   const [overview, setOverview] = useState<AdminCollectionOverview | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  /* The card the grant form is editing, picked out of their collection below.
+     Without one a grant is about the player, and anything customized becomes a
+     card of its own - which is what makes a second Eternal a second card, and
+     what would otherwise make fixing a typo in a badge impossible. */
+  const [editing, setEditing] = useState<AdminCollectionCard | null>(null);
+  const grantRef = useRef<HTMLDivElement | null>(null);
 
   const page = search.page ?? 0;
   const filter = search.q ?? "";
@@ -156,7 +162,6 @@ function CollectionsAdminPage() {
 
   const load = useCallback(async (spec: { userId?: number; username?: string }, nextPage: number, query: string) => {
     setLoading(true);
-    setError(null);
     try {
       const result = await fetchAdminCollection({ data: { ...spec, page: nextPage, query } });
       loadedRef.current = `${result.user.userId}|${nextPage}|${query}`;
@@ -181,7 +186,7 @@ function CollectionsAdminPage() {
       }
       return result;
     } catch (caught) {
-      setError(errMessage(caught));
+      showAdminToast(errMessage(caught), "error");
       setOverview(null);
       return null;
     } finally {
@@ -213,14 +218,14 @@ function CollectionsAdminPage() {
   const pick = useCallback((player: PlayerRef) => {
     setTarget(player);
     setLookup("");
-    setNotice(null);
+    hideAdminToast();
     setSearch({ user: player.id, ...(advanced ? { mode: "advanced" as const } : {}) }, { replace: false });
   }, [advanced, setSearch]);
 
   const submitLookup = useCallback(async () => {
     const trimmed = lookup.trim();
     if (!trimmed) return;
-    setNotice(null);
+    hideAdminToast();
     const mode = advanced ? { mode: "advanced" as const } : {};
     const asId = Math.floor(Number(trimmed));
     if (Number.isInteger(asId) && asId > 0) {
@@ -264,17 +269,6 @@ function CollectionsAdminPage() {
 
       <div className="bg-osu-b5 min-h-[calc(100vh-60px)]">
         <div className="max-w-[1100px] mx-auto px-4 sm:px-5 py-5 space-y-4">
-          {error ? (
-            <div className="rounded-lg border border-osu-red/30 bg-osu-red/10 px-3 py-2 text-[12px] text-osu-red-light">
-              {error}
-            </div>
-          ) : null}
-          {notice ? (
-            <div className="rounded-lg border border-osu-green/30 bg-osu-green/10 px-3 py-2 text-[12px] text-osu-green-light">
-              {notice}
-            </div>
-          ) : null}
-
           <SectionCard title="Who gets it">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <SearchInput
@@ -342,41 +336,51 @@ function CollectionsAdminPage() {
               </div>
             ) : null}
 
-            {overview ? <TargetSummary overview={overview} target={target} /> : null}
+            {overview ? <TargetSummary overview={overview} target={target} /> : <EmptySummary />}
           </SectionCard>
 
           {overview ? (
-            <WalletPanel
-              overview={overview}
-              advanced={advanced}
-              onDone={(message) => { setNotice(message); setError(null); void refresh(); }}
-              onError={(message) => { setNotice(null); setError(message); }}
-            />
-          ) : null}
+            <>
+              <WalletPanel
+                overview={overview}
+                advanced={advanced}
+                onDone={(message) => { showAdminToast(message); void refresh(); }}
+                onError={(message) => showAdminToast(message, "error")}
+              />
 
-          {overview ? (
-            <GrantPanel
-              ownerUserId={overview.user.userId}
-              advanced={advanced}
-              onDone={(message) => { setNotice(message); setError(null); void refresh(); }}
-              onError={(message) => { setNotice(null); setError(message); }}
-            />
-          ) : null}
+              <div ref={grantRef}>
+                <GrantPanel
+                  ownerUserId={overview.user.userId}
+                  advanced={advanced}
+                  editing={editing}
+                  onDone={(message) => { showAdminToast(message); setEditing(null); void refresh(); }}
+                  onError={(message) => showAdminToast(message, "error")}
+                />
+              </div>
 
-          {overview ? (
-            <CollectionPanel
-              overview={overview}
-              filter={filter}
-              page={page}
-              busy={loading}
-              onFilter={(next) => setSearch({ ...search, q: next || undefined, page: undefined })}
-              onPage={(next) => setSearch({ ...search, page: next > 0 ? next : undefined })}
-              onRemoved={(message) => { setNotice(message); setError(null); void refresh(); }}
-              onError={(message) => { setNotice(null); setError(message); }}
-            />
-          ) : null}
+              <CollectionPanel
+                overview={overview}
+                filter={filter}
+                page={page}
+                busy={loading}
+                onFilter={(next) => setSearch({ ...search, q: next || undefined, page: undefined })}
+                onPage={(next) => setSearch({ ...search, page: next > 0 ? next : undefined })}
+                onRemoved={(message) => { showAdminToast(message); setEditing(null); void refresh(); }}
+                onError={(message) => showAdminToast(message, "error")}
+                onEdit={(card) => {
+                  setEditing(card);
+                  hideAdminToast();
+                  grantRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+                }}
+              />
+            </>
+          ) : (
+            <EmptyPanels advanced={advanced} />
+          )}
         </div>
       </div>
+
+      <AdminToasts />
     </div>
   );
 }
@@ -428,6 +432,62 @@ function TargetSummary({ overview, target }: { overview: AdminCollectionOverview
         <Stat label="Packs opened" value={formatNumber(overview.economy.openedPacks)} />
         <Stat label="Shards spent" value={formatNumber(overview.economy.shardsSpent)} />
       </div>
+    </div>
+  );
+}
+
+/* The summary's own shape while it holds nobody, so picking a collector fills
+   the panel in rather than growing it three rows taller. */
+function EmptySummary() {
+  return (
+    <div className="mt-3 pt-3 border-t border-osu-b3/20 opacity-50" aria-hidden>
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-full bg-osu-b4/60" />
+        <div className="text-[15px] font-semibold text-osu-f1">Nobody picked</div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 sm:grid-cols-6 gap-3">
+        {EMPTY_STATS.map((label) => <Stat key={label} label={label} value="-" />)}
+      </div>
+    </div>
+  );
+}
+
+const EMPTY_STATS = ["Shards", "Charges", "Cards", "Copies", "Packs opened", "Shards spent"];
+
+const EMPTY_OVERVIEW: AdminCollectionOverview = {
+  user: { userId: 0, username: null, countryCode: null, tracked: false },
+  economy: { shards: 0, shardsSpent: 0, charges: 0, lastRefillAt: 0, openedPacks: 0, poolTotal: null },
+  walletRev: 0,
+  walletUpdatedAt: null,
+  hasWallet: false,
+  distinctCards: 0,
+  totalCopies: 0,
+  collection: { cards: [], total: 0, tierCounts: {}, duplicateShardTotal: 0, filteredShardTotal: 0 },
+};
+
+const NOOP = () => {};
+
+/* The rest of the desk before a collector is on it: the real panels over an
+   empty collector, dimmed and inert, so what this page does is readable
+   without having to load somebody first. Inert rather than a hand-drawn
+   skeleton, so the two can never drift apart. */
+function EmptyPanels({ advanced }: { advanced: boolean }) {
+  return (
+    <div className="space-y-4 opacity-50" inert aria-hidden>
+      <WalletPanel overview={EMPTY_OVERVIEW} advanced={advanced} onDone={NOOP} onError={NOOP} />
+      <GrantPanel ownerUserId={0} advanced={advanced} editing={null} onDone={NOOP} onError={NOOP} />
+      <CollectionPanel
+        overview={EMPTY_OVERVIEW}
+        filter=""
+        page={0}
+        busy
+        emptyLabel="Nobody picked yet."
+        onFilter={NOOP}
+        onPage={NOOP}
+        onRemoved={NOOP}
+        onError={NOOP}
+        onEdit={NOOP}
+      />
     </div>
   );
 }
@@ -557,11 +617,14 @@ function WalletPanel({
 function GrantPanel({
   ownerUserId,
   advanced,
+  editing,
   onDone,
   onError,
 }: {
   ownerUserId: number;
   advanced: boolean;
+  /* A card of theirs the desk picked out to change, rather than a new grant. */
+  editing: AdminCollectionCard | null;
   onDone: (message: string) => void;
   onError: (message: string) => void;
 }) {
@@ -579,6 +642,21 @@ function GrantPanel({
   const setSkill = useCallback((key: string, value: string) => {
     setForm((current) => ({ ...current, skillsMode: "set", skills: { ...current.skills, [key]: value } }));
   }, []);
+
+  /* Picking a card out of their collection loads it whole, pinned to its key,
+     so the grant edits that card. Keyed on the card rather than run on every
+     render, since the form is hand-edited from here on. */
+  useEffect(() => {
+    if (!editing) return;
+    setForm(cardFormFromHolding(editing));
+    setCard({
+      id: editing.userId,
+      username: editing.username,
+      avatarUrl: editing.avatarUrl,
+      countryCode: editing.countryCode,
+    });
+    setRawId("");
+  }, [editing]);
 
   const cardUserId = card?.id ?? (Number.isInteger(Number(rawId)) ? Math.floor(Number(rawId)) : 0);
   const tier = formTier(form);
@@ -639,7 +717,8 @@ function GrantPanel({
 
   /* Naming a different player means a different card, so the form starts over
      rather than carrying the last one's pp, rank and stat bars onto a face
-     they do not belong to. */
+     they do not belong to. The pinned key goes with it: whatever card was being
+     edited, it was not this player's. */
   const chooseCardPlayer = useCallback((player: PlayerRef | null, userId: number) => {
     setForm(emptyCardForm());
     setCard(player);
@@ -689,7 +768,22 @@ function GrantPanel({
   const cardPower = numberOrUndefined(form.skills.cardPower ?? "");
 
   return (
-    <SectionCard title="Give a card">
+    <SectionCard title={form.cardKey ? "Edit a card they hold" : "Give a card"}>
+      {form.cardKey ? (
+        <div className="mb-2 flex items-center gap-2 text-[11px] text-osu-l2">
+          <span>
+            Editing the card they hold as
+            <span className="ml-1 font-semibold text-white">{form.cardKey}</span>
+            . Clearing this grants a new card instead.
+          </span>
+          <button
+            onClick={() => patch({ cardKey: "" })}
+            className="rounded-md border border-osu-b3/30 bg-osu-b4/60 px-2 py-0.5 text-osu-l2 transition-colors duration-[120ms] hover:bg-osu-b3/60 hover:text-white cursor-pointer"
+          >
+            Clear
+          </button>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <SearchInput
           className="sm:w-[300px]"
@@ -1057,15 +1151,21 @@ function CollectionPanel({
   onPage,
   onRemoved,
   onError,
+  onEdit,
+  emptyLabel,
 }: {
   overview: AdminCollectionOverview;
   filter: string;
   page: number;
   busy: boolean;
+  emptyLabel?: string;
   onFilter: (value: string) => void;
   onPage: (page: number) => void;
   onRemoved: (message: string) => void;
   onError: (message: string) => void;
+  /* Loads this card into the grant form, pinned to its key, so the next grant
+     changes this card rather than minting another of the same player. */
+  onEdit: (card: AdminCollectionCard) => void;
 }) {
   const [query, setQuery] = useState(filter);
   const [armed, setArmed] = useState<string | null>(null);
@@ -1108,7 +1208,7 @@ function CollectionPanel({
     >
       {cards.length === 0 ? (
         <div className="px-3 py-6 text-center text-[12px] text-osu-f1">
-          {filter ? "No card of theirs matches that." : "They hold no cards."}
+          {filter ? "No card of theirs matches that." : emptyLabel ?? "They hold no cards."}
         </div>
       ) : (
         <>
@@ -1150,10 +1250,18 @@ function CollectionPanel({
                 {card.motif ? <span className="text-[11px] text-osu-f1">floats art</span> : null}
 
                 <button
+                  disabled={busy}
+                  onClick={() => onEdit(card)}
+                  className="ml-auto rounded-md border border-osu-b3/30 bg-osu-b4/60 px-2 py-1 text-[11px] text-osu-l2 transition-colors duration-[120ms] hover:bg-osu-b3/60 hover:text-white disabled:opacity-50 cursor-pointer"
+                >
+                  Edit
+                </button>
+
+                <button
                   disabled={removing === cardKey || busy}
                   onClick={() => (armed === cardKey ? void remove(card) : setArmed(cardKey))}
                   onBlur={() => setArmed((current) => (current === cardKey ? null : current))}
-                  className={`ml-auto px-2 py-1 rounded-md border text-[11px] transition-colors duration-[120ms] disabled:opacity-50 cursor-pointer ${
+                  className={`px-2 py-1 rounded-md border text-[11px] transition-colors duration-[120ms] disabled:opacity-50 cursor-pointer ${
                     armed === cardKey
                       ? "border-osu-red/50 bg-osu-red/20 text-osu-red-light"
                       : "border-osu-b3/30 bg-osu-b4/60 text-osu-l2 hover:bg-osu-b3/60 hover:text-white"

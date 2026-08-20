@@ -4,12 +4,14 @@ import {
   collectedCardTier,
   createEmptyWallet,
   duplicateShardTotal,
+  isGrantedCardKey,
   MAX_PACK_CHARGES,
   mergeWallets,
   msUntilNextCharge,
   ownedCards,
   PACK_CHARGE_REGEN_MS,
   packCardKey,
+  packCardKeyOf,
   parsePackCardKey,
   PACK_OPEN_SHARD_REWARD,
   reconcileWallets,
@@ -413,9 +415,52 @@ describe("GOAT cards alongside their player's ordinary card", () => {
     expect(packCardKey(BOJII, "worldClass")).toBe(String(BOJII));
     expect(packCardKey(BOJII, null)).toBe(String(BOJII));
     expect(packCardKey(BOJII, "goat")).toBe(`${BOJII}:goat`);
-    expect(parsePackCardKey(`${BOJII}:goat`)).toEqual({ userId: BOJII, goat: true });
-    expect(parsePackCardKey(String(BOJII))).toEqual({ userId: BOJII, goat: false });
+    expect(parsePackCardKey(`${BOJII}:goat`)).toEqual({ userId: BOJII, goat: true, variant: 0 });
+    expect(parsePackCardKey(String(BOJII))).toEqual({ userId: BOJII, goat: false, variant: 0 });
     expect(parsePackCardKey("nonsense")).toBeNull();
+  });
+
+  it("keys a granted card apart from both, on a number only the server mints", () => {
+    /* The third form: a card /admin/collections handed out is its own
+       collectible, so a collector can hold a player's pull, their GOAT and any
+       number of granted cards at once, each with its own copies, serial and
+       permalink. Nothing in the browser can derive one, which is what keeps a
+       wallet from claiming a card nobody granted. */
+    expect(parsePackCardKey(`${BOJII}:v2`)).toEqual({ userId: BOJII, goat: false, variant: 2 });
+    expect(isGrantedCardKey(`${BOJII}:v2`)).toBe(true);
+    expect(isGrantedCardKey(`${BOJII}:goat`)).toBe(false);
+    expect(isGrantedCardKey(String(BOJII))).toBe(false);
+    for (const bad of [`${BOJII}:v0`, `${BOJII}:v`, `${BOJII}:vx`, `${BOJII}:v1234567`]) {
+      expect(parsePackCardKey(bad)).toBeNull();
+    }
+
+    // A granted card carries its key, and everything that addresses a card
+    // reads that rather than deriving one from the tier.
+    const granted = { ...pull(BOJII, "eternal"), cardKey: `${BOJII}:v2` };
+    expect(packCardKeyOf(granted)).toBe(`${BOJII}:v2`);
+    expect(packCardKeyOf({ userId: BOJII, tier: "eternal" })).toBe(String(BOJII));
+  });
+
+  it("keeps a granted card's key through localStorage", () => {
+    /* The one server-side field the wallet persists, because it is the card's
+       identity rather than a fact about it: dropped, the card would collapse
+       onto the player's ordinary one the next time the wallet was read. */
+    const held = {
+      ...pull(BOJII, "eternal"),
+      cardKey: `${BOJII}:v2`,
+      copies: 1,
+      recycledCopies: 0,
+      firstPulledAt: T0,
+      lastPulledAt: T0,
+    };
+    const wallet = sanitizeWallet({ cards: { [`${BOJII}:v2`]: held } }, T0);
+    expect(Object.keys(wallet?.cards ?? {})).toEqual([`${BOJII}:v2`]);
+    expect(wallet?.cards[`${BOJII}:v2`].cardKey).toBe(`${BOJII}:v2`);
+
+    // A hand-edited wallet cannot point one player's card at another's key:
+    // the card falls back to the key its own tier derives.
+    const forged = sanitizeWallet({ cards: { x: { ...held, cardKey: "999:v2" } } }, T0);
+    expect(Object.keys(forged?.cards ?? {})).toEqual([String(BOJII)]);
   });
 
   it("holds both cards at once, counting the GOAT as a new card", () => {

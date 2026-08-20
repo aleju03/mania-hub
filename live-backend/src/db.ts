@@ -1659,6 +1659,12 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
   if (!columns.includes("motif")) {
     await db.execute("alter table pack_collection_cards add column motif text");
   }
+  // When the grant desk handed this holding out, null for a card that was
+  // pulled. Rows that predate the column stay null and read as pulls, which is
+  // right for all but the handful of cards granted before it existed.
+  if (!columns.includes("granted_at")) {
+    await db.execute("alter table pack_collection_cards add column granted_at integer");
+  }
 }
 
 // The last username a wallet's pulls were recorded under. Durable, unlike the
@@ -2047,6 +2053,20 @@ async function migrateSkins(db: Db): Promise<void> {
     // normalized). Optional at upload, editable with the details; never derived
     // from the archive.
     await db.execute("alter table skins add column resolution text");
+  }
+  if (!skinColumns.includes("listed_at")) {
+    // When the skin first entered the public catalog, which is what the browse
+    // page's newest sort orders by. published_at is the upload date and stays
+    // that: a skin uploaded private and made public weeks later was published
+    // then but listed now, and ordering the catalog on published_at buried it
+    // pages deep on the day it became browsable. Null means never public yet.
+    // Only the first listing stamps it, so toggling private and back is not a
+    // way to bump a skin to the top.
+    await db.execute("alter table skins add column listed_at text");
+    // Every skin already in the catalog was listed the moment it published.
+    await db.execute(
+      "update skins set listed_at = published_at where visibility = 'public' and published_at is not null",
+    );
   }
   await db.execute(`
     create unique index if not exists idx_skins_slug

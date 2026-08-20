@@ -191,6 +191,9 @@ interface LiveBackendStatus {
     worker: ProcessMemorySample | null;
   };
   mapsSnapshotThread?: MapsSnapshotThreadStatus;
+  // Same shape as the maps thread, since it is the same pattern.
+  packCommunityThread?: MapsSnapshotThreadStatus;
+  packCommunitySnapshots?: PackCommunitySnapshotsStatus;
   // Last completed GLOBAL maps refresh, measured in the worker process and
   // persisted to live_meta so the serving process can report it.
   globalMapsRefresh?: JobMemoryRecord | null;
@@ -238,6 +241,29 @@ interface MapsSnapshotThreadStatus {
   lastErrorAt: string | null;
   lastError: string | null;
   lastFailureReason: string | null;
+}
+
+/* The three prepared answers behind /packs/collections. "source" is where the
+   one in hand came from: disk is a restart that started warm, inline means the
+   thread is not running here. */
+interface PackCommunitySlotStatus {
+  source: string;
+  computedAt: string | null;
+  ageMs: number | null;
+  ttlMs: number;
+  building: boolean;
+  builds: number;
+  lastBuildMs: number | null;
+  lastBuildAt: string | null;
+  lastError: string | null;
+  lastErrorAt: string | null;
+}
+
+interface PackCommunitySnapshotsStatus {
+  collector: PackCommunitySlotStatus;
+  card: PackCommunitySlotStatus;
+  totals: PackCommunitySlotStatus;
+  diskCache: boolean;
 }
 
 interface JobMemoryRecord {
@@ -440,16 +466,6 @@ function LiveBackendPage() {
     });
   }, []);
 
-  const patchDeleteCountry = useCallback((country: string) => {
-    setStatus((current) => {
-      if (!current?.countries) return current;
-      return {
-        ...current,
-        countries: current.countries.filter((entry) => entry.country !== country),
-      };
-    });
-  }, []);
-
   const patchAddCountry = useCallback((country: string) => {
     const normalized = country.trim().toUpperCase().slice(0, 2);
     if (!/^[A-Z]{2}$/.test(normalized)) return;
@@ -647,31 +663,11 @@ function LiveBackendPage() {
                   () => patchCountryStatus(entry.country, lifecycle),
                 );
               }}
-              onDeleteCountry={(entry) => {
-                void runAdminAction(
-                  `delete-country-${entry.country}`,
-                  `/api/admin/delete-country?country=${encodeURIComponent(entry.country)}`,
-                  () => patchDeleteCountry(entry.country),
-                );
-              }}
               onSetCountryTier={(entry, tier) => {
                 void runAdminAction(
                   `set-tier-${entry.country}`,
                   `/api/admin/set-country-tier?country=${encodeURIComponent(entry.country)}&tier=${encodeURIComponent(tier)}`,
                   () => patchCountryTier(entry.country, tier),
-                );
-              }}
-              onCatchUpCountry={(entry) => {
-                void runAdminAction(
-                  `catch-up-country-${entry.country}`,
-                  `/api/admin/catch-up-country?country=${encodeURIComponent(entry.country)}`,
-                  () => patchCountryStatus(entry.country, "active"),
-                );
-              }}
-              onCancelCatchUpCountry={(entry) => {
-                void runAdminAction(
-                  `catch-up-country-${entry.country}`,
-                  `/api/admin/cancel-catch-up-country?country=${encodeURIComponent(entry.country)}`,
                 );
               }}
               onAddCountry={(country) => {
@@ -1937,6 +1933,24 @@ function getSnapshotThreadView(thread: MapsSnapshotThreadStatus | undefined): { 
   return { value: "ready", tone: "good" };
 }
 
+/* One of the three reads. Past three lifetimes with nothing building means the
+   refresh clock has stopped, which is the failure worth seeing here: the page
+   keeps answering either way, it just answers with something older. */
+function PackCommunityReadRow({ label, slot }: { label: string; slot: PackCommunitySlotStatus | undefined }) {
+  if (!slot) return <DetailRow label={label} value="not reported" />;
+  const age = slot.ageMs == null ? "never built" : `${formatCallMs(slot.ageMs)} old`;
+  const stalled = slot.ageMs != null && slot.ageMs > slot.ttlMs * 3 && !slot.building;
+  const parts = [slot.source, age, `every ${formatCallMs(slot.ttlMs)}`, `${formatNumber(slot.builds)} builds`];
+  if (slot.building) parts.push("building");
+  return (
+    <DetailRow
+      label={label}
+      value={parts.join(" · ")}
+      tone={slot.lastError ? "warn" : stalled ? "warn" : "neutral"}
+    />
+  );
+}
+
 function ResponseCacheRow({ label, cache }: { label: string; cache: ResponseCacheMetrics | undefined }) {
   // Sitting at the byte budget is the design, not a fault: these are bounded
   // LRUs, so the row stays neutral however full it is.
@@ -2004,6 +2018,10 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
   const globalRefresh = status?.globalMapsRefresh ?? null;
   const thread = status?.mapsSnapshotThread;
   const threadView = getSnapshotThreadView(thread);
+  const packThread = status?.packCommunityThread;
+  const packThreadView = getSnapshotThreadView(packThread);
+  const packReads = status?.packCommunitySnapshots;
+  const packTotals = packReads?.totals;
   const caches = status?.responseCaches;
   const cacheBytes = caches?.mapsPage.bytes ?? null;
   const cacheEntries = caches?.mapsPage.entries ?? null;
@@ -2217,6 +2235,61 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
             </>
           ) : (
             <DetailRow label="Snapshot thread" value="not reported" />
+          )}
+        </>
+      ),
+    },
+    {
+      key: "packCollections",
+      title: "Pack collections",
+      tone: packThreadView.tone,
+      stats: [
+        { label: "Thread", value: packThreadView.value, tone: packThreadView.tone },
+        {
+          label: "Totals",
+          value: packTotals?.ageMs == null ? "—" : `${formatCallMs(packTotals.ageMs)} old`,
+          tone: packTotals?.lastError ? "warn" : "neutral",
+        },
+      ],
+      detail: (
+        <>
+          <div className="rounded-md bg-osu-b4/30 px-3 py-2 text-[10px] leading-relaxed text-osu-f1">
+            The three prepared answers behind /packs/collections, and the worker thread that builds them off the request path. A visitor is only ever handed one that already exists, so these clocks are the whole cost of that page. The thread is also what keeps the maintained collector and card counts level with the ownership table.
+          </div>
+          <PackCommunityReadRow label="Totals" slot={packReads?.totals} />
+          <PackCommunityReadRow label="Collectors" slot={packReads?.collector} />
+          <PackCommunityReadRow label="Cards" slot={packReads?.card} />
+          <DetailRow label="Warm restart cache" value={packReads ? (packReads.diskCache ? "on disk" : "memory only") : "not reported"} />
+          {packThread ? (
+            <>
+              <DetailRow label="Snapshot thread" value={packThreadView.value} tone={packThreadView.tone} />
+              <DetailRow
+                label="Builds"
+                value={`${formatNumber(packThread.ok)} ok · ${formatNumber(packThread.failed)} failed · ${formatNumber(packThread.timeouts)} timed out · ${formatNumber(packThread.inFlight)} in flight`}
+                tone={packThread.failed + packThread.timeouts > 0 ? "warn" : "neutral"}
+              />
+              <DetailRow
+                label="Last build"
+                value={packThread.lastBuildAt
+                  ? `${formatTimeAgo(packThread.lastBuildAt)}${packThread.lastBuildMs == null ? "" : ` · ${formatCallMs(packThread.lastBuildMs)}`}${packThread.lastBuildBytes == null ? "" : ` · ${formatBytes(packThread.lastBuildBytes)}`}`
+                  : "none yet"}
+              />
+              {packThread.lastError ? (
+                <DetailRow label="Last thread error" value={`${packThread.lastFailureReason ?? "error"}: ${packThread.lastError}`} tone="bad" />
+              ) : null}
+            </>
+          ) : (
+            <DetailRow label="Snapshot thread" value="not reported" />
+          )}
+          {[packReads?.totals, packReads?.collector, packReads?.card].map((slot, index) =>
+            slot?.lastError ? (
+              <DetailRow
+                key={index}
+                label={`Last ${["totals", "collectors", "cards"][index]} error`}
+                value={slot.lastError}
+                tone="warn"
+              />
+            ) : null,
           )}
         </>
       ),
@@ -2556,19 +2629,13 @@ function CountriesCard({
   status,
   busy,
   onSetCountryStatus,
-  onDeleteCountry,
   onSetCountryTier,
-  onCatchUpCountry,
-  onCancelCatchUpCountry,
   onAddCountry,
 }: {
   status: LiveBackendStatus | null;
   busy: string | null;
   onSetCountryStatus: (entry: CountryEntry, lifecycle: CountryLifecycleStatus) => void;
-  onDeleteCountry: (entry: CountryEntry) => void;
   onSetCountryTier: (entry: CountryEntry, tier: CountryFeatureTier) => void;
-  onCatchUpCountry: (entry: CountryEntry) => void;
-  onCancelCatchUpCountry: (entry: CountryEntry) => void;
   onAddCountry: (country: string) => void;
 }) {
   const [sortMode, setSortMode] = useState<CountrySortMode>("status");
@@ -2778,12 +2845,9 @@ function CountriesCard({
               entry={entry}
               users={rosterByCountry.get(entry.country) ?? null}
               catchup={status?.catchup?.[entry.country] ?? null}
-              busy={busy === `set-status-${entry.country}` || busy === `delete-country-${entry.country}` || busy === `set-tier-${entry.country}` || busy === `catch-up-country-${entry.country}`}
+              busy={busy === `set-status-${entry.country}` || busy === `set-tier-${entry.country}`}
               onSetStatus={(lifecycle) => onSetCountryStatus(entry, lifecycle)}
-              onDelete={() => onDeleteCountry(entry)}
               onSetTier={(tier) => onSetCountryTier(entry, tier)}
-              onCatchUp={() => onCatchUpCountry(entry)}
-              onCancelCatchUp={() => onCancelCatchUpCountry(entry)}
             />
           ))}
         </div>
@@ -2798,44 +2862,23 @@ function CountryRow({
   catchup,
   busy,
   onSetStatus,
-  onDelete,
   onSetTier,
-  onCatchUp,
-  onCancelCatchUp,
 }: {
   entry: CountryEntry;
   users: number | null;
   catchup: CountryCatchupState | null;
   busy: boolean;
   onSetStatus: (lifecycle: CountryLifecycleStatus) => void;
-  onDelete: () => void;
   onSetTier: (tier: CountryFeatureTier) => void;
-  onCatchUp: () => void;
-  onCancelCatchUp: () => void;
 }) {
   const displayStatus = getCountryDisplayStatus(entry);
   const statusTone = displayStatus === "paused" || displayStatus === "idle" ? "text-osu-red" : displayStatus === "active" ? "text-osu-green" : "text-osu-yellow";
   const featureTier = getCountryFeatureTier(entry);
   const activeUsers = entry.activeUsers ?? 0;
-  const catchupActive = (catchup?.pending ?? 0) + (catchup?.running ?? 0) > 0;
-  const [confirmDelete, setConfirmDelete] = useState(false);
   // Set when the Snipes tier cell is clicked: snipes enables the expensive
   // snipe board seeding, so it takes a second deliberate confirm click.
   const [confirmSnipes, setConfirmSnipes] = useState(false);
-  const deleteRef = useRef<HTMLButtonElement | null>(null);
   const snipesRow = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!confirmDelete) return;
-    const id = window.setTimeout(() => setConfirmDelete(false), 4_000);
-    const onPointerDown = (event: PointerEvent) => {
-      if (!deleteRef.current?.contains(event.target as Node)) setConfirmDelete(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      window.clearTimeout(id);
-      document.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [confirmDelete]);
   useEffect(() => {
     if (!confirmSnipes) return;
     const id = window.setTimeout(() => setConfirmSnipes(false), 5_000);
@@ -2849,10 +2892,7 @@ function CountryRow({
     };
   }, [confirmSnipes]);
   useEffect(() => {
-    if (busy) {
-      setConfirmDelete(false);
-      setConfirmSnipes(false);
-    }
+    if (busy) setConfirmSnipes(false);
   }, [busy]);
   return (
     <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
@@ -2869,59 +2909,6 @@ function CountryRow({
           <div className="text-[10px] text-osu-f1">
             {users == null ? "roster not loaded" : `${formatNumber(users)} roster users`}
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {catchupActive ? (
-            <button
-              type="button"
-              title={`Cancel ${entry.country} score catch-up`}
-              aria-label={`Cancel ${entry.country} score catch-up`}
-              disabled={busy}
-              onClick={onCancelCatchUp}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-osu-red/40 bg-osu-red/10 text-osu-red-light transition hover:border-osu-red-light/70 hover:bg-osu-red/20 hover:text-white disabled:opacity-50 cursor-pointer"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              title={`Queue ${entry.country} score catch-up from this country's last stored score`}
-              aria-label={`Queue ${entry.country} score catch-up`}
-              disabled={busy}
-              onClick={onCatchUp}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-f1 transition hover:border-osu-c2/60 hover:text-white disabled:opacity-50 cursor-pointer"
-            >
-              <History className="h-3.5 w-3.5" />
-            </button>
-          )}
-          {confirmDelete ? (
-            <button
-              ref={deleteRef}
-              type="button"
-              title={`Confirm delete of ${entry.country} country data. This cannot be undone.`}
-              aria-label={`Confirm delete of ${entry.country} country data`}
-              disabled={busy}
-              onClick={() => {
-                setConfirmDelete(false);
-                onDelete();
-              }}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-osu-red/60 bg-osu-red/25 px-2 text-[10px] font-semibold uppercase tracking-wider text-white transition hover:bg-osu-red/35 disabled:opacity-50 cursor-pointer"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Confirm
-            </button>
-          ) : (
-            <button
-              type="button"
-              title={`Delete ${entry.country} country data`}
-              aria-label={`Delete ${entry.country} country data`}
-              disabled={busy}
-              onClick={() => setConfirmDelete(true)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-osu-red/30 bg-osu-red/10 text-osu-red-light transition hover:border-osu-red-light/70 hover:bg-osu-red/20 hover:text-white disabled:opacity-50 cursor-pointer"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          )}
         </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">

@@ -173,6 +173,11 @@ export interface SignatureStyle {
   imageUrl: string | null;
   /** Which keymode a skills or dan render shows. null means their best. */
   keyCount: number | null;
+  /* Whether the render carries the site's name. On by default, and a toggle
+     rather than a fixed mark: this is a picture of the player's own data on
+     the player's own profile, and a site credit they cannot remove is a
+     watermark in the bad sense. */
+  watermark: boolean;
   /* The dan card draws two ladders side by side, and a player's rice and LN
      dans are routinely from different keymodes - 7K rice next to a 4K LN is an
      ordinary thing to want to show. One keymode for the card forced a choice
@@ -205,6 +210,7 @@ export const DEFAULT_SIGNATURE_STYLE: SignatureStyle = {
   imageUrl: null,
   keyCount: null,
   lnKeyCount: null,
+  watermark: true,
 };
 
 /* https only, and no embedded credentials. The transport in
@@ -252,6 +258,8 @@ export function normalizeSignatureStyle(raw: unknown, type?: SignatureType): Sig
     imageUrl: normalizeSignatureImageUrl(input.imageUrl),
     keyCount: normalizeSignatureKeyCount(input.keyCount),
     lnKeyCount: normalizeSignatureKeyCount(input.lnKeyCount),
+    // Absent means a style stored before the toggle existed, which is on.
+    watermark: input.watermark !== false,
   };
 }
 
@@ -298,6 +306,7 @@ export function serializeSignatureStyleMap(map: SignatureStyleMap): string {
       imageUrl: style.imageUrl,
       keyCount: style.keyCount,
       lnKeyCount: style.lnKeyCount,
+      watermark: style.watermark,
     };
   }
   return JSON.stringify(ordered);

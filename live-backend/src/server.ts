@@ -17,13 +17,15 @@ import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, e
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-feedback.js";
+import { registerPackCommunitySnapshots, startPackCommunitySnapshotRefresh } from "./features/pack-community.js";
+import { ensurePackCommunityRollupTriggers } from "./features/pack-community-rollups.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
 import { enqueuePlayerSkills, ensurePlayerSkillPoisonRecoverySeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
 import { backfillPackCardSerials } from "./features/pack-pulls.js";
-import { ensurePackCardCatalog, ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
+import { ensurePackCardCatalog, ensurePackCardVariantKeys, ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
 import { backfillSkinNoteShapes, backfillSkinSlugs, backfillSkinViewCounts } from "./features/skins.js";
 import { isSkinStorageConfigured, readSkinObject, skinObjectDeletesEnabled } from "./skins/r2.js";
 import { backfillSkinArchiveMeta } from "./skins/archive-meta.js";
@@ -133,6 +135,12 @@ export async function createApp() {
   // registers its own connection); this covers the inline fallback path, e.g.
   // source-mode dev where the thread is disabled.
   registerGlobalFarmedBoardDiskCache(db, config.databaseUrl);
+  // The /packs/collections economy roll-up: opts this connection into its own
+  // worker thread (the group-bys behind it are seconds of synchronous libsql,
+  // which would otherwise freeze the whole process) and into the disk cache
+  // that lets a restart start warm instead of making the first visitor wait
+  // out a cold scan.
+  registerPackCommunitySnapshots(db, config);
   // Exactly one process owns schema DDL. A "server"-role process attaches to a
   // DB the worker process migrates, so it waits for readiness instead of racing
   // the worker on concurrent ALTER/CREATE (which would throw duplicate-column).
@@ -212,6 +220,11 @@ export async function createApp() {
     // when its owner first pulled the card). Only fills gaps, so every boot
     // after the first writes nothing.
     await bootWrite("backfill_pack_card_serials", () => backfillPackCardSerials(db));
+    // Cards handed out from /admin/collections used to share their player's
+    // ordinary key, which made a one-off indistinguishable from a pulled card
+    // by anything but its columns. Moves each onto its own ":v<n>" key once;
+    // a no-op on every boot after, and on a database with no granted cards.
+    await bootWrite("variant_pack_card_keys", () => ensurePackCardVariantKeys(db));
     // Pack duels were dropped as a mode, so the prototype's table and its share
     // of the arcade ledger go with it. A no-op on every boot after the first,
     // and on any database created since the schema stopped declaring it.
@@ -223,6 +236,12 @@ export async function createApp() {
     // reconstructed from the Wayback Machine). Content-addressed, so this is a
     // no-op on every boot after the first that sees a given file.
     await bootWrite("seed_archived_players", () => ensureArchivedPlayers(db));
+    /* Arms the community roll-up's dirty-row triggers. Deliberately after the
+       two rebuilds above rather than in the migration: both drop and rename
+       pack_collection_cards, and a trigger on a dropped table goes with it.
+       Re-running three `if not exists` statements every boot is what makes that
+       self-healing. */
+    await bootWrite("pack_community_rollup_triggers", () => ensurePackCommunityRollupTriggers(db));
   }
   // The shared osu! limiter only touches api_rate_limit_reservations (a few
   // hundred rows, pruned to a 60s window) and one live_meta key. Inheriting the
@@ -419,6 +438,7 @@ export async function createApp() {
   if (config.role !== "worker") {
     warmStatusBodyCache(ctx);
     warmGlobalMapsFarmedBoard(ctx);
+    startPackCommunitySnapshotRefresh(db);
   }
   return { server, db, rateLimitDb, serveWriteDb, serveWriteQueue, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord, analytics, ghost };
 }

@@ -35,8 +35,22 @@ describe("normalizeSignatureStyle", () => {
     const style = {
       background: "cover", accent: "#3fd4d0", color: "#112233",
       opacity: 40, blur: 12, brightness: 80, imageUrl: null, keyCount: 7, lnKeyCount: 4,
+      watermark: false,
     };
     expect(normalizeSignatureStyle(style)).toEqual(style);
+  });
+
+  /* The site's name is on by default, so a style written before the toggle
+     existed - and one that simply omits the key - has to come back with it on
+     rather than silently stripping the mark from every render on the site. */
+  it("keeps the site name on unless it was explicitly turned off", () => {
+    expect(normalizeSignatureStyle({}).watermark).toBe(true);
+    expect(normalizeSignatureStyle({ watermark: undefined }).watermark).toBe(true);
+    expect(normalizeSignatureStyle({ watermark: false }).watermark).toBe(false);
+    // And it survives the round trip the backend hashes into the version.
+    const map = normalizeSignatureStyleMap({ goals: { watermark: false } });
+    expect(JSON.parse(serializeSignatureStyleMap(map)).goals.watermark).toBe(false);
+    expect(JSON.parse(serializeSignatureStyleMap(map)).skills.watermark).toBe(true);
   });
 
   it("falls back to the default for a background outside the allowlist", () => {
