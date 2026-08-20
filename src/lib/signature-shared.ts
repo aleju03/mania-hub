@@ -85,7 +85,7 @@ export const SIGNATURE_TYPE_LABELS: Record<SignatureType, string> = {
    the whole point is a URL a player pastes once and never edits. It lives in
    the cache key instead, so bumping it supersedes every stored render and
    propagates within one edge TTL. Bump it when a layout changes. */
-export const SIGNATURE_RENDER_VERSION = "15";
+export const SIGNATURE_RENDER_VERSION = "16";
 
 export function isSignatureType(value: string): value is SignatureType {
   return (SIGNATURE_TYPES as readonly string[]).includes(value);

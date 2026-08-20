@@ -1,11 +1,13 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Loader2, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { formatNumber } from "#/lib/format";
 import type { CollectedCard } from "#/lib/pack-collection";
 import { packCardKeyOf } from "#/lib/pack-collection";
 import { fetchLivePackCollectorCards, type LivePackCommunityCollectionPage } from "#/lib/live-backend";
 import { PACK_SHOWCASE_MAX_CARDS } from "#/lib/pack-showcase";
+import { useBodyScrollLock } from "#/lib/use-body-scroll-lock";
 import { CollectionCardPlaceholder, CollectionCardTile } from "../CardTile";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "../cardThumbnailCache";
 import { useCardThumbnails } from "../useCardThumbnails";
@@ -39,6 +41,11 @@ export function ShowcasePicker({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const debounced = useDebounced(query, 250);
+
+  // The picker is only mounted while open. Keep the page behind the sheet
+  // still so a touch at either end of the grid cannot scroll the document and
+  // make the mobile browser chrome resize two viewports at once.
+  useBodyScrollLock(true);
 
   useEffect(() => {
     setPage(0);
@@ -74,9 +81,11 @@ export function ShowcasePicker({
   const currentPage = Math.min(page, totalPages - 1);
   const full = picked.length >= PACK_SHOWCASE_MAX_CARDS;
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <motion.div
-      className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-6"
+      className="fixed inset-x-0 top-0 z-[90] flex h-[100dvh] min-h-0 items-end justify-center overscroll-none bg-black/70 p-0 sm:items-center sm:p-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -84,14 +93,17 @@ export function ShowcasePicker({
       onClick={onCancel}
     >
       <motion.div
-        className="flex max-h-[88vh] w-full max-w-[860px] flex-col overflow-hidden rounded-t-2xl border border-osu-b3/30 bg-osu-b5 sm:rounded-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Pick your showcase"
+        className="modal-card-mobile-safe flex max-h-[88dvh] w-full max-w-[860px] flex-col overflow-hidden rounded-t-2xl border border-osu-b3/30 bg-osu-b5 sm:rounded-2xl"
         initial={{ y: 16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 8, opacity: 0 }}
         transition={{ duration: 0.14, ease: "easeOut" }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-osu-b3/30 px-4 py-3">
+        <div className="flex shrink-0 items-center gap-3 border-b border-osu-b3/30 px-4 py-3">
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-bold text-white">Pick your showcase</div>
             <div className="mt-0.5 text-[11px] text-osu-f1 tabular-nums">
@@ -108,7 +120,7 @@ export function ShowcasePicker({
           </button>
         </div>
 
-        <div className="border-b border-osu-b3/30 px-4 py-3">
+        <div className="shrink-0 border-b border-osu-b3/30 px-4 py-3">
           <label className="relative flex items-center">
             <Search size={13} className="pointer-events-none absolute left-2.5 text-osu-f1" />
             <input
@@ -120,7 +132,7 @@ export function ShowcasePicker({
           </label>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 [scrollbar-gutter:stable]">
           <PickerGrid
             page={result}
             loading={loading}
@@ -130,7 +142,7 @@ export function ShowcasePicker({
           />
         </div>
 
-        <div className="flex items-center gap-3 border-t border-osu-b3/30 px-4 py-3">
+        <div className="flex shrink-0 items-center gap-3 border-t border-osu-b3/30 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {totalPages > 1 && (
             <div className="flex items-center gap-2 text-[11px]">
               <button
@@ -177,7 +189,8 @@ export function ShowcasePicker({
           </div>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }
 

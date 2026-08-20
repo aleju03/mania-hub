@@ -81,7 +81,7 @@ export const Route = createFileRoute("/packs_/collections")({
     const seo = pageSeo({
       title: "Collections",
       description:
-        "Show off your maniacards, browse anyone else's collection, and see how the whole card game has gone.",
+        "Maniacard collections and pack stats.",
       path: "/packs/collections",
       origin: match.context.origin,
       imageKind: "packs",

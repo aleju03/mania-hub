@@ -1,7 +1,7 @@
 // Detail for /packs/collections: whose shelf was opened, which tab was on
 // screen, and how the visitor moved through the lists once there - so the
 // admin activity feed reads `viewed manolo's collection` and `filtered
-// manolo's shelf · GOAT · newest · page 2` instead of a bare
+// manolo's shelf · GOAT · page 2` instead of a bare
 // `/packs/collections`.
 //
 // The page keeps its filters in component state rather than in the URL (only
@@ -18,19 +18,13 @@ const TAB_LABELS: Record<string, string> = {
   collectors: "Collectors",
 };
 
-// Both lists sort by a column, named by what it puts on top rather than by the
-// label on the chip, so a feed line says which way the list went.
+// Directory sorts are named by what they put on top rather than by the label
+// on the chip, so a feed line says which way the list went.
 const COLLECTOR_SORT_LABELS: Record<string, string> = {
   cards: "most cards",
   copies: "most copies",
   packs: "most packs",
   goats: "most GOATs",
-  recent: "most recent",
-};
-
-const SHELF_SORT_LABELS: Record<string, string> = {
-  rarity: "rarest first",
-  newest: "newest first",
 };
 
 function trimmed(value: string | null | undefined, max: number): string | null {
@@ -53,11 +47,10 @@ export function getCollectionsPageviewProperties(params: URLSearchParams): Recor
   return props;
 }
 
-/** Properties for a move inside somebody's shelf (search, sort, tier, page). */
+/** Properties for a move inside somebody's shelf (search, tier, page). */
 export function collectionsShelfProperties(input: {
   collector: string;
   tierLabel: string | null;
-  sort: string;
   query: string;
   /** Zero-based, as the component holds it; reported as the page shown. */
   page: number;
@@ -68,7 +61,6 @@ export function collectionsShelfProperties(input: {
   // "All" is the tier filter sitting where it started, which says nothing.
   const tier = trimmed(input.tierLabel, MAX_NAME_CHARS);
   if (tier && tier !== "All") props.collections_tier = tier;
-  if (input.sort) props.collections_sort = SHELF_SORT_LABELS[input.sort] ?? input.sort;
   const query = trimmed(input.query, MAX_QUERY_CHARS);
   if (query) props.collections_query = query;
   if (input.page > 0) props.collections_page = String(Math.round(input.page) + 1);

@@ -14,9 +14,12 @@ import {
   enableSignature,
   fetchSignatureKeyModes,
   fetchSignatureSettings,
+  reportSignatureTimeZone,
   rotateSignatureToken,
   type SignatureSettings,
 } from "../../lib/signature";
+import { browserTimeZone } from "../../lib/time-zone";
+import { useViewerTimeZone } from "../../lib/use-viewer-time-zone";
 import type { SignatureImageProbe } from "../../routes/api/signature/-backgrounds";
 import {
   signatureBBCode,
@@ -240,8 +243,19 @@ const PROBE_MESSAGE: Record<SignatureImageProbe, string | null> = {
   "too-large": "That image is too large to draw.",
 };
 
+/* Tells the backend what zone this browser is in, when it has something new to
+   say. Returns the rewritten row, or null when nothing was worth sending -
+   which is the common case, so the caller only sets state on a real change. */
+async function syncTimeZone(current: SignatureSettings): Promise<SignatureSettings | null> {
+  const zone = browserTimeZone();
+  if (zone === current.timeZone) return null;
+  const result = await reportSignatureTimeZone({ data: { timeZone: zone } }).catch(() => null);
+  return result?.signature ?? null;
+}
+
 export function DynamicRendersPanel() {
   const { viewer } = useAuth();
+  const viewerTimeZone = useViewerTimeZone();
   const location = useLocation();
 
   const [settings, setSettings] = useState<SignatureSettings | null>(null);
@@ -284,6 +298,32 @@ export function DynamicRendersPanel() {
         setType(first);
         setDesign(signatureDesigns(first)[0]!.design);
       }
+      /* The insights render prints the day a top play was set, and a stored
+         image has no viewer to be local to - so it prints the OWNER's day, and
+         this page is where the owner's browser gets to say what that is. Sent
+         on load rather than only on a save because a player who set their
+         signature up months ago has no reason to touch a style again, and
+         because it is how the zone follows someone who moved.
+
+         Fire and forget: the backend no-ops when the value already matches, so
+         the ordinary revisit costs a read, and nothing on screen waits on it. */
+      if (result.signature) {
+        void syncTimeZone(result.signature).then((updated) => {
+          if (!updated) return;
+          /* This request runs behind the page rather than joining its action
+             queue. It may therefore finish after a publish, disable or token
+             rotation that started later. Only take the fields this request
+             owns; replacing the row would roll those newer settings back in
+             the UI and could feed stale enabled types into the next save. */
+          setSettings((current) => current?.userId === updated.userId
+            ? {
+                ...current,
+                timeZone: updated.timeZone,
+                updatedAt: Math.max(current.updatedAt, updated.updatedAt),
+              }
+            : current);
+        });
+      }
     } catch {
       setSettings(null);
     } finally {
@@ -320,6 +360,7 @@ export function DynamicRendersPanel() {
         types: enabledTypes.length > 0 ? enabledTypes : [type],
         skillsKeyCount: settings?.skillsKeyCount ?? null,
         styles: next,
+        timeZone: browserTimeZone(),
       },
     }).catch(() => null);
     if (result?.signature) setSettings(result.signature);
@@ -364,7 +405,11 @@ export function DynamicRendersPanel() {
     setDesign(signatureDesigns(target)[0]!.design);
     if (!enabledTypes.includes(target)) {
       void act(() => enableSignature({
-        data: { types: [...enabledTypes, target], skillsKeyCount: settings?.skillsKeyCount ?? null },
+        data: {
+          types: [...enabledTypes, target],
+          skillsKeyCount: settings?.skillsKeyCount ?? null,
+          timeZone: browserTimeZone(),
+        },
       }));
     }
   }, [act, enabledTypes, settings?.skillsKeyCount]);
@@ -372,7 +417,9 @@ export function DynamicRendersPanel() {
   const unpublish = useCallback((target: SignatureType) => {
     const next = enabledTypes.filter((entry) => entry !== target);
     if (next.length === 0) return;
-    void act(() => enableSignature({ data: { types: next, skillsKeyCount: settings?.skillsKeyCount ?? null } }));
+    void act(() => enableSignature({
+      data: { types: next, skillsKeyCount: settings?.skillsKeyCount ?? null, timeZone: browserTimeZone() },
+    }));
     setType(next[0]!);
     setDesign(signatureDesigns(next[0]!)[0]!.design);
   }, [act, enabledTypes, settings?.skillsKeyCount]);
@@ -448,7 +495,17 @@ export function DynamicRendersPanel() {
     design: spec.design,
     style,
     skillsKeyCount: settings?.skillsKeyCount ?? null,
-  }), [design, settings?.skillsKeyCount, spec.design, style, type]);
+    /* The browser's zone rather than the stored one: the row may not have been
+       told yet, and a preview that dates a play one day off from the render it
+       is previewing is the exact confusion this whole change is about.
+
+       Through the hook rather than browserTimeZone() directly, because this
+       memo is computed during SSR too - where that call reads the SERVER's
+       zone - and the zone is not in the deps of anything else that would make
+       it recompute afterwards. The hook is "UTC" until hydration and the real
+       zone after, so it belongs in the deps and drops the stale body. */
+    timeZone: viewerTimeZone,
+  }), [design, settings?.skillsKeyCount, spec.design, style, type, viewerTimeZone]);
 
   useEffect(() => {
     if (!isLive) return;
@@ -569,7 +626,12 @@ export function DynamicRendersPanel() {
         <button
           type="button"
           disabled={busy}
-          onClick={() => void act(() => enableSignature({ data: { types: [SIGNATURE_TYPES[0]], skillsKeyCount: null } }))}
+          onClick={() => void act(() => enableSignature({
+            /* The zone rides along with the very first enable, which is what
+               mints the row - so a new signature is dated in the player's own
+               day from its first render rather than after a second visit. */
+            data: { types: [SIGNATURE_TYPES[0]], skillsKeyCount: null, timeZone: browserTimeZone() },
+          }))}
           className="mt-5 inline-flex h-11 items-center rounded-xl border border-osu-pink/45 bg-osu-pink/15 px-5 text-[13px] font-bold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white cursor-pointer disabled:opacity-50"
         >
           {busy ? "Setting up..." : "Get my link"}

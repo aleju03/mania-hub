@@ -94,6 +94,21 @@ describe("leaving a collector's shelf", () => {
   });
 });
 
+describe("public collection activity privacy", () => {
+  const shelf = readFileSync(join(process.cwd(), "src/components/packs/collections/CollectorShelf.tsx"), "utf8");
+  const directory = readFileSync(join(process.cwd(), "src/components/packs/collections/CollectorDirectory.tsx"), "utf8");
+
+  it("does not offer a recent collector ordering", () => {
+    expect(directory).not.toContain('{ id: "recent"');
+    expect(directory).not.toContain('label: "Recent"');
+  });
+
+  it("does not offer newest-first ordering on somebody else's shelf", () => {
+    expect(shelf).not.toContain('"newest"');
+    expect(shelf).not.toContain("setSort");
+  });
+});
+
 describe("collections nav entry", () => {
   const nav = readFileSync(join(process.cwd(), "src/components/layout/Nav.tsx"), "utf8");
 

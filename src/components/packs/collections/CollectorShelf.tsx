@@ -56,9 +56,8 @@ function shelfPageKey(
   page: number,
   tier: ManiaCardTier | "all",
   query: string,
-  sort: "rarity" | "newest",
 ) {
-  return `${userId}:${page}:${tier}:${sort}:${query}`;
+  return `${userId}:${page}:${tier}:${query}`;
 }
 
 /* Pages already on the wire, so a turn taken before the warm behind it lands
@@ -70,14 +69,13 @@ function loadShelfPage(
   page: number,
   tier: ManiaCardTier | "all",
   query: string,
-  sort: "rarity" | "newest",
 ): Promise<LivePackCommunityCollectionPage> {
-  const key = shelfPageKey(userId, page, tier, query, sort);
+  const key = shelfPageKey(userId, page, tier, query);
   const held = shelfPageCache.get(key);
   if (held) return Promise.resolve(held);
   const inFlight = shelfPageRequests.get(key);
   if (inFlight) return inFlight;
-  const request = fetchLivePackCollectorCards(userId, { page, pageSize: PAGE_SIZE, tier, query, sort })
+  const request = fetchLivePackCollectorCards(userId, { page, pageSize: PAGE_SIZE, tier, query })
     .then((next) => {
       rememberShelfPage(key, next);
       return next;
@@ -309,7 +307,6 @@ export function CollectorShelf({ collector, tab }: {
   const [failed, setFailed] = useState(false);
   const [tier, setTier] = useState<ManiaCardTier | "all">("all");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"rarity" | "newest">("rarity");
   const [page, setPage] = useState(0);
   const [cardPage, setCardPage] = useState<LivePackCommunityCollectionPage | null>(null);
   const [cardsLoading, setCardsLoading] = useState(true);
@@ -353,7 +350,7 @@ export function CollectorShelf({ collector, tab }: {
      new filter is paired with the old page index, and the read below would
      spend a request (and a warm behind it) on a page that is already on its
      way out. */
-  const filterKey = `${tier}:${sort}:${debounced}`;
+  const filterKey = `${tier}:${debounced}`;
   const [pagedFilter, setPagedFilter] = useState(filterKey);
   if (pagedFilter !== filterKey) {
     setPagedFilter(filterKey);
@@ -361,7 +358,7 @@ export function CollectorShelf({ collector, tab }: {
   }
 
   const ownerUserId = profile?.collector.userId ?? null;
-  const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, debounced, sort) : null;
+  const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, debounced) : null;
   /* Read during the render that the click causes, so a page already in hand
      paints in the same commit instead of a frame later. */
   const cachedPage = requestKey ? shelfPageCache.get(requestKey) ?? null : null;
@@ -379,7 +376,7 @@ export function CollectorShelf({ collector, tab }: {
         setPrefetched([]);
         return;
       }
-      loadShelfPage(ownerUserId, nextPage, tier, debounced, sort)
+      loadShelfPage(ownerUserId, nextPage, tier, debounced)
         .then((next) => {
           if (!cancelled) setPrefetched(next.cards as CollectedCard[]);
         })
@@ -400,7 +397,7 @@ export function CollectorShelf({ collector, tab }: {
     setCardsLoading(true);
     // Whatever was warmed sat next to a page that is no longer on screen.
     setPrefetched([]);
-    loadShelfPage(ownerUserId, page, tier, debounced, sort)
+    loadShelfPage(ownerUserId, page, tier, debounced)
       .then((next) => {
         if (cancelled) return;
         setCardPage(next);
@@ -413,19 +410,19 @@ export function CollectorShelf({ collector, tab }: {
     return () => {
       cancelled = true;
     };
-  }, [ownerUserId, requestKey, page, tier, debounced, sort]);
+  }, [ownerUserId, requestKey, page, tier, debounced]);
 
   /* Mints the next page's faces into the shared thumbnail cache while this
      one is being read, so a turn lands on cards rather than on sketches. */
   useCardThumbnails(prefetched);
 
-  /* Every move inside the shelf, for the admin activity feed: the sort, the
-     tier chips, the player search, the pager. What is reported is the state
+  /* Every move inside the shelf, for the admin activity feed: the tier chips,
+     the player search, the pager. What is reported is the state
      the move landed on rather than which control was touched, so one line
      says what the visitor is looking at. The shelf as opened is skipped: the
      pageview already recorded that, and a filter change is one event because
      the reset to page one happens in the same render. */
-  const browseKey = `${tier}:${sort}:${debounced}:${page}`;
+  const browseKey = `${tier}:${debounced}:${page}`;
   const browsedKey = useRef(browseKey);
   useEffect(() => {
     if (browsedKey.current === browseKey) return;
@@ -435,7 +432,6 @@ export function CollectorShelf({ collector, tab }: {
       collectionsShelfProperties({
         collector: profile?.collector.username ?? collector,
         tierLabel: TIER_FILTERS.find((filter) => filter.id === tier)?.label ?? null,
-        sort,
         query: debounced,
         page,
       }),
@@ -562,20 +558,6 @@ export function CollectorShelf({ collector, tab }: {
               className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4/50 py-1.5 pl-7 pr-2 text-[12px] text-white outline-none transition-colors placeholder:text-osu-f1 focus:border-osu-pink/50"
             />
           </label>
-          <div className="flex items-center gap-1">
-            {(["rarity", "newest"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setSort(mode)}
-                className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize transition-colors ${
-                  sort === mode ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-1.5">

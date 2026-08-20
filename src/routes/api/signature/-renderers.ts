@@ -1311,6 +1311,7 @@ function insightCell(
     key,
     style: {
       display: "flex", flexDirection: "column", width: `${width}px`, minWidth: "0",
+      flexShrink: 0, overflow: "hidden",
       ...(first ? {} : { borderLeft: "1px solid rgba(255,255,255,0.12)", paddingLeft: "16px" }),
     },
   }, [
@@ -1337,9 +1338,13 @@ function keySplitValue(insights: UserProfileInsights): ReactNode {
     }, `${only.keyCount}K only`);
   }
   const dominant = insights.keySplit.reduce((top, entry) => Math.max(top, entry.count), 0);
+  /* Five or more entries need the same visual hierarchy in less horizontal
+     space. Tightening only the secondary readings keeps the dominant mode as
+     the headline while leaving every mode visible on one line. */
+  const dense = insights.keySplit.length > 4;
   return h("div", {
     key: "v",
-    style: { display: "flex", alignItems: "baseline", gap: "9px" },
+    style: { display: "flex", alignItems: "baseline", gap: dense ? "5px" : "9px" },
   }, insights.keySplit.map((entry) => {
     const color = keyModeColor(entry.keyCount);
     const lead = entry.count === dominant;
@@ -1349,18 +1354,33 @@ function keySplitValue(insights: UserProfileInsights): ReactNode {
     }, [
       h("div", {
         key: "p",
-        style: { fontSize: lead ? "26px" : "17px", fontWeight: 900, lineHeight: 1, color },
+        style: { fontSize: lead ? (dense ? "25px" : "26px") : (dense ? "16px" : "17px"), fontWeight: 900, lineHeight: 1, color },
       }, String(Math.round((entry.count / insights.sampleSize) * 100))),
       h("div", {
         key: "s",
-        style: { fontSize: lead ? "13px" : "11px", fontWeight: 900, lineHeight: 1, color },
+        style: { fontSize: lead ? (dense ? "12px" : "13px") : (dense ? "10px" : "11px"), fontWeight: 900, lineHeight: 1, color },
       }, "%"),
       h("div", {
         key: "k",
-        style: { marginLeft: "3px", fontSize: "11px", fontWeight: 700, color },
+        style: { marginLeft: "3px", fontSize: dense ? "10px" : "11px", fontWeight: 700, color },
       }, `${entry.keyCount}K`),
     ]);
   }));
+}
+
+/* Most profiles have at most four keymodes and keep the even four-column
+   rhythm. Each additional mode buys the split enough room for one compact
+   reading, taken evenly from the three values whose contents are much
+   shorter. The cap protects those values if malformed chart data ever yields
+   more modes than the ordinary 4K..10K range. */
+export function insightCellWidths(totalWidth: number, keyModeCount: number): [number, number, number, number] {
+  const evenWidth = Math.floor(totalWidth / 4);
+  const maxKeyWidth = Math.floor(totalWidth * 0.45);
+  const requestedExtra = Math.max(0, keyModeCount - 4) * 53;
+  const keyWidth = evenWidth + Math.min(requestedExtra, Math.max(0, maxKeyWidth - evenWidth));
+  const remaining = totalWidth - keyWidth;
+  const secondaryWidth = Math.floor(remaining / 3);
+  return [keyWidth, secondaryWidth, secondaryWidth, remaining - secondaryWidth * 2];
 }
 
 /* The four readings, at the widths they are actually drawn at. Fixed rather
@@ -1372,8 +1392,7 @@ function insightCells(
   accent: string,
   dim: string,
 ): ReactNode[] {
-  const cellWidth = Math.floor(totalWidth / 4);
-  const barWidth = cellWidth - 22;
+  const [keyWidth, modWidth, bpmWidth, ppWidth] = insightCellWidths(totalWidth, insights.keySplit.length);
   const mod = insights.mostUsedMod;
   const modPct = mod && mod.total > 0 ? Math.round((mod.count / mod.total) * 100) : 0;
 
@@ -1384,12 +1403,12 @@ function insightCells(
       dim,
       keySplitValue(insights),
       insights.keySplit.length > 1
-        ? segmentedBar(barWidth, insights.keySplit.map((entry) => ({
+        ? segmentedBar(keyWidth - 22, insights.keySplit.map((entry) => ({
           pct: (entry.count / insights.sampleSize) * 100,
           color: keyModeColor(entry.keyCount),
         })))
         : h("div", { key: "f" }),
-      cellWidth,
+      keyWidth,
       true,
     ),
     insightCell(
@@ -1401,11 +1420,11 @@ function insightCells(
         : insightMissing("No mod preference", dim),
       mod
         ? h("div", { key: "f", style: { display: "flex", alignItems: "center", gap: "8px" } }, [
-          bar(barWidth - 40, modPct, accent, 4),
+          bar(modWidth - 62, modPct, accent, 4),
           h("div", { key: "p", style: { fontSize: "10px", color: dim } }, `${modPct}%`),
         ])
         : h("div", { key: "f" }),
-      cellWidth,
+      modWidth,
       false,
     ),
     insightCell(
@@ -1422,7 +1441,7 @@ function insightCells(
         ? h("div", { key: "f", style: { fontSize: "11px", color: dim } },
           `${Math.round(insights.bpmRange.min)} to ${Math.round(insights.bpmRange.max)}`)
         : h("div", { key: "f" }),
-      cellWidth,
+      bpmWidth,
       false,
     ),
     insightCell(
@@ -1440,7 +1459,7 @@ function insightCells(
         ? h("div", { key: "f", style: { fontSize: "11px", color: dim } },
           `${nf(insights.ppRange.top - insights.ppRange.bottom)}pp spread`)
         : h("div", { key: "f" }),
-      cellWidth,
+      ppWidth,
       false,
     ),
   ];
@@ -1461,11 +1480,17 @@ function topPlayCard(
   dim: string,
   width: number,
   height: number,
+  /* The OWNER's zone, from their row. Not the viewer's: this image is stored
+     once per version and handed to every stranger who loads the osu! profile
+     it hangs on, so there is no viewer to be local to. Null falls back to UTC,
+     which is what every render printed before the column existed - and which
+     dated an evening play in the Americas to the next morning. */
+  timeZone: string | null,
   compact = false,
 ): ReactNode {
   const meta = [
     snapshot.mods.length > 0 ? snapshot.mods.join(" ") : null,
-    snapshot.date ? formatDate(snapshot.date) : null,
+    snapshot.date ? formatDate(snapshot.date, timeZone ?? "UTC") : null,
   ].filter(Boolean).join("  ·  ");
   /* Clamped to the layout, and nowrap besides. A map title is arbitrary
      length: on the card width it would otherwise wrap onto a second line and
@@ -1775,7 +1800,7 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
         ]),
         play
           ? h("div", { key: "playwrap", style: { display: "flex", marginTop: "auto" } }, [
-            topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, true),
+            topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, ctx.resolved.timeZone, true),
           ])
           : h("div", { key: "playwrap" }),
       ]),
@@ -1802,7 +1827,7 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
         insightCells(insights, inner, accent, dim)),
       play
         ? h("div", { key: "playwrap", style: { display: "flex", marginTop: "auto" } }, [
-          topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT),
+          topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, ctx.resolved.timeZone),
         ])
         : h("div", { key: "playwrap" }),
     ]),

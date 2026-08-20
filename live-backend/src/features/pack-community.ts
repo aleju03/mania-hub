@@ -191,7 +191,7 @@ const CARD_TTL_MS = 30 * 60_000;
  * on their own short clock and the boards keep theirs. */
 const TOTALS_TTL_MS = 20_000;
 
-export type PackCollectorSort = "cards" | "copies" | "packs" | "goats" | "recent";
+export type PackCollectorSort = "cards" | "copies" | "packs" | "goats";
 
 /* One comparator per sort, used by both the directory and the boards so a
    collector's position is the same wherever they are printed. */
@@ -200,7 +200,6 @@ const COMPARATORS: Record<PackCollectorSort, (a: PackCollectorSummary, b: PackCo
   copies: (a, b) => b.copies - a.copies || b.cards - a.cards || a.joinedAt - b.joinedAt,
   packs: (a, b) => (b.packsOpened ?? -1) - (a.packsOpened ?? -1) || b.cards - a.cards || a.joinedAt - b.joinedAt,
   goats: (a, b) => b.goats - a.goats || b.cards - a.cards || a.joinedAt - b.joinedAt,
-  recent: (a, b) => b.lastPulledAt - a.lastPulledAt || b.cards - a.cards,
 };
 
 /* hasOwn, not `raw in COMPARATORS`: an inherited key ("toString",
@@ -228,8 +227,7 @@ const HONORARY_ID_LIST = idListSql(HONORARY_USER_IDS);
 /* What a build produces, and the only shape that crosses the worker-thread
    boundary or lands in the disk cache: plain JSON, no Maps and no reliance on
    shared object identity. The sorted views are derived from it on arrival
-   rather than carried, so the payload holds one copy of each collector instead
-   of six. */
+   rather than carried, so the payload holds only one copy of each collector. */
 export interface PackCollectorSnapshotWire {
   collectors: PackCollectorSummary[];
   packsOpenedTotal: number;
@@ -406,7 +404,6 @@ function indexCollectorSnapshot(wire: PackCollectorSnapshotWire): CollectorSnaps
       copies: [...collectors].sort(COMPARATORS.copies),
       packs: [...collectors].sort(COMPARATORS.packs),
       goats: [...collectors].sort(COMPARATORS.goats),
-      recent: [...collectors].sort(COMPARATORS.recent),
     },
   };
 }

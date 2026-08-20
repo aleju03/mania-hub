@@ -3,7 +3,7 @@ import { Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { track } from "#/lib/analytics";
 import { collectionsDirectoryProperties } from "#/lib/analytics-collections";
-import { formatNumber, formatTimeAgo } from "#/lib/format";
+import { formatNumber } from "#/lib/format";
 import {
   fetchLivePackCollectors,
   packCollectorParam,
@@ -25,7 +25,6 @@ const SORTS: Array<{ id: LivePackCollectorSort; label: string }> = [
   { id: "copies", label: "Copies" },
   { id: "packs", label: "Packs" },
   { id: "goats", label: "GOATs" },
-  { id: "recent", label: "Recent" },
 ];
 
 /* Whichever column the list is ordered by is the one it prints. Showing the
@@ -38,8 +37,6 @@ function sortedValue(collector: LivePackCollector, sort: LivePackCollectorSort):
       return collector.packsOpened === null ? "unknown" : formatNumber(collector.packsOpened);
     case "goats":
       return `${collector.goats}/${collector.completion.goatsTotal}`;
-    case "recent":
-      return collector.lastPulledAt > 0 ? formatTimeAgo(new Date(collector.lastPulledAt).toISOString()) : "";
     default:
       return formatNumber(collector.cards);
   }
@@ -214,4 +211,3 @@ export function CollectorDirectory() {
     </ListSurface>
   );
 }
-

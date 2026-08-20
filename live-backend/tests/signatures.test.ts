@@ -12,8 +12,10 @@ import {
   listSignaturesForAdmin,
   normalizeSignatureTypes,
   resolveSignatureToken,
+  normalizeTimeZone,
   rotateUserSignatureToken,
   setSignatureBlocked,
+  setUserSignatureTimeZone,
 } from "../src/features/signatures.js";
 
 /* Dynamic renders live behind a URL a player pasted into an osu! profile and
@@ -497,5 +499,84 @@ describe("signature purge target", () => {
 
   it("has nothing to name for a player with no signature", async () => {
     expect(await getSignaturePurgeTarget(db, 999999)).toBeNull();
+  });
+});
+
+/* The player's own zone. A render prints the DAY a top play was set, and there
+   is nobody looking at it when it is drawn - the PNG is stored once per version
+   and handed to every stranger who loads the osu! profile it hangs on. So the
+   day it prints has to be the owner's, and the zone that decides it has to be
+   part of the key that says the picture is stale. */
+describe("time zone", () => {
+  it("takes a real IANA name and refuses anything else", () => {
+    expect(normalizeTimeZone("America/Costa_Rica")).toBe("America/Costa_Rica");
+    expect(normalizeTimeZone("UTC")).toBe("UTC");
+    // Would throw a RangeError inside the render's toLocaleDateString, which
+    // is a failed image rather than a wrong date.
+    expect(normalizeTimeZone("Mars/Olympus_Mons")).toBeNull();
+    expect(normalizeTimeZone("")).toBeNull();
+    expect(normalizeTimeZone(null)).toBeNull();
+    expect(normalizeTimeZone(42)).toBeNull();
+  });
+
+  it("stores nothing until a browser says, and reads back what it stored", async () => {
+    await enableUserSignature(db, USER, ["insights"], null);
+    expect((await getUserSignature(db, USER))?.timeZone).toBeNull();
+
+    await setUserSignatureTimeZone(db, USER, "America/Costa_Rica");
+    expect((await getUserSignature(db, USER))?.timeZone).toBe("America/Costa_Rica");
+  });
+
+  it("moves the insights version, because that is the render that prints a date", async () => {
+    await enableUserSignature(db, USER, ["insights"], null);
+    const token = (await getUserSignature(db, USER))!.token;
+    const before = (await resolveSignatureToken(db, token))!;
+
+    await setUserSignatureTimeZone(db, USER, "America/Costa_Rica");
+    const after = (await resolveSignatureToken(db, token))!;
+
+    expect(after.timeZone).toBe("America/Costa_Rica");
+    expect(after.versions.insights).not.toBe(before.versions.insights);
+    /* And only that one. Nothing else in the set draws a date, so hashing the
+       zone into them would re-render four images that cannot have changed. */
+    expect(after.versions.maniacard).toBe(before.versions.maniacard);
+    expect(after.versions.skills).toBe(before.versions.skills);
+    expect(after.versions.dan).toBe(before.versions.dan);
+    expect(after.versions.goals).toBe(before.versions.goals);
+  });
+
+  it("does not move anything when the browser reports the same zone again", async () => {
+    await enableUserSignature(db, USER, ["insights"], null, undefined, "Europe/Berlin");
+    const token = (await getUserSignature(db, USER))!.token;
+    const before = (await resolveSignatureToken(db, token))!;
+
+    await setUserSignatureTimeZone(db, USER, "Europe/Berlin");
+    const after = (await resolveSignatureToken(db, token))!;
+
+    expect(after.versions.insights).toBe(before.versions.insights);
+  });
+
+  /* The page reports the zone on load, and a player who turned their signature
+     off is still a player who opens the page. Reusing enable() for that would
+     switch their renders back on behind them. */
+  it("reporting a zone does not turn a disabled signature back on", async () => {
+    await enableUserSignature(db, USER, ["insights"], null);
+    await disableUserSignature(db, USER);
+
+    await setUserSignatureTimeZone(db, USER, "Europe/Berlin");
+
+    const record = (await getUserSignature(db, USER))!;
+    expect(record.enabled).toBe(false);
+    expect(record.timeZone).toBe("Europe/Berlin");
+  });
+
+  it("has nothing to set for a player with no signature", async () => {
+    expect(await setUserSignatureTimeZone(db, 999999, "Europe/Berlin")).toBeNull();
+  });
+
+  it("leaves the stored zone alone when enable does not mention one", async () => {
+    await enableUserSignature(db, USER, ["insights"], null, undefined, "America/Costa_Rica");
+    await enableUserSignature(db, USER, ["insights", "maniacard"], null);
+    expect((await getUserSignature(db, USER))?.timeZone).toBe("America/Costa_Rica");
   });
 });

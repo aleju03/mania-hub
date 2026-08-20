@@ -5,6 +5,7 @@ import { StarRatingBadge } from "#/components/maps/SearchCard";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { formatDate } from "#/lib/format";
+import { useViewerTimeZone } from "#/lib/use-viewer-time-zone";
 import { beatmapStatusAwardsPp, getDisplayedAccuracy, getManiaAccuracyFromCounts, getModDisplayList, getScoreRate, getScoreTimestamp, scoreUsesLazerScoring } from "#/lib/score";
 import { computeManiaRulesetWhatIf } from "#/lib/replay-what-if";
 import type { ManiaBeatmap } from "#/lib/beatmap-parser";
@@ -44,6 +45,7 @@ interface ReplayInfoProps {
 
 export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, onDeleteUpload, deletingUpload = false, playerProfile, judgeAsLazer, onSelectClient, onClear }: ReplayInfoProps) {
   const h = replay.header;
+  const viewerTimeZone = useViewerTimeZone();
   // An upload has no API score, so the client comes from the .osr's own version
   // stamp; both the label and everything judged below follow from it.
   const sourceIsLazer = scoreUsesLazerScoring(score, h.gameVersion);
@@ -63,7 +65,8 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
   // Nothing to claim when there is neither a score nor a version stamp.
   const clientLabel = score || h.gameVersion ? (sourceIsLazer ? "Lazer" : "Stable") : null;
   const playedAt = score ? getScoreTimestamp(score) : "";
-  const playedDate = playedAt ? formatDate(playedAt) : null;
+  // The reader's own day, as osu! shows it. See useViewerTimeZone.
+  const playedDate = playedAt ? formatDate(playedAt, viewerTimeZone) : null;
   const displayName = playerProfile?.username?.trim() || h.playerName;
   // Only a name that came from the profile is a real osu! account: an upload's
   // header name is whatever the client wrote and would link to a dead page.

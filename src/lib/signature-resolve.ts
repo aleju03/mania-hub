@@ -18,6 +18,11 @@ export interface ResolvedSignature {
   skillsKeyCount: number | null;
   /** Raw per-type style map as stored. Normalize before drawing from it. */
   styles: Record<string, unknown> | null;
+  /* The OWNER's IANA zone, not the viewer's - a render has no viewer. It is
+     stored once per version and served to everyone, so the only day it can
+     honestly print is the day the player themselves lived. Null means their
+     browser has never told us, and falls back to UTC. */
+  timeZone: string | null;
   versions: Record<SignatureType, string>;
 }
 

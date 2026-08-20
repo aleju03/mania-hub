@@ -17,6 +17,31 @@ describe("formatDate", () => {
   it("formats near-midnight UTC timestamps as the UTC day in every timezone", () => {
     expect(formatDate("2022-03-20T23:52:23+00:00")).toBe("March 20, 2022");
   });
+
+  /* The reported bug: a play set at 20:28 in Costa Rica is 02:28 UTC the next
+     morning, so the UTC day named a day osu! itself never showed the player. */
+  it("names the viewer's day, not UTC's, when given a zone", () => {
+    expect(formatDate("2026-08-19T02:28:28Z", "America/Costa_Rica")).toBe("August 18, 2026");
+    expect(formatDate("2026-08-19T02:28:28Z", "Asia/Tokyo")).toBe("August 19, 2026");
+  });
+
+  /* A value with no instant behind it has no zone to be converted from: parsed
+     as UTC midnight, any zone west of Greenwich would print the day before. */
+  it("ignores both the viewer and machine zone for a date that names a day rather than a moment", () => {
+    const previousTimeZone = process.env.TZ;
+    process.env.TZ = "Asia/Tokyo";
+    try {
+      expect(formatDate("2026-08-19", "America/Costa_Rica")).toBe("August 19, 2026");
+      expect(formatDate("2026-08-19 02:28:28", "America/Costa_Rica")).toBe("August 19, 2026");
+    } finally {
+      if (previousTimeZone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimeZone;
+    }
+  });
+
+  it("still defaults to UTC, which is what keeps SSR and hydration identical", () => {
+    expect(formatDate("2026-08-19T02:28:28Z")).toBe("August 19, 2026");
+  });
 });
 
 describe("formatTimeAgo", () => {

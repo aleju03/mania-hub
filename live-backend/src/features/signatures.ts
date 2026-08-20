@@ -28,6 +28,9 @@ export interface SignatureRecord {
   skillsKeyCount: number | null;
   /** Per-type look, owned and validated by the frontend. Opaque here. */
   styles: Record<string, unknown> | null;
+  /** The player's own IANA zone, or null when their browser has never said.
+      Null renders in UTC, which is what every row did before this existed. */
+  timeZone: string | null;
   /** Set from the admin page. The player cannot clear it. */
   blockedAt: number | null;
   createdAt: number;
@@ -58,6 +61,7 @@ export interface ResolvedSignature {
   enabledTypes: SignatureType[];
   skillsKeyCount: number | null;
   styles: Record<string, unknown> | null;
+  timeZone: string | null;
   versions: Record<SignatureType, string>;
 }
 
@@ -94,6 +98,28 @@ export function normalizeSignatureTypes(input: unknown): SignatureType[] {
   return SIGNATURE_TYPES.filter((type) => seen.has(type));
 }
 
+/* An IANA zone name, or null. Validated rather than trusted: this reaches a
+   toLocaleDateString call in the render, and Intl throws a RangeError on a
+   name it does not know - which would turn one bad string into a permanently
+   failing image instead of a wrong date. Node carries the full tz database, so
+   asking Intl whether it accepts the name IS the allowlist.
+
+   Not stored uppercase or otherwise touched: the zone that comes back out has
+   to be the one Intl was willing to take. */
+export function normalizeTimeZone(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const value = raw.trim();
+  // Long enough for "America/Argentina/Buenos_Aires", short of anything that
+  // is not a zone name.
+  if (!value || value.length > 64) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return value;
+  } catch {
+    return null;
+  }
+}
+
 function parseStyles(raw: unknown): Record<string, unknown> | null {
   if (typeof raw !== "string" || !raw) return null;
   try {
@@ -114,6 +140,7 @@ function rowToRecord(row: Record<string, unknown>): SignatureRecord {
     enabledTypes: parseTypes(row.enabled_types_json),
     skillsKeyCount: row.skills_key_count == null ? null : Number(row.skills_key_count),
     styles: parseStyles(row.style_json),
+    timeZone: normalizeTimeZone(row.time_zone),
     blockedAt: row.blocked_at == null ? null : Number(row.blocked_at),
     createdAt: Number(row.created_at ?? 0),
     updatedAt: Number(row.updated_at ?? 0),
@@ -151,34 +178,66 @@ export async function enableUserSignature(
   // undefined leaves the stored style alone, so publishing a type does not
   // silently reset how every render looks. Only an explicit string writes.
   styleJson?: string | null,
+  /* Same rule: undefined leaves the stored zone alone. Only the page sends one
+     (the browser is the only thing that knows it), so a call that came from
+     anywhere else must not blank it out. */
+  timeZone?: string | null,
 ): Promise<SignatureRecord> {
   const existing = await getUserSignature(db, userId);
   const now = nowMs();
   const token = existing?.token ?? mintToken();
   const typesJson = JSON.stringify(types);
   if (existing) {
-    if (styleJson === undefined) {
-      await exec(
-        db,
-        "update user_signatures set enabled = 1, enabled_types_json = ?, skills_key_count = ?, updated_at = ? where user_id = ?",
-        [typesJson, skillsKeyCount, now, userId],
-      );
-    } else {
-      await exec(
-        db,
-        "update user_signatures set enabled = 1, enabled_types_json = ?, skills_key_count = ?, style_json = ?, updated_at = ? where user_id = ?",
-        [typesJson, skillsKeyCount, styleJson, now, userId],
-      );
+    /* Built rather than branched: with style and zone each independently
+       present-or-absent, spelling out the four statements was already the
+       longer way to write it at two. */
+    const sets = ["enabled = 1", "enabled_types_json = ?", "skills_key_count = ?"];
+    const params: (string | number | null)[] = [typesJson, skillsKeyCount];
+    if (styleJson !== undefined) {
+      sets.push("style_json = ?");
+      params.push(styleJson);
     }
+    if (timeZone !== undefined) {
+      sets.push("time_zone = ?");
+      params.push(timeZone);
+    }
+    sets.push("updated_at = ?");
+    params.push(now, userId);
+    await exec(db, `update user_signatures set ${sets.join(", ")} where user_id = ?`, params);
   } else {
     await exec(
       db,
-      `insert into user_signatures (user_id, token, enabled, enabled_types_json, skills_key_count, style_json, created_at, updated_at)
-       values (?, ?, 1, ?, ?, ?, ?, ?)`,
-      [userId, token, typesJson, skillsKeyCount, styleJson ?? null, now, now],
+      `insert into user_signatures (user_id, token, enabled, enabled_types_json, skills_key_count, style_json, time_zone, created_at, updated_at)
+       values (?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+      [userId, token, typesJson, skillsKeyCount, styleJson ?? null, timeZone ?? null, now, now],
     );
   }
   return (await getUserSignature(db, userId))!;
+}
+
+/* The zone on its own, for the page telling us what the browser reports rather
+   than the player changing anything. Separate from enableUserSignature because
+   it must not touch `enabled`: a player who turned their signature off and
+   then opened the page would otherwise have it turned back on by a background
+   write they never asked for.
+
+   No-ops when the stored value already matches, so the common case (opening
+   the page again from the same country) is a read and nothing else - and,
+   more to the point, does not move updated_at and re-render an identical image. */
+export async function setUserSignatureTimeZone(
+  db: Db,
+  userId: number,
+  timeZone: string | null,
+): Promise<SignatureRecord | null> {
+  const existing = await getUserSignature(db, userId);
+  if (!existing) return null;
+  if (existing.timeZone === timeZone) return existing;
+  await exec(
+    db,
+    "update user_signatures set time_zone = ?, updated_at = ? where user_id = ?",
+    [timeZone, nowMs(), userId],
+  );
+  return await getUserSignature(db, userId);
 }
 
 export async function disableUserSignature(db: Db, userId: number): Promise<boolean> {
@@ -255,7 +314,7 @@ export interface SignaturePurgeTarget {
 export async function getSignaturePurgeTarget(db: Db, userId: number): Promise<SignaturePurgeTarget | null> {
   const record = await getUserSignature(db, userId);
   if (!record) return null;
-  return { token: record.token, versions: await buildVersions(db, userId, record.styles) };
+  return { token: record.token, versions: await buildVersions(db, userId, record.styles, record.timeZone) };
 }
 
 /** The kill switch. Blocking does not touch `enabled`, so unblocking restores
@@ -331,6 +390,7 @@ async function buildVersions(
   db: Db,
   userId: number,
   styles: Record<string, unknown> | null,
+  timeZone: string | null,
 ): Promise<Record<SignatureType, string>> {
   // No global_rank: nothing on a signature draws a rank any more, and rank
   // moves for an active player constantly, so keeping it here would re-render
@@ -398,9 +458,13 @@ async function buildVersions(
      snapshot itself is rewritten. Without the event stamp the one reading the
      image exists to show would be the last to move. No pp: nothing here is
      computed from it. */
+  /* The zone is in here because the insights card prints a DATE, and the same
+     instant is a different day either side of midnight. Only here: it is the
+     one render in the set that draws a date at all, so hashing it into the
+     other four would re-render images whose pixels cannot change. */
   const insights = hashVersion([
     "i", snapshotRow?.updated_at, userStamp, topScoresStamp, lastScoreRow?.ended_at,
-    styleStamp(styles, "insights"),
+    styleStamp(styles, "insights"), timeZone,
   ]);
 
   return { maniacard, goals, skills, dan, insights };
@@ -409,7 +473,7 @@ async function buildVersions(
 export async function resolveSignatureToken(db: Db, token: string): Promise<ResolvedSignature | null> {
   const row = (await exec(
     db,
-    "select user_id, enabled, enabled_types_json, skills_key_count, style_json, blocked_at from user_signatures where token = ?",
+    "select user_id, enabled, enabled_types_json, skills_key_count, style_json, time_zone, blocked_at from user_signatures where token = ?",
     [token],
   )).rows[0] as Record<string, unknown> | undefined;
   // A blocked row is indistinguishable from an unknown token from here on: the
@@ -420,6 +484,7 @@ export async function resolveSignatureToken(db: Db, token: string): Promise<Reso
   const userRow = (await exec(db, "select username from users where user_id = ?", [userId])).rows[0] as
     Record<string, unknown> | undefined;
   const styles = parseStyles(row.style_json);
+  const timeZone = normalizeTimeZone(row.time_zone);
 
   return {
     userId,
@@ -427,6 +492,7 @@ export async function resolveSignatureToken(db: Db, token: string): Promise<Reso
     enabledTypes: parseTypes(row.enabled_types_json),
     skillsKeyCount: row.skills_key_count == null ? null : Number(row.skills_key_count),
     styles,
-    versions: await buildVersions(db, userId, styles),
+    timeZone,
+    versions: await buildVersions(db, userId, styles, timeZone),
   };
 }

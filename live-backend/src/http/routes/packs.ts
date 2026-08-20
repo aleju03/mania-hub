@@ -516,7 +516,6 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         pageSize,
         tier: url.searchParams.get("tier"),
         query: url.searchParams.get("q"),
-        sort: url.searchParams.get("sort") === "newest" ? "newest" : null,
       });
     res.setHeader("cache-control", "public, max-age=60");
     await sendAccentEnrichedJson(req, res, ctx, 200, collectionPage);

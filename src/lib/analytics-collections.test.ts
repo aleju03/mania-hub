@@ -34,24 +34,23 @@ describe("getCollectionsPageviewProperties", () => {
 describe("collectionsShelfProperties", () => {
   it("reports the state a move landed on, counting pages from one", () => {
     expect(
-      collectionsShelfProperties({ collector: "manolo", tierLabel: "GOAT", sort: "newest", query: "", page: 2 }),
+      collectionsShelfProperties({ collector: "manolo", tierLabel: "GOAT", query: "", page: 2 }),
     ).toEqual({
       collections_collector: "manolo",
       collections_tier: "GOAT",
-      collections_sort: "newest first",
       collections_page: "3",
     });
   });
 
   it("leaves out the tier filter sitting where it started, and the first page", () => {
     expect(
-      collectionsShelfProperties({ collector: "manolo", tierLabel: "All", sort: "rarity", query: "", page: 0 }),
-    ).toEqual({ collections_collector: "manolo", collections_sort: "rarest first" });
+      collectionsShelfProperties({ collector: "manolo", tierLabel: "All", query: "", page: 0 }),
+    ).toEqual({ collections_collector: "manolo" });
   });
 
   it("carries the player search", () => {
     expect(
-      collectionsShelfProperties({ collector: "manolo", tierLabel: null, sort: "rarity", query: " jakads ", page: 0 })
+      collectionsShelfProperties({ collector: "manolo", tierLabel: null, query: " jakads ", page: 0 })
         .collections_query,
     ).toBe("jakads");
   });

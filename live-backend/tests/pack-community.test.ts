@@ -322,6 +322,9 @@ describe("pack collector directory", () => {
 
   it("falls back to the default sort for anything it does not recognise", () => {
     expect(normalizePackCollectorSort("goats")).toBe("goats");
+    // Recency is deliberately not a public directory ordering: accepting the
+    // old query would preserve the player-activity view after its UI was gone.
+    expect(normalizePackCollectorSort("recent")).toBe("cards");
     expect(normalizePackCollectorSort("toString")).toBe("cards");
     expect(normalizePackCollectorSort(null)).toBe("cards");
   });

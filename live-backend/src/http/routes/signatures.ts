@@ -8,9 +8,11 @@ import {
   getSignaturePurgeTarget,
   listSignaturesForAdmin,
   normalizeSignatureTypes,
+  normalizeTimeZone,
   resolveSignatureToken,
   rotateUserSignatureToken,
   setSignatureBlocked,
+  setUserSignatureTimeZone,
 } from "../../features/signatures.js";
 import { logInfo } from "../../logger.js";
 import type { HttpContext } from "../context.js";
@@ -23,6 +25,7 @@ const SIGNATURE_PATHS = new Set([
   "/api/signature/disable",
   "/api/signature/rotate",
   "/api/signature/resolve",
+  "/api/signature/time-zone",
 ]);
 
 /* Moderation. True-admin token, not the bridge: nothing here acts on behalf of
@@ -180,10 +183,13 @@ export async function handleSignatureRoutes(
     return true;
   }
 
-  const body = parseJson<{ userId?: unknown; types?: unknown; skillsKeyCount?: unknown; styles?: unknown }>(
-    (await readBody(req)) || "{}",
-    {},
-  );
+  const body = parseJson<{
+    userId?: unknown;
+    types?: unknown;
+    skillsKeyCount?: unknown;
+    styles?: unknown;
+    timeZone?: unknown;
+  }>((await readBody(req)) || "{}", {});
   const userId = Number(body.userId);
   if (!Number.isInteger(userId) || userId <= 0) {
     sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
@@ -203,8 +209,22 @@ export async function handleSignatureRoutes(
       types,
       readKeyCount(body.skillsKeyCount),
       readStyleJson(body.styles),
+      // Absent leaves the stored zone alone; anything else is validated down to
+      // a name Intl accepts, or to null.
+      body.timeZone === undefined ? undefined : normalizeTimeZone(body.timeZone),
     );
     sendJson(req, res, ctx, 200, { ok: true, signature });
+    return true;
+  }
+
+  /* The zone on its own. The page sends this on load when what the browser
+     reports differs from the row, which is the only way a player who set their
+     signature up before this existed ever gets a local date - they have no
+     reason to touch a style again. Deliberately not part of `enable`: that
+     turns a signature on, and a background sync must not. */
+  if (url.pathname === "/api/signature/time-zone") {
+    const signature = await setUserSignatureTimeZone(writeDb, userId, normalizeTimeZone(body.timeZone));
+    sendJson(req, res, ctx, signature ? 200 : 404, { ok: Boolean(signature), signature });
     return true;
   }
 

@@ -33,6 +33,7 @@ import {
   formatDate,
   formatPP,
 } from "../../lib/format";
+import { useViewerTimeZone } from "../../lib/use-viewer-time-zone";
 import { useHasHydrated } from "../../store";
 import {
   getBeatmapUrl,
@@ -5022,6 +5023,7 @@ function BpmExtremeRow({ label, bpm, snapshot }: { label: string; bpm: number; s
 }
 
 function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScoreSnapshot | null }) {
+  const viewerTimeZone = useViewerTimeZone();
   if (!snapshot) {
     return (
       <div className="h-[120px] rounded-xl bg-osu-b4 p-4">
@@ -5062,8 +5064,16 @@ function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScor
                 so SSR and hydration routinely land on different sides of a minute
                 boundary. Let the client text win. */}
             <span className="text-[10px] text-white/45" suppressHydrationWarning>{formatTimeAgo(snapshot.date)}</span>
+            {/* The viewer's own day, like the score page this links to. A play
+                set at 20:28 in Costa Rica is 02:28 UTC the next morning, and
+                the UTC day dated it one day after osu! did. No
+                suppressHydrationWarning needed: useViewerTimeZone holds UTC
+                through the hydration render and the real zone arrives on the
+                next one, as a normal diff. */}
             {snapshot.date && (
-              <span className="hidden text-[10px] text-white/45 sm:inline">{formatDate(snapshot.date)}</span>
+              <span className="hidden text-[10px] text-white/45 sm:inline">
+                {formatDate(snapshot.date, viewerTimeZone)}
+              </span>
             )}
           </div>
         </div>
@@ -5374,6 +5384,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
   const canReplay = scoreHasReplay(score);
   const hasPp = score.pp != null;
   const playedAt = getScoreTimestamp(score);
+  const viewerTimeZone = useViewerTimeZone();
   const cover = score.beatmapset?.covers?.["cover@2x"] || score.beatmapset?.covers?.cover;
 
   return (
@@ -5524,7 +5535,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
             </div>
 
             <div className="mt-5 flex flex-col gap-3 border-t border-osu-b3/20 pt-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-              <span className="text-[11px] text-osu-f1" suppressHydrationWarning title={formatDate(playedAt)}>
+              <span className="text-[11px] text-osu-f1" suppressHydrationWarning title={formatDate(playedAt, viewerTimeZone)}>
                 Played {formatDetailedTimeAgo(playedAt)} on {display.isLazer ? "Lazer" : "Stable"}
               </span>
               <div className="flex items-center justify-between gap-3 sm:justify-end">

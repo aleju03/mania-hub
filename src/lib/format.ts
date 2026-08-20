@@ -105,15 +105,43 @@ export function formatDuration(totalSeconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function formatDate(dateStr: string): string {
-  // Pinned to UTC: this renders inside server-rendered HTML (e.g. profile
-  // "Joined" line), so server and client must produce identical text for any
-  // viewer timezone or hydration fails (React #418) and recovery re-renders
-  // wipe the <html> theme vars.
-  return new Date(dateStr).toLocaleDateString("en-US", {
+/* A value that names a day and nothing else - "2026-08-19", or a bare
+   "2026-08-19 02:28" with no zone on it. Date.parse gives the first UTC
+   midnight, so putting it through a timezone west of Greenwich would print the
+   day before: a date with no instant behind it has no business being shifted.
+   Only a string that actually carries a zone (Z, +05:30) is a moment. */
+function isZonedInstant(dateStr: string): boolean {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/.test(dateStr.trim());
+}
+
+/* Date parses a zone-less date-time in the machine's local zone. Pinning the
+   formatter to UTC afterwards is too late: in Tokyo, for example,
+   "2026-08-19 02:28" has already become an August 18 UTC instant. For the
+   ISO-shaped calendar values this helper accepts, construct UTC midnight from
+   the day they name so parsing itself cannot move it. */
+function dateForFormatting(dateStr: string, zoned: boolean): Date {
+  const trimmed = dateStr.trim();
+  if (zoned) return new Date(trimmed);
+  const calendarDay = /^(\d{4}-\d{2}-\d{2})(?:$|[T ])/u.exec(trimmed)?.[1];
+  return new Date(calendarDay ? `${calendarDay}T00:00:00Z` : trimmed);
+}
+
+/* The absolute date of something.
+
+   `timeZone` defaults to UTC, and that default is load-bearing: this renders
+   inside server-rendered HTML (the profile "Joined" line among others), so
+   server and client must produce identical text for any viewer or hydration
+   fails (React #418) and recovery re-renders wipe the <html> theme vars.
+
+   A caller that wants the viewer's own day - which is what a play time means
+   to the person reading it, and what osu! itself prints - passes one, and has
+   to have waited for hydration first. useViewerTimeZone() is that gate. */
+export function formatDate(dateStr: string, timeZone = "UTC"): string {
+  const zoned = isZonedInstant(dateStr);
+  return dateForFormatting(dateStr, zoned).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
-    timeZone: "UTC",
+    timeZone: zoned ? timeZone : "UTC",
   });
 }

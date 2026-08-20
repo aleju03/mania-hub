@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject
 import { getBeatmapAudioUrl, getInlineBackgroundUrl } from "../../lib/audio-url";
 import type { ManiaBeatmap } from "../../lib/beatmap-parser";
 import { formatDate } from "../../lib/format";
+import { useViewerTimeZone } from "../../lib/use-viewer-time-zone";
 import {
   exitNativeFullscreen,
   getNativeFullscreenElement,
@@ -1427,6 +1428,7 @@ function PlayerHeader({ side, accentIndex, compact, align = "left" }: {
   const score = side.score;
   const name = score.user?.username ?? side.replay.header.playerName ?? "Unknown";
   const playedAt = getScoreTimestamp(score);
+  const viewerTimeZone = useViewerTimeZone();
   const mods = getModDisplayList(score.mods);
   const right = align === "right";
   const nameNode = score.user?.username ? (
@@ -1475,7 +1477,7 @@ function PlayerHeader({ side, accentIndex, compact, align = "left" }: {
           {nameNode}
         </div>
         <div className={`flex items-center gap-2 ${right ? "flex-row-reverse" : ""}`}>
-          {playedAt && <span className="text-[12px] tabular-nums text-white/55">{formatDate(playedAt)}</span>}
+          {playedAt && <span className="text-[12px] tabular-nums text-white/55">{formatDate(playedAt, viewerTimeZone)}</span>}
           {mods.length > 0 && (
             <span className="flex shrink-0 items-center gap-0.5">
               {mods.map((mod, index) => (

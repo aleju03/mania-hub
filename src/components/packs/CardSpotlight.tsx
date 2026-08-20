@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "#/lib/auth-context";
 import { formatDate, formatOrdinal } from "#/lib/format";
+import { useViewerTimeZone } from "#/lib/use-viewer-time-zone";
 import { fetchLivePackCardStats, isLiveBackendConfigured, packCollectorParam } from "#/lib/live-backend";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
@@ -92,6 +93,7 @@ export function CardSpotlight({
      pull with no date said only how it ranked, which is the less interesting
      half of where a card came from. */
   const gotAt = target ? (target.card.grantedAt || target.card.firstPulledAt || 0) : 0;
+  const viewerTimeZone = useViewerTimeZone();
   const spotlightCardKey = target ? packCardKeyOf(target.card) : null;
   useEffect(() => {
     setOwnerCount(null);
@@ -406,7 +408,7 @@ export function CardSpotlight({
                       : showcasedBy
                         ? " pulled this"
                         : "Pulled"}
-                    {gotAt > 0 ? ` on ${formatDate(new Date(gotAt).toISOString())}` : ""}
+                    {gotAt > 0 ? ` on ${formatDate(new Date(gotAt).toISOString(), viewerTimeZone)}` : ""}
                     {!card.grantedAt && card.serial ? (
                       <>
                         ,{" "}

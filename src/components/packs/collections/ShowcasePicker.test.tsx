@@ -69,6 +69,22 @@ it("reads your own collection through the public paged endpoint", async () => {
   expect(fetchLivePackCollectorCards.mock.calls[0][0]).toBe(7);
 });
 
+it("fits the visible mobile viewport and only lets the card grid shrink", async () => {
+  await renderPicker([]);
+
+  const dialog = screen.getByRole("dialog", { name: "Pick your showcase" });
+  expect(dialog.className).toContain("max-h-[88dvh]");
+  expect(dialog.parentElement?.className).toContain("h-[100dvh]");
+
+  const header = screen.getByText("Pick your showcase").parentElement?.parentElement;
+  const searchRow = screen.getByPlaceholderText("Find a player in your collection").parentElement?.parentElement;
+  const footer = screen.getByText("Save showcase").parentElement?.parentElement;
+  expect(header?.className).toContain("shrink-0");
+  expect(searchRow?.className).toContain("shrink-0");
+  expect(footer?.className).toContain("shrink-0");
+  expect(footer?.className).toContain("safe-area-inset-bottom");
+});
+
 it("saves exactly the cards that were clicked, in the order they were picked", async () => {
   const onSave = await renderPicker([]);
   fireEvent.click(screen.getByText("charlie card"));

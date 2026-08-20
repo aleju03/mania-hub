@@ -2367,6 +2367,16 @@ async function migrateUserSignatures(db: Db): Promise<void> {
   if (!columns.includes("cleared_count")) {
     await db.execute("alter table user_signatures add column cleared_count integer not null default 0");
   }
+  // The player's own IANA zone, sent by their browser from /dynamic-renders.
+  // A render prints the day a top play was set, and there is no viewer at
+  // render time to ask - the PNG is stored once per version and served to
+  // everyone - so the day has to be the OWNER's. Without this it was UTC, which
+  // dates an evening play in the Americas to the following morning. Null means
+  // "never told", and falls back to UTC, so nothing already stored moves until
+  // its player opens the page.
+  if (!columns.includes("time_zone")) {
+    await db.execute("alter table user_signatures add column time_zone text");
+  }
 }
 
 async function migrateAdminTodos(db: Db): Promise<void> {

@@ -2421,7 +2421,7 @@ export interface LivePackCommunityStats {
   computedAt: number;
 }
 
-export type LivePackCollectorSort = "cards" | "copies" | "packs" | "goats" | "recent";
+export type LivePackCollectorSort = "cards" | "copies" | "packs" | "goats";
 
 export interface LivePackCollectorProfile {
   collector: LivePackCollector;
@@ -2544,14 +2544,12 @@ export async function fetchLivePackCollectorCards(userId: number, options: {
   pageSize?: number;
   tier?: string;
   query?: string;
-  sort?: "newest" | "rarity";
 } = {}): Promise<LivePackCommunityCollectionPage> {
   const query = new URLSearchParams();
   if (options.page) query.set("page", String(options.page));
   if (options.pageSize) query.set("pageSize", String(options.pageSize));
   if (options.tier && options.tier !== "all") query.set("tier", options.tier);
   if (options.query?.trim()) query.set("q", options.query.trim());
-  if (options.sort === "newest") query.set("sort", "newest");
   return fetchLiveJson(`/api/packs/community/collection/${userId}?${query.toString()}`);
 }
 

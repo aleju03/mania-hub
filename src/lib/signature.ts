@@ -25,6 +25,9 @@ export interface SignatureSettings {
   skillsKeyCount: number | null;
   /** Always fully populated, even for a row stored before styles existed. */
   styles: SignatureStyleMap;
+  /** The player's own IANA zone, or null when their browser has never said.
+      Null renders dates in UTC, which is what every row did before this. */
+  timeZone: string | null;
   /** Set from the admin page; the player cannot clear it. */
   blockedAt: number | null;
   createdAt: number;
@@ -76,7 +79,7 @@ function readSignature(body: unknown): SignatureSettings | null {
 }
 
 async function postSignatureAction(
-  action: "enable" | "disable" | "rotate",
+  action: "enable" | "disable" | "rotate" | "time-zone",
   payload: Record<string, unknown> = {},
 ): Promise<SignatureSettingsResult> {
   const viewer = await requireViewer();
@@ -90,11 +93,12 @@ async function postSignatureAction(
     if (!response.ok) return { allowed: true, signature: null };
     const signature = readSignature(await response.json().catch(() => null));
     const memo = await import("./signature-resolve");
-    if (action === "enable") {
+    if (action === "enable" || action === "time-zone") {
       /* The render route resolves tokens through a short-lived memo. Without
          this, the preview fetched immediately after a save would re-render the
          style that was stored a moment ago, and the page would look like the
-         setting did nothing. */
+         setting did nothing. A zone report is the same shape of write: it
+         moves the insights version, so the memo has to let go of the token. */
       if (signature?.token) memo.forgetSignatureToken(signature.token);
     } else {
       /* Rotating and disabling are the revoke. The old token is not in the
@@ -183,13 +187,29 @@ export const enableSignature = createServerFn({ method: "POST" })
         type does. Anything sent is re-normalized here, so the allowlist holds
         even if the client posted the call directly. */
     styles?: SignatureStyleMap;
+    /** The browser's IANA zone. Only the client can know it, so it rides along
+        with whatever the player was doing anyway; the backend validates it
+        against Intl before storing. Omit to leave the stored zone alone. */
+    timeZone?: string;
   }) => input)
   .handler(async ({ data }): Promise<SignatureSettingsResult> =>
     postSignatureAction("enable", {
       types: data.types,
       skillsKeyCount: data.skillsKeyCount ?? null,
       ...(data.styles ? { styles: normalizeSignatureStyleMap(data.styles) } : {}),
+      ...(data.timeZone ? { timeZone: data.timeZone } : {}),
     }));
+
+/* The zone on its own, for the page reporting what the browser says on load.
+   A player who set their signature up before this existed has no reason to
+   touch a style again, and without this their render would print UTC dates
+   forever. Separate from enable() because it must not turn a signature back
+   on: the backend no-ops when the stored value already matches, so an ordinary
+   revisit is a read and does not move the version. */
+export const reportSignatureTimeZone = createServerFn({ method: "POST" })
+  .validator((input: { timeZone: string }) => input)
+  .handler(async ({ data }): Promise<SignatureSettingsResult> =>
+    postSignatureAction("time-zone", { timeZone: data.timeZone }));
 
 export const disableSignature = createServerFn({ method: "POST" }).handler(
   async (): Promise<SignatureSettingsResult> => postSignatureAction("disable"));

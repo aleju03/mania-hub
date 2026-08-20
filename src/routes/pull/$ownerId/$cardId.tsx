@@ -7,6 +7,7 @@ import { ManiaCardRenderer } from "../../../components/player/maniacard3d/ManiaC
 import { buildManiaCardRenderDataFromSkills } from "../../../components/player/maniacard3d/renderData";
 import { CountryFlag } from "../../../components/ui/CountryFlag";
 import { formatDate, formatOrdinal } from "../../../lib/format";
+import { useViewerTimeZone } from "../../../lib/use-viewer-time-zone";
 import {
   fetchLivePackSharedCard,
   isLiveBackendConfigured,
@@ -278,6 +279,7 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
   const odds = shared.goatPull ? goatPullOdds(shared.goatPull.packType) : null;
   const exactPull = shared.pullEvent && shared.pullEvent.pulledAt > 0 ? shared.pullEvent : null;
   const displayedPullAt = exactPull?.pulledAt ?? shared.card.firstPulledAt;
+  const viewerTimeZone = useViewerTimeZone();
   const pullLabel = exactPull
     ? exactPull.isNew ? "Pulled by" : "Pulled again by"
     : "First collected by";
@@ -334,7 +336,7 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
             </Link>
           )}
           {displayedPullAt > 0 && (
-            <span className="tabular-nums"> on {formatDate(new Date(displayedPullAt).toISOString())}</span>
+            <span className="tabular-nums"> on {formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)}</span>
           )}
           {shared.card.copies > 1 && <span className="tabular-nums"> &middot; x{shared.card.copies} copies</span>}
         </div>

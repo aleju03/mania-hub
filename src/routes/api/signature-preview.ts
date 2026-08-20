@@ -4,6 +4,7 @@ import { ogRenderGate, pngResponse } from "../../lib/og-render";
 import type { ResolvedSignature } from "../../lib/signature-resolve";
 import { parseSignatureVariant, signatureVariantSlug, type SignatureType } from "../../lib/signature-shared";
 import { normalizeSignatureStyle } from "../../lib/signature-style";
+import { normalizeTimeZone } from "../../lib/time-zone";
 import { createFixedWindowLimiter } from "../../lib/upload-guards";
 import { renderSignature } from "./signature/-renderers";
 
@@ -49,7 +50,7 @@ export const Route = createFileRoute("/api/signature-preview")({
           return new Response(null, { status: 413 });
         }
 
-        let body: { type?: unknown; design?: unknown; style?: unknown; skillsKeyCount?: unknown };
+        let body: { type?: unknown; design?: unknown; style?: unknown; skillsKeyCount?: unknown; timeZone?: unknown };
         try {
           body = await request.json();
         } catch {
@@ -78,6 +79,10 @@ export const Route = createFileRoute("/api/signature-preview")({
           // keymode when the style leaves it unset.
           skillsKeyCount: Number(body.skillsKeyCount) || null,
           styles: null,
+          // Sent by the page rather than read from the row, so the preview
+          // dates a play the same way the stored render will - including on a
+          // first visit, before the row has been told the zone at all.
+          timeZone: normalizeTimeZone(body.timeZone),
           versions: {} as Record<SignatureType, string>,
         };
 
