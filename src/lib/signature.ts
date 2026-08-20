@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { bridgeAuthHeaders } from "./live-backend-tokens";
+import { createFixedWindowLimiter } from "./upload-guards";
 import { getServerLiveBackendUrl } from "./live-backend";
 import type { SignatureType } from "./signature-shared";
 import { normalizeSignatureStyleMap, type SignatureStyleMap } from "./signature-style";
@@ -12,10 +13,9 @@ import type { SignatureImageProbe } from "../routes/api/signature/-backgrounds";
 // gated; that token only exists server-side. Mirrors the roster-self-track and
 // goals bridges.
 //
-// The whole feature is admin-gated for now, and that gate is enforced HERE
-// rather than only in the page UI: hiding a button does not stop a POST. The
-// image route itself is deliberately not admin-gated, since the point is that
-// anyone viewing an osu! profile can load the picture.
+// Anyone logged in can set one up. The moderation calls at the bottom of this
+// file are the part that stays admin-only, and their check is server-side for
+// the same reason every check here is: hiding a button does not stop a POST.
 
 export interface SignatureSettings {
   userId: number;
@@ -33,7 +33,7 @@ export interface SignatureSettings {
 }
 
 export interface SignatureSettingsResult {
-  /** False when the viewer is signed out or not an admin. */
+  /** False when the viewer is signed out. */
   allowed: boolean;
   signature: SignatureSettings | null;
 }
@@ -56,10 +56,10 @@ export interface SignatureAdminRow {
 
 const UNAVAILABLE: SignatureSettingsResult = { allowed: false, signature: null };
 
-async function requireAdminViewer(): Promise<{ userId: number; base: string } | null> {
+async function requireViewer(): Promise<{ userId: number; base: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
   const auth = await readCurrentAuth();
-  if (!auth.viewer || !auth.canUseAdminFeatures) return null;
+  if (!auth.viewer) return null;
   const base = getServerLiveBackendUrl();
   if (!base) return null;
   return { userId: auth.viewer.id, base };
@@ -79,7 +79,7 @@ async function postSignatureAction(
   action: "enable" | "disable" | "rotate",
   payload: Record<string, unknown> = {},
 ): Promise<SignatureSettingsResult> {
-  const viewer = await requireAdminViewer();
+  const viewer = await requireViewer();
   if (!viewer) return UNAVAILABLE;
   try {
     const response = await fetch(`${viewer.base}/api/signature/${action}`, {
@@ -111,7 +111,7 @@ async function postSignatureAction(
 
 export const fetchSignatureSettings = createServerFn({ method: "GET" }).handler(
   async (): Promise<SignatureSettingsResult> => {
-    const viewer = await requireAdminViewer();
+    const viewer = await requireViewer();
     if (!viewer) return UNAVAILABLE;
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
@@ -133,7 +133,7 @@ export const fetchSignatureSettings = createServerFn({ method: "GET" }).handler(
    and concludes the setting is broken. */
 export const fetchSignatureKeyModes = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ keyCounts: number[] }> => {
-    const viewer = await requireAdminViewer();
+    const viewer = await requireViewer();
     if (!viewer) return { keyCounts: [] };
     try {
       const response = await fetch(`${viewer.base}/api/profiles/${viewer.userId}/skills`);
@@ -147,6 +147,13 @@ export const fetchSignatureKeyModes = createServerFn({ method: "GET" }).handler(
   },
 );
 
+/* Typing a url is a handful of probes; the cap is here so an account cannot
+   turn the page into a general-purpose "is this address up" service. Held per
+   viewer rather than per url: the url is the thing being asked about, so
+   keying on it would let one account sweep a list for free. */
+const probeLimiter = createFixedWindowLimiter(60_000);
+const PROBES_PER_MINUTE = 30;
+
 /* Whether a pasted address will actually produce a picture. The render cannot
    answer this: it falls back to no background and carries on, which is right
    for a stranger loading an osu! profile and reads as "the feature is broken"
@@ -156,8 +163,14 @@ export const fetchSignatureKeyModes = createServerFn({ method: "GET" }).handler(
 export const checkSignatureImageUrl = createServerFn({ method: "POST" })
   .validator((input: { url: string }) => input)
   .handler(async ({ data }): Promise<{ status: SignatureImageProbe }> => {
-    const viewer = await requireAdminViewer();
+    const viewer = await requireViewer();
     if (!viewer) return { status: "blocked" };
+    /* Over the cap reads as "that link did not load", which is what an
+       unreachable host says too. Nothing here is worth a distinct message: a
+       player cannot hit this by typing. */
+    if (probeLimiter.isRateLimited(String(viewer.userId), PROBES_PER_MINUTE)) {
+      return { status: "unreachable" };
+    }
     const { probeSignatureImageUrl } = await import("../routes/api/signature/-backgrounds");
     return { status: await probeSignatureImageUrl(data.url) };
   });

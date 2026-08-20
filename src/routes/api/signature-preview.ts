@@ -40,9 +40,9 @@ export const Route = createFileRoute("/api/signature-preview")({
       POST: async ({ request }) => {
         const { readCurrentAuth } = await import("../../lib/auth-server");
         const auth = await readCurrentAuth();
-        // 404 rather than 403: the feature is admin-gated, so its editor's
-        // endpoints should not confirm they exist.
-        if (!auth.viewer || !auth.canUseAdminFeatures) return new Response(null, { status: 404 });
+        // Signed in only: a preview is drawn from the caller's own profile, so
+        // there is nobody else to draw one for.
+        if (!auth.viewer) return new Response(null, { status: 401 });
 
         const declared = Number(request.headers.get("content-length"));
         if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {

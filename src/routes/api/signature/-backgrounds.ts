@@ -348,8 +348,8 @@ export async function thumbnailDataUrl(url: string, width = 128, height = 72): P
    watching nothing happen. So the page asks separately and says which it was.
 
    The reasons stay coarse on purpose. This runs the same fetch the render
-   does, at the same admin gate, but a caller who could read back a status code
-   or an error string would have a probe worth pointing at things. */
+   does, behind a login and a per-viewer cap, but a caller who could read back a
+   status code or an error string would have a probe worth pointing at things. */
 export type SignatureImageProbe =
   | "ok"
   | "blocked"

@@ -1,4 +1,4 @@
-import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { useEffect, useState } from "react";
@@ -22,7 +22,6 @@ import {
   type LivePackCommunityStats,
   type LivePackPullFeedEntry,
 } from "../lib/live-backend";
-import { canUseAdminFeatures } from "../lib/auth-shared";
 import { parsePackShowcaseSlots, readPackShowcaseSlotsClient } from "../lib/pack-showcase";
 import { DEFAULT_COUNTRY_CODE } from "../lib/country";
 import { pageSeo } from "../lib/seo";
@@ -61,16 +60,7 @@ const TABS = [
 type CollectionsTab = (typeof TABS)[number]["id"];
 
 export const Route = createFileRoute("/packs_/collections")({
-  /* Admin-gated while the page is still being built out. Same shape the other
-     unreleased surfaces use: a 404 rather than a refusal, so an unreleased
-     page is indistinguishable from one that does not exist. The nav entry is
-     hidden behind the same flag (isLeafVisible in Nav.tsx), and the backend
-     reads behind it stay public, since everything they serve was already
-     readable one card at a time through the pull ticker. */
   beforeLoad: ({ context }) => {
-    if (!canUseAdminFeatures(context.auth)) {
-      throw notFound();
-    }
     const userId = context.auth?.viewer?.id ?? 0;
     return { showcaseSlots: userId > 0 ? readShowcaseSlots(userId) : 0 };
   },
@@ -96,7 +86,7 @@ export const Route = createFileRoute("/packs_/collections")({
       origin: match.context.origin,
       imageKind: "packs",
     });
-    return { ...seo, meta: [...(seo.meta ?? []), { name: "robots", content: "noindex, nofollow" }] };
+    return seo;
   },
   component: CollectionsPage,
 });

@@ -241,15 +241,16 @@ const PROBE_MESSAGE: Record<SignatureImageProbe, string | null> = {
 };
 
 export function DynamicRendersPanel() {
-  const auth = useAuth();
+  const { viewer } = useAuth();
   const location = useLocation();
-  const viewer = auth.viewer;
-  const isAdmin = auth.canUseAdminFeatures;
 
   const [settings, setSettings] = useState<SignatureSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [type, setType] = useState<SignatureType>("maniacard");
+  /* The first tab, both of them: a stored row overwrites this from its own
+     enabled types, and a brand new one is published as that same first type,
+     so the tab row and the picture under it always start on the same one. */
+  const [type, setType] = useState<SignatureType>(SIGNATURE_TYPES[0]);
   const [design, setDesign] = useState(() => signatureDesigns(SIGNATURE_TYPES[0])[0]!.design);
   const [copied, setCopied] = useState(false);
   const [rotateAsk, setRotateAsk] = useState(false);
@@ -291,13 +292,13 @@ export function DynamicRendersPanel() {
   }, []);
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!viewer) {
       setLoading(false);
       return;
     }
     void load();
     void fetchSignatureKeyModes().then((result) => setKeyModes(result.keyCounts)).catch(() => setKeyModes([]));
-  }, [isAdmin, load]);
+  }, [viewer, load]);
 
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -536,14 +537,6 @@ export function DynamicRendersPanel() {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <PageShell center>
-        <div className="text-[17px] font-bold text-white">Not open yet.</div>
-      </PageShell>
-    );
-  }
-
   if (loading) return <PageShell />;
 
   /* Blocked. Said plainly rather than shown as a broken picture, and with no
@@ -576,7 +569,7 @@ export function DynamicRendersPanel() {
         <button
           type="button"
           disabled={busy}
-          onClick={() => void act(() => enableSignature({ data: { types: ["maniacard"], skillsKeyCount: null } }))}
+          onClick={() => void act(() => enableSignature({ data: { types: [SIGNATURE_TYPES[0]], skillsKeyCount: null } }))}
           className="mt-5 inline-flex h-11 items-center rounded-xl border border-osu-pink/45 bg-osu-pink/15 px-5 text-[13px] font-bold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white cursor-pointer disabled:opacity-50"
         >
           {busy ? "Setting up..." : "Get my link"}

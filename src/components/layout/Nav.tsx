@@ -170,10 +170,6 @@ export function Nav() {
     // Discord bot is dev-gated for now: visible in local dev and on the dev
     // preview host, hidden in production.
     if (leaf.id === "discord") return devMode;
-    /* Admin-gated while the collections page is still being built out. Same
-       flag the route's beforeLoad checks (canUseAdminFeatures), so the tab and
-       the page cannot disagree about who gets in; everyone else 404s. */
-    if (leaf.id === "pack-collections") return adminMode;
     if (leaf.id === "snipes") return showSnipesLink;
     return true;
   };
@@ -449,8 +445,7 @@ export function Nav() {
   /* One tab in the desktop row. Also what a group renders as once everything
      but one of its leaves is gated away: a dropdown holding a single item is a
      link wearing a chevron, so it falls back to the group's own name pointing
-     at the page that is left (packs in production, where collections is
-     admin-only). */
+     at the page that is left. */
   const renderTopLink = (topId: string, leaf: NavLeaf, label: string) => (
     <Link
       key={topId}
@@ -845,17 +840,15 @@ export function Nav() {
                         <Target className="h-3.5 w-3.5" />
                         Goals
                       </Link>
-                      {adminMode ? (
-                        <Link
-                          to="/dynamic-renders"
-                          onClick={() => setUserMenuOpen(false)}
-                          className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
-                          role="menuitem"
-                        >
-                          <ImageIcon className="h-3.5 w-3.5" />
-                          Dynamic Renders
-                        </Link>
-                      ) : null}
+                      <Link
+                        to="/dynamic-renders"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                        role="menuitem"
+                      >
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        Dynamic Renders
+                      </Link>
                       {/* Logout is a POST (the route rejects GET), so it needs a
                           form; `contents` keeps the button laid out as if it
                           were still a direct child of the menu. */}
@@ -1112,19 +1105,17 @@ export function Nav() {
                           <Target className="h-3.5 w-3.5 shrink-0 opacity-75" />
                           Goals
                         </Link>
-                        {adminMode ? (
-                          <Link
-                            to="/dynamic-renders"
-                            onClick={() => {
-                              setMobileAccountOpen(false);
-                              setMenuOpen(false);
-                            }}
-                            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
-                          >
-                            <ImageIcon className="h-3.5 w-3.5 shrink-0 opacity-75" />
-                            Dynamic Renders
-                          </Link>
-                        ) : null}
+                        <Link
+                          to="/dynamic-renders"
+                          onClick={() => {
+                            setMobileAccountOpen(false);
+                            setMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
+                        >
+                          <ImageIcon className="h-3.5 w-3.5 shrink-0 opacity-75" />
+                          Dynamic Renders
+                        </Link>
                         <form method="post" action={logoutHref} className="contents">
                           <button
                             type="submit"

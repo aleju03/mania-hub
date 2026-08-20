@@ -27,22 +27,25 @@ describe("collections search params", () => {
   });
 });
 
-describe("collections admin gate", () => {
+describe("collections access", () => {
   // Only the auth in context matters here; the rest of the router's
-  // BeforeLoadContextOptions is not what this gate reads.
+  // BeforeLoadContextOptions is not what beforeLoad reads.
   const beforeLoad = Route.options.beforeLoad as unknown as (opts: { context: { auth: unknown } }) => unknown;
 
-  it("404s the page for anyone without admin access", () => {
-    /* A 404 rather than a refusal, so an unreleased page is indistinguishable
-       from one that does not exist. Same flag and same shape /valley and the
-       admin pages use. */
-    expect(() => beforeLoad({ context: { auth: { canUseAdminFeatures: false } } })).toThrow();
-    expect(() => beforeLoad({ context: { auth: null } })).toThrow();
-    expect(() => beforeLoad({ context: {} as { auth: unknown } })).toThrow();
+  it("is open to everyone, signed in or not", () => {
+    /* Released: the page was admin-gated while it was being built and is not
+       any more, so nothing here may put a 404 back in front of a visitor. The
+       reads behind it were always public - everything they serve was already
+       readable one card at a time through the pull ticker. */
+    expect(() => beforeLoad({ context: { auth: { canUseAdminFeatures: false } } })).not.toThrow();
+    expect(() => beforeLoad({ context: { auth: null } })).not.toThrow();
+    expect(() => beforeLoad({ context: {} as { auth: unknown } })).not.toThrow();
   });
 
-  it("lets an admin through", () => {
-    expect(() => beforeLoad({ context: { auth: { canUseAdminFeatures: true } } })).not.toThrow();
+  it("holds shelf space only for a signed-in viewer", () => {
+    // The cookie the slot count comes from is written per user id, so a signed
+    // out visitor has no row of their own to reserve height for.
+    expect(beforeLoad({ context: { auth: null } })).toEqual({ showcaseSlots: 0 });
   });
 });
 
@@ -104,9 +107,11 @@ describe("collections nav entry", () => {
     expect(collectionsAt).toBeLessThan(packsAt);
   });
 
-  it("hides the collections leaf behind the same flag the route checks", () => {
-    expect(nav).toContain('if (leaf.id === "pack-collections") return adminMode;');
-    expect(nav).toContain("const adminMode = auth.canUseAdminFeatures;");
+  it("shows the collections leaf to everyone, like the route lets everyone in", () => {
+    // Released: the leaf used to be hidden behind canUseAdminFeatures while the
+    // page was being built. The tab and the page have to agree about who gets
+    // in, and now that is everyone.
+    expect(nav).not.toContain('leaf.id === "pack-collections"');
   });
 
   it("groups both pages under one Packs dropdown", () => {

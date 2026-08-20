@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import { Skeleton } from "../../components/ui/LoadingSkeleton";
@@ -136,6 +136,16 @@ function DynamicRendersAdminPage() {
 
   const withImages = rows?.filter((row) => row.customImageUrls.length > 0).length ?? 0;
 
+  /* Live rows first, off ones after. Turning a render off leaves the row
+     standing (the token and the sticky block both live on it), so the list
+     mixes what is being served right now with what is not, and by date alone
+     an off row can sit at the top. Sorting is stable, so within each group the
+     backend's newest-first order survives. */
+  const ordered = useMemo(
+    () => (rows ? [...rows].sort((a, b) => Number(b.enabled) - Number(a.enabled)) : null),
+    [rows],
+  );
+
   return (
     <div className="flex-1">
       <div className="bg-osu-d5 border-b border-osu-b3/40">
@@ -178,7 +188,7 @@ function DynamicRendersAdminPage() {
             ))}
           </div>
 
-          {rows === null ? (
+          {ordered === null ? (
             <div className="rounded-md border border-osu-b3/20 bg-osu-b5/60 divide-y divide-osu-b3/20">
               {Array.from({ length: 5 }, (_, index) => (
                 <div key={index} className="flex items-center gap-3 px-3 py-2.5">
@@ -188,14 +198,22 @@ function DynamicRendersAdminPage() {
                 </div>
               ))}
             </div>
-          ) : rows.length === 0 ? (
+          ) : ordered.length === 0 ? (
             <div className="rounded-md border border-osu-b3/20 bg-osu-b5/60 px-3 py-6 text-center text-[12px] text-osu-f1">
               {customOnly ? "Nobody is using a custom image." : "Nobody has set one up yet."}
             </div>
           ) : (
             <div className="rounded-md border border-osu-b3/20 bg-osu-b5/60 overflow-hidden divide-y divide-osu-b3/20">
-              {rows.map((row) => (
-                <div key={row.userId} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5">
+              {ordered.map((row) => (
+                /* An off row is dimmed rather than hidden: nothing of it is
+                   being served, but it is still who to block if the pictures
+                   it had were the problem. Hover brings it back to full. */
+                <div
+                  key={row.userId}
+                  className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 transition-opacity duration-[120ms] ${
+                    row.enabled ? "" : "opacity-60 hover:opacity-100"
+                  }`}
+                >
                   <a
                     href={`https://osu.ppy.sh/users/${row.userId}`}
                     target="_blank"
