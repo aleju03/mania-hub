@@ -678,6 +678,11 @@ create table if not exists pack_collection_cards (
   pp real not null,
   global_rank integer not null,
   copies integer not null,
+  -- A row at copies 0 with recycled_copies above it is not a tombstone and
+  -- must not be reaped: it is the recycling history, and its first_pulled_at
+  -- is still the date the collector found that card. Every read that shows a
+  -- card filters on copies > 0, so it falls off the shelf on its own. About
+  -- one holding in six is in this state.
   recycled_copies integer not null,
   first_pulled_at integer not null,
   last_pulled_at integer not null,
@@ -699,6 +704,15 @@ create table if not exists pack_collection_cards (
   granted_at integer,
   primary key(owner_user_id, card_key)
 );
+-- Both this table and pack_card_serials are pure key-value: the primary key is
+-- a separate autoindex (58 MB and 65 MB), so every lookup seeks the index and
+-- then fetches the row. WITHOUT ROWID would delete both autoindexes, and it is
+-- deliberately not used. It cannot be added in place - it needs a rebuild of
+-- 5.4M rows under the write lock - and it would give part of the saving back,
+-- because the secondary indexes below would then carry the full text card_key
+-- instead of a four-byte rowid. src/retention.ts also pages the admin table
+-- browser with "order by rowid desc", which these two tables would no longer
+-- have. 123 MB out of a 10.9 GB database is not worth any of that.
 create index if not exists idx_pack_collection_owner_tier
   on pack_collection_cards(owner_user_id, tier, copies, pp desc);
 -- The card side of the same table: ownership counts, "your card got pulled"
@@ -728,6 +742,14 @@ create table if not exists pack_cards (
 -- collector who pulls a player around the same time, so the JSON is stored
 -- once and referenced by id. Rows are never rewritten (a snapshot is
 -- immutable), which is what makes sharing them safe.
+--
+-- Nothing reaps the rows no holding points at any more, and nothing should.
+-- The unique index on skills_json is what makes this a content-addressed
+-- store: a later pull that freezes the identical snapshot is handed the row
+-- that is already there, so an unreferenced row is a snapshot waiting to be
+-- adopted again, not garbage. A sweeper would also be racing that
+-- insert-or-ignore. They are a four-figure row count and a couple of hundred
+-- KB, against millions of holdings.
 create table if not exists pack_card_skills (
   id integer primary key autoincrement,
   skills_json text not null unique
@@ -787,8 +809,12 @@ create table if not exists pack_card_serials (
 );
 create index if not exists idx_pack_card_serials_card
   on pack_card_serials(card_key, serial);
-create index if not exists idx_pack_card_serials_owner
-  on pack_card_serials(owner_user_id, minted_at desc);
+-- There is deliberately no (owner_user_id, minted_at desc) index. It existed
+-- for a "this collector's mints, newest first" read that was never written:
+-- minted_at is only ever inserted, never selected or ordered by, and every
+-- serial read goes through the primary key, the card index above or the
+-- first-finds one below. It was 50.8 MB of b-tree that also cost an insert on
+-- every mint; db.ts drops it on the databases that still carry it.
 -- Whoever found a card first, anywhere: one row per card key ever minted, which
 -- is thousands where the table itself is hundreds of thousands. Without this the
 -- first-finds board reads every serial ever handed out to count a few of them.

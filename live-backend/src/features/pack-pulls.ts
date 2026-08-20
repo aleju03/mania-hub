@@ -197,13 +197,20 @@ function packCardSerialInsertStatement(
    Ties (two owners with the same stamp, or a zero stamp from an old row) fall
    back to owner id, which is arbitrary but stable across reruns.
 
-   Safe to run on every boot: only owners with no serial yet are numbered, and
-   they start after the card's highest serial so far, so a rerun can only ever
-   append. On the first run against a registry that is still empty that is
-   simply 1..N in historical order. Returns how many serials it wrote. */
+   Safe to rerun: only owners with no serial yet are numbered, and they start
+   after the card's highest serial so far, so a rerun can only ever append. On
+   the first run against a registry that is still empty that is simply 1..N in
+   historical order. Returns how many serials it wrote.
+
+   Still load-bearing rather than a one-off: a serial is minted when the client
+   reports its pull, and the copy itself arrives earlier and by another route
+   (mintDealtPackCards, the wallet sync, the one-time import). A browser closed
+   between the two, or a card for a player recordPackPullEvents drops, leaves a
+   holding with no serial, and this is what hands it one. Its only way to find
+   those is a full scan of pack_collection_cards, so server.ts runs it on a
+   daily interval rather than on every boot. */
 export async function backfillPackCardSerials(db: Db, now = Date.now()): Promise<number> {
-  const before = Number((await exec(db, "select count(*) as n from pack_card_serials")).rows[0]?.n) || 0;
-  await exec(
+  const written = await exec(
     db,
     `insert or ignore into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at)
      select c.card_key, c.card_user_id, c.owner_user_id,
@@ -218,8 +225,10 @@ export async function backfillPackCardSerials(db: Db, now = Date.now()): Promise
        )`,
     [now],
   );
-  const after = Number((await exec(db, "select count(*) as n from pack_card_serials")).rows[0]?.n) || 0;
-  return Math.max(0, after - before);
+  // The insert's own row count, not a count(*) either side of it: bracketing it
+  // that way was two full scans of the serial registry per run to learn a
+  // number the statement already reports.
+  return Math.max(0, written.rowsAffected ?? 0);
 }
 
 /* The serials one owner holds, keyed by card key, for a hand of cards. */

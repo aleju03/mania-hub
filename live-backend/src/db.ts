@@ -1665,6 +1665,14 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
   if (!columns.includes("granted_at")) {
     await db.execute("alter table pack_collection_cards add column granted_at integer");
   }
+  // Dropped rather than declared: (owner_user_id, minted_at desc) was built for
+  // a "this collector's mints, newest first" read nobody ever wrote. minted_at
+  // is inserted and never read back, and every query against pack_card_serials
+  // plans onto the primary key, idx_pack_card_serials_card or the serial = 1
+  // partial index instead - so this was 50.8 MB of b-tree plus an insert on
+  // every mint, for nothing. The migration no longer creates it; this clears it
+  // off the databases that already have it.
+  await db.execute("drop index if exists idx_pack_card_serials_owner");
 }
 
 // The last username a wallet's pulls were recorded under. Durable, unlike the

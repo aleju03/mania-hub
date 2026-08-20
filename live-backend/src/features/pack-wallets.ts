@@ -1932,8 +1932,13 @@ export async function mergeImportedPackWallet(
  *
  * Grouped by what was granted, not by holder: two collectors handed the same
  * card land on one variant, which is the same rule the desk mints under.
- * Writes nothing on a database with no granted cards, which is every boot
- * after the first. */
+ *
+ * Not a one-off, for one narrow reason: /admin/collections resolves a variant
+ * key itself when it mints a card, but an edit that names a holding writes to
+ * the key it named, so labelling a card somebody pulled still lands a
+ * customized holding on a plain key for this to move. That is rare and neither
+ * predicate below can use an index, so server.ts runs this on a daily interval
+ * rather than scanning millions of holdings on every boot. */
 export async function ensurePackCardVariantKeys(db: Db): Promise<number> {
   const grantOnly = [...GRANT_ONLY_TIERS].map((tier) => `'${tier}'`).join(", ") || "''";
   /* Two repairs in one scan, since neither predicate has an index and the
