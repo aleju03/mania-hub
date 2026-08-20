@@ -38,6 +38,67 @@ import { ShowcaseCards } from "./ShowcaseCards";
 
 const PAGE_SIZE = 24;
 
+/* Pages of somebody else's shelf, held for as long as the tab is open and
+   warmed one page ahead of wherever the visitor is. Paging is the whole
+   interaction on this page and every turn was a round trip you could feel:
+   the grid kept showing the page you had just left until the next one landed.
+   The read is public and the backend already serves it with a minute of
+   cache-control, so keeping the pages that were walked costs a map and
+   nothing else. Bounded because a long session with a search box can key a
+   lot of them. */
+const SHELF_PAGE_CACHE_LIMIT = 60;
+const shelfPageCache = new Map<string, LivePackCommunityCollectionPage>();
+
+function shelfPageKey(
+  userId: number,
+  page: number,
+  tier: ManiaCardTier | "all",
+  query: string,
+  sort: "rarity" | "newest",
+) {
+  return `${userId}:${page}:${tier}:${sort}:${query}`;
+}
+
+/* Pages already on the wire, so a turn taken before the warm behind it lands
+   joins that read instead of opening a second one for the same page. */
+const shelfPageRequests = new Map<string, Promise<LivePackCommunityCollectionPage>>();
+
+function loadShelfPage(
+  userId: number,
+  page: number,
+  tier: ManiaCardTier | "all",
+  query: string,
+  sort: "rarity" | "newest",
+): Promise<LivePackCommunityCollectionPage> {
+  const key = shelfPageKey(userId, page, tier, query, sort);
+  const held = shelfPageCache.get(key);
+  if (held) return Promise.resolve(held);
+  const inFlight = shelfPageRequests.get(key);
+  if (inFlight) return inFlight;
+  const request = fetchLivePackCollectorCards(userId, { page, pageSize: PAGE_SIZE, tier, query, sort })
+    .then((next) => {
+      rememberShelfPage(key, next);
+      return next;
+    })
+    .finally(() => {
+      shelfPageRequests.delete(key);
+    });
+  shelfPageRequests.set(key, request);
+  return request;
+}
+
+function rememberShelfPage(key: string, page: LivePackCommunityCollectionPage) {
+  // Re-inserted so the map's order is least-recently-used, which is what the
+  // eviction below reads.
+  shelfPageCache.delete(key);
+  shelfPageCache.set(key, page);
+  while (shelfPageCache.size > SHELF_PAGE_CACHE_LIMIT) {
+    const oldest = shelfPageCache.keys().next().value;
+    if (oldest === undefined) break;
+    shelfPageCache.delete(oldest);
+  }
+}
+
 const TIER_FILTERS: Array<{ id: ManiaCardTier | "all"; label: string }> = [
   { id: "all", label: "All" },
   { id: "goat", label: "GOAT" },
@@ -250,6 +311,9 @@ export function CollectorShelf({ collector, tab }: {
   const [page, setPage] = useState(0);
   const [cardPage, setCardPage] = useState<LivePackCommunityCollectionPage | null>(null);
   const [cardsLoading, setCardsLoading] = useState(true);
+  /* The page after the one on screen, held only so its faces are minted
+     before it is asked for. */
+  const [prefetched, setPrefetched] = useState<CollectedCard[]>([]);
   const [spotlight, setSpotlight] = useState<CardSpotlightTarget | null>(null);
   const [liftedCardKey, setLiftedCardKey] = useState<string | null>(null);
   /* Settled before it reaches the backend. Every keystroke here is a paged
@@ -282,21 +346,64 @@ export function CollectorShelf({ collector, tab }: {
     };
   }, [collector, asUserId]);
 
-  useEffect(() => {
+  /* A filter change starts over at the first page. Done while rendering
+     rather than in an effect because an effect leaves one commit where the
+     new filter is paired with the old page index, and the read below would
+     spend a request (and a warm behind it) on a page that is already on its
+     way out. */
+  const filterKey = `${tier}:${sort}:${debounced}`;
+  const [pagedFilter, setPagedFilter] = useState(filterKey);
+  if (pagedFilter !== filterKey) {
+    setPagedFilter(filterKey);
     setPage(0);
-  }, [tier, debounced, sort]);
+  }
 
   const ownerUserId = profile?.collector.userId ?? null;
+  const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, debounced, sort) : null;
+  /* Read during the render that the click causes, so a page already in hand
+     paints in the same commit instead of a frame later. */
+  const cachedPage = requestKey ? shelfPageCache.get(requestKey) ?? null : null;
 
   useEffect(() => {
-    if (!ownerUserId) return;
+    if (!ownerUserId || !requestKey) return;
     let cancelled = false;
+
+    /* One page ahead, once the page on screen is settled. The prefetch keeps
+       writing to the cache after this effect is torn down: whoever asks for
+       that page next is who it was for. */
+    const warmNextPage = (current: LivePackCommunityCollectionPage) => {
+      const nextPage = page + 1;
+      if (nextPage * PAGE_SIZE >= current.total) {
+        setPrefetched([]);
+        return;
+      }
+      loadShelfPage(ownerUserId, nextPage, tier, debounced, sort)
+        .then((next) => {
+          if (!cancelled) setPrefetched(next.cards as CollectedCard[]);
+        })
+        // A page nobody asked for yet is not worth a failure state.
+        .catch(() => {});
+    };
+
+    const held = shelfPageCache.get(requestKey);
+    if (held) {
+      setCardPage(held);
+      setCardsLoading(false);
+      warmNextPage(held);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     setCardsLoading(true);
-    fetchLivePackCollectorCards(ownerUserId, { page, pageSize: PAGE_SIZE, tier, query: debounced, sort })
+    // Whatever was warmed sat next to a page that is no longer on screen.
+    setPrefetched([]);
+    loadShelfPage(ownerUserId, page, tier, debounced, sort)
       .then((next) => {
         if (cancelled) return;
         setCardPage(next);
         setCardsLoading(false);
+        warmNextPage(next);
       })
       .catch(() => {
         if (!cancelled) setCardsLoading(false);
@@ -304,7 +411,11 @@ export function CollectorShelf({ collector, tab }: {
     return () => {
       cancelled = true;
     };
-  }, [ownerUserId, page, tier, debounced, sort]);
+  }, [ownerUserId, requestKey, page, tier, debounced, sort]);
+
+  /* Mints the next page's faces into the shared thumbnail cache while this
+     one is being read, so a turn lands on cards rather than on sketches. */
+  useCardThumbnails(prefetched);
 
   if (missing) {
     return (
@@ -370,10 +481,14 @@ export function CollectorShelf({ collector, tab }: {
     );
   }
 
-  const total = cardPage?.total ?? 0;
+  /* The page in hand when there is one; otherwise the last one loaded, which
+     is what keeps the pager and the rarity chips on screen while a cold page
+     is on the way instead of collapsing to "0 cards" for a beat. */
+  const shownPage = cachedPage ?? cardPage;
+  const total = shownPage?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);
-  const tierCounts = cardPage?.tierCounts ?? {};
+  const tierCounts = shownPage?.tierCounts ?? {};
 
   return (
     <div>
@@ -395,7 +510,7 @@ export function CollectorShelf({ collector, tab }: {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <SectionHeading>
             every card
-            <HeadingCount value={cardPage ? total : null} />
+            <HeadingCount value={shownPage ? total : null} />
           </SectionHeading>
           <label className="relative flex min-w-[160px] flex-1 items-center sm:max-w-[220px]">
             <Search size={13} className="pointer-events-none absolute left-2 text-osu-f1" />
@@ -448,8 +563,8 @@ export function CollectorShelf({ collector, tab }: {
         </div>
 
         <CardGrid
-          page={cardPage}
-          loading={cardsLoading}
+          page={shownPage}
+          loading={cachedPage ? false : cardsLoading}
           liftedCardKey={liftedCardKey}
           onSpotlight={(target, cardKey) => {
             setSpotlight({ ...target, ownerUserId: profile.collector.userId });
