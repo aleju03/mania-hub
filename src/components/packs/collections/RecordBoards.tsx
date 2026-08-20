@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { formatNumber, formatTimeAgo } from "#/lib/format";
 import { honoraryAvatarUrl } from "#/lib/honorary-players";
-import type {
-  LivePackCollector,
-  LivePackCollectorCompletion,
-  LivePackCommunityCard,
-  LivePackCommunityStats,
+import {
+  packCollectorParam,
+  type LivePackCollector,
+  type LivePackCollectorCompletion,
+  type LivePackCommunityCard,
+  type LivePackCommunityStats,
 } from "#/lib/live-backend";
 import { CountryFlag } from "../../ui/CountryFlag";
 import { BoardSkeleton, Section, SectionHeading } from "./chrome";
@@ -18,13 +19,11 @@ import { BoardSkeleton, Section, SectionHeading } from "./chrome";
    numbers reads as a table nobody scans; the shelf behind the name has the
    rest. */
 
-/* The name where there is one, since the link is a thing people read and
-   paste; an untracked collector's frozen name still resolves server-side. The
-   tab rides along so the shelf's back link returns to the board you opened it
-   from rather than dropping you on the default tab. These boards only ever
-   render on the stats tab. */
-function boardHref(collector: { username: string; userId: number }) {
-  return { collector: collector.username || String(collector.userId), tab: "stats" as const };
+/* The tab rides along so the shelf's back link returns to the board you
+   opened it from rather than dropping you on the default tab. These boards
+   only ever render on the stats tab. */
+function boardHref(collector: LivePackCollector) {
+  return { collector: packCollectorParam(collector), tab: "stats" as const };
 }
 
 function CollectorRow({

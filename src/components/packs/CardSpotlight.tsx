@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "#/lib/auth-context";
 import { formatDate, formatOrdinal } from "#/lib/format";
-import { fetchLivePackCardStats, isLiveBackendConfigured } from "#/lib/live-backend";
+import { fetchLivePackCardStats, isLiveBackendConfigured, packCollectorParam } from "#/lib/live-backend";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
@@ -381,7 +381,7 @@ export function CardSpotlight({
                     {showcasedBy ? (
                       <Link
                         to="/packs/collections"
-                        search={{ collector: showcasedBy.username || String(showcasedBy.userId) }}
+                        search={{ collector: packCollectorParam(showcasedBy) }}
                         preload="intent"
                         className="font-semibold text-white transition-colors hover:text-osu-pink-light"
                       >

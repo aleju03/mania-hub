@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { formatNumber, formatTimeAgo } from "#/lib/format";
 import {
   fetchLivePackCollectors,
+  packCollectorParam,
   type LivePackCollector,
   type LivePackCollectorSort,
 } from "#/lib/live-backend";
@@ -47,7 +48,7 @@ function DirectoryRow({ collector, sort }: { collector: LivePackCollector; sort:
     <Link
       to="/packs/collections"
       // The tab rides along so the shelf's back link comes back here.
-      search={{ collector: collector.username || String(collector.userId), tab: "collectors" as const }}
+      search={{ collector: packCollectorParam(collector), tab: "collectors" as const }}
       preload="intent"
       className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-osu-b3/40"
     >

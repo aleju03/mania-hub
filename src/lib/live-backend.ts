@@ -2441,6 +2441,20 @@ export interface LivePackCommunityCollectionPage {
   tierCounts: Record<string, number>;
 }
 
+/* What to put in ?collector= for a link into someone's shelf.
+
+   The name, because the link is a thing people read and paste, and an
+   untracked collector's frozen wallet name still resolves server-side. But a
+   collector the backend cannot name at all is labelled `user <id>`, and that
+   placeholder resolves to nobody: the lookup searches the users
+   projection and the frozen names for a literal match and 404s, which the
+   shelf reads as "has not opened a pack". Those link by id, which always
+   resolves. */
+export function packCollectorParam(collector: { userId: number; username: string }): string {
+  const id = String(collector.userId);
+  return collector.username && collector.username !== `user ${id}` ? collector.username : id;
+}
+
 /* One collector's chosen cards, as the showcase wall and their own page
    render them. */
 /* Who a showcase belongs to. Narrower than LivePackCollector on purpose: the
