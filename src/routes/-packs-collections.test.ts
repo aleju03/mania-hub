@@ -70,7 +70,9 @@ describe("collections tab param", () => {
 describe("leaving a collector's shelf", () => {
   /* Opening someone from a board or the list and coming back should land on
      the tab you left, not on the default one. The tab rides in the link both
-     ways, so these check the two ends of that. */
+     ways, and an already-open tab stays mounted behind the shelf so its local
+     browse state survives too. */
+  const route = readFileSync(join(process.cwd(), "src/routes/packs_.collections.tsx"), "utf8");
   const shelf = readFileSync(join(process.cwd(), "src/components/packs/collections/CollectorShelf.tsx"), "utf8");
   const directory = readFileSync(join(process.cwd(), "src/components/packs/collections/CollectorDirectory.tsx"), "utf8");
   const boards = readFileSync(join(process.cwd(), "src/components/packs/collections/RecordBoards.tsx"), "utf8");
@@ -82,6 +84,11 @@ describe("leaving a collector's shelf", () => {
 
   it("sends the back link to that tab, and to the plain path for the default one", () => {
     expect(shelf).toContain('search={tab && tab !== "showcase" ? { tab } : {}}');
+  });
+
+  it("keeps the directory mounted behind a collector so its sort survives returning", () => {
+    expect(route).toContain('className={collector || id !== activeTab ? "hidden" : undefined}');
+    expect(route).toContain('useState<CollectionsTab[]>(collector ? [] : [activeTab])');
   });
 
   it("keeps a collector and a tab together through validateSearch", () => {

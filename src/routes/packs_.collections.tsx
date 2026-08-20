@@ -110,8 +110,8 @@ function CollectionsPage() {
    * the click causes, and a tab nobody opens is never built at all - which is
    * also what keeps the server-rendered frame to the one panel it was asked
    * for. */
-  const [opened, setOpened] = useState<CollectionsTab[]>([activeTab]);
-  if (!opened.includes(activeTab)) setOpened([...opened, activeTab]);
+  const [opened, setOpened] = useState<CollectionsTab[]>(collector ? [] : [activeTab]);
+  if (!collector && !opened.includes(activeTab)) setOpened([...opened, activeTab]);
 
   /* Opening the stats used to be the same event as mounting them. Now that
      the panel survives a tab switch, the opening is the click. */
@@ -144,21 +144,22 @@ function CollectionsPage() {
       <div className="relative flex-1">
         <CollectionsBackdrop />
         <div className="relative mx-auto max-w-[1200px] px-4 py-6 sm:px-5">
-          {collector ? (
-            <CollectorShelf collector={collector} tab={tab} />
-          ) : (
-            opened.map((id) => (
-              <div key={id} className={id === activeTab ? undefined : "hidden"}>
-                {id === "showcase" ? (
-                  <ShowcaseTab shelfSlots={showcaseSlots} />
-                ) : id === "stats" ? (
-                  <StatsTab active={activeTab === "stats"} />
-                ) : (
-                  <CollectorDirectory />
-                )}
-              </div>
-            ))
-          )}
+          {collector ? <CollectorShelf collector={collector} tab={tab} /> : null}
+          {/* A shelf is another view of this route, so keep any tab the
+              visitor came from mounted behind it. In particular, the
+              directory owns its sort/search/page state; unmounting it here
+              made returning from a collector reset the list to Cards. */}
+          {opened.map((id) => (
+            <div key={id} className={collector || id !== activeTab ? "hidden" : undefined}>
+              {id === "showcase" ? (
+                <ShowcaseTab shelfSlots={showcaseSlots} />
+              ) : id === "stats" ? (
+                <StatsTab active={!collector && activeTab === "stats"} />
+              ) : (
+                <CollectorDirectory />
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </div>
