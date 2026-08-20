@@ -1,19 +1,8 @@
-import { getCountryName, isGlobalScope } from "../lib/country";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { displayCountryName, isGlobalScope } from "../lib/country";
+import { useLocale } from "../lib/locale-context";
 
 type LiveEmptyKind = "scores" | "top-plays";
-
-const COPY: Record<LiveEmptyKind, { eyebrow: (countryName: string) => string; title: string; body: string }> = {
-  scores: {
-    eyebrow: (countryName) => `${countryName} is ready`,
-    title: "Waiting for new scores",
-    body: "The rankings are here, but this country was added recently. New plays will start showing up once players submit them.",
-  },
-  "top-plays": {
-    eyebrow: () => "",
-    title: "No top plays found",
-    body: "Try a wider range or check back later.",
-  },
-};
 
 // Rendered when no live backend is configured. The live surfaces have no other
 // data source: the osu!-API fallback scans were removed with the Turso exit,
@@ -21,9 +10,11 @@ const COPY: Record<LiveEmptyKind, { eyebrow: (countryName: string) => string; ti
 export function LiveBackendRequired() {
   return (
     <div className="mx-auto max-w-md px-4 py-16 text-center">
-      <div className="text-sm font-bold text-white">Live data is unavailable</div>
+      <div className="text-sm font-bold text-white">
+        <Trans>Live data is unavailable</Trans>
+      </div>
       <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-        Try again in a bit.
+        <Trans>Try again in a bit.</Trans>
       </p>
     </div>
   );
@@ -38,20 +29,26 @@ export function LiveDataEmptyState({
   kind: LiveEmptyKind;
   compact?: boolean;
 }) {
-  const copy = COPY[kind];
-  const name = getCountryName(country);
+  const { t } = useLingui();
+  const locale = useLocale();
+  const name = displayCountryName(country, locale);
   const globalScores = kind === "scores" && isGlobalScope(country);
-  const eyebrow = globalScores ? "Global tracker is ready" : copy.eyebrow(name);
+
+  const eyebrow =
+    kind !== "scores" ? "" : globalScores ? t`Global tracker is ready` : t`${name} is ready`;
+  const title = kind === "scores" ? t`Waiting for new scores` : t`No top plays found`;
   const body = globalScores
-    ? "The live feed is connected. New plays will start showing up as players submit them."
-    : copy.body;
+    ? t`The live feed is connected. New plays will start showing up as players submit them.`
+    : kind === "scores"
+      ? t`The rankings are here, but this country was added recently. New plays will start showing up once players submit them.`
+      : t`Try a wider range or check back later.`;
 
   return (
     <div className={`mx-auto max-w-md text-center ${compact ? "px-4 py-6" : "px-4 py-16"}`}>
       {eyebrow ? (
         <div className="text-xs font-semibold text-osu-l2">{eyebrow}</div>
       ) : null}
-      <div className="mt-1 text-sm font-bold text-white">{copy.title}</div>
+      <div className="mt-1 text-sm font-bold text-white">{title}</div>
       <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">{body}</p>
     </div>
   );

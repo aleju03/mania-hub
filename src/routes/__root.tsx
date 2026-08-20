@@ -30,6 +30,20 @@ import {
   resolveDetectedCountry,
   resolveInitialCountry,
 } from "../lib/country-cookie";
+import {
+  LOCALE_COOKIE_MAX_AGE_SECONDS,
+  LOCALE_COOKIE_NAME,
+  parseLocaleCookieHeader,
+  readLocaleCookieClient,
+  resolveLocaleFromAcceptLanguage,
+} from "../lib/locale-cookie";
+import { DEFAULT_LOCALE, normalizeLocale } from "../lib/locale";
+import type { AppLocale } from "../lib/locale";
+import { LocaleContext, useLocale } from "../lib/locale-context";
+import { getI18n } from "../lib/i18n";
+import { I18nProvider } from "@lingui/react";
+import { Trans } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 import { AnalyticsProvider } from "../lib/analytics-provider";
 import { track } from "../lib/analytics";
 import { getCanonicalOrigin } from "../lib/origin";
@@ -117,6 +131,26 @@ const getInitialCountry = createServerFn({ method: "GET" }).handler(async () => 
   return resolved;
 });
 
+// The UI language. The cookie is the single source of truth; a first visit
+// with no cookie detects from Accept-Language and writes the cookie, so the
+// detection result is pinned and every later request (and the CDN, which
+// varies on Cookie) sees an explicit value. That first no-cookie response is
+// never publicly cached (start.ts), which is what keeps Accept-Language out
+// of the cache key.
+const getInitialLocale = createServerFn({ method: "GET" }).handler(() => {
+  const headers = getRequest().headers;
+  const cookieLocale = parseLocaleCookieHeader(headers.get("cookie"));
+  if (cookieLocale) return cookieLocale;
+
+  const resolved = resolveLocaleFromAcceptLanguage(headers.get("accept-language"));
+  setCookie(LOCALE_COOKIE_NAME, resolved, {
+    path: "/",
+    maxAge: LOCALE_COOKIE_MAX_AGE_SECONDS,
+    sameSite: "lax",
+  });
+  return resolved;
+});
+
 type RootSlowContext = {
   auth: AuthState;
   backendStatus: LiveBackendStatus;
@@ -126,6 +160,7 @@ type RootSlowContext = {
 type RootRouteContext = RootSlowContext & {
   initialCountry: string;
   origin: string;
+  locale: AppLocale;
 };
 
 const CLIENT_ROOT_CONTEXT_TTL_MS = 60_000;
@@ -315,31 +350,44 @@ function resolveClientInitialCountry(context: RootSlowContext): string {
   });
 }
 
+// The locale is recomputable client-side from the cookie the server set. The
+// html lang fallback covers cookies-disabled visitors: the server rendered
+// that attribute from its own resolution, so trusting it keeps both sides in
+// agreement without touching navigator.language (which may differ and would
+// hydrate a mismatch).
+function resolveClientLocale(): AppLocale {
+  return readLocaleCookieClient() ?? normalizeLocale(document.documentElement.lang) ?? DEFAULT_LOCALE;
+}
+
 function getClientRootContext(): RootRouteContext | Promise<RootRouteContext> {
   const origin = window.location.origin;
+  const locale = resolveClientLocale();
   const slowContext = consumeDehydratedRootSlowContext() ?? readClientRootSlowContext();
 
   if (isPromiseLike(slowContext)) {
     return slowContext.then((context) => ({
       initialCountry: resolveClientInitialCountry(context),
       origin,
+      locale,
       ...context,
     }));
   }
 
-  return { initialCountry: resolveClientInitialCountry(slowContext), origin, ...slowContext };
+  return { initialCountry: resolveClientInitialCountry(slowContext), origin, locale, ...slowContext };
 }
 
 async function getServerRootContext(): Promise<RootRouteContext> {
-  const [initialCountry, origin, auth, bootstrap] = await Promise.all([
+  const [initialCountry, origin, auth, bootstrap, locale] = await Promise.all([
     getInitialCountry(),
     getRequestOrigin(),
     getCurrentAuth(),
     fetchLiveBackendBootstrap(),
+    getInitialLocale(),
   ]);
   return {
     initialCountry,
     origin,
+    locale,
     auth: normalizeAuth(auth),
     backendStatus: bootstrap.status,
     countryFeatures: bootstrap.countryFeatures,
@@ -394,6 +442,10 @@ function RootErrorComponent({ error }: { error: Error }) {
   const chunkLoadError = isChunkLoadError(error);
   const staleRouteError = !chunkLoadError && isStaleRouteModuleError(error);
   const staleBuildError = chunkLoadError || staleRouteError;
+  // Not useLingui(): this can render outside RootLayout's I18nProvider (the
+  // error may be the provider tree failing), and the error page must never
+  // throw. useLocale defaults to en without a provider; getI18n always works.
+  const i = getI18n(useLocale());
 
   useEffect(() => {
     const autoReloading = import.meta.env.PROD && staleBuildError && recoverFromChunkLoadError(error, true);
@@ -410,11 +462,11 @@ function RootErrorComponent({ error }: { error: Error }) {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 py-24 text-center">
-      <div className="text-5xl font-bold text-white">Something broke</div>
+      <div className="text-5xl font-bold text-white">{i._(msg`Something broke`)}</div>
       <div className="max-w-md text-sm text-osu-f1">
         {staleBuildError
-          ? "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
-          : "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."}
+          ? i._(msg`A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset.`)
+          : i._(msg`The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions.`)}
       </div>
       <div className="flex items-center gap-2">
         <button
@@ -426,14 +478,14 @@ function RootErrorComponent({ error }: { error: Error }) {
           }}
           className="rounded-md bg-osu-pink/20 px-4 py-2 text-xs font-semibold text-white hover:bg-osu-pink/30 transition-colors"
         >
-          Reload page
+          {i._(msg`Reload page`)}
         </button>
         <Link
           to="/"
           search={{ country: undefined }}
           className="rounded-md px-4 py-2 text-xs font-semibold text-osu-f1 hover:text-white transition-colors"
         >
-          Go home
+          {i._(msg`Go home`)}
         </Link>
       </div>
       {import.meta.env.DEV && error?.message ? (
@@ -446,16 +498,18 @@ function RootErrorComponent({ error }: { error: Error }) {
 }
 
 function NotFoundPage() {
+  // getI18n rather than useLingui for the same reason as RootErrorComponent.
+  const i = getI18n(useLocale());
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 py-24 text-center">
       <div className="text-5xl font-bold text-white">404</div>
-      <div className="text-sm text-osu-f1">This page doesn't exist.</div>
+      <div className="text-sm text-osu-f1">{i._(msg`This page doesn't exist.`)}</div>
       <Link
         to="/"
         search={{ country: undefined }}
         className="rounded-md bg-osu-pink/20 px-4 py-2 text-xs font-semibold text-white hover:bg-osu-pink/30 transition-colors"
       >
-        Go home
+        {i._(msg`Go home`)}
       </Link>
     </div>
   );
@@ -564,7 +618,7 @@ function ChangelogFooterLink() {
         }}
         className="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-osu-pink-light/60"
       >
-        changelog
+        <Trans>changelog</Trans>
       </button>
       <ChangelogModal open={open} onClose={() => setOpen(false)} />
     </>
@@ -572,11 +626,13 @@ function ChangelogFooterLink() {
 }
 
 function RootLayout() {
-  const { auth: rawAuth, initialCountry, backendStatus, countryFeatures } = Route.useRouteContext();
+  const { auth: rawAuth, initialCountry, backendStatus, countryFeatures, locale } = Route.useRouteContext();
   const auth = normalizeAuth(rawAuth);
   seedClientRootSlowContext({ auth, backendStatus, countryFeatures });
   seedCountryTierCache(countryFeatures?.countries);
   return (
+    <LocaleContext.Provider value={locale}>
+    <I18nProvider i18n={getI18n(locale)}>
     <InitialCountryContext.Provider value={initialCountry}>
       <AuthContext.Provider value={auth}>
         <AnalyticsProvider>
@@ -604,17 +660,17 @@ function RootLayout() {
             <KofiSupportButton />
             <span>·</span>
             <Link to="/privacy" className="hover:text-osu-pink-light/60 transition-colors">
-              privacy
+              <Trans>privacy</Trans>
             </Link>
             <span>·</span>
             <Link to="/terms" className="hover:text-osu-pink-light/60 transition-colors">
-              terms
+              <Trans>terms</Trans>
             </Link>
             <span>·</span>
             <ChangelogFooterLink />
             <span>·</span>
             <span>
-              made by{" "}
+              <Trans>made by</Trans>{" "}
               <a
                 href="https://osu.ppy.sh/users/7095193"
                 target="_blank"
@@ -628,6 +684,8 @@ function RootLayout() {
         </AnalyticsProvider>
       </AuthContext.Provider>
     </InitialCountryContext.Provider>
+    </I18nProvider>
+    </LocaleContext.Provider>
   );
 }
 
@@ -679,10 +737,12 @@ function WindowActivityAttribute() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const { origin, auth, backendStatus, countryFeatures } = Route.useRouteContext();
+  const { origin, auth, backendStatus, countryFeatures, locale } = Route.useRouteContext();
   const jsonLd = websiteJsonLd(origin);
   return (
-    <html lang="en" suppressHydrationWarning>
+    // lang doubles as the cookies-disabled locale fallback: the client reads
+    // it back in resolveClientLocale when document.cookie yields nothing.
+    <html lang={locale} suppressHydrationWarning>
       <head>
         <HeadContent />
         {jsonLd && (

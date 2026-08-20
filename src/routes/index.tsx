@@ -1,5 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 import { motion } from "framer-motion";
 import { getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -22,6 +24,7 @@ import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore, CountryTopPlay, LeanRankingEntry } from "../lib/types";
 import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { DEFAULT_DESCRIPTION, pageSeo } from "../lib/seo";
+import { getI18n } from "../lib/i18n";
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
@@ -45,6 +48,11 @@ async function withHomeLoaderBudget<T>(snapshotPromise: Promise<T>): Promise<T |
     timeoutPromise,
   ]);
 }
+
+// Keyword title: searches are "osu mania tracker" and "o!mania" alone
+// doesn't string-match "osu mania", so spell it out before the brand.
+const HOME_SEO_TITLE = "osu!mania rankings & live score tracker";
+const HOME_SEO_TITLE_MSG = msg`osu!mania rankings & live score tracker`;
 
 type HomeLoaderData = {
   scope: string;
@@ -88,15 +96,15 @@ export const Route = createFileRoute("/")({
   head: ({ match }) => {
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
+    const i18n = getI18n(match.context.locale);
     return pageSeo({
-      // Keyword title: searches are "osu mania tracker" and "o!mania" alone
-      // doesn't string-match "osu mania", so spell it out before the brand.
-      title: "osu!mania rankings & live score tracker",
+      title: i18n._(HOME_SEO_TITLE_MSG),
       description: countryName
-        ? `Top osu!mania players, live scores, and pp records in ${countryName}`
+        ? i18n._(msg`Top osu!mania players, live scores, and pp records in ${countryName}`)
         : DEFAULT_DESCRIPTION,
       path: withSearchParams("/", { country }),
       origin: match.context.origin,
+      imageTitle: HOME_SEO_TITLE,
       imageCountry: country,
       imageKind: country ? "home" : undefined,
       social: true,
@@ -342,6 +350,7 @@ function selectFeaturedHomePopoffs(popoffs: LeanHomePopoff[], limit = 3): LeanHo
 }
 
 function HomePage() {
+  const { t } = useLingui();
   const navigate = useNavigate();
   const { country } = Route.useSearch();
   const loaderData = Route.useLoaderData();
@@ -428,7 +437,7 @@ function HomePage() {
       })
       .catch(() => {
         if (cancelled || rankings) return;
-        setRankingsError(`Couldn't load the ${countryName} rankings right now.`);
+        setRankingsError(t`Couldn't load the ${countryName} rankings right now.`);
         setLoadingScores(false);
         setLoadingPopoffs(false);
       });
@@ -680,7 +689,7 @@ function HomePage() {
         <div className="max-w-[1200px] mx-auto text-center">
           <div className="flex items-center justify-center gap-3">
             <span className="mode-icon text-osu-pink text-3xl sm:text-5xl">{"\ue802"}</span>
-            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">{selectedIsGlobal ? "Global" : selectedIsRegion ? countryName : selectedCountry}</span></h1>
+            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">{selectedIsGlobal ? <Trans>Global</Trans> : selectedIsRegion ? countryName : selectedCountry}</span></h1>
           </div>
         </div>
       </section>
@@ -692,8 +701,8 @@ function HomePage() {
         {/* Country Top players (or Global note) */}
         <section className="min-w-0 bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">{boardScope ? "Top players" : "Rankings"}</h2>
-            <Link to="/rankings" search={{ page: 1, country: selectedCountry }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">{boardScope ? <Trans>Top players</Trans> : <Trans>Rankings</Trans>}</h2>
+            <Link to="/rankings" search={{ page: 1, country: selectedCountry }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors"><Trans>view all</Trans></Link>
           </div>
           {boardScope ? (
             <div className="divide-y divide-osu-b3/15">
@@ -720,7 +729,7 @@ function HomePage() {
                   </div>
                 </>
               ) : (
-                <div className="px-4 py-6 text-center text-xs text-osu-f1">No ranked players yet.</div>
+                <div className="px-4 py-6 text-center text-xs text-osu-f1"><Trans>No ranked players yet.</Trans></div>
               )}
             </div>
           ) : (
@@ -790,13 +799,13 @@ function HomePage() {
         {/* Recent Top Plays - featured */}
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Top Plays</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1"><Trans>Recent Top Plays</Trans></h2>
             <Link
               to="/top-plays"
               search={{ range: homeTopPlaysRange, country: selectedCountry, sort: "recent", dir: "desc", keys: "all" }}
               className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors"
             >
-              view all
+              <Trans>view all</Trans>
             </Link>
           </div>
           {loadingPopoffs ? (
@@ -875,7 +884,7 @@ function HomePage() {
             liveBackendEnabled && rankings ? (
               <LiveDataEmptyState country={selectedCountry} kind="top-plays" compact />
             ) : (
-              <div className="px-4 py-6 text-center text-xs text-osu-f1">No recent top plays</div>
+              <div className="px-4 py-6 text-center text-xs text-osu-f1"><Trans>No recent top plays</Trans></div>
             )
           )}
         </section>
@@ -883,8 +892,8 @@ function HomePage() {
         {/* Recent Scores */}
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:flex-1">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Scores</h2>
-            <Link to="/tracker" search={{ country: selectedCountry, page: undefined }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1"><Trans>Recent Scores</Trans></h2>
+            <Link to="/tracker" search={{ country: selectedCountry, page: undefined }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors"><Trans>view all</Trans></Link>
           </div>
           <div className="divide-y divide-osu-b3/15">
             {loadingScores && displayedRecentScores.length === 0 ? (
@@ -906,12 +915,14 @@ function HomePage() {
                   <Avatar url={s.user.avatar_url} size={26} />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs truncate">
-                      <UsernameText
-                        username={s.user.username}
-                        avatarUrl={s.user.avatar_url}
-                        className="font-medium"
-                      />{" "}
-                      <span className="text-osu-f1">on</span> {s.title}
+                      <Trans>
+                        <UsernameText
+                          username={s.user.username}
+                          avatarUrl={s.user.avatar_url}
+                          className="font-medium"
+                        />{" "}
+                        <span className="text-osu-f1">on</span> {s.title}
+                      </Trans>
                     </div>
                     <div className="mt-0.5 text-[10px] text-osu-f1 min-w-0 truncate">
                         [{s.version}] {s.keymodeLabel || (s.keyCount > 0 ? `${s.keyCount}K` : "")} &middot; {formatTimeAgo(s.timestamp)}
@@ -934,7 +945,7 @@ function HomePage() {
               liveBackendEnabled && rankings ? (
                 <LiveDataEmptyState country={selectedCountry} kind="scores" compact />
               ) : (
-                <div className="px-4 py-6 text-center text-xs text-osu-f1">No recent scores</div>
+                <div className="px-4 py-6 text-center text-xs text-osu-f1"><Trans>No recent scores</Trans></div>
               )
             )}
           </div>

@@ -1,6 +1,9 @@
 import { createFileRoute, Link, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import type { MouseEvent } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { getI18n } from "../lib/i18n";
 import { getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
@@ -30,8 +33,8 @@ const GLOBAL_RANKINGS_PAGE_SIZE = 50;
 // backend has no week-old snapshot for them, so the hover carries the
 // difference. A country only starts answering once it has been tracked for a
 // week, and a player added to a roster mid-week waits out the rest of it.
-const NO_DELTA_TITLE = "No rank data from 7 days ago yet";
-const NO_CHANGE_TITLE = "No change in the last 7 days";
+const NO_DELTA_TITLE = msg`No rank data from 7 days ago yet`;
+const NO_CHANGE_TITLE = msg`No change in the last 7 days`;
 
 // Without stripping the default page, page=1 gets serialized into the URL
 // and /rankings 307-redirects to /rankings?page=1, which breaks crawling
@@ -60,11 +63,6 @@ function formatKnownCount(value: number | null | undefined): string {
   return value != null && Number.isFinite(value) ? formatNumber(value) : "-";
 }
 
-function formatKnownPlayCount(value: number | null | undefined): string {
-  const formatted = formatKnownCount(value);
-  return formatted === "-" ? formatted : `${formatted} plays`;
-}
-
 function getGlobalGradeTotal(
   counts: LiveGlobalRankingEntry["grade_counts"],
   keys: Array<keyof LiveGlobalGradeCounts>,
@@ -91,21 +89,24 @@ export const Route = createFileRoute("/rankings")({
   head: ({ match }) => {
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
+    const i18n = getI18n(match.context.locale);
     return pageSeo({
-      title: countryName ? `${countryName} mania rankings` : "Country mania rankings",
+      title: countryName ? i18n._(msg`${countryName} mania rankings`) : i18n._(msg`Country mania rankings`),
       description: countryName
-        ? `Top osu!mania players in ${countryName}`
-        : "osu!mania country rankings",
+        ? i18n._(msg`Top osu!mania players in ${countryName}`)
+        : i18n._(msg`osu!mania country rankings`),
       path: withSearchParams("/rankings", { page: (match.search.page ?? 1) > 1 ? match.search.page : undefined, country }),
       origin: match.context.origin,
       imageCountry: country,
       imageKind: "rankings",
+      imageTitle: countryName ? `${countryName} mania rankings` : "Country mania rankings",
     });
   },
   component: RankingsPage,
 });
 
 function RankingsPage() {
+  const { t, i18n } = useLingui();
   const { page = 1, country } = Route.useSearch();
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
@@ -242,7 +243,7 @@ function RankingsPage() {
       })
       .catch(() => {
         if (cancelled || pageData) return;
-        setError(`Couldn't load the ${countryName} rankings right now.`);
+        setError(t`Couldn't load the ${countryName} rankings right now.`);
       })
       .finally(() => {
         if (cancelled) return;
@@ -395,10 +396,10 @@ function RankingsPage() {
       <div className="flex-1">
         <PageHeader
           iconSrc="/images/icons/rankings.svg"
-          title={selectedIsGlobal ? "Global mania rankings" : `${countryName} mania rankings`}
+          title={selectedIsGlobal ? t`Global mania rankings` : t`${countryName} mania rankings`}
           right={
             globalRankingsTotal > 0 ? (
-              <span className="text-[10px] text-osu-f1">{formatNumber(globalRankingsTotal)} tracked players</span>
+              <span className="text-[10px] text-osu-f1"><Trans>{formatNumber(globalRankingsTotal)} tracked players</Trans></span>
             ) : null
           }
         />
@@ -408,11 +409,11 @@ function RankingsPage() {
             <div className="flex items-center gap-1.5 pb-3 overflow-x-auto scrollbar-hide">
               {([
                 { field: "rank" as SortField, label: "#" },
-                { field: "player" as SortField, label: "Player" },
-                { field: "7d" as SortField, label: "7d" },
-                { field: "cr7d" as SortField, label: "7d Country" },
-                { field: "accuracy" as SortField, label: "Acc" },
-                { field: "playcount" as SortField, label: "Plays" },
+                { field: "player" as SortField, label: t`Player` },
+                { field: "7d" as SortField, label: t`7d` },
+                { field: "cr7d" as SortField, label: t`7d Country` },
+                { field: "accuracy" as SortField, label: t`Acc` },
+                { field: "playcount" as SortField, label: t`Plays` },
               ]).map(({ field, label }) => {
                 const active = sortBy === field;
                 return (
@@ -474,8 +475,10 @@ function RankingsPage() {
                 visibleGlobalRankings.map(({ entry, originalRank }) => {
                   const sortedValue = (() => {
                     switch (sortBy) {
-                      case "playcount":
-                        return <>{formatKnownPlayCount(entry.play_count)}</>;
+                      case "playcount": {
+                        const plays = formatKnownCount(entry.play_count);
+                        return plays === "-" ? <>{plays}</> : <Trans>{plays} plays</Trans>;
+                      }
                       case "accuracy":
                         return <>{formatKnownAccuracy(entry.hit_accuracy)}</>;
                       case "ss":
@@ -519,7 +522,7 @@ function RankingsPage() {
                           </div>
                           <div className="flex items-center gap-3 mt-0.5 text-[11px] text-osu-f1">
                             <span>{formatKnownAccuracy(entry.hit_accuracy)}</span>
-                            <RankDeltaLabel label="7d" change={entry.global_change} />
+                            <RankDeltaLabel label={t`7d`} change={entry.global_change} />
                             <RankDeltaLabel label={entry.user.country_code} change={entry.country_change} />
                           </div>
                         </div>
@@ -529,7 +532,7 @@ function RankingsPage() {
                   );
                 })
               ) : (
-                <div className="px-4 py-10 text-center text-xs text-osu-f1">No ranked players yet.</div>
+                <div className="px-4 py-10 text-center text-xs text-osu-f1"><Trans>No ranked players yet.</Trans></div>
               )}
             </div>
             </div>
@@ -551,11 +554,11 @@ function RankingsPage() {
                 <thead>
                   <tr className="bg-osu-b4 text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
                     <th className="py-2.5 px-3 text-left w-12">#</th>
-                    <SortableHeader field="player" label="Player" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="left" />
-                    <SortableHeader field="7d" label="7d Global" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-32" />
-                    <SortableHeader field="cr7d" label="7d Country" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-24" />
-                    <SortableHeader field="accuracy" label="Accuracy" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
-                    <SortableHeader field="playcount" label="Play Count" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
+                    <SortableHeader field="player" label={t`Player`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="left" />
+                    <SortableHeader field="7d" label={t`7d Global`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-32" />
+                    <SortableHeader field="cr7d" label={t`7d Country`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-24" />
+                    <SortableHeader field="accuracy" label={t`Accuracy`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
+                    <SortableHeader field="playcount" label={t`Play Count`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                     <th className="py-2.5 px-3 text-right">PP</th>
                     <SortableGradeHeader field="ss" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
                       img="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" />
@@ -621,7 +624,7 @@ function RankingsPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={10} className="px-4 py-10 text-center text-xs text-osu-f1">No ranked players yet.</td>
+                      <td colSpan={10} className="px-4 py-10 text-center text-xs text-osu-f1"><Trans>No ranked players yet.</Trans></td>
                     </tr>
                   )}
                 </tbody>
@@ -647,12 +650,12 @@ function RankingsPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title={`${countryName} mania rankings`}
+        title={t`${countryName} mania rankings`}
         right={
           <>
-            {!pageData && rankingsLoading && !error && <span className="text-[10px] text-osu-f1">Loading rankings...</span>}
+            {!pageData && rankingsLoading && !error && <span className="text-[10px] text-osu-f1"><Trans>Loading rankings...</Trans></span>}
             {pageData && deltasLoading && (
-              <span className="text-[10px] text-osu-f1">Checking 7d changes...</span>
+              <span className="text-[10px] text-osu-f1"><Trans>Checking 7d changes...</Trans></span>
             )}
           </>
         }
@@ -668,12 +671,12 @@ function RankingsPage() {
           <div className="flex items-center gap-1.5 pb-3 overflow-x-auto scrollbar-hide">
             {([
               { field: "rank" as SortField, label: "#" },
-              { field: "player" as SortField, label: "Player" },
+              { field: "player" as SortField, label: t`Player` },
               { field: "pp" as SortField, label: "PP" },
-              { field: "accuracy" as SortField, label: "Acc" },
-              { field: "7d" as SortField, label: "7d" },
+              { field: "accuracy" as SortField, label: t`Acc` },
+              { field: "7d" as SortField, label: t`7d` },
               { field: "cr7d" as SortField, label: selectedCountry },
-              { field: "playcount" as SortField, label: "Plays" },
+              { field: "playcount" as SortField, label: t`Plays` },
             ]).map(({ field, label }) => {
               const active = sortBy === field;
               return (
@@ -730,7 +733,7 @@ function RankingsPage() {
                 const sortedValue = (() => {
                   switch (sortBy) {
                     case "playcount":
-                      return <>{formatNumber(entry.play_count)} plays</>;
+                      return <Trans>{formatNumber(entry.play_count)} plays</Trans>;
                     case "accuracy":
                       return <>{formatAccuracy(entry.hit_accuracy / 100)}</>;
                     case "ss":
@@ -764,7 +767,7 @@ function RankingsPage() {
                               {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
                             </span>
                           ) : (
-                            <span title={globalChange === null ? NO_DELTA_TITLE : NO_CHANGE_TITLE}>7d -</span>
+                            <span title={globalChange === null ? i18n._(NO_DELTA_TITLE) : i18n._(NO_CHANGE_TITLE)}><Trans>7d -</Trans></span>
                           )
                         )}
                         {sortBy === "cr7d" && (
@@ -773,7 +776,7 @@ function RankingsPage() {
                               {selectedCountry} {crChange > 0 ? `+${crChange}` : crChange}
                             </span>
                           ) : (
-                            <span title={crChange === null ? NO_DELTA_TITLE : NO_CHANGE_TITLE}>{selectedCountry} -</span>
+                            <span title={crChange === null ? i18n._(NO_DELTA_TITLE) : i18n._(NO_CHANGE_TITLE)}>{selectedCountry} -</span>
                           )
                         )}
                       </div>
@@ -853,11 +856,11 @@ function RankingsPage() {
               <thead>
                 <tr className="bg-osu-b4 text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
                   <th className="py-2.5 px-3 text-left w-12">#</th>
-                  <SortableHeader field="player" label="Player" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="left" />
-                  <SortableHeader field="7d" label="7d Global" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-32" />
-                  <SortableHeader field="cr7d" label={`7d ${selectedCountry}`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-16" />
-                  <SortableHeader field="accuracy" label="Accuracy" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
-                  <SortableHeader field="playcount" label="Play Count" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
+                  <SortableHeader field="player" label={t`Player`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="left" />
+                  <SortableHeader field="7d" label={t`7d Global`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-32" />
+                  <SortableHeader field="cr7d" label={t`7d ${selectedCountry}`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-16" />
+                  <SortableHeader field="accuracy" label={t`Accuracy`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
+                  <SortableHeader field="playcount" label={t`Play Count`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                   <SortableHeader field="pp" label="PP" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                   <SortableGradeHeader field="ss" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
                     img="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" />
@@ -951,14 +954,14 @@ function RankingsPage() {
                 disabled={page === 1}
                 className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
-                Page 1
+                <Trans>Page 1</Trans>
               </button>
               <button
                 onClick={() => navigate({ to: "/rankings", search: { page: 2, country: selectedCountry } })}
                 disabled={page === 2}
                 className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
-                Next Page
+                <Trans>Next Page</Trans>
               </button>
             </div>
           )}
@@ -970,6 +973,7 @@ function RankingsPage() {
 }
 
 function GlobalRankCell({ rankChange, loaded }: { rankChange: number | null; loaded: boolean }) {
+  const { i18n } = useLingui();
   if (!loaded) {
     return <div className="flex items-center justify-center"><Skeleton className="w-20 h-4" /></div>;
   }
@@ -980,19 +984,20 @@ function GlobalRankCell({ rankChange, loaded }: { rankChange: number | null; loa
           {rankChange > 0 ? `+${formatNumber(rankChange)}` : formatNumber(rankChange)}
         </span>
       ) : (
-        <span className="text-[11px] text-osu-f1" title={rankChange === null ? NO_DELTA_TITLE : NO_CHANGE_TITLE}>-</span>
+        <span className="text-[11px] text-osu-f1" title={rankChange === null ? i18n._(NO_DELTA_TITLE) : i18n._(NO_CHANGE_TITLE)}>-</span>
       )}
     </div>
   );
 }
 
 function CRRankCell({ change, loaded }: { change: number | null; loaded: boolean }) {
+  const { i18n } = useLingui();
   if (!loaded) {
     return <div className="flex items-center justify-center"><Skeleton className="w-8 h-4" /></div>;
   }
   if (change === null || change === 0) {
     return (
-      <div className="text-center text-[11px] text-osu-f1" title={change === null ? NO_DELTA_TITLE : NO_CHANGE_TITLE}>-</div>
+      <div className="text-center text-[11px] text-osu-f1" title={change === null ? i18n._(NO_DELTA_TITLE) : i18n._(NO_CHANGE_TITLE)}>-</div>
     );
   }
   return (
@@ -1003,8 +1008,9 @@ function CRRankCell({ change, loaded }: { change: number | null; loaded: boolean
 }
 
 function RankDeltaLabel({ label, change }: { label: string; change: number | null }) {
+  const { i18n } = useLingui();
   if (change === null || change === 0) {
-    return <span title={change === null ? NO_DELTA_TITLE : NO_CHANGE_TITLE}>{label} -</span>;
+    return <span title={change === null ? i18n._(NO_DELTA_TITLE) : i18n._(NO_CHANGE_TITLE)}>{label} -</span>;
   }
   return (
     <span className={`font-semibold ${change > 0 ? "text-osu-green" : "text-osu-red"}`}>

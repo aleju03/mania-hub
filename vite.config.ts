@@ -112,7 +112,10 @@ const config = defineConfig({
     tailwindcss(),
     tanstackStart(),
     nitro(),
-    viteReact(),
+    // The lingui macro must run wherever this babel pass runs; vitest.config.ts
+    // (which deliberately does not load this file) declares it too, so the two
+    // lists have to move together.
+    viteReact({ babel: { plugins: ["@lingui/babel-plugin-lingui-macro"] } }),
   ],
 })
 

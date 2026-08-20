@@ -1,6 +1,8 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { LiveTopPlaysPpGain } from "../../lib/live-backend";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../lib/i18n";
 import { PpGainsRail } from "./PpGainsRail";
 
 function players(count: number): LiveTopPlaysPpGain[] {
@@ -14,8 +16,12 @@ function players(count: number): LiveTopPlaysPpGain[] {
 
 describe("PpGainsRail", () => {
   it("only mounts the visible windows for a large global leaderboard", () => {
+    // The rail uses <Trans>, which throws without a provider; en resolves to
+    // the source strings, matching what this test asserts on.
     const html = renderToString(
-      <PpGainsRail players={players(500)} selectedPlayerIds={[]} onTogglePlayer={vi.fn()} />,
+      <I18nProvider i18n={getI18n("en")}>
+        <PpGainsRail players={players(500)} selectedPlayerIds={[]} onTogglePlayer={vi.fn()} />
+      </I18nProvider>,
     );
 
     const renderedButtons = html.match(/<button/g)?.length ?? 0;

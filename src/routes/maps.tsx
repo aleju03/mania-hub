@@ -1,4 +1,6 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
+import { Trans, Plural, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
@@ -52,6 +54,7 @@ import type {
 import type { ManiaBeatmap, ManiaNote, ManiaScrollVelocity } from "../lib/beatmap-parser";
 import { useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
+import { getI18n } from "../lib/i18n";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getBeatmapAudioUrl, getPreviewAudioProxyUrl } from "../lib/audio-url";
 import { getPreviewAnalyser, releasePreviewAnalyser } from "../lib/preview-analyser";
@@ -131,18 +134,18 @@ type PpFilter = number;
 type ModFilter = "all" | "dt" | "ht" | "nm";
 
 // Sort vocabularies for the browse tabs' "Sort by" row and mobile dropdown.
-const FARMED_SORT_OPTIONS: SortOption[] = [
-  { id: "players", label: "Players" },
-  { id: "avg-pp", label: "Avg PP" },
-  { id: "max-pp", label: "Max PP" },
-  { id: "stars", label: "Stars" },
-  { id: "recent", label: "Recent plays" },
+const FARMED_SORT_OPTIONS = [
+  { id: "players", label: msg`Players` },
+  { id: "avg-pp", label: msg`Avg PP` },
+  { id: "max-pp", label: msg`Max PP` },
+  { id: "stars", label: msg`Stars` },
+  { id: "recent", label: msg`Recent plays` },
 ];
-const POPULAR_SORT_OPTIONS: SortOption[] = [
-  { id: "players", label: "Players" },
-  { id: "plays", label: "Plays" },
-  { id: "stars", label: "Stars" },
-  { id: "length", label: "Length" },
+const POPULAR_SORT_OPTIONS = [
+  { id: "players", label: msg`Players` },
+  { id: "plays", label: msg`Plays` },
+  { id: "stars", label: msg`Stars` },
+  { id: "length", label: msg`Length` },
 ];
 
 type MapsSearch = {
@@ -362,13 +365,13 @@ function writeRandomPickSettings(patch: Partial<RandomPickSettings>): void {
   }
 }
 
-function formatLiveMapsProgress(progress: LiveMapsRefreshProgress): string {
+function formatLiveMapsProgress(progress: LiveMapsRefreshProgress, i18n: ReturnType<typeof getI18n>): string {
   const percent = Math.max(0, Math.min(100, Math.round(progress.percent)));
-  if (progress.status === "queued") return "Loading maps...";
-  if (progress.status === "failed") return "Maps build failed.";
-  if (progress.stage === "done" || progress.status === "done") return "Maps ready.";
-  const message = progress.message || (progress.stage === "persisting" ? "Saving maps..." : "Building maps...");
-  return `${message} (${percent}%)`;
+  if (progress.status === "queued") return i18n._(msg`Loading maps...`);
+  if (progress.status === "failed") return i18n._(msg`Maps build failed.`);
+  if (progress.stage === "done" || progress.status === "done") return i18n._(msg`Maps ready.`);
+  const message = progress.message || (progress.stage === "persisting" ? i18n._(msg`Saving maps...`) : i18n._(msg`Building maps...`));
+  return i18n._(msg`${message} (${percent}%)`);
 }
 
 const RANDOM_STAR_MIN = 2;
@@ -589,16 +592,17 @@ async function seekAudioElement(
 
 export const Route = createFileRoute("/maps")({
   head: ({ match }) => {
+    const i18n = getI18n(match.context.locale);
     // Search + collections are global catalog views with their own OG
     // cards; the country-scoped lenses share the country mosaic below.
     const tab = match.search.tab;
     if (tab === "search" || tab === "collections") {
       const isSearch = tab === "search";
       return pageSeo({
-        title: isSearch ? "Map search" : "Map collections",
+        title: isSearch ? i18n._(msg`Map search`) : i18n._(msg`Map collections`),
         description: isSearch
-          ? "Search every ranked osu!mania map by title, keymode, stars, and status."
-          : "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD.",
+          ? i18n._(msg`Search every ranked osu!mania map by title, keymode, stars, and status.`)
+          : i18n._(msg`Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD.`),
         // Search is the default tab and its default search param is stripped
         // from the visible URL, so keep the canonical aligned with /maps.
         path: isSearch ? "/maps" : withSearchParams("/maps", { tab }),
@@ -609,10 +613,10 @@ export const Route = createFileRoute("/maps")({
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
     return pageSeo({
-      title: countryName ? `Beatmaps played in ${countryName}` : "Beatmaps played by your country",
+      title: countryName ? i18n._(msg`Beatmaps played in ${countryName}`) : i18n._(msg`Beatmaps played by your country`),
       description: countryName
-        ? `osu!mania maps played by top players in ${countryName}.`
-        : "osu!mania maps played by top country players.",
+        ? i18n._(msg`osu!mania maps played by top players in ${countryName}.`)
+        : i18n._(msg`osu!mania maps played by top country players.`),
       path: withSearchParams("/maps", { country }),
       origin: match.context.origin,
       image: country ? mapsOgImagePath(country) : undefined,
@@ -697,6 +701,7 @@ export const Route = createFileRoute("/maps")({
 });
 
 function MapsPage() {
+  const { t, i18n } = useLingui();
   const navigate = useNavigate();
   const mapsSearch = Route.useSearch();
   const mapsSearchRef = useRef(mapsSearch);
@@ -789,15 +794,21 @@ function MapsPage() {
   const totalRandomActive = triStateActive(randomStatus) + triStateActive(randomKey) + triStateActive(randomPattern) + (rStars > 0 || rStarsMax > 0 ? 1 : 0);
   const countryName = getCountryName(selectedCountry);
   // Header title tracks the active lens; search/collections keep "Mania maps".
-  const scopeSuffix = isGlobalScope(selectedCountry) ? "globally" : `in ${countryName}`;
-  const lensTitle =
-    tab === "popular"
-      ? `Most played ${scopeSuffix}`
+  const lensTitle = isGlobalScope(selectedCountry)
+    ? tab === "popular"
+      ? t`Most played globally`
       : tab === "favourites"
-        ? `Favourites ${scopeSuffix}`
+        ? t`Favourites globally`
         : tab === "random"
-          ? `Random picks ${scopeSuffix}`
-          : `Most farmed ${scopeSuffix}`;
+          ? t`Random picks globally`
+          : t`Most farmed globally`
+    : tab === "popular"
+      ? t`Most played in ${countryName}`
+      : tab === "favourites"
+        ? t`Favourites in ${countryName}`
+        : tab === "random"
+          ? t`Random picks in ${countryName}`
+          : t`Most farmed in ${countryName}`;
   const liveMapsBrowseTab = tab === "random" || isGlobalCatalogTab || selectedIsRegion ? null : (tab as LiveMapsBrowseTab);
   const liveMapsPageParams = useMemo(() => liveMapsBrowseTab ? {
     tab: liveMapsBrowseTab,
@@ -930,7 +941,7 @@ function MapsPage() {
           if (!cancelled) {
             setLoadingMaps(false);
             setLiveMapsProgress(null);
-            if (!cachedPage) setError("Couldn't load maps data. Try again later.");
+            if (!cachedPage) setError(t`Couldn't load maps data. Try again later.`);
           }
           if (!cancelled) setLiveMapsRefreshing(false);
         })
@@ -1048,8 +1059,8 @@ function MapsPage() {
   // share a segmented control. "random" draws from the favourites pool, so it
   // renders fused onto the Favourites segment (see the view bar below).
   const browseLenses: { id: Exclude<Tab, "favourites" | "random" | "search" | "collections">; label: string }[] = [
-    { id: "farmed", label: "Farmed" },
-    { id: "popular", label: "Most Played" },
+    { id: "farmed", label: t`Farmed` },
+    { id: "popular", label: t`Most Played` },
   ];
   const favouritesFamilyActive = tab === "favourites" || tab === "random";
 
@@ -1296,7 +1307,7 @@ function MapsPage() {
         setLiveMapsRefreshing(false);
         setLiveMapsProgress(null);
         // A failed refill leaves the visible pick alone; only a cold tab errors.
-        if (!event.hasValue) setError("Couldn't load maps data. Try again later.");
+        if (!event.hasValue) setError(t`Couldn't load maps data. Try again later.`);
         break;
     }
   }, []);
@@ -1364,7 +1375,14 @@ function MapsPage() {
   };
 
   // ── Browse-tab filters (shared by the desktop chip row and mobile sheet) ──
-  const browseSortOptions = tab === "farmed" ? FARMED_SORT_OPTIONS : tab === "popular" ? POPULAR_SORT_OPTIONS : [];
+  const browseSortOptions: SortOption[] = useMemo(
+    () =>
+      (tab === "farmed" ? FARMED_SORT_OPTIONS : tab === "popular" ? POPULAR_SORT_OPTIONS : []).map((option) => ({
+        id: option.id,
+        label: i18n._(option.label),
+      })),
+    [i18n, tab],
+  );
   const browseSortValue = tab === "farmed" ? farmedSort : beatmapSort;
   const setBrowseSort = (id: string) => {
     if (tab === "farmed") updateMapsSearch({ farmedSort: id as FarmedSort, page: 0 });
@@ -1375,7 +1393,7 @@ function MapsPage() {
     <>
       {tab === "random" && (
         <>
-          <ChipGroup label="Status">
+          <ChipGroup label={t`Status`}>
             {RANDOM_STATUS_OPTIONS.map((s) => (
               <TriStatePill
                 key={s}
@@ -1391,7 +1409,7 @@ function MapsPage() {
             ))}
           </ChipGroup>
 
-          <ChipGroup label="Keys">
+          <ChipGroup label={t`Keys`}>
             {RANDOM_KEY_OPTIONS.map((k) => (
               <TriStatePill
                 key={k}
@@ -1405,7 +1423,7 @@ function MapsPage() {
             ))}
           </ChipGroup>
 
-          <ChipGroup label="Tags">
+          <ChipGroup label={t`Tags`}>
             {RANDOM_PATTERN_OPTIONS.map((p) => (
               <TriStatePill
                 key={p}
@@ -1420,14 +1438,14 @@ function MapsPage() {
             ))}
           </ChipGroup>
 
-          <ChipGroup label="Difficulty">
+          <ChipGroup label={t`Difficulty`}>
             <StarRangePill
               lo={RANDOM_STAR_MIN}
               hi={RANDOM_STAR_MAX}
               min={rStars}
               max={rStarsMax}
               step={0.1}
-              ariaLabel="Star rating"
+              ariaLabel={t`Star rating`}
               onChange={(nextMin, nextMax) => updateMapsSearch({ rStars: nextMin, rStarsMax: nextMax })}
             />
           </ChipGroup>
@@ -1435,10 +1453,10 @@ function MapsPage() {
       )}
 
       {(tab === "farmed" || tab === "popular") && (
-        <ChipGroup label="Keys">
+        <ChipGroup label={t`Keys`}>
           {(["4k", "7k", "other"] as KeyFilter[]).map((k) => (
             <Chip key={k} active={keyFilter === k} onClick={() => updateMapsSearch({ key: keyFilter === k ? "all" : k, page: 0 })}>
-              {k === "other" ? "Other" : k.toUpperCase()}
+              {k === "other" ? t`Other` : k.toUpperCase()}
             </Chip>
           ))}
         </ChipGroup>
@@ -1446,26 +1464,26 @@ function MapsPage() {
 
       {tab === "farmed" && (
         <>
-          <ChipGroup label="Mods">
+          <ChipGroup label={t`Mods`}>
             {(["dt", "ht", "nm"] as ModFilter[]).map((m) => (
               <Chip key={m} active={modFilter === m} onClick={() => updateMapsSearch({ mod: modFilter === m ? "all" : m, page: 0 })}>
                 {m.toUpperCase()}
               </Chip>
             ))}
           </ChipGroup>
-          <ChipGroup label="Min PP">
+          <ChipGroup label={t`Min PP`}>
             <MinPpSlider value={ppFilter} onChange={(v) => updateMapsSearch({ pp: v, page: 0 })} />
           </ChipGroup>
         </>
       )}
 
       {tab === "favourites" && (
-        <ChipGroup label="Status">
+        <ChipGroup label={t`Status`}>
           {(["ranked", "loved", "graveyard", "other"] as const).map((s) => (
             <StatusChip
               key={s}
               id={s}
-              label={s === "other" ? "Other" : s.charAt(0).toUpperCase() + s.slice(1)}
+              label={s === "other" ? t`Other` : s.charAt(0).toUpperCase() + s.slice(1)}
               active={statusFilter === s}
               onClick={() => updateMapsSearch({ status: statusFilter === s ? "all" : s, page: 0 })}
             />
@@ -1510,21 +1528,21 @@ function MapsPage() {
     liveMapsProgress &&
     (liveMapsProgress.status === "queued" || liveMapsProgress.status === "running") &&
     (mapsFirstBuild || (!liveBackendPaged && loadingMaps && !randomDraw))
-      ? formatLiveMapsProgress(liveMapsProgress)
+      ? formatLiveMapsProgress(liveMapsProgress, i18n)
       : null;
   const liveMapsPageSliceLoading = liveBackendPaged && liveMapsPagePending && !mapsFirstBuild;
   const mapsLoadingLabel =
     liveMapsProgressLabel
       ?? (mapsFirstBuild
-        ? "Building maps..."
+        ? t`Building maps...`
         : liveMapsRefreshing && !liveMapsPageSliceLoading
-          ? "Refreshing maps..."
-          : "Loading maps...");
+          ? t`Refreshing maps...`
+          : t`Loading maps...`);
 
   if (!liveBackendEnabled) {
     return (
       <div className="flex-1">
-        <PageHeader iconSrc="/images/icons/rankings.svg" title={isGlobalCatalogTab ? "Mania maps" : lensTitle} />
+        <PageHeader iconSrc="/images/icons/rankings.svg" title={isGlobalCatalogTab ? t`Mania maps` : lensTitle} />
         <LiveBackendRequired />
       </div>
     );
@@ -1534,7 +1552,7 @@ function MapsPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title={isGlobalCatalogTab ? "Mania maps" : lensTitle}
+        title={isGlobalCatalogTab ? t`Mania maps` : lensTitle}
         right={isGlobalCatalogTab ? null : (
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {isLoading && !error && (
@@ -1547,9 +1565,11 @@ function MapsPage() {
             )}
             {showMapsSummary && mapsUpdatedAt && (
               <span className="text-[10px] text-osu-f1">
-                {tab === "random"
-                  ? `${formatNumber(randomPickCount)} possible picks · ${formatNumber(randomDraw?.uniqueSets ?? 0)} unique sets`
-                  : `${formatNumber(currentTotal)} maps`} &middot; updated {formatTimeAgo(mapsUpdatedAt)}
+                {tab === "random" ? (
+                  <Trans>{formatNumber(randomPickCount)} possible picks · {formatNumber(randomDraw?.uniqueSets ?? 0)} unique sets &middot; updated {formatTimeAgo(mapsUpdatedAt)}</Trans>
+                ) : (
+                  <Trans>{formatNumber(currentTotal)} maps &middot; updated {formatTimeAgo(mapsUpdatedAt)}</Trans>
+                )}
               </span>
             )}
             {canUseAdminFeatures && !isLoading && !error && (randomDraw || currentLiveMapsPage) && (
@@ -1582,7 +1602,7 @@ function MapsPage() {
               tab === "search" ? "text-osu-c1" : "text-osu-f1 hover:text-osu-l2"
             }`}
           >
-            search
+            <Trans>search</Trans>
             {tab === "search" && (
               <span aria-hidden="true" className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1" />
             )}
@@ -1595,7 +1615,7 @@ function MapsPage() {
               tab === "collections" ? "text-osu-c1" : "text-osu-f1 hover:text-osu-l2"
             }`}
           >
-            collections
+            <Trans>collections</Trans>
             {tab === "collections" && (
               <span aria-hidden="true" className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1" />
             )}
@@ -1635,7 +1655,7 @@ function MapsPage() {
                       : "text-osu-f1 hover:text-osu-l2"
                 }`}
               >
-                Favourites
+                <Trans>Favourites</Trans>
               </button>
               <span
                 aria-hidden="true"
@@ -1644,7 +1664,7 @@ function MapsPage() {
               <button
                 onClick={() => updateMapsSearch({ tab: "random", page: 0 })}
                 aria-pressed={tab === "random"}
-                title="Random picks from the favourites pool"
+                title={t`Random picks from the favourites pool`}
                 className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-medium whitespace-nowrap transition-colors duration-[120ms] cursor-pointer ${
                   tab === "random"
                     ? "text-osu-pink-light"
@@ -1654,7 +1674,7 @@ function MapsPage() {
                 }`}
               >
                 <Dices className="h-3 w-3" aria-hidden="true" />
-                Random
+                <Trans>Random</Trans>
               </button>
             </div>
           </div>
@@ -1685,10 +1705,12 @@ function MapsPage() {
         <div className="bg-osu-b5">
           <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-16 text-center">
             <RegionIcon code={selectedCountry} className="mx-auto h-10 w-10 text-osu-pink-light/70" />
-            <p className="mt-4 text-sm font-semibold text-osu-l2">No region maps boards yet</p>
+            <p className="mt-4 text-sm font-semibold text-osu-l2"><Trans>No region maps boards yet</Trans></p>
             <p className="mt-1 text-xs text-osu-f1">
-              Maps boards are built per country, plus one combined board for Global.
-              There isn't one for {countryName} yet, so pick one of its countries or switch to Global.
+              <Trans>
+                Maps boards are built per country, plus one combined board for Global.
+                There isn't one for {countryName} yet, so pick one of its countries or switch to Global.
+              </Trans>
             </p>
           </div>
         </div>
@@ -1711,15 +1733,15 @@ function MapsPage() {
                   type="text"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Search title, artist, mapper, or difficulty"
-                  aria-label="Search by title, artist, mapper, or difficulty"
+                  placeholder={t`Search title, artist, mapper, or difficulty`}
+                  aria-label={t`Search by title, artist, mapper, or difficulty`}
                   className={`w-full bg-osu-b4 border border-osu-b3/30 rounded-lg pl-10 py-2.5 text-[14px] text-osu-l1 placeholder:text-osu-f1/55 focus:outline-none focus:border-osu-pink/50 transition-colors ${searchInput ? "pr-10" : "pr-3"}`}
                 />
                 {searchInput && (
                   <button
                     type="button"
                     onClick={() => setSearchInput("")}
-                    aria-label="Clear search"
+                    aria-label={t`Clear search`}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-md text-osu-f1/55 hover:text-osu-l1 hover:bg-osu-b3 transition-colors cursor-pointer"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
@@ -1729,7 +1751,7 @@ function MapsPage() {
                 )}
               </div>
               <span className="shrink-0 text-[12px] text-osu-f1 tabular-nums" role="status" aria-live="polite">
-                {isLoading ? "Loading maps..." : `${formatNumber(currentTotal)} maps`}
+                {isLoading ? t`Loading maps...` : t`${formatNumber(currentTotal)} maps`}
               </span>
             </div>
           )}
@@ -1746,7 +1768,7 @@ function MapsPage() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
                 <path d="M3 6h18M7 12h10M10 18h4" />
               </svg>
-              Filters
+              <Trans>Filters</Trans>
               {activeFilterCount > 0 && (
                 <span className="rounded-full bg-osu-pink px-1.5 text-[10px] font-bold leading-4 text-white tabular-nums">
                   {activeFilterCount}
@@ -1755,7 +1777,7 @@ function MapsPage() {
             </button>
             {tab === "random" && (
               <span className="ml-auto text-[11px] text-osu-f1 tabular-nums">
-                {formatNumber(randomPickCount)} {randomPickCount === 1 ? "pick" : "possible picks"}
+                <Plural value={randomPickCount} one="# pick" other="# possible picks" />
               </span>
             )}
             {browseSortOptions.length > 0 && (
@@ -1811,7 +1833,7 @@ function MapsPage() {
             >
               <div className="mx-auto h-1 w-9 rounded-full bg-osu-b3" aria-hidden="true" />
               <div className="flex items-center gap-2 px-4 pt-2">
-                <span className="text-[13px] font-bold text-osu-l1">Filters</span>
+                <span className="text-[13px] font-bold text-osu-l1"><Trans>Filters</Trans></span>
                 {activeFilterCount > 0 && (
                   <span className="rounded-full bg-osu-pink px-1.5 text-[10px] font-bold leading-4 text-white tabular-nums">
                     {activeFilterCount}
@@ -1831,7 +1853,7 @@ function MapsPage() {
                   hasActiveFilters ? "text-osu-f1 hover:text-osu-pink-light cursor-pointer" : "text-osu-f1/40 cursor-default"
                 }`}
               >
-                Clear all
+                <Trans>Clear all</Trans>
               </button>
               <button
                 type="button"
@@ -1839,8 +1861,8 @@ function MapsPage() {
                 className="rounded-md bg-osu-pink px-4 py-2 text-[12.5px] font-bold text-white hover:bg-osu-pink-light transition-colors cursor-pointer"
               >
                 {tab === "random"
-                  ? `Show ${formatNumber(randomPickCount)} picks`
-                  : `Show ${formatNumber(currentTotal)} maps`}
+                  ? t`Show ${formatNumber(randomPickCount)} picks`
+                  : t`Show ${formatNumber(currentTotal)} maps`}
               </button>
             </div>
           </div>
@@ -1850,7 +1872,7 @@ function MapsPage() {
             {browseFilterGroups}
             {tab === "random" && (
               <span className="ml-auto self-center text-[11px] text-osu-f1 tabular-nums">
-                {formatNumber(randomPickCount)} {randomPickCount === 1 ? "pick" : "possible picks"}
+                <Plural value={randomPickCount} one="# pick" other="# possible picks" />
               </span>
             )}
           </div>
@@ -1863,7 +1885,7 @@ function MapsPage() {
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                 {browseSortOptions.length > 0 && (
                   <>
-                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Sort by</span>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Sort by</Trans></span>
                     {browseSortOptions.map((option) => {
                       const isActive = browseSortValue === option.id;
                       return (
@@ -1876,7 +1898,7 @@ function MapsPage() {
                               : setBrowseSort(option.id)
                           }
                           aria-pressed={isActive}
-                          title={isActive ? "Flip direction" : undefined}
+                          title={isActive ? t`Flip direction` : undefined}
                           className={`inline-flex items-center gap-1 text-[12.5px] font-semibold transition-colors cursor-pointer ${
                             isActive ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
                           }`}
@@ -1904,7 +1926,7 @@ function MapsPage() {
                   onClick={resetFilters}
                   className="text-[12px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer"
                 >
-                  Clear all
+                  <Trans>Clear all</Trans>
                 </button>
               )}
             </div>
@@ -1924,8 +1946,10 @@ function MapsPage() {
             <div className="space-y-3">
               {mapsFirstBuild && (
                 <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-3.5 py-2.5 text-[11px] leading-relaxed text-osu-f1">
-                  <span className="font-semibold text-osu-c2">First time loading {countryName} maps.</span>{" "}
-                  Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own.
+                  <Trans>
+                    <span className="font-semibold text-osu-c2">First time loading {countryName} maps.</span>{" "}
+                    Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own.
+                  </Trans>
                 </div>
               )}
               <MapsLoadingIndicator firstBuild={mapsFirstBuild} />
@@ -1971,7 +1995,7 @@ function MapsPage() {
 
           {tab !== "random" && !error && !isLoading && currentList.length === 0 && (
             <div className="text-center py-16 text-osu-f1 text-sm">
-              No maps match your filters
+              <Trans>No maps match your filters</Trans>
             </div>
           )}
 
@@ -1988,13 +2012,13 @@ function MapsPage() {
                       <Avatar url={randomPick.player.avatarUrl} size={44} />
                       <div className="min-w-0">
                         <div className="text-[10px] uppercase tracking-wider text-osu-f1">
-                          random pick from
+                          <Trans>random pick from</Trans>
                         </div>
                         <div className="text-[15px] font-semibold text-osu-l2 group-hover:text-white transition-colors truncate">
                           {randomPick.player.username}
                         </div>
                         <div className="text-[10px] text-osu-f1">
-                          {randomPick.player.favouriteCount} favourites
+                          <Trans>{randomPick.player.favouriteCount} favourites</Trans>
                         </div>
                       </div>
                     </button>
@@ -2008,12 +2032,12 @@ function MapsPage() {
                           {rerollPending && (
                             <span className="w-3 h-3 border-2 border-osu-pink-light/40 border-t-osu-pink-light rounded-full animate-spin" aria-hidden="true" />
                           )}
-                          Reroll
+                          <Trans>Reroll</Trans>
                         </button>
                         <div className="w-px bg-osu-pink/30" />
                         <button
                           onClick={() => setRerollMenuOpen((v) => !v)}
-                          aria-label="Reroll settings"
+                          aria-label={t`Reroll settings`}
                           aria-expanded={rerollMenuOpen}
                           className="px-1.5 flex items-center text-osu-pink-light hover:bg-osu-pink/30 transition-colors cursor-pointer"
                         >
@@ -2025,18 +2049,18 @@ function MapsPage() {
                       {rerollMenuOpen && (
                         <div className="absolute right-0 top-full mt-2 w-[280px] rounded-lg bg-osu-b4 border border-osu-b3 shadow-xl p-1 z-20">
                           <div className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
-                            How to pick
+                            <Trans>How to pick</Trans>
                           </div>
                           {([
                             {
                               id: "favourites" as const,
-                              label: "Equal chance per map",
-                              desc: "Every favourited map is equally likely. Players with bigger collections show up more often as a result.",
+                              label: t`Equal chance per map`,
+                              desc: t`Every favourited map is equally likely. Players with bigger collections show up more often as a result.`,
                             },
                             {
                               id: "players" as const,
-                              label: "Equal chance per player",
-                              desc: "Each player is equally likely, no matter how many favourites they have.",
+                              label: t`Equal chance per player`,
+                              desc: t`Each player is equally likely, no matter how many favourites they have.`,
                             },
                           ]).map((opt) => {
                             const active = rWeight === opt.id;
@@ -2077,7 +2101,7 @@ function MapsPage() {
                           >
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[12px] font-semibold text-osu-l2">
-                                Avoid repeats
+                                <Trans>Avoid repeats</Trans>
                               </span>
                               <span
                                 className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${rAvoidRepeats ? "bg-osu-pink" : "bg-osu-b3"}`}
@@ -2089,7 +2113,7 @@ function MapsPage() {
                               </span>
                             </div>
                             <div className="mt-0.5 text-[10px] text-osu-f1 leading-snug">
-                              Skips the last few players and maps you were shown.
+                              <Trans>Skips the last few players and maps you were shown.</Trans>
                             </div>
                           </button>
                         </div>
@@ -2105,8 +2129,8 @@ function MapsPage() {
               ) : (
                 <div className="text-center py-16 text-osu-f1 text-sm">
                   {hasActiveFilters
-                    ? "No favourites match your filters. Try loosening them."
-                    : "No favourites found for any player in the top 50."}
+                    ? <Trans>No favourites match your filters. Try loosening them.</Trans>
+                    : <Trans>No favourites found for any player in the top 50.</Trans>}
                 </div>
               )}
             </div>
@@ -2144,11 +2168,12 @@ function MapsPage() {
 // ── Loading indicator ─────────────────────────────────────────────────────
 
 const LOADING_STEPS = [
-  "Loading maps...",
-  "Almost there...",
+  msg`Loading maps...`,
+  msg`Almost there...`,
 ];
 
 function MapsLoadingIndicator({ firstBuild }: { firstBuild: boolean }) {
+  const { t, i18n } = useLingui();
   const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
@@ -2160,8 +2185,8 @@ function MapsLoadingIndicator({ firstBuild }: { firstBuild: boolean }) {
   }, [firstBuild]);
 
   const label = firstBuild
-    ? "Building maps for the first time..."
-    : LOADING_STEPS[stepIndex];
+    ? t`Building maps for the first time...`
+    : i18n._(LOADING_STEPS[stepIndex]);
 
   return (
     <div className="flex items-center gap-3">
@@ -2281,6 +2306,7 @@ function RandomCardSkeleton() {
 // Single-thumb slider for farmed "Min PP". Commits on release, rounded to
 // FARMED_PP_STEP. 0 = filter disabled (thumb at floor).
 function MinPpSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const { t } = useLingui();
   const active = value > 0;
   const [localValue, setLocalValue] = useState<number>(active ? value : FARMED_PP_MIN);
   const [isDragging, setIsDragging] = useState(false);
@@ -2322,7 +2348,7 @@ function MinPpSlider({ value, onChange }: { value: number; onChange: (v: number)
         onMouseUp={commit}
         onTouchEnd={commit}
         onKeyUp={commit}
-        aria-label="Minimum PP"
+        aria-label={t`Minimum PP`}
         style={{ background }}
         className={`flex-1 min-w-[120px] h-1 appearance-none rounded-full cursor-pointer
           [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink-light [&::-webkit-slider-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-webkit-slider-thumb]:cursor-grab
@@ -2334,9 +2360,9 @@ function MinPpSlider({ value, onChange }: { value: number; onChange: (v: number)
         className={`shrink-0 w-20 text-left text-[11px] font-semibold tabular-nums transition-colors ${
           active ? "text-osu-pink-light cursor-pointer hover:text-osu-pink" : "text-osu-f1/55 cursor-default"
         }`}
-        title={active ? "Clear" : undefined}
+        title={active ? t`Clear` : undefined}
       >
-        {show ? `${Math.round(localValue)}pp+` : "Any"}{active ? " ✕" : ""}
+        {show ? `${Math.round(localValue)}pp+` : t`Any`}{active ? " ✕" : ""}
       </button>
     </div>
   );
@@ -2427,6 +2453,7 @@ function PlayerAvatars({
   onPlayerClick: (player: { id: number; username: string; avatarUrl: string; pp?: number; count?: number; mods?: string[]; scoreUrl?: string | null }) => void;
   onMoreClick?: () => void;
 }) {
+  const { t } = useLingui();
   const visible = players.slice(0, VISIBLE_AVATARS);
   const total = Math.max(totalCount ?? players.length, players.length);
   const overflow = total - VISIBLE_AVATARS;
@@ -2452,7 +2479,7 @@ function PlayerAvatars({
           type="button"
           onClick={onMoreClick}
           className="text-[8px] text-osu-f1 ml-0.5 cursor-pointer hover:text-osu-l2 transition-colors"
-          title="All players"
+          title={t`All players`}
         >
           +{overflow}
         </button>

@@ -110,6 +110,11 @@ export interface PageSeoInput {
   imageHeight?: number | null;
   imageCountry?: string;
   imageKind?: string;
+  /* OG cards stay English (Torus has no CJK glyphs) and their R2 cache key is
+     derived from the title baked into the image. A route with a localized
+     `title` passes the English original here so every locale shares the one
+     English card instead of forking cache keys per language. */
+  imageTitle?: string;
   type?: "website" | "article" | "profile";
   social?: boolean;
   noindex?: boolean;
@@ -131,6 +136,7 @@ export function pageSeo({
   imageHeight,
   imageCountry,
   imageKind,
+  imageTitle,
   type = "website",
   social = true,
   noindex = false,
@@ -139,7 +145,7 @@ export function pageSeo({
   const fullTitle = title === SITE_NAME || !appendSiteName ? title : `${title} - ${SITE_NAME}`;
   const url = absoluteUrl(path, origin);
   const imageUrl = absoluteUrl(
-    image ?? ogImagePath(title, { country: imageCountry, kind: imageKind }),
+    image ?? ogImagePath(imageTitle ?? title, { country: imageCountry, kind: imageKind }),
     origin,
   );
   // A custom image of unknown size gets no dimension hints at all; that reads

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
 
 interface PaginationProps {
   page: number;
@@ -7,6 +8,7 @@ interface PaginationProps {
 }
 
 export function Pagination({ page, totalPages, onPageChange }: PaginationProps) {
+  const { t } = useLingui();
   const [inputValue, setInputValue] = useState("");
   const [showInput, setShowInput] = useState(false);
 
@@ -28,7 +30,7 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
         onClick={() => onPageChange(0)}
         disabled={page === 0}
         className="px-2.5 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:bg-osu-b4"
-        title="First page"
+        title={t`First page`}
       >
         &laquo;
       </button>
@@ -38,9 +40,9 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
         onClick={() => onPageChange(page - 1)}
         disabled={page === 0}
         className="px-3 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:bg-osu-b4"
-        title="Previous page"
+        title={t`Previous page`}
       >
-        &larr; Prev
+        <Trans>&larr; Prev</Trans>
       </button>
 
       {/* Page indicator / input */}
@@ -72,9 +74,9 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
             setShowInput(true);
           }}
           className="text-xs text-osu-f1 px-3 py-1 rounded hover:bg-osu-b4 transition-colors cursor-pointer"
-          title="Click to jump to page"
+          title={t`Click to jump to page`}
         >
-          Page {page + 1} of {totalPages}
+          <Trans>Page {page + 1} of {totalPages}</Trans>
         </button>
       )}
 
@@ -83,9 +85,9 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
         onClick={() => onPageChange(page + 1)}
         disabled={page >= totalPages - 1}
         className="px-3 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:bg-osu-b4"
-        title="Next page"
+        title={t`Next page`}
       >
-        Next &rarr;
+        <Trans>Next &rarr;</Trans>
       </button>
 
       {/* Last */}
@@ -93,7 +95,7 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
         onClick={() => onPageChange(totalPages - 1)}
         disabled={page >= totalPages - 1}
         className="px-2.5 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:bg-osu-b4"
-        title="Last page"
+        title={t`Last page`}
       >
         &raquo;
       </button>

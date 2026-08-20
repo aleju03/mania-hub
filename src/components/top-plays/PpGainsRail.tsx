@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { formatPpGain } from "../../lib/format";
 import type { LiveTopPlaysPpGain } from "../../lib/live-backend";
@@ -70,7 +71,7 @@ export const PpGainsRail = memo(function PpGainsRail({
     <>
       <div className="lg:hidden flex items-start gap-3 py-1 min-h-[54px]">
         <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold flex-shrink-0 pt-2">
-          PP Gained
+          <Trans>PP Gained</Trans>
         </span>
         <div
           ref={mobileScrollRef}
@@ -106,7 +107,7 @@ export const PpGainsRail = memo(function PpGainsRail({
 
       <div className="hidden lg:flex sticky top-[76px] max-h-[calc(100svh_-_196px)] self-start flex-col flex-shrink-0 min-w-[128px]">
         <div className="flex items-baseline justify-between gap-2 mb-2 px-0.5">
-          <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP Gained</span>
+          <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold"><Trans>PP Gained</Trans></span>
           <span className="text-[9px] tabular-nums text-osu-f1/70 font-semibold">{players.length}</span>
         </div>
         <div
@@ -159,13 +160,14 @@ const PpGainPlayerButton = memo(function PpGainPlayerButton({
   onToggle: (playerId: number) => void;
   insetRing?: boolean;
 }) {
+  const { t } = useLingui();
   return (
     <button
       onClick={() => onToggle(player.id)}
       onContextMenu={(event) => event.preventDefault()}
       aria-pressed={selected}
       className="cursor-pointer group relative flex w-full shrink-0 flex-col items-center gap-0.5"
-      title={`${player.username}: +${formatPpGain(player.totalGain)}pp - click to filter`}
+      title={t`${player.username}: +${formatPpGain(player.totalGain)}pp - click to filter`}
     >
       <div className={`${insetRing ? "ring-inset " : ""}ring-2 rounded-full transition-all ${
         selected

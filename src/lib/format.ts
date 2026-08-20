@@ -1,5 +1,22 @@
-export function formatNumber(n: number): string {
-  return n.toLocaleString("en-US");
+import type { AppLocale } from "./locale";
+
+/* The UI locale is a catalog choice ("en"), not a full formatting locale;
+   this maps it onto the Intl tag the numbers and dates should follow. en-US
+   stays the en tag so every existing default-argument call site keeps
+   producing byte-identical output. */
+const INTL_LOCALE: Record<AppLocale, string> = {
+  en: "en-US",
+  "zh-CN": "zh-CN",
+};
+
+/* Formatters take an optional trailing locale (the formatDate timeZone
+   precedent): a caller that has waited for context - useLocale() - passes it,
+   everything else keeps the en default. The functions whose output embeds
+   English words ("5m ago", "2d 3h", ordinal suffixes, the "k" in compact
+   counts) are deliberately not parameterized yet; they convert to catalog
+   messages when translation reaches their surfaces. */
+export function formatNumber(n: number, locale: AppLocale = "en"): string {
+  return n.toLocaleString(INTL_LOCALE[locale]);
 }
 
 /* Counts for icon-and-number stat rows, where two of them share the space one
@@ -26,9 +43,9 @@ export function formatPP(pp: number | null): string {
   return `${Math.round(pp).toLocaleString("en-US")}pp`;
 }
 
-export function formatPpGain(pp: number): string {
+export function formatPpGain(pp: number, locale: AppLocale = "en"): string {
   if (Math.abs(pp) < 0.05) return "0";
-  return pp.toLocaleString("en-US", {
+  return pp.toLocaleString(INTL_LOCALE[locale], {
     maximumFractionDigits: 1,
     minimumFractionDigits: 0,
   });
@@ -136,9 +153,9 @@ function dateForFormatting(dateStr: string, zoned: boolean): Date {
    A caller that wants the viewer's own day - which is what a play time means
    to the person reading it, and what osu! itself prints - passes one, and has
    to have waited for hydration first. useViewerTimeZone() is that gate. */
-export function formatDate(dateStr: string, timeZone = "UTC"): string {
+export function formatDate(dateStr: string, timeZone = "UTC", locale: AppLocale = "en"): string {
   const zoned = isZonedInstant(dateStr);
-  return dateForFormatting(dateStr, zoned).toLocaleDateString("en-US", {
+  return dateForFormatting(dateStr, zoned).toLocaleDateString(INTL_LOCALE[locale], {
     year: "numeric",
     month: "long",
     day: "numeric",

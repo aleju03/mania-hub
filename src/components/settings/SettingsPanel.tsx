@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
+import { useLocale } from "../../lib/locale-context";
+import { writeLocaleCookieClient } from "../../lib/locale-cookie";
+import { loadLocaleCatalog } from "../../lib/i18n";
+import type { AppLocale } from "../../lib/locale";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 import { AnimatePresence } from "framer-motion";
 import { ArrowDown, ArrowUp, Loader2, Pencil, RotateCcw, Search, Volume1, Volume2, VolumeX, X } from "lucide-react";
 
@@ -104,18 +110,18 @@ const STYLE_ICON_BY_NAME: Record<ReplaySkinStyle, CSSProperties> = {
   arrows: MANIA_ARROW_ICON_STYLE,
 };
 
-const STYLE_LABELS: Record<ReplaySkinStyle, string> = {
-  circles: "Circles",
-  bars: "Bars",
-  arrows: "Arrows",
+const STYLE_LABELS: Record<ReplaySkinStyle, ReturnType<typeof msg>> = {
+  circles: msg`Circles`,
+  bars: msg`Bars`,
+  arrows: msg`Arrows`,
 };
 
 type TabId = "skin" | "viewer" | "filters" | "appearance";
-const TABS: { id: TabId; label: string }[] = [
-  { id: "skin", label: "skin & layout" },
-  { id: "viewer", label: "playback" },
-  { id: "filters", label: "filters" },
-  { id: "appearance", label: "appearance" },
+const TABS: { id: TabId; label: ReturnType<typeof msg> }[] = [
+  { id: "skin", label: msg`skin & layout` },
+  { id: "viewer", label: msg`playback` },
+  { id: "filters", label: msg`filters` },
+  { id: "appearance", label: msg`appearance` },
 ];
 
 type Variant = "page" | "drawer";
@@ -126,6 +132,7 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps) {
+  const { t, i18n } = useLingui();
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
   const [volume, setVolume] = useState(readReplayVolume);
@@ -249,9 +256,11 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
       <RotateCcw
         className={`h-3 w-3 duration-300 ${confirmingReset ? "" : "transition-transform group-hover:-rotate-180"}`}
       />
-      {confirmingReset ? "Sure?" : "Reset all"}
+      {confirmingReset ? t`Sure?` : t`Reset all`}
     </button>
   );
+
+  const tabs = TABS.map((tab) => ({ id: tab.id, label: i18n._(tab.label) }));
 
   const body = (
     <>
@@ -316,20 +325,20 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
       <div className="flex h-full flex-col bg-osu-b5">
         <div className="flex items-center gap-2 border-b border-osu-b3/40 bg-osu-d5 px-4 py-3">
           <img src="/images/icons/settings.svg" alt="" width={22} height={22} className="opacity-60 shrink-0" />
-          <h2 className="flex-1 text-[13px] font-semibold text-osu-c2">settings</h2>
+          <h2 className="flex-1 text-[13px] font-semibold text-osu-c2"><Trans>settings</Trans></h2>
           {resetButton}
           {onClose ? (
             <button
               type="button"
               onClick={onClose}
               className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-osu-pink-light transition-colors hover:bg-osu-b3/50 hover:text-white"
-              aria-label="Close settings"
+              aria-label={t`Close settings`}
             >
               <X className="h-4 w-4" strokeWidth={2.2} />
             </button>
           ) : null}
         </div>
-        <PageTabs items={TABS} value={activeTab} onChange={setActiveTab} />
+        <PageTabs items={tabs} value={activeTab} onChange={setActiveTab} />
         <div className="flex-1 overflow-y-auto">
           <div className="px-3 py-5 sm:px-5 sm:py-6 space-y-6">{body}</div>
         </div>
@@ -340,8 +349,8 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
 
   return (
     <div className="flex-1">
-      <PageHeader iconSrc="/images/icons/settings.svg" title="settings" right={resetButton} />
-      <PageTabs items={TABS} value={activeTab} onChange={setActiveTab} />
+      <PageHeader iconSrc="/images/icons/settings.svg" title={t`settings`} right={resetButton} />
+      <PageTabs items={tabs} value={activeTab} onChange={setActiveTab} />
       <div className="bg-osu-b5 min-h-[80vh]">
         <div className="mx-auto max-w-[900px] px-3 py-6 sm:px-5 sm:py-8 space-y-6">{body}</div>
       </div>
@@ -369,6 +378,34 @@ function PanelGroup({ label, children, action }: { label: string; children: Reac
   );
 }
 
+// Option labels stay in their own language on purpose: a visitor stranded in
+// the wrong locale must be able to recognize their way back.
+function LanguageGroup() {
+  const { t } = useLingui();
+  const locale = useLocale();
+  const router = useRouter();
+  return (
+    <PanelGroup label={t`Language`}>
+      <SegmentedField
+        label={t`Interface language`}
+        value={locale}
+        options={[
+          { value: "en" as AppLocale, label: "English" },
+          { value: "zh-CN" as AppLocale, label: "中文" },
+        ]}
+        onChange={(next) => {
+          if (next === locale) return;
+          writeLocaleCookieClient(next);
+          // Load the catalog before invalidating so the re-render finds its
+          // messages; invalidation re-runs the root beforeLoad, which reads
+          // the cookie and swaps the provider, lang attribute and head.
+          void loadLocaleCatalog(next).then(() => router.invalidate());
+        }}
+      />
+    </PanelGroup>
+  );
+}
+
 function AppearancePanel({
   cursorSettings,
   onUpdateCursor,
@@ -376,23 +413,25 @@ function AppearancePanel({
   cursorSettings: CursorSettings;
   onUpdateCursor: (patch: Partial<CursorSettings>) => void;
 }) {
+  const { t } = useLingui();
   return (
     <div className="space-y-6">
+      <LanguageGroup />
       <PanelGroup
-        label="Custom cursor"
+        label={t`Custom cursor`}
         action={<Switch checked={cursorSettings.enabled} onChange={(enabled) => onUpdateCursor({ enabled })} />}
       >
         <p className="text-[12px] leading-relaxed text-osu-f1">
-          Replaces the mouse cursor with an osu!-style cursor across the site. Desktop only.
+          <Trans>Replaces the mouse cursor with an osu!-style cursor across the site. Desktop only.</Trans>
         </p>
         {cursorSettings.enabled ? (
           <>
             <div className="space-y-1.5">
-              <span className="text-[11px] font-semibold text-osu-l1">Color</span>
+              <span className="text-[11px] font-semibold text-osu-l1"><Trans>Color</Trans></span>
               <ColorSwatchRow value={cursorSettings.color} onChange={(color) => onUpdateCursor({ color })} />
             </div>
             <div className="space-y-1.5">
-              <span className="text-[11px] font-semibold text-osu-l1">Size</span>
+              <span className="text-[11px] font-semibold text-osu-l1"><Trans>Size</Trans></span>
               <PercentSlider
                 value={cursorSettings.size}
                 min={CURSOR_SIZE_MIN}
@@ -402,35 +441,35 @@ function AppearancePanel({
               />
             </div>
             <div className="space-y-1.5">
-              <span className="text-[11px] font-semibold text-osu-l1">Glow</span>
+              <span className="text-[11px] font-semibold text-osu-l1"><Trans>Glow</Trans></span>
               <PercentSlider
                 value={cursorSettings.glow}
                 min={CURSOR_GLOW_MIN}
                 max={CURSOR_GLOW_MAX}
                 step={5}
                 onChange={(glow) => onUpdateCursor({ glow })}
-                hint="How far the colored glow reaches around the cursor core."
+                hint={t`How far the colored glow reaches around the cursor core.`}
               />
             </div>
             <div className="space-y-3 rounded-lg border border-osu-b3/40 bg-osu-b5/40 px-3 py-2.5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-[12px] font-semibold text-osu-l1">Cursor trail</div>
-                  <div className="text-[11px] text-osu-f1">Leaves a short fading trail behind the cursor.</div>
+                  <div className="text-[12px] font-semibold text-osu-l1"><Trans>Cursor trail</Trans></div>
+                  <div className="text-[11px] text-osu-f1"><Trans>Leaves a short fading trail behind the cursor.</Trans></div>
                 </div>
                 <Switch checked={cursorSettings.trail} onChange={(trail) => onUpdateCursor({ trail })} />
               </div>
               {cursorSettings.trail ? (
                 <>
                   <div className="space-y-1.5">
-                    <span className="text-[11px] font-semibold text-osu-l1">Trail color</span>
+                    <span className="text-[11px] font-semibold text-osu-l1"><Trans>Trail color</Trans></span>
                     <ColorSwatchRow
                       value={cursorSettings.trailColor}
                       onChange={(trailColor) => onUpdateCursor({ trailColor })}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <span className="text-[11px] font-semibold text-osu-l1">Trail thickness</span>
+                    <span className="text-[11px] font-semibold text-osu-l1"><Trans>Trail thickness</Trans></span>
                     <PercentSlider
                       value={cursorSettings.trailThickness}
                       min={CURSOR_TRAIL_THICKNESS_MIN}
@@ -443,8 +482,10 @@ function AppearancePanel({
               ) : null}
             </div>
             <p className="text-[11px] text-osu-f1/80">
-              Hold <kbd className="rounded border border-osu-b3/60 bg-osu-b5/80 px-1.5 py-0.5 font-bold text-osu-pink-light">C</kbd>{" "}
-              and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own.
+              <Trans>
+                Hold <kbd className="rounded border border-osu-b3/60 bg-osu-b5/80 px-1.5 py-0.5 font-bold text-osu-pink-light">C</kbd>{" "}
+                and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own.
+              </Trans>
             </p>
           </>
         ) : null}
@@ -454,6 +495,7 @@ function AppearancePanel({
 }
 
 function ColorSwatchRow({ value, onChange }: { value: string; onChange: (color: string) => void }) {
+  const { t } = useLingui();
   const [pickerOpen, setPickerOpen] = useState(false);
   const isPreset = CURSOR_COLOR_PRESETS.some((preset) => preset.value === value);
   const [r, g, b] = hexToRgbParts(value);
@@ -486,8 +528,8 @@ function ColorSwatchRow({ value, onChange }: { value: string; onChange: (color: 
         })}
         <button
           type="button"
-          title="Custom color"
-          aria-label="Custom color"
+          title={t`Custom color`}
+          aria-label={t`Custom color`}
           aria-expanded={pickerOpen}
           onClick={() => setPickerOpen((open) => !open)}
           className={`relative h-8 w-8 cursor-pointer overflow-hidden rounded-full border-2 p-0 transition-transform hover:scale-110 ${
@@ -523,7 +565,7 @@ function ColorSwatchRow({ value, onChange }: { value: string; onChange: (color: 
                 if (normalized) onChange(normalized);
               }}
               spellCheck={false}
-              aria-label="Custom color hex"
+              aria-label={t`Custom color hex`}
               className="h-7 w-24 rounded-md border border-osu-b3/50 bg-osu-b5 px-2 font-mono text-[11px] text-osu-c1 outline-none transition-colors focus:border-osu-pink/60"
             />
           </div>
@@ -542,6 +584,7 @@ function SkinPanel({
   onUpdateSkin: (patch: Partial<ReplaySkinSettings>) => void;
   onOpenAdvanced: () => void;
 }) {
+  const { t, i18n } = useLingui();
   const auth = useAuth();
   const viewerId = auth.viewer?.id ?? null;
   /* The first SSR/client render starts from hydration-safe defaults. Drawer
@@ -620,16 +663,24 @@ function SkinPanel({
       });
   };
 
+  const updatedAtLabel = myReplaySkin
+    ? new Date(myReplaySkin.updatedAt).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : "";
+
   return (
     <div className="space-y-6">
       {hasCustomSkinArt ? null : (
-        <PanelGroup label="Note shape">
+        <PanelGroup label={t`Note shape`}>
           <div className="grid grid-cols-3 gap-2">
             {(Object.keys(STYLE_LABELS) as ReplaySkinStyle[]).map((style) => (
               <ShapeOption
                 key={style}
                 active={skinSettings.style === style}
-                label={STYLE_LABELS[style]}
+                label={i18n._(STYLE_LABELS[style])}
                 icon={<span aria-hidden="true" className="h-5 w-5 bg-current" style={STYLE_ICON_BY_NAME[style]} />}
                 onClick={() => onUpdateSkin({ style })}
               />
@@ -638,30 +689,30 @@ function SkinPanel({
         </PanelGroup>
       )}
 
-      <PanelGroup label={hasCustomSkinArt ? "Direction" : "Direction & long notes"}>
+      <PanelGroup label={hasCustomSkinArt ? t`Direction` : t`Direction & long notes`}>
         <div className="grid gap-3 sm:grid-cols-2">
           <SegmentedField
-            label="Scroll direction"
+            label={t`Scroll direction`}
             value={skinSettings.upscroll ? "up" : "down"}
             options={[
-              { value: "down", label: "Downscroll", icon: <ArrowDown className="h-3.5 w-3.5" strokeWidth={2.4} /> },
-              { value: "up", label: "Upscroll", icon: <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.4} /> },
+              { value: "down", label: t`Downscroll`, icon: <ArrowDown className="h-3.5 w-3.5" strokeWidth={2.4} /> },
+              { value: "up", label: t`Upscroll`, icon: <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.4} /> },
             ]}
             onChange={(value) => onUpdateSkin({ upscroll: value === "up" })}
           />
           {hasCustomSkinArt ? null : (
             <SegmentedField
-              label="LN tail"
+              label={t`LN tail`}
               value={skinSettings.percy ? "cut" : "full"}
               options={[
                 {
                   value: "full",
-                  label: "Full",
+                  label: t`Full`,
                   icon: <span aria-hidden="true" className="block h-3 w-2 rounded-sm bg-current" />,
                 },
                 {
                   value: "cut",
-                  label: "Cut",
+                  label: t`Cut`,
                   icon: <span aria-hidden="true" className="block h-1.5 w-2 rounded-sm bg-current" />,
                 },
               ]}
@@ -672,7 +723,7 @@ function SkinPanel({
       </PanelGroup>
 
       <PanelGroup
-        label="Advanced"
+        label={t`Advanced`}
         action={
           <button
             type="button"
@@ -680,28 +731,28 @@ function SkinPanel({
             className="group inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-osu-pink/40 bg-osu-pink/10 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white"
           >
             <Pencil className="h-3 w-3" />
-            Viewer editor
+            <Trans>Viewer editor</Trans>
           </button>
         }
       >
         <p className="text-[12px] leading-relaxed text-osu-f1">
-          Customize how replays look for you. This does not change the replay skin other people see on your plays.
+          <Trans>Customize how replays look for you. This does not change the replay skin other people see on your plays.</Trans>
         </p>
       </PanelGroup>
 
-      <PanelGroup label="Replay skin">
+      <PanelGroup label={t`Replay skin`}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-[12px] font-semibold text-osu-l1">Watch replays with the player's skin</div>
+            <div className="text-[12px] font-semibold text-osu-l1"><Trans>Watch replays with the player's skin</Trans></div>
             <div className="text-[11px] text-osu-f1">
-              Replays play with their player's published skin. Turn off to always use yours.
+              <Trans>Replays play with their player's published skin. Turn off to always use yours.</Trans>
             </div>
           </div>
           <Switch checked={ownerSkinEnabled} onChange={updateOwnerSkinEnabled} />
         </div>
         {viewerId ? (
           <div className="rounded-lg border border-osu-b3/40 bg-osu-b5/40 px-3 py-2.5">
-            <div className="mb-1.5 text-[11px] font-semibold text-osu-l1">Your replay skin</div>
+            <div className="mb-1.5 text-[11px] font-semibold text-osu-l1"><Trans>Your replay skin</Trans></div>
             {!myReplaySkinLoaded ? null : myReplaySkin ? (
               <div className="flex flex-wrap items-center gap-3">
                 {myReplaySkin.skin.previewUrl ? (
@@ -714,12 +765,7 @@ function SkinPanel({
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[13px] font-semibold text-osu-l1">{myReplaySkin.skin.name}</div>
                   <div className="text-[11px] text-osu-f1">
-                    {myReplaySkin.private ? "private · " : ""}updated{" "}
-                    {new Date(myReplaySkin.updatedAt).toLocaleDateString("en-US", {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
+                    {myReplaySkin.private ? t`private · updated ${updatedAtLabel}` : t`updated ${updatedAtLabel}`}
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-1.5">
@@ -728,40 +774,42 @@ function SkinPanel({
                     onClick={() => setCustomizing(true)}
                     className="inline-flex h-7 cursor-pointer items-center rounded-md border border-osu-pink/40 bg-osu-pink/10 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white"
                   >
-                    Customize
+                    <Trans>Customize</Trans>
                   </button>
                   <Link
                     to="/skins"
                     search={{}}
                     className="inline-flex h-7 items-center rounded-md border border-osu-b3/60 bg-osu-b5/70 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
                   >
-                    Change
+                    <Trans>Change</Trans>
                   </Link>
                   <button
                     type="button"
                     onClick={removeMyReplaySkin}
                     className="inline-flex h-7 cursor-pointer items-center rounded-md border border-osu-b3/60 bg-osu-b5/70 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1 transition-colors hover:border-osu-red/60 hover:bg-osu-red/10 hover:text-osu-red"
                   >
-                    Remove
+                    <Trans>Remove</Trans>
                   </button>
                 </div>
               </div>
             ) : (
               <p className="text-[12px] text-osu-f1">
-                None set.{" "}
-                <Link
-                  to="/skins"
-                  search={{}}
-                  className="font-semibold text-osu-pink-light transition-colors hover:text-white"
-                >
-                  Pick one from the skins page
-                </Link>
-                .
+                <Trans>
+                  None set.{" "}
+                  <Link
+                    to="/skins"
+                    search={{}}
+                    className="font-semibold text-osu-pink-light transition-colors hover:text-white"
+                  >
+                    Pick one from the skins page
+                  </Link>
+                  .
+                </Trans>
               </p>
             )}
           </div>
         ) : (
-          <p className="text-[12px] text-osu-f1">Sign in to set a replay skin for your plays.</p>
+          <p className="text-[12px] text-osu-f1"><Trans>Sign in to set a replay skin for your plays.</Trans></p>
         )}
       </PanelGroup>
 
@@ -800,31 +848,32 @@ function ViewerPanel({
   spectatorNameShown: boolean;
   onSpectatorNameShownChange: (shown: boolean) => void;
 }) {
+  const { t } = useLingui();
   const volumePercent = Math.round(volume * 100);
 
   return (
     <div className="space-y-6">
-      <PanelGroup label="Scroll speed">
+      <PanelGroup label={t`Scroll speed`}>
         <NumberStepperSlider
           value={scrollSpeed}
           min={1}
           max={40}
           step={1}
           onChange={onScrollSpeedChange}
-          hint="Higher values make notes travel faster across the playfield."
+          hint={t`Higher values make notes travel faster across the playfield.`}
         />
       </PanelGroup>
-      <PanelGroup label="Background dim">
+      <PanelGroup label={t`Background dim`}>
         <PercentSlider
           value={bgDim}
           min={0}
           max={100}
           step={5}
           onChange={onBgDimChange}
-          hint="Darkens the beatmap background so notes stay readable."
+          hint={t`Darkens the beatmap background so notes stay readable.`}
         />
       </PanelGroup>
-      <PanelGroup label="Default volume">
+      <PanelGroup label={t`Default volume`}>
         <div className="flex items-center gap-3">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-osu-b3/40 bg-osu-b5/55 text-osu-pink-light">
             <VolumeIcon volume={volume} className="h-4 w-4" />
@@ -835,19 +884,19 @@ function ViewerPanel({
             max={100}
             step={5}
             onChange={onVolumeChange}
-            hint="Used when a replay or map preview opens."
+            hint={t`Used when a replay or map preview opens.`}
             className="flex-1"
           />
         </div>
       </PanelGroup>
-      <PanelGroup label="Spectators">
+      <PanelGroup label={t`Spectators`}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-[12px] font-semibold text-osu-l1">
-              Show my name under spectators when watching a replay
+              <Trans>Show my name under spectators when watching a replay</Trans>
             </div>
             <div className="text-[11px] text-osu-f1">
-              Off means you are only part of the count. Needs you signed in.
+              <Trans>Off means you are only part of the count. Needs you signed in.</Trans>
             </div>
           </div>
           <Switch checked={spectatorNameShown} onChange={onSpectatorNameShownChange} />
@@ -858,6 +907,7 @@ function ViewerPanel({
 }
 
 function HiddenPlayersPanel() {
+  const { t } = useLingui();
   const hiddenUsers = useAppStore((state) => state.hiddenUsers);
   const addHiddenUser = useAppStore((state) => state.addHiddenUser);
   const removeHiddenUser = useAppStore((state) => state.removeHiddenUser);
@@ -911,10 +961,12 @@ function HiddenPlayersPanel() {
 
   return (
     <div className="space-y-6">
-      <PanelGroup label="Hide players">
+      <PanelGroup label={t`Hide players`}>
         <p className="text-[12px] leading-relaxed text-osu-f1">
-          Players you hide are filtered out of rankings and feeds across the site. This list is
-          stored on this browser only.
+          <Trans>
+            Players you hide are filtered out of rankings and feeds across the site. This list is
+            stored on this browser only.
+          </Trans>
         </p>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-osu-f1" />
@@ -922,7 +974,7 @@ function HiddenPlayersPanel() {
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search players by username"
+            placeholder={t`Search players by username`}
             disabled={atLimit}
             className="h-10 w-full rounded-lg border border-osu-b3/50 bg-osu-b5/70 pl-9 pr-9 text-sm text-osu-l1 outline-none transition-colors placeholder:text-osu-f1/70 focus:border-osu-pink/60 disabled:cursor-not-allowed disabled:opacity-50"
           />
@@ -933,7 +985,7 @@ function HiddenPlayersPanel() {
               type="button"
               onClick={() => setQuery("")}
               className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 cursor-pointer place-items-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white"
-              aria-label="Clear search"
+              aria-label={t`Clear search`}
             >
               <X className="h-3.5 w-3.5" strokeWidth={2.4} />
             </button>
@@ -942,14 +994,16 @@ function HiddenPlayersPanel() {
 
         {atLimit ? (
           <p className="text-[11px] text-osu-red">
-            You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remove someone to add more.
+            <Trans>
+              You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remove someone to add more.
+            </Trans>
           </p>
         ) : trimmedQuery.length >= 2 ? (
           <div className="overflow-hidden rounded-lg border border-osu-b3/40 bg-osu-b5/40">
             {status === "error" ? (
-              <p className="px-3 py-3 text-[12px] text-osu-f1">Search failed. Try again.</p>
+              <p className="px-3 py-3 text-[12px] text-osu-f1"><Trans>Search failed. Try again.</Trans></p>
             ) : results.length === 0 && status === "idle" ? (
-              <p className="px-3 py-3 text-[12px] text-osu-f1">No players found.</p>
+              <p className="px-3 py-3 text-[12px] text-osu-f1"><Trans>No players found.</Trans></p>
             ) : (
               <ul className="divide-y divide-osu-b3/30">
                 {results.map((user) => {
@@ -963,7 +1017,7 @@ function HiddenPlayersPanel() {
                       </span>
                       {isHidden ? (
                         <span className="rounded-md border border-osu-b3/50 bg-osu-b5/70 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-osu-f1">
-                          Hidden
+                          <Trans>Hidden</Trans>
                         </span>
                       ) : (
                         <button
@@ -971,7 +1025,7 @@ function HiddenPlayersPanel() {
                           onClick={() => addHiddenUser(user)}
                           className="inline-flex h-7 cursor-pointer items-center rounded-md border border-osu-pink/40 bg-osu-pink/10 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white"
                         >
-                          Hide
+                          <Trans>Hide</Trans>
                         </button>
                       )}
                     </li>
@@ -983,10 +1037,10 @@ function HiddenPlayersPanel() {
         ) : null}
       </PanelGroup>
 
-      <PanelGroup label={`Hidden list (${hiddenList.length})`}>
+      <PanelGroup label={t`Hidden list (${hiddenList.length})`}>
         {hiddenList.length === 0 ? (
           <p className="rounded-lg border border-osu-b3/40 bg-osu-b5/40 px-4 py-6 text-center text-[12px] text-osu-f1">
-            No players hidden.
+            <Trans>No players hidden.</Trans>
           </p>
         ) : (
           <ul className="space-y-2">
@@ -1005,7 +1059,7 @@ function HiddenPlayersPanel() {
                   onClick={() => removeHiddenUser(user.id)}
                   className="inline-flex h-7 cursor-pointer items-center rounded-md border border-osu-b3/60 bg-osu-b5/70 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1 transition-colors hover:border-osu-red/60 hover:bg-osu-red/10 hover:text-osu-red"
                 >
-                  Unhide
+                  <Trans>Unhide</Trans>
                 </button>
               </li>
             ))}
@@ -1099,6 +1153,7 @@ function NumberStepperSlider({
   onChange: (value: number) => void;
   hint?: string;
 }) {
+  const { t } = useLingui();
   const fillRatio = max > min ? (value - min) / (max - min) : 0;
   return (
     <div className="space-y-2">
@@ -1109,7 +1164,7 @@ function NumberStepperSlider({
             onClick={() => onChange(Math.max(min, value - step))}
             disabled={value <= min}
             className="grid h-6 w-6 cursor-pointer place-items-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/60 hover:text-white disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-osu-f1"
-            aria-label="Decrease"
+            aria-label={t`Decrease`}
           >
             <span className="text-base leading-none">−</span>
           </button>
@@ -1119,7 +1174,7 @@ function NumberStepperSlider({
             onClick={() => onChange(Math.min(max, value + step))}
             disabled={value >= max}
             className="grid h-6 w-6 cursor-pointer place-items-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/60 hover:text-white disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-osu-f1"
-            aria-label="Increase"
+            aria-label={t`Increase`}
           >
             <span className="text-base leading-none">+</span>
           </button>

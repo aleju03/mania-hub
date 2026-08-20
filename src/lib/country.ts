@@ -1,4 +1,6 @@
 import { getRegionDef, isRegionScope } from "./regions";
+import { COUNTRY_NAMES_ZH } from "./country-names-zh.generated";
+import type { AppLocale } from "./locale";
 
 export const DEFAULT_COUNTRY_CODE = "CR";
 
@@ -271,6 +273,22 @@ export function getCountryName(code?: string | null): string {
   if (region) return region.name;
   const normalized = normalizeCountryCode(code);
   return COUNTRY_NAME_BY_CODE.get(normalized) ?? normalized;
+}
+
+// Locale-aware variant of getCountryName. Country and region names come from
+// a generated static table rather than the message catalogs (210+ entries
+// nobody should hand-translate) or runtime Intl.DisplayNames (server and
+// browser ICU can disagree, which is a hydration mismatch). Missing entries
+// fall back to the English name.
+export function displayCountryName(code: string | null | undefined, locale: AppLocale): string {
+  if (locale === "zh-CN") {
+    const key = isGlobalScope(code)
+      ? GLOBAL_SCOPE_CODE
+      : (getRegionDef(code)?.code ?? normalizeCountryCode(code));
+    const zh = COUNTRY_NAMES_ZH[key];
+    if (zh) return zh;
+  }
+  return getCountryName(code);
 }
 
 export function getCountryFlagEmoji(code?: string | null): string {

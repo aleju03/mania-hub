@@ -1,0 +1,1606 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-08-20 14:25-0600\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#. placeholder {0}: formatTimeAgo(new Date(snipesFetchedAt).toISOString())
+#: src/routes/snipes.tsx
+msgid " · updated {0}"
+msgstr " · updated {0}"
+
+#. placeholder {0}: board.total
+#: src/routes/snipes.tsx
+msgid "{0, plural, one {# score} other {# scores}}"
+msgstr "{0, plural, one {# score} other {# scores}}"
+
+#. placeholder {0}: sorted.length
+#: src/routes/snipes.tsx
+msgid "{0, plural, one {# snipe} other {# snipes}}"
+msgstr "{0, plural, one {# snipe} other {# snipes}}"
+
+#. placeholder {0}: player.username
+#: src/routes/tracker.tsx
+msgid "{0} - click to filter"
+msgstr "{0} - click to filter"
+
+#. placeholder {0}: randomPick.player.favouriteCount
+#: src/routes/maps.tsx
+msgid "{0} favourites"
+msgstr "{0} favourites"
+
+#. placeholder {0}: formatNumber(currentTotal)
+#: src/routes/maps.tsx
+msgid "{0} maps"
+msgstr "{0} maps"
+
+#. placeholder {0}: formatNumber(currentTotal)
+#. placeholder {1}: formatTimeAgo(mapsUpdatedAt)
+#: src/routes/maps.tsx
+msgid "{0} maps · updated {1}"
+msgstr "{0} maps · updated {1}"
+
+#. placeholder {0}: Math.floor(days / 30)
+#: src/routes/snipes.tsx
+msgid "{0} months"
+msgstr "{0} months"
+
+#. placeholder {0}: item.label
+#: src/routes/tracker.tsx
+msgid "{0} only"
+msgstr "{0} only"
+
+#. placeholder {0}: formatNumber(entry.play_count)
+#: src/routes/rankings.tsx
+msgid "{0} plays"
+msgstr "{0} plays"
+
+#. placeholder {0}: formatNumber(randomPickCount)
+#. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0)
+#. placeholder {2}: formatTimeAgo(mapsUpdatedAt)
+#: src/routes/maps.tsx
+msgid "{0} possible picks · {1} unique sets · updated {2}"
+msgstr "{0} possible picks · {1} unique sets · updated {2}"
+
+#. placeholder {0}: formatNumber(trackerWindowCount)
+#: src/routes/tracker.tsx
+msgid "{0} scores"
+msgstr "{0} scores"
+
+#. placeholder {0}: formatNumber(globalRankingsTotal)
+#: src/routes/rankings.tsx
+msgid "{0} tracked players"
+msgstr "{0} tracked players"
+
+#. placeholder {0}: player.username
+#. placeholder {1}: formatPpGain(player.totalGain)
+#: src/components/top-plays/PpGainsRail.tsx
+msgid "{0}: +{1}pp - click to filter"
+msgstr "{0}: +{1}pp - click to filter"
+
+#: src/routes/rankings.tsx
+msgid "{countryName} mania rankings"
+msgstr "{countryName} mania rankings"
+
+#: src/routes/snipes.tsx
+msgid "{countryName} mania snipes"
+msgstr "{countryName} mania snipes"
+
+#: src/routes/top-plays.tsx
+msgid "{countryName} mania top plays"
+msgstr "{countryName} mania top plays"
+
+#: src/routes/tracker.tsx
+msgid "{countryName} mania tracker"
+msgstr "{countryName} mania tracker"
+
+#: src/routes/snipes.tsx
+msgid "{days, plural, one {# day} other {# days}}"
+msgstr "{days, plural, one {# day} other {# days}}"
+
+#: src/routes/snipes.tsx
+msgid "{hours, plural, one {# hour} other {# hours}}"
+msgstr "{hours, plural, one {# hour} other {# hours}}"
+
+#: src/routes/maps.tsx
+msgid "{message} ({percent}%)"
+msgstr "{message} ({percent}%)"
+
+#: src/components/CountryWarming.tsx
+msgid "{name} added to queue, come back later :)"
+msgstr "{name} added to queue, come back later :)"
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "{name} is ready"
+msgstr "{name} is ready"
+
+#: src/components/SnipesNotTracked.tsx
+msgid "{name} isn't one of them, so the snipes below are older history and won't update."
+msgstr "{name} isn't one of them, so the snipes below are older history and won't update."
+
+#: src/components/SnipesNotTracked.tsx
+msgid "{name} isn't one of them."
+msgstr "{name} isn't one of them."
+
+#. placeholder {0}: activeTab === "regions" ? i18n._(msg`Countries`) : i18n._(msg`Regions`)
+#: src/components/layout/CountrySelector.tsx
+msgid "{otherTabMatches, plural, one {# match} other {# matches}} in <0>{0}</0>"
+msgstr "{otherTabMatches, plural, one {# match} other {# matches}} in <0>{0}</0>"
+
+#: src/routes/rankings.tsx
+msgid "{plays} plays"
+msgstr "{plays} plays"
+
+#: src/routes/snipes.tsx
+msgid "{previousScoreAge} earlier"
+msgstr "{previousScoreAge} earlier"
+
+#: src/routes/maps.tsx
+msgid "{randomPickCount, plural, one {# pick} other {# possible picks}}"
+msgstr "{randomPickCount, plural, one {# pick} other {# possible picks}}"
+
+#: src/routes/top-plays.tsx
+msgid "{totalCount} top plays found"
+msgstr "{totalCount} top plays found"
+
+#: src/components/layout/CountrySelector.tsx
+msgid "{tracked} tracked"
+msgstr "{tracked} tracked"
+
+#: src/routes/snipes.tsx
+msgid "{years, plural, one {# year} other {# years}}"
+msgstr "{years, plural, one {# year} other {# years}}"
+
+#: src/components/ui/Pagination.tsx
+msgid "← Prev"
+msgstr "← Prev"
+
+#. placeholder {0}: s.title
+#: src/routes/index.tsx
+msgid "<0/> <1>on</1> {0}"
+msgstr "<0/> <1>on</1> {0}"
+
+#: src/routes/maps.tsx
+msgid "<0>First time loading {countryName} maps.</0> Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own."
+msgstr "<0>First time loading {countryName} maps.</0> Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own."
+
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
+msgid "▶ Watch"
+msgstr "▶ Watch"
+
+#: src/routes/top-plays.tsx
+msgid "24 hours"
+msgstr "24 hours"
+
+#: src/routes/snipes.tsx
+msgid "24h"
+msgstr "24h"
+
+#: src/routes/top-plays.tsx
+msgid "3 days"
+msgstr "3 days"
+
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+msgid "30 days"
+msgstr "30 days"
+
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+msgid "7 days"
+msgstr "7 days"
+
+#: src/routes/rankings.tsx
+msgid "7d"
+msgstr "7d"
+
+#: src/routes/rankings.tsx
+msgid "7d -"
+msgstr "7d -"
+
+#: src/routes/rankings.tsx
+msgid "7d {selectedCountry}"
+msgstr "7d {selectedCountry}"
+
+#: src/routes/rankings.tsx
+msgid "7d Country"
+msgstr "7d Country"
+
+#: src/routes/rankings.tsx
+msgid "7d Global"
+msgstr "7d Global"
+
+#: src/routes/__root.tsx
+msgid "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
+msgstr "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
+
+#: src/routes/snipes.tsx
+msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
+msgstr "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
+
+#: src/routes/rankings.tsx
+msgid "Acc"
+msgstr "Acc"
+
+#: src/components/layout/Nav.tsx
+msgid "Account"
+msgstr "Account"
+
+#: src/components/layout/Nav.tsx
+msgid "Account menu"
+msgstr "Account menu"
+
+#: src/routes/rankings.tsx
+msgid "Accuracy"
+msgstr "Accuracy"
+
+#. placeholder {0}: formatAccuracy(event.accuracy)
+#: src/routes/snipes.tsx
+msgid "Accuracy <0>{0}</0>"
+msgstr "Accuracy <0>{0}</0>"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Advanced"
+msgstr "Advanced"
+
+#: src/routes/snipes.tsx
+#: src/routes/tracker.tsx
+msgid "All"
+msgstr "All"
+
+#: src/routes/maps.tsx
+msgid "All players"
+msgstr "All players"
+
+#: src/routes/maps.tsx
+msgid "Almost there..."
+msgstr "Almost there..."
+
+#: src/routes/maps.tsx
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
+msgid "Any"
+msgstr "Any"
+
+#: src/routes/tracker.tsx
+msgid "Any grade"
+msgstr "Any grade"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "appearance"
+msgstr "appearance"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Arrows"
+msgstr "Arrows"
+
+#: src/routes/maps.tsx
+msgid "Avg PP"
+msgstr "Avg PP"
+
+#: src/routes/maps.tsx
+msgid "Avoid repeats"
+msgstr "Avoid repeats"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Background dim"
+msgstr "Background dim"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Bars"
+msgstr "Bars"
+
+#: src/components/layout/Nav.tsx
+msgid "BBCode editor"
+msgstr "BBCode editor"
+
+#: src/routes/maps.tsx
+msgid "Beatmaps played by your country"
+msgstr "Beatmaps played by your country"
+
+#: src/routes/maps.tsx
+msgid "Beatmaps played in {countryName}"
+msgstr "Beatmaps played in {countryName}"
+
+#. placeholder {0}: event.boardRank
+#: src/routes/snipes.tsx
+msgid "Board spot <0>#{0}</0>"
+msgstr "Board spot <0>#{0}</0>"
+
+#: src/routes/maps.tsx
+msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
+msgstr "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
+
+#: src/routes/maps.tsx
+msgid "Building maps for the first time..."
+msgstr "Building maps for the first time..."
+
+#: src/routes/maps.tsx
+msgid "Building maps..."
+msgstr "Building maps..."
+
+#: src/routes/tracker.tsx
+msgid "Ch"
+msgstr "Ch"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Change"
+msgstr "Change"
+
+#: src/routes/__root.tsx
+msgid "changelog"
+msgstr "changelog"
+
+#: src/routes/rankings.tsx
+msgid "Checking 7d changes..."
+msgstr "Checking 7d changes..."
+
+#: src/routes/tracker.tsx
+msgid "Choke"
+msgstr "Choke"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Circles"
+msgstr "Circles"
+
+#: src/routes/maps.tsx
+msgid "Clear"
+msgstr "Clear"
+
+#: src/routes/maps.tsx
+msgid "Clear all"
+msgstr "Clear all"
+
+#: src/routes/snipes.tsx
+msgid "Clear filters"
+msgstr "Clear filters"
+
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
+msgid "Clear player filter"
+msgstr "Clear player filter"
+
+#: src/components/settings/SettingsPanel.tsx
+#: src/routes/maps.tsx
+msgid "Clear search"
+msgstr "Clear search"
+
+#: src/components/ui/Pagination.tsx
+msgid "Click to jump to page"
+msgstr "Click to jump to page"
+
+#: src/routes/top-plays.tsx
+msgid "Click to sort ascending"
+msgstr "Click to sort ascending"
+
+#: src/routes/top-plays.tsx
+msgid "Click to sort descending"
+msgstr "Click to sort descending"
+
+#: src/routes/snipes.tsx
+msgid "Close filters"
+msgstr "Close filters"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Close settings"
+msgstr "Close settings"
+
+#: src/components/layout/Nav.tsx
+#: src/routes/maps.tsx
+msgid "collections"
+msgstr "collections"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Color"
+msgstr "Color"
+
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
+msgid "Combo"
+msgstr "Combo"
+
+#: src/routes/tracker.tsx
+msgid "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
+msgstr "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
+
+#: src/routes/tracker.tsx
+msgid "Connection lost; reconnecting."
+msgstr "Connection lost; reconnecting."
+
+#: src/components/layout/CountrySelector.tsx
+msgid "Continents"
+msgstr "Continents"
+
+#: src/routes/snipes.tsx
+msgid "Couldn't load live snipes."
+msgstr "Couldn't load live snipes."
+
+#: src/routes/maps.tsx
+msgid "Couldn't load maps data. Try again later."
+msgstr "Couldn't load maps data. Try again later."
+
+#: src/routes/index.tsx
+#: src/routes/rankings.tsx
+msgid "Couldn't load the {countryName} rankings right now."
+msgstr "Couldn't load the {countryName} rankings right now."
+
+#: src/routes/snipes.tsx
+msgid "Couldn't load the board."
+msgstr "Couldn't load the board."
+
+#: src/components/layout/CountrySelector.tsx
+msgid "Countries"
+msgstr "Countries"
+
+#: src/routes/rankings.tsx
+msgid "Country mania rankings"
+msgstr "Country mania rankings"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Cursor trail"
+msgstr "Cursor trail"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Custom color"
+msgstr "Custom color"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Custom color hex"
+msgstr "Custom color hex"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Custom cursor"
+msgstr "Custom cursor"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Customize"
+msgstr "Customize"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Customize how replays look for you. This does not change the replay skin other people see on your plays."
+msgstr "Customize how replays look for you. This does not change the replay skin other people see on your plays."
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Cut"
+msgstr "Cut"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Darkens the beatmap background so notes stay readable."
+msgstr "Darkens the beatmap background so notes stay readable."
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Decrease"
+msgstr "Decrease"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Default volume"
+msgstr "Default volume"
+
+#: src/routes/maps.tsx
+msgid "Difficulty"
+msgstr "Difficulty"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Direction"
+msgstr "Direction"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Direction & long notes"
+msgstr "Direction & long notes"
+
+#: src/components/layout/Nav.tsx
+msgid "Discord bot"
+msgstr "Discord bot"
+
+#: src/components/layout/Nav.tsx
+msgid "Discord servers"
+msgstr "Discord servers"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Downscroll"
+msgstr "Downscroll"
+
+#: src/components/layout/Nav.tsx
+msgid "Dynamic Renders"
+msgstr "Dynamic Renders"
+
+#: src/routes/maps.tsx
+msgid "Each player is equally likely, no matter how many favourites they have."
+msgstr "Each player is equally likely, no matter how many favourites they have."
+
+#: src/routes/maps.tsx
+msgid "Equal chance per map"
+msgstr "Equal chance per map"
+
+#: src/routes/maps.tsx
+msgid "Equal chance per player"
+msgstr "Equal chance per player"
+
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
+msgid "Estimated pp gain from replacing your previous best score on this map"
+msgstr "Estimated pp gain from replacing your previous best score on this map"
+
+#: src/routes/maps.tsx
+msgid "Every favourited map is equally likely. Players with bigger collections show up more often as a result."
+msgstr "Every favourited map is equally likely. Players with bigger collections show up more often as a result."
+
+#: src/routes/snipes.tsx
+msgid "Explore Global maps"
+msgstr "Explore Global maps"
+
+#: src/components/layout/Nav.tsx
+msgid "farm helper"
+msgstr "farm helper"
+
+#: src/routes/maps.tsx
+msgid "Farmed"
+msgstr "Farmed"
+
+#: src/routes/maps.tsx
+msgid "Favourites"
+msgstr "Favourites"
+
+#: src/routes/maps.tsx
+msgid "Favourites globally"
+msgstr "Favourites globally"
+
+#: src/routes/maps.tsx
+msgid "Favourites in {countryName}"
+msgstr "Favourites in {countryName}"
+
+#: src/routes/tracker.tsx
+msgid "FC"
+msgstr "FC"
+
+#: src/routes/tracker.tsx
+msgid "FC chokes only (1 miss)"
+msgstr "FC chokes only (1 miss)"
+
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
+msgid "Filter by keymode"
+msgstr "Filter by keymode"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "filters"
+msgstr "filters"
+
+#: src/routes/maps.tsx
+#: src/routes/snipes.tsx
+msgid "Filters"
+msgstr "Filters"
+
+#: src/components/layout/Nav.tsx
+msgid "find player..."
+msgstr "find player..."
+
+#: src/components/ui/Pagination.tsx
+msgid "First page"
+msgstr "First page"
+
+#: src/components/CountryWarming.tsx
+msgid "First time anyone has visited {name}. Its rankings, maps and live tracking are being set up in the background."
+msgstr "First time anyone has visited {name}. Its rankings, maps and live tracking are being set up in the background."
+
+#: src/routes/maps.tsx
+msgid "Flip direction"
+msgstr "Flip direction"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Full"
+msgstr "Full"
+
+#: src/routes/tracker.tsx
+msgid "Full combos only (0 misses)"
+msgstr "Full combos only (0 misses)"
+
+#: src/routes/index.tsx
+msgid "Global"
+msgstr "Global"
+
+#: src/routes/rankings.tsx
+msgid "Global mania rankings"
+msgstr "Global mania rankings"
+
+#: src/routes/snipes.tsx
+msgid "Global mania snipes"
+msgstr "Global mania snipes"
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "Global tracker is ready"
+msgstr "Global tracker is ready"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Glow"
+msgstr "Glow"
+
+#: src/routes/__root.tsx
+msgid "Go home"
+msgstr "Go home"
+
+#: src/components/layout/Nav.tsx
+msgid "Goals"
+msgstr "Goals"
+
+#: src/routes/tracker.tsx
+msgid "Grade"
+msgstr "Grade"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Hidden"
+msgstr "Hidden"
+
+#. placeholder {0}: hiddenList.length
+#: src/components/settings/SettingsPanel.tsx
+msgid "Hidden list ({0})"
+msgstr "Hidden list ({0})"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Hide"
+msgstr "Hide"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Hide players"
+msgstr "Hide players"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Higher values make notes travel faster across the playfield."
+msgstr "Higher values make notes travel faster across the playfield."
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
+msgstr "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
+
+#: src/components/layout/Nav.tsx
+msgid "home"
+msgstr "home"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "How far the colored glow reaches around the cursor core."
+msgstr "How far the colored glow reaches around the cursor core."
+
+#: src/routes/maps.tsx
+msgid "How to pick"
+msgstr "How to pick"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Increase"
+msgstr "Increase"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Interface language"
+msgstr "Interface language"
+
+#: src/routes/maps.tsx
+#: src/routes/snipes.tsx
+#: src/routes/tracker.tsx
+msgid "Keys"
+msgstr "Keys"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Language"
+msgstr "Language"
+
+#: src/routes/tracker.tsx
+msgid "Last 24h"
+msgstr "Last 24h"
+
+#. placeholder {0}: formatNumber(trackerWindowCount)
+#: src/routes/tracker.tsx
+msgid "Last 24h · {0} scores"
+msgstr "Last 24h · {0} scores"
+
+#: src/components/ui/Pagination.tsx
+msgid "Last page"
+msgstr "Last page"
+
+#: src/routes/snipes.tsx
+msgid "Leaderboard"
+msgstr "Leaderboard"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Leaves a short fading trail behind the cursor."
+msgstr "Leaves a short fading trail behind the cursor."
+
+#: src/routes/tracker.tsx
+msgid "Left click for FCs, right click for FC chokes"
+msgstr "Left click for FCs, right click for FC chokes"
+
+#: src/routes/tracker.tsx
+msgid "Left click for highest star rating first, right click for lowest first"
+msgstr "Left click for highest star rating first, right click for lowest first"
+
+#: src/routes/maps.tsx
+msgid "Length"
+msgstr "Length"
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "Live data is unavailable"
+msgstr "Live data is unavailable"
+
+#: src/routes/tracker.tsx
+msgid "Live feed reconnecting"
+msgstr "Live feed reconnecting"
+
+#: src/routes/tracker.tsx
+msgid "Live score tracker"
+msgstr "Live score tracker"
+
+#: src/routes/tracker.tsx
+msgid "Live score tracker - {countryName}"
+msgstr "Live score tracker - {countryName}"
+
+#: src/routes/tracker.tsx
+msgid "Live updates delayed"
+msgstr "Live updates delayed"
+
+#: src/routes/tracker.tsx
+msgid "Live updates on"
+msgstr "Live updates on"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "LN tail"
+msgstr "LN tail"
+
+#: src/routes/snipes.tsx
+msgid "Loading {countryName} snipes…"
+msgstr "Loading {countryName} snipes…"
+
+#: src/routes/snipes.tsx
+msgid "Loading board…"
+msgstr "Loading board…"
+
+#: src/routes/maps.tsx
+msgid "Loading maps..."
+msgstr "Loading maps..."
+
+#: src/routes/top-plays.tsx
+msgid "Loading page..."
+msgstr "Loading page..."
+
+#: src/routes/rankings.tsx
+msgid "Loading rankings..."
+msgstr "Loading rankings..."
+
+#: src/routes/top-plays.tsx
+msgid "Loading top plays..."
+msgstr "Loading top plays..."
+
+#: src/routes/snipes.tsx
+msgid "Loading..."
+msgstr "Loading..."
+
+#: src/components/layout/Nav.tsx
+msgid "Log in with osu!"
+msgstr "Log in with osu!"
+
+#: src/components/layout/Nav.tsx
+msgid "Logout"
+msgstr "Logout"
+
+#: src/routes/__root.tsx
+msgid "made by"
+msgstr "made by"
+
+#: src/routes/maps.tsx
+msgid "Mania maps"
+msgstr "Mania maps"
+
+#: src/routes/maps.tsx
+msgid "Map collections"
+msgstr "Map collections"
+
+#: src/routes/maps.tsx
+msgid "Map search"
+msgstr "Map search"
+
+#: src/components/layout/Nav.tsx
+msgid "maps"
+msgstr "maps"
+
+#: src/routes/maps.tsx
+msgid "Maps boards are built per country, plus one combined board for Global. There isn't one for {countryName} yet, so pick one of its countries or switch to Global."
+msgstr "Maps boards are built per country, plus one combined board for Global. There isn't one for {countryName} yet, so pick one of its countries or switch to Global."
+
+#: src/routes/maps.tsx
+msgid "Maps build failed."
+msgstr "Maps build failed."
+
+#: src/routes/maps.tsx
+msgid "Maps ready."
+msgstr "Maps ready."
+
+#. placeholder {0}: formatNumber(Math.max(0, event.totalScore - event.victimTotalScore!))
+#: src/routes/snipes.tsx
+msgid "Margin <0>+{0}</0>"
+msgstr "Margin <0>+{0}</0>"
+
+#: src/routes/maps.tsx
+msgid "Max PP"
+msgstr "Max PP"
+
+#: src/routes/maps.tsx
+msgid "Min PP"
+msgstr "Min PP"
+
+#: src/routes/maps.tsx
+msgid "Minimum PP"
+msgstr "Minimum PP"
+
+#: src/routes/maps.tsx
+msgid "Mods"
+msgstr "Mods"
+
+#: src/components/layout/Nav.tsx
+msgid "more"
+msgstr "more"
+
+#: src/routes/maps.tsx
+msgid "Most farmed globally"
+msgstr "Most farmed globally"
+
+#: src/routes/maps.tsx
+msgid "Most farmed in {countryName}"
+msgstr "Most farmed in {countryName}"
+
+#: src/routes/maps.tsx
+msgid "Most Played"
+msgstr "Most Played"
+
+#: src/routes/maps.tsx
+msgid "Most played globally"
+msgstr "Most played globally"
+
+#: src/routes/maps.tsx
+msgid "Most played in {countryName}"
+msgstr "Most played in {countryName}"
+
+#: src/components/layout/Nav.tsx
+msgid "My Stats"
+msgstr "My Stats"
+
+#: src/routes/tracker.tsx
+msgid "New scores stream in live over this connection."
+msgstr "New scores stream in live over this connection."
+
+#: src/components/ui/Pagination.tsx
+msgid "Next →"
+msgstr "Next →"
+
+#: src/components/ui/Pagination.tsx
+msgid "Next page"
+msgstr "Next page"
+
+#: src/routes/rankings.tsx
+msgid "Next Page"
+msgstr "Next Page"
+
+#: src/routes/snipes.tsx
+msgid "No board stored for this lane yet."
+msgstr "No board stored for this lane yet."
+
+#: src/routes/rankings.tsx
+msgid "No change in the last 7 days"
+msgstr "No change in the last 7 days"
+
+#: src/components/layout/CountrySelector.tsx
+msgid "No countries found"
+msgstr "No countries found"
+
+#: src/routes/maps.tsx
+msgid "No favourites found for any player in the top 50."
+msgstr "No favourites found for any player in the top 50."
+
+#: src/routes/maps.tsx
+msgid "No favourites match your filters. Try loosening them."
+msgstr "No favourites match your filters. Try loosening them."
+
+#: src/routes/maps.tsx
+msgid "No maps match your filters"
+msgstr "No maps match your filters"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "No players found."
+msgstr "No players found."
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "No players hidden."
+msgstr "No players hidden."
+
+#: src/routes/rankings.tsx
+msgid "No rank data from 7 days ago yet"
+msgstr "No rank data from 7 days ago yet"
+
+#: src/routes/index.tsx
+#: src/routes/rankings.tsx
+msgid "No ranked players yet."
+msgstr "No ranked players yet."
+
+#: src/routes/index.tsx
+msgid "No recent scores"
+msgstr "No recent scores"
+
+#: src/routes/tracker.tsx
+msgid "No recent scores yet."
+msgstr "No recent scores yet."
+
+#: src/routes/index.tsx
+msgid "No recent top plays"
+msgstr "No recent top plays"
+
+#: src/routes/maps.tsx
+msgid "No region maps boards yet"
+msgstr "No region maps boards yet"
+
+#: src/components/layout/CountrySelector.tsx
+msgid "No regions found"
+msgstr "No regions found"
+
+#: src/routes/tracker.tsx
+msgid "No scores match this filter"
+msgstr "No scores match this filter"
+
+#: src/routes/snipes.tsx
+msgid "No snipes match the current filters."
+msgstr "No snipes match the current filters."
+
+#: src/routes/snipes.tsx
+msgid "No snipes tracked yet for {countryName}."
+msgstr "No snipes tracked yet for {countryName}."
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "No top plays found"
+msgstr "No top plays found"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "None set. <0>Pick one from the skins page</0>."
+msgstr "None set. <0>Pick one from the skins page</0>."
+
+#: src/components/layout/Nav.tsx
+msgid "Not signed in"
+msgstr "Not signed in"
+
+#: src/components/layout/CountrySelector.tsx
+msgid "Not tracked yet"
+msgstr "Not tracked yet"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Note shape"
+msgstr "Note shape"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Off means you are only part of the count. Needs you signed in."
+msgstr "Off means you are only part of the count. Needs you signed in."
+
+#. placeholder {0}: entry.user.username
+#. placeholder {0}: event.sniper.username
+#. placeholder {0}: event.victim.username
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+msgid "Open {0}'s profile"
+msgstr "Open {0}'s profile"
+
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+msgid "Open beatmap on osu!"
+msgstr "Open beatmap on osu!"
+
+#: src/components/layout/Nav.tsx
+msgid "open packs"
+msgstr "open packs"
+
+#: src/routes/rankings.tsx
+msgid "osu!mania country rankings"
+msgstr "osu!mania country rankings"
+
+#: src/routes/maps.tsx
+msgid "osu!mania maps played by top country players."
+msgstr "osu!mania maps played by top country players."
+
+#: src/routes/maps.tsx
+msgid "osu!mania maps played by top players in {countryName}."
+msgstr "osu!mania maps played by top players in {countryName}."
+
+#: src/routes/index.tsx
+msgid "osu!mania rankings & live score tracker"
+msgstr "osu!mania rankings & live score tracker"
+
+#: src/routes/maps.tsx
+msgid "Other"
+msgstr "Other"
+
+#: src/components/layout/Nav.tsx
+msgid "packs"
+msgstr "packs"
+
+#. placeholder {0}: page + 1
+#: src/components/ui/Pagination.tsx
+msgid "Page {0} of {totalPages}"
+msgstr "Page {0} of {totalPages}"
+
+#: src/routes/rankings.tsx
+msgid "Page 1"
+msgstr "Page 1"
+
+#: src/routes/tracker.tsx
+msgid "Pass"
+msgstr "Pass"
+
+#: src/routes/rankings.tsx
+msgid "Play Count"
+msgstr "Play Count"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "playback"
+msgstr "playback"
+
+#. placeholder {0}: lazer ? "Lazer" : "Stable"
+#: src/routes/top-plays.tsx
+msgid "Played on: <0>{0}</0>"
+msgstr "Played on: <0>{0}</0>"
+
+#: src/routes/rankings.tsx
+msgid "Player"
+msgstr "Player"
+
+#: src/components/layout/Nav.tsx
+msgid "players"
+msgstr "players"
+
+#: src/routes/maps.tsx
+msgid "Players"
+msgstr "Players"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Players you hide are filtered out of rankings and feeds across the site. This list is stored on this browser only."
+msgstr "Players you hide are filtered out of rankings and feeds across the site. This list is stored on this browser only."
+
+#: src/routes/tracker.tsx
+msgid "Playing"
+msgstr "Playing"
+
+#: src/routes/maps.tsx
+#: src/routes/rankings.tsx
+msgid "Plays"
+msgstr "Plays"
+
+#: src/routes/top-plays.tsx
+msgid "PP Gain"
+msgstr "PP Gain"
+
+#: src/components/top-plays/PpGainsRail.tsx
+msgid "PP Gained"
+msgstr "PP Gained"
+
+#: src/components/ui/Pagination.tsx
+msgid "Previous page"
+msgstr "Previous page"
+
+#: src/routes/snipes.tsx
+msgid "Previously"
+msgstr "Previously"
+
+#: src/routes/__root.tsx
+msgid "privacy"
+msgstr "privacy"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "private · updated {updatedAtLabel}"
+msgstr "private · updated {updatedAtLabel}"
+
+#: src/components/BackendOfflineScreen.tsx
+msgid "Probably restarting or under maintenance. Try again in a bit."
+msgstr "Probably restarting or under maintenance. Try again in a bit."
+
+#: src/components/layout/Nav.tsx
+msgid "Profile"
+msgstr "Profile"
+
+#: src/routes/maps.tsx
+msgid "Random"
+msgstr "Random"
+
+#: src/routes/maps.tsx
+msgid "random pick from"
+msgstr "random pick from"
+
+#: src/routes/maps.tsx
+msgid "Random picks from the favourites pool"
+msgstr "Random picks from the favourites pool"
+
+#: src/routes/maps.tsx
+msgid "Random picks globally"
+msgstr "Random picks globally"
+
+#: src/routes/maps.tsx
+msgid "Random picks in {countryName}"
+msgstr "Random picks in {countryName}"
+
+#: src/routes/snipes.tsx
+msgid "Range"
+msgstr "Range"
+
+#: src/routes/tracker.tsx
+msgid "Ranked (PP)"
+msgstr "Ranked (PP)"
+
+#: src/components/layout/Nav.tsx
+msgid "rankings"
+msgstr "rankings"
+
+#: src/routes/index.tsx
+msgid "Rankings"
+msgstr "Rankings"
+
+#: src/routes/top-plays.tsx
+msgid "Recent"
+msgstr "Recent"
+
+#: src/routes/maps.tsx
+msgid "Recent plays"
+msgstr "Recent plays"
+
+#: src/routes/index.tsx
+msgid "Recent Scores"
+msgstr "Recent Scores"
+
+#: src/routes/top-plays.tsx
+msgid "Recent top osu!mania plays and pp records by country."
+msgstr "Recent top osu!mania plays and pp records by country."
+
+#: src/routes/top-plays.tsx
+msgid "Recent top osu!mania plays and pp records in {countryName}."
+msgstr "Recent top osu!mania plays and pp records in {countryName}."
+
+#: src/routes/index.tsx
+msgid "Recent Top Plays"
+msgstr "Recent Top Plays"
+
+#: src/routes/maps.tsx
+msgid "Refreshing maps..."
+msgstr "Refreshing maps..."
+
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
+msgid "Refreshing..."
+msgstr "Refreshing..."
+
+#: src/components/layout/CountrySelector.tsx
+msgid "Regions"
+msgstr "Regions"
+
+#: src/routes/__root.tsx
+msgid "Reload page"
+msgstr "Reload page"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Remove"
+msgstr "Remove"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Replaces the mouse cursor with an osu!-style cursor across the site. Desktop only."
+msgstr "Replaces the mouse cursor with an osu!-style cursor across the site. Desktop only."
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Replay skin"
+msgstr "Replay skin"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Replays play with their player's published skin. Turn off to always use yours."
+msgstr "Replays play with their player's published skin. Turn off to always use yours."
+
+#: src/routes/maps.tsx
+msgid "Reroll"
+msgstr "Reroll"
+
+#: src/routes/maps.tsx
+msgid "Reroll settings"
+msgstr "Reroll settings"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Reset all"
+msgstr "Reset all"
+
+#: src/routes/maps.tsx
+msgid "Saving maps..."
+msgstr "Saving maps..."
+
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+msgid "Score"
+msgstr "Score"
+
+#: src/routes/tracker.tsx
+msgid "Scores"
+msgstr "Scores"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Scroll direction"
+msgstr "Scroll direction"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Scroll speed"
+msgstr "Scroll speed"
+
+#: src/routes/maps.tsx
+msgid "search"
+msgstr "search"
+
+#: src/routes/maps.tsx
+msgid "Search by title, artist, mapper, or difficulty"
+msgstr "Search by title, artist, mapper, or difficulty"
+
+#: src/routes/maps.tsx
+msgid "Search every ranked osu!mania map by title, keymode, stars, and status."
+msgstr "Search every ranked osu!mania map by title, keymode, stars, and status."
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Search failed. Try again."
+msgstr "Search failed. Try again."
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Search players by username"
+msgstr "Search players by username"
+
+#: src/routes/maps.tsx
+msgid "Search title, artist, mapper, or difficulty"
+msgstr "Search title, artist, mapper, or difficulty"
+
+#: src/components/layout/CountrySelector.tsx
+msgid "Search..."
+msgstr "Search..."
+
+#: src/components/layout/CountrySelector.tsx
+msgid "Select country"
+msgstr "Select country"
+
+#: src/routes/snipes.tsx
+msgid "Set"
+msgstr "Set"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "settings"
+msgstr "settings"
+
+#: src/components/layout/Nav.tsx
+msgid "Settings"
+msgstr "Settings"
+
+#. placeholder {0}: formatNumber(currentTotal)
+#: src/routes/maps.tsx
+msgid "Show {0} maps"
+msgstr "Show {0} maps"
+
+#. placeholder {0}: formatNumber(randomPickCount)
+#: src/routes/maps.tsx
+msgid "Show {0} picks"
+msgstr "Show {0} picks"
+
+#. placeholder {0}: formatNumber(board.entries.length)
+#: src/routes/snipes.tsx
+msgid "Show all {0}"
+msgstr "Show all {0}"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Show my name under spectators when watching a replay"
+msgstr "Show my name under spectators when watching a replay"
+
+#: src/routes/top-plays.tsx
+msgid "Show non-4K plays"
+msgstr "Show non-4K plays"
+
+#: src/routes/tracker.tsx
+msgid "Show non-4K scores"
+msgstr "Show non-4K scores"
+
+#: src/routes/tracker.tsx
+msgid "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
+msgstr "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
+
+#: src/routes/tracker.tsx
+msgid "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
+msgstr "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Sign in to set a replay skin for your plays."
+msgstr "Sign in to set a replay skin for your plays."
+
+#: src/components/layout/Nav.tsx
+msgid "Signed in as"
+msgstr "Signed in as"
+
+#. placeholder {0}: auth.viewer.username
+#: src/components/layout/Nav.tsx
+msgid "Signed in as {0}"
+msgstr "Signed in as {0}"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Size"
+msgstr "Size"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "skin & layout"
+msgstr "skin & layout"
+
+#: src/components/layout/Nav.tsx
+msgid "skins"
+msgstr "skins"
+
+#: src/routes/maps.tsx
+msgid "Skips the last few players and maps you were shown."
+msgstr "Skips the last few players and maps you were shown."
+
+#: src/components/SnipesNotTracked.tsx
+msgid "Snipe tracking runs for a small set of countries because it's an expensive operation."
+msgstr "Snipe tracking runs for a small set of countries because it's an expensive operation."
+
+#: src/routes/snipes.tsx
+msgid "sniped"
+msgstr "sniped"
+
+#: src/routes/snipes.tsx
+msgid "Sniper"
+msgstr "Sniper"
+
+#: src/components/layout/Nav.tsx
+msgid "snipes"
+msgstr "snipes"
+
+#: src/routes/snipes.tsx
+msgid "Snipes"
+msgstr "Snipes"
+
+#: src/routes/snipes.tsx
+msgid "Snipes - {countryName}"
+msgstr "Snipes - {countryName}"
+
+#: src/routes/snipes.tsx
+msgid "Snipes appear when tracked country players push each other down a beatmap's country leaderboard."
+msgstr "Snipes appear when tracked country players push each other down a beatmap's country leaderboard."
+
+#: src/components/SnipesNotTracked.tsx
+msgid "Snipes aren't tracked for {name}"
+msgstr "Snipes aren't tracked for {name}"
+
+#: src/routes/snipes.tsx
+msgid "Snipes don't apply to Global"
+msgstr "Snipes don't apply to Global"
+
+#: src/routes/__root.tsx
+msgid "Something broke"
+msgstr "Something broke"
+
+#: src/routes/tracker.tsx
+msgid "Sort"
+msgstr "Sort"
+
+#: src/routes/maps.tsx
+msgid "Sort by"
+msgstr "Sort by"
+
+#: src/routes/tracker.tsx
+msgid "Sorting highest star rating first - left click for ascending, right click to clear"
+msgstr "Sorting highest star rating first - left click for ascending, right click to clear"
+
+#: src/routes/tracker.tsx
+msgid "Sorting lowest star rating first - left click to clear, right click for descending"
+msgstr "Sorting lowest star rating first - left click to clear, right click for descending"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Spectators"
+msgstr "Spectators"
+
+#: src/routes/maps.tsx
+msgid "Star rating"
+msgstr "Star rating"
+
+#: src/routes/maps.tsx
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
+msgid "Stars"
+msgstr "Stars"
+
+#. placeholder {0}: event.beatmap.difficulty_rating.toFixed(2)
+#: src/routes/snipes.tsx
+msgid "Stars <0>{0}</0>"
+msgstr "Stars <0>{0}</0>"
+
+#: src/routes/maps.tsx
+msgid "Status"
+msgstr "Status"
+
+#: src/components/layout/CountrySelector.tsx
+msgid "Subregions"
+msgstr "Subregions"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Sure?"
+msgstr "Sure?"
+
+#. placeholder {0}: displayCountryName(viewerCountryCode, locale)
+#: src/components/layout/Nav.tsx
+msgid "Switch country to {0}"
+msgstr "Switch country to {0}"
+
+#. placeholder {0}: displayCountryName(viewerCountryCode, locale)
+#: src/components/layout/Nav.tsx
+msgid "Switch to {0}"
+msgstr "Switch to {0}"
+
+#: src/routes/maps.tsx
+msgid "Tags"
+msgstr "Tags"
+
+#: src/components/BackendOfflineScreen.tsx
+msgid "Temporarily offline"
+msgstr "Temporarily offline"
+
+#: src/routes/__root.tsx
+msgid "terms"
+msgstr "terms"
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "The live feed is connected. New plays will start showing up as players submit them."
+msgstr "The live feed is connected. New plays will start showing up as players submit them."
+
+#: src/routes/__root.tsx
+msgid "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."
+msgstr "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "The rankings are here, but this country was added recently. New plays will start showing up once players submit them."
+msgstr "The rankings are here, but this country was added recently. New plays will start showing up once players submit them."
+
+#: src/routes/tracker.tsx
+msgid "These players finished the same maps within seconds of each other, repeatedly: a multiplayer lobby"
+msgstr "These players finished the same maps within seconds of each other, repeatedly: a multiplayer lobby"
+
+#: src/routes/__root.tsx
+msgid "This page doesn't exist."
+msgstr "This page doesn't exist."
+
+#: src/components/CountryWarming.tsx
+msgid "This page will load automatically once {name} is ready."
+msgstr "This page will load automatically once {name} is ready."
+
+#: src/components/layout/Nav.tsx
+msgid "Toggle menu"
+msgstr "Toggle menu"
+
+#. placeholder {0}: event.boardRank
+#: src/routes/snipes.tsx
+msgid "Took the country board's #{0} spot"
+msgstr "Took the country board's #{0} spot"
+
+#. placeholder {0}: board.entries.length
+#. placeholder {1}: formatNumber(board.total)
+#: src/routes/snipes.tsx
+msgid "Top {0} of {1}"
+msgstr "Top {0} of {1}"
+
+#: src/routes/top-plays.tsx
+msgid "Top mania plays in {countryName}"
+msgstr "Top mania plays in {countryName}"
+
+#: src/routes/rankings.tsx
+msgid "Top osu!mania players in {countryName}"
+msgstr "Top osu!mania players in {countryName}"
+
+#: src/routes/index.tsx
+msgid "Top osu!mania players, live scores, and pp records in {countryName}"
+msgstr "Top osu!mania players, live scores, and pp records in {countryName}"
+
+#: src/routes/top-plays.tsx
+msgid "Top osu!mania plays"
+msgstr "Top osu!mania plays"
+
+#: src/routes/index.tsx
+msgid "Top players"
+msgstr "Top players"
+
+#: src/components/layout/Nav.tsx
+msgid "top plays"
+msgstr "top plays"
+
+#: src/components/layout/Nav.tsx
+msgid "tracker"
+msgstr "tracker"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Trail color"
+msgstr "Trail color"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Trail thickness"
+msgstr "Trail thickness"
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "Try a wider range or check back later."
+msgstr "Try a wider range or check back later."
+
+#: src/components/BackendOfflineScreen.tsx
+msgid "Try again"
+msgstr "Try again"
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "Try again in a bit."
+msgstr "Try again in a bit."
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Unhide"
+msgstr "Unhide"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "updated {updatedAtLabel}"
+msgstr "updated {updatedAtLabel}"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Upscroll"
+msgstr "Upscroll"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Used when a replay or map preview opens."
+msgstr "Used when a replay or map preview opens."
+
+#: src/routes/index.tsx
+msgid "view all"
+msgstr "view all"
+
+#: src/routes/snipes.tsx
+msgid "View beatmap →"
+msgstr "View beatmap →"
+
+#: src/routes/top-plays.tsx
+msgid "View on osu! →"
+msgstr "View on osu! →"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Viewer editor"
+msgstr "Viewer editor"
+
+#: src/routes/snipes.tsx
+msgid "vs"
+msgstr "vs"
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "Waiting for new scores"
+msgstr "Waiting for new scores"
+
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
+msgid "Watch replay"
+msgstr "Watch replay"
+
+#: src/components/layout/Nav.tsx
+msgid "watch replays"
+msgstr "watch replays"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Watch replays with the player's skin"
+msgstr "Watch replays with the player's skin"
+
+#: src/routes/snipes.tsx
+msgid "Won on score, not pp"
+msgstr "Won on score, not pp"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remove someone to add more."
+msgstr "You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remove someone to add more."
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Your replay skin"
+msgstr "Your replay skin"

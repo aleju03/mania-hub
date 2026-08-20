@@ -1,6 +1,7 @@
 import { createStart, createMiddleware } from "@tanstack/react-start";
 import { hasAuthCookieHeader } from "./lib/auth-shared";
 import { hasCountryCookieHeader } from "./lib/country-cookie";
+import { hasLocaleCookieHeader } from "./lib/locale-cookie";
 import { getAppRateLimitClientIp } from "./lib/app-client-ip";
 import { trackServerEvent } from "./lib/server-track";
 
@@ -227,7 +228,12 @@ const documentCacheMiddleware = createMiddleware().server(
       return result;
     }
 
-    if (!hasCountryCookieHeader(cookieHeader)) {
+    // A request missing either identity cookie gets a private response: its
+    // HTML was resolved from request-specific signals (geo IP for country,
+    // Accept-Language for locale) that are not part of the Vary: Cookie cache
+    // key, and the response carries the Set-Cookie that pins the decision.
+    // The next request has both cookies and is publicly cacheable.
+    if (!hasCountryCookieHeader(cookieHeader) || !hasLocaleCookieHeader(cookieHeader)) {
       try {
         response.headers.set("Cache-Control", "private, no-store");
         response.headers.set("Vary", "Cookie");
@@ -244,13 +250,13 @@ const documentCacheMiddleware = createMiddleware().server(
 
     try {
       response.headers.set("Cache-Control", formatCacheControl(cacheConfig));
-      // Key the CDN cache per country. The HTML embeds country-specific
-      // state (nav, initial context) resolved from the `mania-hub-country`
-      // cookie, so responses differ per country. `Vary: Cookie` makes the
-      // edge key by cookie value, producing one cached variant per country
-      // (plus an anonymous "no cookie" bucket). Authenticated requests are
-      // handled above as private/no-store so per-user dev access never gets
-      // cached into a shared document.
+      // Key the CDN cache per country and locale. The HTML embeds state
+      // resolved from the `mania-hub-country` and `mania-hub-locale` cookies
+      // (nav, initial context, UI language), so responses differ per pair.
+      // `Vary: Cookie` makes the edge key by cookie value, producing one
+      // cached variant per country x locale (plus an anonymous "no cookie"
+      // bucket). Authenticated requests are handled above as private/no-store
+      // so per-user dev access never gets cached into a shared document.
       response.headers.set("Vary", "Cookie");
     } catch {
       // Some response objects have immutable headers — silently skip.

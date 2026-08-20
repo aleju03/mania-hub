@@ -1,6 +1,9 @@
 import { createFileRoute, Link, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { Globe } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { getI18n } from "../lib/i18n";
 import { getCountryName, isGlobalScope } from "../lib/country";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo } from "../lib/format";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -61,9 +64,10 @@ export const Route = createFileRoute("/snipes")({
   head: ({ match }) => {
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
+    const i18n = getI18n(match.context.locale);
     return {
       meta: [
-        { title: countryName ? `Snipes - ${countryName}` : "Snipes" },
+        { title: countryName ? i18n._(msg`Snipes - ${countryName}`) : i18n._(msg`Snipes`) },
         { name: "description", content: "" },
         { name: "robots", content: "noindex, nofollow" },
       ],
@@ -82,6 +86,7 @@ export const Route = createFileRoute("/snipes")({
 });
 
 function SnipesPage() {
+  const { t } = useLingui();
   const search = Route.useSearch();
   const location = useLocation();
   const navigate = useNavigate();
@@ -132,7 +137,7 @@ function SnipesPage() {
       })
       .catch((err) => {
         if (currentCountryRef.current === requestedCountry && snipes.length === 0) {
-          setError(err instanceof Error ? err.message : "Couldn't load live snipes.");
+          setError(err instanceof Error ? err.message : t`Couldn't load live snipes.`);
         }
       });
     return () => {
@@ -325,7 +330,7 @@ function SnipesPage() {
   if (!liveBackendEnabled) {
     return (
       <div className="flex-1">
-        <PageHeader iconSrc="/images/icons/snipes.svg" title={`${countryName} mania snipes`} />
+        <PageHeader iconSrc="/images/icons/snipes.svg" title={t`${countryName} mania snipes`} />
         <LiveBackendRequired />
       </div>
     );
@@ -336,17 +341,19 @@ function SnipesPage() {
   if (selectedIsGlobal) {
     return (
       <div className="flex-1">
-        <PageHeader iconSrc="/images/icons/snipes.svg" title="Global mania snipes" />
+        <PageHeader iconSrc="/images/icons/snipes.svg" title={t`Global mania snipes`} />
         <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 py-12 sm:py-20">
           <div className="mx-auto max-w-md rounded-xl border border-osu-b3/30 bg-osu-b4/80 px-6 py-10 text-center backdrop-blur-sm">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-osu-pink/15 text-osu-pink-light">
               <Globe className="h-6 w-6" strokeWidth={2.2} />
             </span>
-            <p className="mt-5 text-sm font-medium text-osu-c2">Snipes don't apply to Global</p>
+            <p className="mt-5 text-sm font-medium text-osu-c2"><Trans>Snipes don't apply to Global</Trans></p>
             <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-              A snipe is one country's player overtaking another on a board, so it
-              only makes sense within a single country. Pick a country to see its
-              snipes, or explore the combined Maps view.
+              <Trans>
+                A snipe is one country's player overtaking another on a board, so it
+                only makes sense within a single country. Pick a country to see its
+                snipes, or explore the combined Maps view.
+              </Trans>
             </p>
             <Link
               to="/maps"
@@ -354,7 +361,7 @@ function SnipesPage() {
               className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-osu-pink/20 px-3.5 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/30 hover:text-white"
             >
               <Globe className="h-3.5 w-3.5" strokeWidth={2.4} />
-              Explore Global maps
+              <Trans>Explore Global maps</Trans>
             </Link>
           </div>
         </div>
@@ -366,21 +373,21 @@ function SnipesPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/snipes.svg"
-        title={`${countryName} mania snipes`}
+        title={t`${countryName} mania snipes`}
         right={
           <div className="flex items-center gap-2">
             {(loading || refreshing) && !error && (
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1">
-                  {loading ? "Loading..." : "Refreshing..."}
+                  {loading ? <Trans>Loading...</Trans> : <Trans>Refreshing...</Trans>}
                 </span>
               </div>
             )}
             {!loading && !refreshing && !error && visibleSnipes.length > 0 && (
               <span className="text-[10px] text-osu-f1">
-                {sorted.length} {sorted.length === 1 ? "snipe" : "snipes"}
-                {snipesFetchedAt ? ` · updated ${formatTimeAgo(new Date(snipesFetchedAt).toISOString())}` : ""}
+                <Plural value={sorted.length} one="# snipe" other="# snipes" />
+                {snipesFetchedAt ? t` · updated ${formatTimeAgo(new Date(snipesFetchedAt).toISOString())}` : ""}
               </span>
             )}
           </div>
@@ -409,7 +416,7 @@ function SnipesPage() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
               </svg>
-              <span>Filters</span>
+              <span><Trans>Filters</Trans></span>
               {activeFilterCount > 0 && (
                 <span className="inline-flex min-w-[18px] h-[18px] shrink-0 items-center justify-center self-center rounded-full bg-osu-pink/30 px-1 text-[10px] font-bold leading-none text-osu-pink-light tabular-nums">
                   <span className="relative -top-px">{activeFilterCount}</span>
@@ -455,7 +462,7 @@ function SnipesPage() {
             </div>
             <div className="sm:hidden flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <h3 className="text-[12px] font-bold text-osu-l2 uppercase tracking-wider">Filters</h3>
+                <h3 className="text-[12px] font-bold text-osu-l2 uppercase tracking-wider"><Trans>Filters</Trans></h3>
                 {activeFilterCount > 0 && (
                   <span className="inline-flex min-w-[18px] h-[18px] shrink-0 items-center justify-center self-center rounded-full bg-osu-pink/30 px-1 text-[10px] font-bold leading-none text-osu-pink-light tabular-nums">
                     <span className="relative -top-px">{activeFilterCount}</span>
@@ -464,7 +471,7 @@ function SnipesPage() {
               </div>
               <button
                 onClick={() => setFiltersOpen(false)}
-                aria-label="Close filters"
+                aria-label={t`Close filters`}
                 className="p-1 text-osu-f1 hover:text-white transition-colors cursor-pointer"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
@@ -474,27 +481,27 @@ function SnipesPage() {
               </button>
             </div>
 
-            <FilterField label="Range">
+            <FilterField label={t`Range`}>
               <SegmentedControl
                 id="snipes-range"
                 value={search.range}
                 className="max-sm:flex max-sm:w-full max-sm:*:flex-1"
                 options={[
-                  { value: "24h", label: "24h" },
-                  { value: "7d", label: "7 days" },
-                  { value: "30d", label: "30 days" },
+                  { value: "24h", label: t`24h` },
+                  { value: "7d", label: t`7 days` },
+                  { value: "30d", label: t`30 days` },
                 ] satisfies SegmentedOption<RangeFilter>[]}
                 onChange={(range) => updateSearch({ range, page: 0 })}
               />
             </FilterField>
 
-            <FilterField label="Keys">
+            <FilterField label={t`Keys`}>
               <SegmentedControl
                 id="snipes-keys"
                 value={search.keys}
                 className="max-sm:flex max-sm:w-full max-sm:*:flex-1"
                 options={[
-                  { value: "all", label: "All" },
+                  { value: "all", label: t`All` },
                   { value: "4k", label: "4K" },
                   { value: "7k", label: "7K" },
                 ] satisfies SegmentedOption<KeyFilter>[]}
@@ -509,7 +516,7 @@ function SnipesPage() {
               onClick={resetFilters}
               className="text-[10px] text-osu-pink-light hover:text-white transition-colors cursor-pointer"
             >
-              Clear filters
+              <Trans>Clear filters</Trans>
             </button>
           )}
         </div>
@@ -527,25 +534,27 @@ function SnipesPage() {
               {loading && snipes.length === 0 && (
                 <div className="flex items-center justify-center gap-2 py-20 text-osu-f1 text-xs">
                   <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-                  <span>{`Loading ${countryName} snipes…`}</span>
+                  <span>{t`Loading ${countryName} snipes…`}</span>
                 </div>
               )}
 
               {!loading && sorted.length === 0 && visibleSnipes.length === 0 && (
                 <div className="text-center py-16 text-osu-f1 text-sm">
-                  <p>No snipes tracked yet for {countryName}.</p>
+                  <p><Trans>No snipes tracked yet for {countryName}.</Trans></p>
                   <p className="mt-1 text-[11px]">
-                    Snipes appear when tracked country players push each other down a beatmap's country leaderboard.
+                    <Trans>
+                      Snipes appear when tracked country players push each other down a beatmap's country leaderboard.
+                    </Trans>
                   </p>
                 </div>
               )}
 
               {!loading && sorted.length === 0 && visibleSnipes.length > 0 && (
                 <div className="text-center py-16 text-osu-f1 text-sm">
-                  <p>No snipes match the current filters.</p>
+                  <p><Trans>No snipes match the current filters.</Trans></p>
                   {hasActiveFilters && (
                     <button onClick={resetFilters} className="mt-2 text-[11px] text-osu-pink-light hover:text-white cursor-pointer">
-                      Clear filters
+                      <Trans>Clear filters</Trans>
                     </button>
                   )}
                 </div>
@@ -603,6 +612,7 @@ function SnipeRow({
   expanded: boolean;
   onToggle: (key: string) => void;
 }) {
+  const { t } = useLingui();
   const navigate = useNavigate();
 
   const keys = Math.round(event.beatmap.cs);
@@ -624,15 +634,15 @@ function SnipeRow({
     // is not a figure anyone reads.
     if (days >= 365) {
       const years = Math.floor(days / 365);
-      return `${years} ${years === 1 ? "year" : "years"}`;
+      return <Plural value={years} one="# year" other="# years" />;
     }
-    if (days >= 60) return `${Math.floor(days / 30)} months`;
-    if (days >= 1) return `${days} ${days === 1 ? "day" : "days"}`;
+    if (days >= 60) return <Trans>{Math.floor(days / 30)} months</Trans>;
+    if (days >= 1) return <Plural value={days} one="# day" other="# days" />;
     const hours = Math.max(1, Math.floor(diff / (60 * 60 * 1000)));
-    return `${hours} ${hours === 1 ? "hour" : "hours"}`;
+    return <Plural value={hours} one="# hour" other="# hours" />;
   }, [event.timestamp, event.victimTimestamp]);
 
-  const relationLabel = "sniped";
+  const relationLabel = t`sniped`;
   const hasVictimScore = event.victimTotalScore != null && event.victimTotalScore > 0;
   const hasSniperPp = event.pp != null && event.pp > 0;
   const hasVictimPp = event.victimPp != null && event.victimPp > 0;
@@ -651,7 +661,7 @@ function SnipeRow({
             window.location.href = sniperHref;
           }}
           className="cursor-pointer flex-shrink-0"
-          title={`Open ${event.sniper.username}'s profile`}
+          title={t`Open ${event.sniper.username}'s profile`}
         >
           <Avatar url={event.sniper.avatar_url} size={36} />
         </button>
@@ -676,7 +686,7 @@ function SnipeRow({
               <span className="text-[9px] text-osu-f1 uppercase tracking-wider hidden sm:inline">
                 {relationLabel}
               </span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-osu-pink-light flex-shrink-0" aria-label="sniped">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-osu-pink-light flex-shrink-0" aria-label={t`sniped`}>
                 <circle cx="12" cy="12" r="9" />
                 <line x1="12" y1="2" x2="12" y2="6" />
                 <line x1="12" y1="18" x2="12" y2="22" />
@@ -690,7 +700,7 @@ function SnipeRow({
                   window.location.href = previousHref;
                 }}
                 className="cursor-pointer min-w-0 flex items-center gap-1.5"
-                title={`Open ${event.victim.username}'s profile`}
+                title={t`Open ${event.victim.username}'s profile`}
               >
                 <Avatar url={event.victim.avatar_url} size={20} />
                 <UsernameText
@@ -726,7 +736,7 @@ function SnipeRow({
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
                       className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
-                      title="Open beatmap on osu!"
+                      title={t`Open beatmap on osu!`}
                     >
                       {event.beatmapset.title}
                     </a>
@@ -744,7 +754,7 @@ function SnipeRow({
               {event.boardRank != null && event.boardRank > 0 && (
                 <span
                   className="rounded bg-osu-pink/15 px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-osu-pink-light"
-                  title={`Took the country board's #${event.boardRank} spot`}
+                  title={t`Took the country board's #${event.boardRank} spot`}
                 >
                   #{event.boardRank}
                 </span>
@@ -775,8 +785,8 @@ function SnipeRow({
                     navigate({ to: "/replay", search: replaySearch });
                   }}
                   className="px-1.5 py-0.5 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
-                  title="Watch replay"
-                  aria-label="Watch replay"
+                  title={t`Watch replay`}
+                  aria-label={t`Watch replay`}
                 >
                   &#9654;
                 </button>
@@ -802,9 +812,9 @@ function SnipeRow({
                 navigate({ to: "/replay", search: replaySearch });
               }}
               className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
-              title="Watch replay"
+              title={t`Watch replay`}
             >
-              &#9654; Watch
+              <Trans>&#9654; Watch</Trans>
             </button>
           )}
           <span className="text-[10px] text-osu-f1 w-12 text-right">
@@ -829,20 +839,20 @@ function SnipeRow({
                 avatarUrl={event.sniper.avatar_url}
                 className="block truncate text-xs font-semibold"
               />
-              <div className="text-[9px] uppercase tracking-wider text-osu-f1">Sniper</div>
+              <div className="text-[9px] uppercase tracking-wider text-osu-f1"><Trans>Sniper</Trans></div>
             </div>
-            <div className="text-[9px] uppercase tracking-wider text-osu-f1">vs</div>
+            <div className="text-[9px] uppercase tracking-wider text-osu-f1"><Trans>vs</Trans></div>
             <div className="min-w-0 text-left">
               <UsernameText
                 username={event.victim.username}
                 avatarUrl={event.victim.avatar_url}
                 className="block truncate text-xs font-semibold"
               />
-              <div className="text-[9px] uppercase tracking-wider text-osu-f1">Previously</div>
+              <div className="text-[9px] uppercase tracking-wider text-osu-f1"><Trans>Previously</Trans></div>
             </div>
 
             <VersusRow
-              label="Score"
+              label={t`Score`}
               sniper={formatNumber(event.totalScore)}
               victim={hasVictimScore ? formatNumber(event.victimTotalScore!) : null}
               sniperLeads
@@ -859,9 +869,9 @@ function SnipeRow({
               />
             )}
             <VersusRow
-              label="Set"
+              label={t`Set`}
               sniper={formatTimeAgo(event.timestamp)}
-              victim={previousScoreAge ? `${previousScoreAge} earlier` : formatTimeAgo(event.victimTimestamp)}
+              victim={previousScoreAge ? <Trans>{previousScoreAge} earlier</Trans> : formatTimeAgo(event.victimTimestamp)}
               sniperLeads={false}
               muted
             />
@@ -870,22 +880,22 @@ function SnipeRow({
           <div className="relative mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-osu-b3/20 pt-2.5 text-[10px] text-osu-f1">
             {hasVictimScore && (
               <span>
-                Margin <strong className="font-bold tabular-nums text-osu-pink-light">+{formatNumber(Math.max(0, event.totalScore - event.victimTotalScore!))}</strong>
+                <Trans>Margin <strong className="font-bold tabular-nums text-osu-pink-light">+{formatNumber(Math.max(0, event.totalScore - event.victimTotalScore!))}</strong></Trans>
               </span>
             )}
             <span>
-              Accuracy <strong className="font-bold tabular-nums text-osu-l2">{formatAccuracy(event.accuracy)}</strong>
+              <Trans>Accuracy <strong className="font-bold tabular-nums text-osu-l2">{formatAccuracy(event.accuracy)}</strong></Trans>
             </span>
             <span>
-              Stars <strong className="font-bold tabular-nums text-white">{event.beatmap.difficulty_rating.toFixed(2)}</strong>
+              <Trans>Stars <strong className="font-bold tabular-nums text-white">{event.beatmap.difficulty_rating.toFixed(2)}</strong></Trans>
             </span>
             {event.boardRank != null && event.boardRank > 0 && (
               <span>
-                Board spot <strong className="font-bold tabular-nums text-osu-pink-light">#{event.boardRank}</strong>
+                <Trans>Board spot <strong className="font-bold tabular-nums text-osu-pink-light">#{event.boardRank}</strong></Trans>
               </span>
             )}
             {victimPpLeads && (
-              <span className="text-osu-yellow">Won on score, not pp</span>
+              <span className="text-osu-yellow"><Trans>Won on score, not pp</Trans></span>
             )}
             <a
               href={beatmapHref}
@@ -893,7 +903,7 @@ function SnipeRow({
               rel="noreferrer"
               className="ml-auto flex-shrink-0 underline-offset-2 transition-colors hover:text-osu-pink-light hover:underline"
             >
-              View beatmap →
+              <Trans>View beatmap →</Trans>
             </a>
           </div>
 
@@ -951,7 +961,7 @@ function SnipeBoard({ event, country }: { event: SnipeEvent; country: string }) 
   if (error) {
     return (
       <div className="relative mt-3 border-t border-osu-b3/20 pt-2.5 text-[10px] text-osu-f1">
-        Couldn't load the board.
+        <Trans>Couldn't load the board.</Trans>
       </div>
     );
   }
@@ -959,12 +969,12 @@ function SnipeBoard({ event, country }: { event: SnipeEvent; country: string }) 
   return (
     <div className="relative mt-3 border-t border-osu-b3/20 pt-2.5">
       <div className="flex items-baseline justify-between gap-3 text-[10px] uppercase tracking-wider text-osu-f1">
-        <span>Leaderboard</span>
+        <span><Trans>Leaderboard</Trans></span>
         {board != null && (
           <span className="tabular-nums normal-case tracking-normal">
             {board.total > board.entries.length
-              ? `Top ${board.entries.length} of ${formatNumber(board.total)}`
-              : `${formatNumber(board.total)} ${board.total === 1 ? "score" : "scores"}`}
+              ? <Trans>Top {board.entries.length} of {formatNumber(board.total)}</Trans>
+              : <Plural value={board.total} one="# score" other="# scores" />}
           </span>
         )}
       </div>
@@ -972,10 +982,10 @@ function SnipeBoard({ event, country }: { event: SnipeEvent; country: string }) 
       {board == null ? (
         <div className="flex items-center gap-2 py-3 text-[10px] text-osu-f1">
           <div className="w-2.5 h-2.5 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-          <span>Loading board…</span>
+          <span><Trans>Loading board…</Trans></span>
         </div>
       ) : board.entries.length === 0 ? (
-        <div className="py-3 text-[10px] text-osu-f1">No board stored for this lane yet.</div>
+        <div className="py-3 text-[10px] text-osu-f1"><Trans>No board stored for this lane yet.</Trans></div>
       ) : (
         <BoardRows board={board} event={event} showAll={showAll} onShowAll={() => setShowAll(true)} />
       )}
@@ -1024,7 +1034,7 @@ function BoardRows({
           }}
           className="mt-1 cursor-pointer text-[10px] text-osu-pink-light transition-colors hover:text-white"
         >
-          Show all {formatNumber(board.entries.length)}
+          <Trans>Show all {formatNumber(board.entries.length)}</Trans>
         </button>
       )}
     </div>
@@ -1040,6 +1050,7 @@ function SnipeBoardRow({
   showPp: boolean;
   highlight: "sniper" | "victim" | null;
 }) {
+  const { t } = useLingui();
   // Names carry their own accent color, so the two rows this snipe is about are
   // marked by the row itself rather than by text color.
   const rowTint = highlight === "sniper" ? "bg-osu-pink/10" : highlight === "victim" ? "bg-osu-b3/40" : "";
@@ -1054,7 +1065,7 @@ function SnipeBoardRow({
           window.location.href = `/player/${encodeURIComponent(entry.user.username)}`;
         }}
         className="flex min-w-0 cursor-pointer items-center gap-1.5 text-left"
-        title={`Open ${entry.user.username}'s profile`}
+        title={t`Open ${entry.user.username}'s profile`}
       >
         <Avatar url={entry.user.avatar_url} size={18} />
         <UsernameText
@@ -1094,7 +1105,7 @@ function VersusRow({
 }: {
   label: string;
   sniper: string;
-  victim: string | null;
+  victim: ReactNode | null;
   sniperLeads: boolean;
   muted?: boolean;
 }) {

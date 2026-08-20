@@ -1,6 +1,9 @@
 import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { motion } from "framer-motion";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { getI18n } from "../lib/i18n";
 import { CLIENT_CACHE_TTL } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
 import { isRegionScope } from "../lib/regions";
@@ -86,14 +89,16 @@ export const Route = createFileRoute("/top-plays")({
   head: ({ match }) => {
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
+    const i18n = getI18n(match.context.locale);
     return pageSeo({
-      title: countryName ? countryTopPlaysTitle(countryName) : "Top osu!mania plays",
+      title: countryName ? i18n._(msg`Top mania plays in ${countryName}`) : i18n._(msg`Top osu!mania plays`),
       description: countryName
-        ? `Recent top osu!mania plays and pp records in ${countryName}.`
-        : "Recent top osu!mania plays and pp records by country.",
+        ? i18n._(msg`Recent top osu!mania plays and pp records in ${countryName}.`)
+        : i18n._(msg`Recent top osu!mania plays and pp records by country.`),
       path: withSearchParams("/top-plays", { country }),
       origin: match.context.origin,
       imageCountry: country,
+      imageTitle: countryName ? countryTopPlaysTitle(countryName) : "Top osu!mania plays",
     });
   },
   search: {
@@ -140,6 +145,7 @@ function preloadPopoffCover(popoff: PopOff): void {
 }
 
 function PopOffsPage() {
+  const { t } = useLingui();
   const { range, country, sort, dir, keys } = Route.useSearch();
   const location = useLocation();
   const navigate = useNavigate();
@@ -415,19 +421,19 @@ function PopOffsPage() {
     seenPopoffKeysRef.current = seen;
     prevPopoffListKeyRef.current = popoffListKey;
   }, [isPopoffListResetRender, paginated, popoffListKey, showingInitialLiveSnapshot, showingLivePageTransition]);
-  const loadingLabel = hasCachedPopoffs ? "Refreshing..." : "Loading top plays...";
-  const scanProgressLabel = showingLivePageTransition ? "Loading page..." : loadingLabel;
+  const loadingLabel = hasCachedPopoffs ? t`Refreshing...` : t`Loading top plays...`;
+  const scanProgressLabel = showingLivePageTransition ? t`Loading page...` : loadingLabel;
   const showTopPlaysSkeletons =
     showingInitialLiveSnapshot || showingLivePageTransition || (loading && paginated.length === 0);
 
   const ranges: { id: TimeRange; label: string }[] = [
-    { id: "24h", label: "24 hours" },
-    { id: "3d", label: "3 days" },
-    { id: "7d", label: "7 days" },
-    { id: "30d", label: "30 days" },
+    { id: "24h", label: t`24 hours` },
+    { id: "3d", label: t`3 days` },
+    { id: "7d", label: t`7 days` },
+    { id: "30d", label: t`30 days` },
   ];
   const keymodes: { id: KeyFilter; label: string }[] = [
-    { id: "all", label: "Any" },
+    { id: "all", label: t`Any` },
     { id: "4k", label: "4K" },
     { id: "other", label: "≠4K" },
   ];
@@ -435,7 +441,7 @@ function PopOffsPage() {
   if (!liveBackendEnabled) {
     return (
       <div className="flex-1">
-        <PageHeader iconSrc="/images/icons/rankings.svg" title={`${countryName} mania top plays`} />
+        <PageHeader iconSrc="/images/icons/rankings.svg" title={t`${countryName} mania top plays`} />
         <LiveBackendRequired />
       </div>
     );
@@ -445,7 +451,7 @@ function PopOffsPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title={`${countryName} mania top plays`}
+        title={t`${countryName} mania top plays`}
         right={
           <div className="flex items-center gap-2">
             {(refreshing || showingInitialLiveSnapshot || showingLivePageTransition) && (
@@ -458,7 +464,7 @@ function PopOffsPage() {
             )}
             {!refreshing && !loading && !showingInitialLiveSnapshot && !showingLivePageTransition && (
               <span className="text-[10px] text-osu-f1">
-                {totalCount} top plays found
+                <Trans>{totalCount} top plays found</Trans>
               </span>
             )}
           </div>
@@ -495,7 +501,7 @@ function PopOffsPage() {
                 onClick={clearPlayerFilter}
                 className="px-2.5 py-1 rounded-lg bg-osu-pink/15 text-[11px] font-medium text-osu-pink-light hover:bg-osu-pink/25 transition-colors cursor-pointer"
               >
-                Clear player filter
+                <Trans>Clear player filter</Trans>
               </button>
             )}
           </div>
@@ -513,7 +519,7 @@ function PopOffsPage() {
                     });
                     setPage(0);
                   }}
-                  title={item.id === "other" ? "Show non-4K plays" : "Filter by keymode"}
+                  title={item.id === "other" ? t`Show non-4K plays` : t`Filter by keymode`}
                   className={`px-2.5 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] tabular-nums ${
                     keys === item.id
                       ? "bg-osu-b3 text-osu-l2"
@@ -525,10 +531,10 @@ function PopOffsPage() {
               ))}
             </div>
             {([
-              ["recent", "Recent"],
+              ["recent", t`Recent`],
               ["pp", "PP"],
-              ["gain", "PP Gain"],
-            ] as const).map(([id, label]) => (
+              ["gain", t`PP Gain`],
+            ] as [SortMode, string][]).map(([id, label]) => (
               <SortPill
                 key={id}
                 active={sort === id}
@@ -641,7 +647,7 @@ function PopOffsPage() {
                         {p.ppGain >= 0.05 && (
                           <div
                             className="text-[10px] font-semibold text-osu-green"
-                            title="Estimated pp gain from replacing your previous best score on this map"
+                            title={t`Estimated pp gain from replacing your previous best score on this map`}
                           >
                             +{formatPpGain(p.ppGain)}
                           </div>
@@ -659,7 +665,7 @@ function PopOffsPage() {
                           });
                         }}
                         className="cursor-pointer"
-                        title={`Open ${p.user.username}'s profile`}
+                        title={t`Open ${p.user.username}'s profile`}
                       >
                         <Avatar url={p.user.avatar_url} size={36} />
                       </button>
@@ -700,7 +706,7 @@ function PopOffsPage() {
                               rel="noreferrer"
                               onClick={(e) => e.stopPropagation()}
                               className="text-xs text-osu-l2 truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
-                              title="Open beatmap on osu!"
+                              title={t`Open beatmap on osu!`}
                             >
                               {p.score.beatmapset?.title}
                             </a>
@@ -736,8 +742,8 @@ function PopOffsPage() {
                                   navigate({ to: "/replay", search: getReplaySearch(p.score.id, p.score.beatmapset?.id) });
                                 }}
                                 className="px-1.5 py-0.5 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
-                                title="Watch replay"
-                                aria-label="Watch replay"
+                                title={t`Watch replay`}
+                                aria-label={t`Watch replay`}
                               >
                                 &#9654;
                               </button>
@@ -767,7 +773,7 @@ function PopOffsPage() {
                             }}
                             className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
                           >
-                            ▶ Watch
+                            <Trans>▶ Watch</Trans>
                           </button>
                         )}
                         <span className="text-[11px] text-osu-f1 w-16 text-right" title={formatTimeAgoTooltip(p.time)}>
@@ -782,14 +788,14 @@ function PopOffsPage() {
                               <CoverBackdrop url={p.score.beatmapset.covers["cover@2x"] || p.score.beatmapset.covers.cover} />
                             )}
                             <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
-                              <StatCell label="Score" value={getDisplayedTotalScore(p.score) != null ? formatNumber(getDisplayedTotalScore(p.score)!) : "-"} />
-                              <StatCell label="Combo" value={`${formatNumber(p.score.max_combo)}x`} />
+                              <StatCell label={t`Score`} value={getDisplayedTotalScore(p.score) != null ? formatNumber(getDisplayedTotalScore(p.score)!) : "-"} />
+                              <StatCell label={t`Combo`} value={`${formatNumber(p.score.max_combo)}x`} />
                               {judgementStats.map((judgement, i) => (
                                 <StatCell key={judgement.label} label={judgement.label} value={formatNumber(judgement.value)} color={judgement.className} className={JUDGEMENT_MOBILE_ORDER_CLASS[i]} />
                               ))}
                               {p.score.beatmap?.difficulty_rating != null && (
                                 <StatCell
-                                  label="Stars"
+                                  label={t`Stars`}
                                   value={<StarRatingBadge stars={p.score.beatmap.difficulty_rating} size={1.2} />}
                                   className="max-sm:order-8"
                                 />
@@ -802,7 +808,7 @@ function PopOffsPage() {
                             </div>
                             <div className="relative mt-2 flex items-center justify-between gap-2">
                               <span className="text-[10px] text-osu-f1">
-                                Played on: <span className={lazer ? "text-osu-pink-light" : "text-osu-l2"}>{lazer ? "Lazer" : "Stable"}</span>
+                                <Trans>Played on: <span className={lazer ? "text-osu-pink-light" : "text-osu-l2"}>{lazer ? "Lazer" : "Stable"}</span></Trans>
                               </span>
                               {getScoreUrl(p.score) ? (
                                 <a
@@ -811,7 +817,7 @@ function PopOffsPage() {
                                   rel="noreferrer"
                                   className="text-[10px] text-osu-f1 hover:text-osu-pink-light underline-offset-2 hover:underline transition-colors"
                                 >
-                                  View on osu! →
+                                  <Trans>View on osu! →</Trans>
                                 </a>
                               ) : <span />}
                             </div>
@@ -850,6 +856,7 @@ function SortPill({
   onClick: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useLingui();
   return (
     <button
       onClick={onClick}
@@ -859,7 +866,7 @@ function SortPill({
           : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
       }`}
       aria-pressed={active}
-      title={active ? (dir === "desc" ? "Click to sort ascending" : "Click to sort descending") : undefined}
+      title={active ? (dir === "desc" ? t`Click to sort ascending` : t`Click to sort descending`) : undefined}
     >
       <span>{children}</span>
       {active && (

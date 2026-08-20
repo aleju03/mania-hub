@@ -30,8 +30,8 @@ describe("rankings rank-delta loading", () => {
   it("tells a missing delta apart from a real zero on hover", () => {
     // Both render the same dash, so the title is the only thing carrying the
     // difference between "no snapshot yet" and "did not move".
-    expect(routeSource).toContain('const NO_DELTA_TITLE = "No rank data from 7 days ago yet"');
-    expect(routeSource).toContain('const NO_CHANGE_TITLE = "No change in the last 7 days"');
+    expect(routeSource).toContain("const NO_DELTA_TITLE = msg`No rank data from 7 days ago yet`");
+    expect(routeSource).toContain("const NO_CHANGE_TITLE = msg`No change in the last 7 days`");
 
     for (const cell of ["GlobalRankCell", "CRRankCell", "RankDeltaLabel"]) {
       const start = routeSource.indexOf(`function ${cell}(`);

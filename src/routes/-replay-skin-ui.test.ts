@@ -333,7 +333,7 @@ describe("replay skin settings UI", () => {
     // tab already hides them; the quick panel was the inconsistent one.
     expect(source).toContain("setHasCustomSkinArt(readAppliedCommunityReplaySkin() != null || replaySkinSettingsEmbedAssets(skinSettings));");
     expect(source).toContain("{hasCustomSkinArt ? null : (");
-    expect(source).toContain('<PanelGroup label={hasCustomSkinArt ? "Direction" : "Direction & long notes"}>');
+    expect(source).toContain("<PanelGroup label={hasCustomSkinArt ? t`Direction` : t`Direction & long notes`}>");
   });
 
   it("drops the HUD tab once the skin draws both its judgements and its combo", () => {

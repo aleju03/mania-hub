@@ -1,5 +1,8 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, memo, useRef, type ReactNode } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { getI18n } from "../lib/i18n";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { getCountryName, isGlobalScope } from "../lib/country";
 import { isRegionScope } from "../lib/regions";
@@ -237,9 +240,10 @@ export const Route = createFileRoute("/tracker")({
   head: ({ match }) => {
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
+    const i18n = getI18n(match.context.locale);
     return {
       meta: [
-        { title: countryName ? `Live score tracker - ${countryName}` : "Live score tracker" },
+        { title: countryName ? i18n._(msg`Live score tracker - ${countryName}`) : i18n._(msg`Live score tracker`) },
         { name: "description", content: "" },
         { name: "robots", content: "noindex, nofollow" },
       ],
@@ -387,6 +391,7 @@ const EMPTY_SCORE_GAINS: Record<number, { fetchedAt: number; value: number }> = 
 
 
 function ScoresPage() {
+  const { t } = useLingui();
   const navigate = useNavigate();
   const { country, page: searchPage, sort: searchSort, sortDirection: searchSortDirection } = Route.useSearch();
   const trackerSort: TrackerSort = searchSort ?? "recent";
@@ -847,18 +852,18 @@ function ScoresPage() {
         : "";
 
   const filters: { id: ScoreFilter; label: string }[] = [
-    { id: "all", label: "All" },
-    { id: "ranked", label: "Ranked (PP)" },
+    { id: "all", label: t`All` },
+    { id: "ranked", label: t`Ranked (PP)` },
   ];
   const grades: { id: GradeFilter; label: string }[] = [
-    { id: "all", label: "Any" },
+    { id: "all", label: t`Any` },
     { id: "SS", label: "SS" },
     { id: "S", label: "S" },
     { id: "A", label: "A" },
     { id: "B", label: "B" },
   ];
   const keymodes: { id: KeyFilter; label: string }[] = [
-    { id: "all", label: "Any" },
+    { id: "all", label: t`Any` },
     { id: "4k", label: "4K" },
     { id: "other", label: "≠4K" },
   ];
@@ -890,17 +895,17 @@ function ScoresPage() {
     if (!liveBackendEnabled || !windowActive || !hasActiveScoreFilters || useLiveBackendFilteredScores || feedScores.length >= TRACKER_FEED_SCORE_LIMIT) return;
     void reconcileLiveSnapshot(selectedCountry, { force: true, limit: TRACKER_FEED_SCORE_LIMIT });
   }, [feedScores.length, hasActiveScoreFilters, liveBackendEnabled, reconcileLiveSnapshot, selectedCountry, useLiveBackendFilteredScores, windowActive]);
-  const mobileMissButtonLabel = missFilter === "fc_choke" ? "Ch" : "FC";
+  const mobileMissButtonLabel = missFilter === "fc_choke" ? t`Ch` : t`FC`;
   const missButtonTitle = missFilter === "fc"
-    ? "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
+    ? t`Showing full combos (0 misses) - left click for FC chokes, right click to clear`
     : missFilter === "fc_choke"
-      ? "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
-      : "Left click for FCs, right click for FC chokes";
+      ? t`Showing FC chokes (1 miss) - left click to clear, right click for FCs`
+      : t`Left click for FCs, right click for FC chokes`;
   const starSortTitle = trackerSort === "stars"
     ? trackerSortDirection === "desc"
-      ? "Sorting highest star rating first - left click for ascending, right click to clear"
-      : "Sorting lowest star rating first - left click to clear, right click for descending"
-    : "Left click for highest star rating first, right click for lowest first";
+      ? t`Sorting highest star rating first - left click for ascending, right click to clear`
+      : t`Sorting lowest star rating first - left click to clear, right click for descending`
+    : t`Left click for highest star rating first, right click for lowest first`;
   const listKey = `${filter}:${gradeFilter}:${keyFilter}:${missFilter}:${trackerSort}:${trackerSortDirection}:${selectedPlayersKey}`;
   const trackerWindowCount = getTrackerWindowCount({
     displayableCount: filtered.length,
@@ -981,20 +986,20 @@ function ScoresPage() {
     return entries;
   }, [paginatedScores, multiGroupByScoreKey, hiddenUserIds]);
   const liveStatusLabel = liveFeedState === "delayed"
-    ? "Live updates delayed"
+    ? t`Live updates delayed`
     : liveFeedState === "reconnecting"
-      ? "Live feed reconnecting"
-      : "Live updates on";
+      ? t`Live feed reconnecting`
+      : t`Live updates on`;
   const liveStatusTitle = liveFeedState === "delayed"
-    ? "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
+    ? t`Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up.`
     : liveFeedState === "reconnecting"
-      ? "Connection lost; reconnecting."
-      : "New scores stream in live over this connection.";
+      ? t`Connection lost; reconnecting.`
+      : t`New scores stream in live over this connection.`;
   const scoreWindowLabel = selectedIsGlobal
     ? liveTrackerTotal == null && !useLiveBackendFilteredScores
-      ? "Last 24h"
-      : `Last 24h \u00b7 ${formatNumber(trackerWindowCount)} scores`
-    : `${formatNumber(trackerWindowCount)} scores`;
+      ? t`Last 24h`
+      : t`Last 24h \u00b7 ${formatNumber(trackerWindowCount)} scores`
+    : t`${formatNumber(trackerWindowCount)} scores`;
 
   useEffect(() => {
     if (!useLiveBackendFilteredScores) {
@@ -1132,7 +1137,7 @@ function ScoresPage() {
         <button
           key={item.id}
           onClick={() => { setKeyFilter(item.id); updateTrackerSearch({ page: 0 }); }}
-          title={item.id === "other" ? "Show non-4K scores" : "Filter by keymode"}
+          title={item.id === "other" ? t`Show non-4K scores` : t`Filter by keymode`}
           className={`px-2 py-1 text-[10px] font-semibold cursor-pointer transition-colors duration-[120ms] tabular-nums ${
             keyFilter === item.id
               ? "bg-osu-pink/15 text-osu-pink-light"
@@ -1148,7 +1153,7 @@ function ScoresPage() {
   if (!liveBackendEnabled) {
     return (
       <div className="flex-1">
-        <PageHeader iconSrc="/images/icons/news.svg" title={`${countryName} mania tracker`} />
+        <PageHeader iconSrc="/images/icons/news.svg" title={t`${countryName} mania tracker`} />
         <LiveBackendRequired />
       </div>
     );
@@ -1158,7 +1163,7 @@ function ScoresPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/news.svg"
-        title={`${countryName} mania tracker`}
+        title={t`${countryName} mania tracker`}
         right={
           <div className="flex flex-wrap items-center justify-end gap-2">
             {import.meta.env.DEV && (
@@ -1193,7 +1198,7 @@ function ScoresPage() {
               <>
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1 tabular-nums">
-                  Refreshing...
+                  <Trans>Refreshing...</Trans>
                 </span>
               </>
             ) : (
@@ -1238,10 +1243,10 @@ function ScoresPage() {
                 onClick={clearPlayerFilter}
                 className="shrink-0 rounded-lg bg-osu-pink/15 px-2.5 py-1.5 text-[11px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 cursor-pointer"
               >
-                Clear player filter
+                <Trans>Clear player filter</Trans>
               </button>
             )}
-            <FilterField label="Scores">
+            <FilterField label={t`Scores`}>
               <SegmentedControl
                 id="tracker-source"
                 value={filter}
@@ -1249,7 +1254,7 @@ function ScoresPage() {
                 onChange={(id) => { setFilter(id); if (id !== "all") setGradeFilter("all"); updateTrackerSearch({ page: 0 }); }}
               />
             </FilterField>
-            <FilterField label="Grade">
+            <FilterField label={t`Grade`}>
               <SegmentedControl
                 id="tracker-grade"
                 size="icon"
@@ -1257,15 +1262,15 @@ function ScoresPage() {
                 value={gradeFilter}
                 options={grades.map((item) => ({
                   value: item.id,
-                  title: item.id === "all" ? "Any grade" : `${item.label} only`,
+                  title: item.id === "all" ? t`Any grade` : t`${item.label} only`,
                   label: item.id === "all"
-                    ? <span className="px-1 text-[11px]">Any</span>
+                    ? <span className="px-1 text-[11px]"><Trans>Any</Trans></span>
                     : <GradeImg grade={item.id} size={20} />,
                 }))}
                 onChange={(id) => { setGradeFilter(id); if (id !== "all") setFilter("all"); updateTrackerSearch({ page: 0 }); }}
               />
             </FilterField>
-            <FilterField label="Keys">
+            <FilterField label={t`Keys`}>
               <SegmentedControl
                 id="tracker-keys"
                 value={keyFilter}
@@ -1273,25 +1278,25 @@ function ScoresPage() {
                 options={keymodes.map((item) => ({
                   value: item.id,
                   label: item.label,
-                  title: item.id === "other" ? "Show non-4K scores" : undefined,
+                  title: item.id === "other" ? t`Show non-4K scores` : undefined,
                 }))}
                 onChange={(id) => { setKeyFilter(id); updateTrackerSearch({ page: 0 }); }}
               />
             </FilterField>
-            <FilterField label="Combo">
+            <FilterField label={t`Combo`}>
               <SegmentedControl
                 id="tracker-miss"
                 value={missFilter}
                 options={[
-                  { value: "all", label: "Any" },
-                  { value: "fc", label: "FC", title: "Full combos only (0 misses)" },
-                  { value: "fc_choke", label: "Choke", title: "FC chokes only (1 miss)" },
+                  { value: "all", label: t`Any` },
+                  { value: "fc", label: t`FC`, title: t`Full combos only (0 misses)` },
+                  { value: "fc_choke", label: t`Choke`, title: t`FC chokes only (1 miss)` },
                 ]}
                 onChange={selectMissFilter}
               />
             </FilterField>
             <div className="ml-auto">
-              <FilterField label="Sort">
+              <FilterField label={t`Sort`}>
                 <button
                   onClick={() => cycleStarSort(1)}
                   onContextMenu={(event) => {
@@ -1305,7 +1310,7 @@ function ScoresPage() {
                       : "border-osu-b3/25 bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
                   }`}
                 >
-                  Stars{trackerSort === "stars" ? (trackerSortDirection === "desc" ? " ↓" : " ↑") : ""}
+                  <Trans>Stars</Trans>{trackerSort === "stars" ? (trackerSortDirection === "desc" ? " ↓" : " ↑") : ""}
                 </button>
               </FilterField>
             </div>
@@ -1317,7 +1322,7 @@ function ScoresPage() {
                 onClick={clearPlayerFilter}
                 className="mb-2 px-2.5 py-1 rounded-lg bg-osu-pink/15 text-[11px] font-medium text-osu-pink-light hover:bg-osu-pink/25 transition-colors cursor-pointer"
               >
-                Clear player filter
+                <Trans>Clear player filter</Trans>
               </button>
             )}
             <div className="flex items-center justify-between gap-1">
@@ -1332,7 +1337,7 @@ function ScoresPage() {
                         : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
                     }`}
                   >
-                    {item.id === "all" ? "All" : item.id === "ranked" ? "PP" : "Pass"}
+                    {item.id === "all" ? t`All` : item.id === "ranked" ? "PP" : t`Pass`}
                   </button>
                 ))}
                 <button
@@ -1387,7 +1392,7 @@ function ScoresPage() {
                     : "border-osu-b3/25 bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
                 }`}
               >
-                Stars{trackerSort === "stars" ? (trackerSortDirection === "desc" ? " ↓" : " ↑") : ""}
+                <Trans>Stars</Trans>{trackerSort === "stars" ? (trackerSortDirection === "desc" ? " ↓" : " ↑") : ""}
               </button>
             </div>
           </div>
@@ -1400,7 +1405,7 @@ function ScoresPage() {
             <>
               {/* Mobile: horizontal row */}
               <div className="lg:hidden flex items-center gap-3 overflow-x-auto scrollbar-hide py-1">
-                <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold flex-shrink-0">Playing</span>
+                <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold flex-shrink-0"><Trans>Playing</Trans></span>
                 {activePlayers.map((player) => (
                   <button
                     key={player.id}
@@ -1413,7 +1418,7 @@ function ScoresPage() {
                     }}
                     aria-pressed={!player.simulated && selectedPlayerIdSet.has(player.id)}
                     className="cursor-pointer group relative flex-shrink-0"
-                    title={player.simulated ? `${player.username} - simulated dev traffic` : `${player.username} - click to filter`}
+                    title={player.simulated ? `${player.username} - simulated dev traffic` : t`${player.username} - click to filter`}
                   >
                     <div className={`ring-2 ring-inset rounded-full transition-all ${
                       selectedPlayerIdSet.has(player.id)
@@ -1428,7 +1433,7 @@ function ScoresPage() {
               {/* Desktop: vertical sidebar, two columns, edge-faded internal scroll */}
               <div className="hidden lg:flex sticky top-[76px] max-h-[calc(100svh_-_196px)] self-start flex-col flex-shrink-0">
                 <div className="flex items-baseline justify-between gap-2 mb-2 px-0.5">
-                  <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Playing</span>
+                  <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold"><Trans>Playing</Trans></span>
                   <span className="text-[9px] tabular-nums text-osu-f1/70 font-semibold">{activePlayers.length}</span>
                 </div>
                 <div
@@ -1449,7 +1454,7 @@ function ScoresPage() {
                         }}
                         aria-pressed={!player.simulated && selectedPlayerIdSet.has(player.id)}
                         className="cursor-pointer group relative shrink-0"
-                        title={player.simulated ? `${player.username} - simulated dev traffic` : `${player.username} - click to filter`}
+                        title={player.simulated ? `${player.username} - simulated dev traffic` : t`${player.username} - click to filter`}
                       >
                         <div className={`ring-2 rounded-full transition-all ${
                           selectedPlayerIdSet.has(player.id)
@@ -1505,8 +1510,8 @@ function ScoresPage() {
                   ) : (
                     <div className="text-center py-16 text-osu-f1 text-sm">
                       {feedScores.length === 0
-                        ? "No recent scores yet."
-                        : "No scores match this filter"}
+                        ? <Trans>No recent scores yet.</Trans>
+                        : <Trans>No scores match this filter</Trans>}
                     </div>
                   )
                 )}
@@ -1686,6 +1691,7 @@ const MultiFeedCard = memo(function MultiFeedCard({
   showCountryFlag: boolean;
   isNew: boolean;
 }) {
+  const { t } = useLingui();
   const latestRound = rounds[rounds.length - 1];
   const sample = latestRound.scores[0];
   const newest = latestRound.scores[latestRound.scores.length - 1];
@@ -1741,7 +1747,7 @@ const MultiFeedCard = memo(function MultiFeedCard({
             <div className="flex items-center gap-2 min-w-0">
               <span
                 className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full bg-osu-purple/15 ring-1 ring-inset ring-osu-purple/40 text-osu-purple-light flex-shrink-0 cursor-help"
-                title="These players finished the same maps within seconds of each other, repeatedly: a multiplayer lobby"
+                title={t`These players finished the same maps within seconds of each other, repeatedly: a multiplayer lobby`}
               >
                 <svg viewBox="0 0 16 16" className="w-2.5 h-2.5 fill-current" aria-hidden>
                   <circle cx="5.5" cy="4.6" r="2.4" />
@@ -1895,6 +1901,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   /** Lobby results placement (1 = round winner); only set when embedded. */
   placement?: number | null;
 }) {
+  const { t } = useLingui();
   const navigate = useNavigate();
 
   // The profile can only show osu!'s `last_visit`, which ignores gameplay. This
@@ -2028,8 +2035,8 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                     navigate({ to: "/replay", search: getReplaySearch(score.id, score.beatmapset?.id) });
                   }}
                   className="px-1.5 py-0.5 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
-                  title="Watch replay"
-                  aria-label="Watch replay"
+                  title={t`Watch replay`}
+                  aria-label={t`Watch replay`}
                 >
                   &#9654;
                 </button>
@@ -2050,7 +2057,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
             {showPpGain && (
               <span
                 className="ml-1 text-[11px] font-semibold text-osu-green"
-                title="Estimated pp gain from replacing your previous best score on this map"
+                title={t`Estimated pp gain from replacing your previous best score on this map`}
               >
                 (+{formatPpGain(approxPpGain)})
               </span>
@@ -2063,9 +2070,9 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 navigate({ to: "/replay", search: getReplaySearch(score.id, score.beatmapset?.id) });
               }}
               className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
-              title="Watch replay"
+              title={t`Watch replay`}
             >
-              &#9654; Watch
+              <Trans>&#9654; Watch</Trans>
             </button>
           )}
           <span className="text-[11px] text-osu-f1 w-14 text-right">

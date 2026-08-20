@@ -5,8 +5,11 @@ import {
   COUNTRY_OPTIONS,
   GLOBAL_SCOPE_CODE,
   GLOBAL_SCOPE_NAME,
-  getCountryName,
+  displayCountryName,
 } from "../../lib/country";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { useLocale } from "../../lib/locale-context";
 import type { LiveCountryFeatureTier } from "../../lib/live-backend";
 import { CONTINENT_OPTIONS, isRegionScope, REGION_OPTIONS, type RegionDef } from "../../lib/regions";
 import { getCachedCountryTier } from "../../lib/use-country-warming";
@@ -33,9 +36,9 @@ type PickerItem =
   | { type: "header"; id: string; label: string }
   | { type: "separator"; id: "offered-countries"; label: string; count: number; expanded: boolean };
 
-const TABS: ReadonlyArray<{ id: PickerTab; label: string }> = [
-  { id: "countries", label: "Countries" },
-  { id: "regions", label: "Regions" },
+const TABS: ReadonlyArray<{ id: PickerTab; label: ReturnType<typeof msg> }> = [
+  { id: "countries", label: msg`Countries` },
+  { id: "regions", label: msg`Regions` },
 ];
 
 const GLOBAL_OPTION = { code: GLOBAL_SCOPE_CODE, name: GLOBAL_SCOPE_NAME } as const;
@@ -52,6 +55,8 @@ export function CountrySelector({
   open: openProp,
   onOpenChange,
 }: CountrySelectorProps) {
+  const { t, i18n } = useLingui();
+  const locale = useLocale();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = openProp ?? uncontrolledOpen;
   const setOpen = (value: boolean) => {
@@ -76,9 +81,15 @@ export function CountrySelector({
     const countryTiers = new Map(COUNTRY_OPTIONS.map((country) => [country.code, getCachedCountryTier(country.code)]));
     const hasTrackedCountries = showGlobal && COUNTRY_OPTIONS.some((country) => isTrackedCountryTier(countryTiers.get(country.code) ?? null));
     const matchesCountry = (country: CountryOption) => (
-      !q || country.name.toLowerCase().includes(q) || country.code.toLowerCase().includes(q)
+      !q
+        || country.name.toLowerCase().includes(q)
+        || country.code.toLowerCase().includes(q)
+        || displayCountryName(country.code, locale).toLowerCase().includes(q)
     );
-    const matchesGlobal = !q || GLOBAL_SCOPE_NAME.toLowerCase().includes(q) || GLOBAL_SCOPE_CODE.toLowerCase().includes(q);
+    const matchesGlobal = !q
+      || GLOBAL_SCOPE_NAME.toLowerCase().includes(q)
+      || GLOBAL_SCOPE_CODE.toLowerCase().includes(q)
+      || displayCountryName(GLOBAL_SCOPE_CODE, locale).toLowerCase().includes(q);
     const countries = COUNTRY_OPTIONS.filter(matchesCountry);
     const trackedCountries = showGlobal
       ? countries.filter((country) => isTrackedCountryTier(countryTiers.get(country.code) ?? null))
@@ -87,7 +98,10 @@ export function CountrySelector({
     const offeredCountries = countries.filter((country) => !trackedCountryCodes.has(country.code));
 
     const matchesRegion = (region: RegionDef) => (
-      !q || region.name.toLowerCase().includes(q) || region.code.toLowerCase().includes(q)
+      !q
+        || region.name.toLowerCase().includes(q)
+        || region.code.toLowerCase().includes(q)
+        || displayCountryName(region.code, locale).toLowerCase().includes(q)
     );
     const continents = showGlobal ? CONTINENT_OPTIONS.filter(matchesRegion) : [];
     const regions = showGlobal ? REGION_OPTIONS.filter(matchesRegion) : [];
@@ -110,17 +124,17 @@ export function CountrySelector({
           option: { code: region.code, name: region.name },
           selectable: true,
           muted: false,
-          badge: `${tracked} tracked`,
+          badge: t`${tracked} tracked`,
         });
       };
       if (continents.length > 0) {
-        items.push({ type: "header", id: "continents", label: "Continents" });
+        items.push({ type: "header", id: "continents", label: t`Continents` });
         for (const continent of continents) pushRegionOption(continent);
       }
       if (regions.length > 0) {
         // "Subregions", not "Regions": a continent is a region too, and the tab
         // is already called Regions.
-        items.push({ type: "header", id: "regions", label: "Subregions" });
+        items.push({ type: "header", id: "regions", label: t`Subregions` });
         for (const region of regions) pushRegionOption(region);
       }
     } else {
@@ -128,7 +142,7 @@ export function CountrySelector({
         items.push({ type: "option", option: country, selectable: true, muted: false });
       }
       if (trackedCountries.length > 0 && offeredCountries.length > 0) {
-        items.push({ type: "separator", id: "offered-countries", label: "Not tracked yet", count: offeredCountries.length, expanded: notTrackedOpen || searching });
+        items.push({ type: "separator", id: "offered-countries", label: t`Not tracked yet`, count: offeredCountries.length, expanded: notTrackedOpen || searching });
       }
       if (!hasTrackedCountries || notTrackedOpen || searching) {
         for (const country of offeredCountries) {
@@ -143,7 +157,7 @@ export function CountrySelector({
       pickerItems: items,
       otherTabMatches: searching && tabIsEmpty ? otherMatches : 0,
     };
-  }, [activeTab, notTrackedOpen, search, showGlobal]);
+  }, [activeTab, notTrackedOpen, search, showGlobal, locale, t]);
 
   // Reset transient state whenever the dropdown closes (including a controlled
   // close), and open on the tab the current scope came from.
@@ -212,7 +226,7 @@ export function CountrySelector({
     const content = (
       <>
         <CountryFlag code={c.code} size="md" muted={muted} decorative />
-        <span className={`text-[11px] font-medium truncate ${muted ? "opacity-80" : ""}`}>{c.name}</span>
+        <span className={`text-[11px] font-medium truncate ${muted ? "opacity-80" : ""}`}>{displayCountryName(c.code, locale)}</span>
         <span className="ml-auto flex items-center gap-1.5 flex-shrink-0">
           {item.badge && (
             <span className="text-[9px] tabular-nums text-osu-f1/55">{item.badge}</span>
@@ -260,12 +274,12 @@ export function CountrySelector({
           }
         }}
         className="w-full flex items-center gap-2.5 rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1.5 text-osu-l2 hover:border-osu-b3/60 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
-        aria-label="Select country"
+        aria-label={t`Select country`}
         aria-expanded={open}
       >
         <CountryFlag code={selectedCountry} size="md" decorative />
         <span className="text-[11px] font-semibold truncate flex-1 text-left">
-          {getCountryName(selectedCountry)}
+          {displayCountryName(selectedCountry, locale)}
         </span>
         <svg
           viewBox="0 0 20 20"
@@ -296,7 +310,7 @@ export function CountrySelector({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search..."
+                placeholder={t`Search...`}
                 className="w-full px-3 py-1.5 rounded-md bg-osu-b4 text-osu-c1 text-[11px] placeholder:text-osu-f1 border border-osu-b3/40 focus:border-osu-h1/40 focus:outline-none transition-colors duration-[120ms]"
               />
               {showGlobal && (
@@ -318,7 +332,7 @@ export function CountrySelector({
                       }`}
                       aria-pressed={activeTab === pickerTab.id}
                     >
-                      {pickerTab.label}
+                      {i18n._(pickerTab.label)}
                     </button>
                   ))}
                 </div>
@@ -382,12 +396,14 @@ export function CountrySelector({
                   }}
                   className="w-full px-3 py-3 text-center text-[11px] text-osu-f1 hover:text-osu-l2 cursor-pointer"
                 >
-                  {otherTabMatches} {otherTabMatches === 1 ? "match" : "matches"} in{" "}
-                  <span className="font-semibold">{activeTab === "regions" ? "Countries" : "Regions"}</span>
+                  <Trans>
+                    <Plural value={otherTabMatches} one="# match" other="# matches" /> in{" "}
+                    <span className="font-semibold">{activeTab === "regions" ? i18n._(msg`Countries`) : i18n._(msg`Regions`)}</span>
+                  </Trans>
                 </button>
               ) : pickerItems.length === 0 ? (
                 <div className="px-3 py-4 text-center text-[11px] text-osu-f1">
-                  {activeTab === "regions" ? "No regions found" : "No countries found"}
+                  {activeTab === "regions" ? t`No regions found` : t`No countries found`}
                 </div>
               ) : null}
             </div>

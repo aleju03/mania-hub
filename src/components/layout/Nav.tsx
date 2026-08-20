@@ -13,12 +13,15 @@ import { useAuth } from "../../lib/auth-context";
 import { searchPlayers } from "../../lib/player-search";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
-import { getCountryFlagGradient, getCountryFlagLargeUrl, getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
+import { displayCountryName, getCountryFlagGradient, getCountryFlagLargeUrl, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { isRegionScope } from "../../lib/regions";
 import { isLiveBackendConfigured } from "../../lib/live-backend";
 import { showPlayerCountryFlagState } from "../../lib/player-profile-navigation";
 import { getCachedCountryTier, useCountryWarming } from "../../lib/use-country-warming";
 import { useDynamicFavicon } from "../../lib/favicon";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { useLocale } from "../../lib/locale-context";
 
 // Leaf destinations. Kept `as const` (not typed) so each `to` stays a literal
 // route path; TanStack Router's Link types reject a widened `string`.
@@ -64,6 +67,35 @@ const NAV_TOP: NavTop[] = [
      here does not restart the argument. */
   { kind: "group", id: "more", label: "more", items: ["farm-helper", "replay", "bbcode", "discord", "communities"] },
 ];
+
+/* The `label` fields above are the English source and double as stable ids in
+   a few places, so they stay plain strings; this parallel map carries the
+   translatable descriptors the render sites resolve through useLingui().
+   Admin tools keep their English labels (admin surfaces are out of scope). */
+const NAV_LABELS: Record<NavLeafId, ReturnType<typeof msg>> = {
+  home: msg`home`,
+  rankings: msg`rankings`,
+  "top-plays": msg`top plays`,
+  tracker: msg`tracker`,
+  maps: msg`maps`,
+  "pack-collections": msg`collections`,
+  packs: msg`open packs`,
+  skins: msg`skins`,
+  snipes: msg`snipes`,
+  "farm-helper": msg`farm helper`,
+  replay: msg`watch replays`,
+  bbcode: msg`BBCode editor`,
+  discord: msg`Discord bot`,
+  communities: msg`Discord servers`,
+};
+
+// "packs" names both the group and its opener leaf with different labels, so
+// group labels get their own map instead of sharing the leaf one.
+const NAV_GROUP_LABELS: Record<string, ReturnType<typeof msg>> = {
+  players: msg`players`,
+  packs: msg`packs`,
+  more: msg`more`,
+};
 
 // Each leaf maps to its top-level item id so the active-link bar can sit under
 // the group that owns the current page.
@@ -123,6 +155,8 @@ function adminToolSearch(tool: AdminTool): never | undefined {
 }
 
 export function Nav() {
+  const { t, i18n } = useLingui();
+  const locale = useLocale();
   const location = useLocation();
   const navigate = useNavigate();
   const auth = useAuth();
@@ -438,7 +472,7 @@ export function Nav() {
           : "border-transparent text-osu-pink-light hover:bg-osu-b4/50 hover:text-white"
       }`}
     >
-      {opts?.label ?? leaf.label}
+      {opts?.label ?? i18n._(NAV_LABELS[leaf.id])}
     </Link>
   );
 
@@ -642,12 +676,12 @@ export function Nav() {
               if (top.kind === "link") {
                 const leaf = NAV_LEAVES[top.id];
                 if (!isLeafVisible(leaf)) return null;
-                return renderTopLink(top.id, leaf, leaf.label);
+                return renderTopLink(top.id, leaf, i18n._(NAV_LABELS[leaf.id]));
               }
 
               const groupItems = top.items.map((id) => NAV_LEAVES[id]).filter(isLeafVisible);
               if (groupItems.length === 0) return null;
-              if (groupItems.length === 1) return renderTopLink(top.id, groupItems[0], top.label);
+              if (groupItems.length === 1) return renderTopLink(top.id, groupItems[0], i18n._(NAV_GROUP_LABELS[top.id]));
               const open = openGroup === top.id;
               return (
                 <div
@@ -669,7 +703,7 @@ export function Nav() {
                     aria-haspopup="menu"
                     aria-expanded={open}
                   >
-                    {top.label}
+                    {i18n._(NAV_GROUP_LABELS[top.id])}
                     <ChevronDown
                       className={`h-3 w-3 opacity-70 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
                       strokeWidth={2.5}
@@ -698,7 +732,7 @@ export function Nav() {
                                 : "text-osu-pink-light before:opacity-0 hover:text-white hover:before:opacity-100"
                             }`}
                           >
-                            {leaf.label}
+                            {i18n._(NAV_LABELS[leaf.id])}
                           </Link>
                         );
                       })}
@@ -775,7 +809,7 @@ export function Nav() {
                 type="button"
                 onClick={() => setUserMenuOpen((open) => !open)}
                 className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60 text-osu-pink-light transition hover:ring-osu-pink/60 cursor-pointer"
-                title={auth.viewer ? `Signed in as ${auth.viewer.username}` : "Account"}
+                title={auth.viewer ? t`Signed in as ${auth.viewer.username}` : t`Account`}
                 aria-haspopup="menu"
                 aria-expanded={userMenuOpen}
               >
@@ -793,7 +827,7 @@ export function Nav() {
                   {auth.viewer ? (
                     <>
                       <div className="px-3 py-2 border-b border-osu-b3/30">
-                        <div className="text-[10px] font-medium text-osu-l3 leading-tight">Signed in as</div>
+                        <div className="text-[10px] font-medium text-osu-l3 leading-tight"><Trans>Signed in as</Trans></div>
                         <div className="flex items-center gap-1.5">
                           <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white">{auth.viewer.username}</span>
                           {viewerCountryTracked && viewerCountryCode ? (
@@ -803,8 +837,8 @@ export function Nav() {
                                 handleCountrySelect(viewerCountryCode);
                                 setUserMenuOpen(false);
                               }}
-                              title={`Switch to ${getCountryName(viewerCountryCode)}`}
-                              aria-label={`Switch country to ${getCountryName(viewerCountryCode)}`}
+                              title={t`Switch to ${displayCountryName(viewerCountryCode, locale)}`}
+                              aria-label={t`Switch country to ${displayCountryName(viewerCountryCode, locale)}`}
                               className="-my-1 flex shrink-0 items-center justify-center rounded-md p-1 transition-colors hover:bg-osu-b3/70 cursor-pointer"
                             >
                               <CountryFlag code={viewerCountryCode} size="md" decorative />
@@ -820,7 +854,7 @@ export function Nav() {
                         role="menuitem"
                       >
                         <UserRound className="h-3.5 w-3.5" />
-                        Profile
+                        <Trans>Profile</Trans>
                       </Link>
                       <Link
                         to="/my-stats"
@@ -829,7 +863,7 @@ export function Nav() {
                         role="menuitem"
                       >
                         <BarChart3 className="h-3.5 w-3.5" />
-                        My Stats
+                        <Trans>My Stats</Trans>
                       </Link>
                       <Link
                         to="/goals"
@@ -838,7 +872,7 @@ export function Nav() {
                         role="menuitem"
                       >
                         <Target className="h-3.5 w-3.5" />
-                        Goals
+                        <Trans>Goals</Trans>
                       </Link>
                       <Link
                         to="/dynamic-renders"
@@ -847,7 +881,7 @@ export function Nav() {
                         role="menuitem"
                       >
                         <ImageIcon className="h-3.5 w-3.5" />
-                        Dynamic Renders
+                        <Trans>Dynamic Renders</Trans>
                       </Link>
                       {/* Logout is a POST (the route rejects GET), so it needs a
                           form; `contents` keeps the button laid out as if it
@@ -859,14 +893,14 @@ export function Nav() {
                           role="menuitem"
                         >
                           <LogOut className="h-3.5 w-3.5" />
-                          Logout
+                          <Trans>Logout</Trans>
                         </button>
                       </form>
                     </>
                   ) : (
                     <>
                       <div className="px-3 py-2 border-b border-osu-b3/30 text-[12px] font-semibold text-white">
-                        Not signed in
+                        <Trans>Not signed in</Trans>
                       </div>
                       <a
                         href={loginHref}
@@ -874,7 +908,7 @@ export function Nav() {
                         role="menuitem"
                       >
                         <LogIn className="h-3.5 w-3.5" />
-                        Log in with osu!
+                        <Trans>Log in with osu!</Trans>
                       </a>
                     </>
                   )}
@@ -885,7 +919,7 @@ export function Nav() {
           <CountrySelector className="w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
           <SearchInput
             className="w-52"
-            placeholder="find player..."
+            placeholder={t`find player...`}
             onSearch={handleSearch}
             onSelect={(u) => navigate({
               to: "/player/$username",
@@ -904,8 +938,8 @@ export function Nav() {
                 ? "bg-osu-pink/20 text-white"
                 : "text-osu-pink-light hover:bg-osu-b3/50 hover:text-white"
             }`}
-            title="Settings"
-            aria-label="Settings"
+            title={t`Settings`}
+            aria-label={t`Settings`}
             aria-expanded={settingsOpen}
           >
             <Settings className="h-5 w-5" strokeWidth={2.1} />
@@ -920,7 +954,7 @@ export function Nav() {
             restoreMenuAfterSettingsCloseRef.current = false;
             setMenuOpen(!menuOpen);
           }}
-          aria-label="Toggle menu"
+          aria-label={t`Toggle menu`}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-5 h-5 text-osu-pink-light">
             {menuOpen ? (
@@ -964,7 +998,7 @@ export function Nav() {
                   }
                   const groupItems = top.items.map((id) => NAV_LEAVES[id]).filter(isLeafVisible);
                   if (groupItems.length === 0) return null;
-                  if (groupItems.length === 1) return renderMobileLink(groupItems[0], { label: top.label });
+                  if (groupItems.length === 1) return renderMobileLink(groupItems[0], { label: i18n._(NAV_GROUP_LABELS[top.id]) });
                   const expanded = mobileOpenGroups.has(top.id);
                   return (
                     <div key={top.id}>
@@ -978,7 +1012,7 @@ export function Nav() {
                             : "border-transparent text-osu-pink-light hover:bg-osu-b4/50 hover:text-white"
                         }`}
                       >
-                        <span>{top.label}</span>
+                        <span>{i18n._(NAV_GROUP_LABELS[top.id])}</span>
                         <ChevronDown
                           className={`h-4 w-4 shrink-0 opacity-70 transition-transform duration-150 ${expanded ? "rotate-180" : ""}`}
                           strokeWidth={2.5}
@@ -1005,7 +1039,7 @@ export function Nav() {
               <div className="border-t border-osu-b3/30 px-4 py-4">
                 <SearchInput
                   className="w-full"
-                  placeholder="find player..."
+                  placeholder={t`find player...`}
                   onSearch={handleSearch}
                   onSelect={(u) => {
                     setMenuOpen(false);
@@ -1041,7 +1075,7 @@ export function Nav() {
                           setMobileCountryOpen(false);
                         }}
                         className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1.5 text-osu-l2 transition-colors duration-[120ms] hover:border-osu-b3/60 hover:bg-osu-b4/80"
-                        aria-label="Account menu"
+                        aria-label={t`Account menu`}
                         aria-expanded={mobileAccountOpen}
                       >
                         <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60">
@@ -1060,8 +1094,8 @@ export function Nav() {
                             setMobileAccountOpen(false);
                             setMenuOpen(false);
                           }}
-                          title={`Switch to ${getCountryName(viewerCountryCode)}`}
-                          aria-label={`Switch country to ${getCountryName(viewerCountryCode)}`}
+                          title={t`Switch to ${displayCountryName(viewerCountryCode, locale)}`}
+                          aria-label={t`Switch country to ${displayCountryName(viewerCountryCode, locale)}`}
                           className="flex shrink-0 items-center justify-center rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-2.5 transition-colors duration-[120ms] hover:border-osu-b3/60 hover:bg-osu-b4/80 cursor-pointer"
                         >
                           <CountryFlag code={viewerCountryCode} size="md" decorative />
