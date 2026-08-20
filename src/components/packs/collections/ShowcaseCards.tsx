@@ -5,6 +5,7 @@ import { CardSpotlight, type CardSpotlightTarget } from "../CardSpotlight";
 import { CollectionCardTile } from "../CardTile";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "../cardThumbnailCache";
 import { useCardThumbnails } from "../useCardThumbnails";
+import { SHOWCASE_ROW_CLASS, SHOWCASE_SLOT_CLASS } from "./chrome";
 import { useState } from "react";
 
 /* A row of chosen cards, drawn bigger than a collection tile because this is
@@ -51,7 +52,7 @@ export function ShowcaseCards({
 
   return (
     <>
-      <div className="flex flex-wrap gap-2.5 sm:gap-3">
+      <div className={SHOWCASE_ROW_CLASS}>
         {collected.map((card) => {
           const cardKey = packCardKeyOf(card);
           const thumbnail = getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card));
@@ -70,7 +71,7 @@ export function ShowcaseCards({
                 setLiftedCardKey(cardKey);
               }}
               style={liftedCardKey === cardKey ? { visibility: "hidden" } : undefined}
-              className="w-[92px] cursor-pointer transition-transform duration-[120ms] hover:-translate-y-1 sm:w-[116px]"
+              className={`${SHOWCASE_SLOT_CLASS} cursor-pointer transition-transform duration-[120ms] hover:-translate-y-1`}
               title={card.serial ? `${card.username}, serial #${card.serial}` : card.username}
             >
               <CollectionCardTile
@@ -88,7 +89,7 @@ export function ShowcaseCards({
             key={`slot-${index}`}
             type="button"
             onClick={onEmptySlotClick}
-            className="w-[92px] cursor-pointer rounded-[10px] border border-dashed border-osu-b3/60 text-[20px] font-light text-osu-f1 transition-colors hover:border-osu-pink/50 hover:text-osu-pink-light sm:w-[116px]"
+            className={`${SHOWCASE_SLOT_CLASS} cursor-pointer rounded-[10px] border border-dashed border-osu-b3/60 text-[20px] font-light text-osu-f1 transition-colors hover:border-osu-pink/50 hover:text-osu-pink-light`}
             style={{ aspectRatio: "5 / 7" }}
             aria-label="Add a card to your showcase"
           >

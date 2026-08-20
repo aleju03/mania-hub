@@ -1,5 +1,5 @@
 import { Pencil } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "#/lib/auth-context";
 import {
   fetchLivePackShowcaseCards,
@@ -7,12 +7,13 @@ import {
   isLiveBackendConfigured,
   type LivePackShowcaseWallCard,
 } from "#/lib/live-backend";
+import { writePackShowcaseSlotsClient } from "#/lib/pack-showcase-slots";
 import {
   PACK_SHOWCASE_MAX_CARDS,
   saveOwnPackShowcase,
   type ServerPackCollectionCard,
 } from "#/lib/pack-wallet-sync";
-import { Section, SectionHeading, ShowcaseRowSkeleton, SkeletonBlock } from "./chrome";
+import { Section, SectionHeading, ShowcaseRowSkeleton, ShowcaseWallSkeleton } from "./chrome";
 import { ShowcaseCards } from "./ShowcaseCards";
 import { ShowcasePickerHost } from "./ShowcasePicker";
 import { ShowcaseWallGrid } from "./ShowcaseWall";
@@ -26,7 +27,7 @@ import { ShowcaseWallGrid } from "./ShowcaseWall";
 
 const WALL_PAGE_SIZE = 40;
 
-export function ShowcaseTab() {
+export function ShowcaseTab({ shelfSlots }: { shelfSlots: number }) {
   /* Saving your showcase changes the wall under it, and the wall used to fetch
      on page change alone, so the card you had just put up was not there until
      you reloaded the page. */
@@ -34,19 +35,18 @@ export function ShowcaseTab() {
   const onSaved = useCallback(() => setSavedAt(Date.now()), []);
   return (
     <div className="space-y-10">
-      <YourShowcase onSaved={onSaved} />
+      <YourShowcase slots={shelfSlots} onSaved={onSaved} />
       <ShowcaseWall reloadKey={savedAt} />
     </div>
   );
 }
 
-function YourShowcase({ onSaved }: { onSaved: () => void }) {
+function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }) {
   const auth = useAuth();
   const viewer = auth.viewer;
   const [cards, setCards] = useState<ServerPackCollectionCard[] | null>(null);
   const [picking, setPicking] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-
   /* One browser-direct read for the whole row, and one that touches nothing
      expensive. It used to be two requests in series: the owner-scoped server
      function for the card keys, then the entire wall (two dozen collectors'
@@ -57,6 +57,9 @@ function YourShowcase({ onSaved }: { onSaved: () => void }) {
     let cancelled = false;
     fetchLivePackShowcaseCards(viewer.id, { fresh: reloadKey > 0 })
       .then((showcase) => {
+        // Written whether or not this render is still around to draw it:
+        // what the shelf holds is true for the next page load either way.
+        writePackShowcaseSlotsClient(viewer.id, showcase.length);
         if (!cancelled) setCards(showcase);
       })
       .catch(() => {
@@ -113,9 +116,24 @@ function YourShowcase({ onSaved }: { onSaved: () => void }) {
       {/* An empty shelf draws nothing at all: no card-shaped holes, and no
           second button telling you to fill them. It cost the height of a row
           of cards to say nothing, above a page that is entirely cards, and
-          Edit already opens the picker. */}
+          Edit already opens the picker.
+
+          So the shelf lands on one of two heights, a row of cards or that same
+          nothing, and nothing on the client knows which until the read
+          answers. The bar that used to wait here was neither: it reserved 24px
+          that an empty shelf then took back, dropping the wall below it and
+          raising it again on every load. What waits here now is the shelf this
+          browser saw last time, which is nothing for everyone who has picked
+          no cards and the right number of holes for everyone who has. It rides
+          a cookie so the server-rendered frame can hold the row too, minutes
+          of hydration before any script could read it back. A browser that has
+          never had the page open reserves nothing, same as before. */}
       {cards === null ? (
-        <SkeletonBlock className="mt-3 h-3 w-40" />
+        slots > 0 ? (
+          <div className="mt-3">
+            <ShowcaseRowSkeleton cards={slots} />
+          </div>
+        ) : null
       ) : chosen.length > 0 ? (
         <div className="mt-3">
           <ShowcaseCards
@@ -150,14 +168,10 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
     setSeenReload(reloadKey);
     setPage(0);
   }
-  /* Paging from a button under a grid four rows tall otherwise leaves you at
-     the bottom of the next page, looking at its last row with everything above
-     already scrolled past. Same handling the collection's own pager uses. */
-  const headerRef = useRef<HTMLDivElement>(null);
-  const goToPage = useCallback((next: number) => {
-    setPage(next);
-    headerRef.current?.scrollIntoView({ block: "start" });
-  }, []);
+  /* Paging leaves the scroll alone. Every page is the same forty tiles tall,
+     so the buttons stay under the cursor for the next click and the grid
+     changes in place; scrolling back up to the heading on each press meant
+     re-finding the pager every time you wanted the page after this one. */
   const [result, setResult] = useState<{ cards: LivePackShowcaseWallCard[]; total: number } | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -176,10 +190,25 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
     };
   }, [page, reloadKey]);
 
+  /* One header for every state this section has. The count only exists once
+     the wall lands, so until then its slot holds a blank line of the same 11px
+     type: an empty span has no line box at all, and the heading row growing
+     1.5px when the number arrives steps the whole grid under it. */
+  const header = (
+    <div className="flex items-baseline gap-3">
+      <SectionHeading>showcases</SectionHeading>
+      <span className="ml-auto shrink-0 text-[11px] text-osu-f1 tabular-nums">
+        {result && result.total > 0
+          ? `${result.total.toLocaleString("en-US")} ${result.total === 1 ? "card" : "cards"}`
+          : "\u00a0"}
+      </span>
+    </div>
+  );
+
   if (failed) {
     return (
       <Section>
-        <SectionHeading>showcases</SectionHeading>
+        {header}
         <p className="mt-2 text-[12px] text-osu-f1">Could not load the showcases.</p>
       </Section>
     );
@@ -188,9 +217,9 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
   if (!result) {
     return (
       <Section>
-        <SectionHeading>showcases</SectionHeading>
+        {header}
         <div className="mt-3">
-          <ShowcaseRowSkeleton cards={WALL_PAGE_SIZE} />
+          <ShowcaseWallSkeleton cards={WALL_PAGE_SIZE} />
         </div>
       </Section>
     );
@@ -199,7 +228,7 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
   if (result.cards.length === 0) {
     return (
       <Section>
-        <SectionHeading>showcases</SectionHeading>
+        {header}
         <p className="mt-2 text-[12px] text-osu-f1">
           Nobody has picked cards yet. Yours would be the first.
         </p>
@@ -211,12 +240,7 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
 
   return (
     <Section>
-      <div ref={headerRef} className="flex scroll-mt-[76px] items-baseline gap-3">
-        <SectionHeading>showcases</SectionHeading>
-        <span className="ml-auto shrink-0 text-[11px] text-osu-f1 tabular-nums">
-          {result.total.toLocaleString("en-US")} {result.total === 1 ? "card" : "cards"}
-        </span>
-      </div>
+      {header}
       <div className="mt-3">
         <ShowcaseWallGrid entries={result.cards} />
       </div>
@@ -226,7 +250,7 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
           <button
             type="button"
             disabled={page === 0}
-            onClick={() => goToPage(page - 1)}
+            onClick={() => setPage(page - 1)}
             className="cursor-pointer px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
           >
             Previous
@@ -237,7 +261,7 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
           <button
             type="button"
             disabled={page >= totalPages - 1}
-            onClick={() => goToPage(page + 1)}
+            onClick={() => setPage(page + 1)}
             className="cursor-pointer px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
           >
             Next

@@ -1,4 +1,6 @@
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
+import { createIsomorphicFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { useEffect, useState } from "react";
 import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -21,6 +23,7 @@ import {
   type LivePackPullFeedEntry,
 } from "../lib/live-backend";
 import { canUseAdminFeatures } from "../lib/auth-shared";
+import { parsePackShowcaseSlots, readPackShowcaseSlotsClient } from "../lib/pack-showcase-slots";
 import { DEFAULT_COUNTRY_CODE } from "../lib/country";
 import { pageSeo } from "../lib/seo";
 import { useScrollRestoreRef } from "../lib/use-scroll-restore";
@@ -33,6 +36,21 @@ import { track } from "../lib/analytics";
  * reasons: the showcase is browsing, the stats are a readout, the collector
  * list is a lookup. `?collector=` overrides all three and opens one shelf,
  * which is what every name on the page links to. */
+
+/* How many cards to hold space for on the viewer's own shelf while it loads.
+   Resolved here rather than inside the component because the frame that needs
+   it is the server-rendered one: the shelf is read browser-direct after mount,
+   and until then the row is either card-height or nothing, so the server has
+   to be told which. The browser writes the cookie; see lib/pack-showcase-slots.
+
+   Isomorphic rather than a server function: both sides are reading the same
+   cookie off whatever they have (a request header, document.cookie), so this
+   needs no round trip and no RPC endpoint standing open for a value the caller
+   sent us in the first place. The plugin drops the server half from the
+   browser bundle, which is what keeps getRequest out of it. */
+const readShowcaseSlots = createIsomorphicFn()
+  .server((userId: number) => parsePackShowcaseSlots(getRequest().headers.get("cookie"), userId))
+  .client((userId: number) => readPackShowcaseSlotsClient(userId));
 
 const TABS = [
   { id: "showcase" as const, label: "Showcase" },
@@ -53,7 +71,8 @@ export const Route = createFileRoute("/packs_/collections")({
     if (!canUseAdminFeatures(context.auth)) {
       throw notFound();
     }
-    return undefined as never;
+    const userId = context.auth?.viewer?.id ?? 0;
+    return { showcaseSlots: userId > 0 ? readShowcaseSlots(userId) : 0 };
   },
   validateSearch: (search: Record<string, unknown>): { collector?: string; tab?: CollectionsTab } => {
     /* An osu! username or id. Trimmed and length-capped here so the value that
@@ -84,6 +103,7 @@ export const Route = createFileRoute("/packs_/collections")({
 
 function CollectionsPage() {
   const { collector, tab } = Route.useSearch();
+  const { showcaseSlots } = Route.useRouteContext();
   const navigate = useNavigate();
   const scrollRestoreRef = useScrollRestoreRef();
   const activeTab: CollectionsTab = tab ?? "showcase";
@@ -116,7 +136,7 @@ function CollectionsPage() {
           {collector ? (
             <CollectorShelf collector={collector} tab={tab} />
           ) : activeTab === "showcase" ? (
-            <ShowcaseTab />
+            <ShowcaseTab shelfSlots={showcaseSlots} />
           ) : activeTab === "stats" ? (
             <StatsTab />
           ) : (

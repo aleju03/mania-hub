@@ -3,6 +3,7 @@ import type { CollectedCard } from "#/lib/pack-collection";
 import { packCardKeyOf } from "#/lib/pack-collection";
 import type { LivePackShowcaseWallCard } from "#/lib/live-backend";
 import { CardSpotlight, type CardSpotlightTarget } from "../CardSpotlight";
+import { SHOWCASE_GRID_CLASS } from "./chrome";
 import { CollectionCardTile } from "../CardTile";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "../cardThumbnailCache";
 import { useCardThumbnails } from "../useCardThumbnails";
@@ -30,7 +31,7 @@ export function ShowcaseWallGrid({ entries }: { entries: LivePackShowcaseWallCar
           right, which on a phone three tiles wide is most of a fourth tile.
           auto-fill fits as many columns as there is room for and 1fr shares
           the remainder between them, so both edges line up at every width. */}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(124px,1fr))] sm:gap-3">
+      <div className={SHOWCASE_GRID_CLASS}>
         {entries.map((entry) => {
           const card = entry.card as CollectedCard;
           const tileId = `${entry.collector.userId}:${packCardKeyOf(card)}`;

@@ -146,29 +146,47 @@ export function BoardSkeleton({ rows }: { rows: number }) {
   );
 }
 
-/* A showcase row while it loads: card-shaped, at the size the real cards
-   render, so the section does not resize under the reader. */
-export function ShowcaseRowSkeleton({ cards = 5, withHeader = false }: { cards?: number; withHeader?: boolean }) {
+/* The showcase wall's grid, shared with the skeleton below rather than written
+   out twice. The two had drifted: the wall is auto-fill columns that share the
+   leftover width, the skeleton was a wrapping row of fixed-width tiles, and at
+   any given viewport those fit a different number of tiles per row at a
+   different size. So the page laid out one grid to wait in and reflowed into
+   another when the cards landed, dead space down the right included - the
+   layout ShowcaseWall.tsx explains why it does not use. */
+export const SHOWCASE_GRID_CLASS =
+  "grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(124px,1fr))] sm:gap-3";
+
+/* The wall while it loads: the same grid, holding a page's worth of tiles at
+   the card's own 5:7 aspect and corner radius, so what arrives lands in the
+   holes the skeleton drew. */
+export function ShowcaseWallSkeleton({ cards }: { cards: number }) {
   return (
-    <div>
-      {withHeader && (
-        <div className="mb-3 flex items-center gap-2.5">
-          <SkeletonBlock className="h-[26px] w-[26px] rounded-full" />
-          <SkeletonBlock className="h-3 w-24" />
-          <SkeletonBlock className="ml-auto h-2.5 w-16" />
-        </div>
-      )}
-      <div className="flex flex-wrap gap-2.5 sm:gap-3">
-        {/* 5:7 is the card's own aspect, the same one the tiles use, so the
-            row does not resize when the real cards arrive. */}
-        {Array.from({ length: cards }, (_, index) => (
-          <div
-            key={index}
-            className="skeleton-pulse w-[92px] rounded-[10px] sm:w-[116px]"
-            style={{ aspectRatio: "5 / 7" }}
-          />
-        ))}
-      </div>
+    <div className={SHOWCASE_GRID_CLASS}>
+      {Array.from({ length: cards }, (_, index) => (
+        <div key={index} className="skeleton-pulse w-full rounded-[10px]" style={{ aspectRatio: "5 / 7" }} />
+      ))}
+    </div>
+  );
+}
+
+/* Your own shelf, which is a wrapping row of fixed-width slots rather than the
+   wall's grid: five cards at most, so there is no last column to leave dead
+   space, and a shelf of three should not stretch three cards across the page.
+   Shared with ShowcaseCards, which draws the real thing. */
+export const SHOWCASE_ROW_CLASS = "flex flex-wrap gap-2.5 sm:gap-3";
+export const SHOWCASE_SLOT_CLASS = "w-[92px] sm:w-[116px]";
+
+/* The shelf while it loads, at the count the caller last saw on it. */
+export function ShowcaseRowSkeleton({ cards }: { cards: number }) {
+  return (
+    <div className={SHOWCASE_ROW_CLASS}>
+      {Array.from({ length: cards }, (_, index) => (
+        <div
+          key={index}
+          className={`skeleton-pulse rounded-[10px] ${SHOWCASE_SLOT_CLASS}`}
+          style={{ aspectRatio: "5 / 7" }}
+        />
+      ))}
     </div>
   );
 }
