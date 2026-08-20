@@ -23,7 +23,7 @@ import {
   type LivePackPullFeedEntry,
 } from "../lib/live-backend";
 import { canUseAdminFeatures } from "../lib/auth-shared";
-import { parsePackShowcaseSlots, readPackShowcaseSlotsClient } from "../lib/pack-showcase-slots";
+import { parsePackShowcaseSlots, readPackShowcaseSlotsClient } from "../lib/pack-showcase";
 import { DEFAULT_COUNTRY_CODE } from "../lib/country";
 import { pageSeo } from "../lib/seo";
 import { useScrollRestoreRef } from "../lib/use-scroll-restore";
@@ -41,7 +41,7 @@ import { track } from "../lib/analytics";
    Resolved here rather than inside the component because the frame that needs
    it is the server-rendered one: the shelf is read browser-direct after mount,
    and until then the row is either card-height or nothing, so the server has
-   to be told which. The browser writes the cookie; see lib/pack-showcase-slots.
+   to be told which. The browser writes the cookie; see lib/pack-showcase.
 
    Isomorphic rather than a server function: both sides are reading the same
    cookie off whatever they have (a request header, document.cookie), so this

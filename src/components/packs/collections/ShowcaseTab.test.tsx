@@ -19,7 +19,7 @@ vi.mock("#/lib/live-backend", () => ({
   fetchLivePackShowcaseCards: () => new Promise(() => {}),
   fetchLivePackShowcaseWall: () => new Promise(() => {}),
 }));
-vi.mock("#/lib/pack-wallet-sync", () => ({ PACK_SHOWCASE_MAX_CARDS: 5, saveOwnPackShowcase: () => Promise.resolve() }));
+vi.mock("#/lib/pack-wallet-sync", () => ({ saveOwnPackShowcase: () => Promise.resolve() }));
 vi.mock("./ShowcasePicker", () => ({ ShowcasePickerHost: () => null }));
 
 const { ShowcaseTab } = await import("./ShowcaseTab");

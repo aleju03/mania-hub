@@ -153,7 +153,10 @@ export function CardSpotlight({
     if (!target || typeof window === "undefined") return null;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const infoHeight = 118;
+    /* Room under the card for the info block. On a narrow screen the
+       provenance line wraps to two or three lines, so it needs more than the
+       desktop single line. */
+    const infoHeight = vw < 640 ? 154 : 118;
     const gap = 16;
     const margin = 16;
     const maxHeight = Math.min(470, vh - infoHeight - gap - margin * 2);
@@ -365,19 +368,24 @@ export function CardSpotlight({
                * it read as the viewer's own pull, which on a wall of other
                * people's cards is the wrong person every time. */}
               {gotAt > 0 || card.serial ? (
-                <div className="mt-1 flex items-center gap-1.5 text-[12px] text-osu-f1">
-                  {showcasedBy ? (
-                    <img
-                      src={showcasedBy.avatarUrl}
-                      alt=""
-                      width={18}
-                      height={18}
-                      loading="lazy"
-                      className="h-[18px] w-[18px] shrink-0 rounded-full object-cover"
-                      draggable={false}
-                    />
-                  ) : null}
+                <div className="mt-1 max-w-[min(30rem,88vw)] text-[12px] text-osu-f1">
+                  {/* The avatar rides inline with the name rather than as a
+                      flex sibling: on a narrow screen the sentence wraps to
+                      two or three lines, and a sibling ends up floating at the
+                      left edge, level with the middle of a block it no longer
+                      looks attached to. */}
                   <span>
+                    {showcasedBy ? (
+                      <img
+                        src={showcasedBy.avatarUrl}
+                        alt=""
+                        width={18}
+                        height={18}
+                        loading="lazy"
+                        className="mr-1.5 inline-block h-[18px] w-[18px] rounded-full object-cover align-[-4px]"
+                        draggable={false}
+                      />
+                    ) : null}
                     {showcasedBy ? (
                       <Link
                         to="/packs/collections"

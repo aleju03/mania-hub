@@ -8,7 +8,7 @@ import {
   parsePackShowcaseSlots,
   readPackShowcaseSlotsClient,
   writePackShowcaseSlotsClient,
-} from "./pack-showcase-slots";
+} from "./pack-showcase";
 
 beforeEach(() => {
   document.cookie = `${PACK_SHOWCASE_SLOTS_COOKIE_NAME}=; Path=/; Max-Age=0`;

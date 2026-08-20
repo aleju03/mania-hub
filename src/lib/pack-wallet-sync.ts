@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
 import type { ManiaCardTier, ManiaSkills } from "./maniacard";
 import { liveBridgeToken } from "./live-backend-tokens";
+import { PACK_SHOWCASE_MAX_CARDS } from "./pack-showcase";
 
 // Server functions bridging the browser to the server's pack_wallets store.
 // The viewer always comes from the osu! login cookie, never from client
@@ -269,11 +270,8 @@ export const fetchServerPackCollectionOwnedKeys = createServerFn({ method: "GET"
   },
 );
 
-/* How many cards a collector may put in their showcase. Reading a showcase
-   (yours or anyone else's) is a public browser-direct call on the collections
-   page; only the write below is owner-scoped. */
-export const PACK_SHOWCASE_MAX_CARDS = 5;
-
+/* Reading a showcase (yours or anyone else's) is a public browser-direct call
+   on the collections page; only this write is owner-scoped. */
 export const saveOwnPackShowcase = createServerFn({ method: "POST" })
   .validator((input: { cardKeys?: unknown }) => ({
     cardKeys: Array.isArray(input?.cardKeys)

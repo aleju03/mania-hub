@@ -5,7 +5,7 @@ import { formatNumber } from "#/lib/format";
 import type { CollectedCard } from "#/lib/pack-collection";
 import { packCardKeyOf } from "#/lib/pack-collection";
 import { fetchLivePackCollectorCards, type LivePackCommunityCollectionPage } from "#/lib/live-backend";
-import { PACK_SHOWCASE_MAX_CARDS } from "#/lib/pack-wallet-sync";
+import { PACK_SHOWCASE_MAX_CARDS } from "#/lib/pack-showcase";
 import { CollectionCardPlaceholder, CollectionCardTile } from "../CardTile";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "../cardThumbnailCache";
 import { useCardThumbnails } from "../useCardThumbnails";

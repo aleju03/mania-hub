@@ -7,12 +7,8 @@ import {
   isLiveBackendConfigured,
   type LivePackShowcaseWallCard,
 } from "#/lib/live-backend";
-import { writePackShowcaseSlotsClient } from "#/lib/pack-showcase-slots";
-import {
-  PACK_SHOWCASE_MAX_CARDS,
-  saveOwnPackShowcase,
-  type ServerPackCollectionCard,
-} from "#/lib/pack-wallet-sync";
+import { PACK_SHOWCASE_MAX_CARDS, writePackShowcaseSlotsClient } from "#/lib/pack-showcase";
+import { saveOwnPackShowcase, type ServerPackCollectionCard } from "#/lib/pack-wallet-sync";
 import { Section, SectionHeading, ShowcaseRowSkeleton, ShowcaseWallSkeleton } from "./chrome";
 import { ShowcaseCards } from "./ShowcaseCards";
 import { ShowcasePickerHost } from "./ShowcasePicker";
