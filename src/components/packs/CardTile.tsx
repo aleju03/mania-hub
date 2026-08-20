@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import { fetchPackPlayerScores } from "#/lib/packs";
@@ -33,6 +33,14 @@ export interface CardMint {
 }
 
 const skeletonThumbnailCache = new Map<ManiaCardTier | "neutral", string>();
+
+const noopSubscribe = () => () => {};
+// False during SSR and the hydration render, true from the post-mount render
+// on - and true on the first render of anything that mounts later, which is
+// what every tile of a page turn is.
+function useHydrated(): boolean {
+  return useSyncExternalStore(noopSubscribe, () => true, () => false);
+}
 
 let activeRenders = 0;
 const renderQueue: Array<() => void> = [];
@@ -141,12 +149,15 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card
      on the server. Rendering it during the hydration pass would mean the
      server sent the gradient below and the client swapped in an <img>, which
      is a hydration mismatch wherever a placeholder is server-rendered (the
-     collections page shows a grid of them while a collection loads). Waiting a
-     commit costs one frame of gradient and keeps the two passes identical. */
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  let thumbnail = mounted ? skeletonThumbnailCache.get(tier ?? "neutral") ?? null : null;
-  if (mounted && !thumbnail) {
+     collections page shows a grid of them while a collection loads).
+
+     Only that one pass has to wait for it. A placeholder that mounts later has
+     no server render to match, so it draws its sketch in the commit that mounts
+     it: turning a page used to paint a frame of bare gradient first, which read
+     as a third state between the old page and the new one. */
+  const hydrated = useHydrated();
+  let thumbnail = hydrated ? skeletonThumbnailCache.get(tier ?? "neutral") ?? null : null;
+  if (hydrated && !thumbnail) {
     thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH);
     if (thumbnail) skeletonThumbnailCache.set(tier ?? "neutral", thumbnail);
   }
@@ -161,11 +172,15 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card
     );
   }
 
+  /* What a server-rendered placeholder grid shows until it hydrates, and the
+     only thing left that ever precedes the sketch. It borrows the tier's wash
+     but not the tier's border: that one is a near-white rim, far louder than
+     anything on the sketch it hands over to. */
   const style = tier ? MANIA_TIER_STYLES[tier] : null;
   return (
     <div
-      className={`relative overflow-hidden rounded-[10px] border bg-gradient-to-br ${
-        style ? `${style.background} ${style.border}` : "from-osu-b3 via-osu-b4 to-osu-b5 border-osu-b3/40"
+      className={`relative overflow-hidden rounded-[10px] border border-white/8 bg-gradient-to-br ${
+        style ? style.background : "from-osu-b3 via-osu-b4 to-osu-b5"
       }`}
       style={{ aspectRatio: "5 / 7" }}
     >
