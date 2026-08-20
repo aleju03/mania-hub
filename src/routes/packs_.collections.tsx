@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
@@ -98,6 +98,27 @@ function CollectionsPage() {
   const scrollRestoreRef = useScrollRestoreRef();
   const activeTab: CollectionsTab = tab ?? "showcase";
 
+  /* Which tabs have been opened, in the order they were opened.
+   *
+   * A tab is built the first time it is asked for and kept from then on,
+   * hidden rather than unmounted, so going to the stats and back to the
+   * showcase is the panel you left instead of its skeletons and its round
+   * trips all over again. What makes the return instant is the state each tab
+   * holds, and there is no keeping the state of a component that is not there.
+   *
+   * Grown during render so the tab just clicked is in the DOM in the commit
+   * the click causes, and a tab nobody opens is never built at all - which is
+   * also what keeps the server-rendered frame to the one panel it was asked
+   * for. */
+  const [opened, setOpened] = useState<CollectionsTab[]>([activeTab]);
+  if (!opened.includes(activeTab)) setOpened([...opened, activeTab]);
+
+  /* Opening the stats used to be the same event as mounting them. Now that
+     the panel survives a tab switch, the opening is the click. */
+  useEffect(() => {
+    if (!collector && activeTab === "stats" && isLiveBackendConfigured()) track("packs_collections_stats");
+  }, [collector, activeTab]);
+
   if (!isLiveBackendConfigured()) {
     return (
       <div>
@@ -125,12 +146,18 @@ function CollectionsPage() {
         <div className="relative mx-auto max-w-[1200px] px-4 py-6 sm:px-5">
           {collector ? (
             <CollectorShelf collector={collector} tab={tab} />
-          ) : activeTab === "showcase" ? (
-            <ShowcaseTab shelfSlots={showcaseSlots} />
-          ) : activeTab === "stats" ? (
-            <StatsTab />
           ) : (
-            <CollectorDirectory />
+            opened.map((id) => (
+              <div key={id} className={id === activeTab ? undefined : "hidden"}>
+                {id === "showcase" ? (
+                  <ShowcaseTab shelfSlots={showcaseSlots} />
+                ) : id === "stats" ? (
+                  <StatsTab active={activeTab === "stats"} />
+                ) : (
+                  <CollectorDirectory />
+                )}
+              </div>
+            ))
           )}
         </div>
       </div>
@@ -210,58 +237,110 @@ export function mergePulls(
   return added.length === 0 ? current : [...current, ...added].slice(-PULL_BUFFER);
 }
 
-function StatsTab() {
+export function StatsTab({ active }: { active: boolean }) {
   const [stats, setStats] = useState<LivePackCommunityStats | null>(null);
   const [pulls, setPulls] = useState<CountedPull[]>([]);
   const [failed, setFailed] = useState(false);
-
+  /* When the snapshot was last asked for, so a tab being opened again knows
+     whether what it is holding is an answer or an old one. Stamped at the
+     request rather than at the reply: a read that failed still happened, and
+     asking again on every click is not how it gets better. */
+  const readAt = useRef(0);
+  /* The pulls, held whether or not this panel is the one on screen. A tab that
+     has been switched away from still has to count them - until the next
+     snapshot bakes them in, the stream is the only place they exist - but it
+     has nothing to draw, so they land here and go into state on the way back
+     in. Otherwise a busy minute re-renders a panel nobody is looking at once
+     per pull. */
+  const pullsRef = useRef<CountedPull[]>([]);
+  const showing = useRef(active);
+  /* Effects that outlive a tab switch check this rather than a per-run flag:
+     the point is to keep a reply that landed while the panel was away, and
+     only a real unmount has nobody left to give it to. */
+  const mounted = useRef(true);
   useEffect(() => {
-    track("packs_collections_stats");
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
   }, []);
 
+  const takePulls = useCallback((next: CountedPull[]) => {
+    pullsRef.current = next;
+    if (showing.current) setPulls(next);
+  }, []);
+
+  // Whatever the stream carried while the tab was put away is drawn in the
+  // commit that brings it back.
   useEffect(() => {
-    let cancelled = false;
+    showing.current = active;
+    if (active) setPulls(pullsRef.current);
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) return;
     const load = () => {
+      readAt.current = Date.now();
       Promise.all([
         fetchLivePackCommunityStats(),
         // Best effort: without it the page is merely as live as it was before.
         fetchLivePackRecentPulls(PULL_CATCHUP_LIMIT, { includeAll: true }).catch(() => []),
       ])
         .then(([next, recent]) => {
-          if (cancelled) return;
+          if (!mounted.current) return;
           setStats(next);
           // Everything these totals already count stops being a delta, which is
           // what keeps the list to the window it is actually needed for.
-          setPulls((current) =>
-            mergePulls(current.filter((pull) => pull.pulledAt > next.computedAt), recent, next.computedAt),
+          takePulls(
+            mergePulls(
+              pullsRef.current.filter((pull) => pull.pulledAt > next.computedAt),
+              recent,
+              next.computedAt,
+            ),
           );
         })
         .catch(() => {
-          if (!cancelled) setFailed(true);
+          if (mounted.current) setFailed(true);
         });
     };
-    load();
-    const interval = window.setInterval(() => {
-      // A backgrounded tab is not being read, and its numbers are re-read on
-      // the way back in anyway.
+    // How long until these numbers are worth asking for again.
+    const dueIn = () => Math.max(0, STATS_REFRESH_MS - (Date.now() - readAt.current));
+    /* A snapshot the tab is already holding is the answer the request would
+       come back with: the boards behind it are rebuilt on the same clock this
+       refresh runs on, and the four totals on top are kept exact in between by
+       the stream below, which never stopped. So a tab switch inside that
+       window paints what it had and asks for nothing. */
+    if (dueIn() === 0) load();
+    let interval = 0;
+    const refresh = () => {
+      // A backgrounded browser tab is not being read, and whatever it missed
+      // is due the moment it comes back.
       if (!document.hidden) load();
-    }, STATS_REFRESH_MS);
+    };
+    // Timed from the last read rather than from this click, so switching tabs
+    // cannot walk the refresh forward indefinitely.
+    const first = window.setTimeout(() => {
+      refresh();
+      interval = window.setInterval(refresh, STATS_REFRESH_MS);
+    }, dueIn());
     const onVisible = () => {
-      if (!document.hidden) load();
+      if (!document.hidden && dueIn() === 0) load();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      cancelled = true;
+      window.clearTimeout(first);
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [active, takePulls]);
 
   /* The live half. Every pull lands on the shared /api/live stream as a
      country-less event the moment the backend logs it, which is the same feed
      the pull rail on /packs reads. The country here is only the connection
      anchor the endpoint requires; observe keeps a visit to this page from
-     touching the country registry. */
+     touching the country registry. Held for as long as the page is open rather
+     than for as long as the tab is showing: the connection is shared and
+     reopening it on every tab click costs more than leaving it alone. */
   useEffect(() => {
     const source = openLiveEventSource(DEFAULT_COUNTRY_CODE, { observe: true });
     if (!source) return;
@@ -269,13 +348,13 @@ function StatsTab() {
       try {
         const pull = JSON.parse(event.data) as LivePackPullFeedEntry;
         if (!Number.isFinite(pull?.id) || !Number.isFinite(pull?.pulledAt)) return;
-        setPulls((current) =>
-          current.some((seen) => seen.id === pull.id)
-            ? current
-            : [
-                ...current,
-                { id: pull.id, ownerUserId: pull.ownerUserId, pulledAt: pull.pulledAt, isNew: pull.isNew },
-              ].slice(-PULL_BUFFER),
+        const current = pullsRef.current;
+        if (current.some((seen) => seen.id === pull.id)) return;
+        takePulls(
+          [
+            ...current,
+            { id: pull.id, ownerUserId: pull.ownerUserId, pulledAt: pull.pulledAt, isNew: pull.isNew },
+          ].slice(-PULL_BUFFER),
         );
       } catch {
         // Malformed frame: the next snapshot carries this pull instead.
@@ -286,7 +365,7 @@ function StatsTab() {
       source.removeEventListener("pack_pull", onPackPull);
       source.close();
     };
-  }, []);
+  }, [takePulls]);
 
   /* A refresh that fails keeps whatever is already on screen; only never
      having had an answer at all is worth saying out loud. */
