@@ -1521,7 +1521,7 @@ msgstr "Acerca de"
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/rankings.tsx
 msgid "Acc"
-msgstr "Prec."
+msgstr "Acc"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Accent colour"
