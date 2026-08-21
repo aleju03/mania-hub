@@ -13,9 +13,10 @@ import {
 // flat-colour fallbacks where the skin has none. Sprite sizing and anchoring
 // follow osu!stable, not naive image-fitting: the stage sits at ColumnStart
 // like in game (not centred), note heights come from noteHeightScale, LN
-// bodies cascade at natural aspect from the tail end (stable's default
-// NoteBodyStyle, which is what makes Percy-style 40000px body images show
-// their baked-in rounded cap instead of squashing it flat), the body runs
+// bodies follow the skin's NoteBodyStyle - cascade at natural aspect from the
+// tail end by default (what makes Percy-style 40000px body images show their
+// baked-in rounded cap instead of squashing it flat), stretch one copy when
+// the skin declares style 0, cascade from the head end for 2 - the body runs
 // half-way under the head cap and the full depth of the tail cap, and key
 // images stretch from the hit line to the bottom edge. The note pattern is
 // seeded by the key count only, so every skin renders the same "chart" and
@@ -1036,13 +1037,15 @@ function drawLongNote(
   }
 
   if (bodyImage && visibleBottom > visibleTop) {
-    // Cascade, not stretch (stable's default NoteBodyStyle): the image runs at
-    // natural aspect from the tail end toward the head, tiling if it is
-    // shorter than the span. Percy bodies are one huge tile whose rounded cap
-    // (and "appears shorter" transparent lead-in) lands at the tail. Draw via
-    // source slices so the destination rect never exceeds the visible span:
-    // Chromium quietly rasterises multi-thousand-pixel upscales through a
-    // capped intermediate, which would squash the cap flat.
+    // The skin's NoteBodyStyle decides how the art fills the span: stretch one
+    // copy (0), or cascade it at natural aspect - tiling when the art is
+    // shorter than the hold - anchored at the tail (1, stable's default) or
+    // the head (2). Percy bodies are one huge cascade tile whose rounded cap
+    // (and "appears shorter" transparent lead-in) lands at the tail. Cascades
+    // draw via source slices so the destination rect never exceeds the visible
+    // span: Chromium quietly rasterises multi-thousand-pixel upscales through
+    // a capped intermediate, which would squash the cap flat.
+    const bodyStyle = profile.noteBodyStyles[ln.column] ?? 1;
     const sourceWidth = bodyImage.naturalWidth || 1;
     const sourceHeight = bodyImage.naturalHeight || 1;
     ctx.save();
@@ -1050,13 +1053,21 @@ function drawLongNote(
     ctx.beginPath();
     ctx.rect(laneX, visibleTop, laneWidth, visibleBottom - visibleTop);
     ctx.clip();
-    if (upscroll) {
-      // Tail end is at the bottom: flip the span so the cap edge lands there.
+    // bodyTileRects anchors at bodyTop, so flip the span whenever the anchor
+    // end - the tail for cascade styles 0/1, the head for 2 - sits at the
+    // bottom. That both repositions the tiles and mirrors the art so its top
+    // row keeps facing the anchor, the same rule the replay canvas draws by.
+    const anchorAtBottom = bodyStyle === 2 ? !upscroll : upscroll;
+    if (anchorAtBottom) {
       ctx.translate(0, bodyTop + bodyBottom);
       ctx.scale(1, -1);
     }
-    for (const tile of bodyTileRects(bodyTop, bodyBottom, sourceHeight, laneWidth / sourceWidth)) {
-      ctx.drawImage(bodyImage, 0, 0, sourceWidth, tile.sourceRows, laneX, tile.top, laneWidth, tile.height);
+    if (bodyStyle === 0) {
+      ctx.drawImage(bodyImage, 0, 0, sourceWidth, sourceHeight, laneX, bodyTop, laneWidth, bodyBottom - bodyTop);
+    } else {
+      for (const tile of bodyTileRects(bodyTop, bodyBottom, sourceHeight, laneWidth / sourceWidth)) {
+        ctx.drawImage(bodyImage, 0, 0, sourceWidth, tile.sourceRows, laneX, tile.top, laneWidth, tile.height);
+      }
     }
     ctx.restore();
   } else if (visibleBottom > visibleTop) {

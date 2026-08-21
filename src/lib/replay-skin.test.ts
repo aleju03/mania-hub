@@ -121,6 +121,7 @@ describe("replay skin settings", () => {
           comboPosition: null,
           comboHidden: false,
           keysUnderNotes: false,
+          noteBodyStyles: [],
           comboScale: 1,
           noteHeightScale: 50,
           assets: {
@@ -255,6 +256,7 @@ describe("replay skin settings", () => {
           lnHeadColors: ["#e3a5de", "#e3a5de", "#e3a5de", "#e3a5de"],
           columnWidth: 91,
           columnSpacing: 2,
+          noteBodyStyles: [0, 0, 1, 0],
         },
       },
     });

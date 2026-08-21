@@ -385,9 +385,13 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain("const MAX_LN_BODY_TILES = 8;");
     // The old whole-span stretch is gone from the skin body path.
     expect(source).not.toContain("(segmentTop - bodyTop) / bodyHeight,");
-    // Tail-anchored means the tile grows upward on upscroll, mirrored.
-    expect(source).toContain("top: upscroll ? bodyBottom - far : bodyTop + near,");
-    expect(source).toContain("flipY: upscroll,");
+    // The cascade anchors at the tail (style 1) or head (style 2), and the
+    // tiles stack upward mirrored whenever that anchor sits at the bottom.
+    expect(source).toContain("const anchorAtTop = (bodyStyle === 2) === upscroll;");
+    expect(source).toContain("top: anchorAtTop ? bodyTop + near : bodyBottom - far,");
+    expect(source).toContain("flipY: !anchorAtTop,");
+    // NoteBodyStyle 0 stretches one copy instead of cascading.
+    expect(source).toContain("if (bodyStyle === 0) return stretched;");
     expect(source).toContain("const nearOffset = tile.flipY ? tile.bottom - segmentBottom : segmentTop - tile.top;");
     expect(source).toContain("sprite.anchor.set(0.5, flipY ? 1 : 0);");
     // Whole-pixel tile edges: partial rows at a seam composite to under full

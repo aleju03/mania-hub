@@ -418,3 +418,25 @@ describe("importReplaySkinFromOsk stage flags and lazer HUD layout", () => {
     expect(result.settings.keymodeProfiles["4"].comboScale).toBe(1);
   });
 });
+
+describe("importReplaySkinFromOsk NoteBodyStyle", () => {
+  it("fans the block value out per column and lets NoteBodyStyle# override one", async () => {
+    const file = await buildOsk(
+      ["[General]", "Name: Fnf", "[Mania]", "Keys: 4", "NoteBodyStyle: 0", "NoteBodyStyle2: 1"].join("\n"),
+      ["mania-note1.png", "mania-key1.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    expect(result.settings.keymodeProfiles["4"].noteBodyStyles).toEqual([0, 0, 1, 0]);
+  });
+
+  it("leaves the list empty when the skin never declares a style", async () => {
+    const file = await buildOsk(
+      ["[General]", "Name: Fnf", "[Mania]", "Keys: 4"].join("\n"),
+      ["mania-note1.png", "mania-key1.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    expect(result.settings.keymodeProfiles["4"].noteBodyStyles).toEqual([]);
+  });
+});

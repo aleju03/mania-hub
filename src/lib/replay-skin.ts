@@ -186,6 +186,13 @@ export interface ReplaySkinKeymodeProfile {
   // skin.ini KeysUnderNotes: the key area draws below the notes instead of
   // over them. Stable defaults it off.
   keysUnderNotes: boolean;
+  // skin.ini NoteBodyStyle per column (the block-level key fanned out, the
+  // NoteBodyStyle# override applied): 0 stretches one copy of the body art
+  // over the hold, 1 cascades it at natural aspect from the tail end
+  // (stable's default, and what Percy-style bodies are authored for), 2
+  // cascades from the head end. Empty means nothing was declared anywhere,
+  // which every renderer reads as all-1.
+  noteBodyStyles: number[];
   // Multiplier on the combo counter's drawn size, from the lazer skin's
   // MainHUDComponents.json (LegacyManiaComboCounter Scale). 1 means the skin
   // never resized it.
@@ -408,6 +415,7 @@ export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
   comboPosition: null,
   comboHidden: false,
   keysUnderNotes: false,
+  noteBodyStyles: [],
   comboScale: 1,
   noteHeightScale: REPLAY_SKIN_DEFAULT_COLUMN_WIDTH,
   assets: EMPTY_REPLAY_SKIN_ASSETS,
@@ -726,6 +734,7 @@ function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKe
     comboPosition: normalizeNullableStagePosition(raw.comboPosition, 768),
     comboHidden: raw.comboHidden === true,
     keysUnderNotes: raw.keysUnderNotes === true,
+    noteBodyStyles: normalizeNumberList(raw.noteBodyStyles, 0, 2),
     comboScale: normalizeComboScale(raw.comboScale),
     noteHeightScale: normalizeNoteHeightScale(raw.noteHeightScale ?? fallback?.noteHeightScale, smallestColumnWidth),
     assets: normalizeKeymodeAssets(raw.assets),
@@ -1146,6 +1155,7 @@ function compactKeymodeProfileV3(profile: ReplaySkinKeymodeProfile): Record<stri
   if (profile.scorePosition != null) out.r = profile.scorePosition;
   if (profile.comboPosition != null) out.s = profile.comboPosition;
   if (profile.comboHidden) out.t = 1;
+  if (profile.noteBodyStyles.length > 0) out.w = profile.noteBodyStyles;
   if (profile.noteHeightScale !== DEFAULT_REPLAY_SKIN_PROFILE.noteHeightScale) out.l = profile.noteHeightScale;
   const hasAssets = profile.assets.columns.length > 0
     || profile.assets.combo !== null
@@ -1174,6 +1184,7 @@ function expandKeymodeProfileV3(value: unknown): Record<string, unknown> {
     scorePosition: raw.r,
     comboPosition: raw.s,
     comboHidden: raw.t === 1,
+    noteBodyStyles: raw.w,
     noteHeightScale: raw.l,
     assets: raw.m,
   };

@@ -580,6 +580,21 @@ async function buildProfileFromManiaBlock({
   // KeysUnderNotes puts the key area below the notes, which is how arrow and
   // deck skins keep their receptors from covering the hit.
   const keysUnderNotes = parseNumber(block.KeysUnderNotes) === 1;
+  // NoteBodyStyle decides how the body art fills the hold: 0 stretches one
+  // copy over the whole span (short gradient bodies are authored for this),
+  // 1 cascades it at natural aspect from the tail end (stable's default, and
+  // what Percy bodies need), 2 cascades from the head end. The block-level
+  // key covers every column and NoteBodyStyle# overrides one, mirroring the
+  // NoteImage# pattern. Left empty when the skin never said, which every
+  // renderer reads as all-1.
+  const blockNoteBodyStyle = parseNumber(block.NoteBodyStyle);
+  const perColumnNoteBodyStyle = Array.from({ length: keys }, (_, col) => parseNumber(block[`NoteBodyStyle${col}`]));
+  const noteBodyStyles = blockNoteBodyStyle == null && perColumnNoteBodyStyle.every((value) => value == null)
+    ? []
+    : Array.from({ length: keys }, (_, col) => {
+        const value = perColumnNoteBodyStyle[col] ?? blockNoteBodyStyle ?? 1;
+        return Math.max(0, Math.min(2, Math.round(value)));
+      });
   const columnWidth = clampInteger(columnWidths[0] ?? parseNumber(block.ColumnWidth) ?? baseProfile.columnWidth, 20, 160);
   const columnSpacing = clampInteger(columnSpacings[0] ?? parseNumber(block.ColumnSpacing) ?? baseProfile.columnSpacing, 0, 40);
   const noteHeightScale = clampInteger(
@@ -760,6 +775,7 @@ async function buildProfileFromManiaBlock({
       comboPosition,
       comboHidden,
       keysUnderNotes,
+      noteBodyStyles,
       noteHeightScale,
       columnBackgrounds,
       assets: {

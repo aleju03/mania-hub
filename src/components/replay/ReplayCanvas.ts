@@ -3404,7 +3404,7 @@ export class ManiaReplayRenderer {
         const tailTrimDelta = this.skinSettings.percy
           ? Math.min(20, Math.max(noteHeight * 0.9, headTrimDelta * 1.1))
           : 0;
-        if (this.renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, bodyAlpha, headAlpha, noteFadeHeight, layout)) {
+        if (this.renderHoldSkinImages(layout, col, assets, colX, colWidth, top, bottom, headEndY, tailEndY, bodyAlpha, headAlpha, noteFadeHeight, layout)) {
           continue;
         }
 
@@ -3714,7 +3714,7 @@ export class ManiaReplayRenderer {
         ? Math.min(20, Math.max(noteHeight * 0.9, headTrimDelta * 1.1))
         : 0;
 
-      if (this.renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, 0.92, 0.96, noteFadeHeight)) {
+      if (this.renderHoldSkinImages(layout, col, assets, colX, colWidth, top, bottom, headEndY, tailEndY, 0.92, 0.96, noteFadeHeight)) {
         return;
       }
 
@@ -5490,6 +5490,7 @@ export class ManiaReplayRenderer {
 
   private renderHoldSkinImages(
     layout: Layout,
+    col: number,
     assets: ReplaySkinColumnAssets | undefined,
     colX: number,
     colWidth: number,
@@ -5563,7 +5564,7 @@ export class ManiaReplayRenderer {
 
     if (bodyAsset && clipBottom > clipTop) {
       const baseAlpha = bodyAlpha * this.topFadeAlpha(Math.max(0, Math.min(bodyBottom, fadeHeight)), fadeHeight, 0.55);
-      for (const full of this.lnBodyTiles(bodyAsset, colWidth, bodyTop, bodyBottom)) {
+      for (const full of this.lnBodyTiles(bodyAsset, colWidth, bodyTop, bodyBottom, this.skinProfile.noteBodyStyles[col] ?? 1)) {
         const tile = clipLnBodyTile(full, clipTop, clipBottom);
         if (!tile) continue;
         const tileHeight = tile.bottom - tile.top;
@@ -5627,19 +5628,27 @@ export class ManiaReplayRenderer {
     return value === undefined ? "pending" : value;
   }
 
-  // Stable cascades the LN body instead of stretching it (its default
-  // NoteBodyStyle): the art runs at its natural aspect from the tail end
-  // toward the head and repeats when the hold outruns it. Percy bodies live or
-  // die by this - one 4000px tall strip whose rounded cap sits behind a
-  // transparent lead-in, so the hold shows a cap and reads shorter than it is.
-  // Stretched, both collapse into a couple of pixels and the tail goes flat.
+  // Stable's default NoteBodyStyle cascades the LN body instead of stretching
+  // it: the art runs at its natural aspect from the tail end toward the head
+  // and repeats when the hold outruns it. Percy bodies live or die by this -
+  // one 4000px tall strip whose rounded cap sits behind a transparent
+  // lead-in, so the hold shows a cap and reads shorter than it is. Stretched,
+  // both collapse into a couple of pixels and the tail goes flat. But a skin
+  // can declare otherwise: style 0 stretches one copy over the whole hold
+  // (short gradient bodies are authored for exactly that, and cascading them
+  // instead reads as a ladder of repeated caps), style 2 cascades from the
+  // head end rather than the tail.
   private lnBodyTiles(
     asset: ReplaySkinImageAsset,
     colWidth: number,
     bodyTop: number,
     bodyBottom: number,
+    bodyStyle: number,
   ): LnBodyTile[] {
-    const stretched: LnBodyTile[] = [{ top: bodyTop, bottom: bodyBottom, fracTop: 0, fracBottom: 1, flipY: false }];
+    // The upscroll flip on the stretched copy keeps the art's cap end facing
+    // the tail, the same orientation every cascade path below draws with.
+    const stretched: LnBodyTile[] = [{ top: bodyTop, bottom: bodyBottom, fracTop: 0, fracBottom: 1, flipY: bodyStyle === 0 && this.skinSettings.upscroll }];
+    if (bodyStyle === 0) return stretched;
     const span = bodyBottom - bodyTop;
     if (!(span > 0) || !(colWidth > 0)) return stretched;
     const texture = this.getTexture(asset);
@@ -5650,6 +5659,11 @@ export class ManiaReplayRenderer {
     if (!(tileHeight > 0)) return stretched;
 
     const upscroll = this.skinSettings.upscroll;
+    // The cascade counts outward from its anchor end - the tail for style 1,
+    // the head for style 2. When that anchor sits at the bottom of the span
+    // the tiles stack upward and the art mirrors, so its top row keeps facing
+    // the anchor; that is exactly the old flipY-on-upscroll rule, generalised.
+    const anchorAtTop = (bodyStyle === 2) === upscroll;
     const tiles: LnBodyTile[] = [];
     // Whole-pixel edges: two half-covered rows composited one after the other
     // come to less than full opacity, which reads as a seam at every boundary.
@@ -5659,11 +5673,11 @@ export class ManiaReplayRenderer {
       const far = Math.round(end);
       if (far <= near) return;
       tiles.push({
-        top: upscroll ? bodyBottom - far : bodyTop + near,
-        bottom: upscroll ? bodyBottom - near : bodyTop + far,
+        top: anchorAtTop ? bodyTop + near : bodyBottom - far,
+        bottom: anchorAtTop ? bodyTop + far : bodyBottom - near,
         fracTop,
         fracBottom,
-        flipY: upscroll,
+        flipY: !anchorAtTop,
       });
     };
 
