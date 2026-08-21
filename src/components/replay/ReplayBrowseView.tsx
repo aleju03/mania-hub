@@ -1463,7 +1463,7 @@ function ScoreInputPreview({
   error: string | null;
   onOpen: () => void;
 }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   if (loading) {
     return (
       <div className="mt-2 flex items-center gap-2 rounded-lg bg-osu-b4/70 border border-osu-b3/30 px-3 py-2 text-xs text-osu-f1">
@@ -1508,7 +1508,7 @@ function ScoreInputPreview({
         </div>
         <div className="text-[10px] text-osu-f1 truncate">
           {unavailable
-            ? availability.message
+            ? i18n._(availability.message)
             : `${score.user?.username ?? t`Unknown player`}${score.beatmap?.version ? ` // [${score.beatmap.version}]` : ""}`}
         </div>
       </div>

@@ -42,6 +42,10 @@ describe("formatDate", () => {
   it("still defaults to UTC, which is what keeps SSR and hydration identical", () => {
     expect(formatDate("2026-08-19T02:28:28Z")).toBe("August 19, 2026");
   });
+
+  it("uses neutral Latin American date formatting for Spanish", () => {
+    expect(formatDate("2026-08-19", "UTC", "es")).toBe("19 de agosto de 2026");
+  });
 });
 
 describe("formatTimeAgo", () => {
@@ -125,6 +129,14 @@ describe("formatCompactCount", () => {
     expect(formatCompactCount(10_000)).toBe("10k");
     expect(formatCompactCount(45_600)).toBe("46k");
     expect(formatCompactCount(1_250_000)).toBe("1250k");
+  });
+
+  it("delegates Spanish compact counts to CLDR locale data", () => {
+    const withoutNbsp = (value: number) => formatCompactCount(value, "es").replace(/\u00a0/g, " ");
+    expect(withoutNbsp(999)).toBe("999");
+    expect(withoutNbsp(1_200)).toBe("1.2 K");
+    expect(withoutNbsp(12_000)).toBe("12 k");
+    expect(withoutNbsp(1_200_000)).toBe("1.2 M");
   });
 
   it("floors fractions and never renders a negative count", () => {

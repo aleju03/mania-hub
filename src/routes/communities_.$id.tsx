@@ -15,13 +15,15 @@ import { track } from "../lib/analytics";
 import { communityEventProperties, rememberCommunityName } from "../lib/analytics-communities";
 import { useAuth } from "../lib/auth-context";
 import { getCountryName } from "../lib/country";
-import { formatTimeAgo } from "../lib/format";
+import { formatTimeAgo, intlLocaleTag } from "../lib/format";
+import { useLingui } from "@lingui/react/macro";
+import { useLocale } from "../lib/locale-context";
+import { useCommunityFeatureLabels, useCommunityLanguageLabel } from "../components/communities/field-options";
+import type { AppLocale } from "../lib/locale";
 import {
   COMMUNITY_INTERNATIONAL,
   clearCommunitiesCache,
   communitiesListCacheKey,
-  communityFeatureLabels,
-  communityLanguageLabel,
   describeAccessScopes,
   discordSnowflakeDate,
   fetchCommunities,
@@ -95,8 +97,8 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 
 // "March 2019" rather than a full date: nobody needs the day a Discord server
 // was made, and the month is the part that says whether it is old or new.
-function monthYear(date: Date): string {
-  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+function monthYear(date: Date, locale: AppLocale): string {
+  return date.toLocaleDateString(intlLocaleTag(locale), { month: "long", year: "numeric" });
 }
 
 /*
@@ -130,6 +132,7 @@ function largeIconUrl(url: string): string {
  * it as written meant this shelf came between the pitch and the counts.
  */
 function OtherServers({ community, className }: { community: CommunitySummary; className?: string }) {
+  const { t } = useLingui();
   const [rows, setRows] = useState<CommunitySummary[] | null>(null);
   const [scoped, setScoped] = useState(false);
 
@@ -178,9 +181,9 @@ function OtherServers({ community, className }: { community: CommunitySummary; c
   const country = community.countryCode;
   const where = scoped && country
     ? country === COMMUNITY_INTERNATIONAL
-      ? "More international servers"
-      : `More servers from ${getCountryName(country)}`
-    : "More servers";
+      ? t`More international servers`
+      : t`More servers from ${getCountryName(country)}`
+    : t`More servers`;
 
   return (
     <div className={`pt-1 ${className ?? ""}`}>
@@ -190,7 +193,7 @@ function OtherServers({ community, className }: { community: CommunitySummary; c
           to="/communities"
           className="text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-white"
         >
-          browse all
+          {t`browse all`}
         </Link>
       </div>
       {/* Two wide, not three: this grid lives in a column the facts have taken
@@ -206,6 +209,10 @@ function OtherServers({ community, className }: { community: CommunitySummary; c
 }
 
 function CommunityDetailPage() {
+  const { t } = useLingui();
+  const locale = useLocale();
+  const languageLabel = useCommunityLanguageLabel();
+  const featureLabels = useCommunityFeatureLabels();
   const community = Route.useLoaderData() as CommunitySummary | null;
   const navigate = useNavigate();
   const auth = useAuth();
@@ -237,7 +244,7 @@ function CommunityDetailPage() {
   // The backend says whether this person already has one open, so the state
   // survives a reload rather than living only in this tab.
   const reported = justReported || row?.viewerReported === true;
-  const language = row ? communityLanguageLabel(row.language) : null;
+  const language = row ? languageLabel(row.language) : null;
   const showFlag = row?.countryCode != null && row.countryCode !== COMMUNITY_INTERNATIONAL;
   // The backend reads this out of the guild id, because the guild id itself is
   // not sent to someone the server is not for. The snowflake path stays as the
@@ -245,7 +252,7 @@ function CommunityDetailPage() {
   const created = row?.guildCreatedAt
     ? new Date(row.guildCreatedAt)
     : discordSnowflakeDate(row?.guildId);
-  const badges = communityFeatureLabels(row?.features);
+  const badges = featureLabels(row?.features);
   const inviteCode = row?.inviteUrl?.split("/").filter(Boolean).pop() ?? "";
   // Null when this server is not for where you are. There is no invite in the
   // response at all in that case, so the page has nothing to hide, only
@@ -261,7 +268,7 @@ function CommunityDetailPage() {
             iconSrc="/images/icons/chat.svg"
             title={
               <Link to="/communities" className="transition-colors hover:text-white">
-                osu!mania Discord servers
+                {t`osu!mania Discord servers`}
               </Link>
             }
             right={
@@ -270,7 +277,7 @@ function CommunityDetailPage() {
                 className="inline-flex items-center gap-1.5 rounded-lg bg-osu-b4 px-2.5 py-1.5 text-[11px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3 hover:text-white"
               >
                 <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>back to servers</span>
+                <span>{t`back to servers`}</span>
               </Link>
             }
           />
@@ -278,15 +285,15 @@ function CommunityDetailPage() {
           <div className="mx-auto w-full max-w-[1100px] flex-1 px-4 py-6 sm:px-5">
             {!row ? (
               <div className="mx-auto max-w-md px-4 py-20 text-center">
-                <div className="text-sm font-bold text-white">That server is not listed</div>
+                <div className="text-sm font-bold text-white">{t`That server is not listed`}</div>
                 <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-                  It may have been taken down, or it is still waiting for approval.
+                  {t`It may have been taken down, or it is still waiting for approval.`}
                 </p>
                 <Link
                   to="/communities"
                   className="mt-4 inline-block rounded-full bg-osu-pink px-5 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110"
                 >
-                  All Discord servers
+                  {t`All Discord servers`}
                 </Link>
               </div>
             ) : (
@@ -306,7 +313,7 @@ function CommunityDetailPage() {
                         <button
                           type="button"
                           onClick={() => setIconOpen(true)}
-                          aria-label={`View ${row.name}'s icon`}
+                          aria-label={t`View ${row.name}'s icon`}
                           className={`h-20 w-20 shrink-0 overflow-hidden rounded-3xl bg-osu-b3/40 transition duration-150 cursor-pointer hover:ring-osu-pink/70 ${
                             row.bannerUrl ? "-mt-12 ring-4 ring-osu-b4" : "ring-2 ring-transparent"
                           }`}
@@ -353,7 +360,7 @@ function CommunityDetailPage() {
                           className="inline-flex items-center gap-1.5 rounded-full bg-osu-b5 px-3.5 py-2 text-[12.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3"
                         >
                           <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                          Edit
+                          {t`Edit`}
                         </button>
                       )}
                       {row.inviteUrl ? (
@@ -366,12 +373,12 @@ function CommunityDetailPage() {
                           style={{ backgroundColor: DISCORD_BLURPLE }}
                         >
                           <DiscordLogo className="h-4 w-4" aria-hidden="true" />
-                          Join server
+                          {t`Join server`}
                         </a>
                       ) : (
                         <span className="inline-flex items-center gap-2 rounded-full bg-osu-b5 px-5 py-2 text-[13px] font-bold text-osu-f1">
                           <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-                          {accessLabel ?? "Closed"}
+                          {accessLabel ?? t`Closed`}
                         </span>
                       )}
                     </div>
@@ -384,7 +391,7 @@ function CommunityDetailPage() {
 
                     <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-4 sm:p-5">
                       <h2 className="text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                        What it is for
+                        {t`What it is for`}
                       </h2>
                       <p className="mt-2 whitespace-pre-line break-words text-[13.5px] leading-relaxed text-osu-l2 [overflow-wrap:anywhere]">
                         {row.pitch}
@@ -401,7 +408,7 @@ function CommunityDetailPage() {
                           >
                             {showFlag && <CountryFlag code={row.countryCode} size="sm" decorative />}
                             {row.countryCode === COMMUNITY_INTERNATIONAL
-                              ? "international"
+                              ? t`international`
                               : getCountryName(row.countryCode)}
                           </Link>
                         )}
@@ -433,18 +440,18 @@ function CommunityDetailPage() {
                     {/* Counts are Discord's own approximations, refreshed with
                         the invite every few hours. */}
                     <div className="grid grid-cols-2 gap-4">
-                      <Stat label="members" value={row.memberCount.toLocaleString("en-US")} />
-                      <Stat label="online" value={row.onlineCount.toLocaleString("en-US")} />
+                      <Stat label={t`members`} value={row.memberCount.toLocaleString("en-US")} />
+                      <Stat label={t`online`} value={row.onlineCount.toLocaleString("en-US")} />
                       {typeof row.boostCount === "number" && row.boostCount > 0 && (
-                        <Stat label="boosts" value={row.boostCount.toLocaleString("en-US")} />
+                        <Stat label={t`boosts`} value={row.boostCount.toLocaleString("en-US")} />
                       )}
                     </div>
 
                     <div className="mt-4 space-y-2 border-t border-osu-b3/20 pt-4">
                       {/* A month and a year rather than a number, so it reads as
                           a line here instead of wrapping across a stat. */}
-                      {created && <Fact label="server made">{monthYear(created)}</Fact>}
-                      <Fact label="posted by">
+                      {created && <Fact label={t`server made`}>{monthYear(created, locale)}</Fact>}
+                      <Fact label={t`posted by`}>
                         <Link
                           to="/player/$username"
                           params={{ username: row.ownerUsername }}
@@ -454,11 +461,11 @@ function CommunityDetailPage() {
                           {row.ownerUsername}
                         </Link>
                       </Fact>
-                      <Fact label="listed">
+                      <Fact label={t`listed`}>
                         <span suppressHydrationWarning>{formatTimeAgo(row.createdAt)}</span>
                       </Fact>
                       {accessLabel && (
-                        <Fact label="open to">
+                        <Fact label={t`open to`}>
                           <span className="inline-flex items-center gap-1.5">
                             <Lock className="h-3.5 w-3.5 shrink-0 text-osu-f1" aria-hidden="true" />
                             {accessLabel}
@@ -468,7 +475,7 @@ function CommunityDetailPage() {
                       {/* Nothing to print when the invite was withheld, which is
                           the point: the link is not on the page in any form. */}
                       {row.inviteUrl && (
-                        <Fact label="invite">
+                        <Fact label={t`invite`}>
                           <a
                             href={row.inviteUrl}
                             target="_blank"
@@ -509,7 +516,7 @@ function CommunityDetailPage() {
                          against it. */
                       <div className="mt-4 flex justify-end border-t border-osu-b3/20 pt-3">
                         {reported ? (
-                          <p className="text-[11.5px] text-osu-f1/70">Report sent</p>
+                          <p className="text-[11.5px] text-osu-f1/70">{t`Report sent`}</p>
                         ) : (
                           <button
                             type="button"
@@ -517,7 +524,7 @@ function CommunityDetailPage() {
                             className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light"
                           >
                             <Flag className="h-3 w-3" aria-hidden="true" />
-                            report this server
+                            {t`report this server`}
                           </button>
                         )}
                       </div>
@@ -547,7 +554,7 @@ function CommunityDetailPage() {
           >
             <motion.img
               src={largeIconUrl(row.iconUrl)}
-              alt={`${row.name} icon`}
+              alt={t`${row.name} icon`}
               className="h-[300px] w-[300px] rounded-3xl object-cover shadow-[0_12px_60px_rgba(0,0,0,0.7)]"
               onClick={(event) => event.stopPropagation()}
               initial={{ scale: 0.85, opacity: 0 }}

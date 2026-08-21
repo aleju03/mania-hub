@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { getI18n } from "./i18n";
 import {
+  formatSideBySideIssue,
   getSideBySideCandidateIssue,
   getSideBySideIssue,
   getSideBySideScoreIssue,
@@ -40,7 +42,7 @@ describe("getSideBySideScoreIssue", () => {
       user: { id: 2, username: "instal", avatar_url: "", country_code: "TH" },
     }));
     expect(issue?.code).toBe("unplayable");
-    expect(issue?.message).toBe("instal: This score doesn't have a downloadable replay.");
+    expect(issue && formatSideBySideIssue(issue, getI18n("en"))).toBe("instal: This score doesn't have a downloadable replay.");
   });
 });
 
@@ -61,7 +63,7 @@ describe("getSideBySideIssue", () => {
   it("rejects a rate mismatch, and says which rates", () => {
     const issue = getSideBySideIssue(score({ id: 1 }), score({ id: 2, mods: [{ acronym: "DT" }] }));
     expect(issue?.code).toBe("different-rate");
-    expect(issue?.message).toContain("1x vs 1.5x");
+    expect(issue && formatSideBySideIssue(issue, getI18n("en"))).toContain("1x vs 1.5x");
   });
 
   it("reports an unplayable side before comparing the two", () => {

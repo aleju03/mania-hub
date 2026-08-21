@@ -17,6 +17,7 @@ import { CountryFlag } from "../ui/CountryFlag";
 import { SelectMenu } from "../ui/SelectMenu";
 import { ReplaySkinSettingsModal } from "../replay/ReplaySkinSettingsModal";
 import { OwnerReplaySkinCustomizeModal } from "./OwnerReplaySkinCustomizeModal";
+import { TranslationReportForm } from "./TranslationReportForm";
 import {
   ReplaySkinColorWheel,
   ReplaySkinValueSlider,
@@ -385,6 +386,7 @@ function PanelGroup({ label, children, action }: { label: string; children: Reac
 const LANGUAGE_OPTIONS: Record<AppLocale, { label: string; flag: string }> = {
   en: { label: "English", flag: "US" },
   "zh-CN": { label: "中文（简体）", flag: "CN" },
+  es: { label: "Español", flag: "ES" },
 };
 
 function LanguageGroup() {
@@ -414,6 +416,9 @@ function LanguageGroup() {
           }}
         />
       </div>
+      {/* Spanish is maintained directly by the site's owner. Keep reader
+          reports for Chinese, where community feedback is useful. */}
+      {locale === "zh-CN" ? <TranslationReportForm key={locale} /> : null}
     </PanelGroup>
   );
 }

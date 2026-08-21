@@ -1,3 +1,4 @@
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Share2 } from "lucide-react";
@@ -5,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "#/lib/auth-context";
 import { formatDate, formatOrdinal } from "#/lib/format";
+import { useLocale } from "#/lib/locale-context";
 import { useViewerTimeZone } from "#/lib/use-viewer-time-zone";
 import { fetchLivePackCardStats, isLiveBackendConfigured, packCollectorParam } from "#/lib/live-backend";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
@@ -83,6 +85,8 @@ export function CardSpotlight({
   const [shareCopied, setShareCopied] = useState(false);
   const reducedMotion = prefersReducedMotion();
   const viewerId = useAuth().viewer?.id ?? null;
+  const { t } = useLingui();
+  const locale = useLocale();
 
   /* Community context: how many collections hold this card. Asked for by key,
      so a collector who holds a player's ordinary card and a granted one is
@@ -132,7 +136,7 @@ export function CardSpotlight({
       // sheet is the fallback rather than the default so desktop gets the
       // predictable copy behavior.
       try {
-        await navigator.share?.({ url, title: `${card.username} maniacard` });
+        await navigator.share?.({ url, title: t`${card.username} maniacard` });
       } catch {
         // The user closed the share sheet; nothing to do.
       }
@@ -271,7 +275,7 @@ export function CardSpotlight({
           <motion.button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t`Close`}
             className="absolute top-3 right-3 z-20 grid h-8 w-8 place-items-center rounded-full bg-black/50 text-white/80 transition-colors hover:bg-black/70 hover:text-white cursor-pointer"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -303,7 +307,7 @@ export function CardSpotlight({
             {baseImage ? (
               <img
                 src={hiResFallback ?? baseImage}
-                alt={`${card.username} maniacard`}
+                alt={t`${card.username} maniacard`}
                 className="h-full w-full rounded-[14px] object-cover shadow-[0_18px_48px_rgba(0,0,0,0.6)]"
                 style={{ opacity: canvasReady ? 0 : 1, transition: "opacity 0.2s ease-out" }}
                 draggable={false}
@@ -322,7 +326,7 @@ export function CardSpotlight({
                 touchAction: "none",
               }}
               role="img"
-              aria-label={canvasReady ? `${card.username} maniacard` : undefined}
+              aria-label={canvasReady ? t`${card.username} maniacard` : undefined}
             />
           </motion.div>
 
@@ -353,10 +357,20 @@ export function CardSpotlight({
               </div>
               <div className="text-[12px] text-osu-f1 tabular-nums">
                 {Math.round(card.pp).toLocaleString("en-US")}pp
-                {card.globalRank > 0 && <> &middot; #{card.globalRank.toLocaleString("en-US")} global</>}
-                {card.copies > 1 && <> &middot; x{card.copies} copies</>}
+                {card.globalRank > 0 && <> &middot; {t`#${card.globalRank.toLocaleString("en-US")} global`}</>}
+                {card.copies > 1 && (
+                  <>
+                    {" "}
+                    &middot; <Plural value={Number(card.copies)} one="x# copy" other="x# copies" />
+                  </>
+                )}
                 {ownerCount !== null && ownerCount > 0 && (
-                  <> &middot; in {ownerCount.toLocaleString("en-US")} {ownerCount === 1 ? "collection" : "collections"}</>
+                  <>
+                    {" "}
+                    {/* Number() keeps the catalog id positional so this shares
+                        the pull page's already-translated entry. */}
+                    &middot; <Plural value={Number(ownerCount)} one="in # collection" other="in # collections" />
+                  </>
                 )}
               </div>
               {/* How this holding came to be, in one line.
@@ -388,39 +402,52 @@ export function CardSpotlight({
                         draggable={false}
                       />
                     ) : null}
-                    {showcasedBy ? (
-                      <Link
-                        to="/packs/collections"
-                        search={{ collector: packCollectorParam(showcasedBy) }}
-                        preload="intent"
-                        className="font-semibold text-white transition-colors hover:text-osu-pink-light"
-                      >
-                        {showcasedBy.username}
-                      </Link>
-                    ) : null}
                     {/* "Obtained" rather than "was given": how a card that
                         never came out of a pack came to be somebody's is not
                         the card's business to announce. */}
-                    {card.grantedAt
-                      ? showcasedBy
-                        ? " obtained this card"
-                        : "Obtained"
-                      : showcasedBy
-                        ? " pulled this"
-                        : "Pulled"}
-                    {gotAt > 0 ? ` on ${formatDate(new Date(gotAt).toISOString(), viewerTimeZone)}` : ""}
+                    {(() => {
+                      const nameLink = showcasedBy ? (
+                        <Link
+                          to="/packs/collections"
+                          search={{ collector: packCollectorParam(showcasedBy) }}
+                          preload="intent"
+                          className="font-semibold text-white transition-colors hover:text-osu-pink-light"
+                        >
+                          {showcasedBy.username}
+                        </Link>
+                      ) : null;
+                      const dateText = gotAt > 0 ? formatDate(new Date(gotAt).toISOString(), viewerTimeZone, locale) : null;
+                      if (card.grantedAt) {
+                        if (nameLink) {
+                          return dateText ? (
+                            <Trans>{nameLink} obtained this card on {dateText}</Trans>
+                          ) : (
+                            <Trans>{nameLink} obtained this card</Trans>
+                          );
+                        }
+                        return dateText ? <Trans>Obtained on {dateText}</Trans> : <Trans>Obtained</Trans>;
+                      }
+                      if (nameLink) {
+                        return dateText ? (
+                          <Trans>{nameLink} pulled this on {dateText}</Trans>
+                        ) : (
+                          <Trans>{nameLink} pulled this</Trans>
+                        );
+                      }
+                      return dateText ? <Trans>Pulled on {dateText}</Trans> : <Trans>Pulled</Trans>;
+                    })()}
                     {!card.grantedAt && card.serial ? (
-                      <>
-                        ,{" "}
-                        <span className={`tabular-nums ${card.serial === 1 ? "font-bold text-amber-300" : ""}`}>
-                          {formatOrdinal(card.serial)}
-                          {card.mintedTotal && card.mintedTotal !== card.serial
-                            // Skip the total when it just repeats the serial ("61st of 61").
-                            ? ` of ${card.mintedTotal.toLocaleString("en-US")}`
-                            : ""}
-                          {" to pull it"}
-                        </span>
-                      </>
+                      <span className={`tabular-nums ${card.serial === 1 ? "font-bold text-amber-300" : ""}`}>
+                        {(() => {
+                          const ordinalText = formatOrdinal(card.serial, locale);
+                          // Skip the total when it just repeats the serial ("61st of 61").
+                          if (card.mintedTotal && card.mintedTotal !== card.serial) {
+                            const totalText = card.mintedTotal.toLocaleString("en-US");
+                            return <Trans>, {ordinalText} of {totalText} to pull it</Trans>;
+                          }
+                          return <Trans>, {ordinalText} to pull it</Trans>;
+                        })()}
+                      </span>
                     ) : null}
                   </span>
                 </div>
@@ -431,23 +458,23 @@ export function CardSpotlight({
                   params={{ username: card.username }}
                   className="rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition hover:brightness-110"
                 >
-                  View profile
+                  <Trans>View profile</Trans>
                 </Link>
                 <button
                   type="button"
                   onClick={() => void shareCard(card)}
                   className="flex items-center gap-1.5 rounded-full bg-osu-b3/80 px-4 py-1.5 text-[12px] font-bold text-white transition hover:bg-osu-b3 cursor-pointer"
-                  aria-label={`Share ${card.username}'s maniacard`}
+                  aria-label={t`Share ${card.username}'s maniacard`}
                 >
                   {shareCopied ? (
                     <>
                       <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                      Copied
+                      <Trans>Copied</Trans>
                     </>
                   ) : (
                     <>
                       <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      Share
+                      <Trans>Share</Trans>
                     </>
                   )}
                 </button>

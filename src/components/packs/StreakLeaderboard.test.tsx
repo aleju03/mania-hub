@@ -3,7 +3,10 @@
    that exists is removing one, and it lives on the board itself. These cover
    who is offered that and what one click does, since a stray click here would
    delete somebody's record. */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
+import type { ReactElement, ReactNode } from "react";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "#/lib/i18n";
 import { afterEach, expect, it, vi } from "vitest";
 import type { LiveStreakBoard } from "#/lib/live-backend";
 
@@ -19,6 +22,12 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 const { StreakLeaderboard } = await import("./StreakLeaderboard");
+
+// The board reads its copy through Lingui; en resolves to the source strings.
+const I18nWrap = ({ children }: { children: ReactNode }) => (
+  <I18nProvider i18n={getI18n("en")}>{children}</I18nProvider>
+);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
 
 const board: LiveStreakBoard = {
   pool: "top500",

@@ -4,6 +4,7 @@ import { exec, parseJson, type Db } from "../../db.js";
 import { countUserLinks } from "../../discord/identity.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../../discord/subscriptions.js";
 import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, updateAdminTodo, type CreateTodoInput, type UpdateTodoInput } from "../../features/admin-todos.js";
+import { clearReviewedTranslationReports, deleteTranslationReport, listTranslationReports, updateTranslationReport, type UpdateTranslationReportInput } from "../../features/translation-reports.js";
 import { cancelBeatmapOsuFileBackfill, startBeatmapOsuFileBackfill } from "../../features/beatmap-osu-file-backfill.js";
 import { cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, startChartAnalysisBackfill } from "../../features/chart-analysis.js";
 import { importDanBenchmark, isDanBenchmarkFamily, listDanBenchmarkHiddenDiffs, listDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "../../features/dan-benchmark.js";
@@ -814,6 +815,71 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       return true;
     }
     sendJson(req, res, ctx, 200, { ok: true, cleared: await clearDoneAdminTodos(ctx.serveWriteDb ?? ctx.db) });
+    return true;
+  }
+  if (url.pathname === "/api/admin/translation-reports") {
+    // The read side of the settings-panel report form (user-data.ts owns the
+    // write). Admin-only: reports quote whoever filed them, sometimes by name.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const page = await listTranslationReports(ctx.db, {
+      status: url.searchParams.get("status") ?? undefined,
+      locale: url.searchParams.get("locale") ?? undefined,
+      search: url.searchParams.get("search") ?? undefined,
+      limit: url.searchParams.get("limit") ?? undefined,
+      offset: url.searchParams.get("offset") ?? undefined,
+    });
+    sendJson(req, res, ctx, 200, page);
+    return true;
+  }
+  if (url.pathname === "/api/admin/translation-reports/update") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<UpdateTranslationReportInput>((await readBody(req)) || "{}", {});
+    const report = await updateTranslationReport(ctx.serveWriteDb ?? ctx.db, body);
+    if (!report) {
+      sendJson(req, res, ctx, 404, { error: "report_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, report });
+    return true;
+  }
+  if (url.pathname === "/api/admin/translation-reports/delete") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ id?: unknown }>((await readBody(req)) || "{}", {});
+    const removed = await deleteTranslationReport(ctx.serveWriteDb ?? ctx.db, typeof body.id === "string" ? body.id : "");
+    if (!removed) {
+      sendJson(req, res, ctx, 404, { error: "report_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true });
+    return true;
+  }
+  if (url.pathname === "/api/admin/translation-reports/clear-reviewed") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, cleared: await clearReviewedTranslationReports(ctx.serveWriteDb ?? ctx.db) });
     return true;
   }
   if (url.pathname === "/api/admin/dan-benchmark/labels" || url.pathname === "/api/admin/dan-benchmark/hidden") {

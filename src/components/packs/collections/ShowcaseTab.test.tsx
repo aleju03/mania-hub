@@ -5,7 +5,10 @@
    card's height the moment the shelf lands. That is invisible to a test that
    only asserts on the settled page, so this one renders the tab the way the
    server does and counts what it reserved. */
-import { renderToString } from "react-dom/server";
+import { renderToString as reactRenderToString } from "react-dom/server";
+import type { ReactElement } from "react";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "#/lib/i18n";
 import { expect, it, vi } from "vitest";
 
 const viewer = { id: 7095193, username: "Aleju03", avatarUrl: "", countryCode: "CR" };
@@ -23,6 +26,10 @@ vi.mock("#/lib/pack-wallet-sync", () => ({ saveOwnPackShowcase: () => Promise.re
 vi.mock("./ShowcasePicker", () => ({ ShowcasePickerHost: () => null }));
 
 const { ShowcaseTab } = await import("./ShowcaseTab");
+
+// The tab reads its copy through Lingui; en resolves to the source strings.
+const renderToString = (ui: ReactElement) =>
+  reactRenderToString(<I18nProvider i18n={getI18n("en")}>{ui}</I18nProvider>);
 
 const WALL_TILES = 40;
 const slots = (html: string) => html.split("skeleton-pulse").length - 1;

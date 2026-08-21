@@ -4,7 +4,10 @@
    collections page that cannot be clicked through in a browser without a real
    osu! session. These cover what a click does: the cap, taking one back off,
    and what actually gets saved. */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
+import type { ReactElement, ReactNode } from "react";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "#/lib/i18n";
 import { afterEach, expect, it, vi } from "vitest";
 import type { LivePackCommunityCollectionPage } from "#/lib/live-backend";
 
@@ -24,6 +27,12 @@ vi.mock("../cardThumbnailCache", () => ({
 vi.mock("../useCardThumbnails", () => ({ useCardThumbnails: () => ({ onThumbnailError: () => {} }) }));
 
 const { ShowcasePicker } = await import("./ShowcasePicker");
+
+// The picker reads its copy through Lingui; en resolves to the source strings.
+const I18nWrap = ({ children }: { children: ReactNode }) => (
+  <I18nProvider i18n={getI18n("en")}>{children}</I18nProvider>
+);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
 
 function card(userId: number, username: string) {
   return {

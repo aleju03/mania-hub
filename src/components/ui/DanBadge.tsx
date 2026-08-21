@@ -6,6 +6,7 @@ import { getScoreRate } from "#/lib/score";
 import { useAuth } from "#/lib/auth-context";
 import { DAN_ESTIMATE_CACHE_VERSION } from "#dan/dan-estimator/cache-version";
 import { fetchLiveDanEstimates, isLiveBackendConfigured } from "#/lib/live-backend";
+import { useLingui } from "@lingui/react/macro";
 
 // ── Batched fetcher ────────────────────────────────────────────────────────────
 
@@ -185,6 +186,7 @@ const FAMILY_COLOR: Record<string, string> = {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 function DanBadgeInner({ estimate }: { estimate: LeanDanEstimate }) {
+  const { t } = useLingui();
   const imgSrc = getDanImageSrc(estimate.label, estimate.family);
   const familyColor = FAMILY_COLOR[estimate.family] ?? "text-white/70";
   const variantText = estimate.variant ?? "";
@@ -192,7 +194,9 @@ function DanBadgeInner({ estimate }: { estimate: LeanDanEstimate }) {
   return (
     <span
       className="inline-flex items-center gap-1 flex-shrink-0"
-      title={`Dan estimate: ${estimate.displayName} (${estimate.family}${estimate.confidence < 0.5 ? ", low confidence" : ""})`}
+      title={estimate.confidence < 0.5
+        ? t`Dan estimate: ${estimate.displayName} (${estimate.family}, low confidence)`
+        : t`Dan estimate: ${estimate.displayName} (${estimate.family})`}
     >
       {imgSrc ? (
         <img

@@ -29,6 +29,9 @@ import {
   SIGNATURE_TYPE_LABELS,
   type SignatureType,
 } from "../../lib/signature-shared";
+import { useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 import {
   normalizeSignatureImageUrl,
   normalizeSignatureStyleMap,
@@ -84,9 +87,10 @@ const STYLE_SAVE_DEBOUNCE_MS = 600;
    set this up yet it would flash a mock editor they never get. An empty shell
    holds the header, and whatever arrives fades in. */
 function PageShell({ children, center = false, enter = false }: { children?: ReactNode; center?: boolean; enter?: boolean }) {
+  const { t } = useLingui();
   return (
     <div className="min-h-screen">
-      <PageHeader iconSrc="/images/icons/contests.svg" title="dynamic renders" />
+      <PageHeader iconSrc="/images/icons/contests.svg" title={t`dynamic renders`} />
       <div className="min-h-[80vh] bg-osu-b5">
         <div
           className={`${center
@@ -234,13 +238,13 @@ function ColorSwatch({
 /* Said out loud rather than left as a picture that never appears. Every one of
    these makes the render silently skip the background, which from the page
    looks the same as the setting doing nothing. */
-const PROBE_MESSAGE: Record<SignatureImageProbe, string | null> = {
+const PROBE_MESSAGE: Record<SignatureImageProbe, MessageDescriptor | null> = {
   ok: null,
-  blocked: "That address cannot be loaded.",
-  refused: "That site blocks our request. Hosts like imgur or catbox work.",
-  unreachable: "That link did not load.",
-  "not-an-image": "That link is a page, not an image file.",
-  "too-large": "That image is too large to draw.",
+  blocked: msg`That address cannot be loaded.`,
+  refused: msg`That site blocks our request. Hosts like imgur or catbox work.`,
+  unreachable: msg`That link did not load.`,
+  "not-an-image": msg`That link is a page, not an image file.`,
+  "too-large": msg`That image is too large to draw.`,
 };
 
 /* Tells the backend what zone this browser is in, when it has something new to
@@ -254,6 +258,7 @@ async function syncTimeZone(current: SignatureSettings): Promise<SignatureSettin
 }
 
 export function DynamicRendersPanel() {
+  const { t, i18n } = useLingui();
   const { viewer } = useAuth();
   const viewerTimeZone = useViewerTimeZone();
   const location = useLocation();
@@ -582,13 +587,13 @@ export function DynamicRendersPanel() {
     const loginHref = `/api/auth/osu?next=${encodeURIComponent(`${location.pathname}${location.searchStr}`)}`;
     return (
       <PageShell center>
-        <div className="text-[17px] font-bold text-white">Log in with osu! to set one up.</div>
+        <div className="text-[17px] font-bold text-white">{t`Log in with osu! to set one up.`}</div>
         <a
           href={loginHref}
           className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl border border-osu-pink/45 bg-osu-pink/15 px-5 text-[13px] font-bold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white"
         >
           <OsuLogo className="h-4 w-4" />
-          Log in with osu!
+          {t`Log in with osu!`}
         </a>
       </PageShell>
     );
@@ -606,9 +611,9 @@ export function DynamicRendersPanel() {
   if (settings?.blockedAt) {
     return (
       <PageShell center enter>
-        <div className="text-[17px] font-bold text-white">Your dynamic renders were turned off.</div>
+        <div className="text-[17px] font-bold text-white">{t`Your dynamic renders were turned off.`}</div>
         <div className="mt-2.5 text-[13.5px] leading-5 text-osu-f1">
-          Any image you pasted has stopped loading. Get in touch if you think that is a mistake.
+          {t`Any image you pasted has stopped loading. Get in touch if you think that is a mistake.`}
         </div>
       </PageShell>
     );
@@ -618,10 +623,10 @@ export function DynamicRendersPanel() {
     return (
       <PageShell center enter>
         <div className="text-[22px] font-bold leading-snug text-white">
-          A customizable picture for your osu! profile that keeps itself updated.
+          {t`A customizable picture for your osu! profile that keeps itself updated.`}
         </div>
         <div className="mt-2.5 text-[13.5px] leading-5 text-osu-f1">
-          Paste it once. It redraws when your stats change.
+          {t`Paste it once. It redraws when your stats change.`}
         </div>
         <button
           type="button"
@@ -634,7 +639,7 @@ export function DynamicRendersPanel() {
           }))}
           className="mt-5 inline-flex h-11 items-center rounded-xl border border-osu-pink/45 bg-osu-pink/15 px-5 text-[13px] font-bold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white cursor-pointer disabled:opacity-50"
         >
-          {busy ? "Setting up..." : "Get my link"}
+          {busy ? t`Setting up...` : t`Get my link`}
         </button>
       </PageShell>
     );
@@ -656,7 +661,7 @@ export function DynamicRendersPanel() {
                 type === entry ? "text-white" : "text-osu-f1 hover:text-osu-l2"
               }`}
             >
-              {SIGNATURE_TYPE_LABELS[entry]}
+              {i18n._(SIGNATURE_TYPE_LABELS[entry])}
               {type === entry ? (
                 <motion.span
                   layoutId="signature-type-indicator"
@@ -689,7 +694,7 @@ export function DynamicRendersPanel() {
                     : "font-semibold text-osu-f1 hover:text-osu-l2"
                 }`}
               >
-                {entry.label}
+                {i18n._(entry.label)}
               </button>
             ))}
           </div>
@@ -709,13 +714,13 @@ export function DynamicRendersPanel() {
             {type === "dan" && keyModes.length > 1 ? (
               <>
                 <KeyModePicker
-                  label="Rice"
+                  label={t`Rice`}
                   keyModes={keyModes}
                   value={style.keyCount ?? keyModes[0]!}
                   onChange={(keys) => patchStyle({ keyCount: keys })}
                 />
                 <KeyModePicker
-                  label="LN"
+                  label={t`LN`}
                   keyModes={keyModes}
                   value={style.lnKeyCount ?? style.keyCount ?? keyModes[0]!}
                   onChange={(keys) => patchStyle({ lnKeyCount: keys })}
@@ -747,7 +752,7 @@ export function DynamicRendersPanel() {
             {!imageUrl ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="text-[12px] font-semibold text-osu-l3">
-                  {imageState === "error" ? "Could not draw this one." : "Drawing..."}
+                  {imageState === "error" ? t`Could not draw this one.` : t`Drawing...`}
                 </span>
               </div>
             ) : (
@@ -762,7 +767,7 @@ export function DynamicRendersPanel() {
           say the same thing at more length. */}
       {spec.ownArt ? null : (
       <div className="mt-5 space-y-3">
-        <Field label="Background">
+        <Field label={t`Background`}>
           {signatureBackgroundsFor(type).map((entry) => (
             <Chip
               key={entry.id}
@@ -774,7 +779,7 @@ export function DynamicRendersPanel() {
                 className="h-3 w-3 shrink-0 rounded-full border border-white/15"
                 style={{ background: entry.painted ? style.color : entry.swatch }}
               />
-              {entry.label}
+              {i18n._(entry.label)}
             </Chip>
           ))}
         </Field>
@@ -785,17 +790,17 @@ export function DynamicRendersPanel() {
             control nobody could name - a swatch says a colour changed, not
             which of the two the render has. */}
         {signatureBackground(style.background)?.painted ? (
-          <Field label="Background colour">
+          <Field label={t`Background colour`}>
             <ColorSwatch
               value={style.color}
               active
-              title="Background colour"
+              title={t`Background colour`}
               onChange={(value) => patchStyle({ color: value })}
             />
             <span className="mr-1 text-[11.5px] tabular-nums text-osu-l3">{style.color}</span>
             {styleUsesBrightness(style) ? (
               <Slider
-                label="Brightness"
+                label={t`Brightness`}
                 value={style.brightness}
                 min={SIGNATURE_BRIGHTNESS_RANGE.min}
                 max={SIGNATURE_BRIGHTNESS_RANGE.max}
@@ -807,7 +812,7 @@ export function DynamicRendersPanel() {
         ) : null}
 
         {styleIsCustomImage(style) ? (
-          <Field label="Image URL">
+          <Field label={t`Image URL`}>
             <div className="w-full">
               <input
                 type="url"
@@ -827,7 +832,7 @@ export function DynamicRendersPanel() {
                 className="h-10 w-full rounded-lg border border-osu-b3/40 bg-osu-b4/70 px-3 text-[12px] text-osu-l2 outline-none focus:border-osu-pink/40"
               />
               {urlCheck && urlCheck !== "checking" && PROBE_MESSAGE[urlCheck] ? (
-                <div className="mt-1.5 text-[12px] font-semibold text-osu-red-light">{PROBE_MESSAGE[urlCheck]}</div>
+                <div className="mt-1.5 text-[12px] font-semibold text-osu-red-light">{i18n._(PROBE_MESSAGE[urlCheck]!)}</div>
               ) : null}
             </div>
           </Field>
@@ -837,9 +842,9 @@ export function DynamicRendersPanel() {
             nothing: opacity and blur only describe a photo, and brightness has
             nothing to act on when the background is the layout's own. */}
         {styleUsesImage(style) ? (
-          <Field label="Image">
+          <Field label={t`Image`}>
             <Slider
-              label="Brightness"
+              label={t`Brightness`}
               value={style.brightness}
               min={SIGNATURE_BRIGHTNESS_RANGE.min}
               max={SIGNATURE_BRIGHTNESS_RANGE.max}
@@ -847,7 +852,7 @@ export function DynamicRendersPanel() {
               onChange={(value) => patchStyle({ brightness: value })}
             />
             <Slider
-              label="Opacity"
+              label={t`Opacity`}
               value={style.opacity}
               min={SIGNATURE_OPACITY_RANGE.min}
               max={SIGNATURE_OPACITY_RANGE.max}
@@ -855,7 +860,7 @@ export function DynamicRendersPanel() {
               onChange={(value) => patchStyle({ opacity: value })}
             />
             <Slider
-              label="Blur"
+              label={t`Blur`}
               value={style.blur}
               min={SIGNATURE_BLUR_RANGE.min}
               max={SIGNATURE_BLUR_RANGE.max}
@@ -867,10 +872,10 @@ export function DynamicRendersPanel() {
 
         {/* Its own row, and named for what it colours rather than left as a
             second unlabelled strip of circles beside the background's one. */}
-        <Field label="Accent colour">
+        <Field label={t`Accent colour`}>
           <button
             type="button"
-            title="Auto"
+            title={t`Auto`}
             onClick={() => patchStyle({ accent: SIGNATURE_ACCENT_AUTO })}
             className={`h-6 w-6 shrink-0 rounded-full border-2 transition-colors cursor-pointer ${
               style.accent === SIGNATURE_ACCENT_AUTO ? "border-white" : "border-transparent hover:border-white/35"
@@ -881,7 +886,7 @@ export function DynamicRendersPanel() {
             <button
               key={entry.id}
               type="button"
-              title={entry.label}
+              title={i18n._(entry.label)}
               onClick={() => patchStyle({ accent: entry.hex! })}
               className={`h-6 w-6 shrink-0 rounded-full border-2 transition-colors cursor-pointer ${
                 style.accent === entry.hex ? "border-white" : "border-transparent hover:border-white/35"
@@ -892,24 +897,24 @@ export function DynamicRendersPanel() {
           <ColorSwatch
             value={style.accent === SIGNATURE_ACCENT_AUTO ? "#ff66aa" : style.accent}
             active={style.accent !== SIGNATURE_ACCENT_AUTO && !SIGNATURE_ACCENTS.some((entry) => entry.hex === style.accent)}
-            title="Pick a colour"
+            title={t`Pick a colour`}
             onChange={(value) => patchStyle({ accent: value })}
           />
           {/* The first swatch is a rainbow, which looks like a colour rather
               than like "let the render choose". One word settles it. */}
           <span className="ml-1 text-[11.5px] text-osu-l3">
-            {style.accent === SIGNATURE_ACCENT_AUTO ? "Auto" : style.accent}
+            {style.accent === SIGNATURE_ACCENT_AUTO ? t`Auto` : style.accent}
           </span>
         </Field>
 
         {/* On by default, and a switch: it is one boolean, so a pair of chips
             was a picker doing a switch's job. Same control the settings page
             uses for every other on/off on the site. */}
-        <Field label="Watermark">
+        <Field label={t`Watermark`}>
           <Switch
             checked={style.watermark}
             onChange={(watermark) => patchStyle({ watermark })}
-            label="Show the site name on the render"
+            label={t`Show the site name on the render`}
           />
         </Field>
       </div>
@@ -928,24 +933,24 @@ export function DynamicRendersPanel() {
           className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg border border-osu-pink/50 bg-osu-pink/15 px-4 text-[12.5px] font-bold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white cursor-pointer"
         >
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? "Copied" : "Copy"}
+          {copied ? t`Copied` : t`Copy`}
         </button>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-        <span className="text-[12px] text-osu-l3">Anyone with the link can see it.</span>
+        <span className="text-[12px] text-osu-l3">{t`Anyone with the link can see it.`}</span>
         {enabledTypes.length > 1 ? (
-          <TextAction disabled={busy} onClick={() => unpublish(type)}>Stop sharing this one</TextAction>
+          <TextAction disabled={busy} onClick={() => unpublish(type)}>{t`Stop sharing this one`}</TextAction>
         ) : null}
-        <TextAction disabled={busy} onClick={() => setRotateAsk(true)}>New link</TextAction>
-        <TextAction disabled={busy} onClick={() => void act(() => disableSignature())}>Turn off</TextAction>
+        <TextAction disabled={busy} onClick={() => setRotateAsk(true)}>{t`New link`}</TextAction>
+        <TextAction disabled={busy} onClick={() => void act(() => disableSignature())}>{t`Turn off`}</TextAction>
       </div>
 
       {rotateAsk ? (
         <ConfirmModal
-          title="Make a new link?"
-          body="Every image you have already pasted will stop working."
-          confirmLabel="Make a new link"
+          title={t`Make a new link?`}
+          body={t`Every image you have already pasted will stop working.`}
+          confirmLabel={t`Make a new link`}
           danger
           onConfirm={() => void act(() => rotateSignatureToken())}
           onClose={() => setRotateAsk(false)}

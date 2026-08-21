@@ -3,6 +3,9 @@
 // same chart at the same rate: otherwise a side would play its frames faster
 // than its player heard them, and the single audio track would match neither.
 
+import { msg } from "@lingui/core/macro";
+import type { I18n, MessageDescriptor } from "@lingui/core";
+
 import { getReplayScoreAvailability } from "./replay-score-availability";
 import { getScoreRate } from "./score";
 import type { OsuScore } from "./types";
@@ -11,7 +14,15 @@ export type SideBySideIssueCode = "unplayable" | "same-score" | "different-map" 
 
 export interface SideBySideIssue {
   code: SideBySideIssueCode;
-  message: string;
+  message: MessageDescriptor;
+  /** Set on "unplayable": whose side can't be watched, prefixed on render. */
+  player?: string;
+}
+
+/** The issue as one line of viewer-facing copy. */
+export function formatSideBySideIssue(issue: SideBySideIssue, i18n: I18n): string {
+  const message = i18n._(issue.message);
+  return issue.player ? `${issue.player}: ${message}` : message;
 }
 
 /** One side on its own: a mania score with a replay we can download. */
@@ -20,7 +31,8 @@ export function getSideBySideScoreIssue(score: OsuScore): SideBySideIssue | null
   if (availability.available) return null;
   return {
     code: "unplayable",
-    message: `${score.user?.username ?? "This player"}: ${availability.message}`,
+    message: availability.message,
+    player: score.user?.username,
   };
 }
 
@@ -32,7 +44,7 @@ export function getSideBySideIssue(left: OsuScore, right: OsuScore): SideBySideI
   if (left.id === right.id) {
     return {
       code: "same-score",
-      message: "That's the same score on both sides. Pick a different run for the other side.",
+      message: msg`That's the same score on both sides. Pick a different run for the other side.`,
     };
   }
 
@@ -40,7 +52,7 @@ export function getSideBySideIssue(left: OsuScore, right: OsuScore): SideBySideI
   if (!beatmapId || right.beatmap?.id !== beatmapId) {
     return {
       code: "different-map",
-      message: "These scores are on different maps. Side by side plays two runs of the same beatmap.",
+      message: msg`These scores are on different maps. Side by side plays two runs of the same beatmap.`,
     };
   }
 
@@ -49,7 +61,7 @@ export function getSideBySideIssue(left: OsuScore, right: OsuScore): SideBySideI
   if (leftRate !== rightRate) {
     return {
       code: "different-rate",
-      message: `These runs used different rates (${leftRate}x vs ${rightRate}x). Side by side needs both at the same rate.`,
+      message: msg`These runs used different rates (${leftRate}x vs ${rightRate}x). Side by side needs both at the same rate.`,
     };
   }
 

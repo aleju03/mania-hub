@@ -7,6 +7,7 @@ import { ChevronRight, X } from "lucide-react";
 import { UPDATES, WIP } from "#/data/changelog";
 import { formatReleaseAge, groupUpdatesByDay } from "#/lib/changelog";
 import { formatDate } from "#/lib/format";
+import { useLingui } from "@lingui/react/macro";
 
 const DAYS = groupUpdatesByDay(UPDATES);
 /** Newest day only: it is the one the reader came for, and every other day
@@ -14,6 +15,7 @@ const DAYS = groupUpdatesByDay(UPDATES);
 const DEFAULT_OPEN_DAYS = DAYS.slice(0, 1).map((day) => day.date);
 
 export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useLingui();
   const [openDays, setOpenDays] = useState<string[]>(DEFAULT_OPEN_DAYS);
 
   // Each visit starts from the newest day again: a day left open two sessions
@@ -63,7 +65,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
           <motion.div
             role="dialog"
             aria-modal="true"
-            aria-label="Changelog"
+            aria-label={t`Changelog`}
             initial={{ opacity: 0, y: 8, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.99 }}
@@ -71,11 +73,11 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
             className="modal-card-mobile-safe relative z-10 flex max-h-[min(560px,calc(100vh-2rem))] w-[min(460px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
           >
             <div className="flex items-center gap-3 border-b border-osu-b3/50 px-4 py-3">
-              <div className="text-sm font-bold text-white">What&apos;s new</div>
+              <div className="text-sm font-bold text-white">{t`What's new`}</div>
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Close"
+                aria-label={t`Close`}
                 className="ml-auto cursor-pointer rounded-md p-1 text-osu-f1 transition-colors hover:bg-osu-b3/60 hover:text-white"
               >
                 <X className="h-4 w-4" />

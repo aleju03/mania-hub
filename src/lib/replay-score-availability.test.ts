@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getI18n } from "./i18n";
 import { getReplayScoreAvailability } from "./replay-score-availability";
 import type { OsuScore } from "./types";
 
@@ -26,19 +27,19 @@ describe("getReplayScoreAvailability", () => {
     expect(getReplayScoreAvailability(score({ has_replay: true }))).toEqual({ available: true });
   });
 
+  // The message is a catalog descriptor now, so it is compared as the English
+  // line the source string resolves to.
   it("rejects non-mania scores", () => {
-    expect(getReplayScoreAvailability(score({ beatmap: { mode: "osu" } as OsuScore["beatmap"], has_replay: true }))).toEqual({
-      available: false,
-      reason: "non-mania",
-      message: "This score is for osu!standard, not mania.",
-    });
+    const result = getReplayScoreAvailability(score({ beatmap: { mode: "osu" } as OsuScore["beatmap"], has_replay: true }));
+    expect(result.available).toBe(false);
+    expect(result.available === false && result.reason).toBe("non-mania");
+    expect(result.available === false && getI18n("en")._(result.message)).toBe("This score is for osu!standard, not mania.");
   });
 
   it("rejects scores without downloadable replays", () => {
-    expect(getReplayScoreAvailability(score({ has_replay: false, replay: false }))).toEqual({
-      available: false,
-      reason: "no-replay",
-      message: "This score doesn't have a downloadable replay.",
-    });
+    const result = getReplayScoreAvailability(score({ has_replay: false, replay: false }));
+    expect(result.available).toBe(false);
+    expect(result.available === false && result.reason).toBe("no-replay");
+    expect(result.available === false && getI18n("en")._(result.message)).toBe("This score doesn't have a downloadable replay.");
   });
 });

@@ -5,10 +5,19 @@
 // only when the source itself could not be loaded. A shared error handler used
 // to blame whichever set was active when the event fired, so a 404 on an old
 // set crossed out the next card the user clicked.
-import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render as rtlRender, renderHook, screen } from "@testing-library/react";
+import type { ReactElement, ReactNode } from "react";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../lib/i18n";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { REPLAY_VOLUME_STORAGE_KEY, writeReplayVolume } from "../../lib/replay-preferences";
 import { MapPreviewPlayerBar, useMapPreviewAudio, type MapPreviewAudio, type MapPreviewTrack } from "./MapPreviewAudio";
+
+// The player bar reads its copy through Lingui; en resolves to the source strings.
+const I18nWrap = ({ children }: { children: ReactNode }) => (
+  <I18nProvider i18n={getI18n("en")}>{children}</I18nProvider>
+);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
 
 const MEDIA_ERR_NETWORK = 2;
 const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;

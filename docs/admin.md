@@ -1,6 +1,6 @@
 # Admin Surfaces
 
-Deep reference for admin tooling: pack grants, ghost overlay, admin todos, analytics, BBCode image audit. Admin controls are exposed through the frontend at `/admin/live-backend` and backend `/api/admin/*` (status, ingest fixtures, roster refresh, pause/resume country, set status/tier, delete country). Be careful with destructive controls.
+Deep reference for admin tooling: pack grants, ghost overlay, admin todos, translation reports, analytics, BBCode image audit. Admin controls are exposed through the frontend at `/admin/live-backend` and backend `/api/admin/*` (status, ingest fixtures, roster refresh, pause/resume country, set status/tier, delete country). Be careful with destructive controls.
 
 ## Ghost overlay
 
@@ -31,6 +31,14 @@ The rule is deliberately dumb: the form sends a label only when one was typed, a
 ## Admin todos
 
 `/admin/todos` is the owner's private todo list, backed by `features/admin-todos.ts` (durable `admin_todos` table, single user, no per-user scoping) over `GET /api/admin/todos` + `POST /api/admin/todos/{create,update,delete,clear-done}`. Frontend server fns in `src/lib/admin-todos.ts` proxy with the shared admin token; the nav entry and page are `canUseAdminFeatures`-gated.
+
+## Translation reports
+
+`/admin/translation-reports` is where reader feedback about the site's own translations lands. A visitor browsing in a non-English locale gets a "Report a translation" control under the language picker in the settings panel's Appearance tab (`src/components/settings/TranslationReportForm.tsx`, hidden in English since the source strings are written in it), and files what reads wrong, what it should say, and anything else.
+
+No login is required: the people who catch a bad translation are the ones reading in that language, signed in or not. `features/translation-reports.ts` owns the durable `translation_reports` table (never pruned by retention) and the two ceilings that open write path needs: a daily per-reporter cap keyed on an opaque `reporter_key` (`user:<id>`, or the visitor's address HMACed with the bridge secret, never stored raw), with a much larger shared ceiling for the anonymous bucket that deployments without trusted proxy headers collapse into, plus a 24h duplicate guard that returns the stored row instead of a second copy. The submit route is bridge-gated (`POST /api/translation-reports/submit`, see `docs/backend.md`); reading and triage are admin-token gated: `GET /api/admin/translation-reports` + `POST /api/admin/translation-reports/{update,delete,clear-reviewed}`, proxied by `src/lib/translation-reports.ts`.
+
+A report is `new`, `resolved` or `dismissed`; nothing here edits a catalog, since fixing a string means editing `src/locales/<locale>/messages.po` and recompiling. The board keeps the reporter's words verbatim and adds only what finds the string again: locale, the page path they were on (query string stripped), and their osu! account when they had one.
 
 ## Analytics
 

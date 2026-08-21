@@ -174,6 +174,18 @@ describe("signature versions", () => {
     expect((await versions()).goals).not.toBe(before.goals);
   });
 
+  it("moves the goals version when completed history changes", async () => {
+    await exec(
+      db,
+      `insert into user_goals (id, user_id, kind, status, created_at, completed_at, updated_at)
+       values ('done', ?, 'reach_pp', 'completed', 1000, 2000, 2000)`,
+      [USER],
+    );
+    const before = await versions();
+    await exec(db, "update user_goals set completed_at = 3000, updated_at = 3000 where id = 'done'");
+    expect((await versions()).goals).not.toBe(before.goals);
+  });
+
   /* GoalProgress is computed live and never written back to user_goals, so a
      bar that advances because the player's pp climbed has to be picked up
      from the play-side stamps instead. */
@@ -527,7 +539,7 @@ describe("time zone", () => {
     expect((await getUserSignature(db, USER))?.timeZone).toBe("America/Costa_Rica");
   });
 
-  it("moves the insights version, because that is the render that prints a date", async () => {
+  it("moves the dated render versions when the owner's time zone changes", async () => {
     await enableUserSignature(db, USER, ["insights"], null);
     const token = (await getUserSignature(db, USER))!.token;
     const before = (await resolveSignatureToken(db, token))!;
@@ -537,12 +549,12 @@ describe("time zone", () => {
 
     expect(after.timeZone).toBe("America/Costa_Rica");
     expect(after.versions.insights).not.toBe(before.versions.insights);
-    /* And only that one. Nothing else in the set draws a date, so hashing the
-       zone into them would re-render four images that cannot have changed. */
+    expect(after.versions.goals).not.toBe(before.versions.goals);
+    /* Only insights and goals draw dates. The other images stay byte-identical
+       when the owner's zone changes. */
     expect(after.versions.maniacard).toBe(before.versions.maniacard);
     expect(after.versions.skills).toBe(before.versions.skills);
     expect(after.versions.dan).toBe(before.versions.dan);
-    expect(after.versions.goals).toBe(before.versions.goals);
   });
 
   it("does not move anything when the browser reports the same zone again", async () => {

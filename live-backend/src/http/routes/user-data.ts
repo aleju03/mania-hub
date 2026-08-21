@@ -6,11 +6,12 @@ import { invalidateFarmHelperCacheForUser } from "../../features/farm-helper.js"
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, updateUserGoal, type GoalKind, type GoalSpeedBucket, type UserGoalInput, type UserGoalTargetPatch } from "../../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed } from "../../features/my-data.js";
 import { getPlayerSkillBreakdown } from "../../features/player-skills.js";
+import { createTranslationReport } from "../../features/translation-reports.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { addManualRosterMember, removeManualRosterMember } from "../../rosters/country-rosters.js";
 import type { HttpContext } from "../context.js";
-import { clampInteger, clampLimit, isBridge, readBody } from "../request.js";
-import { sendJson } from "../respond.js";
+import { clampInteger, clampLimit, isAdmin, isBridge, readBody } from "../request.js";
+import { sendJson, sendRateLimited } from "../respond.js";
 import { readMyDataTopPlaysQuery, readMyDataTrackedQuery } from "../snapshot-queries.js";
 
 export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL): Promise<boolean> {
@@ -318,6 +319,41 @@ export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResp
     const offset = clampInteger(url.searchParams.get("offset"), 0, 1_000_000, 0);
     const page = await getUserTopPlaysFeed(ctx.db, userId, limit, offset, readMyDataTopPlaysQuery(url.searchParams));
     sendJson(req, res, ctx, 200, { plays: page.items, total: page.total, limit: page.limit, offset: page.offset });
+    return true;
+  }
+  if (url.pathname === "/api/translation-reports/submit") {
+    // Bridge-gated like every frontend-originated write, but unlike its
+    // neighbours here a report needs no viewer: someone reading the site in
+    // Chinese without an osu! login is exactly the person best placed to say a
+    // string is wrong. `userId` is therefore optional, and when it is present
+    // the frontend has already verified it against the login cookie.
+    if (!isBridge(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    // Deliberately not checkRate(): that re-buckets bridge traffic into the
+    // site-wide `bridge` budget, which for an open write is no limit at all.
+    // The frontend forwards the visitor's address, so the guard keys on the
+    // reporter (falling back to one shared window where the deployment does
+    // not trust proxy headers, same as every other per-IP bucket).
+    if (ctx.abuse && !isAdmin(req, ctx)) {
+      const rate = ctx.abuse.check(req, ctx.config, "translationReport");
+      if (!rate.allowed) {
+        sendRateLimited(req, res, ctx, rate);
+        return true;
+      }
+    }
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    const result = await createTranslationReport(ctx.serveWriteDb ?? ctx.db, body);
+    if (!result.ok) {
+      sendJson(req, res, ctx, 400, { error: result.reason });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, report: result.report, duplicate: result.duplicate });
     return true;
   }
   return false;

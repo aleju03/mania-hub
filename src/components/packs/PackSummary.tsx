@@ -4,6 +4,7 @@ import { Check, Recycle } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { formatOrdinal } from "#/lib/format";
+import { useLocale } from "#/lib/locale-context";
 import {
   copiesShardValue,
   duplicateShardValueForTier,
@@ -117,6 +118,7 @@ export function PackSummary({
   flyFrom = null,
 }: PackSummaryProps) {
   const { t } = useLingui();
+  const locale = useLocale();
   const instant = flyFrom !== null;
   /* The ring marks the best card in the hand, which is a tier question before
      it is a rank one: an honorary card carries no meaningful global rank, so
@@ -762,8 +764,8 @@ export function PackSummary({
                         ? first
                           ? t`first ever to pull this`
                           : latest
-                            ? t`${formatOrdinal(mint.serial)} to pull this`
-                            : t`${formatOrdinal(mint.serial)} of ${mint.mintedTotal.toLocaleString("en-US")} to pull this`
+                            ? t`${formatOrdinal(mint.serial, locale)} to pull this`
+                            : t`${formatOrdinal(mint.serial, locale)} of ${mint.mintedTotal.toLocaleString("en-US")} to pull this`
                         : null}
                     </div>
                   );

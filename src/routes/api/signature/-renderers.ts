@@ -13,6 +13,7 @@ import type { ReactElement, ReactNode } from "react";
 import { getServerLiveBackendUrl } from "../../../lib/live-backend";
 import { bridgeAuthHeaders } from "../../../lib/live-backend-tokens";
 import { clamp, loadOgFonts, ogAvatarUrl, ogFontList } from "../../../lib/og-render";
+import { getAssetOrigin } from "../../../lib/origin";
 import {
   cosmicLaurelDataUrl,
   maniaTierCardElement,
@@ -22,7 +23,7 @@ import {
 import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../../lib/maniacard";
 import type { ManiaSkills } from "../../../lib/maniacard";
 import { formatDate } from "../../../lib/format";
-import { describeGoalEnglish, nf, trimZeros } from "../../../lib/goal-format";
+import { describeGoalEnglish, nf } from "../../../lib/goal-format";
 import type { UserGoal } from "../../../lib/goals";
 import {
   formatTopShare,
@@ -52,6 +53,7 @@ import { getCosmicTierPalette } from "../../../lib/maniacard-cosmic";
 import type { ResolvedSignature } from "../../../lib/signature-resolve";
 import { buildPpCumulativeDistribution, calculateUserProfileInsights } from "../../../lib/profile-insights";
 import type { InsightScoreSnapshot, OsuScore, UserProfileInsights } from "../../../lib/types";
+import { MOD_BADGE_FILE_NAMES, MOD_BADGE_TYPE_COLORS } from "../../../components/ui/ModBadge";
 
 const SURFACE = "#120d15";
 const TEXT_DIM = "#9c8fa8";
@@ -733,7 +735,9 @@ function goalReadout(goal: UserGoal): string {
       return target != null ? `chasing ${Math.round(target)}pp` : `${Math.round(pct)}%`;
     case "play_pp_count":
       if (current == null || target == null) break;
-      return `${trimZeros(nf(current))} / ${trimZeros(nf(target))}`;
+      /* nf() already rounds these to whole plays. trimZeros is for a decimal
+         tail and would eat real digits here - it turned "20" into "2". */
+      return `${nf(current)} / ${nf(target)} plays`;
     case "accuracy":
       if (current == null) break;
       return `best ${(current * 100).toFixed(2)}%`;
@@ -746,26 +750,189 @@ function goalReadout(goal: UserGoal): string {
   return `${Math.round(pct)}%`;
 }
 
-function goalRow(goal: UserGoal, width: number, accent: string, dim: string, compact = false): ReactNode {
-  const pct = goal.progress?.pct ?? 0;
-  const value = goalReadout(goal);
+export function goalsForDynamicRender(goals: UserGoal[]): UserGoal[] {
+  const open = goals
+    .filter((goal) => goal.status === "open")
+    .sort((a, b) => (b.progress?.pct ?? 0) - (a.progress?.pct ?? 0));
+  const completed = goals
+    .filter((goal) => goal.status === "completed")
+    .sort((a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt));
+  return [...open, ...completed];
+}
+
+export function completedGoalDate(goal: UserGoal, timeZone: string | null): string | null {
+  if (goal.status !== "completed" || goal.completedAt == null) return null;
+  return formatDate(new Date(goal.completedAt).toISOString(), timeZone ?? "UTC");
+}
+
+/* The tick. Drawn as an SVG image rather than a text glyph: satori lays text
+   out with the fonts the card loaded, and Torus has no check in it. */
+function checkGlyphDataUrl(color: string): string {
+  return svgDataUrl(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">`
+    + `<path d="M4.5 12.6 L9.8 18 L19.5 6.6" fill="none" stroke="${color}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>`
+    + `</svg>`,
+  );
+}
+
+/* A goal is a thing you tick off, so a cleared one is a checked box - a bar
+   filled to its end is a progress meter saying nothing but "100". The open
+   box is still the progress meter: it fills from the bottom by the same
+   percentage, in one small square instead of across the whole row. */
+function goalCheckbox(size: number, pct: number, done: boolean, accent: string): ReactNode {
+  const radius = Math.round(size * 0.3);
+  if (done) {
+    const glyph = Math.round(size * 0.68);
+    return h("div", {
+      key: "box",
+      style: {
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        width: `${size}px`, height: `${size}px`, borderRadius: `${radius}px`, background: accent,
+      },
+    }, [
+      // The same near-black tint the mod badges put over their colour, so the
+      // tick stays readable on a pale accent as well as a saturated one.
+      h("img", { key: "tick", src: checkGlyphDataUrl(modGlyphColor(accent)), width: glyph, height: glyph }),
+    ]);
+  }
+  const filled = Math.round((Math.max(0, Math.min(100, pct)) / 100) * size);
+  return h("div", {
+    key: "box",
+    style: {
+      display: "flex", position: "relative", overflow: "hidden", flexShrink: 0,
+      width: `${size}px`, height: `${size}px`, borderRadius: `${radius}px`,
+      border: `2px solid ${hexAlpha(accent, 0.45)}`, background: "rgba(255,255,255,0.05)",
+    },
+  }, [
+    h("div", {
+      key: "fill",
+      style: { position: "absolute", left: 0, right: 0, bottom: 0, height: `${filled}px`, background: hexAlpha(accent, 0.32) },
+    }),
+  ]);
+}
+
+/* How big a checklist row is drawn.
+
+   Derived from the room each row actually gets - the card's height divided by
+   how many goals it is drawing - rather than from which layout it is. The
+   tall list reserves space for five goals, and a player with two of them was
+   getting five-row type adrift in a card sized for five rows. */
+interface GoalRowSize {
+  box: number;
+  label: number;
+  note: number;
+  pct: number;
+  pctWidth: number;
+  gap: number;
+  rowGap: number;
+  clamp: number;
+}
+
+/* Header, footer and the body padding. What is left over is the rows'. */
+const GOAL_LIST_CHROME = 76;
+
+const GOAL_ROW_SIZES: Array<GoalRowSize & { minRoom: number }> = [
+  { minRoom: 66, box: 30, label: 19, note: 14.5, pct: 22, pctWidth: 56, gap: 15, rowGap: 26, clamp: 50 },
+  { minRoom: 50, box: 26, label: 17, note: 13.5, pct: 19, pctWidth: 50, gap: 14, rowGap: 20, clamp: 54 },
+  { minRoom: 38, box: 22, label: 15, note: 12.5, pct: 16, pctWidth: 44, gap: 12, rowGap: 16, clamp: 56 },
+  { minRoom: 0, box: 18, label: 13, note: 11.5, pct: 14, pctWidth: 38, gap: 10, rowGap: 12, clamp: 52 },
+];
+
+export function goalRowSize(rows: number, height: number): GoalRowSize {
+  const room = Math.max(0, height - GOAL_LIST_CHROME) / Math.max(1, rows);
+  return GOAL_ROW_SIZES.find((size) => room >= size.minRoom) ?? GOAL_ROW_SIZES[GOAL_ROW_SIZES.length - 1]!;
+}
+
+/* One line of the checklist: box, what the goal is, and what it is at.
+
+   The right end carries the percentage for an open goal and nothing for a
+   cleared one - the box has already said "done", and a second "100%" beside
+   it is the filled-bar problem again in smaller type. */
+function goalRow(
+  goal: UserGoal,
+  accent: string,
+  dim: string,
+  timeZone: string | null,
+  size: GoalRowSize,
+): ReactNode {
+  const done = goal.status === "completed";
+  const completedDate = completedGoalDate(goal, timeZone);
+  const pct = done ? 100 : (goal.progress?.pct ?? 0);
+  const note = done
+    ? completedDate ?? "Completed"
+    : goalReadout(goal);
   return h("div", {
     key: goal.id,
-    style: { display: "flex", flexDirection: "column", gap: compact ? "4px" : "6px", width: `${width}px` },
+    style: { display: "flex", alignItems: "center", gap: `${size.gap}px`, width: "100%" },
   }, [
-    h("div", { key: "top", style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "12px" } }, [
-      h("div", {
-        key: "l",
-        // flexShrink on the label, not the value: a long map name should be
-        // the thing that gives way, never the number the image exists for.
-        style: { fontSize: compact ? "13px" : "15px", fontWeight: 700, color: "#ffffff", overflow: "hidden", flexShrink: 1, minWidth: "0" },
-      }, clamp(describeGoalEnglish(goal), compact ? 46 : 54)),
-      h("div", {
-        key: "v",
-        style: { fontSize: compact ? "12px" : "13px", color: dim, whiteSpace: "nowrap", flexShrink: 0 },
-      }, value),
+    goalCheckbox(size.box, pct, done, accent),
+    h("div", {
+      key: "l",
+      // flexShrink on the label, not the readout: a long map name should be
+      // the thing that gives way, never the number the image exists for.
+      style: {
+        fontSize: `${size.label}px`, fontWeight: 700,
+        color: done ? "rgba(255,255,255,0.72)" : "#ffffff",
+        overflow: "hidden", flexShrink: 1, minWidth: "0",
+      },
+    }, clamp(describeGoalEnglish(goal), size.clamp)),
+    h("div", {
+      key: "r",
+      style: {
+        display: "flex", alignItems: "baseline", gap: "10px", marginLeft: "auto",
+        flexShrink: 0, whiteSpace: "nowrap",
+      },
+    }, [
+      h("div", { key: "n", style: { fontSize: `${size.note}px`, color: dim } }, note),
+      done
+        ? h("div", { key: "p" })
+        : h("div", {
+          key: "p",
+          style: {
+            fontSize: `${size.pct}px`, fontWeight: 900, color: accent,
+            width: `${size.pctWidth}px`, display: "flex", justifyContent: "flex-end",
+          },
+        }, `${Math.round(pct)}%`),
     ]),
-    bar(width, pct, accent, compact ? 6 : 8),
+  ]);
+}
+
+/* The single-goal layout's meter. A ring rather than a row-wide bar, which is
+   what the goals page itself draws for a continuous climb. */
+function goalRingDataUrl(size: number, stroke: number, pct: number, accent: string): string {
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const drawn = (Math.max(0, Math.min(100, pct)) / 100) * circumference;
+  const centre = size / 2;
+  return svgDataUrl(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`
+    + `<circle cx="${centre}" cy="${centre}" r="${radius}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="${stroke}"/>`
+    + `<circle cx="${centre}" cy="${centre}" r="${radius}" fill="none" stroke="${accent}" stroke-width="${stroke}"`
+    + ` stroke-linecap="round" stroke-dasharray="${drawn.toFixed(2)} ${(circumference - drawn).toFixed(2)}"`
+    + ` transform="rotate(-90 ${centre} ${centre})"/>`
+    + `</svg>`,
+  );
+}
+
+/** The ring with its reading inside: the percentage, or a tick once cleared. */
+function goalRing(size: number, pct: number, done: boolean, accent: string): ReactNode {
+  return h("div", {
+    key: "ring",
+    style: {
+      display: "flex", position: "relative", flexShrink: 0,
+      width: `${size}px`, height: `${size}px`, alignItems: "center", justifyContent: "center",
+    },
+  }, [
+    h("img", {
+      key: "arc",
+      src: goalRingDataUrl(size, 6, done ? 100 : pct, accent),
+      width: size,
+      height: size,
+      style: { position: "absolute", top: "0", left: "0" },
+    }),
+    done
+      ? h("img", { key: "tick", src: checkGlyphDataUrl(accent), width: Math.round(size * 0.42), height: Math.round(size * 0.42) })
+      : h("div", { key: "pct", style: { fontSize: `${Math.round(size * 0.27)}px`, fontWeight: 900, color: "#ffffff" } }, `${Math.round(pct)}%`),
   ]);
 }
 
@@ -773,14 +940,10 @@ async function renderGoals(ctx: SignatureRenderContext): Promise<Buffer> {
   const spec = signatureDesign(ctx.type, ctx.design)!;
   const goals = await fetchGoals(ctx.resolved.userId);
   if (goals == null) return renderPlate(ctx, "Goals are unavailable right now.");
-  const open = goals
-    .filter((goal) => goal.status === "open")
-    .sort((a, b) => (b.progress?.pct ?? 0) - (a.progress?.pct ?? 0));
-  const completed = goals.filter((goal) => goal.status === "completed").length;
+  const ordered = goalsForDynamicRender(goals);
+  const completed = ordered.filter((goal) => goal.status === "completed");
 
-  if (open.length === 0) {
-    return renderPlate(ctx, completed > 0 ? `No open goals. ${completed} completed.` : "No open goals.");
-  }
+  if (ordered.length === 0) return renderPlate(ctx, "No goals yet.");
 
   const background = await styleLayers(ctx, spec, await fetchBackgroundSources(ctx));
   const accent = accentHex(ctx.style, ACCENT);
@@ -798,31 +961,45 @@ async function renderGoals(ctx: SignatureRenderContext): Promise<Buffer> {
   ]);
 
   if (ctx.design === 2) {
-    const goal = open[0]!;
-    const pct = goal.progress?.pct ?? 0;
+    const goal = ordered[0]!;
+    const done = goal.status === "completed";
+    const completedDate = completedGoalDate(goal, ctx.resolved.timeZone);
+    const pct = done ? 100 : (goal.progress?.pct ?? 0);
+    /* One goal gets the ring the goals page draws for it, not a row-wide bar:
+       the reading belongs next to the goal rather than stretched under it. */
+    const detail = !done && goal.progress?.detail ? goal.progress.detail : null;
     return renderPng(ctx, frame(spec.width, spec.height, [
       ...background.layers,
       h("div", {
         key: "body",
-        style: { display: "flex", flexDirection: "column", justifyContent: "center", gap: "12px", padding: "0 26px", width: "100%" },
+        style: { display: "flex", alignItems: "center", gap: "18px", padding: "0 26px", width: "100%" },
       }, [
-        h("div", { key: "top", style: { display: "flex", justifyContent: "space-between", alignItems: "baseline" } }, [
-          h("div", { key: "l", style: { fontSize: "16px", fontWeight: 700, overflow: "hidden" } }, clamp(describeGoalEnglish(goal), 40)),
-          h("div", { key: "p", style: { fontSize: "24px", fontWeight: 900, color: accent } }, `${Math.round(pct)}%`),
+        goalRing(74, pct, done, accent),
+        h("div", {
+          key: "text",
+          style: { display: "flex", flexDirection: "column", gap: "6px", flexShrink: 1, minWidth: "0" },
+        }, [
+          h("div", {
+            key: "l",
+            style: { fontSize: "16px", fontWeight: 900, color: "#ffffff", overflow: "hidden" },
+          }, clamp(describeGoalEnglish(goal), 38)),
+          h("div", {
+            key: "n",
+            style: { fontSize: "12.5px", color: done ? accent : dim },
+          }, done ? (completedDate ? `Completed · ${completedDate}` : "Completed") : goalReadout(goal)),
+          detail
+            ? h("div", { key: "d", style: { fontSize: "11.5px", color: dim } }, clamp(detail, 54))
+            : h("div", { key: "d" }),
         ]),
-        bar(spec.width - 52, pct, accent, 10),
-        goal.progress?.detail
-          ? h("div", { key: "d", style: { fontSize: "12px", color: dim } }, clamp(goal.progress.detail, 60))
-          : h("div", { key: "d" }),
       ]),
       wordmark(ctx.style, 12, 8),
     ]));
   }
 
   const limit = ctx.design === 3 ? 5 : 3;
-  const shown = open.slice(0, limit);
-  const rest = open.length - shown.length;
-  const rowWidth = spec.width - 56;
+  const shown = ordered.slice(0, limit);
+  const rest = ordered.length - shown.length;
+  const size = goalRowSize(shown.length, spec.height);
 
   return renderPng(ctx, frame(spec.width, spec.height, [
     ...background.layers,
@@ -837,14 +1014,16 @@ async function renderGoals(ctx: SignatureRenderContext): Promise<Buffer> {
          otherwise get a card that is half empty at the bottom. */
       h("div", {
         key: "rows",
-        style: { display: "flex", flexDirection: "column", gap: "12px", flex: 1, justifyContent: "center" },
-      }, shown.map((goal) => goalRow(goal, rowWidth, accent, dim, ctx.design === 3))),
+        style: { display: "flex", flexDirection: "column", gap: `${size.rowGap}px`, flex: 1, justifyContent: "center" },
+      }, shown.map((goal) => goalRow(goal, accent, dim, ctx.resolved.timeZone, size))),
       h("div", {
         key: "foot",
         style: { display: "flex", gap: "14px", fontSize: "11px", color: dim },
       }, [
         rest > 0 ? h("span", { key: "more" }, `+${rest} more`) : h("span", { key: "more" }),
-        completed > 0 ? h("span", { key: "done" }, `${completed} completed`) : h("span", { key: "done" }),
+        completed.length > 0
+          ? h("span", { key: "done" }, `${completed.length} of ${ordered.length} done`)
+          : h("span", { key: "done" }),
       ]),
     ]),
     wordmark(ctx.style),
@@ -1465,6 +1644,102 @@ function insightCells(
   ];
 }
 
+interface RenderModBadge {
+  acronym: string;
+  color: string;
+  shape: string | null;
+  glyph: string | null;
+}
+
+const recoloredModAssetCache = new Map<string, Promise<string | null>>();
+
+/* Browser badges tint two white SVG masks with CSS. Satori does not reliably
+   implement masks, so the dynamic render fetches those same assets once and
+   puts the colour into the SVG itself. Keeping them as two image layers also
+   preserves the site's exact shield and glyph instead of drawing a second
+   approximation for signatures. */
+async function recoloredModAsset(request: Request, path: string, color: string): Promise<string | null> {
+  const url = new URL(path, getAssetOrigin(request)).toString();
+  const key = `${url}|${color}`;
+  const cached = recoloredModAssetCache.get(key);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const svg = (await response.text())
+        .replaceAll('fill="white"', `fill="${color}"`)
+        .replaceAll('stroke="white"', `stroke="${color}"`);
+      return svgDataUrl(svg);
+    } catch {
+      return null;
+    }
+  })();
+  recoloredModAssetCache.set(key, promise);
+  promise.then((value) => {
+    if (value == null) recoloredModAssetCache.delete(key);
+  });
+  return promise;
+}
+
+function modGlyphColor(color: string): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!match) return "#17121a";
+  const value = parseInt(match[1]!, 16);
+  const channel = (shift: number) => Math.round(((value >> shift) & 255) * 0.12).toString(16).padStart(2, "0");
+  return `#${channel(16)}${channel(8)}${channel(0)}`;
+}
+
+async function loadRenderModBadges(request: Request, mods: string[]): Promise<RenderModBadge[]> {
+  return Promise.all(mods.map(async (raw) => {
+    const acronym = raw.toUpperCase();
+    const color = MOD_BADGE_TYPE_COLORS[acronym] ?? "#ff6666";
+    const file = MOD_BADGE_FILE_NAMES[acronym];
+    const [shape, glyph] = await Promise.all([
+      recoloredModAsset(request, "/images/badges/mods/mod-icon.svg", color),
+      file
+        ? recoloredModAsset(request, `/images/badges/mods/mod-${file}.svg`, modGlyphColor(color))
+        : Promise.resolve(null),
+    ]);
+    return { acronym, color, shape, glyph };
+  }));
+}
+
+function renderModBadge(badge: RenderModBadge, index: number): ReactNode {
+  // The browser badge is 36x24 with a 100:70 mask centred inside it. This is
+  // its 0.7x profile-card size, including the small transparent side gutters.
+  const width = 25.2;
+  const height = 16.8;
+  const artWidth = 24;
+  const artLeft = (width - artWidth) / 2;
+  return h("div", {
+    key: `${badge.acronym}-${index}`,
+    style: {
+      display: "flex", alignItems: "center", justifyContent: "center", position: "relative",
+      width: `${width}px`, height: `${height}px`, flexShrink: 0,
+      background: badge.shape ? "transparent" : badge.color,
+      borderRadius: badge.shape ? "0" : "6px",
+    },
+  }, [
+    badge.shape
+      ? h("img", {
+        key: "shape", src: badge.shape, width: artWidth, height,
+        style: { position: "absolute", top: "0", left: `${artLeft}px`, width: `${artWidth}px`, height: `${height}px` },
+      })
+      : h("div", { key: "shape" }),
+    badge.glyph
+      ? h("img", {
+        key: "glyph", src: badge.glyph, width: artWidth, height,
+        style: { position: "absolute", top: "0", left: `${artLeft}px`, width: `${artWidth}px`, height: `${height}px` },
+      })
+      : h("div", {
+        key: "glyph",
+        style: { position: "relative", fontSize: "8px", lineHeight: 1, fontWeight: 900, color: modGlyphColor(badge.color) },
+      }, badge.acronym),
+  ]);
+}
+
 /* The newest top play, on its own beatmap cover - which is how the profile
    page draws this card, and without it the row is just four lines of text
    where the page has a picture.
@@ -1486,12 +1761,10 @@ function topPlayCard(
      which is what every render printed before the column existed - and which
      dated an evening play in the Americas to the next morning. */
   timeZone: string | null,
+  modBadges: RenderModBadge[],
   compact = false,
 ): ReactNode {
-  const meta = [
-    snapshot.mods.length > 0 ? snapshot.mods.join(" ") : null,
-    snapshot.date ? formatDate(snapshot.date, timeZone ?? "UTC") : null,
-  ].filter(Boolean).join("  ·  ");
+  const date = snapshot.date ? formatDate(snapshot.date, timeZone ?? "UTC") : null;
   /* Clamped to the layout, and nowrap besides. A map title is arbitrary
      length: on the card width it would otherwise wrap onto a second line and
      push the artist and the date off the bottom edge, which is a layout that
@@ -1547,7 +1820,15 @@ function topPlayCard(
         }, clamp(snapshot.title, compact ? 28 : 44)),
         h("div", { key: "a", style: { ...line, fontSize: "11px", color: secondary } },
           clamp(`${snapshot.artist} [${snapshot.version}]`, compact ? 40 : 56)),
-        meta ? h("div", { key: "m", style: { fontSize: "10.5px", color: secondary } }, meta) : h("div", { key: "m" }),
+        modBadges.length > 0 || date
+          ? h("div", { key: "m", style: { display: "flex", alignItems: "center", gap: "4px", height: "18px", color: secondary } }, [
+            ...modBadges.map(renderModBadge),
+            date ? h("div", {
+              key: "date",
+              style: { marginLeft: modBadges.length > 0 ? "3px" : "0", fontSize: "10.5px", whiteSpace: "nowrap" },
+            }, date) : h("div", { key: "date" }),
+          ])
+          : h("div", { key: "m" }),
       ]),
       snapshot.pp != null
         ? h("div", { key: "pp", style: { display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 } }, [
@@ -1731,9 +2012,12 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
   const inner = spec.width - (ctx.design === 3 ? 48 : 56);
   /* Design 2 carries no top play, so it pays for no cover: this is a fetch and
      a sharp pass, cheap once per version and pointless every time. */
-  const cover = play && ctx.design !== 2
-    ? await beatmapCoverBandDataUrl(play.coverUrl, inner, TOP_PLAY_CARD_HEIGHT)
-    : null;
+  const [cover, modBadges] = await Promise.all([
+    play && ctx.design !== 2
+      ? beatmapCoverBandDataUrl(play.coverUrl, inner, TOP_PLAY_CARD_HEIGHT)
+      : Promise.resolve(null),
+    play && ctx.design !== 2 ? loadRenderModBadges(ctx.request, play.mods) : Promise.resolve([]),
+  ]);
 
   if (ctx.design === 2) {
     // Stats only, at a strip height. No name on this one: it is the layout for
@@ -1800,7 +2084,7 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
         ]),
         play
           ? h("div", { key: "playwrap", style: { display: "flex", marginTop: "auto" } }, [
-            topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, ctx.resolved.timeZone, true),
+            topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, ctx.resolved.timeZone, modBadges, true),
           ])
           : h("div", { key: "playwrap" }),
       ]),
@@ -1827,7 +2111,7 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
         insightCells(insights, inner, accent, dim)),
       play
         ? h("div", { key: "playwrap", style: { display: "flex", marginTop: "auto" } }, [
-          topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, ctx.resolved.timeZone),
+          topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, ctx.resolved.timeZone, modBadges),
         ])
         : h("div", { key: "playwrap" }),
     ]),

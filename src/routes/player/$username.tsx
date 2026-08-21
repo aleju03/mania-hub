@@ -2,6 +2,9 @@ import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, ExternalLink, Pencil, RefreshCw, X } from "lucide-react";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { I18n, MessageDescriptor } from "@lingui/core";
 import {
   getUser,
   getUserScoresBestWindow,
@@ -226,6 +229,15 @@ function getPlayerTabLabel(tab: PlayerTab): string {
   if (tab === "activity") return "Activity";
   if (tab === "skills") return "Skills";
   return "About";
+}
+
+function getPlayerTabLabelMsg(tab: PlayerTab): MessageDescriptor {
+  if (tab === "best") return msg`Best Performance`;
+  if (tab === "recent") return msg`Recent Plays`;
+  if (tab === "card") return msg`Maniacard`;
+  if (tab === "activity") return msg`Activity`;
+  if (tab === "skills") return msg`Skills`;
+  return msg`About`;
 }
 
 function getPlayerTabSlug(tab: PlayerTab): string | null {
@@ -1089,6 +1101,7 @@ export function PlayerProfilePage({
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [tabState, setTab] = useState<PlayerTab>(() => normalizePlayerTab(initialTab));
   const auth = useAuth();
+  const { t, i18n } = useLingui();
   const tab = tabState;
   const playerTabs = PLAYER_TABS;
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
@@ -1320,7 +1333,7 @@ export function PlayerProfilePage({
       .catch(() => {
         if (cancelled) return;
         if (!snapshotApplied && !seededUser) {
-          setUserError("Couldn't load this player right now.");
+          setUserError(t`Couldn't load this player right now.`);
           setLoadingInsights(false);
         }
       })
@@ -1402,8 +1415,8 @@ export function PlayerProfilePage({
         })
         .catch(() => {
           if (cancelled) return;
-          setBestError("Couldn't load top plays right now.");
-          setInsightsError("Couldn't load profile insights right now.");
+          setBestError(t`Couldn't load top plays right now.`);
+          setInsightsError(t`Couldn't load profile insights right now.`);
         })
         .finally(() => {
           if (cancelled) return;
@@ -1440,7 +1453,7 @@ export function PlayerProfilePage({
       })
       .catch(() => {
         if (cancelled) return;
-        setRecentError("Couldn't load recent scores right now.");
+        setRecentError(t`Couldn't load recent scores right now.`);
       })
       .finally(() => {
         if (cancelled) return;
@@ -1478,7 +1491,7 @@ export function PlayerProfilePage({
       })
       .catch(() => {
         if (cancelled) return;
-        setAboutError("Couldn't load About right now.");
+        setAboutError(t`Couldn't load About right now.`);
       })
       .finally(() => {
         if (cancelled) return;
@@ -1526,7 +1539,7 @@ export function PlayerProfilePage({
       setRecentOsuFetchedAt(section.fetchedAt);
     } catch {
       if (recentOsuRequestRef.current !== requestId) return;
-      setRecentOsuError("Couldn't load osu! recents right now.");
+      setRecentOsuError(t`Couldn't load osu! recents right now.`);
     } finally {
       if (recentOsuRequestRef.current === requestId) setLoadingOsuRecent(false);
     }
@@ -1604,7 +1617,7 @@ export function PlayerProfilePage({
     return (
       <div className="flex-1 bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-5 py-16 text-center text-sm text-osu-f1">
-          {userError ?? "Player not found."}
+          {userError ?? t`Player not found.`}
         </div>
       </div>
     );
@@ -1684,7 +1697,7 @@ export function PlayerProfilePage({
       rel="noreferrer"
       className="inline-flex items-center gap-1 rounded-full bg-osu-pink/20 px-2 py-0.5 font-semibold text-osu-pink-light transition-colors duration-150 hover:bg-osu-pink/35"
     >
-      osu! profile
+      <Trans>osu! profile</Trans>
       <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 1.5h7v7" /><path d="M10.5 1.5 1.5 10.5" /></svg>
     </a>,
   ];
@@ -1693,7 +1706,7 @@ export function PlayerProfilePage({
       // Relative to Date.now(), so SSR and hydration can land on different
       // sides of a minute boundary; let the client text win.
       <span key="seen" title={new Date(user.last_visit).toLocaleString("en-US")} suppressHydrationWarning>
-        Last seen {formatDetailedTimeAgo(user.last_visit)}
+        <Trans>Last seen {formatDetailedTimeAgo(user.last_visit)}</Trans>
       </span>,
     );
   }
@@ -1741,7 +1754,7 @@ export function PlayerProfilePage({
                 rel="noreferrer"
                 className="text-xs text-osu-f1 hover:text-osu-l2 transition-colors"
               >
-                View osu! profile
+                <Trans>View osu! profile</Trans>
               </a>
             </motion.div>
           </motion.div>
@@ -1770,7 +1783,7 @@ export function PlayerProfilePage({
               <button
                 type="button"
                 onClick={() => { setModModalOpen(false); setHoveredMod(null); }}
-                aria-label="Close"
+                aria-label={t`Close`}
                 className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -1828,15 +1841,17 @@ export function PlayerProfilePage({
                   <>
                     <div className="pr-8 flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">Mod Usage</div>
+                        <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">{t`Mod Usage`}</div>
                         <div className="mt-0.5 text-[11px] text-osu-f1/60 flex items-center gap-1.5 flex-wrap">
-                          <span>across {usageSampleSize} {includeNoModUsage ? "top plays" : "modded top plays"}</span>
+                          <span>{includeNoModUsage
+                            ? t`across ${usageSampleSize} top plays`
+                            : t`across ${usageSampleSize} modded top plays`}</span>
                           {stacks > 0 && (
                             <span
                               className="px-1.5 py-[1px] rounded bg-osu-b3/40 text-[9px] font-semibold uppercase tracking-wider text-osu-f1 cursor-help"
-                              title={`${stacks} extra mod-use${stacks === 1 ? "" : "s"} from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays.`}
+                              title={t`${stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays.`}
                             >
-                              +{stacks} stacked
+                              <Trans>+{stacks} stacked</Trans>
                             </span>
                           )}
                         </div>
@@ -1849,7 +1864,7 @@ export function PlayerProfilePage({
                             setHoveredMod(null);
                           }}
                           aria-pressed={includeNoModUsage}
-                          title={includeNoModUsage ? "NM is included in mod usage" : "NM is excluded from mod usage"}
+                          title={includeNoModUsage ? t`NM is included in mod usage` : t`NM is excluded from mod usage`}
                           className={`mt-0.5 flex h-6 flex-shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-1.5 text-[9px] font-semibold uppercase tracking-wider transition-colors hover:text-white ${includeNoModUsage
                               ? "border-osu-green-light/45 bg-osu-green-light/12 text-osu-green-light hover:border-osu-green-light/65 hover:bg-osu-green-light/18"
                               : "border-osu-b2/60 bg-osu-b3/30 text-osu-f1 hover:border-osu-b1/80 hover:bg-osu-b3/50"
@@ -1908,7 +1923,7 @@ export function PlayerProfilePage({
                               {Math.round(focused.pct)}%
                             </text>
                             <text x={cx} y={cy + 24} textAnchor="middle" fill="var(--color-osu-f1)" style={{ fontSize: 10 }}>
-                              {focused.count} of {usageSampleSize}
+                              <Trans>{focused.count} of {usageSampleSize}</Trans>
                             </text>
                           </>
                         ) : (
@@ -1917,7 +1932,7 @@ export function PlayerProfilePage({
                               {usageSampleSize}
                             </text>
                             <text x={cx} y={cy + 20} textAnchor="middle" fill="var(--color-osu-f1)" style={{ fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase" }}>
-                              {includeNoModUsage ? "top plays" : "modded plays"}
+                              {includeNoModUsage ? t`top plays` : t`modded plays`}
                             </text>
                           </>
                         )}
@@ -1983,7 +1998,7 @@ export function PlayerProfilePage({
               <button
                 type="button"
                 onClick={() => setBpmModalOpen(false)}
-                aria-label="Close"
+                aria-label={t`Close`}
                 className="absolute top-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -1991,19 +2006,19 @@ export function PlayerProfilePage({
                 </svg>
               </button>
               <div className="relative z-10 max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
-                <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">BPM Breakdown</div>
+                <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">{t`BPM Breakdown`}</div>
                 <div className="mt-0.5 text-[11px] text-osu-f1/60">
-                  across {profileInsights.sampleSize} top plays · note-density tempo where available · adjusted for rate mods · weighted toward your highest plays
+                  <Trans>across {profileInsights.sampleSize} top plays · note-density tempo where available · adjusted for rate mods · weighted toward your highest plays</Trans>
                 </div>
 
                 <div className="mt-4 flex items-baseline gap-2">
                   <span className="text-2xl font-bold text-white">{Math.round(profileInsights.medianBpm)}</span>
-                  <span className="text-[11px] text-osu-f1">median BPM</span>
+                  <span className="text-[11px] text-osu-f1">{t`median BPM`}</span>
                 </div>
 
                 {profileInsights.bpmByKeyMode && profileInsights.bpmByKeyMode.length > 1 && (
                   <div className="mt-4">
-                    <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Median by Keymode</div>
+                    <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">{t`Median by Keymode`}</div>
                     <div className="space-y-2">
                       {(() => {
                         const maxMedian = Math.max(...profileInsights.bpmByKeyMode.map((b) => b.median));
@@ -2028,10 +2043,10 @@ export function PlayerProfilePage({
 
                 {profileInsights.bpmRange?.minScore && profileInsights.bpmRange?.maxScore && (
                   <div className="mt-4">
-                    <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Range</div>
+                    <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">{t`Range`}</div>
                     <div className="space-y-2">
-                      <BpmExtremeRow label="Slowest" bpm={profileInsights.bpmRange.min} snapshot={profileInsights.bpmRange.minScore} />
-                      <BpmExtremeRow label="Fastest" bpm={profileInsights.bpmRange.max} snapshot={profileInsights.bpmRange.maxScore} />
+                      <BpmExtremeRow label={t`Slowest`} bpm={profileInsights.bpmRange.min} snapshot={profileInsights.bpmRange.minScore} />
+                      <BpmExtremeRow label={t`Fastest`} bpm={profileInsights.bpmRange.max} snapshot={profileInsights.bpmRange.maxScore} />
                     </div>
                   </div>
                 )}
@@ -2055,7 +2070,7 @@ export function PlayerProfilePage({
             <motion.div
               role="dialog"
               aria-modal="true"
-              aria-label="PP distribution"
+              aria-label={t`PP distribution`}
               className="modal-card-mobile-safe relative isolate bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[420px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
               onClick={(e) => e.stopPropagation()}
               initial={{ opacity: 0, y: 8 }}
@@ -2067,7 +2082,7 @@ export function PlayerProfilePage({
               <button
                 type="button"
                 onClick={() => setPpModalOpen(false)}
-                aria-label="Close"
+                aria-label={t`Close`}
                 className="absolute top-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
               >
                 <X size={14} />
@@ -2100,9 +2115,9 @@ export function PlayerProfilePage({
                     <>
                       <div className="pr-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
-                          <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">PP Distribution</div>
+                          <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">{t`PP Distribution`}</div>
                           <div className="mt-0.5 text-[11px] text-osu-f1/60">
-                            across {ppTotal} profile top plays with PP
+                            <Trans>across {ppTotal} profile top plays with PP</Trans>
                           </div>
                         </div>
                         <div className="inline-flex w-fit items-center gap-0.5 rounded-lg border border-osu-b3/20 bg-osu-b4/60 p-0.5">
@@ -2119,7 +2134,7 @@ export function PlayerProfilePage({
                                   : "text-osu-f1 hover:bg-osu-b3/40 hover:text-osu-l2"
                                 }`}
                               >
-                                {mode === "bands" ? "Bands" : "Cumulative"}
+                                {mode === "bands" ? t`Bands` : t`Cumulative`}
                               </button>
                             );
                           })}
@@ -2138,10 +2153,10 @@ export function PlayerProfilePage({
 
                       <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
                         <span className="text-2xl font-bold text-osu-pink-light tabular-nums">{Math.round(ppTop)}</span>
-                        <span className="text-[11px] text-osu-f1">top pp</span>
+                        <span className="text-[11px] text-osu-f1">{t`top pp`}</span>
                         <span className="text-osu-f1/40">/</span>
                         <span className="text-xl font-bold text-white tabular-nums">{Math.round(ppBottom)}</span>
-                        <span className="text-[11px] text-osu-f1">bottom pp</span>
+                        <span className="text-[11px] text-osu-f1">{t`bottom pp`}</span>
                       </div>
 
                       <div className="mt-4 space-y-2">
@@ -2158,7 +2173,7 @@ export function PlayerProfilePage({
                                 </div>
                                 <div className="flex items-baseline gap-1.5 tabular-nums">
                                   <span className="text-sm font-bold text-white">{entry.count}</span>
-                                  <span className="text-[10px] text-osu-f1">{entry.count === 1 ? "play" : "plays"}</span>
+                                  <span className="text-[10px] text-osu-f1"><Plural value={entry.count} one="play" other="plays" /></span>
                                   <span className="text-[10px] text-osu-f1/60">({formatPpDistributionPercent(entry.count, entry.total)})</span>
                                 </div>
                               </div>
@@ -2229,21 +2244,21 @@ export function PlayerProfilePage({
                     to="/"
                     search={{ country: profileCountryCode }}
                     className="inline-flex shrink-0 items-center rounded-[3px] ring-1 ring-white/20 transition hover:ring-osu-pink-light/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink-light"
-                    title={`Open ${profileCountryName} home`}
-                    aria-label={`Open ${profileCountryName} home`}
+                    title={t`Open ${profileCountryName} home`}
+                    aria-label={t`Open ${profileCountryName} home`}
                   >
                     <CountryFlag code={profileCountryCode} size="md" decorative />
                   </Link>
                 ) : null}
                 {user.is_supporter && (
-                  <span className="inline-flex h-[22px] items-center justify-center rounded-full bg-osu-pink px-2" title="osu! Supporter">
-                    <img src="/images/icons/supporter.svg" alt="Supporter" className="h-3 w-3 brightness-0 invert" />
+                  <span className="inline-flex h-[22px] items-center justify-center rounded-full bg-osu-pink px-2" title={t`osu! Supporter`}>
+                    <img src="/images/icons/supporter.svg" alt={t`Supporter`} className="h-3 w-3 brightness-0 invert" />
                   </span>
                 )}
                 {isOnlineNow ? (
                   <span
                     className="h-2 w-2 shrink-0 rounded-full bg-osu-green"
-                    title={user.is_online || !recentPlayAt ? "Online" : `Set a play ${formatDetailedTimeAgo(recentPlayAt)}`}
+                    title={user.is_online || !recentPlayAt ? t`Online` : t`Set a play ${formatDetailedTimeAgo(recentPlayAt)}`}
                   />
                 ) : null}
               </h1>
@@ -2261,7 +2276,7 @@ export function PlayerProfilePage({
               corner, so on narrow screens the numbers step out of its way. */}
           <div className={`mt-7 grid grid-cols-2 gap-x-6 gap-y-5 sm:mt-9 sm:flex sm:flex-wrap sm:items-end sm:gap-x-12 sm:pr-0 ${showTungTungSahur ? "pr-16" : ""}`}>
             <HeroStat
-              label="Global"
+              label={t`Global`}
               value={stats.global_rank ? `#${formatNumber(stats.global_rank)}` : "-"}
               sub={rankDelta90d != null && rankDelta90d !== 0 ? (
                 <span className={`inline-flex items-center gap-1 ${rankDelta90d > 0 ? "text-osu-green-light" : "text-osu-red-light"}`}>
@@ -2269,24 +2284,24 @@ export function PlayerProfilePage({
                     <path d={rankDelta90d > 0 ? "M3.5 0 L7 6 L0 6 Z" : "M3.5 6 L0 0 L7 0 Z"} fill="currentColor" />
                   </svg>
                   <span className="tabular-nums">{formatNumber(Math.abs(rankDelta90d))}</span>
-                  <span className="text-white/40">in 90d</span>
+                  <span className="text-white/40">{t`in 90d`}</span>
                 </span>
               ) : null}
             />
             <HeroStat
-              label="Country"
+              label={t`Country`}
               value={stats.country_rank ? `#${formatNumber(stats.country_rank)}` : "-"}
               valueClassName="text-osu-pink-light"
               sub={profileCountryName ?? (user.country_code || null)}
             />
             <HeroStat
-              label="Peak"
+              label={t`Peak`}
               value={awaitingPeak ? <span className="skeleton-pulse block h-[26px] w-24 rounded sm:h-[34px] sm:w-32" /> : peakRank ? `#${formatNumber(peakRank)}` : "-"}
               valueClassName={peakRank ? getRankTierClass(peakRank) || "text-white" : "text-white"}
-              sub={peakRank && peakRankDate ? `achieved ${formatDate(peakRankDate)}` : null}
+              sub={peakRank && peakRankDate ? t`achieved ${formatDate(peakRankDate)}` : null}
             />
             <HeroStat
-              label="Performance"
+              label={t`Performance`}
               value={`${formatNumber(Math.round(stats.pp))}pp`}
               valueClassName="text-osu-yellow"
               sub={ppVariants.length >= 2 ? (
@@ -2295,8 +2310,8 @@ export function PlayerProfilePage({
                     <span
                       key={variant.variant}
                       title={[
-                        variant.global_rank != null ? `#${formatNumber(variant.global_rank)} global` : null,
-                        variant.country_rank != null ? `#${formatNumber(variant.country_rank)} country` : null,
+                        variant.global_rank != null ? t`#${formatNumber(variant.global_rank)} global` : null,
+                        variant.country_rank != null ? t`#${formatNumber(variant.country_rank)} country` : null,
                       ].filter(Boolean).join("  •  ") || undefined}
                     >
                       <span className="font-bold uppercase text-white/35">{variant.variant} </span>
@@ -2317,20 +2332,20 @@ export function PlayerProfilePage({
               the numbers with a hairline under them. */}
           <div className="relative flex flex-wrap items-center gap-x-8 gap-y-5 border-b border-osu-b3/25 py-5 sm:gap-x-12">
             {showTungTungSahur && <TungTungSahurKeycap />}
-            <RailStat label="Accuracy" value={profileStatsProjectedOnly ? "-" : formatAccuracy(stats.hit_accuracy / 100)} />
-            <RailStat label="Play Count" value={profileStatsProjectedOnly ? "-" : formatNumber(stats.play_count)} />
-            <RailStat label="Play Time" value={profileStatsProjectedOnly || stats.play_time == null ? "-" : `${formatNumber(Math.floor(stats.play_time / 3600))}h`} />
+            <RailStat label={t`Accuracy`} value={profileStatsProjectedOnly ? "-" : formatAccuracy(stats.hit_accuracy / 100)} />
+            <RailStat label={t`Play Count`} value={profileStatsProjectedOnly ? "-" : formatNumber(stats.play_count)} />
+            <RailStat label={t`Play Time`} value={profileStatsProjectedOnly || stats.play_time == null ? "-" : t`${formatNumber(Math.floor(stats.play_time / 3600))}h`} />
             {/* One quiet line rather than two label/value blocks: at rail-stat
                 weight these claimed a whole row to themselves on mobile, which
                 is more than a join date and a playstyle are worth. */}
             {(joinedValue || playstyleValue) && (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-osu-f1">
                 {joinedValue && (
-                  <span>Joined <strong className="font-semibold text-osu-l2">{joinedValue}</strong></span>
+                  <span><Trans>Joined <strong className="font-semibold text-osu-l2">{joinedValue}</strong></Trans></span>
                 )}
                 {joinedValue && playstyleValue && <span className="text-osu-b1">·</span>}
                 {playstyleValue && (
-                  <span>Plays with <strong className="font-semibold capitalize text-osu-l2">{playstyleValue}</strong></span>
+                  <span><Trans>Plays with <strong className="font-semibold capitalize text-osu-l2">{playstyleValue}</strong></Trans></span>
                 )}
               </div>
             )}
@@ -2372,7 +2387,7 @@ export function PlayerProfilePage({
                     onClick={profileInsights.mostUsedMod ? () => setModModalOpen(true) : undefined}
                   >
                     <div className="flex items-center justify-between">
-                      <div className={INSIGHT_LABEL_CLASS}>Most Used Mod</div>
+                      <div className={INSIGHT_LABEL_CLASS}>{t`Most Used Mod`}</div>
                       {profileInsights.mostUsedMod && <ExpandHint />}
                     </div>
                     {profileInsights.mostUsedMod ? (
@@ -2394,7 +2409,7 @@ export function PlayerProfilePage({
                         </div>
                       </>
                     ) : (
-                      <div className="mt-2 text-sm text-osu-f1">No mod preference</div>
+                      <div className="mt-2 text-sm text-osu-f1">{t`No mod preference`}</div>
                     )}
                   </div>
                   <div
@@ -2402,18 +2417,18 @@ export function PlayerProfilePage({
                     onClick={profileInsights.medianBpm != null ? () => setBpmModalOpen(true) : undefined}
                   >
                     <div className="flex items-center justify-between">
-                      <div className={INSIGHT_LABEL_CLASS}>Median BPM</div>
+                      <div className={INSIGHT_LABEL_CLASS}>{t`Median BPM`}</div>
                       {profileInsights.medianBpm != null && <ExpandHint />}
                     </div>
                     {profileInsights.medianBpm != null ? (
                       <>
                         <div className="mt-2 flex items-baseline gap-1.5">
                           <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.medianBpm)}</span>
-                          <span className="text-[11px] font-semibold text-osu-f1">BPM</span>
+                          <span className="text-[11px] font-semibold text-osu-f1">{t`BPM`}</span>
                         </div>
                         {profileInsights.bpmRange && (
                           <div className="mt-auto pt-2.5 text-[11px] tabular-nums text-osu-f1">
-                            {Math.round(profileInsights.bpmRange.min)} to {Math.round(profileInsights.bpmRange.max)}
+                            <Trans>{Math.round(profileInsights.bpmRange.min)} to {Math.round(profileInsights.bpmRange.max)}</Trans>
                           </div>
                         )}
                       </>
@@ -2428,17 +2443,17 @@ export function PlayerProfilePage({
                     disabled={!hasPpDistribution}
                   >
                     <div className="flex items-center justify-between">
-                      <div className={INSIGHT_LABEL_CLASS}>PP Range</div>
+                      <div className={INSIGHT_LABEL_CLASS}>{t`PP Range`}</div>
                       {hasPpDistribution && <ExpandHint />}
                     </div>
                     {profileInsights.ppRange ? (
                       <>
                         <div className="mt-2 flex items-baseline gap-1.5">
                           <span className="text-[26px] font-black leading-none tabular-nums text-osu-pink-light">{Math.round(profileInsights.ppRange.top)}</span>
-                          <span className="text-[11px] text-osu-f1">to</span>
+                          <span className="text-[11px] text-osu-f1">{t`to`}</span>
                           <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.ppRange.bottom)}</span>
                         </div>
-                        <div className="mt-auto pt-2.5 text-[11px] text-osu-f1">{Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)}pp spread</div>
+                        <div className="mt-auto pt-2.5 text-[11px] text-osu-f1">{t`${Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)}pp spread`}</div>
                       </>
                     ) : (
                       <div className="mt-2 text-sm text-osu-f1">-</div>
@@ -2448,8 +2463,8 @@ export function PlayerProfilePage({
 
                 {/* Row 2: Newest + Oldest top play with map backgrounds */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <TopPlayCard label="Newest Top Play" snapshot={displayedProfileInsights.newestTopPlay} />
-                  <TopPlayCard label="Oldest Top Play" snapshot={displayedProfileInsights.oldestTopPlay} />
+                  <TopPlayCard label={t`Newest Top Play`} snapshot={displayedProfileInsights.newestTopPlay} />
+                  <TopPlayCard label={t`Oldest Top Play`} snapshot={displayedProfileInsights.oldestTopPlay} />
                 </div>
               </div>
               );
@@ -2460,15 +2475,15 @@ export function PlayerProfilePage({
           <div className="flex flex-col gap-3 border-t border-osu-b3/25 pt-1 lg:flex-row lg:items-center lg:justify-between">
             <div ref={tabsRailRef} className="-mx-4 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:px-0">
               <div className="flex min-w-max">
-                {playerTabs.map((t) => (
+                {playerTabs.map((playerTab) => (
                   <button
-                    key={t}
-                    data-player-tab={t}
-                    onClick={() => handleTabChange(t)}
-                    className={`relative shrink-0 cursor-pointer whitespace-nowrap px-4 py-3 text-[12px] font-semibold transition-colors duration-[120ms] ${tab === t ? "text-white" : "text-osu-f1 hover:text-osu-l2"}`}
+                    key={playerTab}
+                    data-player-tab={playerTab}
+                    onClick={() => handleTabChange(playerTab)}
+                    className={`relative shrink-0 cursor-pointer whitespace-nowrap px-4 py-3 text-[12px] font-semibold transition-colors duration-[120ms] ${tab === playerTab ? "text-white" : "text-osu-f1 hover:text-osu-l2"}`}
                   >
-                    {getPlayerTabLabel(t)}
-                    {tab === t && (
+                    {i18n._(getPlayerTabLabelMsg(playerTab))}
+                    {tab === playerTab && (
                       <motion.span
                         layoutId="player-tab-indicator"
                         className="absolute inset-x-2.5 bottom-0 h-[2px] rounded-full bg-osu-h1"
@@ -2586,14 +2601,14 @@ export function PlayerProfilePage({
                   <PlayerAboutCard html={displayedAboutHtml} onEdit={() => setAboutEditing(true)} />
                 ) : (
                   <div className="text-center py-8 text-osu-f1 text-sm space-y-3">
-                    <div>No About content found.</div>
+                    <div>{t`No About content found.`}</div>
                     <button
                       type="button"
                       onClick={() => setAboutEditing(true)}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-osu-b4 text-[12px] font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors cursor-pointer"
                     >
                       <Pencil size={13} />
-                      Write one in the BBCode editor
+                      {t`Write one in the BBCode editor`}
                     </button>
                   </div>
                 )}
@@ -2670,7 +2685,7 @@ export function PlayerProfilePage({
                   })
                 ) : (
                   <div className="text-center py-8 text-osu-f1 text-sm">
-                    {tab === "recent" ? "No tracked plays found" : "No scores found"}
+                    {tab === "recent" ? t`No tracked plays found` : t`No scores found`}
                   </div>
                 )}
               </motion.div>
@@ -2685,7 +2700,7 @@ export function PlayerProfilePage({
                 disabled={isLoadingMoreCurrentTab}
                 className="px-4 py-2 rounded-lg bg-osu-b4 text-[12px] font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors cursor-pointer disabled:cursor-default disabled:opacity-60"
               >
-                {isLoadingMoreCurrentTab ? "Loading..." : "Show more"}
+                {isLoadingMoreCurrentTab ? t`Loading...` : t`Show more`}
               </button>
             </div>
           )}
@@ -2696,6 +2711,7 @@ export function PlayerProfilePage({
 }
 
 function TungTungSahurKeycap() {
+  const { t } = useLingui();
   const [pressed, setPressed] = useState(false);
   const [actuated, setActuated] = useState(false);
   const [glowColor, setGlowColor] = useState(TUNG_TUNG_SAHUR_GLOW_COLORS[0]);
@@ -2749,7 +2765,7 @@ function TungTungSahurKeycap() {
   return (
     <button
       type="button"
-      aria-label="Tung tung sahur keycap"
+      aria-label={t`Tung tung sahur keycap`}
       className="group absolute right-3 bottom-full z-20 h-28 w-16 translate-y-1 cursor-pointer touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/80 focus-visible:ring-offset-2 focus-visible:ring-offset-osu-b5 sm:right-5 sm:h-32 sm:w-[4.5rem]"
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -2862,6 +2878,7 @@ function PlayerPageSkeleton({
   onTabChange: (tab: PlayerTab) => void;
 }) {
   const playerTabs = PLAYER_TABS;
+  const { i18n } = useLingui();
   return (
     <div className="flex-1 bg-osu-b5">
       <div className="relative overflow-hidden bg-osu-b4">
@@ -2908,14 +2925,14 @@ function PlayerPageSkeleton({
         <div className="border-t border-osu-b3/25 pt-1">
           <div className="-mx-4 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:px-0">
             <div className="flex min-w-max">
-              {playerTabs.map((t) => (
+              {playerTabs.map((playerTab) => (
                 <button
-                  key={t}
-                  onClick={() => onTabChange(t)}
-                  className={`relative shrink-0 cursor-pointer whitespace-nowrap px-4 py-3 text-[12px] font-semibold transition-colors duration-[120ms] ${tab === t ? "text-white" : "text-osu-f1 hover:text-osu-l2"}`}
+                  key={playerTab}
+                  onClick={() => onTabChange(playerTab)}
+                  className={`relative shrink-0 cursor-pointer whitespace-nowrap px-4 py-3 text-[12px] font-semibold transition-colors duration-[120ms] ${tab === playerTab ? "text-white" : "text-osu-f1 hover:text-osu-l2"}`}
                 >
-                  {getPlayerTabLabel(t)}
-                  {tab === t && <span className="absolute inset-x-2.5 bottom-0 h-[2px] rounded-full bg-osu-h1" />}
+                  {i18n._(getPlayerTabLabelMsg(playerTab))}
+                  {tab === playerTab && <span className="absolute inset-x-2.5 bottom-0 h-[2px] rounded-full bg-osu-h1" />}
                 </button>
               ))}
             </div>
@@ -2946,6 +2963,7 @@ function ActivityOptInEmptyState({
   onTracked?: () => void;
 }) {
   const location = useLocation();
+  const { t } = useLingui();
   const [status, setStatus] = useState<"idle" | "pending" | "done" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(`${location.pathname}${location.searchStr}`)}`;
@@ -2964,23 +2982,23 @@ function ActivityOptInEmptyState({
       setStatus("error");
       setMessage(
         result.status === "country_not_tracked"
-          ? "Your country isn't tracked yet, so there's nothing to record your plays against."
+          ? t`Your country isn't tracked yet, so there's nothing to record your plays against.`
           : result.status === "country_full"
-            ? "This country's opt-in list is full right now. Check back later."
-            : "Couldn't turn on tracking right now. Try again in a moment.",
+            ? t`This country's opt-in list is full right now. Check back later.`
+            : t`Couldn't turn on tracking right now. Try again in a moment.`,
       );
     } catch {
       setStatus("error");
-      setMessage("Couldn't turn on tracking right now. Try again in a moment.");
+      setMessage(t`Couldn't turn on tracking right now. Try again in a moment.`);
     }
   }, [onTracked]);
 
   if (mode === "self" && status === "done") {
     return (
       <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
-        <div className="text-sm font-semibold text-osu-l2">You're being tracked now</div>
+        <div className="text-sm font-semibold text-osu-l2">{t`You're being tracked now`}</div>
         <div className="mt-1.5 text-[13px] text-osu-f1">
-          Your recent plays are being pulled in. Activity will start filling in here within a minute or two, and keeps updating as you play.
+          {t`Your recent plays are being pulled in. Activity will start filling in here within a minute or two, and keeps updating as you play.`}
         </div>
       </div>
     );
@@ -2989,9 +3007,9 @@ function ActivityOptInEmptyState({
   if (mode === "self") {
     return (
       <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
-        <div className="text-sm font-semibold text-osu-l2">Start tracking your plays</div>
+        <div className="text-sm font-semibold text-osu-l2">{t`Start tracking your plays`}</div>
         <div className="mt-1.5 text-[13px] text-osu-f1">
-          Activity is recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker.
+          {t`Activity is recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker.`}
         </div>
         <button
           type="button"
@@ -2999,7 +3017,7 @@ function ActivityOptInEmptyState({
           disabled={status === "pending"}
           className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-osu-pink/40 bg-osu-pink/15 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white cursor-pointer disabled:opacity-60 disabled:cursor-default"
         >
-          {status === "pending" ? "Adding you…" : "Track my plays"}
+          {status === "pending" ? t`Adding you…` : t`Track my plays`}
         </button>
         {message ? <div className="mt-3 text-[12px] text-osu-f1">{message}</div> : null}
       </div>
@@ -3009,9 +3027,9 @@ function ActivityOptInEmptyState({
   if (mode === "anon") {
     return (
       <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
-        <div className="text-sm font-semibold text-osu-l2">No activity data for this player</div>
+        <div className="text-sm font-semibold text-osu-l2">{t`No activity data for this player`}</div>
         <div className="mt-1.5 text-[13px] text-osu-f1">
-          Activity is recorded for the top 100 of each tracked country. If this is your profile, log in with osu! to add yourself to the tracker.
+          {t`Activity is recorded for the top 100 of each tracked country. If this is your profile, log in with osu! to add yourself to the tracker.`}
         </div>
         {loginAvailable ? (
           <a
@@ -3019,7 +3037,7 @@ function ActivityOptInEmptyState({
             className="mt-4 inline-flex items-center gap-2 rounded-lg border border-osu-pink/40 bg-osu-pink/15 px-4 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white"
           >
             <OsuLogo className="h-4 w-4" />
-            Log in with osu!
+            {t`Log in with osu!`}
           </a>
         ) : null}
       </div>
@@ -3028,9 +3046,9 @@ function ActivityOptInEmptyState({
 
   return (
     <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
-      <div className="text-sm font-semibold text-osu-l2">No activity data for this player</div>
+      <div className="text-sm font-semibold text-osu-l2">{t`No activity data for this player`}</div>
       <div className="mt-1.5 text-[13px] text-osu-f1">
-        Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them.
+        {t`Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them.`}
       </div>
     </div>
   );
@@ -3053,6 +3071,7 @@ function PlayerSkillCard({ title, accent, children }: { title: string; accent: s
 // visitors start "pending" while the backend rates their plays, so the panel
 // polls until the breakdown lands.
 function PlayerSkillsPanel({ user }: { user: OsuUser }) {
+  const { t } = useLingui();
   const [skills, setSkills] = useState<LivePlayerSkills | null>(null);
   const [skillsError, setSkillsError] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<{ entry: SkillAxisEntry; keyCount: number } | null>(null);
@@ -3091,10 +3110,10 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   }, [user.id]);
 
   if (!liveConfigured) {
-    return <div className="py-8 text-center text-sm text-osu-f1">Skill ratings are unavailable right now.</div>;
+    return <div className="py-8 text-center text-sm text-osu-f1">{t`Skill ratings are unavailable right now.`}</div>;
   }
   if (skillsError) {
-    return <div className="py-8 text-center text-sm text-osu-f1">Could not load skill ratings. Try again in a bit.</div>;
+    return <div className="py-8 text-center text-sm text-osu-f1">{t`Could not load skill ratings. Try again in a bit.`}</div>;
   }
   if (!skills) {
     return (
@@ -3116,7 +3135,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   if (skills.status !== "ready" || modes.length === 0) {
     return (
       <div className="mx-auto max-w-[440px]">
-        <PlayerSkillCard title="Skill rating" accent={skillRatingAccent(null)}>
+        <PlayerSkillCard title={t`Skill rating`} accent={skillRatingAccent(null)}>
           <SkillBreakdownBody skills={skills} mode={null} />
         </PlayerSkillCard>
       </div>
@@ -3160,6 +3179,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
 
 function PlayerActivityPanel({ user }: { user: OsuUser }) {
   const auth = useAuth();
+  const { t, i18n } = useLingui();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [activityRefreshKey, setActivityRefreshKey] = useState(0);
@@ -3195,7 +3215,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
     if (!isLiveBackendConfigured()) {
       setLoading(false);
       setSnapshot(null);
-      setError("Activity is only available when the server is configured.");
+      setError(t`Activity is only available when the server is configured.`);
       return;
     }
 
@@ -3211,7 +3231,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
       .catch(() => {
         if (cancelled) return;
         setSnapshot(null);
-        setError("Couldn't load Activity right now.");
+        setError(t`Couldn't load Activity right now.`);
       })
       .finally(() => {
         if (cancelled) return;
@@ -3248,7 +3268,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
       })
       .catch(() => {
         if (cancelled) return;
-        setDayDetailError("Couldn't load the full day detail.");
+        setDayDetailError(t`Couldn't load the full day detail.`);
       })
       .finally(() => {
         if (cancelled) return;
@@ -3305,12 +3325,12 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-white">
-                {formatNumber(activity.totalScores)} plays in {selectedYear}
+                <Trans>{formatNumber(activity.totalScores)} plays in {selectedYear}</Trans>
               </h2>
             </div>
             <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-              <ActivityInlineMetric label="Avg active day" value={formatNumber(averageActiveDay)} detail="plays" />
-              <ActivityInlineMetric label="Streak" value={`${activity.currentStreak}d`} detail="now" />
+              <ActivityInlineMetric label={t`Avg active day`} value={formatNumber(averageActiveDay)} detail={t`plays`} />
+              <ActivityInlineMetric label={t`Streak`} value={t`${activity.currentStreak}d`} detail={t`now`} />
             </div>
           </div>
 
@@ -3320,8 +3340,8 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
                   12px), 1fr rows on sm+ where pt-5 equals the month-label row (h-3 +
                   mt-2) so the stretched height equals the heatmap grid exactly. */}
               <div className="grid w-8 shrink-0 grid-rows-[repeat(7,12px)] gap-1 pt-5 text-[10px] leading-none text-osu-f1 sm:grid-rows-7">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                  <span key={day} className="flex items-center">{day}</span>
+                {ACTIVITY_WEEKDAY_LABELS.map((day, index) => (
+                  <span key={index} className="flex items-center">{i18n._(day)}</span>
                 ))}
               </div>
               <div className="min-w-0 max-w-full flex-1 overflow-x-auto pb-2 scrollbar-hide sm:overflow-visible sm:pb-0">
@@ -3339,7 +3359,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
                               <button
                                 key={day.date}
                                 type="button"
-                                title={`${formatFullActivityDate(day.date)}: ${day.scoreCount} plays, ${day.sessionCount} sessions`}
+                                title={t`${formatFullActivityDate(day.date)}: ${day.scoreCount} plays, ${day.sessionCount} sessions`}
                                 onClick={() => setSelectedDay(day)}
                                 className="aspect-square w-full min-w-0 rounded-[3px] border transition-transform hover:scale-125 hover:ring-2 hover:ring-osu-pink/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/90"
                                 style={getActivityCellStyle(day, activity.typicalSession)}
@@ -3347,7 +3367,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
                             ) : (
                               <span
                                 key={day.date}
-                                title={`${formatFullActivityDate(day.date)}: no tracked plays`}
+                                title={t`${formatFullActivityDate(day.date)}: no tracked plays`}
                                 className={`aspect-square w-full min-w-0 rounded-[3px] border ${ACTIVITY_EMPTY_CELL_CLASS}`}
                               />
                             )
@@ -3365,16 +3385,16 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
             <span className="text-[11px] text-osu-f1">
-              Typical session <span className="font-semibold text-osu-l2">{activity.typicalSession} plays</span>
+              <Trans>Typical session <span className="font-semibold text-osu-l2">{activity.typicalSession} plays</span></Trans>
             </span>
             {import.meta.env.DEV && (
               <button
                 type="button"
                 onClick={() => setDevDay(createDevActivityDay(activity.timezone))}
                 className="rounded-lg border border-osu-pink/25 bg-osu-pink/10 px-2 py-1 text-[10px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/20"
-                title="Open the day modal with simulated busy-day data"
+                title={t`Open the day modal with simulated busy-day data`}
               >
-                Sim busy day
+                {t`Sim busy day`}
               </button>
             )}
           </div>
@@ -3420,13 +3440,13 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
             >
               <div className="flex shrink-0 items-start justify-between gap-4">
                 <div>
-                  <div className="text-[9px] font-black uppercase tracking-wide text-osu-pink-light sm:text-[10px]">Activity day</div>
+                  <div className="text-[9px] font-black uppercase tracking-wide text-osu-pink-light sm:text-[10px]">{t`Activity day`}</div>
                   <h3 className="mt-1 text-xl font-black text-white sm:text-2xl">{formatFullActivityDate(modalDay.date)}</h3>
                 </div>
                 <button
                   type="button"
                   onClick={closeDayModal}
-                  aria-label="Close activity details"
+                  aria-label={t`Close activity details`}
                   className="flex h-8 w-8 items-center justify-center rounded-full text-osu-f1 hover:bg-osu-b3/50 hover:text-white"
                 >
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -3437,10 +3457,10 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
 
               <div className="min-h-0 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
                 <div className={`mt-4 grid gap-2 sm:mt-5 ${modalPlayedLabel ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
-                  <ActivityDetailMetric label="Plays" value={formatNumber(modalDay.scoreCount)} />
-                  <ActivityDetailMetric label="Sessions" value={formatNumber(modalDay.sessionCount)} />
-                  {modalPlayedLabel ? <ActivityDetailMetric label="Time played" value={modalPlayedLabel} /> : null}
-                  <ActivityDetailMetric label="Maps" value={formatNumber(modalDay.mapCount)} />
+                  <ActivityDetailMetric label={t`Plays`} value={formatNumber(modalDay.scoreCount)} />
+                  <ActivityDetailMetric label={t`Sessions`} value={formatNumber(modalDay.sessionCount)} />
+                  {modalPlayedLabel ? <ActivityDetailMetric label={t`Time played`} value={modalPlayedLabel} /> : null}
+                  <ActivityDetailMetric label={t`Maps`} value={formatNumber(modalDay.mapCount)} />
                 </div>
 
                 <ActivitySessionFlow day={modalDay} timezone={activity.timezone} />
@@ -3455,8 +3475,8 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
 
                 <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">Pattern mix</div>
-                    <div className="text-[10px] text-osu-f1 sm:text-[11px]">avg intensity, 0-100</div>
+                    <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">{t`Pattern mix`}</div>
+                    <div className="text-[10px] text-osu-f1 sm:text-[11px]">{t`avg intensity, 0-100`}</div>
                   </div>
                   {modalDay.skills && modalDay.skills.analyzedPlays > 0 ? (
                     <ActivityPatternMix key={modalDay.date} skills={modalDay.skills} />
@@ -3469,7 +3489,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
                     </div>
                   ) : (
                     <div className="mt-3 text-[11px] text-osu-f1">
-                      Skill analysis is queued for the maps played on this day.
+                      {t`Skill analysis is queued for the maps played on this day.`}
                     </div>
                   )}
                 </div>
@@ -3500,10 +3520,11 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
       analyzedPlays: skills.analyzedPlays,
       totalPlays: skills.totalPlays,
     }];
+  const { t, i18n } = useLingui();
   const [selectedKeyModeIndex, setSelectedKeyModeIndex] = useState(0);
   const activeIndex = Math.min(selectedKeyModeIndex, keyModes.length - 1);
   const activeKeyMode = keyModes[activeIndex];
-  const entries = getActivityPatternEntries(activeKeyMode.patterns, activeKeyMode.keyCount).slice(0, 6);
+  const entries = getActivityPatternEntries(activeKeyMode.patterns, activeKeyMode.keyCount, i18n).slice(0, 6);
   return (
     <div className="mt-3">
       {keyModes.length > 1 && (
@@ -3520,9 +3541,9 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
                     : "bg-osu-b4/60 text-osu-f1 hover:bg-osu-b3/55 hover:text-osu-l2"
                   }`}
               >
-                {formatActivityKeyCount(keyMode.keyCount) ?? "Other"}
+                {formatActivityKeyCount(keyMode.keyCount) ?? t`Other`}
                 <span className={`ml-1 font-semibold ${selected ? "text-white/75" : "text-osu-f1/80"}`}>
-                  {formatNumber(keyMode.analyzedPlays)} {keyMode.analyzedPlays === 1 ? "play" : "plays"}
+                  <Plural value={keyMode.analyzedPlays} one={`${formatNumber(keyMode.analyzedPlays)} play`} other={`${formatNumber(keyMode.analyzedPlays)} plays`} />
                 </span>
               </button>
             );
@@ -3550,11 +3571,11 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
           ))}
         </div>
       ) : (
-        <div className="text-[11px] text-osu-f1">No pattern signal for this keymode yet.</div>
+        <div className="text-[11px] text-osu-f1">{t`No pattern signal for this keymode yet.`}</div>
       )}
       {activeKeyMode.analyzedPlays < activeKeyMode.totalPlays && (
         <div className="mt-2 text-[10px] text-osu-f1">
-          {formatNumber(activeKeyMode.analyzedPlays)} of {formatNumber(activeKeyMode.totalPlays)} plays analyzed
+          <Trans>{formatNumber(activeKeyMode.analyzedPlays)} of {formatNumber(activeKeyMode.totalPlays)} plays analyzed</Trans>
         </div>
       )}
     </div>
@@ -3562,16 +3583,17 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
 }
 
 function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: string }) {
+  const { t, i18n } = useLingui();
   if (day.timeline.length === 0) return null;
   const sessions = groupActivityTimelineBySession(day.timeline).map(mergeActivitySessionSegments);
-  const flowLabel = formatActivityKeyFlow(day.timeline);
+  const flowLabel = formatActivityKeyFlow(day.timeline, t`mixed keys`);
   const timezoneHint = getActivityTimezoneHint(timezone, day.timeline[0]?.startAt);
   const multiKeymode = new Set(day.timeline.map((segment) => segment.keyCount ?? 0)).size > 1;
   return (
     <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">
-          Sessions
+          {t`Sessions`}
           {timezoneHint ? <span className="ml-1.5 font-semibold normal-case text-osu-f1/70">{timezoneHint}</span> : null}
         </div>
         <div className="text-[10px] font-semibold text-osu-l2 sm:text-[11px]">{flowLabel}</div>
@@ -3590,20 +3612,20 @@ function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: st
             <div key={first.key}>
               <div className="mb-1.5 flex items-baseline justify-between gap-3">
                 <span className="text-[11px] font-semibold text-osu-l2">
-                  {sessions.length > 1 ? <span className="text-osu-f1">Session {sessionIndex + 1} · </span> : null}
+                  {sessions.length > 1 ? <span className="text-osu-f1"><Trans>Session {sessionIndex + 1}</Trans> · </span> : null}
                   {startDateLabel ? `${startDateLabel} · ` : null}
                   {formatActivityTime(first.startAt, timezone)} - {formatActivityTime(last.endAt, timezone)}
                   {durationLabel ? <span className="font-normal text-osu-f1"> · {durationLabel}</span> : null}
                 </span>
                 <span className="text-[10px] text-osu-f1">
-                  {formatNumber(sessionPlays)} {sessionPlays === 1 ? "play" : "plays"}
+                  <Plural value={sessionPlays} one={`${formatNumber(sessionPlays)} play`} other={`${formatNumber(sessionPlays)} plays`} />
                 </span>
               </div>
               <div className="flex h-2.5 overflow-hidden rounded-full bg-osu-b4/70">
                 {session.map((segment) => (
                   <div
                     key={segment.key}
-                    title={formatActivitySegmentTitle(segment, timezone)}
+                    title={formatActivitySegmentTitle(segment, timezone, i18n)}
                     className="min-w-0 border-r border-black/25 last:border-r-0"
                     style={{
                       flexBasis: 0,
@@ -3616,12 +3638,12 @@ function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: st
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {breakdown.map((entry) => {
                   const known = entry.skill !== "unknown";
-                  const label = known ? getActivitySkillLabel(entry.skill, entry.keyCount) : "Unanalyzed";
+                  const label = known ? getActivitySkillLabel(entry.skill, entry.keyCount, i18n) : t`Unanalyzed`;
                   const keyLabel = multiKeymode ? formatActivityKeyCount(entry.keyCount) : null;
                   return (
                     <span
                       key={`${entry.skill}:${entry.keyCount ?? "x"}`}
-                      title={`${formatNumber(entry.playCount)} ${entry.playCount === 1 ? "play" : "plays"}`}
+                      title={entry.playCount === 1 ? t`${formatNumber(entry.playCount)} play` : t`${formatNumber(entry.playCount)} plays`}
                       className="flex items-center gap-1 rounded bg-osu-b4/60 px-1.5 py-1 text-[10px] leading-none"
                     >
                       <span
@@ -3653,6 +3675,7 @@ function ActivityDayClock({ sessions, timezone, dayKey }: {
   timezone: string;
   dayKey: string;
 }) {
+  const { t } = useLingui();
   const blocks = sessions
     .map((session) => {
       const first = session[0];
@@ -3677,7 +3700,9 @@ function ActivityDayClock({ sessions, timezone, dayKey }: {
         key: first.key,
         left: (start / ACTIVITY_MINUTES_PER_DAY) * 100,
         width: ((end - start) / ACTIVITY_MINUTES_PER_DAY) * 100,
-        title: `${formatActivityTime(first.startAt, timezone)} - ${formatActivityTime(last.endAt, timezone)} · ${formatNumber(plays)} ${plays === 1 ? "play" : "plays"}`,
+        title: plays === 1
+          ? t`${formatActivityTime(first.startAt, timezone)} - ${formatActivityTime(last.endAt, timezone)} · ${formatNumber(plays)} play`
+          : t`${formatActivityTime(first.startAt, timezone)} - ${formatActivityTime(last.endAt, timezone)} · ${formatNumber(plays)} plays`,
       };
     })
     .filter((block): block is NonNullable<typeof block> => block != null);
@@ -3698,11 +3723,11 @@ function ActivityDayClock({ sessions, timezone, dayKey }: {
         ))}
       </div>
       <div className="mt-1 flex justify-between text-[9px] leading-none text-osu-f1">
-        <span>12 AM</span>
-        <span>6 AM</span>
-        <span>12 PM</span>
-        <span>6 PM</span>
-        <span>12 AM</span>
+        <span>{t`12 AM`}</span>
+        <span>{t`6 AM`}</span>
+        <span>{t`12 PM`}</span>
+        <span>{t`6 PM`}</span>
+        <span>{t`12 AM`}</span>
       </div>
     </div>
   );
@@ -3718,19 +3743,22 @@ function ActivityDayMaps({ maps, mapCount, loading, error }: {
   loading: boolean;
   error: string | null;
 }) {
+  const { t } = useLingui();
   const [expanded, setExpanded] = useState(false);
   const visibleMaps = expanded ? maps : maps.slice(0, ACTIVITY_DAY_MAPS_PREVIEW);
   const hiddenCount = maps.length - visibleMaps.length;
   return (
     <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">Maps played</div>
+        <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">{t`Maps played`}</div>
         <div className="text-[10px] text-osu-f1 sm:text-[11px]">
           {loading
-            ? "loading"
+            ? t`loading`
             : mapCount > maps.length
-              ? `${maps.length} of ${mapCount}`
-              : `${maps.length} ${maps.length === 1 ? "map" : "maps"}`}
+              ? t`${maps.length} of ${mapCount}`
+              : maps.length === 1
+                ? t`${maps.length} map`
+                : t`${maps.length} maps`}
         </div>
       </div>
       <div className="mt-2 space-y-1.5 sm:mt-3 sm:space-y-2">
@@ -3757,7 +3785,7 @@ function ActivityDayMaps({ maps, mapCount, loading, error }: {
           onClick={() => setExpanded(true)}
           className="mt-2 w-full rounded-md bg-osu-b4/60 px-3 py-1.5 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l2"
         >
-          Show {hiddenCount} more {hiddenCount === 1 ? "map" : "maps"}
+          <Plural value={hiddenCount} one="Show # more map" other="Show # more maps" />
         </button>
       ) : expanded ? (
         <button
@@ -3765,7 +3793,7 @@ function ActivityDayMaps({ maps, mapCount, loading, error }: {
           onClick={() => setExpanded(false)}
           className="mt-2 w-full rounded-md bg-osu-b4/60 px-3 py-1.5 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l2"
         >
-          Show fewer
+          {t`Show fewer`}
         </button>
       ) : null}
     </div>
@@ -3806,7 +3834,7 @@ function ActivityMapRow({ map }: { map: ActivityPlayedMap }) {
       </div>
       <div className="text-right">
         <div className="text-[13px] font-black text-osu-l2 sm:text-sm">{formatNumber(map.plays)}</div>
-        <div className="text-[10px] text-osu-f1">{map.plays === 1 ? "play" : "plays"}</div>
+        <div className="text-[10px] text-osu-f1"><Plural value={map.plays} one="play" other="plays" /></div>
       </div>
     </a>
   );
@@ -3815,10 +3843,11 @@ function ActivityMapRow({ map }: { map: ActivityPlayedMap }) {
 // One clear primary-pattern tag instead of a row of abbreviated score pills;
 // the full breakdown stays reachable via the tooltip.
 function ActivityMapPatternTag({ skills, keyCount }: { skills: LivePlayerActivitySkillVector | null; keyCount: number | null }) {
+  const { i18n } = useLingui();
   if (!skills) return null;
   const primary = getActivityPrimarySkill(skills);
   if (primary === "unknown") return null;
-  const entries = getActivityPatternEntries(skills.patterns, keyCount);
+  const entries = getActivityPatternEntries(skills.patterns, keyCount, i18n);
   const secondary = entries.filter(({ key }) => key !== primary).slice(0, 2);
   const tooltip = entries.slice(0, 5).map(({ label, value }) => `${label} ${value}`).join(" · ");
   return (
@@ -3827,7 +3856,7 @@ function ActivityMapPatternTag({ skills, keyCount }: { skills: LivePlayerActivit
         className="rounded px-1.5 py-0.5 text-[9px] font-black leading-none text-white"
         style={{ backgroundColor: primary === "mixed" ? "rgba(255,255,255,0.14)" : getActivitySkillColor(primary) }}
       >
-        {getActivitySkillLabel(primary, keyCount)}
+        {getActivitySkillLabel(primary, keyCount, i18n)}
       </span>
       {secondary.length > 0 ? (
         <span className="text-[9px] leading-none text-osu-f1">
@@ -4024,45 +4053,61 @@ function getActivityPrimarySkill(skills: LivePlayerActivitySkillVector | null): 
 
 // Pattern ids come from the backend's dan estimator families; unknown ids get
 // a derived label and a palette color so future families render unchanged.
-const ACTIVITY_PATTERN_META: Record<string, { label: string; shortLabel: string; color: string }> = {
-  stream: { label: "Stream", shortLabel: "S", color: "#8f6bd8" },
-  jumpstream: { label: "Jumpstream", shortLabel: "JS", color: "#6f87d8" },
-  handstream: { label: "Handstream", shortLabel: "HS", color: "#b06bc0" },
-  jack: { label: "Jack", shortLabel: "J", color: "#c66f84" },
-  chordjack: { label: "Chordjack", shortLabel: "CJ", color: "#c59a5c" },
-  stamina: { label: "Stamina", shortLabel: "ST", color: "#ad6b5d" },
-  tech: { label: "Tech", shortLabel: "T", color: "#83a86f" },
-  ln: { label: "LN", shortLabel: "LN", color: "#57aeba" },
-  lnGeneral: { label: "LN General", shortLabel: "LNG", color: "#63bf98" },
-  lnRelease: { label: "LN Release", shortLabel: "LNR", color: "#58b7d9" },
-  lnInverse: { label: "LN Inverse", shortLabel: "LNI", color: "#7fbed2" },
-  lnTech: { label: "LN Tech", shortLabel: "LNT", color: "#9f78df" },
-  unknown: { label: "Unknown", shortLabel: "", color: "#5f596b" },
+const ACTIVITY_PATTERN_META: Record<string, { label: MessageDescriptor; shortLabel: string; color: string }> = {
+  stream: { label: msg`Stream`, shortLabel: "S", color: "#8f6bd8" },
+  jumpstream: { label: msg`Jumpstream`, shortLabel: "JS", color: "#6f87d8" },
+  handstream: { label: msg`Handstream`, shortLabel: "HS", color: "#b06bc0" },
+  jack: { label: msg`Jack`, shortLabel: "J", color: "#c66f84" },
+  chordjack: { label: msg`Chordjack`, shortLabel: "CJ", color: "#c59a5c" },
+  stamina: { label: msg`Stamina`, shortLabel: "ST", color: "#ad6b5d" },
+  tech: { label: msg`Tech`, shortLabel: "T", color: "#83a86f" },
+  ln: { label: msg`LN`, shortLabel: "LN", color: "#57aeba" },
+  lnGeneral: { label: msg`LN General`, shortLabel: "LNG", color: "#63bf98" },
+  lnRelease: { label: msg`LN Release`, shortLabel: "LNR", color: "#58b7d9" },
+  lnInverse: { label: msg`LN Inverse`, shortLabel: "LNI", color: "#7fbed2" },
+  lnTech: { label: msg`LN Tech`, shortLabel: "LNT", color: "#9f78df" },
+  unknown: { label: msg`Unknown`, shortLabel: "", color: "#5f596b" },
 };
+
+const ACTIVITY_WEEKDAY_LABELS: MessageDescriptor[] = [
+  msg`Sun`,
+  msg`Mon`,
+  msg`Tue`,
+  msg`Wed`,
+  msg`Thu`,
+  msg`Fri`,
+  msg`Sat`,
+];
 
 const ACTIVITY_PATTERN_FALLBACK_COLORS = ["#8c7fb8", "#b88a7f", "#7fb89a", "#b8a87f", "#7f9ab8"];
 
-function getActivityPatternMeta(patternId: string, keyCount: number | null): { label: string; shortLabel: string; color: string } {
+function getActivityPatternColor(patternId: string): string {
+  const meta = ACTIVITY_PATTERN_META[patternId];
+  if (meta) return meta.color;
+  let hash = 0;
+  for (let index = 0; index < patternId.length; index++) hash = (hash * 31 + patternId.charCodeAt(index)) | 0;
+  return ACTIVITY_PATTERN_FALLBACK_COLORS[Math.abs(hash) % ACTIVITY_PATTERN_FALLBACK_COLORS.length];
+}
+
+function getActivityPatternMeta(patternId: string, keyCount: number | null, i18n: I18n): { label: string; shortLabel: string; color: string } {
   // The estimator's handstream family reads as brackets in 7K+ vocabulary;
   // the score is the same, only the label follows the keymode.
   if (patternId === "handstream" && keyCount != null && keyCount >= 7) {
-    return { label: "Bracket", shortLabel: "B", color: ACTIVITY_PATTERN_META.handstream.color };
+    return { label: i18n._(msg`Bracket`), shortLabel: "B", color: ACTIVITY_PATTERN_META.handstream.color };
   }
   const meta = ACTIVITY_PATTERN_META[patternId];
-  if (meta) return meta;
-  let hash = 0;
-  for (let index = 0; index < patternId.length; index++) hash = (hash * 31 + patternId.charCodeAt(index)) | 0;
+  if (meta) return { label: i18n._(meta.label), shortLabel: meta.shortLabel, color: meta.color };
   return {
     label: patternId.charAt(0).toUpperCase() + patternId.slice(1),
     shortLabel: patternId.slice(0, 2).toUpperCase(),
-    color: ACTIVITY_PATTERN_FALLBACK_COLORS[Math.abs(hash) % ACTIVITY_PATTERN_FALLBACK_COLORS.length],
+    color: getActivityPatternColor(patternId),
   };
 }
 
-function getActivityPatternEntries(patterns: LivePlayerActivityPatterns | null | undefined, keyCount: number | null) {
+function getActivityPatternEntries(patterns: LivePlayerActivityPatterns | null | undefined, keyCount: number | null, i18n: I18n) {
   return Object.entries(patterns ?? {})
     .map(([key, raw]) => {
-      const meta = getActivityPatternMeta(key, keyCount);
+      const meta = getActivityPatternMeta(key, keyCount, i18n);
       return { key, label: meta.label, shortLabel: meta.shortLabel, value: Math.round(clamp01(Number(raw)) * 100) };
     })
     .filter(({ value }) => value >= 5)
@@ -4070,23 +4115,23 @@ function getActivityPatternEntries(patterns: LivePlayerActivityPatterns | null |
 }
 
 function getActivitySkillColor(skill: LivePlayerActivityPrimarySkill): string {
-  return getActivityPatternMeta(skill, null).color;
+  return getActivityPatternColor(skill);
 }
 
 function getActivityTimelineSegmentColor(segment: ActivityTimelineSegment): string {
   return getActivitySkillColor(segment.primarySkill);
 }
 
-function getActivitySkillLabel(skill: LivePlayerActivityPrimarySkill, keyCount: number | null): string {
-  if (skill === "mixed") return "Hybrid";
-  return getActivityPatternMeta(skill, keyCount).label;
+function getActivitySkillLabel(skill: LivePlayerActivityPrimarySkill, keyCount: number | null, i18n: I18n): string {
+  if (skill === "mixed") return i18n._(msg`Hybrid`);
+  return getActivityPatternMeta(skill, keyCount, i18n).label;
 }
 
-function formatActivityKeyFlow(segments: ActivityTimelineSegment[]): string {
+function formatActivityKeyFlow(segments: ActivityTimelineSegment[], mixedLabel: string): string {
   const labels = [...new Set(segments
     .map((segment) => formatActivityKeyCount(segment.keyCount))
     .filter((label): label is string => label != null))];
-  if (labels.length === 0) return "mixed keys";
+  if (labels.length === 0) return mixedLabel;
   return labels.join(" / ");
 }
 
@@ -4258,16 +4303,18 @@ function createDevActivityDay(timezone: string): ActivityDay {
   };
 }
 
-function formatActivitySegmentTitle(segment: ActivityTimelineSegment, timeZone: string): string {
-  const scores = getActivityPatternEntries(segment.patterns, segment.keyCount)
+function formatActivitySegmentTitle(segment: ActivityTimelineSegment, timeZone: string, i18n: I18n): string {
+  const scores = getActivityPatternEntries(segment.patterns, segment.keyCount, i18n)
     .slice(0, 4)
     .map(({ shortLabel, value }) => `${shortLabel} ${value}%`)
     .join(" / ");
   return [
     `${formatActivityTime(segment.startAt, timeZone)} - ${formatActivityTime(segment.endAt, timeZone)}`,
-    `${formatNumber(segment.playCount)} ${segment.playCount === 1 ? "play" : "plays"}`,
+    segment.playCount === 1
+      ? i18n._(msg`${formatNumber(segment.playCount)} play`)
+      : i18n._(msg`${formatNumber(segment.playCount)} plays`),
     formatActivityKeyCount(segment.keyCount),
-    getActivitySkillLabel(segment.primarySkill, segment.keyCount),
+    getActivitySkillLabel(segment.primarySkill, segment.keyCount, i18n),
     scores,
   ].filter(Boolean).join(" • ");
 }
@@ -4401,6 +4448,7 @@ function formatActivityMonth(date: string): string {
 }
 
 function PlayerAboutCard({ html, onEdit }: { html: string; onEdit: () => void }) {
+  const { t } = useLingui();
   const contentRef = useRef<HTMLDivElement | null>(null);
 
   // Wire up osu's spoilerbox toggles + shorten raw URL link text. osu's own
@@ -4470,8 +4518,8 @@ function PlayerAboutCard({ html, onEdit }: { html: string; onEdit: () => void })
       <button
         type="button"
         onClick={onEdit}
-        title="Open in the BBCode editor"
-        aria-label="Open in the BBCode editor"
+        title={t`Open in the BBCode editor`}
+        aria-label={t`Open in the BBCode editor`}
         className="absolute top-2.5 right-2.5 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-osu-b3/80 text-osu-l2 border border-osu-b3/40 hover:bg-osu-b2 hover:text-osu-c1 transition-colors cursor-pointer"
       >
         <Pencil size={14} />
@@ -4512,14 +4560,15 @@ function BestScoresControlBar({
   ageSort: BestAgeSort;
   onChangeSort: (sort: BestSort) => void;
 }) {
+  const { t } = useLingui();
   const hasActiveFilter = Object.keys(modFilter).length > 0;
 
   return (
     <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
       <div className="order-2 flex items-center gap-2 flex-wrap min-w-0 lg:order-1">
-        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">Mods</span>
+        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">{t`Mods`}</span>
         {mods.length === 0 ? (
-          <span className="text-[11px] text-osu-f1">No mods in top plays</span>
+          <span className="text-[11px] text-osu-f1">{t`No mods in top plays`}</span>
         ) : (
           <>
             <div className="flex items-center gap-1 flex-wrap">
@@ -4539,7 +4588,7 @@ function BestScoresControlBar({
                 onClick={onClearMods}
                 className="text-[10px] font-semibold text-osu-f1 hover:text-osu-l2 underline underline-offset-2 cursor-pointer"
               >
-                Clear
+                {t`Clear`}
               </button>
             )}
           </>
@@ -4572,6 +4621,7 @@ function BestSortControl({
   ageSort: BestAgeSort;
   onChangeSort: (sort: BestSort) => void;
 }) {
+  const { t } = useLingui();
   const ppActive = sort === "pp-desc" || sort === "pp-asc";
   const ppArrow = ppSort === "pp-asc" ? "↑" : "↓";
   const nextPpSort: BestPpSort = ppActive
@@ -4585,12 +4635,12 @@ function BestSortControl({
 
   return (
     <div className="flex items-center gap-1 shrink-0">
-      <span className="hidden text-[9px] uppercase tracking-wider text-osu-f1 font-semibold sm:inline">Sort</span>
+      <span className="hidden text-[9px] uppercase tracking-wider text-osu-f1 font-semibold sm:inline">{t`Sort`}</span>
       <div className="flex items-center gap-0.5 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1">
         <button
           type="button"
           onClick={() => onChangeSort(nextPpSort)}
-          title={ppSort === "pp-asc" ? "Lowest PP first" : "Highest PP first"}
+          title={ppSort === "pp-asc" ? t`Lowest PP first` : t`Highest PP first`}
           className={`px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${ppActive
               ? "bg-osu-pink/15 text-osu-pink-light"
               : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
@@ -4602,13 +4652,13 @@ function BestSortControl({
         <button
           type="button"
           onClick={() => onChangeSort(nextAgeSort)}
-          title={ageSort === "oldest" ? "Oldest first" : "Newest first"}
+          title={ageSort === "oldest" ? t`Oldest first` : t`Newest first`}
           className={`px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${ageActive
               ? "bg-osu-pink/15 text-osu-pink-light"
               : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
             }`}
         >
-          Age {ageArrow}
+          <Trans>Age {ageArrow}</Trans>
         </button>
       </div>
     </div>
@@ -4624,12 +4674,13 @@ function KeyModeControl({
   keyFilter: KeyFilter;
   onChangeKeyFilter: (keyFilter: KeyFilter) => void;
 }) {
+  const { t } = useLingui();
   return (
     // Someone who plays every keymode makes this strip wider than a phone, so it
     // scrolls inside its own box rather than running off the screen. Desktop keeps
     // it at full width and lets the tab rail beside it take the squeeze instead.
     <div className="inline-flex max-w-full items-center gap-0.5 overflow-x-auto scrollbar-hide rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1 lg:shrink-0">
-      {[["all", "All"] as const, ...availableKeyModes.map((k) => [k, k.toUpperCase()] as const)].map(([value, label]) => (
+      {[["all", t`All`] as const, ...availableKeyModes.map((k) => [k, k.toUpperCase()] as const)].map(([value, label]) => (
         <button
           key={value}
           onClick={() => onChangeKeyFilter(value)}
@@ -4656,23 +4707,24 @@ function RecentOsuSourceButton({
   fetchedAt: string | null;
   onFetch: () => void;
 }) {
+  const { t } = useLingui();
   const [clockMs, setClockMs] = useState(() => Date.now());
   const fetchedAtMs = fetchedAt == null ? Number.NaN : Date.parse(fetchedAt);
   const refreshAtMs = fetchedAtMs + PLAYER_RECENT_OSU_REFRESH_COOLDOWN_MS;
   const refreshWaitMs = Number.isFinite(refreshAtMs) ? Math.max(0, refreshAtMs - clockMs) : 0;
   const coolingDown = loaded && refreshWaitMs > 0;
   const label = loading
-    ? "Loading…"
+    ? t`Loading…`
     : coolingDown
-      ? "Updated just now"
+      ? t`Updated just now`
       : loaded
-        ? "osu! recents"
-        : "Load osu! recents";
+        ? t`osu! recents`
+        : t`Load osu! recents`;
   const description = coolingDown
-    ? `osu! recents are loaded. Refresh available in ${formatRecentRefreshWait(refreshWaitMs)}.`
+    ? t`osu! recents are loaded. Refresh available in ${formatRecentRefreshWait(refreshWaitMs)}.`
     : loaded
-      ? "Refresh failed or otherwise missed plays from osu!'s latest recent history."
-      : "Add failed or otherwise missed plays from osu!'s latest recent history.";
+      ? t`Refresh failed or otherwise missed plays from osu!'s latest recent history.`
+      : t`Add failed or otherwise missed plays from osu!'s latest recent history.`;
 
   useEffect(() => {
     if (!loaded || !Number.isFinite(refreshAtMs)) return;
@@ -4741,17 +4793,18 @@ function ModFilterChip({
   onClick: () => void;
   onContextMenu: () => void;
 }) {
+  const { t } = useLingui();
   const groupMods = getModFilterGroup(mod);
   const label = mod === NO_MOD_KEY
-    ? "NoMod"
+    ? t`NoMod`
     : groupMods
-      ? groupMods.join(" or ")
+      ? groupMods.join(t` or `)
       : mod;
   const title = mode === "include"
-    ? `Showing only ${label}`
+    ? t`Showing only ${label}`
     : mode === "exclude"
-      ? `Hiding ${label}`
-      : `Click to require ${label}`;
+      ? t`Hiding ${label}`
+      : t`Click to require ${label}`;
 
   const ringClass = mode === "include"
     ? "border-osu-green-light bg-osu-green/15"
@@ -4775,7 +4828,7 @@ function ModFilterChip({
     >
       <div className={`flex items-center transition-opacity ${contentDimClass}`}>
         {mod === NO_MOD_KEY ? (
-          <span className="text-[10px] font-bold text-osu-l2 px-1">NoMod</span>
+          <span className="text-[10px] font-bold text-osu-l2 px-1">{t`NoMod`}</span>
         ) : groupMods ? (
           <div className="flex items-center gap-0.5">
             {groupMods.map((m) => (
@@ -4886,6 +4939,7 @@ function KeySplitCard({ keySplit, sampleSize }: { keySplit: UserProfileInsights[
   // purple theme it collapsed onto 4K's blue or 6K's purple. Keymode identity
   // has to read the same under every theme, and 4K/7K (the pair that almost
   // always appears together) get complementary ends of the range.
+  const { t } = useLingui();
   const colors: Record<number, string> = { 4: "bg-osu-blue", 5: "bg-osu-green-light", 6: "bg-osu-purple-light", 7: "bg-osu-orange", 8: "bg-osu-yellow", 9: "bg-osu-red-light", 10: "bg-osu-green" };
   const textColors: Record<number, string> = { 4: "text-osu-blue", 5: "text-osu-green-light", 6: "text-osu-purple-light", 7: "text-osu-orange", 8: "text-osu-yellow", 9: "text-osu-red-light", 10: "text-osu-green-light" };
   // keySplit stays in keymode order, so the dominant share has to be found.
@@ -4893,14 +4947,14 @@ function KeySplitCard({ keySplit, sampleSize }: { keySplit: UserProfileInsights[
 
   return (
     <div className={INSIGHT_CELL_CLASS}>
-      <div className={INSIGHT_LABEL_CLASS}>Key Split</div>
+      <div className={INSIGHT_LABEL_CLASS}>{t`Key Split`}</div>
       {keySplit.length === 0 ? (
-        <div className="mt-2 text-sm text-osu-f1">No key data</div>
+        <div className="mt-2 text-sm text-osu-f1">{t`No key data`}</div>
       ) : keySplit.length === 1 ? (
         // A single keymode carries no split to show, so the keymode itself is
         // the reading.
         <div className={`mt-2 text-[26px] font-black leading-none ${textColors[keySplit[0].keyCount] ?? "text-white"}`}>
-          {keySplit[0].keyCount}K only
+          <Trans>{keySplit[0].keyCount}K only</Trans>
         </div>
       ) : (
         <>
@@ -4988,6 +5042,7 @@ function formatPpDistributionPercent(count: number, total: number): string {
 }
 
 function BpmExtremeRow({ label, bpm, snapshot }: { label: string; bpm: number; snapshot: InsightScoreSnapshot }) {
+  const { t } = useLingui();
   const backgroundImage = snapshot.coverUrl
     ? `linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.60) 50%, rgba(0,0,0,0.80) 100%), url(${JSON.stringify(snapshot.coverUrl)})`
     : "linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.60) 50%, rgba(0,0,0,0.80) 100%)";
@@ -5004,7 +5059,7 @@ function BpmExtremeRow({ label, bpm, snapshot }: { label: string; bpm: number; s
         <div className="flex-shrink-0 text-center w-14">
           <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
           <div className="text-lg font-bold text-white leading-none tabular-nums mt-0.5">{Math.round(bpm)}</div>
-          <div className="text-[9px] text-osu-f1">BPM</div>
+          <div className="text-[9px] text-osu-f1">{t`BPM`}</div>
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs font-bold text-white truncate">{snapshot.title}</div>
@@ -5023,12 +5078,13 @@ function BpmExtremeRow({ label, bpm, snapshot }: { label: string; bpm: number; s
 }
 
 function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScoreSnapshot | null }) {
+  const { t } = useLingui();
   const viewerTimeZone = useViewerTimeZone();
   if (!snapshot) {
     return (
       <div className="h-[120px] rounded-xl bg-osu-b4 p-4">
         <div className={INSIGHT_LABEL_CLASS}>{label}</div>
-        <div className="mt-2 text-sm text-osu-f1">No data</div>
+        <div className="mt-2 text-sm text-osu-f1">{t`No data`}</div>
       </div>
     );
   }
@@ -5080,7 +5136,7 @@ function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScor
         {snapshot.pp != null && (
           <div className="flex-shrink-0 text-right">
             <div className="text-[28px] font-black leading-none tabular-nums text-osu-pink-light">{Math.round(snapshot.pp)}</div>
-            <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">pp</div>
+            <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">{t`pp`}</div>
           </div>
         )}
       </div>
@@ -5217,6 +5273,8 @@ function ScoreRow({
   layout?: ScoreRowLayout;
   onOpenDetails: (score: OsuScore) => void;
 }) {
+  const { t } = useLingui();
+  const scoreFallbackLabel = t`score`;
   const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
   const canReplay = scoreHasReplay(score);
   const display = getScoreDisplayValues(score);
@@ -5229,7 +5287,7 @@ function ScoreRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-white truncate">
-            {score.beatmapset?.title || "Unknown"}
+            {score.beatmapset?.title || t`Unknown`}
           </span>
           <span className="text-[11px] text-osu-f1 truncate hidden sm:inline">
             [{score.beatmap?.version}]
@@ -5276,8 +5334,8 @@ function ScoreRow({
               <Link
                 to="/replay"
                 search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
-                title="Watch replay"
-                aria-label="Watch replay"
+                title={t`Watch replay`}
+                aria-label={t`Watch replay`}
                 className="pointer-events-auto inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-osu-pink/20 text-[9px] font-semibold leading-none text-osu-pink-light transition-colors hover:bg-osu-pink/30"
               >
                 <span aria-hidden="true">&#9654;</span>
@@ -5325,7 +5383,7 @@ function ScoreRow({
       <button
         type="button"
         onClick={() => onOpenDetails(score)}
-        aria-label={`Show details for ${score.beatmapset?.title || "score"}`}
+        aria-label={t`Show details for ${score.beatmapset?.title || scoreFallbackLabel}`}
         className="absolute inset-0 z-0 rounded-lg cursor-pointer"
       />
       {/* Mobile inline position number */}
@@ -5344,17 +5402,17 @@ function ScoreRow({
         <Link
           to="/replay"
           search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
-          title="Watch replay"
-          aria-label="Watch replay"
+          title={t`Watch replay`}
+          aria-label={t`Watch replay`}
           className={`pointer-events-auto transition-colors hover:bg-osu-pink/25 ${REPLAY_BUTTON_CLASS}`}
         >
-          Replay
+          {t`Replay`}
         </Link>
       ) : layout.showReplay ? (
         // Rows without a stored replay still hold the slot, otherwise their
         // numbers sit a button-width right of the rows that have one.
         <span aria-hidden="true" className={`pointer-events-none invisible ${REPLAY_BUTTON_CLASS}`}>
-          Replay
+          {t`Replay`}
         </span>
       ) : null}
     </div>
@@ -5375,6 +5433,8 @@ function ScoreDetailStat({ label, value, color }: { label: string; value: ReactN
 /** Everything the row can't fit: total score, judgement spread, map metadata,
  *  and the links (osu! page, replay) the row used to navigate to on its own. */
 function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => void }) {
+  const { t } = useLingui();
+  const scoreTitleFallback = t`Score`;
   const display = getScoreDisplayValues(score);
   const judgements = getManiaJudgementStats(score);
   const mods = getModDisplayList(score.mods);
@@ -5399,7 +5459,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
       <motion.div
         role="dialog"
         aria-modal="true"
-        aria-label={`${score.beatmapset?.title ?? "Score"} details`}
+        aria-label={t`${score.beatmapset?.title ?? scoreTitleFallback} details`}
         className="modal-card-mobile-safe relative isolate bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[520px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
         onClick={(e) => e.stopPropagation()}
         initial={{ opacity: 0, y: 8 }}
@@ -5410,7 +5470,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t`Close`}
           className="absolute top-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-full bg-black/30 text-white/80 hover:text-white hover:bg-black/50 transition-colors cursor-pointer"
         >
           <X size={14} />
@@ -5440,13 +5500,13 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
                       target="_blank"
                       rel="noreferrer"
                       className="text-lg font-semibold text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
-                      title="Open beatmap on osu!"
+                      title={t`Open beatmap on osu!`}
                     >
-                      {score.beatmapset?.title || "Unknown"}
+                      {score.beatmapset?.title || t`Unknown`}
                     </a>
                   ) : (
                     <span className="text-lg font-semibold text-white truncate">
-                      {score.beatmapset?.title || "Unknown"}
+                      {score.beatmapset?.title || t`Unknown`}
                     </span>
                   )}
                   {keymodeLabel && (
@@ -5459,7 +5519,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
                 <div className="mt-0.5 truncate text-[11px] text-osu-f1">
                   {score.beatmapset?.artist}
                   {score.beatmap?.version ? ` · [${score.beatmap.version}]` : ""}
-                  {score.beatmapset?.creator ? ` · mapped by ${score.beatmapset.creator}` : ""}
+                  {score.beatmapset?.creator ? ` · ${t`mapped by ${score.beatmapset.creator}`}` : ""}
                 </div>
               </div>
               {(mods.length > 0 || display.isLazer) && (
@@ -5482,7 +5542,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
                 <div className="text-2xl font-bold leading-none tabular-nums text-white sm:text-3xl">
                   {formatAccuracy(display.accuracy)}
                 </div>
-                <div className="mt-1.5 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Accuracy</div>
+                <div className="mt-1.5 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{t`Accuracy`}</div>
               </div>
               <div className="ml-auto text-right">
                 <div
@@ -5493,7 +5553,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
                 <div className="mt-1.5 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
                   {/* Best-play rows know how much of this actually reaches the
                       profile total, which beats repeating the raw pp. */}
-                  {hasPp ? (score.weight ? `${Math.round(score.weight.percentage)}% weighted` : "PP") : "Score"}
+                  {hasPp ? (score.weight ? t`${Math.round(score.weight.percentage)}% weighted` : t`PP`) : t`Score`}
                 </div>
               </div>
             </div>
@@ -5513,15 +5573,15 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-3 text-center sm:grid-cols-4 sm:text-left">
-              <ScoreDetailStat label="Combo" value={`${formatNumber(score.max_combo)}x`} />
+              <ScoreDetailStat label={t`Combo`} value={`${formatNumber(score.max_combo)}x`} />
               {hasPp && (
                 <ScoreDetailStat
-                  label="Score"
+                  label={t`Score`}
                   value={display.totalScore != null ? formatNumber(display.totalScore) : "-"}
                 />
               )}
               <ScoreDetailStat
-                label="Stars"
+                label={t`Stars`}
                 value={
                   score.beatmap?.difficulty_rating != null
                     ? <StarRatingBadge stars={score.beatmap.difficulty_rating} size={1.4} />
@@ -5529,14 +5589,14 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
                 }
               />
               <ScoreDetailStat
-                label="BPM"
+                label={t`BPM`}
                 value={score.beatmap?.bpm != null ? String(Math.round(score.beatmap.bpm)) : "-"}
               />
             </div>
 
             <div className="mt-5 flex flex-col gap-3 border-t border-osu-b3/20 pt-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <span className="text-[11px] text-osu-f1" suppressHydrationWarning title={formatDate(playedAt, viewerTimeZone)}>
-                Played {formatDetailedTimeAgo(playedAt)} on {display.isLazer ? "Lazer" : "Stable"}
+                <Trans>Played {formatDetailedTimeAgo(playedAt)} on {display.isLazer ? "Lazer" : "Stable"}</Trans>
               </span>
               <div className="flex items-center justify-between gap-3 sm:justify-end">
                 {scoreUrl && (
@@ -5546,7 +5606,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 text-[11px] text-osu-f1 hover:text-osu-pink-light transition-colors"
                   >
-                    View on osu!
+                    {t`View on osu!`}
                     <ExternalLink size={11} className="shrink-0" />
                   </a>
                 )}
@@ -5556,7 +5616,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
                     search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
                     className="rounded-md border border-osu-pink/20 bg-osu-pink/15 px-2.5 py-1.5 text-[10px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25"
                   >
-                    Watch replay
+                    {t`Watch replay`}
                   </Link>
                 )}
               </div>

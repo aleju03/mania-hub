@@ -1,0 +1,13 @@
+{
+  "Report a translation": "反馈翻译问题",
+  "Text that reads wrong": "有问题的文本",
+  "How it should read": "建议的译法",
+  "Anything else": "其他补充",
+  "optional": "选填",
+  "Send report": "提交反馈",
+  "Sent, thanks.": "已提交，谢谢。",
+  "Add the text that reads wrong.": "请填写有问题的文本。",
+  "That is a lot of reports for one day. Try again tomorrow.": "今天提交的反馈已经够多了，明天再来吧。",
+  "Too many reports just now. Try again in a bit.": "提交太频繁了，请稍后再试。",
+  "Could not send that. Try again.": "提交失败，请重试。"
+}

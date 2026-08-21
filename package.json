@@ -32,6 +32,7 @@
     "i18n:extract": "lingui extract",
     "i18n:compile": "lingui compile --typescript",
     "i18n:build-country-names": "vite-node scripts/generate-country-names-zh.ts",
+    "i18n:build-country-names:es": "vite-node --script scripts/generate-country-names-es.ts",
     "audio:migrate-playback": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/migrate-audio-playback-cache.ts"
   },
   "dependencies": {

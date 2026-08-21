@@ -1,9 +1,12 @@
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
+
 import { scoreHasReplay } from "./score";
 import type { OsuScore } from "./types";
 
 export type ReplayScoreAvailability =
   | { available: true }
-  | { available: false; reason: "non-mania" | "no-replay"; message: string };
+  | { available: false; reason: "non-mania" | "no-replay"; message: MessageDescriptor };
 
 function formatRuleset(mode: string): string {
   if (mode === "osu") return "osu!standard";
@@ -17,7 +20,7 @@ export function getReplayScoreAvailability(score: OsuScore): ReplayScoreAvailabi
     return {
       available: false,
       reason: "non-mania",
-      message: `This score is for ${formatRuleset(mode)}, not mania.`,
+      message: msg`This score is for ${formatRuleset(mode)}, not mania.`,
     };
   }
 
@@ -25,7 +28,7 @@ export function getReplayScoreAvailability(score: OsuScore): ReplayScoreAvailabi
     return {
       available: false,
       reason: "no-replay",
-      message: "This score doesn't have a downloadable replay.",
+      message: msg`This score doesn't have a downloadable replay.`,
     };
   }
 

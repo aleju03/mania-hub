@@ -1,7 +1,7 @@
 // The locales the site ships UI translations for. Adding a locale means
 // extending this array, adding src/locales/<locale>/, and giving the settings
 // picker a label; everything else (cookie, context, catalogs) keys off it.
-export const SUPPORTED_LOCALES = ["en", "zh-CN"] as const;
+export const SUPPORTED_LOCALES = ["en", "zh-CN", "es"] as const;
 
 export type AppLocale = (typeof SUPPORTED_LOCALES)[number];
 
@@ -17,6 +17,9 @@ export function normalizeLocale(raw: string | null | undefined): AppLocale | nul
   const tag = raw.trim().toLowerCase();
   if (tag === "en" || tag.startsWith("en-")) return "en";
   if (tag === "zh" || tag.startsWith("zh-")) return "zh-CN";
+  // One neutral, Latin America-friendly Spanish catalog serves every Spanish
+  // browser tag. Formatting uses es-419 separately in format.ts.
+  if (tag === "es" || tag.startsWith("es-")) return "es";
   return null;
 }
 

@@ -18,13 +18,16 @@ const registry = new Map<AppLocale, Messages>();
 const loaders: Record<AppLocale, () => Promise<{ messages: Messages }>> = {
   en: () => import("../locales/en/messages"),
   "zh-CN": () => import("../locales/zh-CN/messages"),
+  es: () => import("../locales/es/messages"),
 };
 
 if (import.meta.env.SSR) {
   const { messages: en } = await import("../locales/en/messages");
   const { messages: zhCN } = await import("../locales/zh-CN/messages");
+  const { messages: es } = await import("../locales/es/messages");
   registry.set("en", en);
   registry.set("zh-CN", zhCN);
+  registry.set("es", es);
 }
 
 export async function loadLocaleCatalog(locale: AppLocale): Promise<void> {

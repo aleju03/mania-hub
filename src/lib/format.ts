@@ -11,7 +11,13 @@ import type { AppLocale } from "./locale";
 const INTL_LOCALE: Record<AppLocale, string> = {
   en: "en-US",
   "zh-CN": "zh-CN",
+  es: "es-419",
 };
+
+/** The Intl tag for a UI locale, for callers formatting dates of their own. */
+export function intlLocaleTag(locale: AppLocale): string {
+  return INTL_LOCALE[locale];
+}
 
 /* The labels below embed words ("5m ago", "2d 3h"), so they are catalog
    messages rather than template literals: zh reorders them and re-units them
@@ -35,8 +41,9 @@ export function formatNumber(n: number, locale: AppLocale = "en"): string {
 export function formatCompactCount(n: number, locale: AppLocale = "en"): string {
   const value = Math.max(0, Math.floor(n));
   if (locale !== "en") {
-    /* Not a translation of "k": Chinese groups by 万 (ten thousand), so the
-       shortening itself is different, and CLDR already knows where it starts. */
+    /* Compact notation is locale data, not a translation of English "k":
+       Chinese groups by 万 while Spanish supplies its own separators and
+       suffixes. CLDR already knows where each locale starts shortening. */
     return new Intl.NumberFormat(INTL_LOCALE[locale], { notation: "compact" }).format(value);
   }
   if (value < 1000) return value.toLocaleString("en-US");

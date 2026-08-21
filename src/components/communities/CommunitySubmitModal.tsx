@@ -1,8 +1,10 @@
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Loader2, ShieldCheck, X } from "lucide-react";
 import {
   COMMUNITY_PITCH_MAX_LENGTH,
-  communityErrorMessage,
   communityInviteExpiryLabel,
   type CommunityInvitePreview,
   type CommunitySummary,
@@ -24,7 +26,7 @@ import { CommunityCard } from "./CommunityCard";
 // Both pickers get a filter box: one is every country, the other is most of the
 // languages people play in, and scrolling either for one entry is worse than
 // typing three letters. Shared with the edit form, so the two agree.
-import { useCountrySelectOptions, useLanguageSelectOptions } from "./field-options";
+import { useCommunityErrorMessage, useCountrySelectOptions, useLanguageSelectOptions } from "./field-options";
 import { AccessScopePicker } from "./AccessScopePicker";
 import { TagInput } from "./TagInput";
 
@@ -46,13 +48,13 @@ const FIELD_CLASS =
 // What the OAuth consent screen is about to ask for, said plainly here first so
 // the Discord screen holds no surprises. These are exactly the identify and
 // guilds scopes in buildDiscordAuthorizeUrl; keep the two in step.
-const CONSENT_LINES = [
-  "Your username and avatar",
+const CONSENT_LINES: MessageDescriptor[] = [
+  msg`Your username and avatar`,
   // Deliberately not "the servers you own or manage": the guilds scope hands
   // over the whole list and we filter it here, and Discord's own screen says as
   // much a click later. Saying the smaller thing would read as a cover-up the
   // moment the two are seen together, so this says the true thing and why.
-  "The servers you are in, so we can show you the ones you can post",
+  msg`The servers you are in, so we can show you the ones you can post`,
 ];
 
 // Long enough that pasting a link does not fire a lookup per character, short
@@ -90,6 +92,8 @@ export function CommunitySubmitModal({
   onDisconnected: () => void;
   onSubmitted: (community: CommunitySummary) => void;
 }) {
+  const { t, i18n } = useLingui();
+  const errorMessage = useCommunityErrorMessage();
   const auth = useAuth();
   const countryOptions = useCountrySelectOptions(auth.viewer?.countryCode ?? null);
   const languageOptions = useLanguageSelectOptions();
@@ -133,7 +137,7 @@ export function CommunitySubmitModal({
     try {
       const result = await fetchManageableGuilds();
       if (!result.ok) {
-        setError(communityErrorMessage(result.error));
+        setError(errorMessage(result.error));
         setStep("connect");
         /* The connection lasts thirty minutes, so a modal opened later in the
            session finds it gone. Say so all the way up, or the header keeps
@@ -147,7 +151,7 @@ export function CommunitySubmitModal({
       // to "is it the consent screen or the Manage Server bar" is here.
       if (result.guilds.length === 0) track("community_post_no_servers");
     } catch {
-      setError("Could not read your Discord servers. Try connecting again.");
+      setError(t`Could not read your Discord servers. Try connecting again.`);
       setStep("connect");
     } finally {
       setLoadingGuilds(false);
@@ -206,11 +210,11 @@ export function CommunitySubmitModal({
           setInviteCheck(
             result.ok && result.invite
               ? { status: "ok", preview: result.invite }
-              : { status: "error", message: communityErrorMessage(result.error) },
+              : { status: "error", message: errorMessage(result.error) },
           );
         })
         .catch(() => {
-          if (!cancelled) setInviteCheck({ status: "error", message: "Could not check that invite. Try again." });
+          if (!cancelled) setInviteCheck({ status: "error", message: t`Could not check that invite. Try again.` });
         });
     }, INVITE_CHECK_DELAY_MS);
     return () => {
@@ -251,7 +255,7 @@ export function CommunitySubmitModal({
   const handleSubmit = async () => {
     if (!guild) return;
     if (pitch.trim() === "") {
-      setError("Write a short description of the server.");
+      setError(t`Write a short description of the server.`);
       return;
     }
     setSubmitting(true);
@@ -270,14 +274,14 @@ export function CommunitySubmitModal({
         },
       });
       if (!result.ok) {
-        setError(communityErrorMessage(result.error));
+        setError(errorMessage(result.error));
         return;
       }
       track("community_post_submitted", communityEventProperties(result.community));
       setStep("done");
       onSubmitted(result.community);
     } catch {
-      setError("Could not submit that. Try again.");
+      setError(t`Could not submit that. Try again.`);
     } finally {
       setSubmitting(false);
     }
@@ -319,7 +323,7 @@ export function CommunitySubmitModal({
     bannerUrl: resolved?.bannerUrl ?? null,
     memberCount: resolved?.memberCount ?? guild.memberCount ?? 0,
     onlineCount: resolved?.onlineCount ?? 0,
-    pitch: pitch.trim() === "" ? "Your description shows up here." : pitch,
+    pitch: pitch.trim() === "" ? t`Your description shows up here.` : pitch,
     countryCode: countryCode || null,
     language: language || null,
     tags,
@@ -342,7 +346,7 @@ export function CommunitySubmitModal({
       className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/70 py-3 pl-3 pr-[calc(0.75rem+var(--modal-scrollbar-compensation,0px))] sm:py-4 sm:pl-4 sm:pr-[calc(1rem+var(--modal-scrollbar-compensation,0px))]"
       role="dialog"
       aria-modal="true"
-      aria-label="Post a Discord server"
+      aria-label={t`Post a Discord server`}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -362,11 +366,11 @@ export function CommunitySubmitModal({
         <div className="h-1 rounded-t-xl" style={{ backgroundColor: DISCORD_BLURPLE }} aria-hidden="true" />
         <div className="flex items-center gap-2.5 border-b border-osu-b3/30 px-4 py-3">
           <DiscordLogo className="h-5 w-5 shrink-0" />
-          <h2 className="flex-1 text-[14px] font-bold text-white">Post your Discord server</h2>
+          <h2 className="flex-1 text-[14px] font-bold text-white">{t`Post your Discord server`}</h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t`Close`}
             className="text-osu-f1 transition-colors cursor-pointer hover:text-white"
           >
             <X className="h-4 w-4" />
@@ -399,14 +403,14 @@ export function CommunitySubmitModal({
               )}
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] font-bold text-white">{discordUsername}</div>
-                <div className="text-[11px] text-osu-f1">connected to Discord</div>
+                <div className="text-[11px] text-osu-f1">{t`connected to Discord`}</div>
               </div>
               <button
                 type="button"
                 onClick={handleDisconnect}
                 className="shrink-0 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-white"
               >
-                disconnect
+                {t`disconnect`}
               </button>
             </div>
           )}
@@ -414,13 +418,13 @@ export function CommunitySubmitModal({
           {step === "connect" && (
             <>
               <p className="text-[12.5px] leading-relaxed text-osu-f1">
-                Sign in with Discord so we can check the server is yours to post. Discord will share:
+                {t`Sign in with Discord so we can check the server is yours to post. Discord will share:`}
               </p>
               <ul className="space-y-1.5">
-                {CONSENT_LINES.map((line) => (
-                  <li key={line} className="flex items-start gap-2 text-[12.5px] leading-relaxed text-osu-l2">
+                {CONSENT_LINES.map((line, index) => (
+                  <li key={index} className="flex items-start gap-2 text-[12.5px] leading-relaxed text-osu-l2">
                     <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: DISCORD_BLURPLE }} aria-hidden="true" />
-                    {line}
+                    {i18n._(line)}
                   </li>
                 ))}
               </ul>
@@ -428,8 +432,7 @@ export function CommunitySubmitModal({
                   losing control of what goes up, not messages being read. */}
               <p className="flex items-start gap-2 text-[12px] leading-relaxed text-osu-f1">
                 <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden="true" />
-                Nothing is posted until you review and submit it, and the access ends as soon as it
-                is.
+                {t`Nothing is posted until you review and submit it, and the access ends as soon as it is.`}
               </p>
               <a
                 href={connectHref}
@@ -438,23 +441,22 @@ export function CommunitySubmitModal({
                 style={{ backgroundColor: DISCORD_BLURPLE }}
               >
                 <DiscordLogo className="h-4 w-4" />
-                Continue with Discord
+                {t`Continue with Discord`}
               </a>
             </>
           )}
 
           {step === "pick" && (
             <>
-              <p className="text-[12.5px] text-osu-f1">Pick the server you want to post.</p>
+              <p className="text-[12.5px] text-osu-f1">{t`Pick the server you want to post.`}</p>
               {loadingGuilds || guilds === null ? (
                 <div className="flex items-center gap-2 py-6 text-[12.5px] text-osu-f1">
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  Reading your servers
+                  {t`Reading your servers`}
                 </div>
               ) : guilds.length === 0 ? (
                 <p className="py-6 text-[12.5px] leading-relaxed text-osu-f1">
-                  None of your Discord servers are ones you own or have Manage Server on, so there is
-                  nothing here you can post.
+                  {t`None of your Discord servers are ones you own or have Manage Server on, so there is nothing here you can post.`}
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -465,8 +467,8 @@ export function CommunitySubmitModal({
                       type="text"
                       value={guildFilter}
                       onChange={(event) => setGuildFilter(event.target.value)}
-                      placeholder="Search your servers"
-                      aria-label="Search your servers"
+                      placeholder={t`Search your servers`}
+                      aria-label={t`Search your servers`}
                       className={FIELD_CLASS}
                     />
                   )}
@@ -492,12 +494,12 @@ export function CommunitySubmitModal({
                         )}
                         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white">{entry.name}</span>
                         <span className="shrink-0 text-[11px] text-osu-f1 tabular-nums">
-                          {entry.owner ? "owner" : "manager"}
+                          {entry.owner ? t`owner` : t`manager`}
                         </span>
                       </button>
                     ))}
                     {visibleGuilds.length === 0 && (
-                      <p className="py-4 text-center text-[12.5px] text-osu-f1">No server by that name.</p>
+                      <p className="py-4 text-center text-[12.5px] text-osu-f1">{t`No server by that name.`}</p>
                     )}
                   </div>
                 </div>
@@ -523,13 +525,13 @@ export function CommunitySubmitModal({
                     onClick={() => setStep("pick")}
                     className="shrink-0 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-white"
                   >
-                    go back
+                    {t`go back`}
                   </button>
                 </div>
 
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                    Invite link
+                    {t`Invite link`}
                   </span>
                   <input
                     type="text"
@@ -544,7 +546,7 @@ export function CommunitySubmitModal({
                   {inviteCheck.status === "checking" ? (
                     <span className="mt-1 flex items-center gap-1.5 text-[11px] text-osu-f1/70">
                       <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                      Checking with Discord
+                      {t`Checking with Discord`}
                     </span>
                   ) : inviteCheck.status === "error" ? (
                     <span className="mt-1 flex items-start gap-1.5 text-[11px] leading-relaxed text-osu-pink-light">
@@ -555,7 +557,7 @@ export function CommunitySubmitModal({
                     <span className="mt-1 block text-[11px] leading-relaxed">
                       <span className="flex items-center gap-1.5 text-emerald-400">
                         <Check className="h-3 w-3 shrink-0" aria-hidden="true" />
-                        {inviteCheck.preview.name}, {inviteCheck.preview.memberCount.toLocaleString("en-US")} members
+                        <Trans>{inviteCheck.preview.name}, {inviteCheck.preview.memberCount.toLocaleString("en-US")} members</Trans>
                       </span>
                       {/* An expiring invite is allowed: it is a worse listing,
                           not an invalid one, and a listing whose link stops
@@ -564,28 +566,26 @@ export function CommunitySubmitModal({
                       {inviteCheck.preview.expiresAt && (
                         <span className="mt-0.5 flex items-start gap-1.5 text-amber-300">
                           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
-                          This invite expires on {communityInviteExpiryLabel(inviteCheck.preview.expiresAt)}. When it
-                          does, your server gets hidden until you paste a new link.
+                          <Trans>This invite expires on {communityInviteExpiryLabel(inviteCheck.preview.expiresAt)}. When it does, your server gets hidden until you paste a new link.</Trans>
                         </span>
                       )}
                     </span>
                   ) : (
                     <span className="mt-1 block text-[11px] leading-relaxed text-osu-f1/70">
-                      Make it permanent if you can: a temporary invite hides your server the day it
-                      runs out, until you paste a new one.
+                      {t`Make it permanent if you can: a temporary invite hides your server the day it runs out, until you paste a new one.`}
                     </span>
                   )}
                 </label>
 
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                    What is it for
+                    {t`What is it for`}
                   </span>
                   <textarea
                     value={pitch}
                     onChange={(event) => setPitch(event.target.value.slice(0, COMMUNITY_PITCH_MAX_LENGTH))}
                     rows={6}
-                    placeholder="Who the server is for, what happens in it, when it is busy. Line breaks are kept."
+                    placeholder={t`Who the server is for, what happens in it, when it is busy. Line breaks are kept.`}
                     className={`${FIELD_CLASS} resize-y`}
                   />
                   <span className="mt-1 block text-right text-[11px] text-osu-f1/70 tabular-nums">
@@ -595,7 +595,7 @@ export function CommunitySubmitModal({
 
                 <div>
                   <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                    Tags
+                    {t`Tags`}
                   </span>
                   <TagInput tags={tags} onChange={setTags} />
                 </div>
@@ -603,37 +603,37 @@ export function CommunitySubmitModal({
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                      Country
+                      {t`Country`}
                     </span>
                     <SelectMenu
                       value={countryCode}
                       options={countryOptions}
                       onChange={setCountryCode}
-                      ariaLabel="Country"
+                      ariaLabel={t`Country`}
                       block
                       searchable
-                      searchPlaceholder="Search countries"
+                      searchPlaceholder={t`Search countries`}
                     />
                   </div>
                   <div>
                     <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                      Language
+                      {t`Language`}
                     </span>
                     <SelectMenu
                       value={language}
                       options={languageOptions}
                       onChange={setLanguage}
-                      ariaLabel="Language"
+                      ariaLabel={t`Language`}
                       block
                       searchable
-                      searchPlaceholder="Search languages"
+                      searchPlaceholder={t`Search languages`}
                     />
                   </div>
                 </div>
 
                 <div>
                   <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                    Who can join
+                    {t`Who can join`}
                   </span>
                   <AccessScopePicker
                     scopes={accessScopes}
@@ -653,7 +653,7 @@ export function CommunitySubmitModal({
                   hidden there: the last thing seen before posting. */}
               <div className="lg:col-start-2 lg:row-start-1 lg:row-span-2">
                 <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                  How it will look
+                  {t`How it will look`}
                 </span>
                 <CommunityCard community={previewCommunity} preview />
               </div>
@@ -665,7 +665,7 @@ export function CommunitySubmitModal({
                 className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-osu-pink px-4 py-2 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-40 disabled:hover:brightness-100 lg:col-start-1 lg:row-start-2"
               >
                 {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-                Submit
+                {t`Submit`}
               </button>
             </div>
           )}
@@ -673,17 +673,16 @@ export function CommunitySubmitModal({
           {step === "done" && (
             <div className="py-4 text-center">
               <Check className="mx-auto h-8 w-8 text-emerald-400" aria-hidden="true" />
-              <p className="mt-3 text-[13px] font-bold text-white">Submission sent</p>
+              <p className="mt-3 text-[13px] font-bold text-white">{t`Submission sent`}</p>
               <p className="mx-auto mt-1.5 max-w-sm text-[12px] leading-relaxed text-osu-f1">
-                Your server shows up here once it is approved. Until then you can see it, and edit it,
-                in your own listings above.
+                {t`Your server shows up here once it is approved. Until then you can see it, and edit it, in your own listings above.`}
               </p>
               <button
                 type="button"
                 onClick={onClose}
                 className="mt-4 rounded-full bg-osu-pink px-5 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110"
               >
-                Done
+                {t`Done`}
               </button>
             </div>
           )}

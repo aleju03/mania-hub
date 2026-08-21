@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { SettingsPanel } from "../settings/SettingsPanel";
+import { useLingui } from "@lingui/react/macro";
 
 interface SettingsDrawerProps {
   open: boolean;
@@ -8,6 +9,7 @@ interface SettingsDrawerProps {
 }
 
 export function SettingsDrawer({ open, onClose, onBackdropClose }: SettingsDrawerProps) {
+  const { t } = useLingui();
   // Body scroll lock matches the mobile nav drawer pattern: defer the
   // layout-invalidating overflow write by two rAFs so the slide transition
   // gets a clean compositor frame before triggering a full-document restyle.
@@ -54,7 +56,7 @@ export function SettingsDrawer({ open, onClose, onBackdropClose }: SettingsDrawe
         }`}
         role="dialog"
         aria-modal="true"
-        aria-label="Settings"
+        aria-label={t`Settings`}
         aria-hidden={!open}
       >
         {open ? <SettingsPanel variant="drawer" onClose={onClose} /> : null}

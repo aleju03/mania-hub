@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   COUNTRY_OPTIONS,
+  displayCountryName,
   GLOBAL_SCOPE_CODE,
   GLOBAL_SCOPE_ICON_URL,
   getCountryFlagGradient,
@@ -33,6 +34,12 @@ describe("country scope helpers", () => {
     expect(normalizeCountryCode("cr")).toBe("CR");
     expect(normalizeCountryCode("zz")).toBe("CR"); // unknown falls back to default
     expect(getCountryName("CR")).toBe("Costa Rica");
+  });
+
+  it("uses the generated Spanish country and region names", () => {
+    expect(displayCountryName("DE", "es")).toBe("Alemania");
+    expect(displayCountryName("R-CAMERICA", "es")).toBe("Centroamérica");
+    expect(displayCountryName("GLOBAL", "es")).toBe("Global");
   });
 
   it("sorts country options alphabetically without pinning the default country", () => {

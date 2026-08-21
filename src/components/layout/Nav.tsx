@@ -136,6 +136,7 @@ const ADMIN_TOOLS = [
   { to: "/admin/collections", label: "Collections", adminOnly: true },
   { to: "/admin/bbcode-images", label: "BBCode images", adminOnly: true },
   { to: "/admin/discord", label: "Discord", adminOnly: true },
+  { to: "/admin/translation-reports", label: "Translations", adminOnly: true },
   { to: "/admin/dan-classifier", label: "Chart Patterns", adminOnly: false },
   { to: "/admin/og-preview", label: "OG preview", adminOnly: false },
   { to: "/admin/dynamic-renders", label: "Dynamic renders", adminOnly: true },

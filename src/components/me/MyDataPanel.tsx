@@ -32,44 +32,56 @@ import { getScoreTimestamp } from "../../lib/score";
 import { MeScoreRow } from "./MeScoreRow";
 import { ModBadge } from "../ui/ModBadge";
 import { RosterOptInCard } from "./RosterOptInCard";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DAY_NAMES: MessageDescriptor[] = [
+  msg`Sundays`,
+  msg`Mondays`,
+  msg`Tuesdays`,
+  msg`Wednesdays`,
+  msg`Thursdays`,
+  msg`Fridays`,
+  msg`Saturdays`,
+];
 const KEY_LABEL: Record<number, string> = { 1: "1K", 2: "2K", 3: "3K", 4: "4K", 5: "5K", 6: "6K", 7: "7K", 8: "8K", 9: "9K", 10: "10K" };
 type FeedTabId = "tracked" | "top";
 
-const MOD_FILTER_OPTIONS: Array<{ value: MyDataModFilter; label: string }> = [
-  { value: "all", label: "All mods" },
-  { value: "nomod", label: "No mods" },
-  { value: "modded", label: "Modded" },
+const MOD_FILTER_OPTIONS: Array<{ value: MyDataModFilter; label: MessageDescriptor }> = [
+  { value: "all", label: msg`All mods` },
+  { value: "nomod", label: msg`No mods` },
+  { value: "modded", label: msg`Modded` },
 ];
 
-const ARCHIVE_FILTER_OPTIONS: Array<{ value: MyDataArchiveFilter; label: string }> = [
-  { value: "all", label: "All rows" },
-  { value: "current", label: "Current" },
-  { value: "archived", label: "Archived" },
+const ARCHIVE_FILTER_OPTIONS: Array<{ value: MyDataArchiveFilter; label: MessageDescriptor }> = [
+  { value: "all", label: msg`All rows` },
+  { value: "current", label: msg`Current` },
+  { value: "archived", label: msg`Archived` },
 ];
 
-const TRACKED_SORT_OPTIONS: Array<{ value: MyDataTrackedSort; label: string }> = [
-  { value: "recent_desc", label: "Newest" },
-  { value: "recent_asc", label: "Oldest" },
-  { value: "pp_desc", label: "PP" },
-  { value: "accuracy_desc", label: "Accuracy" },
-  { value: "stars_desc", label: "Stars" },
+const TRACKED_SORT_OPTIONS: Array<{ value: MyDataTrackedSort; label: MessageDescriptor }> = [
+  { value: "recent_desc", label: msg`Newest` },
+  { value: "recent_asc", label: msg`Oldest` },
+  { value: "pp_desc", label: msg`PP` },
+  { value: "accuracy_desc", label: msg`Accuracy` },
+  { value: "stars_desc", label: msg`Stars` },
 ];
 
-const TOP_SORT_OPTIONS: Array<{ value: MyDataTopPlaySort; label: string }> = [
-  { value: "pp_desc", label: "PP" },
-  { value: "pp_asc", label: "Low PP" },
-  { value: "recent_desc", label: "Newest" },
-  { value: "recent_asc", label: "Oldest" },
-  { value: "gain_desc", label: "PP gain" },
-  { value: "accuracy_desc", label: "Accuracy" },
+const TOP_SORT_OPTIONS: Array<{ value: MyDataTopPlaySort; label: MessageDescriptor }> = [
+  { value: "pp_desc", label: msg`PP` },
+  { value: "pp_asc", label: msg`Low PP` },
+  { value: "recent_desc", label: msg`Newest` },
+  { value: "recent_asc", label: msg`Oldest` },
+  { value: "gain_desc", label: msg`PP gain` },
+  { value: "accuracy_desc", label: msg`Accuracy` },
 ];
 
 function PageShell({ children }: { children: React.ReactNode }) {
+  const { t } = useLingui();
   return (
     <div className="min-h-screen">
-      <PageHeader iconSrc="/images/icons/profile.svg" title="my stats" />
+      <PageHeader iconSrc="/images/icons/profile.svg" title={t`my stats`} />
       <div className="bg-osu-b5 min-h-[80vh]">
         <div className="mx-auto max-w-[1080px] px-3 py-5 sm:px-5 sm:py-7 space-y-5">{children}</div>
       </div>
@@ -160,6 +172,7 @@ function scoreMatchesTrackedFilters(score: MyDataTrackedPlay, filters: MyDataTra
 }
 
 export function MyDataPanel() {
+  const { t } = useLingui();
   const auth = useAuth();
   const location = useLocation();
   const viewer = auth.viewer;
@@ -215,7 +228,7 @@ export function MyDataPanel() {
     const keys = new Set<number>([4, 7]);
     for (const stat of summary?.keyStats ?? []) keys.add(stat.keyCount);
     return [
-      { value: "all", label: "All keys" },
+      { value: "all", label: t`All keys` },
       ...[...keys].sort((a, b) => a - b).map((key) => ({ value: String(key), label: KEY_LABEL[key] ?? `${key}K` })),
     ];
   }, [summary?.keyStats]);
@@ -383,8 +396,8 @@ export function MyDataPanel() {
     if (summary.highlights.biggestDay) {
       stats.push({
         key: "biggest-day",
-        label: "Biggest day",
-        value: `${compact(summary.highlights.biggestDay.count)} plays`,
+        label: t`Biggest day`,
+        value: t`${compact(summary.highlights.biggestDay.count)} plays`,
         sub: formatDay(summary.highlights.biggestDay.day),
         accent: "#d8a657",
       });
@@ -392,8 +405,10 @@ export function MyDataPanel() {
     if (summary.highlights.longestStreak > 0) {
       stats.push({
         key: "longest-streak",
-        label: "Longest streak",
-        value: `${summary.highlights.longestStreak} ${summary.highlights.longestStreak === 1 ? "day" : "days"}`,
+        label: t`Longest streak`,
+        value: summary.highlights.longestStreak === 1
+          ? t`${summary.highlights.longestStreak} day`
+          : t`${summary.highlights.longestStreak} days`,
         sub: formatDayRange(summary.highlights.longestStreakRange),
         accent: "#7fb89a",
       });
@@ -401,9 +416,9 @@ export function MyDataPanel() {
     if (summary.highlights.ppGainedTracked >= 1) {
       stats.push({
         key: "pp-gained",
-        label: "PP gained",
+        label: t`PP gained`,
         value: `+${Math.round(summary.highlights.ppGainedTracked)}pp`,
-        sub: "while tracked",
+        sub: t`while tracked`,
         accent: "#e173a6",
       });
     }
@@ -416,13 +431,13 @@ export function MyDataPanel() {
     return (
       <PageShell>
         <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-8 text-center">
-          <div className="text-sm font-semibold text-osu-l2">Log in to see your data</div>
+          <div className="text-sm font-semibold text-osu-l2">{t`Log in to see your data`}</div>
           <div className="mx-auto mt-1.5 max-w-md text-[13px] text-osu-f1">
-            A live feed of your tracked plays, your playstyle fingerprint, when you play, and records the osu! profile never shows you.
+            {t`A live feed of your tracked plays, your playstyle fingerprint, when you play, and records the osu! profile never shows you.`}
           </div>
           <a href={loginHref} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-osu-pink/40 bg-osu-pink/15 px-4 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white">
             <OsuLogo className="h-4 w-4" />
-            Log in with osu!
+            {t`Log in with osu!`}
           </a>
         </div>
       </PageShell>
@@ -434,7 +449,7 @@ export function MyDataPanel() {
       <PageShell>
         <div className="flex items-center justify-center gap-2 py-20 text-[13px] text-osu-f1">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading your data…
+          {t`Loading your data…`}
         </div>
       </PageShell>
     );
@@ -470,27 +485,27 @@ export function MyDataPanel() {
                 (the /my-stats slice of the /packs crash in the analytics). */}
             <div translate="no" className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-osu-f1 tabular-nums">
               {summary?.pp != null ? <span className="font-semibold text-osu-pink-light">{Math.round(summary.pp).toLocaleString("en-US")}pp</span> : null}
-              {summary?.globalRank != null ? <span>#{summary.globalRank.toLocaleString("en-US")} global</span> : null}
+              {summary?.globalRank != null ? <span><Trans>#{summary.globalRank.toLocaleString("en-US")} global</Trans></span> : null}
               {summary?.countryRank != null && country ? <span>#{summary.countryRank.toLocaleString("en-US")} {country}</span> : null}
             </div>
           </div>
           <div className="hidden shrink-0 gap-4 pb-0.5 pr-1 text-right sm:flex">
-            <HeaderStat label="plays" value={compact(summary?.totalScores ?? 0)} />
-            <HeaderStat label="active days" value={compact(summary?.activeDays ?? 0)} />
-            <HeaderStat label="top plays" value={compact(summary?.topPlayCount ?? 0)} />
+            <HeaderStat label={t`plays`} value={compact(summary?.totalScores ?? 0)} />
+            <HeaderStat label={t`active days`} value={compact(summary?.activeDays ?? 0)} />
+            <HeaderStat label={t`top plays`} value={compact(summary?.topPlayCount ?? 0)} />
           </div>
         </div>
         {/* The header stat trio doesn't fit next to the avatar on phones; give it its own strip. */}
         <div className="relative grid grid-cols-3 gap-3 border-t border-osu-b3/25 px-4 py-2.5 sm:hidden">
-          <HeaderStat label="plays" value={compact(summary?.totalScores ?? 0)} />
-          <HeaderStat label="active days" value={compact(summary?.activeDays ?? 0)} />
-          <HeaderStat label="top plays" value={compact(summary?.topPlayCount ?? 0)} />
+          <HeaderStat label={t`plays`} value={compact(summary?.totalScores ?? 0)} />
+          <HeaderStat label={t`active days`} value={compact(summary?.activeDays ?? 0)} />
+          <HeaderStat label={t`top plays`} value={compact(summary?.topPlayCount ?? 0)} />
         </div>
       </div>
 
       {!tracked ? (
         <RosterOptInCard
-          description="Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play."
+          description={t`Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play.`}
           onTracked={load}
         />
       ) : (
@@ -507,8 +522,8 @@ export function MyDataPanel() {
             <div className="lg:col-span-2">
               <div className="mb-2 space-y-2">
                 <div className="flex items-center gap-1.5">
-                  <FeedTab active={feedTab === "tracked"} onClick={() => setFeedTab("tracked")}>Tracked</FeedTab>
-                  <FeedTab active={feedTab === "top"} onClick={() => setFeedTab("top")}>Top plays</FeedTab>
+                  <FeedTab active={feedTab === "tracked"} onClick={() => setFeedTab("tracked")}>{t`Tracked`}</FeedTab>
+                  <FeedTab active={feedTab === "top"} onClick={() => setFeedTab("top")}>{t`Top plays`}</FeedTab>
                 </div>
                 <FeedControls
                   tab={feedTab}
@@ -530,7 +545,11 @@ export function MyDataPanel() {
               {feedTab === "tracked" ? (
                 feed.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-osu-b3/30 bg-osu-b4/40 p-8 text-center text-[13px] text-osu-f1">
-                    {hasActiveFeedControls ? "No tracked plays match those controls." : <>No tracked plays. Play some ranked maps and they show up here live{topTotal > 0 ? ", or check your top plays" : ""}.</>}
+                    {hasActiveFeedControls
+                      ? t`No tracked plays match those controls.`
+                      : topTotal > 0
+                        ? t`No tracked plays. Play some ranked maps and they show up here live, or check your top plays.`
+                        : t`No tracked plays. Play some ranked maps and they show up here live.`}
                   </div>
                 ) : (
                   /* translate="no": rows prepend live off the SSE stream and
@@ -553,7 +572,7 @@ export function MyDataPanel() {
                 )
               ) : topPlays.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-osu-b3/30 bg-osu-b4/40 p-8 text-center text-[13px] text-osu-f1">
-                  {hasActiveFeedControls ? "No top plays match those controls." : "No top plays recorded yet. As you set new personal bests while tracked, they're saved here."}
+                  {hasActiveFeedControls ? t`No top plays match those controls.` : t`No top plays recorded yet. As you set new personal bests while tracked, they're saved here.`}
                 </div>
               ) : (
                 <div translate="no" className="space-y-1.5">
@@ -573,7 +592,7 @@ export function MyDataPanel() {
 
             <div className="space-y-4">
               <InsightCard
-                title="Skill rating"
+                title={t`Skill rating`}
                 accent={skillRatingAccent(activeSkillMode)}
                 right={skillModes.length > 1 ? <KeymodeToggle modes={skillModes} active={activeSkillMode?.keyCount ?? null} onChange={setSkillModeKey} /> : undefined}
               >
@@ -581,13 +600,13 @@ export function MyDataPanel() {
               </InsightCard>
 
               {summary && summary.rhythm.sampleSize > 0 ? (
-                <InsightCard title="When you play" accent="#57aeba" right={summary.rhythm.timezone}>
+                <InsightCard title={t`When you play`} accent="#57aeba" right={summary.rhythm.timezone}>
                   <RhythmChart byHour={summary.rhythm.byHour} peakHour={summary.rhythm.peakHour} peakDay={summary.rhythm.peakDay} />
                 </InsightCard>
               ) : null}
 
               {summary && summary.mods.sample > 0 ? (
-                <InsightCard title="Mods" accent="#d8a657">
+                <InsightCard title={t`Mods`} accent="#d8a657">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <ModUsage mod="NM" pct={summary.mods.noModPct} />
                     {summary.mods.top.map((m) => (
@@ -602,10 +621,10 @@ export function MyDataPanel() {
 
           <div className="flex flex-wrap gap-2">
             <Link to="/player/$username/activity" params={{ username }} className="inline-flex items-center rounded-lg border border-osu-b3/40 bg-osu-b5/60 px-3.5 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:border-osu-pink/40 hover:bg-osu-pink/10 hover:text-osu-pink-light">
-              Full activity
+              {t`Full activity`}
             </Link>
             <Link to="/goals" className="inline-flex items-center rounded-lg border border-osu-b3/40 bg-osu-b5/60 px-3.5 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:border-osu-pink/40 hover:bg-osu-pink/10 hover:text-osu-pink-light">
-              {`Goals${summary?.goalsOpen ? ` (${summary.goalsOpen} open)` : ""}`}
+              {summary?.goalsOpen ? t`Goals (${summary.goalsOpen} open)` : t`Goals`}
             </Link>
           </div>
         </>
@@ -645,6 +664,7 @@ function FeedControls({
   onTrackedSortChange: (value: MyDataTrackedSort) => void;
   onTopSortChange: (value: MyDataTopPlaySort) => void;
 }) {
+  const { t } = useLingui();
   const sortOptions = tab === "tracked" ? TRACKED_SORT_OPTIONS : TOP_SORT_OPTIONS;
   const sortValue = tab === "tracked" ? trackedSort : topSort;
   return (
@@ -655,14 +675,14 @@ function FeedControls({
           type="text"
           value={query}
           onChange={(event) => onQueryChange(event.currentTarget.value)}
-          placeholder="search maps..."
-          aria-label="Search maps"
+          placeholder={t`search maps...`}
+          aria-label={t`Search maps`}
           className="h-8 w-full rounded-md border border-osu-b3/30 bg-osu-b5/70 pl-8 pr-8 text-[12px] text-white outline-none transition-colors placeholder:text-osu-f1/70 focus:border-osu-pink/40"
         />
         {query ? (
           <button
             type="button"
-            aria-label="Clear search"
+            aria-label={t`Clear search`}
             onClick={() => onQueryChange("")}
             className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white"
           >
@@ -671,13 +691,13 @@ function FeedControls({
         ) : null}
       </div>
       <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-1.5 sm:col-span-1 sm:justify-end">
-        <ControlDropdown ariaLabel="Keymode filter" value={keyFilter} options={keyOptions} onChange={onKeyFilterChange} />
-        <ControlDropdown ariaLabel="Mod filter" value={modFilter} options={MOD_FILTER_OPTIONS} onChange={(value) => onModFilterChange(value as MyDataModFilter)} />
+        <ControlDropdown ariaLabel={t`Keymode filter`} value={keyFilter} options={keyOptions} onChange={onKeyFilterChange} />
+        <ControlDropdown ariaLabel={t`Mod filter`} value={modFilter} options={MOD_FILTER_OPTIONS} onChange={(value) => onModFilterChange(value as MyDataModFilter)} />
         {tab === "tracked" ? (
-          <ControlDropdown ariaLabel="Archive filter" value={archiveFilter} options={ARCHIVE_FILTER_OPTIONS} onChange={(value) => onArchiveFilterChange(value as MyDataArchiveFilter)} />
+          <ControlDropdown ariaLabel={t`Archive filter`} value={archiveFilter} options={ARCHIVE_FILTER_OPTIONS} onChange={(value) => onArchiveFilterChange(value as MyDataArchiveFilter)} />
         ) : null}
         <ControlDropdown
-          ariaLabel="Sort plays"
+          ariaLabel={t`Sort plays`}
           value={sortValue}
           options={sortOptions}
           onChange={(value) => {
@@ -698,9 +718,10 @@ function ControlDropdown({
 }: {
   ariaLabel: string;
   value: string;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label: string | MessageDescriptor }>;
   onChange: (value: string) => void;
 }) {
+  const { t, i18n } = useLingui();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   const active = options.find((option) => option.value === value) ?? options[0];
@@ -740,7 +761,7 @@ function ControlDropdown({
             : "border-osu-b3/30 bg-osu-b5/70 text-osu-l2 hover:border-osu-pink/30 hover:text-white"
         }`}
       >
-        <span className="truncate">{active?.label ?? "Any"}</span>
+        <span className="truncate">{active?.label == null ? t`Any` : typeof active.label === "string" ? active.label : i18n._(active.label)}</span>
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${open ? "rotate-180" : ""}`} strokeWidth={2.4} />
       </button>
       {open ? (
@@ -770,7 +791,7 @@ function ControlDropdown({
                 <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
                   {selected ? <Check className="h-3.5 w-3.5" strokeWidth={2.6} /> : null}
                 </span>
-                <span className="whitespace-nowrap">{option.label}</span>
+                <span className="whitespace-nowrap">{typeof option.label === "string" ? option.label : i18n._(option.label)}</span>
               </button>
             );
           })}
@@ -808,6 +829,7 @@ function Pagination({
   loading: boolean;
   onPageChange: (pageIndex: number) => void | Promise<void>;
 }) {
+  const { t } = useLingui();
   const safeLimit = Math.max(1, limit);
   const pageCount = Math.max(1, Math.ceil(total / safeLimit));
   if (pageCount <= 1) return null;
@@ -824,7 +846,7 @@ function Pagination({
         {first}-{last} of {total.toLocaleString("en-US")}
       </div>
       <div className="flex items-center gap-1">
-        <PaginationIconButton label="Previous page" disabled={loading || pageIndex === 0} onClick={() => go(pageIndex - 1)}>
+        <PaginationIconButton label={t`Previous page`} disabled={loading || pageIndex === 0} onClick={() => go(pageIndex - 1)}>
           <ChevronLeft className="h-3.5 w-3.5" />
         </PaginationIconButton>
         {paginationPages(pageIndex, pageCount).map((page, i) => page === "gap" ? (
@@ -844,7 +866,7 @@ function Pagination({
             {page + 1}
           </button>
         ))}
-        <PaginationIconButton label="Next page" disabled={loading || pageIndex >= pageCount - 1} onClick={() => go(pageIndex + 1)}>
+        <PaginationIconButton label={t`Next page`} disabled={loading || pageIndex >= pageCount - 1} onClick={() => go(pageIndex + 1)}>
           <ChevronRight className="h-3.5 w-3.5" />
         </PaginationIconButton>
       </div>
@@ -912,8 +934,9 @@ function HeaderStat({ label, value }: { label: string; value: string }) {
 }
 
 function ModUsage({ mod, pct }: { mod: string; pct: number }) {
+  const { t } = useLingui();
   return (
-    <div className="flex items-center gap-1.5" title={`${mod === "NM" ? "No mod" : mod}: ${pct}% of plays`}>
+    <div className="flex items-center gap-1.5" title={mod === "NM" ? t`No mod: ${pct}% of plays` : t`${mod}: ${pct}% of plays`}>
       <ModBadge mod={mod} size={0.85} color={mod === "NM" ? "#a8b2bf" : undefined} />
       <span className="text-[11px] text-osu-l2 tabular-nums">{pct}%</span>
     </div>
@@ -921,6 +944,7 @@ function ModUsage({ mod, pct }: { mod: string; pct: number }) {
 }
 
 function RhythmChart({ byHour, peakHour, peakDay }: { byHour: number[]; peakHour: number | null; peakDay: number | null }) {
+  const { t, i18n } = useLingui();
   const [hovered, setHovered] = useState<number | null>(null);
   const max = Math.max(1, ...byHour);
   const total = byHour.reduce((sum, count) => sum + count, 0);
@@ -935,7 +959,7 @@ function RhythmChart({ byHour, peakHour, peakDay }: { byHour: number[]; peakHour
             onMouseEnter={() => setHovered(hour)}
             onFocus={() => setHovered(hour)}
             onBlur={() => setHovered((prev) => (prev === hour ? null : prev))}
-            aria-label={`${formatHour(hour)}: ${count} ${count === 1 ? "play" : "plays"}`}
+            aria-label={count === 1 ? t`${formatHour(hour)}: ${count} play` : t`${formatHour(hour)}: ${count} plays`}
           >
             <div
               className={`w-full rounded-sm ${hovered === hour ? "bg-osu-pink" : "bg-osu-pink/45"}`}
@@ -948,16 +972,16 @@ function RhythmChart({ byHour, peakHour, peakDay }: { byHour: number[]; peakHour
         {hovered != null ? (
           <>
             <span className="font-semibold text-white">{formatHour(hovered)}</span>
-            {" "}&middot; {byHour[hovered]} {byHour[hovered] === 1 ? "play" : "plays"}
+            {" "}&middot; <Plural value={byHour[hovered]} one="# play" other="# plays" />
             {total > 0 ? <span className="text-osu-f1"> ({Math.round((byHour[hovered] / total) * 100)}%)</span> : null}
           </>
         ) : (
           <>
             {peakHour != null ? (
-              <>Most active around <span className="font-semibold text-white">{formatHour(peakHour)}</span></>
+              <Trans>Most active around <span className="font-semibold text-white">{formatHour(peakHour)}</span></Trans>
             ) : null}
             {peakDay != null ? (
-              <>, mostly on <span className="font-semibold text-white">{DAY_NAMES[peakDay]}s</span></>
+              <Trans>, mostly on <span className="font-semibold text-white">{i18n._(DAY_NAMES[peakDay])}</span></Trans>
             ) : null}
           </>
         )}

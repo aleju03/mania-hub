@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import type { CollectedCard } from "#/lib/pack-collection";
 import { packCardKeyOf } from "#/lib/pack-collection";
 import type { ServerPackCollectionCard } from "#/lib/pack-wallet-sync";
@@ -44,6 +45,7 @@ export function ShowcaseCards({
      its own loads its own. */
   thumbnails?: ReturnType<typeof useCardThumbnails>;
 }) {
+  const { t } = useLingui();
   const collected = cards as CollectedCard[];
   const own = useCardThumbnails(thumbnails ? NO_CARDS : collected);
   const { onThumbnailError } = thumbnails ?? own;
@@ -96,7 +98,7 @@ export function ShowcaseCards({
             onClick={onEmptySlotClick}
             className={`${SHOWCASE_SLOT_CLASS} cursor-pointer rounded-[10px] border border-dashed border-osu-b3/60 text-[20px] font-light text-osu-f1 transition-colors hover:border-osu-pink/50 hover:text-osu-pink-light`}
             style={{ aspectRatio: "5 / 7" }}
-            aria-label="Add a card to your showcase"
+            aria-label={t`Add a card to your showcase`}
           >
             +
           </button>

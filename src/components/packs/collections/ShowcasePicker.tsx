@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Loader2, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -34,6 +35,7 @@ export function ShowcasePicker({
   onCancel: () => void;
   onSave: (cardKeys: string[]) => Promise<void>;
 }) {
+  const { t } = useLingui();
   const [picked, setPicked] = useState<string[]>(initialKeys);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
@@ -95,7 +97,7 @@ export function ShowcasePicker({
       <motion.div
         role="dialog"
         aria-modal="true"
-        aria-label="Pick your showcase"
+        aria-label={t`Pick your showcase`}
         className="modal-card-mobile-safe flex max-h-[88dvh] w-full max-w-[860px] flex-col overflow-hidden rounded-t-2xl border border-osu-b3/30 bg-osu-b5 sm:rounded-2xl"
         initial={{ y: 16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -105,16 +107,16 @@ export function ShowcasePicker({
       >
         <div className="flex shrink-0 items-center gap-3 border-b border-osu-b3/30 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-bold text-white">Pick your showcase</div>
+            <div className="text-[13px] font-bold text-white">{t`Pick your showcase`}</div>
             <div className="mt-0.5 text-[11px] text-osu-f1 tabular-nums">
-              {picked.length} of {PACK_SHOWCASE_MAX_CARDS} chosen
+              <Trans>{picked.length} of {PACK_SHOWCASE_MAX_CARDS} chosen</Trans>
             </div>
           </div>
           <button
             type="button"
             onClick={onCancel}
             className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-osu-f1 transition-colors hover:bg-osu-b3/60 hover:text-white"
-            aria-label="Close"
+            aria-label={t`Close`}
           >
             <X size={15} />
           </button>
@@ -126,7 +128,7 @@ export function ShowcasePicker({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Find a player in your collection"
+              placeholder={t`Find a player in your collection`}
               className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4/60 py-2 pl-8 pr-3 text-[12px] text-white outline-none transition-colors placeholder:text-osu-f1 focus:border-osu-pink/50"
             />
           </label>
@@ -151,7 +153,7 @@ export function ShowcasePicker({
                 onClick={() => setPage(currentPage - 1)}
                 className="cursor-pointer rounded-lg px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
               >
-                Previous
+                {t`Previous`}
               </button>
               <span translate="no" className="text-osu-f1 tabular-nums">
                 {currentPage + 1} / {formatNumber(totalPages)}
@@ -162,7 +164,7 @@ export function ShowcasePicker({
                 onClick={() => setPage(currentPage + 1)}
                 className="cursor-pointer rounded-lg px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
               >
-                Next
+                {t`Next`}
               </button>
             </div>
           )}
@@ -172,7 +174,7 @@ export function ShowcasePicker({
               onClick={onCancel}
               className="cursor-pointer rounded-lg px-3 py-1.5 text-[12px] font-semibold text-osu-f1 transition-colors hover:text-white"
             >
-              Cancel
+              {t`Cancel`}
             </button>
             <button
               type="button"
@@ -184,7 +186,7 @@ export function ShowcasePicker({
               className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-osu-pink/20 px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-osu-pink/30 disabled:cursor-default disabled:opacity-50"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-              Save showcase
+              {t`Save showcase`}
             </button>
           </div>
         </div>
@@ -207,6 +209,7 @@ function PickerGrid({
   full: boolean;
   onToggle: (cardKey: string) => void;
 }) {
+  const { t } = useLingui();
   const cards = (page?.cards ?? []) as CollectedCard[];
   const { onThumbnailError } = useCardThumbnails(cards);
 
@@ -221,7 +224,7 @@ function PickerGrid({
   }
 
   if (cards.length === 0) {
-    return <div className="py-12 text-center text-[12px] text-osu-f1">No cards match that.</div>;
+    return <div className="py-12 text-center text-[12px] text-osu-f1">{t`No cards match that.`}</div>;
   }
 
   return (

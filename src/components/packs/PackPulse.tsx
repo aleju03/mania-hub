@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Sparkles, Users } from "lucide-react";
@@ -239,19 +240,21 @@ function tierAccentRgb(tier: string | null): string {
    fun); only the your-card fun fact steps aside, since it is static trivia
    that would just compete with the cards. */
 function PulledStatsLine({ stats }: { stats: LivePackPulledStats }) {
+  const { t } = useLingui();
   return (
     <>
       <Users className="mt-px h-3 w-3 shrink-0" aria-hidden="true" />
       <span className="tabular-nums">
         {stats.owners === 1
-          ? "1 person has your card"
-          : `${stats.owners.toLocaleString("en-US")} people have your card`}
+          ? t`1 person has your card`
+          : t`${stats.owners.toLocaleString("en-US")} people have your card`}
       </span>
     </>
   );
 }
 
 export function PackPulse({ viewerId, revealing = false }: { viewerId: number | null; revealing?: boolean }) {
+  const { t } = useLingui();
   // Admins get the collector list (a prototype; the fun fact itself stays
   // visible to everyone) and the rail's inflow simulator.
   const isAdmin = canUseAdminFeatures(useAuth());
@@ -526,10 +529,10 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
             className={`pointer-events-auto self-start text-[9px] font-semibold uppercase tracking-[0.14em] transition-colors cursor-pointer ${
               simulating ? "text-osu-pink" : "text-osu-f1/40 hover:text-osu-f1"
             }`}
-            title="Admin: flood the rail with fake pulls to preview the animation"
+            title={t`Admin: flood the rail with fake pulls to preview the animation`}
             aria-pressed={simulating}
           >
-            {simulating ? "stop sim" : "sim pulls"}
+            {simulating ? t`stop sim` : t`sim pulls`}
           </button>
         )}
         <div
@@ -606,8 +609,8 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                       <span className="flex items-center gap-1 leading-tight">
                         <span className="truncate text-[11px] font-semibold text-white/90">{pull.cardUsername}</span>
                         {pull.isFirstGlobal && (
-                          <span title="First time anyone pulled this card" className="flex shrink-0">
-                            <Sparkles className="h-2.5 w-2.5 text-osu-pink" aria-label="first time anyone pulled this card" />
+                          <span title={t`First time anyone pulled this card`} className="flex shrink-0">
+                            <Sparkles className="h-2.5 w-2.5 text-osu-pink" aria-label={t`first time anyone pulled this card`} />
                           </span>
                         )}
                       </span>
@@ -617,7 +620,7 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                             {style.label}
                           </span>
                         ) : (
-                          <span className="text-osu-f1/70">pulled</span>
+                          <span className="text-osu-f1/70">{t`pulled`}</span>
                         )}
                         {pull.pulledAt > 0 && (
                           <span className="tabular-nums text-osu-f1/50"> · {formatPreciseTimeAgo(pull.pulledAt, now)}</span>

@@ -1,4 +1,5 @@
 import { getRegionDef, isRegionScope } from "./regions";
+import { COUNTRY_NAMES_ES } from "./country-names-es.generated";
 import { COUNTRY_NAMES_ZH } from "./country-names-zh.generated";
 import type { AppLocale } from "./locale";
 
@@ -281,12 +282,12 @@ export function getCountryName(code?: string | null): string {
 // browser ICU can disagree, which is a hydration mismatch). Missing entries
 // fall back to the English name.
 export function displayCountryName(code: string | null | undefined, locale: AppLocale): string {
-  if (locale === "zh-CN") {
+  if (locale !== "en") {
     const key = isGlobalScope(code)
       ? GLOBAL_SCOPE_CODE
       : (getRegionDef(code)?.code ?? normalizeCountryCode(code));
-    const zh = COUNTRY_NAMES_ZH[key];
-    if (zh) return zh;
+    const localized = locale === "zh-CN" ? COUNTRY_NAMES_ZH[key] : COUNTRY_NAMES_ES[key];
+    if (localized) return localized;
   }
   return getCountryName(code);
 }

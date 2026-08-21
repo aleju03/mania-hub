@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { communityInviteExpiryLabel, type CommunitySummary } from "../../lib/communities-shared";
@@ -12,27 +13,28 @@ import { communityInviteExpiryLabel, type CommunitySummary } from "../../lib/com
  * owner can act on, and they belong on the thing they are about.
  */
 export function CommunityStatusNote({ community }: { community: CommunitySummary }) {
+  const { t } = useLingui();
   if (!community.status) return null;
 
   if (community.inviteOk === false) {
     return (
       <Note tone="warn">
-        This invite stopped working, so your server is hidden. Paste a new link to put it back.
+        {t`This invite stopped working, so your server is hidden. Paste a new link to put it back.`}
       </Note>
     );
   }
   if (community.status === "pending") {
-    return <Note tone="muted">Waiting for approval.</Note>;
+    return <Note tone="muted">{t`Waiting for approval.`}</Note>;
   }
   if (community.status === "rejected") {
     // Moderators type the reason as a fragment as often as a sentence, so give
     // it the full stop it needs rather than running it into the next line.
     const reason = community.rejectReason?.trim();
     const said = reason ? `: ${/[.!?]$/.test(reason) ? reason : `${reason}.`}` : ".";
-    return <Note tone="bad">Turned down{said} Editing it sends it back for approval.</Note>;
+    return <Note tone="bad"><Trans>Turned down{said} Editing it sends it back for approval.</Trans></Note>;
   }
   if (community.status === "hidden") {
-    return <Note tone="muted">Taken down by a moderator.</Note>;
+    return <Note tone="muted">{t`Taken down by a moderator.`}</Note>;
   }
   // A listing posted with an expiring invite is fine until it is not, and the
   // date is the one thing its owner cannot see anywhere else. Said here while
@@ -41,8 +43,7 @@ export function CommunityStatusNote({ community }: { community: CommunitySummary
   if (expiry) {
     return (
       <Note tone="warn">
-        This invite expires on {expiry}. When it does, your server gets hidden until you paste a new
-        link.
+        <Trans>This invite expires on {expiry}. When it does, your server gets hidden until you paste a new link.</Trans>
       </Note>
     );
   }

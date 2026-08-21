@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { LoaderCircle, Plus, Search, Swords, X } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { CountryFlag } from "#/components/ui/CountryFlag";
@@ -20,7 +22,7 @@ import { getScore } from "#/lib/osu";
 import { searchPlayers } from "#/lib/player-search";
 import type { RecentReplayEntry } from "#/lib/replay-recent";
 import { parseReplayScoreInput } from "#/lib/replay-score-input";
-import { getSideBySideCandidateIssue, getSideBySideIssue } from "#/lib/replay-side-by-side";
+import { formatSideBySideIssue, getSideBySideCandidateIssue, getSideBySideIssue } from "#/lib/replay-side-by-side";
 import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp, scoreHasReplay } from "#/lib/score";
 import type { OsuScore } from "#/lib/types";
 
@@ -44,14 +46,14 @@ type SlotScores = [OsuScore | null, OsuScore | null];
 
 const SLOT_META = [
   {
-    label: "Left",
+    label: msg`Left`,
     accent: "text-osu-pink-light",
     ring: "ring-osu-pink/45",
     border: "border-osu-pink/45",
     glow: "from-osu-pink/25",
   },
   {
-    label: "Right",
+    label: msg`Right`,
     accent: "text-osu-blue",
     ring: "ring-osu-blue/45",
     border: "border-osu-blue/45",
@@ -111,6 +113,7 @@ export function ReplaySideBySidePicker({
   recentReplays: RecentReplayEntry[];
   onStart: (leftScoreId: number, rightScoreId: number) => void;
 }) {
+  const { t, i18n } = useLingui();
   const [slots, setSlots] = useState<SlotScores>([null, null]);
   // Which card the search fills. Clicking a card moves it, so replacing a run
   // is the same gesture as adding one.
@@ -149,11 +152,11 @@ export function ReplaySideBySidePicker({
   return (
     <div className="mx-auto max-w-4xl">
       <h3 className="text-center text-sm font-semibold uppercase tracking-wider text-osu-f1">
-        Watch two runs of the same map at once
+        {t`Watch two runs of the same map at once`}
       </h3>
       {/* Said here rather than after the tap: on a phone this only plays in
           landscape, and it takes the whole screen when it does. */}
-      <p className="mt-1 text-center text-[11px] text-osu-f1/70 sm:hidden">Turn your phone sideways to watch.</p>
+      <p className="mt-1 text-center text-[11px] text-osu-f1/70 sm:hidden">{t`Turn your phone sideways to watch.`}</p>
 
       <div className="mt-4 grid items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-2">
         <SlotCard
@@ -175,7 +178,7 @@ export function ReplaySideBySidePicker({
 
       {pairIssue && (
         <p className="mx-auto mt-3 max-w-lg rounded-lg bg-osu-red/10 px-4 py-2 text-center text-xs text-osu-red-light">
-          {pairIssue.message}
+          {formatSideBySideIssue(pairIssue, i18n)}
         </p>
       )}
 
@@ -192,7 +195,7 @@ export function ReplaySideBySidePicker({
               : "cursor-not-allowed bg-osu-b4 text-osu-f1/60"
           }`}
         >
-          Watch side by side
+          {t`Watch side by side`}
         </button>
       </div>
 
@@ -231,7 +234,8 @@ function SlotCard({ index, score, active, onSelect, onClear }: {
   onClear: () => void;
 }) {
   const meta = SLOT_META[index];
-  const label = meta.label.toLowerCase();
+  const { t, i18n } = useLingui();
+  const label = i18n._(meta.label).toLowerCase();
 
   return (
     <div
@@ -256,12 +260,12 @@ function SlotCard({ index, score, active, onSelect, onClear }: {
       <button
         type="button"
         onClick={onSelect}
-        aria-label={score ? `Replace the ${label} run` : `Fill the ${label} run`}
-        title={score ? `Replace the ${label} run` : `Fill the ${label} run`}
+        aria-label={score ? t`Replace the ${label} run` : t`Fill the ${label} run`}
+        title={score ? t`Replace the ${label} run` : t`Fill the ${label} run`}
         className="relative flex flex-1 flex-col text-left cursor-pointer"
       >
         <span className={`px-3.5 pt-3 text-[10px] font-bold uppercase tracking-[0.2em] ${meta.accent}`}>
-          {meta.label}
+          {label}
         </span>
         {score ? (
           <PickedScore score={score} />
@@ -271,7 +275,7 @@ function SlotCard({ index, score, active, onSelect, onClear }: {
               <Plus className="h-5 w-5" aria-hidden="true" />
             </span>
             <span className="text-[13px] font-semibold text-white">
-              {active ? `Fill the ${label} run below` : `Add the ${label} run`}
+              {active ? t`Fill the ${label} run below` : t`Add the ${label} run`}
             </span>
           </span>
         )}
@@ -281,7 +285,7 @@ function SlotCard({ index, score, active, onSelect, onClear }: {
         <button
           type="button"
           onClick={onClear}
-          aria-label={`Clear the ${label} score`}
+          aria-label={t`Clear the ${label} score`}
           className="absolute right-3 top-3 rounded-full bg-black/30 p-1 text-osu-f1 transition-colors hover:text-white cursor-pointer"
         >
           <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -292,6 +296,7 @@ function SlotCard({ index, score, active, onSelect, onClear }: {
 }
 
 function PickedScore({ score }: { score: OsuScore }) {
+  const { t } = useLingui();
   const mods = getModDisplayList(score.mods);
   return (
     <motion.span
@@ -307,7 +312,7 @@ function PickedScore({ score }: { score: OsuScore }) {
       />
       <span className="flex min-w-0 max-w-full items-center gap-1.5">
         <CountryFlag code={score.user?.country_code} size="xs" decorative />
-        <span className="truncate text-[15px] font-bold text-white">{score.user?.username ?? "Unknown"}</span>
+        <span className="truncate text-[15px] font-bold text-white">{score.user?.username ?? t`Unknown`}</span>
       </span>
       <span className="flex items-center gap-2 tabular-nums">
         <GradeImg grade={getDisplayedRank(score)} size={20} />
@@ -341,6 +346,7 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
   onPick: (score: OsuScore) => void;
 }) {
   const meta = SLOT_META[slotIndex];
+  const { t, i18n } = useLingui();
   const { viewer } = useAuth();
   const anchorBeatmapId = anchor?.beatmap?.id ?? null;
 
@@ -393,7 +399,7 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
         })
         .catch(() => {
           if (cancelled) return;
-          setLinkError("That score couldn't be loaded. Check the link and try again.");
+          setLinkError(t`That score couldn't be loaded. Check the link and try again.`);
         })
         .finally(() => {
           if (!cancelled) setLinkLoading(false);
@@ -532,7 +538,7 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
   const pick = useCallback((score: OsuScore) => {
     const issue = getSideBySideCandidateIssue(score, anchor);
     if (issue) {
-      setPickError(issue.message);
+      setPickError(formatSideBySideIssue(issue, i18n));
       return;
     }
     setPickError(null);
@@ -553,7 +559,7 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
       })
       .catch(() => {
         if (resolveRequestRef.current !== request) return;
-        setPickError("That score couldn't be loaded.");
+        setPickError(t`That score couldn't be loaded.`);
       })
       .finally(() => {
         if (resolveRequestRef.current === request) setResolvingScoreId(null);
@@ -575,14 +581,14 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
   const recentScoreEntries = recentReplays.filter((entry) => entry.scoreId != null);
   const searching = playersLoading || linkLoading;
   const placeholder = player
-    ? `Filter ${player.username}'s runs...`
-    : "Search a player, or paste a score link...";
+    ? t`Filter ${player.username}'s runs...`
+    : t`Search a player, or paste a score link...`;
 
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-osu-b3/30 bg-osu-b4">
       <div className="flex items-center gap-2.5 border-b border-osu-b3/30 bg-osu-b5/30 px-3 py-2.5">
         <span className={`shrink-0 text-[10px] font-bold uppercase tracking-[0.2em] ${meta.accent}`}>
-          {meta.label}
+          {i18n._(meta.label)}
         </span>
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" aria-hidden="true" />
@@ -603,7 +609,7 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
             <button
               type="button"
               onClick={() => setQuery("")}
-              aria-label="Clear the search"
+              aria-label={t`Clear the search`}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-osu-f1 transition-colors hover:text-white cursor-pointer"
             >
               <X className="h-3 w-3" aria-hidden="true" />
@@ -628,7 +634,7 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
               setPlayer(null);
               setQuery("");
             }}
-            aria-label={`Stop browsing ${player.username}`}
+            aria-label={t`Stop browsing ${player.username}`}
             className="rounded-full p-1 text-osu-f1 transition-colors hover:text-white cursor-pointer"
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -644,7 +650,7 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
         <PickerBody
           anchor={anchor}
           pickedIds={pickedIds}
-          slotLabel={meta.label}
+          slotLabel={i18n._(meta.label)}
           queryScoreId={queryScoreId}
           trimmedQuery={trimmedQuery}
           linkScore={linkScore}
@@ -732,8 +738,10 @@ function PickerBody({
   onPickById: (scoreId: number) => void;
   onLoadMoreRuns: () => void;
 }) {
+  const { t, i18n } = useLingui();
   const anchorBeatmapId = anchor?.beatmap?.id ?? null;
-  const useLabel = `Use as the ${slotLabel.toLowerCase()} run`;
+  const slotLabelLower = slotLabel.toLowerCase();
+  const useLabel = t`Use as the ${slotLabelLower} run`;
 
   const scoreRow = (score: OsuScore, options: { leading: ReactNode; primary: ReactNode }) => {
     const alreadyPicked = pickedIds.has(score.id);
@@ -750,7 +758,7 @@ function PickerBody({
         accuracy={getDisplayedAccuracy(score)}
         pp={score.pp}
         disabled={alreadyPicked || issue != null}
-        title={alreadyPicked ? "Already picked" : issue?.message ?? useLabel}
+        title={alreadyPicked ? t`Already picked` : issue ? formatSideBySideIssue(issue, i18n) : useLabel}
         onClick={() => onPick(score)}
       />
     );
@@ -770,7 +778,7 @@ function PickerBody({
         pp={run.pp}
         disabled={alreadyPicked}
         busy={resolvingScoreId === run.scoreId}
-        title={alreadyPicked ? "Already picked" : useLabel}
+        title={alreadyPicked ? t`Already picked` : useLabel}
         onClick={() => onPickById(run.scoreId)}
       />
     );
@@ -795,7 +803,7 @@ function PickerBody({
 
   const mapTitle = (score: OsuScore) => (
     <>
-      {score.beatmapset?.title ?? "Unknown map"}
+      {score.beatmapset?.title ?? t`Unknown map`}
       {score.beatmap?.version ? <span className="font-medium text-osu-f1"> [{score.beatmap.version}]</span> : null}
     </>
   );
@@ -804,14 +812,14 @@ function PickerBody({
   if (queryScoreId != null) {
     if (linkLoading) return <RowSkeleton />;
     if (linkError || !linkScore) {
-      return <Hint>{linkError ?? `No score found for #${queryScoreId}.`}</Hint>;
+      return <Hint>{linkError ?? t`No score found for #${queryScoreId}.`}</Hint>;
     }
     return scoreRow(linkScore, {
       leading: playerAvatar(linkScore),
       primary: (
         <>
-          <span className="text-white">{linkScore.user?.username ?? "Unknown"}</span>
-          <span className="text-osu-f1"> // {linkScore.beatmapset?.title ?? "Unknown map"}</span>
+          <span className="text-white">{linkScore.user?.username ?? t`Unknown`}</span>
+          <span className="text-osu-f1"> // {linkScore.beatmapset?.title ?? t`Unknown map`}</span>
         </>
       ),
     });
@@ -822,14 +830,14 @@ function PickerBody({
     if (runsLoading) return <RowSkeleton />;
     if (anchorBeatmapId != null) {
       if (!playerBoard || playerBoard.length === 0) {
-        return <Hint>We have no run by {player.username} on this map. Paste a link to their score to use it.</Hint>;
+        return <Hint><Trans>We have no run by {player.username} on this map. Paste a link to their score to use it.</Trans></Hint>;
       }
       return (
         <>
-          <SectionLabel>Their runs on this map</SectionLabel>
+          <SectionLabel>{t`Their runs on this map`}</SectionLabel>
           {playerBoard.map((run) => boardRow(run, {
             leading: avatar(run.avatarUrl, run.userId),
-            primary: run.playedAt ? `Set ${formatTimeAgo(run.playedAt)}` : "This run",
+            primary: run.playedAt ? t`Set ${formatTimeAgo(run.playedAt)}` : t`This run`,
           }))}
         </>
       );
@@ -838,16 +846,16 @@ function PickerBody({
       if (trimmedQuery && runs && runs.length > 0) {
         return (
           <>
-            <Hint>Nothing in the loaded plays matches "{trimmedQuery}".</Hint>
+            <Hint><Trans>Nothing in the loaded plays matches "{trimmedQuery}".</Trans></Hint>
             {hasMoreRuns && <LoadMoreRuns busy={runsMoreLoading} onClick={onLoadMoreRuns} />}
           </>
         );
       }
-      return <Hint>We have no replay-ready plays stored for {player.username} yet.</Hint>;
+      return <Hint><Trans>We have no replay-ready plays stored for {player.username} yet.</Trans></Hint>;
     }
     return (
       <>
-        <SectionLabel>{player.id === viewer?.id ? "Your plays" : "Their plays"}</SectionLabel>
+        <SectionLabel>{player.id === viewer?.id ? t`Your plays` : t`Their plays`}</SectionLabel>
         {visibleRuns.map((score) => scoreRow(score, {
           leading: mapCover(score),
           primary: mapTitle(score),
@@ -860,10 +868,10 @@ function PickerBody({
   // A name: the players it could be.
   if (trimmedQuery.length >= PLAYER_SEARCH_MIN_LENGTH) {
     if (playersLoading && players == null) return <RowSkeleton />;
-    if (!players || players.length === 0) return <Hint>No players found for "{trimmedQuery}".</Hint>;
+    if (!players || players.length === 0) return <Hint><Trans>No players found for "{trimmedQuery}".</Trans></Hint>;
     return (
       <>
-        <SectionLabel>Players</SectionLabel>
+        <SectionLabel>{t`Players`}</SectionLabel>
         {players.map((candidate) => (
           <button
             key={candidate.id}
@@ -887,14 +895,14 @@ function PickerBody({
 
   // Nothing typed, map already locked: our board for that map.
   if (anchorBeatmapId != null) {
-    if (candidates == null) return candidatesLoading ? <RowSkeleton /> : <Hint>Couldn't load who has played this map.</Hint>;
+    if (candidates == null) return candidatesLoading ? <RowSkeleton /> : <Hint>{t`Couldn't load who has played this map.`}</Hint>;
     if (candidates.length === 0) {
-      return <Hint>Nobody we track has a scored run on this map. Search a player, or paste a score link.</Hint>;
+      return <Hint>{t`Nobody we track has a scored run on this map. Search a player, or paste a score link.`}</Hint>;
     }
     return (
       <>
         <SectionLabel>
-          Tracked runs on {anchor?.beatmapset?.title ?? "this map"}
+          <Trans>Tracked runs on {anchor?.beatmapset?.title ?? t`this map`}</Trans>
           {anchor?.beatmap?.version ? ` [${anchor.beatmap.version}]` : ""}
         </SectionLabel>
         {candidates.map((run) => boardRow(run, {
@@ -915,7 +923,7 @@ function PickerBody({
     <>
       {viewer && (
         <>
-          <SectionLabel>You</SectionLabel>
+          <SectionLabel>{t`You`}</SectionLabel>
           <button
             type="button"
             onClick={() => onOpenPlayer({
@@ -933,7 +941,7 @@ function PickerBody({
               className="h-6 w-6 rounded-full object-cover ring-1 ring-white/10"
             />
             <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white">
-              My plays
+              {t`My plays`}
             </span>
           </button>
         </>
@@ -941,7 +949,7 @@ function PickerBody({
 
       {recentEntries.length > 0 && (
         <>
-          <SectionLabel>Recently watched</SectionLabel>
+          <SectionLabel>{t`Recently watched`}</SectionLabel>
           {recentEntries.map((entry) => (
             <PickRow
               key={entry.key}
@@ -960,7 +968,7 @@ function PickerBody({
               accuracy={entry.accuracy}
               pp={entry.pp}
               busy={resolvingScoreId === entry.scoreId}
-              title={`Use as the ${slotLabel.toLowerCase()} run`}
+              title={useLabel}
               onClick={() => {
                 if (entry.scoreId != null) onPickById(entry.scoreId);
               }}
@@ -970,7 +978,7 @@ function PickerBody({
       )}
 
       {!viewer && recentEntries.length === 0 && (
-        <Hint>Search a player to browse their plays, or paste a score link.</Hint>
+        <Hint>{t`Search a player to browse their plays, or paste a score link.`}</Hint>
       )}
     </>
   );
@@ -1054,6 +1062,7 @@ function RowSkeleton() {
 }
 
 function LoadMoreRuns({ busy, onClick }: { busy: boolean; onClick: () => void }) {
+  const { t } = useLingui();
   return (
     <button
       type="button"
@@ -1062,7 +1071,7 @@ function LoadMoreRuns({ busy, onClick }: { busy: boolean; onClick: () => void })
       className="flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b5 hover:text-white disabled:cursor-wait disabled:opacity-60 cursor-pointer"
     >
       {busy && <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" />}
-      {busy ? "Loading plays..." : "Load more plays"}
+      {busy ? t`Loading plays...` : t`Load more plays`}
     </button>
   );
 }

@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -341,6 +342,7 @@ function TierProgress({
   cardRating: number;
   onExplain: () => void;
 }) {
+  const { t } = useLingui();
   const toColor = TIER_FILL_COLOR[nextTier.tier] ?? "rgb(226, 232, 240)";
   const pct = Math.round(nextTier.progress * 100);
   const currentLabel = MANIA_TIER_STYLES[nextTier.currentTier].label;
@@ -357,7 +359,7 @@ function TierProgress({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={pct}
-        aria-label={`Progress from ${currentLabel} to ${nextTier.label}`}
+        aria-label={t`Progress from ${currentLabel} to ${nextTier.label}`}
       >
         <div
           className="h-full rounded-full transition-[width] duration-500"
@@ -366,13 +368,13 @@ function TierProgress({
       </div>
       <div className="mt-2 flex items-baseline gap-1.5 text-[11px]">
         <span className="font-bold tabular-nums" style={{ color: toColor }}>+{nextTier.remaining}</span>
-        <span className="text-osu-f1">to</span>
+        <span className="text-osu-f1">{t`to`}</span>
         <span className={`font-semibold ${TIER_TEXT_COLOR[nextTier.tier] ?? "text-osu-l2"}`}>{nextTier.label}</span>
         <button
           type="button"
           onClick={onExplain}
           className="ml-0.5 text-osu-f1/70 hover:text-osu-f1 cursor-pointer transition-colors"
-          aria-label="How card rating is calculated"
+          aria-label={t`How card rating is calculated`}
         >
           (?)
         </button>
@@ -392,6 +394,7 @@ function RatingExplainerModal({
   isOwnProfile: boolean;
   onClose: () => void;
 }) {
+  const { t } = useLingui();
   const toColor = TIER_FILL_COLOR[nextTier.tier] ?? "rgb(226, 232, 240)";
   const pct = Math.round(nextTier.progress * 100);
   // Highest tier at the top, so the ladder reads like an in-game rank ladder.
@@ -418,7 +421,7 @@ function RatingExplainerModal({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t`Close`}
           className="absolute top-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -426,12 +429,12 @@ function RatingExplainerModal({
           </svg>
         </button>
         <div className="relative z-10 max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
-          <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">Card rank</div>
+          <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">{t`Card rank`}</div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-bold text-white tabular-nums">{cardRating}</span>
             <span className="text-[11px] text-osu-f1">
               <span className="font-bold tabular-nums" style={{ color: toColor }}>+{nextTier.remaining}</span>{" "}
-              <span className="text-osu-f1">to</span>{" "}
+              <span className="text-osu-f1">{t`to`}</span>{" "}
               <span className={`font-semibold ${TIER_TEXT_COLOR[nextTier.tier] ?? "text-osu-l2"}`}>{nextTier.label}</span>
             </span>
           </div>
@@ -477,7 +480,7 @@ function RatingExplainerModal({
                         </span>
                         {isCurrent && isOwnProfile && (
                           <span className="rounded-full bg-white/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white">
-                            You
+                            {t`You`}
                           </span>
                         )}
                       </div>
@@ -505,7 +508,7 @@ function RatingExplainerModal({
           </div>
 
           <p className="mt-4 text-[11px] leading-snug text-osu-f1/55">
-            Rank is set by {isOwnProfile ? "your" : "the player's"} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits.
+            {t`Rank is set by ${isOwnProfile ? t`your` : t`the player's`} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits.`}
           </p>
         </div>
       </motion.div>
@@ -514,6 +517,7 @@ function RatingExplainerModal({
 }
 
 function ManiaCard3DFallback() {
+  const { t } = useLingui();
   return (
     <div className="py-4 sm:py-6">
       <div className="max-w-[440px] mx-auto px-2">
@@ -521,7 +525,7 @@ function ManiaCard3DFallback() {
           className="relative grid place-items-center rounded-[22px] border-2 border-osu-b3/30 bg-osu-b4/40 px-6 text-center text-sm text-osu-f1"
           style={{ aspectRatio: "5 / 7" }}
         >
-          3D card preview is unavailable on this device.
+          {t`3D card preview is unavailable on this device.`}
         </div>
       </div>
     </div>
@@ -529,6 +533,7 @@ function ManiaCard3DFallback() {
 }
 
 function ManiaCard3DLoading() {
+  const { t } = useLingui();
   return (
     <div className="py-4 sm:py-6">
       <div className="max-w-[440px] mx-auto px-2">
@@ -538,7 +543,7 @@ function ManiaCard3DLoading() {
         >
           <div className="absolute inset-0 rounded-[22px] animate-pulse" />
         </div>
-        <div className="mt-4 text-center text-[11px] text-osu-f1">Calculating skills...</div>
+        <div className="mt-4 text-center text-[11px] text-osu-f1">{t`Calculating skills...`}</div>
       </div>
     </div>
   );

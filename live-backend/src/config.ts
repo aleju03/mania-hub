@@ -74,6 +74,7 @@ export interface Config {
   ghostMaxClientsPerIp: number;
   replayVideoRatePerMinute: number;
   skinUploadRatePerMinute: number;
+  translationReportRatePerHour: number;
   bridgeRatePerMinute: number;
   osuApiTargetPerMinute: number;
   osuApiHardPerMinute: number;
@@ -351,6 +352,7 @@ export function readConfig(): Config {
     // to 4 screenshots + the .osk + finish), so the budget must cover a full
     // multi-keymode upload with headroom; uploads are ticket-gated anyway.
     skinUploadRatePerMinute: readInt("SKIN_UPLOAD_RATE_PER_MINUTE", 40),
+    translationReportRatePerHour: readInt("TRANSLATION_REPORT_RATE_PER_HOUR", 10),
     bridgeRatePerMinute: readInt("BRIDGE_RATE_PER_MINUTE", 6000),
     osuApiTargetPerMinute: readInt("OSU_API_TARGET_PER_MINUTE", 45),
     osuApiHardPerMinute: readInt("OSU_API_HARD_PER_MINUTE", 60),

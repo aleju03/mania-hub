@@ -1,8 +1,19 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
+import type { ReactElement, ReactNode } from "react";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../../lib/i18n";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AnalyticsRecentEventRow } from "../../../lib/analytics-feed";
 import type { AnalyticsViewersResult } from "../../../lib/analytics-monitor";
+
+// The flag chips these cards draw read their copy through Lingui, so renders
+// need the provider; en resolves to the source strings.
+const I18nWrap = ({ children }: { children: ReactNode }) => (
+  <I18nProvider i18n={getI18n("en")}>{children}</I18nProvider>
+);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
+
 
 const getAnalyticsViewers = vi.hoisted(() => vi.fn());
 const getAnalyticsViewerEvents = vi.hoisted(() => vi.fn());

@@ -15,14 +15,21 @@ describe("normalizeLocale", () => {
     expect(normalizeLocale("ZH-cn")).toBe("zh-CN");
   });
 
-  it("maps English variants to en and everything else to null", () => {
+  it("maps English variants to en and unsupported tags to null", () => {
     expect(normalizeLocale("en")).toBe("en");
     expect(normalizeLocale("en-GB")).toBe("en");
-    expect(normalizeLocale("es")).toBeNull();
+    expect(normalizeLocale("fr")).toBeNull();
     expect(normalizeLocale("")).toBeNull();
     expect(normalizeLocale(null)).toBeNull();
     // "english" is not en: prefix matching stops at the subtag boundary.
     expect(normalizeLocale("english")).toBeNull();
+  });
+
+  it("maps every Spanish tag to the neutral Spanish catalog", () => {
+    expect(normalizeLocale("es")).toBe("es");
+    expect(normalizeLocale("es-419")).toBe("es");
+    expect(normalizeLocale("es-CR")).toBe("es");
+    expect(normalizeLocale("ES-es")).toBe("es");
   });
 });
 
@@ -30,6 +37,7 @@ describe("parseLocaleCookieHeader", () => {
   it("finds the cookie among others and normalizes its value", () => {
     expect(parseLocaleCookieHeader("mania-hub-country=CR; mania-hub-locale=zh-CN")).toBe("zh-CN");
     expect(parseLocaleCookieHeader("mania-hub-locale=en")).toBe("en");
+    expect(parseLocaleCookieHeader("mania-hub-locale=es-CR")).toBe("es");
   });
 
   it("returns null for a missing cookie so detection can run", () => {
@@ -49,6 +57,7 @@ describe("hasLocaleCookieHeader", () => {
   it("reports presence even when the value is junk", () => {
     expect(hasLocaleCookieHeader("mania-hub-locale=fr")).toBe(true);
     expect(hasLocaleCookieHeader("mania-hub-locale=zh-CN")).toBe(true);
+    expect(hasLocaleCookieHeader("mania-hub-locale=es")).toBe(true);
     expect(hasLocaleCookieHeader("mania-hub-country=CR")).toBe(false);
     expect(hasLocaleCookieHeader(null)).toBe(false);
   });
@@ -59,11 +68,12 @@ describe("resolveLocaleFromAcceptLanguage", () => {
     expect(resolveLocaleFromAcceptLanguage("zh-CN,zh;q=0.9,en;q=0.8")).toBe("zh-CN");
     expect(resolveLocaleFromAcceptLanguage("en-US,en;q=0.9,zh;q=0.8")).toBe("en");
     expect(resolveLocaleFromAcceptLanguage("zh-TW,en;q=0.9")).toBe("zh-CN");
+    expect(resolveLocaleFromAcceptLanguage("es-CR,es;q=0.9,en;q=0.8")).toBe("es");
   });
 
   it("skips unsupported tags instead of defaulting on them", () => {
     expect(resolveLocaleFromAcceptLanguage("fr-FR,fr;q=0.9,zh;q=0.5")).toBe("zh-CN");
-    expect(resolveLocaleFromAcceptLanguage("es-419,pt;q=0.9")).toBe("en");
+    expect(resolveLocaleFromAcceptLanguage("pt-BR,pt;q=0.9,es-419;q=0.5")).toBe("es");
   });
 
   it("defaults to en on empty, wildcard or missing headers", () => {

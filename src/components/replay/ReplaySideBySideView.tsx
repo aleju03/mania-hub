@@ -4,6 +4,10 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject
 
 import { getBeatmapAudioUrl, getInlineBackgroundUrl } from "../../lib/audio-url";
 import type { ManiaBeatmap } from "../../lib/beatmap-parser";
+import { useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
+
 import { formatDate } from "../../lib/format";
 import { useViewerTimeZone } from "../../lib/use-viewer-time-zone";
 import {
@@ -32,6 +36,7 @@ import {
   SIDE_BY_SIDE_PORTRAIT_PHONE_QUERY,
   SIDE_BY_SIDE_SHORT_VIEWPORT_QUERY,
   SIDE_BY_SIDE_TOUCH_QUERY,
+  formatSideBySideIssue,
   getSideBySideIssue,
   resolveSideBySideLayout,
   type SideBySideViewport,
@@ -180,6 +185,7 @@ export function ReplaySideBySideView({
   rightScoreId: number;
   onExit: () => void;
 }) {
+  const { t, i18n } = useLingui();
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasLeftRef = useRef<HTMLCanvasElement>(null);
@@ -379,9 +385,9 @@ export function ReplaySideBySideView({
         getScore({ data: { scoreId: rightScoreId, mode: "mania" } }).catch(() => null),
       ]);
       if (cancelled) return;
-      if (!scoreLeft || !scoreRight) throw new Error("Couldn't load one of the scores.");
+      if (!scoreLeft || !scoreRight) throw new Error(t`Couldn't load one of the scores.`);
       const issue = getSideBySideIssue(scoreLeft, scoreRight);
-      if (issue) throw new Error(issue.message);
+      if (issue) throw new Error(formatSideBySideIssue(issue, i18n));
       const beatmapId = scoreLeft.beatmap!.id;
       const beatmapFilePromise = getBeatmapFile({
         data: { beatmapId, beatmapsetId: scoreLeft.beatmapset?.id, checksum: scoreLeft.beatmap?.checksum },
@@ -396,7 +402,7 @@ export function ReplaySideBySideView({
       setSides([sideLeft, sideRight]);
     })()
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load the replays.");
+        if (!cancelled) setError(e instanceof Error ? e.message : t`Failed to load the replays.`);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -416,7 +422,7 @@ export function ReplaySideBySideView({
         const { ManiaReplayRenderer } = await withTimeout(
           import("./ReplayCanvas"),
           8000,
-          "Timed out loading the replay renderer.",
+          t`Timed out loading the replay renderer.`,
         );
         if (cancelled) return;
         const skinSettings = readReplaySkinSettings();
@@ -425,7 +431,7 @@ export function ReplaySideBySideView({
         const created: ReplayRendererLike[] = [];
         for (const [index, side] of sides.entries()) {
           const canvas = canvases[index];
-          if (!canvas) throw new Error("The side-by-side playfields failed to mount.");
+          if (!canvas) throw new Error(t`The side-by-side playfields failed to mount.`);
           created.push(new ManiaReplayRenderer(
             canvas,
             side.replay.frames,
@@ -466,7 +472,7 @@ export function ReplaySideBySideView({
         await withTimeout(
           Promise.all(created.map((renderer) => renderer.ready())),
           12000,
-          "Timed out starting the replay renderers.",
+          t`Timed out starting the replay renderers.`,
         );
         if (cancelled) {
           for (const renderer of created) renderer.destroy();
@@ -498,7 +504,7 @@ export function ReplaySideBySideView({
         setSpeed(1);
         setReady(true);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to start the replay renderers.");
+        if (!cancelled) setError(e instanceof Error ? e.message : t`Failed to start the replay renderers.`);
       }
     })();
 
@@ -980,28 +986,28 @@ export function ReplaySideBySideView({
       {loading && (
         <div className="relative flex flex-1 flex-col items-center justify-center px-4 text-center">
           <div className="mb-4 h-10 w-10 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
-          <p className="text-sm font-semibold text-osu-l2">Loading both replays...</p>
-          <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">Fetching the two runs and the beatmap.</p>
+          <p className="text-sm font-semibold text-osu-l2">{t`Loading both replays...`}</p>
+          <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">{t`Fetching the two runs and the beatmap.`}</p>
           <button
             type="button"
             onClick={onExit}
             className="mt-5 rounded-lg bg-white/10 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-white/20 hover:text-white cursor-pointer"
           >
-            Cancel
+            {t`Cancel`}
           </button>
         </div>
       )}
 
       {!loading && (error || !sides) && (
         <div className="relative flex flex-1 flex-col items-center justify-center px-4 text-center">
-          <div className="text-sm font-bold text-white">Couldn't start the comparison</div>
-          <div className="mt-2 max-w-[460px] text-[12px] text-osu-f1">{error ?? "Something went wrong."}</div>
+          <div className="text-sm font-bold text-white">{t`Couldn't start the comparison`}</div>
+          <div className="mt-2 max-w-[460px] text-[12px] text-osu-f1">{error ?? t`Something went wrong.`}</div>
           <button
             type="button"
             onClick={onExit}
             className="mt-5 rounded-full bg-osu-pink px-6 py-2 text-sm font-bold text-white hover:brightness-110 transition cursor-pointer"
           >
-            Pick two scores
+            {t`Pick two scores`}
           </button>
         </div>
       )}
@@ -1043,7 +1049,7 @@ export function ReplaySideBySideView({
               <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
                 <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-white/80">
                   <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" />
-                  Buffering audio
+                  {t`Buffering audio`}
                 </span>
               </div>
             )}
@@ -1059,7 +1065,7 @@ export function ReplaySideBySideView({
                 type="button"
                 onClick={() => (isPlaying ? pause() : play())}
                 disabled={!ready}
-                aria-label={isPlaying ? "Pause both replays" : "Play both replays"}
+                aria-label={isPlaying ? t`Pause both replays` : t`Play both replays`}
                 className={`flex shrink-0 cursor-pointer items-center justify-center rounded-full bg-osu-pink text-white transition hover:bg-osu-pink-light active:scale-95 disabled:opacity-50 ${
                   compact ? "h-8 w-8" : "h-9 w-9"
                 }`}
@@ -1125,8 +1131,8 @@ export function ReplaySideBySideView({
               <button
                 type="button"
                 onClick={fullscreen ? exitFullscreen : enterFullscreen}
-                title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-                aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+                title={fullscreen ? t`Exit fullscreen` : t`Fullscreen`}
+                aria-label={fullscreen ? t`Exit fullscreen` : t`Fullscreen`}
                 aria-pressed={fullscreen}
                 className="shrink-0 rounded p-1 text-osu-f1 hover:text-white transition-colors cursor-pointer"
               >
@@ -1154,13 +1160,13 @@ export function ReplaySideBySideView({
       {layout.rotatePrompt && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-[#07070b]/95 px-6 text-center">
           <Smartphone className="mb-2 h-10 w-10 rotate-90 text-osu-pink" aria-hidden="true" />
-          <p className="text-sm font-semibold text-osu-l2">Rotate your phone to watch both</p>
+          <p className="text-sm font-semibold text-osu-l2">{t`Rotate your phone to watch both`}</p>
           <button
             type="button"
             onClick={onExit}
             className="mt-3 rounded-lg bg-white/10 px-4 py-2 text-xs font-semibold text-osu-f1 hover:bg-white/20 hover:text-white transition-colors cursor-pointer"
           >
-            Pick two scores
+            {t`Pick two scores`}
           </button>
         </div>
       )}
@@ -1210,6 +1216,7 @@ function VisualSettings({ dim, onSetDim, storyboardOn, storyboardStatus, onToggl
   storyboardStatus: "idle" | "loading" | "active" | "unavailable" | "error";
   onToggleStoryboard: () => void;
 }) {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -1234,9 +1241,9 @@ function VisualSettings({ dim, onSetDim, storyboardOn, storyboardStatus, onToggl
   }, [open]);
 
   const storyboardLabel = storyboardStatus === "loading" && storyboardOn
-    ? "Loading..."
+    ? t`Loading...`
     : storyboardOn && (storyboardStatus === "unavailable" || storyboardStatus === "error")
-      ? storyboardStatus === "error" ? "Failed" : "None on this map"
+      ? storyboardStatus === "error" ? t`Failed` : t`None on this map`
       : null;
 
   return (
@@ -1244,8 +1251,8 @@ function VisualSettings({ dim, onSetDim, storyboardOn, storyboardStatus, onToggl
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        title="Background dim and storyboard"
-        aria-label="Background dim and storyboard"
+        title={t`Background dim and storyboard`}
+        aria-label={t`Background dim and storyboard`}
         aria-expanded={open}
         className={`rounded p-1 transition-colors cursor-pointer ${open ? "text-white" : "text-osu-f1 hover:text-white"}`}
       >
@@ -1254,7 +1261,7 @@ function VisualSettings({ dim, onSetDim, storyboardOn, storyboardStatus, onToggl
       {open && (
         <div className="absolute bottom-full right-0 z-30 mb-2 w-56 rounded-lg border border-white/10 bg-[#0b0b12]/95 p-3 shadow-xl backdrop-blur">
           <div className="flex items-center justify-between text-[11px] font-semibold text-white/70">
-            <span>Background dim</span>
+            <span>{t`Background dim`}</span>
             <span className="tabular-nums text-white">{dim}%</span>
           </div>
           <input
@@ -1264,7 +1271,7 @@ function VisualSettings({ dim, onSetDim, storyboardOn, storyboardStatus, onToggl
             step={5}
             value={dim}
             onChange={(event) => onSetDim(Number(event.target.value))}
-            aria-label="Background dim"
+            aria-label={t`Background dim`}
             className="mt-2 w-full"
           />
           <button
@@ -1275,7 +1282,7 @@ function VisualSettings({ dim, onSetDim, storyboardOn, storyboardStatus, onToggl
               storyboardOn ? "bg-osu-pink text-white" : "bg-white/10 text-osu-f1 hover:bg-white/20 hover:text-white"
             }`}
           >
-            <span>Storyboard</span>
+            <span>{t`Storyboard`}</span>
             {storyboardLabel && <span className="text-[10px] font-medium opacity-75">{storyboardLabel}</span>}
           </button>
         </div>
@@ -1342,6 +1349,7 @@ function ScoreLeadBar({ sides, stats, compact }: {
   stats: (ReplayLiveStats | null)[];
   compact: boolean;
 }) {
+  const { t } = useLingui();
   const leftScore = stats[0]?.score ?? 0;
   const rightScore = stats[1]?.score ?? 0;
   const lead = leftScore - rightScore;
@@ -1377,7 +1385,7 @@ function ScoreLeadBar({ sides, stats, compact }: {
           compact={compact}
           align="right"
         />
-        <span className={`uppercase tracking-[0.2em] text-white/30 ${compact ? "text-[8px]" : "text-[9px]"}`}>Score</span>
+        <span className={`uppercase tracking-[0.2em] text-white/30 ${compact ? "text-[8px]" : "text-[9px]"}`}>{t`Score`}</span>
         <LeadScore
           side={sides[1]}
           stats={stats[1]}
@@ -1497,8 +1505,9 @@ function MapHeader({ side, stars, compact, onExit }: {
   compact: boolean;
   onExit: () => void;
 }) {
+  const { t } = useLingui();
   const set = side.score.beatmapset;
-  const title = set?.title ?? side.beatmap?.title ?? "Unknown map";
+  const title = set?.title ?? side.beatmap?.title ?? t`Unknown map`;
   const artist = set?.artist ?? side.beatmap?.artist;
   const version = side.score.beatmap?.version ?? side.beatmap?.version;
   const beatmapsetId = set?.id;
@@ -1516,7 +1525,7 @@ function MapHeader({ side, stars, compact, onExit }: {
         <button
           type="button"
           onClick={onExit}
-          aria-label="Back to the picker"
+          aria-label={t`Back to the picker`}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/20 bg-white/15 text-white transition-colors hover:bg-white/25 cursor-pointer"
         >
           <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1538,7 +1547,7 @@ function MapHeader({ side, stars, compact, onExit }: {
           className="flex shrink-0 items-center gap-1 rounded-lg border border-white/20 bg-white/15 px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-white/25 cursor-pointer"
         >
           <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          Back
+          {t`Back`}
         </button>
         {stars != null && <StarRatingBadge stars={stars} size={1.45} />}
       </div>
@@ -1563,6 +1572,7 @@ function MapHeader({ side, stars, compact, onExit }: {
 // Chart facts both runs share, so they sit once under the transport instead of
 // twice in the header. Rate mods move BPM and length, so apply the rate.
 function MapFacts({ side, className = "" }: { side: SideBySideSide; className?: string }) {
+  const { t } = useLingui();
   const apiBeatmap = side.score.beatmap;
   const rate = side.rate;
   const keyCount = side.replay.keyCount;
@@ -1570,13 +1580,13 @@ function MapFacts({ side, className = "" }: { side: SideBySideSide; className?: 
   const lengthSeconds = apiBeatmap?.total_length ?? (side.beatmap ? side.beatmap.totalLength / 1000 : undefined);
   const od = apiBeatmap?.accuracy ?? side.beatmap?.od;
   const facts: { label: string; value: string }[] = [
-    { label: "Keys", value: `${keyCount}K` },
-    ...(od != null ? [{ label: "OD", value: od.toFixed(1) }] : []),
-    ...(apiBeatmap?.drain != null ? [{ label: "HP", value: apiBeatmap.drain.toFixed(1) }] : []),
-    ...(bpm != null ? [{ label: "BPM", value: String(Math.round(bpm * rate)) }] : []),
-    ...(lengthSeconds != null ? [{ label: "Length", value: formatLength(lengthSeconds / rate) }] : []),
-    ...(side.beatmap ? [{ label: "Notes", value: side.beatmap.notes.length.toLocaleString("en-US") }] : []),
-    ...(rate !== 1 ? [{ label: "Rate", value: `${rate}x` }] : []),
+    { label: t`Keys`, value: `${keyCount}K` },
+    ...(od != null ? [{ label: t`OD`, value: od.toFixed(1) }] : []),
+    ...(apiBeatmap?.drain != null ? [{ label: t`HP`, value: apiBeatmap.drain.toFixed(1) }] : []),
+    ...(bpm != null ? [{ label: t`BPM`, value: String(Math.round(bpm * rate)) }] : []),
+    ...(lengthSeconds != null ? [{ label: t`Length`, value: formatLength(lengthSeconds / rate) }] : []),
+    ...(side.beatmap ? [{ label: t`Notes`, value: side.beatmap.notes.length.toLocaleString("en-US") }] : []),
+    ...(rate !== 1 ? [{ label: t`Rate`, value: `${rate}x` }] : []),
   ];
   return (
     <div className={`flex flex-wrap items-center justify-center gap-x-4 gap-y-1 ${className}`}>
@@ -1595,7 +1605,7 @@ function formatLength(seconds: number): string {
 }
 
 interface StatRow {
-  label: string;
+  label: MessageDescriptor;
   labelClass?: string;
   format: (stats: ReplayLiveStats) => string;
   /** Raw value the two sides are ranked on; omit for rows with no winner. */
@@ -1607,34 +1617,34 @@ interface StatRow {
 }
 
 const JUDGEMENT_ROWS: StatRow[] = [
-  { label: "MAX", labelClass: "text-osu-yellow", format: (s) => String(s.counts[1]), rank: (s) => s.counts[1], better: "higher" },
-  { label: "300", labelClass: "text-osu-blue", format: (s) => String(s.counts[2]), rank: (s) => s.counts[2], better: "lower" },
-  { label: "200", labelClass: "text-osu-green-light", format: (s) => String(s.counts[3]), rank: (s) => s.counts[3], better: "lower" },
-  { label: "100", labelClass: "text-osu-green", format: (s) => String(s.counts[4]), rank: (s) => s.counts[4], better: "lower" },
-  { label: "50", labelClass: "text-osu-orange", format: (s) => String(s.counts[5]), rank: (s) => s.counts[5], better: "lower" },
-  { label: "MISS", labelClass: "text-osu-red-light", format: (s) => String(s.counts[6]), rank: (s) => s.counts[6], better: "lower" },
+  { label: msg`MAX`, labelClass: "text-osu-yellow", format: (s) => String(s.counts[1]), rank: (s) => s.counts[1], better: "higher" },
+  { label: msg`300`, labelClass: "text-osu-blue", format: (s) => String(s.counts[2]), rank: (s) => s.counts[2], better: "lower" },
+  { label: msg`200`, labelClass: "text-osu-green-light", format: (s) => String(s.counts[3]), rank: (s) => s.counts[3], better: "lower" },
+  { label: msg`100`, labelClass: "text-osu-green", format: (s) => String(s.counts[4]), rank: (s) => s.counts[4], better: "lower" },
+  { label: msg`50`, labelClass: "text-osu-orange", format: (s) => String(s.counts[5]), rank: (s) => s.counts[5], better: "lower" },
+  { label: msg`MISS`, labelClass: "text-osu-red-light", format: (s) => String(s.counts[6]), rank: (s) => s.counts[6], better: "lower" },
 ];
 
 const TIMING_ROWS: StatRow[] = [
-  { label: "Early", format: (s) => String(s.early) },
-  { label: "Late", format: (s) => String(s.late) },
-  { label: "Mean", format: (s) => `${s.meanOffsetMs >= 0 ? "+" : ""}${s.meanOffsetMs.toFixed(1)}ms`, rank: (s) => Math.abs(s.meanOffsetMs), better: "lower" },
+  { label: msg`Early`, format: (s) => String(s.early) },
+  { label: msg`Late`, format: (s) => String(s.late) },
+  { label: msg`Mean`, format: (s) => `${s.meanOffsetMs >= 0 ? "+" : ""}${s.meanOffsetMs.toFixed(1)}ms`, rank: (s) => Math.abs(s.meanOffsetMs), better: "lower" },
   // MAX-to-300 ratio, the number mania players quote for how clean the taps
   // were. Undefined until the run has dropped a 300.
-  { label: "Ratio", format: (s) => (s.counts[2] > 0 ? (s.counts[1] / s.counts[2]).toFixed(2) : "-"), rank: (s) => (s.counts[2] > 0 ? s.counts[1] / s.counts[2] : 0), better: "higher" },
-  { label: "Judged", format: (s) => String(s.totalJudgements) },
+  { label: msg`Ratio`, format: (s) => (s.counts[2] > 0 ? (s.counts[1] / s.counts[2]).toFixed(2) : "-"), rank: (s) => (s.counts[2] > 0 ? s.counts[1] / s.counts[2] : 0), better: "higher" },
+  { label: msg`Judged`, format: (s) => String(s.totalJudgements) },
 ];
 
 const HEADLINE_ROWS: StatRow[] = [
   // "Acc", not "Accuracy": at this size the label was taking the width the two
   // percentages needed, and both were truncating to "100.0...".
-  { label: "Acc", format: (s) => `${s.accuracy.toFixed(2)}%`, rank: (s) => s.accuracy, better: "higher", valueClass: "text-[24px]", compactValueClass: "text-[16px]" },
-  { label: "UR", format: (s) => s.unstableRate.toFixed(2), rank: (s) => s.unstableRate, better: "lower", valueClass: "text-[19px]", compactValueClass: "text-[13px]" },
+  { label: msg`Acc`, format: (s) => `${s.accuracy.toFixed(2)}%`, rank: (s) => s.accuracy, better: "higher", valueClass: "text-[24px]", compactValueClass: "text-[16px]" },
+  { label: msg`UR`, format: (s) => s.unstableRate.toFixed(2), rank: (s) => s.unstableRate, better: "lower", valueClass: "text-[19px]", compactValueClass: "text-[13px]" },
 ];
 
 const PP_ROWS: StatRow[] = [
   {
-    label: "PP",
+    label: msg`PP`,
     format: (s) => (s.maxPp > 0 ? `${Math.round(s.pp)}/${Math.round(s.maxPp)}` : String(Math.round(s.pp))),
     rank: (s) => s.pp,
     better: "higher",
@@ -1689,7 +1699,7 @@ function StatGroup({ rows, left, right, compact, divider = false }: {
   return (
     <div className={divider ? `border-t border-white/[0.07] ${compact ? "pt-1.5" : "pt-3.5"}` : ""}>
       {rows.map((row) => (
-        <StatLine key={row.label} row={row} left={left} right={right} compact={compact} />
+        <StatLine key={String(row.label.id)} row={row} left={left} right={right} compact={compact} />
       ))}
     </div>
   );
@@ -1701,6 +1711,7 @@ function StatLine({ row, left, right, compact }: {
   right: ReplayLiveStats | null;
   compact: boolean;
 }) {
+  const { i18n } = useLingui();
   // Whoever is ahead on this line right now reads bright; the other dims. It
   // is the whole point of the column, so it has to be legible at a glance.
   let leader: 0 | 1 | null = null;
@@ -1718,7 +1729,7 @@ function StatLine({ row, left, right, compact }: {
   return (
     <div className={`grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-baseline ${compact ? "gap-x-1.5 py-0" : "gap-x-3 py-[3px]"}`}>
       <span className={`${valueClass(0)} text-right`}>{left ? row.format(left) : "-"}</span>
-      <span className={`font-semibold uppercase tracking-[0.1em] ${compact ? "text-[9px]" : "text-[11px]"} ${row.labelClass ?? "text-white/45"}`}>{row.label}</span>
+      <span className={`font-semibold uppercase tracking-[0.1em] ${compact ? "text-[9px]" : "text-[11px]"} ${row.labelClass ?? "text-white/45"}`}>{i18n._(row.label)}</span>
       <span className={`${valueClass(1)} text-left`}>{right ? row.format(right) : "-"}</span>
     </div>
   );

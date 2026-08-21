@@ -44,6 +44,7 @@ import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backen
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminR2RouteImport } from './routes/admin/r2'
 import { Route as AdminTodosRouteImport } from './routes/admin/todos'
+import { Route as AdminTranslationReportsRouteImport } from './routes/admin/translation-reports'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
 import { Route as ApiAvatarRouteImport } from './routes/api/avatar'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
@@ -253,6 +254,11 @@ const AdminTodosRoute = AdminTodosRouteImport.update({
   path: '/admin/todos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminTranslationReportsRoute = AdminTranslationReportsRouteImport.update({
+  id: '/admin/translation-reports',
+  path: '/admin/translation-reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAudioRoute = ApiAudioRouteImport.update({
   id: '/api/audio',
   path: '/api/audio',
@@ -456,6 +462,7 @@ export interface FileRoutesByFullPath {
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/todos': typeof AdminTodosRoute
+  '/admin/translation-reports': typeof AdminTranslationReportsRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -526,6 +533,7 @@ export interface FileRoutesByTo {
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/todos': typeof AdminTodosRoute
+  '/admin/translation-reports': typeof AdminTranslationReportsRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -597,6 +605,7 @@ export interface FileRoutesById {
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/todos': typeof AdminTodosRoute
+  '/admin/translation-reports': typeof AdminTranslationReportsRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -669,6 +678,7 @@ export interface FileRouteTypes {
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/todos'
+    | '/admin/translation-reports'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -739,6 +749,7 @@ export interface FileRouteTypes {
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/todos'
+    | '/admin/translation-reports'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -809,6 +820,7 @@ export interface FileRouteTypes {
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/todos'
+    | '/admin/translation-reports'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -880,6 +892,7 @@ export interface RootRouteChildren {
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
   AdminR2Route: typeof AdminR2Route
   AdminTodosRoute: typeof AdminTodosRoute
+  AdminTranslationReportsRoute: typeof AdminTranslationReportsRoute
   ApiAudioRoute: typeof ApiAudioRoute
   ApiAvatarRoute: typeof ApiAvatarRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
@@ -1152,6 +1165,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/todos'
       fullPath: '/admin/todos'
       preLoaderRoute: typeof AdminTodosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/translation-reports': {
+      id: '/admin/translation-reports'
+      path: '/admin/translation-reports'
+      fullPath: '/admin/translation-reports'
+      preLoaderRoute: typeof AdminTranslationReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/audio': {
@@ -1480,6 +1500,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminOgPreviewRoute: AdminOgPreviewRoute,
   AdminR2Route: AdminR2Route,
   AdminTodosRoute: AdminTodosRoute,
+  AdminTranslationReportsRoute: AdminTranslationReportsRoute,
   ApiAudioRoute: ApiAudioRoute,
   ApiAvatarRoute: ApiAvatarRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,

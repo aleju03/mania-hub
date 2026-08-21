@@ -11,7 +11,7 @@ describe("replay skin settings UI", () => {
     expect(routeSource).toContain("writeReplaySkinSettings");
     expect(routeSource).toContain("rendererRef.current?.setSkinSettings");
     expect(routeSource).toContain("ReplaySkinSettingsModal");
-    expect(controlsSource).toContain('aria-label="Replay settings"');
+    expect(controlsSource).toContain("aria-label={t`Replay settings`}");
   });
 
   it("persists applied community skins as a dehydrated pointer, never data URLs", () => {
@@ -145,7 +145,7 @@ describe("replay skin settings UI", () => {
   it("exposes ColumnStart in the layout tab and moves the preview with it", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
 
-    expect(source).toContain('label="Column start"');
+    expect(source).toContain("label={t`Column start`}");
     // Stored null while centred, so the reset goes back to centred rather than
     // to some skin's imported value.
     expect(source).toContain("function getCenteredColumnStart(");
@@ -215,9 +215,9 @@ describe("replay skin settings UI", () => {
 
     // One card held both, so the buttons under "Your replay skin: X" read as
     // acting on the skin named at the top of the card instead.
-    expect(source).toContain(">Custom skin</div>");
-    expect(source).toContain(">My replay skin</div>");
-    expect(source).toContain("{myReplaySkinRecord ? myReplaySkinRecord.skin.name : \"None set\"}");
+    expect(source).toContain("{t`Custom skin`}</div>");
+    expect(source).toContain("{t`My replay skin`}</div>");
+    expect(source).toContain("{myReplaySkinRecord ? myReplaySkinRecord.skin.name : t`None set`}");
     expect(source).toContain("src={myReplaySkinRecord.skin.previewUrl}");
   });
 
@@ -243,7 +243,7 @@ describe("replay skin settings UI", () => {
     // Publishing the unchanged draft is just as redundant as loading it, so
     // both directions share the same disabled state.
     expect(source).toContain("disabled={!communitySkinContext || communityBusy != null || draftMatchesMyReplaySkin}");
-    expect(source).toContain('draftMatchesMyReplaySkin\n                                    ? "Already set"');
+    expect(source).toContain("draftMatchesMyReplaySkin\n                                    ? t`Already set`");
   });
 
   it("makes viewer-local and public replay-skin saves explicit", () => {
@@ -254,11 +254,11 @@ describe("replay skin settings UI", () => {
     expect(panelSource).toContain("Viewer editor");
     expect(panelSource).toContain("This does not change the replay skin other people see on your plays.");
     expect(modalSource).toContain('saveScope?: "viewer" | "owner";');
-    expect(modalSource).toContain('saveScope === "owner" ? "Save for everyone" : "Apply for me"');
+    expect(modalSource).toContain("saveScope === \"owner\" ? t`Save for everyone` : t`Apply for me`");
     // The publish action lives in the persistent footer, so a Layout edit can
     // be saved publicly without returning to the Style tab.
     expect(modalSource).toContain('saveScope === "viewer" && viewerId && communitySkinContext');
-    expect(modalSource).toContain('"Saved for everyone"');
+    expect(modalSource).toContain("t`Saved for everyone`");
     expect(ownerModalSource).toContain('saveScope="owner"');
   });
 
@@ -342,13 +342,13 @@ describe("replay skin settings UI", () => {
     // Nothing left on the tab would change the stage.
     expect(source).toContain("const keymodeHasJudgementArt = Object.values(profile.assets.judgements).some(Boolean);");
     expect(source).toContain("const showHudTab = !keymodeHasComboArt || !keymodeHasJudgementArt;");
-    expect(source).toContain('...(showHudTab ? ([["hud", "HUD"]] as const) : []),');
+    expect(source).toContain("...(showHudTab ? ([[\"hud\", t`HUD`]] as const) : []),");
     // A stored "hud" tab must not strand the modal on a tab it no longer draws.
     expect(source).toContain('if (activeTab === "hud" && !showHudTab) setActiveTab("style");');
     // Judgement size still moves the stage, so it survives on Layout next to
     // the position it shares a section with in game.
     expect(source).toContain("{showHudTab ? null : (");
-    expect(source).toContain('label="Judgement size"');
+    expect(source).toContain("label={t`Judgement size`}");
   });
 
   it("paints the stage with the player's skin already on, and caches the decode", () => {

@@ -8,7 +8,7 @@ import { formatter } from "@lingui/format-po";
 // vitest and vite build all work without an extra build step.
 export default defineConfig({
   sourceLocale: "en",
-  locales: ["en", "zh-CN"],
+  locales: ["en", "zh-CN", "es"],
   catalogs: [
     {
       path: "<rootDir>/src/locales/{locale}/messages",

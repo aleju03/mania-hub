@@ -1,3 +1,6 @@
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
+
 // Dynamic renders: the look of a signature, as opposed to signature-shared.ts,
 // which says which layouts exist.
 //
@@ -23,7 +26,7 @@ export type SignatureBackgroundArt = "triangles" | "notes";
 
 export interface SignatureBackgroundOption {
   id: string;
-  label: string;
+  label: MessageDescriptor;
   /** Needs a picture fetched and processed, rather than a painted fill. */
   image?: boolean;
   /** Takes its address from the player instead of from their osu! data. */
@@ -50,21 +53,21 @@ export interface SignatureBackgroundOption {
    address so DNS cannot rebind under it, and re-checks each redirect hop. Any
    new caller must use that path rather than fetch(). */
 export const SIGNATURE_BACKGROUNDS: SignatureBackgroundOption[] = [
-  { id: "none", label: "None", swatch: "#1a1320" },
+  { id: "none", label: msg`None`, swatch: "#1a1320" },
   /* The maniacard's tier art - the gold wash a Legendary card carries in the
      app. It is an option rather than the thing every card gets whether or not
      a background was chosen, because a look nobody picked and nobody can turn
      off is not a style, it is a constraint. */
-  { id: "tier", label: "Card tier", tier: true, types: ["maniacard"], swatch: "linear-gradient(135deg,#4a2f10,#c8952f)" },
-  { id: "solid", label: "Solid", painted: true },
-  { id: "gradient", label: "Gradient", painted: true },
+  { id: "tier", label: msg`Card tier`, tier: true, types: ["maniacard"], swatch: "linear-gradient(135deg,#4a2f10,#c8952f)" },
+  { id: "solid", label: msg`Solid`, painted: true },
+  { id: "gradient", label: msg`Gradient`, painted: true },
   /* The site's own two backdrops, in the player's colour. Both are drawn
      rather than fetched, so they cost no network and cannot fail. */
-  { id: "triangles", label: "Triangles", painted: true, art: "triangles" },
-  { id: "notes", label: "Falling notes", painted: true, art: "notes" },
-  { id: "cover", label: "Profile banner", image: true, swatch: "linear-gradient(135deg,#4a3357,#8a6b9e)" },
-  { id: "map", label: "Top play", image: true, swatch: "linear-gradient(135deg,#2d4a57,#6b9e8a)" },
-  { id: "custom", label: "Image URL", image: true, custom: true, swatch: "linear-gradient(135deg,#57492d,#9e8a6b)" },
+  { id: "triangles", label: msg`Triangles`, painted: true, art: "triangles" },
+  { id: "notes", label: msg`Falling notes`, painted: true, art: "notes" },
+  { id: "cover", label: msg`Profile banner`, image: true, swatch: "linear-gradient(135deg,#4a3357,#8a6b9e)" },
+  { id: "map", label: msg`Top play`, image: true, swatch: "linear-gradient(135deg,#2d4a57,#6b9e8a)" },
+  { id: "custom", label: msg`Image URL`, image: true, custom: true, swatch: "linear-gradient(135deg,#57492d,#9e8a6b)" },
 ];
 
 export type SignatureBackgroundId = string;
@@ -89,7 +92,7 @@ export function defaultSignatureBackground(type?: SignatureType): SignatureBackg
 
 export interface SignatureAccentOption {
   id: string;
-  label: string;
+  label: MessageDescriptor;
   /** null means "let the render decide", which differs per type. */
   hex: string | null;
 }
@@ -99,14 +102,14 @@ export interface SignatureAccentOption {
    one click. Their ids are still accepted on the way in, so a style stored
    when this WAS the whole allowlist keeps the colour it was set to. */
 export const SIGNATURE_ACCENTS: SignatureAccentOption[] = [
-  { id: "auto", label: "Auto", hex: null },
-  { id: "pink", label: "Pink", hex: "#ff66aa" },
-  { id: "violet", label: "Violet", hex: "#a97bff" },
-  { id: "blue", label: "Blue", hex: "#4da3ff" },
-  { id: "cyan", label: "Cyan", hex: "#3fd4d0" },
-  { id: "green", label: "Green", hex: "#5fd66a" },
-  { id: "gold", label: "Gold", hex: "#ffc24d" },
-  { id: "red", label: "Red", hex: "#ff5f5f" },
+  { id: "auto", label: msg`Auto`, hex: null },
+  { id: "pink", label: msg`Pink`, hex: "#ff66aa" },
+  { id: "violet", label: msg`Violet`, hex: "#a97bff" },
+  { id: "blue", label: msg`Blue`, hex: "#4da3ff" },
+  { id: "cyan", label: msg`Cyan`, hex: "#3fd4d0" },
+  { id: "green", label: msg`Green`, hex: "#5fd66a" },
+  { id: "gold", label: msg`Gold`, hex: "#ffc24d" },
+  { id: "red", label: msg`Red`, hex: "#ff5f5f" },
 ];
 
 export const SIGNATURE_ACCENT_AUTO = "auto";

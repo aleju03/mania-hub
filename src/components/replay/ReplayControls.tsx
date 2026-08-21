@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import type { MutableRefObject, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, Film, Maximize2, Settings, Share2 } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
 
 import type { ReplayRendererLike } from "#/lib/replay-types";
 import { withReplayShareTime } from "#/lib/replay-share";
@@ -173,6 +174,7 @@ export function ReplayControls({
   onSeek,
   onContextMenu,
 }: ReplayControlsProps) {
+  const { t } = useLingui();
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [sharePos, setSharePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [shareLabel, setShareLabel] = useState("");
@@ -330,7 +332,7 @@ export function ReplayControls({
         setVideoToast((current) => (current?.id === toastId ? null : current));
       }, url ? 9000 : 3500);
     };
-    showToast("Discord video ready", videoExportUrl);
+    showToast(t`Discord video ready`, videoExportUrl);
   }, [videoExporting, videoExportUrl]);
 
   const handleProgressContextMenu = (timeMsGame: number, clientX: number, clientY: number) => {
@@ -373,8 +375,8 @@ export function ReplayControls({
   const customEnd = Math.max(videoCustomStartMs ?? 0, videoCustomEndMs ?? 0);
   const hasCustomRange = videoCustomStartMs != null && videoCustomEndMs != null && customEnd > customStart;
   const selectedExportLabel = videoExportKind === "full"
-    ? "Full"
-    : videoCustomStartMs == null || videoCustomEndMs != null ? "Set start" : "Set end";
+    ? t`Full`
+    : videoCustomStartMs == null || videoCustomEndMs != null ? t`Set start` : t`Set end`;
 
   const markCustomVideoPoint = () => {
     const timeMs = currentReplayTimeMs();
@@ -416,7 +418,7 @@ export function ReplayControls({
   const playButton = (
     <button
       onClick={onTogglePlay}
-      title={pendingPlay ? "Waiting for audio to load..." : isPlaying && buffering ? "Buffering..." : undefined}
+      title={pendingPlay ? t`Waiting for audio to load...` : isPlaying && buffering ? t`Buffering...` : undefined}
       className={`${isOverlay ? "w-10 h-10" : "w-9 h-9"} rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors hidden sm:flex items-center justify-center cursor-pointer shrink-0`}
     >
       {pendingPlay || (isPlaying && buffering) ? (
@@ -497,24 +499,24 @@ export function ReplayControls({
           >
             <div className="w-48 space-y-3 rounded-lg border border-osu-b2 bg-osu-b3 p-3 shadow-2xl">
               <VolumeMixerRow
-                label="Music"
-                display={audioEnabled ? `${Math.round(volume * 100)}%` : "muted"}
+                label={t`Music`}
+                display={audioEnabled ? `${Math.round(volume * 100)}%` : t`muted`}
                 value={audioEnabled ? volume : 0}
                 onChange={onSetVolume}
                 onToggle={onToggleAudio}
               />
               {beatmapHitsoundsAvailable && (
                 <VolumeMixerRow
-                  label="Beatmap hitsounds"
-                  display={beatmapHitsoundsOn ? `${Math.round(beatmapHitsoundVolume * 100)}%` : "off"}
+                  label={t`Beatmap hitsounds`}
+                  display={beatmapHitsoundsOn ? `${Math.round(beatmapHitsoundVolume * 100)}%` : t`off`}
                   value={beatmapHitsoundsOn ? beatmapHitsoundVolume : 0}
                   onChange={onSetBeatmapHitsoundVolume}
                   onToggle={onToggleBeatmapHitsounds}
                 />
               )}
               <VolumeMixerRow
-                label={beatmapHitsoundsAvailable ? "Key hitsounds" : "Hitsounds"}
-                display={keypressHitsoundsOn ? `${Math.round(keypressHitsoundVolume * 100)}%` : "off"}
+                label={beatmapHitsoundsAvailable ? t`Key hitsounds` : t`Hitsounds`}
+                display={keypressHitsoundsOn ? `${Math.round(keypressHitsoundVolume * 100)}%` : t`off`}
                 value={keypressHitsoundsOn ? keypressHitsoundVolume : 0}
                 onChange={onSetKeypressHitsoundVolume}
                 onToggle={onToggleKeypressHitsounds}
@@ -544,8 +546,8 @@ export function ReplayControls({
   const settingsButton = (
     <button
       onClick={onOpenSkinSettings}
-      aria-label="Replay settings"
-      title="Replay settings"
+      aria-label={t`Replay settings`}
+      title={t`Replay settings`}
       className={`${isOverlay ? "w-9 h-9" : "order-8 sm:order-none w-7 h-7"} rounded flex items-center justify-center cursor-pointer transition-colors ${
         skinSettingsOpen
           ? "bg-osu-pink text-white"
@@ -564,15 +566,15 @@ export function ReplayControls({
       <button
         type="button"
         onClick={toggleSharePanel}
-        aria-label="Share this replay"
+        aria-label={t`Share this replay`}
         aria-expanded={sharePanelOpen}
-        title="Share this replay"
+        title={t`Share this replay`}
         className={`${isOverlay ? "h-9 text-[11px]" : "h-7 text-[10px]"} flex items-center gap-1.5 rounded px-2.5 font-semibold cursor-pointer transition-colors ${
           sharePanelOpen ? "bg-osu-pink text-white hover:bg-osu-pink-light" : "bg-osu-b3/50 text-osu-f1 hover:bg-osu-b3 hover:text-white"
         }`}
       >
         <Share2 className="h-3.5 w-3.5" strokeWidth={2.3} />
-        <span>Share</span>
+        <span>{t`Share`}</span>
       </button>
       <AnimatePresence>
         {sharePanelOpen && (
@@ -587,7 +589,7 @@ export function ReplayControls({
               type="text"
               readOnly
               value={shareLink}
-              aria-label="Replay link"
+              aria-label={t`Replay link`}
               className="w-full select-all truncate rounded bg-black/40 px-2 py-1.5 text-[11px] text-white/60 outline-none"
               onFocus={(event) => event.target.select()}
             />
@@ -599,7 +601,7 @@ export function ReplayControls({
               }}
               className="mt-1 flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4"
             >
-              <span>Start at {formatReplayMs(sharePlayheadWallMs)}</span>
+              <span><Trans>Start at {formatReplayMs(sharePlayheadWallMs)}</Trans></span>
               <CheckMark on={shareAtTimestamp} />
             </button>
             <div className="mt-1 flex gap-1">
@@ -611,7 +613,7 @@ export function ReplayControls({
                 }`}
               >
                 {shareLinkCopied ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : null}
-                {shareLinkCopied ? "Copied" : "Copy link"}
+                {shareLinkCopied ? t`Copied` : t`Copy link`}
               </button>
               {canNativeShare && (
                 <button
@@ -621,7 +623,7 @@ export function ReplayControls({
                   }}
                   className="cursor-pointer rounded bg-osu-b4 px-2.5 py-1.5 text-[11px] font-bold text-osu-f0 transition-colors hover:text-white"
                 >
-                  Share…
+                  {t`Share…`}
                 </button>
               )}
             </div>
@@ -643,7 +645,7 @@ export function ReplayControls({
           }
         }}
         disabled={videoExporting}
-        aria-label="Generate replay video URL"
+        aria-label={t`Generate replay video URL`}
         className={`${isOverlay ? "h-9 text-[11px]" : "h-7 text-[10px]"} rounded-l px-2.5 font-semibold transition-colors flex items-center gap-1.5 ${
           videoExporting
             ? "cursor-default bg-osu-b3/40 text-osu-f1"
@@ -663,7 +665,7 @@ export function ReplayControls({
         type="button"
         onClick={() => setVideoMenuOpen((open) => !open)}
         disabled={videoExporting}
-        aria-label="Replay video export options"
+        aria-label={t`Replay video export options`}
         aria-expanded={videoMenuOpen}
         className={`${isOverlay ? "h-9" : "h-7"} rounded-r border-l border-osu-b4/40 px-1 transition-colors flex items-center ${
           videoExporting
@@ -700,7 +702,7 @@ export function ReplayControls({
                 videoExportKind === "custom" && videoClipMode ? "text-white" : "text-osu-f0"
               }`}
             >
-              <span>Custom</span>
+              <span>{t`Custom`}</span>
               <CheckMark on={videoExportKind === "custom" && videoClipMode} />
             </button>
             {videoExportKind === "custom" && videoClipMode && (
@@ -718,7 +720,7 @@ export function ReplayControls({
                         : "bg-osu-b4 text-osu-f0 hover:text-white"
                     }`}
                   >
-                    Start here
+                    {t`Start here`}
                   </button>
                   <button
                     type="button"
@@ -732,18 +734,18 @@ export function ReplayControls({
                         : "bg-osu-b4 text-osu-f0 hover:text-white"
                     }`}
                   >
-                    End here
+                    {t`End here`}
                   </button>
                 </div>
                 <div className="rounded bg-osu-b4/60 px-1.5 py-1 text-[10px] leading-tight text-osu-f1">
                   <div className="flex justify-between gap-2">
-                    <span>Start</span>
+                    <span>{t`Start`}</span>
                     <span className={videoCustomStartMs != null ? "font-semibold text-white" : ""}>
                       {videoCustomStartMs != null ? formatReplayMs(videoCustomStartMs / modRate) : "--:--"}
                     </span>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <span>End</span>
+                    <span>{t`End`}</span>
                     <span className={videoCustomEndMs != null ? "font-semibold text-white" : ""}>
                       {videoCustomEndMs != null ? formatReplayMs(videoCustomEndMs / modRate) : "--:--"}
                     </span>
@@ -758,7 +760,7 @@ export function ReplayControls({
                     }}
                     className="w-full cursor-pointer rounded bg-osu-b4/70 px-1.5 py-1 text-[10px] font-semibold text-osu-f0 hover:text-white"
                   >
-                    Clear marks
+                    {t`Clear marks`}
                   </button>
                 )}
               </div>
@@ -774,7 +776,7 @@ export function ReplayControls({
                 videoExportKind === "full" ? "text-white" : "text-osu-f0"
               }`}
             >
-              <span>Full play</span>
+              <span>{t`Full play`}</span>
               <CheckMark on={videoExportKind === "full"} />
             </button>
             <div className="my-1 h-px bg-osu-b2" />
@@ -793,10 +795,10 @@ export function ReplayControls({
               disabled={videoExportKind === "custom" && !hasCustomRange}
               className="flex w-full cursor-pointer items-center justify-center rounded bg-osu-pink px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink"
             >
-              Generate URL
+              {t`Generate URL`}
             </button>
             <div className="px-1 py-1 text-center text-[10px] leading-tight text-osu-f1">
-              For Discord embeds
+              {t`For Discord embeds`}
             </div>
             <div className="my-1 h-px bg-osu-b2" />
             <div className="grid grid-cols-2 gap-1">
@@ -868,12 +870,12 @@ export function ReplayControls({
                 type="button"
                 onClick={() => {
                   void copyTextToClipboard(videoToast.url!).then((ok) => {
-                    if (ok) setVideoToast({ id: videoToast.id, message: "Discord video URL copied" });
+                    if (ok) setVideoToast({ id: videoToast.id, message: t`Discord video URL copied` });
                   });
                 }}
                 className="rounded bg-osu-pink px-2 py-1 text-[11px] font-bold text-white hover:bg-osu-pink-light"
               >
-                Copy
+                {t`Copy`}
               </button>
             )}
           </motion.div>
@@ -927,8 +929,8 @@ export function ReplayControls({
           </div>
 
           <div className="w-60 shrink-0 space-y-4">
-            <OsuSliderRow label="Background dim:" display={`${bgDim}%`} min={0} max={100} step={5} value={bgDim} onChange={onSetBgDim} />
-            <OsuSliderRow label="Scroll speed:" display={String(scrollSpeed)} min={1} max={40} step={1} value={scrollSpeed} onChange={(value) => onSetScrollSpeed(Math.round(value))} />
+            <OsuSliderRow label={t`Background dim:`} display={`${bgDim}%`} min={0} max={100} step={5} value={bgDim} onChange={onSetBgDim} />
+            <OsuSliderRow label={t`Scroll speed:`} display={String(scrollSpeed)} min={1} max={40} step={1} value={scrollSpeed} onChange={(value) => onSetScrollSpeed(Math.round(value))} />
           </div>
 
           <div className="shrink-0 space-y-3">
@@ -940,30 +942,30 @@ export function ReplayControls({
           </div>
 
           <div className="shrink-0">
-            <div className="mb-1.5 text-[15px] font-bold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.7)]">Toggles</div>
+            <div className="mb-1.5 text-[15px] font-bold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.7)]">{t`Toggles`}</div>
             <OsuToggleRow
-              label="Black playfield"
+              label={t`Black playfield`}
               on={blackPlayfield}
               onClick={onToggleBlackPlayfield}
-              title="Fill the playfield with a solid black background"
+              title={t`Fill the playfield with a solid black background`}
             />
             <OsuToggleRow
-              label={storyboardLoading ? "Storyboard…" : "Storyboard"}
+              label={storyboardLoading ? t`Storyboard…` : t`Storyboard`}
               on={storyboardOn}
               onClick={onToggleStoryboard}
-              title="Show the map's storyboard behind (and over) the playfield"
+              title={t`Show the map's storyboard behind (and over) the playfield`}
             />
             {ownerSkinAvailable && onToggleOwnerSkin && (
               <OsuToggleRow
-                label="Player's skin"
+                label={t`Player's skin`}
                 on={ownerSkinOn ?? false}
                 onClick={onToggleOwnerSkin}
-                title={ownerSkinName ? `Watch with the player's own skin (${ownerSkinName})` : "Watch with the player's own skin"}
+                title={ownerSkinName ? t`Watch with the player's own skin (${ownerSkinName})` : t`Watch with the player's own skin`}
               />
             )}
             {inputsMenu}
             {keypressOverlayEnabled && (
-              <OsuToggleRow label="Key history" on={inputOverlayKeyHistory} onClick={onToggleInputOverlayKeyHistory} />
+              <OsuToggleRow label={t`Key history`} on={inputOverlayKeyHistory} onClick={onToggleInputOverlayKeyHistory} />
             )}
           </div>
 
@@ -975,8 +977,8 @@ export function ReplayControls({
                 <button
                   type="button"
                   onClick={onToggleFullscreen}
-                  aria-label="Enter fullscreen"
-                  title="Fullscreen"
+                  aria-label={t`Enter fullscreen`}
+                  title={t`Fullscreen`}
                   className="w-9 h-9 rounded flex items-center justify-center cursor-pointer transition-colors bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
                 >
                   <Maximize2 className="h-4 w-4" strokeWidth={2.2} />
@@ -1013,7 +1015,7 @@ export function ReplayControls({
           {videoExportCluster}
 
           <div className="order-4 sm:order-none flex items-center gap-1">
-            <span className="text-[10px] text-osu-f1 mr-0.5">Scroll</span>
+            <span className="text-[10px] text-osu-f1 mr-0.5">{t`Scroll`}</span>
             <button
               onClick={() => onSetScrollSpeed(Math.max(1, scrollSpeed - 1))}
               className="w-5 h-5 rounded bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 transition-colors cursor-pointer flex items-center justify-center text-xs leading-none"
@@ -1024,7 +1026,7 @@ export function ReplayControls({
               type="text"
               inputMode="numeric"
               value={scrollSpeedInput}
-              aria-label="Scroll speed"
+              aria-label={t`Scroll speed`}
               onFocus={() => setEditingScrollSpeed(true)}
               onChange={(event) => setScrollSpeedInput(event.target.value.replace(/[^\d]/g, "").slice(0, 2))}
               onBlur={commitScrollSpeedInput}
@@ -1053,7 +1055,7 @@ export function ReplayControls({
           {/* sm:order-1 keeps the desktop right cluster reading [Black playfield][BG Dim]
               even though BG Dim comes first in the DOM for the mobile rows. */}
           <div className="order-5 ml-auto sm:order-1 sm:ml-0 flex items-center gap-2">
-            <span className="text-[10px] text-osu-f1">BG Dim</span>
+            <span className="text-[10px] text-osu-f1">{t`BG Dim`}</span>
             <input
               type="range"
               min={0}
@@ -1069,38 +1071,38 @@ export function ReplayControls({
           <button
             type="button"
             onClick={onToggleBlackPlayfield}
-            title="Fill the playfield with a solid black background"
+            title={t`Fill the playfield with a solid black background`}
             aria-pressed={blackPlayfield}
             className={`order-10 ml-auto sm:order-none px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
               blackPlayfield ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
             }`}
           >
-            Black playfield
+            {t`Black playfield`}
           </button>
 
           <button
             type="button"
             onClick={onToggleStoryboard}
-            title="Show the map's storyboard behind (and over) the playfield"
+            title={t`Show the map's storyboard behind (and over) the playfield`}
             aria-pressed={storyboardOn}
             className={`order-11 sm:order-none px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
               storyboardOn ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
             }${storyboardLoading ? " animate-pulse" : ""}`}
           >
-            Storyboard
+            {t`Storyboard`}
           </button>
 
           {ownerSkinAvailable && onToggleOwnerSkin && (
             <button
               type="button"
               onClick={onToggleOwnerSkin}
-              title={ownerSkinName ? `Watch with the player's own skin (${ownerSkinName})` : "Watch with the player's own skin"}
+              title={ownerSkinName ? t`Watch with the player's own skin (${ownerSkinName})` : t`Watch with the player's own skin`}
               aria-pressed={ownerSkinOn}
               className={`order-12 sm:order-none px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
                 ownerSkinOn ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
               }`}
             >
-              Player's skin
+              {t`Player's skin`}
             </button>
           )}
         </div>
@@ -1249,6 +1251,7 @@ function InputOverlayMenu({
   onToggleInputOverlayKeyHistory: () => void;
   onSetInputOverlayColor: (color: string) => void;
 }) {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const [colorOpen, setColorOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1292,7 +1295,7 @@ function InputOverlayMenu({
               onClick={onToggleInputOverlay}
               className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer"
             >
-              <span>Column presses</span>
+              <span>{t`Column presses`}</span>
               <CheckMark on={showInputOverlay} />
             </button>
             <button
@@ -1300,7 +1303,7 @@ function InputOverlayMenu({
               disabled={!showInputOverlay}
               className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             >
-              <span>Convert hits to notes</span>
+              <span>{t`Convert hits to notes`}</span>
               <CheckMark on={inputOverlayOnly} />
             </button>
             {keypressOverlayEnabled && (
@@ -1308,7 +1311,7 @@ function InputOverlayMenu({
                 onClick={onToggleInputOverlayKeyHistory}
                 className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer"
               >
-                <span>Key history</span>
+                <span>{t`Key history`}</span>
                 <CheckMark on={inputOverlayKeyHistory} />
               </button>
             )}
@@ -1322,7 +1325,7 @@ function InputOverlayMenu({
               aria-expanded={colorOpen}
               className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 ${anyInputVisualization ? "cursor-pointer hover:bg-osu-b4" : "opacity-40 cursor-not-allowed"}`}
             >
-              <span>Color</span>
+              <span>{t`Color`}</span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="text-[10px] tabular-nums text-osu-f1">{inputOverlayColor.toUpperCase()}</span>
                 <span
@@ -1357,7 +1360,7 @@ function InputOverlayMenu({
           className={`absolute left-0 bottom-full z-50 mb-2 rounded-sm border-t-2 border-[#4a8fd6] bg-[#0b0b11]/95 p-3 shadow-[0_10px_30px_rgba(0,0,0,0.6)] ${colorOpen ? "w-64" : "w-56"}`}
         >
           <OsuToggleRow
-            label="Convert hits to notes"
+            label={t`Convert hits to notes`}
             on={inputOverlayOnly}
             onClick={onToggleInputOverlayOnly}
             disabled={!showInputOverlay}
@@ -1372,7 +1375,7 @@ function InputOverlayMenu({
             aria-expanded={colorOpen}
             className={`flex w-full items-center justify-between gap-2 py-0.5 text-[13px] font-semibold ${anyInputVisualization ? "cursor-pointer text-osu-f1 hover:text-white" : "cursor-not-allowed text-osu-f1/40"}`}
           >
-            <span>Color</span>
+            <span>{t`Color`}</span>
             <span className="inline-flex items-center gap-1.5">
               <span className="text-[11px] tabular-nums text-osu-f1">{inputOverlayColor.toUpperCase()}</span>
               <span
@@ -1396,16 +1399,16 @@ function InputOverlayMenu({
     return (
       <div ref={containerRef} className="relative flex items-center gap-0.5">
         <OsuToggleRow
-          label="Column presses"
+          label={t`Column presses`}
           on={showInputOverlay}
           onClick={onToggleInputOverlay}
-          title="Toggle field input overlay"
+          title={t`Toggle field input overlay`}
         />
         <button
           onClick={() => setOpen((v) => !v)}
-          aria-label="Input overlay options"
+          aria-label={t`Input overlay options`}
           aria-expanded={open}
-          title="Input overlay options"
+          title={t`Input overlay options`}
           className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-osu-f1 transition-colors hover:text-white"
         >
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "" : "rotate-180"}`} strokeWidth={2.5} />
@@ -1419,18 +1422,18 @@ function InputOverlayMenu({
     <div ref={containerRef} className="relative inline-flex items-stretch">
       <button
         onClick={onToggleInputOverlay}
-        title="Toggle field input overlay"
+        title={t`Toggle field input overlay`}
         className={`pl-2.5 pr-2 py-1 rounded-l text-[10px] font-semibold cursor-pointer transition-colors ${
           showInputOverlay ? activeBtn : inactiveBtn
         }`}
       >
-        Inputs
+        {t`Inputs`}
       </button>
       <button
         onClick={() => setOpen((v) => !v)}
-        aria-label="Input overlay options"
+        aria-label={t`Input overlay options`}
         aria-expanded={open}
-        title="Input overlay options"
+        title={t`Input overlay options`}
         className={`px-1 py-1 rounded-r border-l border-osu-b4/40 cursor-pointer transition-colors ${
           anyInputVisualization ? activeBtn : inactiveBtn
         }`}
@@ -1473,6 +1476,7 @@ function ShareTimestampTooltip({
   onClose: () => void;
   onCopied: () => void;
 }) {
+  const { t } = useLingui();
   const panelRef = useRef<HTMLDivElement | null>(null);
   // Esc closes it like every other transient layer on the stage. Clicking
   // away closes it too, but via a window listener rather than a full-screen
@@ -1538,7 +1542,7 @@ function ShareTimestampTooltip({
               }`}
             >
               {copied ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : null}
-              {copied ? "Copied" : "Copy"}
+              {copied ? t`Copied` : t`Copy`}
             </button>
           </motion.div>
         </>

@@ -1,3 +1,6 @@
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
+
 // Dynamic renders: the one place that says which signature variants exist.
 //
 // Shared by the /dynamic-renders page, the image route, and the tests, because
@@ -20,7 +23,7 @@ export interface SignatureDesign {
      ordering artefact: the maniacard's card front is the first layout and the
      fourth ever added, and `maniacard-4.png` was the number leaking out. */
   slug: string;
-  label: string;
+  label: MessageDescriptor;
   width: number;
   height: number;
   /* The layout draws a finished piece of art edge to edge, so the per-type
@@ -42,50 +45,50 @@ export const SIGNATURE_DESIGNS: Record<SignatureType, SignatureDesign[]> = {
     /* The real card front, not a signature-shaped summary of it: the same
        element tree /api/og and the Discord command draw. Sized at the card's
        own 5:7, which is why the numbers are not round. */
-    { design: 4, slug: "card-front", label: "Card front", width: 480, height: 672, ownArt: true },
-    { design: 1, slug: "banner", label: "Banner", width: 880, height: 200 },
-    { design: 2, slug: "strip", label: "Strip", width: 600, height: 140 },
-    { design: 3, slug: "card", label: "Card", width: 420, height: 588 },
+    { design: 4, slug: "card-front", label: msg`Card front`, width: 480, height: 672, ownArt: true },
+    { design: 1, slug: "banner", label: msg`Banner`, width: 880, height: 200 },
+    { design: 2, slug: "strip", label: msg`Strip`, width: 600, height: 140 },
+    { design: 3, slug: "card", label: msg`Card`, width: 420, height: 588 },
   ],
   goals: [
-    { design: 1, slug: "progress-list", label: "Progress list", width: 880, height: 230 },
-    { design: 2, slug: "single-focus", label: "Single focus", width: 560, height: 150 },
-    { design: 3, slug: "full-list", label: "Full list", width: 880, height: 300 },
+    { design: 1, slug: "progress-list", label: msg`Progress list`, width: 880, height: 230 },
+    { design: 2, slug: "single-focus", label: msg`Single focus`, width: 560, height: 150 },
+    { design: 3, slug: "full-list", label: msg`Full list`, width: 880, height: 300 },
   ],
   skills: [
-    { design: 1, slug: "radar-and-axes", label: "Radar and axes", width: 880, height: 260 },
-    { design: 2, slug: "bars", label: "Bars", width: 700, height: 220 },
-    { design: 3, slug: "radar", label: "Radar", width: 320, height: 320 },
+    { design: 1, slug: "radar-and-axes", label: msg`Radar and axes`, width: 880, height: 260 },
+    { design: 2, slug: "bars", label: msg`Bars`, width: 700, height: 220 },
+    { design: 3, slug: "radar", label: msg`Radar`, width: 320, height: 320 },
   ],
   dan: [
-    { design: 1, slug: "rice-and-ln", label: "Rice and LN", width: 880, height: 200 },
-    { design: 2, slug: "single", label: "Single", width: 420, height: 160 },
-    { design: 3, slug: "badge", label: "Badge", width: 300, height: 300 },
+    { design: 1, slug: "rice-and-ln", label: msg`Rice and LN`, width: 880, height: 200 },
+    { design: 2, slug: "single", label: msg`Single`, width: 420, height: 160 },
+    { design: 3, slug: "badge", label: msg`Badge`, width: 300, height: 300 },
   ],
   insights: [
-    { design: 1, slug: "stats-and-top-play", label: "Stats and top play", width: 880, height: 230 },
-    { design: 2, slug: "stats", label: "Stats", width: 880, height: 110 },
-    { design: 3, slug: "card", label: "Card", width: 420, height: 300 },
+    { design: 1, slug: "stats-and-top-play", label: msg`Stats and top play`, width: 880, height: 230 },
+    { design: 2, slug: "stats", label: msg`Stats`, width: 880, height: 110 },
+    { design: 3, slug: "card", label: msg`Card`, width: 420, height: 300 },
     /* The profile's cumulative pp view: how many top plays sit at or above
        each threshold. Taller than the others because it is a ladder whose
        length is the player's own pp spread. */
-    { design: 4, slug: "pp-distribution", label: "PP distribution", width: 560, height: 300 },
+    { design: 4, slug: "pp-distribution", label: msg`PP distribution`, width: 560, height: 300 },
   ],
 };
 
-export const SIGNATURE_TYPE_LABELS: Record<SignatureType, string> = {
-  maniacard: "ManiaCard",
-  goals: "Goals",
-  skills: "Skill radar",
-  dan: "Dan rating",
-  insights: "Profile stats",
+export const SIGNATURE_TYPE_LABELS: Record<SignatureType, MessageDescriptor> = {
+  maniacard: msg`ManiaCard`,
+  goals: msg`Goals`,
+  skills: msg`Skill radar`,
+  dan: msg`Dan rating`,
+  insights: msg`Profile stats`,
 };
 
 /* The render version cannot live in the URL the way OG_IMAGE_VERSION does -
    the whole point is a URL a player pastes once and never edits. It lives in
    the cache key instead, so bumping it supersedes every stored render and
    propagates within one edge TTL. Bump it when a layout changes. */
-export const SIGNATURE_RENDER_VERSION = "16";
+export const SIGNATURE_RENDER_VERSION = "18";
 
 export function isSignatureType(value: string): value is SignatureType {
   return (SIGNATURE_TYPES as readonly string[]).includes(value);

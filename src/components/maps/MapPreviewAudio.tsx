@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import {
   useCallback,
   useEffect,
@@ -310,6 +311,7 @@ function PreviewProgressRing({ getAudio }: { getAudio: () => HTMLAudioElement | 
 }
 
 export function MapPreviewButton({ beatmapsetId, preview }: { beatmapsetId: number; preview: MapPreviewAudio }) {
+  const { t } = useLingui();
   const playing = preview.playingSetId === beatmapsetId;
   const loading = preview.loadingSetId === beatmapsetId;
   const paused = preview.pausedSetId === beatmapsetId;
@@ -333,8 +335,8 @@ export function MapPreviewButton({ beatmapsetId, preview }: { beatmapsetId: numb
     return (
       <span
         className="relative grid h-7 w-7 shrink-0 place-items-center text-osu-f1/40"
-        title="No preview audio"
-        aria-label="No preview audio"
+        title={t`No preview audio`}
+        aria-label={t`No preview audio`}
       >
         <svg viewBox="0 0 28 28" fill="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
           <circle cx="14" cy="14" r={RING_RADIUS} stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" />
@@ -355,9 +357,9 @@ export function MapPreviewButton({ beatmapsetId, preview }: { beatmapsetId: numb
         preview.toggle(beatmapsetId);
       }}
       onKeyDown={(e) => e.stopPropagation()}
-      aria-label={playing ? "Pause preview" : "Play preview"}
+      aria-label={playing ? t`Pause preview` : t`Play preview`}
       aria-pressed={playing}
-      title={playing ? "Pause preview" : "Play preview"}
+      title={playing ? t`Pause preview` : t`Play preview`}
       className={`relative grid h-7 w-7 shrink-0 cursor-pointer place-items-center transition-colors ${
         playing || loading || paused ? "text-osu-pink-light" : "text-osu-l2 hover:text-white"
       }`}
@@ -405,6 +407,7 @@ function PreviewSeekBar({
   getAudio: () => HTMLAudioElement | null;
   onSeek: (seconds: number) => void;
 }) {
+  const { t } = useLingui();
   const trackRef = useRef<HTMLDivElement | null>(null);
   const fillRef = useRef<HTMLDivElement | null>(null);
   const handleRef = useRef<HTMLDivElement | null>(null);
@@ -491,7 +494,7 @@ function PreviewSeekBar({
         onPointerCancel={() => setDragRatio(null)}
         className="group relative flex h-4 flex-1 cursor-pointer touch-none select-none items-center"
         role="slider"
-        aria-label="Preview position"
+        aria-label={t`Preview position`}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round((dragRatio ?? 0) * 100)}
@@ -561,6 +564,7 @@ export function MapPreviewPlayerBar({
   tracks: readonly MapPreviewTrack[];
   clearsStickyBar?: boolean;
 }) {
+  const { t } = useLingui();
   const { activeSetId, playingSetId, volume, looping, isUnavailable } = preview;
 
   // A set can appear on more than one row (one per matching difficulty); the
@@ -631,37 +635,37 @@ export function MapPreviewPlayerBar({
               step={0.05}
               value={volume}
               onChange={(e) => preview.setVolume(Number(e.target.value))}
-              aria-label="Preview volume"
-              title="Default volume"
+              aria-label={t`Preview volume`}
+              title={t`Default volume`}
               className="h-1 w-14 shrink-0 cursor-pointer appearance-none rounded-full bg-osu-b3 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink"
             />
-            <PlayerIconButton label="Close player" onClick={preview.stop}>
+            <PlayerIconButton label={t`Close player`} onClick={preview.stop}>
               <X className="h-3.5 w-3.5" />
             </PlayerIconButton>
           </div>
           <div className="mt-2 flex items-center gap-2">
             <PlayerIconButton
-              label="Previous preview"
+              label={t`Previous preview`}
               onClick={() => previous && preview.toggle(previous.beatmapsetId)}
               disabled={!previous}
             >
               <SkipBack className="h-3.5 w-3.5 fill-current" />
             </PlayerIconButton>
             <PlayerIconButton
-              label={playing ? "Pause preview" : "Play preview"}
+              label={playing ? t`Pause preview` : t`Play preview`}
               onClick={() => preview.toggle(activeSetId)}
             >
               {playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
             </PlayerIconButton>
             <PlayerIconButton
-              label="Next preview"
+              label={t`Next preview`}
               onClick={() => next && preview.toggle(next.beatmapsetId)}
               disabled={!next}
             >
               <SkipForward className="h-3.5 w-3.5 fill-current" />
             </PlayerIconButton>
             <PlayerIconButton
-              label={looping ? "Stop repeating" : "Repeat preview"}
+              label={looping ? t`Stop repeating` : t`Repeat preview`}
               onClick={preview.toggleLoop}
               active={looping}
             >

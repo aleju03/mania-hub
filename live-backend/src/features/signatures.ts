@@ -420,10 +420,11 @@ async function buildVersions(
   // GoalProgress is computed live by listUserGoalsWithProgress and never
   // written back, so max(user_goals.updated_at) alone would never move when a
   // player's pp climbs and a progress bar advances. The play-side stamps are
-  // what make a goals render actually track its own bars.
+  // what make a goals render actually track its own bars. Completed rows stay
+  // in the picture as history, so the row stamp covers every status.
   const goalRow = (await exec(
     db,
-    "select count(*) as open_count, max(updated_at) as newest from user_goals where user_id = ? and status = 'open'",
+    "select count(*) as goal_count, max(updated_at) as newest from user_goals where user_id = ?",
     [userId],
   )).rows[0] as Record<string, unknown> | undefined;
 
@@ -448,8 +449,8 @@ async function buildVersions(
   // cannot simply reuse the skills version any more.
   const dan = hashVersion(["d", skillsRow?.status, skillsStamp, styleStamp(styles, "dan")]);
   const goals = hashVersion([
-    "g", goalRow?.open_count, goalRow?.newest, userStamp, topScoresStamp, lastScoreRow?.ended_at,
-    styleStamp(styles, "goals"),
+    "g", goalRow?.goal_count, goalRow?.newest, userStamp, topScoresStamp, lastScoreRow?.ended_at,
+    styleStamp(styles, "goals"), timeZone,
   ]);
   /* Same top-play window the maniacard reads, plus the last score event. The
      card power a maniacard prints is a slow aggregate, but an insights render
@@ -458,10 +459,9 @@ async function buildVersions(
      snapshot itself is rewritten. Without the event stamp the one reading the
      image exists to show would be the last to move. No pp: nothing here is
      computed from it. */
-  /* The zone is in here because the insights card prints a DATE, and the same
-     instant is a different day either side of midnight. Only here: it is the
-     one render in the set that draws a date at all, so hashing it into the
-     other four would re-render images whose pixels cannot change. */
+  /* The zone is in here because the insights card prints a play date, and the
+     goals card now prints completion dates. The same instant is a different
+     day either side of midnight, so each dated render owns the zone stamp. */
   const insights = hashVersion([
     "i", snapshotRow?.updated_at, userStamp, topScoresStamp, lastScoreRow?.ended_at,
     styleStamp(styles, "insights"), timeZone,

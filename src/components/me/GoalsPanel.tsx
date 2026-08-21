@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Pencil } from "lucide-react";
-import { useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { useLocation } from "@tanstack/react-router";
 
 import { PageHeader } from "../layout/PageHeader";
@@ -27,6 +28,7 @@ import {
   type UpdateGoalInput,
   type UserGoal,
 } from "../../lib/goals";
+import type { I18n, MessageDescriptor } from "@lingui/core";
 import type { OsuBeatmap, OsuBeatmapset } from "../../lib/types";
 
 const ICONS = {
@@ -50,9 +52,10 @@ function CloseGlyph() {
 }
 
 function PageShell({ children }: { children: ReactNode }) {
+  const { t } = useLingui();
   return (
     <div className="min-h-screen">
-      <PageHeader iconSrc="/images/icons/contests.svg" title="goals" />
+      <PageHeader iconSrc="/images/icons/contests.svg" title={t`goals`} />
       <div className="min-h-[80vh] bg-osu-b5">
         <div className="mx-auto w-full max-w-[1000px] space-y-5 px-3 py-5 sm:px-5 sm:py-7">{children}</div>
       </div>
@@ -68,7 +71,9 @@ const GOAL_SPEED_OPTIONS: GoalSpeedBucket[] = ["normal", "ht", "dt"];
 
 interface GoalTypeMeta {
   kind: GoalKind;
-  label: string;
+  // Rendered through i18n._(), so the picker chips translate; hint/description
+  // are dead data kept for documentation and never rendered.
+  label: MessageDescriptor;
   hint: string;
   description: string;
   group: GoalGroup;
@@ -81,7 +86,7 @@ interface GoalTypeMeta {
 const GOAL_TYPES: GoalTypeMeta[] = [
   {
     kind: "reach_pp",
-    label: "Reach pp",
+    label: msg`Reach pp`,
     hint: "total performance",
     description: "Climb to a specific total pp number.",
     group: "profile",
@@ -92,7 +97,7 @@ const GOAL_TYPES: GoalTypeMeta[] = [
   },
   {
     kind: "play_pp",
-    label: "Big play",
+    label: msg`Big play`,
     hint: "single score",
     description: "Land another single play worth a target pp amount.",
     group: "profile",
@@ -103,7 +108,7 @@ const GOAL_TYPES: GoalTypeMeta[] = [
   },
   {
     kind: "play_pp_count",
-    label: "PP count",
+    label: msg`PP count`,
     hint: "score stack",
     description: "Own a target number of plays above a pp amount.",
     group: "profile",
@@ -114,7 +119,7 @@ const GOAL_TYPES: GoalTypeMeta[] = [
   },
   {
     kind: "reach_rank",
-    label: "Rank",
+    label: msg`Rank`,
     hint: "leaderboard climb",
     description: "Climb to a global or country rank.",
     group: "profile",
@@ -125,7 +130,7 @@ const GOAL_TYPES: GoalTypeMeta[] = [
   },
   {
     kind: "pass",
-    label: "Pass",
+    label: msg`Pass`,
     hint: "clear a map",
     description: "Clear a certain map.",
     group: "map",
@@ -136,7 +141,7 @@ const GOAL_TYPES: GoalTypeMeta[] = [
   },
   {
     kind: "fc",
-    label: "FC",
+    label: msg`FC`,
     hint: "full combo",
     description: "Full-combo a certain map (no misses).",
     group: "map",
@@ -147,7 +152,7 @@ const GOAL_TYPES: GoalTypeMeta[] = [
   },
   {
     kind: "accuracy",
-    label: "Accuracy",
+    label: msg`Accuracy`,
     hint: "map target",
     description: "Hit a specific accuracy on a certain map.",
     group: "map",
@@ -158,7 +163,7 @@ const GOAL_TYPES: GoalTypeMeta[] = [
   },
   {
     kind: "grade",
-    label: "Grade",
+    label: msg`Grade`,
     hint: "map badge",
     description: "Getting a specific rank on a certain map.",
     group: "map",
@@ -247,19 +252,32 @@ function progressPct(goal: UserGoal): number | null {
   return clampPct(goal.progress.pct);
 }
 
-function completedDetail(goal: UserGoal): string | null {
+function completedDetail(goal: UserGoal, i18n: I18n): string | null {
   if (goal.status !== "completed" || !goal.completedAt) return null;
   const date = new Date(goal.completedAt).toLocaleDateString("en-US");
-  if (goal.kind === "accuracy" && goal.completedValue != null) return `cleared ${date} · ${(goal.completedValue * 100).toFixed(2)}%`;
-  if ((goal.kind === "play_pp" || goal.kind === "reach_pp") && goal.completedValue != null) return `cleared ${date} · ${nf(goal.completedValue)}pp`;
-  if (goal.kind === "play_pp_count" && goal.completedValue != null) return `cleared ${date} · ${nf(goal.completedValue)} plays`;
-  if (goal.kind === "reach_rank" && goal.completedValue != null) return `cleared ${date} · #${nf(goal.completedValue)}`;
-  return `cleared ${date}`;
+  if (goal.kind === "accuracy" && goal.completedValue != null) {
+    const acc = (goal.completedValue * 100).toFixed(2);
+    return i18n._(msg`cleared ${date} · ${acc}%`);
+  }
+  if ((goal.kind === "play_pp" || goal.kind === "reach_pp") && goal.completedValue != null) {
+    const pp = nf(goal.completedValue);
+    return i18n._(msg`cleared ${date} · ${pp}pp`);
+  }
+  if (goal.kind === "play_pp_count" && goal.completedValue != null) {
+    const count = nf(goal.completedValue);
+    return i18n._(msg`cleared ${date} · ${count} plays`);
+  }
+  if (goal.kind === "reach_rank" && goal.completedValue != null) {
+    const rank = nf(goal.completedValue);
+    return i18n._(msg`cleared ${date} · #${rank}`);
+  }
+  return i18n._(msg`cleared ${date}`);
 }
 
 /** Exact set date, one hover away from the compact "set 12d ago" on the card. */
-function setOnTitle(createdAt: number): string {
-  return `Set on ${new Date(createdAt).toLocaleString("en-US")}`;
+function setOnTitle(createdAt: number, i18n: I18n): string {
+  const at = new Date(createdAt).toLocaleString("en-US");
+  return i18n._(msg`Set on ${at}`);
 }
 
 function beatmapHref(beatmapId: number | null | undefined): string | null {
@@ -278,7 +296,7 @@ function sortGoals(goals: UserGoal[]): UserGoal[] {
 }
 
 export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_METRICS }: { initialSuggestionMetrics?: GoalSuggestionMetrics }) {
-  const { i18n } = useLingui();
+  const { i18n, t } = useLingui();
   const auth = useAuth();
   const location = useLocation();
   const viewer = auth.viewer;
@@ -427,12 +445,12 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
           if (diff) resolveDiff(set, diff);
           else {
             setResults([]);
-            setMapLookupError("That beatmap ID is not a mania difficulty.");
+            setMapLookupError(t`That beatmap ID is not a mania difficulty.`);
           }
         } catch {
           if (!cancelled) {
             setResults([]);
-            setMapLookupError("Couldn't find that beatmap ID.");
+            setMapLookupError(t`Couldn't find that beatmap ID.`);
           }
         } finally {
           if (!cancelled) setSearching(false);
@@ -453,7 +471,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [mapQuery, needsMap, resolved, pickedSet, resolveDiff]);
+  }, [mapQuery, needsMap, resolved, pickedSet, resolveDiff, t]);
 
   const switchKind = (next: GoalKind) => {
     setKind(next);
@@ -533,7 +551,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     try {
       const result = await createGoal({ data: input });
       if (!result.ok) {
-        setCreateError("Couldn't save that goal. Check the values and try again.");
+        setCreateError(t`Couldn't save that goal. Check the values and try again.`);
         return;
       }
       setPpTarget("");
@@ -544,11 +562,11 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
       resetMapPicker();
       await load();
     } catch {
-      setCreateError("Couldn't save that goal. Try again in a moment.");
+      setCreateError(t`Couldn't save that goal. Try again in a moment.`);
     } finally {
       setCreating(false);
     }
-  }, [canSubmit, kind, scope, ppTarget, ppCountTarget, accPct, rankTarget, rankScope, grade, speedBucket, resolved, load, resetMapPicker]);
+  }, [canSubmit, kind, scope, ppTarget, ppCountTarget, accPct, rankTarget, rankScope, grade, speedBucket, resolved, load, resetMapPicker, t]);
 
   // Hide the card and hand the delete to the goal-toasts store: it waits out the undo window (the
   // window keeps counting across navigation, with the undo bar rendered from the root layout) and
@@ -583,16 +601,16 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
           </div>
           <div className="relative grid gap-5 p-6 sm:grid-cols-[1fr_auto] sm:items-center sm:p-7">
             <div className="min-w-0">
-              <div className="text-[10.5px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">goal tracker</div>
-              <div className="mt-2 text-[16px] font-bold leading-snug text-white">Log in with osu! to set goals.</div>
+              <div className="text-[10.5px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">{t`goal tracker`}</div>
+              <div className="mt-2 text-[16px] font-bold leading-snug text-white">{t`Log in with osu! to set goals.`}</div>
               <div className="mt-1.5 max-w-md text-[12.5px] leading-5 text-osu-f1">
-                Targets track themselves from your mania plays: a pp number, a play worth, a play count, an accuracy, a clear, or a grade.
+                <Trans>Targets track themselves from your mania plays: a pp number, a play worth, a play count, an accuracy, a clear, or a grade.</Trans>
               </div>
               <div className="mt-4 flex flex-wrap gap-1.5">
                 {GOAL_TYPES.map((type) => (
                   <span key={type.kind} className="inline-flex items-center gap-1.5 rounded-lg border border-osu-b3/35 bg-osu-b5/55 px-2 py-1 text-[11px] font-semibold text-osu-l2">
                     <OsuAssetIcon src={type.iconSrc} className="h-3 w-3" style={{ color: type.accent }} />
-                    {type.label}
+                    {i18n._(type.label)}
                   </span>
                 ))}
               </div>
@@ -602,7 +620,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
               className="inline-flex h-11 items-center justify-center gap-2 justify-self-start rounded-xl border border-osu-pink/45 bg-osu-pink/15 px-5 text-[13px] font-bold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white sm:justify-self-end"
             >
               <OsuLogo className="h-4 w-4" />
-              Log in with osu!
+              {t`Log in with osu!`}
             </a>
           </div>
         </section>
@@ -618,9 +636,9 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
   if (kind === "reach_pp") {
     const cur = suggestionMetrics.currentPp;
     if (cur != null && Number.isFinite(reachTargetNum) && reachTargetNum > 0) {
-      hint = reachTargetNum > cur ? `from ${nf(cur)} now, that's +${nf(reachTargetNum - cur)} to climb` : `you're already past ${nf(reachTargetNum)}`;
+      hint = reachTargetNum > cur ? t`from ${nf(cur)} now, that's +${nf(reachTargetNum - cur)} to climb` : t`you're already past ${nf(reachTargetNum)}`;
     } else if (cur != null) {
-      hint = `you're sitting at ${nf(cur)} right now`;
+      hint = t`you're sitting at ${nf(cur)} right now`;
     }
   }
 
@@ -629,7 +647,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
   ) : pickedSet ? (
     <PendingMapToken set={pickedSet} accent={accent} />
   ) : (
-    <PlaceholderToken label="a map" accent={accent} />
+    <PlaceholderToken label={t`a map`} accent={accent} />
   );
 
   return (
@@ -644,12 +662,12 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
             <img src={viewer.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-osu-b3/45" loading="lazy" />
             <div className="min-w-0">
               <div className="truncate text-[13px] font-bold text-white">{viewer.username}</div>
-              <div className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-osu-f1">goal tracker</div>
+              <div className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-osu-f1">{t`goal tracker`}</div>
             </div>
             <div className="ml-auto flex items-center gap-4 sm:gap-6">
-              <Stat label="current pp" value={suggestionMetrics.currentPp != null ? nf(suggestionMetrics.currentPp) : "—"} tone="pp" />
-              <Stat label="in flight" value={String(open.length)} />
-              <Stat label="cleared" value={String(done.length)} />
+              <Stat label={t`current pp`} value={suggestionMetrics.currentPp != null ? nf(suggestionMetrics.currentPp) : "—"} tone="pp" />
+              <Stat label={t`in flight`} value={String(open.length)} />
+              <Stat label={t`cleared`} value={String(done.length)} />
             </div>
           </div>
 
@@ -663,74 +681,57 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-2.5 text-[16px] font-semibold text-osu-l2 sm:text-[17px]">
                   {scope === "pp" ? (
                     kind === "reach_pp" ? (
-                      <>
-                        <span>Reach</span>
-                        <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.reachPpPlaceholder || "15000"} suffix="pp" accent={accent} width="6.5rem" ariaLabel="Target total pp" />
-                        <span>total pp</span>
-                      </>
+                      <Trans>
+                        Reach{" "}
+                        <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.reachPpPlaceholder || "15000"} suffix="pp" accent={accent} width="6.5rem" ariaLabel={t`Target total pp`} />{" "}
+                        total pp
+                      </Trans>
                     ) : (
-                      <>
-                        <span>Land a play worth</span>
-                        <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.playPpPlaceholder || "300"} suffix="pp" accent={accent} width="5rem" ariaLabel="Play worth at least" />
-                      </>
+                      <Trans>
+                        Land a play worth{" "}
+                        <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.playPpPlaceholder || "300"} suffix="pp" accent={accent} width="5rem" ariaLabel={t`Play worth at least`} />
+                      </Trans>
                     )
                   ) : null}
 
                   {scope === "pp-count" ? (
-                    <>
-                      <span>Have</span>
-                      <NumberToken value={ppCountTarget} onChange={setPpCountTarget} placeholder={suggestions.ppCountPlaceholder} accent={accent} width="4rem" ariaLabel="Target play count" />
-                      <span>plays worth</span>
-                      <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.playPpPlaceholder || "600"} suffix="pp" accent={accent} width="5rem" ariaLabel="Minimum pp per play" />
-                      <span>or more</span>
-                    </>
+                    <Trans>
+                      Have{" "}
+                      <NumberToken value={ppCountTarget} onChange={setPpCountTarget} placeholder={suggestions.ppCountPlaceholder} accent={accent} width="4rem" ariaLabel={t`Target play count`} /> plays worth{" "}
+                      <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.playPpPlaceholder || "600"} suffix="pp" accent={accent} width="5rem" ariaLabel={t`Minimum pp per play`} /> or more
+                    </Trans>
                   ) : null}
 
                   {scope === "rank" ? (
-                    <>
-                      <span>Reach</span>
-                      <RankScopeToggle value={rankScope} onChange={setRankScope} accent={accent} />
-                      <span>rank</span>
-                      <NumberToken value={rankTarget} onChange={setRankTarget} placeholder={active.placeholder} prefix="#" accent={accent} width="5rem" ariaLabel="Target rank" />
-                    </>
+                    <Trans>
+                      Reach{" "}
+                      <RankScopeToggle value={rankScope} onChange={setRankScope} accent={accent} /> <NumberToken value={rankTarget} onChange={setRankTarget} placeholder={active.placeholder} prefix="#" accent={accent} width="5rem" ariaLabel={t`Target rank`} /> rank
+                    </Trans>
                   ) : null}
 
                   {scope === "map-acc" ? (
-                    <>
-                      <span>Hit</span>
-                      <NumberToken value={accPct} onChange={setAccPct} placeholder={active.placeholder} suffix="%" accent={accent} width="4rem" decimal ariaLabel="Target accuracy" />
-                      <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} />
-                      <span>accuracy on</span>
-                      {mapSlot}
-                    </>
+                    <Trans>
+                      Hit{" "}
+                      <NumberToken value={accPct} onChange={setAccPct} placeholder={active.placeholder} suffix="%" accent={accent} width="4rem" decimal ariaLabel={t`Target accuracy`} /> <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> accuracy on {mapSlot}
+                    </Trans>
                   ) : null}
 
                   {scope === "map" ? (
-                    <>
-                      <span>Pass</span>
-                      <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} />
-                      <span>on</span>
-                      {mapSlot}
-                    </>
+                    <Trans>
+                      Pass <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> on {mapSlot}
+                    </Trans>
                   ) : null}
 
                   {scope === "map-fc" ? (
-                    <>
-                      <span>FC</span>
-                      <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} />
-                      <span>on</span>
-                      {mapSlot}
-                    </>
+                    <Trans>
+                      FC <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> on {mapSlot}
+                    </Trans>
                   ) : null}
 
                   {scope === "map-grade" ? (
-                    <>
-                      <span>Earn</span>
-                      <GradeToken value={grade} onChange={setGrade} accent={accent} />
-                      <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} />
-                      <span>on</span>
-                      {mapSlot}
-                    </>
+                    <Trans>
+                      Earn <GradeToken value={grade} onChange={setGrade} accent={accent} /> <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> on {mapSlot}
+                    </Trans>
                   ) : null}
                 </div>
                 {hint ? <div className="mt-2.5 text-[11.5px] font-semibold text-osu-f1">{hint}</div> : null}
@@ -785,17 +786,18 @@ function Stat({ label, value, tone = "default" }: { label: string; value: string
 // Goal kinds split into two groups so eight types don't read as one undifferentiated strip: the
 // profile climbs (pp / rank, no map) and the per-map challenges. Compact icon+label chips, no
 // per-button example line; the composer sentence below carries the specifics once a type is picked.
-const TYPE_GROUPS: Array<{ key: GoalGroup; label: string }> = [
-  { key: "profile", label: "profile" },
-  { key: "map", label: "on a map" },
+const TYPE_GROUPS: Array<{ key: GoalGroup; label: MessageDescriptor }> = [
+  { key: "profile", label: msg`profile` },
+  { key: "map", label: msg`on a map` },
 ];
 
 function TypeSelector({ kind, onSwitch }: { kind: GoalKind; onSwitch: (next: GoalKind) => void }) {
+  const { i18n } = useLingui();
   return (
     <div className="space-y-2.5">
       {TYPE_GROUPS.map((group) => (
         <div key={group.key}>
-          <div className="mb-1.5 text-[9px] font-extrabold uppercase tracking-[0.16em] text-osu-f1">{group.label}</div>
+          <div className="mb-1.5 text-[9px] font-extrabold uppercase tracking-[0.16em] text-osu-f1">{i18n._(group.label)}</div>
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {GOAL_TYPES.filter((type) => type.group === group.key).map((type) => {
               const selected = kind === type.kind;
@@ -811,7 +813,7 @@ function TypeSelector({ kind, onSwitch }: { kind: GoalKind; onSwitch: (next: Goa
                   }`}
                 >
                   <OsuAssetIcon src={type.iconSrc} className="h-3.5 w-3.5 shrink-0" style={{ color: type.accent }} />
-                  {type.label}
+                  {i18n._(type.label)}
                 </button>
               );
             })}
@@ -862,6 +864,7 @@ function NumberToken({
 }
 
 function RankScopeToggle({ value, onChange, accent }: { value: RankScope; onChange: (scope: RankScope) => void; accent: string }) {
+  const { t } = useLingui();
   return (
     <span className="inline-flex items-center gap-0.5 rounded-lg border border-osu-b3/45 bg-osu-b5/55 p-0.5 align-middle text-[12.5px] font-bold">
       {(["global", "country"] as RankScope[]).map((option) => {
@@ -875,7 +878,7 @@ function RankScopeToggle({ value, onChange, accent }: { value: RankScope; onChan
             className={`rounded-md px-2 py-1 transition-colors ${selected ? "text-white" : "text-osu-l2 hover:text-white"}`}
             style={selected ? { backgroundColor: `${accent}26` } : undefined}
           >
-            {option}
+            {option === "global" ? t`global` : t`country`}
           </button>
         );
       })}
@@ -889,14 +892,15 @@ function SpeedToken({ value, onChange, accent }: { value: GoalSpeedBucket; onCha
     <span className="inline-flex items-center gap-1 rounded-lg border border-osu-b3/45 bg-osu-b5/55 p-1 align-middle">
       {GOAL_SPEED_OPTIONS.map((option) => {
         const selected = option === value;
+        const speedLabel = i18n._(GOAL_SPEED_LABELS[option]);
         return (
           <button
             key={option}
             type="button"
             onClick={() => onChange(option)}
             aria-pressed={selected}
-            aria-label={`${i18n._(GOAL_SPEED_LABELS[option])} speed`}
-            title={i18n._(GOAL_SPEED_LABELS[option])}
+            aria-label={i18n._(msg`${speedLabel} speed`)}
+            title={speedLabel}
             className={`flex h-8 min-w-10 items-center justify-center rounded-md px-1.5 transition ${
               selected ? "opacity-100" : "opacity-45 hover:opacity-85"
             }`}
@@ -957,13 +961,14 @@ function GradeToken({ value, onChange, accent }: { value: (typeof GRADES)[number
 }
 
 function MapChip({ resolved, accent, onReset }: { resolved: ResolvedMap; accent: string; onReset: () => void }) {
+  const { t } = useLingui();
   return (
     <span className="inline-flex max-w-full items-center gap-2 rounded-lg border bg-osu-b5/70 py-1 pl-1 pr-1.5 align-middle" style={{ borderColor: `${accent}66` }}>
       <img src={resolved.cover} alt="" className="h-7 w-12 shrink-0 rounded-md object-cover" loading="lazy" />
       <span className="max-w-[180px] truncate text-[13px] font-bold text-white sm:max-w-[280px]" title={resolved.label}>
         {resolved.label}
       </span>
-      <button type="button" onClick={onReset} aria-label="Change map" className="shrink-0 rounded-md p-0.5 text-osu-l2 transition-colors hover:bg-osu-b3/60 hover:text-white">
+      <button type="button" onClick={onReset} aria-label={t`Change map`} className="shrink-0 rounded-md p-0.5 text-osu-l2 transition-colors hover:bg-osu-b3/60 hover:text-white">
         <CloseGlyph />
       </button>
     </span>
@@ -971,11 +976,12 @@ function MapChip({ resolved, accent, onReset }: { resolved: ResolvedMap; accent:
 }
 
 function PendingMapToken({ set, accent }: { set: OsuBeatmapset; accent: string }) {
+  const { t } = useLingui();
   return (
     <span className="inline-flex items-center gap-2 rounded-lg border border-dashed bg-osu-b5/55 py-1 pl-1 pr-2.5 align-middle" style={{ borderColor: `${accent}66` }}>
       <img src={listCover(set)} alt="" className="h-7 w-12 shrink-0 rounded-md object-cover" loading="lazy" />
       <span className="text-[12px] font-bold" style={{ color: accent }}>
-        pick a difficulty below
+        {t`pick a difficulty below`}
       </span>
     </span>
   );
@@ -992,6 +998,7 @@ function PlaceholderToken({ label, accent }: { label: string; accent: string }) 
 }
 
 function SetGoalButton({ canSubmit, creating, accent, onClick }: { canSubmit: boolean; creating: boolean; accent: string; onClick: () => void }) {
+  const { t } = useLingui();
   return (
     <button
       type="button"
@@ -1001,7 +1008,7 @@ function SetGoalButton({ canSubmit, creating, accent, onClick }: { canSubmit: bo
       className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border px-5 text-[13px] font-bold transition hover:brightness-110 disabled:cursor-default disabled:border-osu-b3/30 disabled:bg-osu-b5/40 disabled:text-osu-f1/55 disabled:hover:brightness-100 lg:w-auto"
     >
       {creating ? <Spinner /> : <span className="text-[17px] leading-none" aria-hidden="true">+</span>}
-      Set goal
+      {t`Set goal`}
     </button>
   );
 }
@@ -1027,6 +1034,7 @@ function MapSearchRow({
   onPickSet: (set: OsuBeatmapset) => void;
   onResolveDiff: (set: OsuBeatmapset, diff: OsuBeatmap) => void;
 }) {
+  const { t } = useLingui();
   if (pickedSet) {
     return (
       <div className="overflow-hidden rounded-xl border border-osu-b3/30 bg-osu-b5/55">
@@ -1036,9 +1044,9 @@ function MapSearchRow({
             <div className="truncate text-[12.5px] font-bold text-white">
               {pickedSet.artist} - {pickedSet.title}
             </div>
-            <div className="text-[10.5px] font-semibold text-osu-f1">Choose a mania difficulty</div>
+            <div className="text-[10.5px] font-semibold text-osu-f1">{t`Choose a mania difficulty`}</div>
           </div>
-          <button type="button" onClick={onReset} aria-label="Back" className="shrink-0 rounded-md p-1.5 text-osu-l2 transition-colors hover:bg-osu-b3/55 hover:text-white">
+          <button type="button" onClick={onReset} aria-label={t`Back`} className="shrink-0 rounded-md p-1.5 text-osu-l2 transition-colors hover:bg-osu-b3/55 hover:text-white">
             <CloseGlyph />
           </button>
         </div>
@@ -1066,8 +1074,8 @@ function MapSearchRow({
         <input
           value={mapQuery}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Search a map or paste a beatmap ID..."
-          aria-label="Search for a map"
+          placeholder={t`Search a map or paste a beatmap ID...`}
+          aria-label={t`Search for a map`}
           className="min-w-0 flex-1 bg-transparent px-2.5 text-[13px] font-semibold text-white outline-none placeholder:text-osu-f1/60"
         />
         {searching ? <Spinner className="mr-3 h-4 w-4 shrink-0 text-osu-f1" /> : null}
@@ -1082,7 +1090,7 @@ function MapSearchRow({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[12.5px] font-bold text-white">{set.title}</span>
                   <span className="block truncate text-[10.5px] text-osu-f1">
-                    {set.artist} · {diffs.length} mania diff{diffs.length === 1 ? "" : "s"}
+                    {set.artist} · <Plural value={diffs.length} one="# mania diff" other="# mania diffs" />
                   </span>
                 </span>
               </button>
@@ -1092,7 +1100,7 @@ function MapSearchRow({
       ) : lookupError ? (
         <div className="mt-2 px-1 text-[11.5px] font-semibold text-osu-red-light">{lookupError}</div>
       ) : mapQuery.trim().length >= 3 && !searching ? (
-        <div className="mt-2 px-1 text-[11.5px] text-osu-f1">No mania maps found.</div>
+        <div className="mt-2 px-1 text-[11.5px] text-osu-f1">{t`No mania maps found.`}</div>
       ) : null}
     </div>
   );
@@ -1113,11 +1121,12 @@ function GoalSections({
   onUpdate: (input: UpdateGoalInput) => Promise<boolean>;
   onAgain: (goal: UserGoal) => void;
 }) {
+  const { t } = useLingui();
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 rounded-2xl border border-osu-b3/25 bg-osu-b4/50 py-16 text-[13px] text-osu-f1">
         <Spinner />
-        Loading goals...
+        {t`Loading goals...`}
       </div>
     );
   }
@@ -1126,8 +1135,8 @@ function GoalSections({
     return (
       <div className="rounded-2xl border border-dashed border-osu-b3/35 bg-osu-b4/30 px-5 py-12">
         <div className="text-center">
-          <div className="text-[14px] font-bold text-osu-l2">No goals tracked yet</div>
-          <div className="mx-auto mt-1 max-w-sm text-[12.5px] leading-5 text-osu-f1">Pick a target above. Progress updates as your mania plays land.</div>
+          <div className="text-[14px] font-bold text-osu-l2">{t`No goals tracked yet`}</div>
+          <div className="mx-auto mt-1 max-w-sm text-[12.5px] leading-5 text-osu-f1">{t`Pick a target above. Progress updates as your mania plays land.`}</div>
         </div>
       </div>
     );
@@ -1136,7 +1145,7 @@ function GoalSections({
   return (
     <div className="space-y-6">
       <div>
-        <SectionLabel title="Active" count={open.length} />
+        <SectionLabel title={t`Active`} count={open.length} />
         {open.length > 0 ? (
           <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
             {open.map((goal) => (
@@ -1144,13 +1153,13 @@ function GoalSections({
             ))}
           </div>
         ) : (
-          <div className="mt-3 rounded-2xl border border-dashed border-osu-b3/30 bg-osu-b4/30 p-8 text-center text-[12.5px] text-osu-f1">Nothing active right now.</div>
+          <div className="mt-3 rounded-2xl border border-dashed border-osu-b3/30 bg-osu-b4/30 p-8 text-center text-[12.5px] text-osu-f1">{t`Nothing active right now.`}</div>
         )}
       </div>
 
       {done.length > 0 ? (
         <div>
-          <SectionLabel title="Cleared" count={done.length} />
+          <SectionLabel title={t`Cleared`} count={done.length} />
           <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             {done.map((goal) => (
               <ClearedChip key={goal.id} goal={goal} onDelete={() => onDelete(goal)} onAgain={() => onAgain(goal)} />
@@ -1218,13 +1227,14 @@ function StatLine({ main, sub }: { main: string; sub?: string | null }) {
 
 // Best grade so far, as a badge. The target grade rides in the media corner, so no arrow is needed.
 function GradeProgress({ current }: { current: string | null }) {
+  const { t } = useLingui();
   return current ? (
     <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-osu-f1">
-      <span className="uppercase tracking-wide">best</span>
+      <span className="uppercase tracking-wide">{t`best`}</span>
       <GradeImg grade={current} size={36} className="h-[19px] w-auto" />
     </span>
   ) : (
-    <Muted>not passed yet</Muted>
+    <Muted>{t`not passed yet`}</Muted>
   );
 }
 
@@ -1252,46 +1262,56 @@ function accuracyRingPct(goal: UserGoal): number | null {
 // The readout is type-specific and arrow-free: a gap for pp, a best for accuracy, a best grade
 // badge, a current rank, a play count for passes. Progress is carried by the ring where one fits.
 function GoalReadout({ goal }: { goal: UserGoal }) {
+  const { t } = useLingui();
   const current = goal.progress?.current ?? null;
   const target = goal.progress?.target ?? goal.targetValue ?? null;
   switch (goal.kind) {
     case "reach_pp": {
       const remaining = current != null && target != null ? Math.max(0, target - current) : null;
-      return remaining != null && remaining > 0 ? <StatLine main={`${nf(remaining)}pp to go`} /> : <Muted>{goal.progress?.detail ?? "Tracking your plays"}</Muted>;
+      const gap = remaining != null ? nf(remaining) : "";
+      return remaining != null && remaining > 0 ? <StatLine main={t`${gap}pp to go`} /> : <Muted>{goal.progress?.detail ?? t`Tracking your plays`}</Muted>;
     }
-    case "reach_rank":
-      return current != null ? <StatLine main={`now #${nf(current)}`} /> : <Muted>{goal.progress?.detail ?? "Tracking your rank"}</Muted>;
-    case "play_pp":
+    case "reach_rank": {
+      const nowRank = current != null ? nf(current) : "";
+      return current != null ? <StatLine main={t`now #${nowRank}`} /> : <Muted>{goal.progress?.detail ?? t`Tracking your rank`}</Muted>;
+    }
+    case "play_pp": {
       if (current != null && current > 0 && target != null && current < target) {
-        return <StatLine main={`best ${Math.round(current)}pp`} sub={`+${Math.round(target - current)}pp to go`} />;
+        const best = String(Math.round(current));
+        const gap = String(Math.round(target - current));
+        return <StatLine main={t`best ${best}pp`} sub={t`+${gap}pp to go`} />;
       }
       if (current != null && target != null && current >= target) {
-        return (
-          <Muted>waiting for another {Math.round(target)}pp+ play</Muted>
-        );
+        const want = String(Math.round(target));
+        return <Muted>{t`waiting for another ${want}pp+ play`}</Muted>;
       }
-      return (
-        <Muted>chasing your first {target != null ? Math.round(target) : "big"}pp play</Muted>
-      );
+      const chaseTarget = target != null ? String(Math.round(target)) : "big";
+      return <Muted>{t`chasing your first ${chaseTarget}pp play`}</Muted>;
+    }
     case "play_pp_count": {
       const threshold = goal.targetValue != null ? Math.round(goal.targetValue) : null;
       const remaining = current != null && target != null ? Math.max(0, target - current) : null;
-      return current != null && target != null ? (
-        <StatLine main={`${nf(current)} / ${nf(target)} plays`} sub={remaining != null && remaining > 0 && threshold != null ? `${nf(remaining)} to go at ${threshold}pp+` : null} />
-      ) : (
-        <Muted>{threshold != null ? `counting ${threshold}pp+ plays` : "counting pp plays"}</Muted>
-      );
+      if (current != null && target != null) {
+        const have = nf(current);
+        const want = nf(target);
+        const left = remaining != null ? nf(remaining) : "";
+        const at = threshold != null ? String(threshold) : "";
+        return <StatLine main={t`${have} / ${want} plays`} sub={remaining != null && remaining > 0 && threshold != null ? t`${left} to go at ${at}pp+` : null} />;
+      }
+      return <Muted>{threshold != null ? t`counting ${String(threshold)}pp+ plays` : t`counting pp plays`}</Muted>;
     }
-    case "accuracy":
-      return current != null && target != null ? (
-        <StatLine main={`best ${(current * 100).toFixed(2)}%`} sub={target - current > 0 ? `${((target - current) * 100).toFixed(2)}% to go` : null} />
-      ) : (
-        <Muted>{goal.progress?.detail ?? "not played yet"}</Muted>
-      );
+    case "accuracy": {
+      if (current != null && target != null) {
+        const best = (current * 100).toFixed(2);
+        const left = ((target - current) * 100).toFixed(2);
+        return <StatLine main={t`best ${best}%`} sub={target - current > 0 ? t`${left}% to go` : null} />;
+      }
+      return <Muted>{goal.progress?.detail ?? t`not played yet`}</Muted>;
+    }
     case "grade":
       return <GradeProgress current={bestGradeOf(goal.progress)} />;
     default:
-      return <Muted>{goal.progress?.detail ?? "Tracking your plays"}</Muted>;
+      return <Muted>{goal.progress?.detail ?? t`Tracking your plays`}</Muted>;
   }
 }
 
@@ -1299,6 +1319,7 @@ function GoalReadout({ goal }: { goal: UserGoal }) {
 // closeness ring wrapping its cover; big play is a milestone badge; grade / pass show the cover,
 // progress in text.
 function GoalMedia({ goal, accent, href }: { goal: UserGoal; accent: string; href: string | null }) {
+  const { t } = useLingui();
   const meta = goalMeta(goal.kind);
   const cover = coverUrl(goal.beatmapsetId);
 
@@ -1323,7 +1344,7 @@ function GoalMedia({ goal, accent, href }: { goal: UserGoal; accent: string; hre
     return (
       <GoalRing pct={pct} accent={accent} size={84} stroke={6}>
         {href ? (
-          <a href={href} target="_blank" rel="noreferrer" className="block rounded-full transition-transform hover:scale-[1.04]" aria-label={`Open ${goal.beatmapLabel ?? "map"} on osu!`}>
+          <a href={href} target="_blank" rel="noreferrer" className="block rounded-full transition-transform hover:scale-[1.04]" aria-label={t`Open ${goal.beatmapLabel ?? t`map`} on osu!`}>
             {inner}
           </a>
         ) : (
@@ -1351,7 +1372,7 @@ function GoalMedia({ goal, accent, href }: { goal: UserGoal; accent: string; hre
   return (
     <span className="relative h-[84px] w-[84px] shrink-0">
       {href ? (
-        <a href={href} target="_blank" rel="noreferrer" className="block h-full w-full rounded-full ring-1 ring-osu-b3/30 transition-transform hover:scale-[1.04]" aria-label={`Open ${goal.beatmapLabel ?? "map"} on osu!`}>
+        <a href={href} target="_blank" rel="noreferrer" className="block h-full w-full rounded-full ring-1 ring-osu-b3/30 transition-transform hover:scale-[1.04]" aria-label={t`Open ${goal.beatmapLabel ?? t`map`} on osu!`}>
           {disc}
         </a>
       ) : (
@@ -1372,7 +1393,7 @@ function GoalMedia({ goal, accent, href }: { goal: UserGoal; accent: string; hre
 }
 
 function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () => void; onUpdate: (input: UpdateGoalInput) => Promise<boolean> }) {
-  const { i18n } = useLingui();
+  const { i18n, t } = useLingui();
   const meta = goalMeta(goal.kind);
   const accent = meta.accent;
   const href = beatmapHref(goal.beatmapId);
@@ -1396,9 +1417,9 @@ function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () =
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <span className="text-[10px] font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>
-              {meta.label}
+              {i18n._(meta.label)}
             </span>
-            <span className="truncate text-[10px] font-semibold text-osu-f1" title={setOnTitle(goal.createdAt)}>
+            <span className="truncate text-[10px] font-semibold text-osu-f1" title={setOnTitle(goal.createdAt, i18n)}>
               {goalAgeLabel(goal.createdAt, Date.now(), i18n)}
             </span>
           </div>
@@ -1408,7 +1429,7 @@ function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () =
               target="_blank"
               rel="noreferrer"
               className="mt-1 block truncate text-[14px] font-bold text-white transition-colors hover:text-osu-pink-light hover:underline"
-              title={`Open ${goal.beatmapLabel ?? describeGoal(goal, i18n)} on osu!`}
+              title={t`Open ${goal.beatmapLabel ?? describeGoal(goal, i18n)} on osu!`}
             >
               {describeGoal(goal, i18n)}
             </a>
@@ -1428,7 +1449,7 @@ function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () =
           <button
             type="button"
             onClick={() => setEditing(true)}
-            aria-label="Edit goal"
+            aria-label={t`Edit goal`}
             className="rounded-md p-1 text-osu-f1/60 transition-colors hover:bg-osu-b3/40 hover:text-white"
           >
             <Pencil className="h-3 w-3" />
@@ -1437,7 +1458,7 @@ function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () =
         <button
           type="button"
           onClick={onDelete}
-          aria-label="Delete goal"
+          aria-label={t`Delete goal`}
           className="rounded-md p-1 text-osu-f1/60 transition-colors hover:bg-osu-red/10 hover:text-osu-red-light"
         >
           <CloseGlyph />
@@ -1450,6 +1471,7 @@ function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () =
 // Inline editor for an open goal. The kind and map are fixed (a different map is a different
 // goal); the targets are the same tokens the composer uses, so the sentence reads identically.
 function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input: UpdateGoalInput) => Promise<boolean>; onCancel: () => void }) {
+  const { i18n, t } = useLingui();
   const meta = goalMeta(goal.kind);
   const accent = meta.accent;
   const [value, setValue] = useState<string>(() => {
@@ -1522,64 +1544,54 @@ function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input
   return (
     <div className="min-w-0 flex-1">
       <div className="text-[10px] font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>
-        {meta.label}
+        {i18n._(meta.label)}
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-2 text-[13.5px] font-semibold text-osu-l2">
         {goal.kind === "reach_pp" ? (
-          <>
-            <span>Reach</span>
-            <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} suffix="pp" accent={accent} width="6.5rem" ariaLabel="Target total pp" />
-            <span>total pp</span>
-          </>
+          <Trans>
+            Reach{" "}
+            <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} suffix="pp" accent={accent} width="6.5rem" ariaLabel={t`Target total pp`} /> total pp
+          </Trans>
         ) : null}
         {goal.kind === "play_pp" ? (
-          <>
-            <span>Land a play worth</span>
-            <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} suffix="pp" accent={accent} width="5rem" ariaLabel="Play worth at least" />
-          </>
+          <Trans>
+            Land a play worth{" "}
+            <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} suffix="pp" accent={accent} width="5rem" ariaLabel={t`Play worth at least`} />
+          </Trans>
         ) : null}
         {goal.kind === "play_pp_count" ? (
-          <>
-            <span>Have</span>
-            <NumberToken value={count} onChange={setCount} placeholder="50" accent={accent} width="4rem" ariaLabel="Target play count" />
-            <span>plays worth</span>
-            <NumberToken value={value} onChange={setValue} placeholder="600" suffix="pp" accent={accent} width="5rem" ariaLabel="Minimum pp per play" />
-            <span>or more</span>
-          </>
+          <Trans>
+            Have{" "}
+            <NumberToken value={count} onChange={setCount} placeholder="50" accent={accent} width="4rem" ariaLabel={t`Target play count`} /> plays worth{" "}
+            <NumberToken value={value} onChange={setValue} placeholder="600" suffix="pp" accent={accent} width="5rem" ariaLabel={t`Minimum pp per play`} /> or more
+          </Trans>
         ) : null}
         {goal.kind === "reach_rank" ? (
-          <>
-            <span>Reach</span>
-            <RankScopeToggle value={rankScope} onChange={setRankScope} accent={accent} />
-            <span>rank</span>
-            <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} prefix="#" accent={accent} width="5rem" ariaLabel="Target rank" />
-          </>
+          <Trans>
+            Reach{" "}
+            <RankScopeToggle value={rankScope} onChange={setRankScope} accent={accent} /> <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} prefix="#" accent={accent} width="5rem" ariaLabel={t`Target rank`} /> rank
+          </Trans>
         ) : null}
         {goal.kind === "accuracy" ? (
-          <>
-            <span>Hit</span>
-            <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} suffix="%" accent={accent} width="4rem" decimal ariaLabel="Target accuracy" />
-            <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
-          </>
+          <Trans>
+            Hit{" "}
+            <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} suffix="%" accent={accent} width="4rem" decimal ariaLabel={t`Target accuracy`} /> <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
+          </Trans>
         ) : null}
         {goal.kind === "grade" ? (
-          <>
-            <span>Earn</span>
-            <GradeToken value={grade} onChange={setGrade} accent={accent} />
-            <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
-          </>
+          <Trans>
+            Earn <GradeToken value={grade} onChange={setGrade} accent={accent} /> <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
+          </Trans>
         ) : null}
         {goal.kind === "pass" ? (
-          <>
-            <span>Pass</span>
-            <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
-          </>
+          <Trans>
+            Pass <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
+          </Trans>
         ) : null}
         {goal.kind === "fc" ? (
-          <>
-            <span>FC</span>
-            <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
-          </>
+          <Trans>
+            FC <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
+          </Trans>
         ) : null}
       </div>
       <div className="mt-2 flex items-center gap-1.5">
@@ -1591,19 +1603,19 @@ function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input
           className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[12px] font-bold transition hover:brightness-110 disabled:cursor-default disabled:border-osu-b3/30 disabled:bg-osu-b5/40 disabled:text-osu-f1/55 disabled:hover:brightness-100"
         >
           {saving ? <Spinner className="h-3.5 w-3.5" /> : null}
-          Save
+          {t`Save`}
         </button>
         <button type="button" onClick={onCancel} className="h-8 rounded-lg px-2.5 text-[12px] font-bold text-osu-f1 transition-colors hover:bg-osu-b3/40 hover:text-white">
-          Cancel
+          {t`Cancel`}
         </button>
-        {error ? <span className="text-[11px] font-semibold text-osu-red-light">Couldn't save. Try again.</span> : null}
+        {error ? <span className="text-[11px] font-semibold text-osu-red-light">{t`Couldn't save. Try again.`}</span> : null}
       </div>
     </div>
   );
 }
 
 function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: () => void; onAgain: () => void }) {
-  const { i18n } = useLingui();
+  const { i18n, t } = useLingui();
   const meta = goalMeta(goal.kind);
   const cover = coverUrl(goal.beatmapsetId);
   const took = goalDurationLabel(goal, i18n);
@@ -1630,7 +1642,7 @@ function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: ()
             target="_blank"
             rel="noreferrer"
             className="block truncate text-[12.5px] font-bold text-osu-l2 transition-colors hover:text-osu-pink-light hover:underline"
-            title={`Open ${goal.beatmapLabel ?? describeGoal(goal, i18n)} on osu!`}
+            title={t`Open ${goal.beatmapLabel ?? describeGoal(goal, i18n)} on osu!`}
           >
             {describeGoal(goal, i18n)}
           </a>
@@ -1639,8 +1651,8 @@ function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: ()
             {describeGoal(goal, i18n)}
           </div>
         )}
-        <div className="mt-0.5 truncate text-[10.5px] font-semibold text-osu-green-light" title={setOnTitle(goal.createdAt)}>
-          {completedDetail(goal) ?? "cleared"}
+        <div className="mt-0.5 truncate text-[10.5px] font-semibold text-osu-green-light" title={setOnTitle(goal.createdAt, i18n)}>
+          {completedDetail(goal, i18n) ?? "cleared"}
           {took ? <span className="font-normal text-osu-f1"> · {took}</span> : null}
         </div>
       </div>
@@ -1648,14 +1660,14 @@ function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: ()
         type="button"
         onClick={onAgain}
         className="shrink-0 self-start rounded-md px-1.5 py-1 text-[10.5px] font-bold text-osu-f1 transition-colors hover:bg-osu-pink/10 hover:text-osu-pink-light"
-        title={movesToNextMilestone ? "Set the next milestone" : "Set this goal again"}
+        title={movesToNextMilestone ? t`Set the next milestone` : t`Set this goal again`}
       >
-        {movesToNextMilestone ? "aim higher" : "go again"}
+        {movesToNextMilestone ? t`aim higher` : t`go again`}
       </button>
       <button
         type="button"
         onClick={onDelete}
-        aria-label="Delete goal"
+        aria-label={t`Delete goal`}
         className="shrink-0 self-start rounded-md p-1 text-osu-f1/55 transition-colors hover:bg-osu-red/10 hover:text-osu-red-light"
       >
         <CloseGlyph />

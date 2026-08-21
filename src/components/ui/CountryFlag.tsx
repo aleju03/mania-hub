@@ -8,6 +8,7 @@ import {
 } from "../../lib/country";
 import { isRegionScope } from "../../lib/regions";
 import { RegionIcon } from "./RegionIcon";
+import { useLingui } from "@lingui/react/macro";
 
 type CountryFlagSize = "xs" | "sm" | "md" | "lg";
 
@@ -47,8 +48,9 @@ export function CountryFlag({
   decorative?: boolean;
   className?: string;
 }) {
+  const { t } = useLingui();
   const normalized = code?.trim().toUpperCase() || "XX";
-  const title = normalized === "XX" ? "Unknown country" : getCountryName(normalized);
+  const title = normalized === "XX" ? t`Unknown country` : getCountryName(normalized);
   const labelProps = decorative ? { alt: "", title: undefined } : { alt: title, title };
   const outerClassName = `inline-flex shrink-0 items-center justify-center overflow-hidden align-middle ${sizeClass[size]} ${muted ? "opacity-50 saturate-75" : ""} ${className}`;
 

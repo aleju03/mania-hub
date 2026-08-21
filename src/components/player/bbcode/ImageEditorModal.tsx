@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import {
   useCallback,
   useEffect,
@@ -123,6 +124,7 @@ export function ImageEditorModal({
   /** External "still handling the result" state shown after Apply. */
   busy?: boolean;
 }) {
+  const { t } = useLingui();
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [orientation, setOrientation] = useState<Orientation>({ rotation: 0, flipH: false, flipV: false });
@@ -166,7 +168,7 @@ export function ImageEditorModal({
             ? await (await fetch(source.url)).blob()
             : await fetchImageBlobViaProxy(source.url);
         }
-        if (!blob) throw new Error("No image to edit.");
+        if (!blob) throw new Error(t`No image to edit.`);
         sourceTypeRef.current = blob.type;
         objectUrl = URL.createObjectURL(blob);
         const image = new Image();
@@ -175,11 +177,11 @@ export function ImageEditorModal({
           setImg(image);
         };
         image.onerror = () => {
-          if (!cancelled) setError("Couldn't decode that image.");
+          if (!cancelled) setError(t`Couldn't decode that image.`);
         };
         image.src = objectUrl;
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Couldn't load that image.");
+        if (!cancelled) setError(err instanceof Error ? err.message : t`Couldn't load that image.`);
       }
     })();
     return () => {
@@ -464,15 +466,15 @@ export function ImageEditorModal({
       canvas.width = Math.max(1, output.w);
       canvas.height = Math.max(1, output.h);
       const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas unavailable.");
+      if (!ctx) throw new Error(t`Canvas unavailable.`);
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(oriented, crop.x, crop.y, crop.w, crop.h, 0, 0, canvas.width, canvas.height);
       const { mime, quality } = exportType(sourceTypeRef.current);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, quality));
-      if (!blob) throw new Error("Couldn't export the image.");
+      if (!blob) throw new Error(t`Couldn't export the image.`);
       await onApply(blob);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't export the image.");
+      setError(err instanceof Error ? err.message : t`Couldn't export the image.`);
     } finally {
       setExporting(false);
     }
@@ -531,10 +533,10 @@ export function ImageEditorModal({
       >
         <div className="flex items-center gap-3 border-b border-osu-b3/30 px-4 py-3">
           <Crop size={16} className="text-osu-pink" />
-          <div className="text-[13px] font-bold text-osu-c1">Edit image</div>
+          <div className="text-[13px] font-bold text-osu-c1">{t`Edit image`}</div>
           {img ? (
             <div className="text-[12px] text-osu-f1">
-              {crop ? `crop ${crop.w}×${crop.h}` : ""}
+              {crop ? t`crop ${crop.w}×${crop.h}` : ""}
               {crop && (output.w !== crop.w || output.h !== crop.h) ? ` → ${output.w}×${output.h}` : ""}
             </div>
           ) : null}
@@ -542,8 +544,8 @@ export function ImageEditorModal({
             type="button"
             onClick={onCancel}
             disabled={working}
-            title="Close"
-            aria-label="Close"
+            title={t`Close`}
+            aria-label={t`Close`}
             className="ml-auto grid h-7 w-7 place-items-center rounded-full text-osu-f1 hover:bg-osu-b3/50 hover:text-white cursor-pointer disabled:opacity-50"
           >
             <X size={15} />
@@ -552,19 +554,19 @@ export function ImageEditorModal({
 
         {/* Tools */}
         <div className="flex flex-wrap items-center gap-1.5 border-b border-osu-b3/30 px-4 py-2">
-          <ToolbarButton label="Undo (Ctrl+Z)" onClick={undo} disabled={!canUndo || working}><Undo2 size={15} /></ToolbarButton>
-          <ToolbarButton label="Redo (Ctrl+Shift+Z)" onClick={redo} disabled={!canRedo || working}><Redo2 size={15} /></ToolbarButton>
+          <ToolbarButton label={t`Undo (Ctrl+Z)`} onClick={undo} disabled={!canUndo || working}><Undo2 size={15} /></ToolbarButton>
+          <ToolbarButton label={t`Redo (Ctrl+Shift+Z)`} onClick={redo} disabled={!canRedo || working}><Redo2 size={15} /></ToolbarButton>
           <div className="mx-1 h-5 w-px bg-osu-b3/60" />
-          <ToolbarButton label="Rotate left" onClick={() => rotate(-90)} disabled={!img || working}><RotateCcw size={15} /></ToolbarButton>
-          <ToolbarButton label="Rotate right" onClick={() => rotate(90)} disabled={!img || working}><RotateCw size={15} /></ToolbarButton>
+          <ToolbarButton label={t`Rotate left`} onClick={() => rotate(-90)} disabled={!img || working}><RotateCcw size={15} /></ToolbarButton>
+          <ToolbarButton label={t`Rotate right`} onClick={() => rotate(90)} disabled={!img || working}><RotateCw size={15} /></ToolbarButton>
           <ToolbarButton
-            label="Flip horizontal"
+            label={t`Flip horizontal`}
             onClick={() => flip("flipH")}
             disabled={!img || working}
             active={orientation.flipH}
           ><FlipHorizontal size={15} /></ToolbarButton>
           <ToolbarButton
-            label="Flip vertical"
+            label={t`Flip vertical`}
             onClick={() => flip("flipV")}
             disabled={!img || working}
             active={orientation.flipV}
@@ -580,7 +582,7 @@ export function ImageEditorModal({
             disabled={!img || working}
             className="rounded-md px-2 py-1 text-[12px] text-osu-l2 hover:bg-osu-b3/60 hover:text-osu-c1 cursor-pointer disabled:opacity-50"
           >
-            Reset crop
+            {t`Reset crop`}
           </button>
           <button
             type="button"
@@ -588,10 +590,10 @@ export function ImageEditorModal({
             disabled={!img || working}
             className="rounded-md px-2 py-1 text-[12px] text-osu-l2 hover:bg-osu-b3/60 hover:text-osu-c1 cursor-pointer disabled:opacity-50"
           >
-            Reset orientation
+            {t`Reset orientation`}
           </button>
           <span className="ml-auto hidden items-center gap-1.5 text-[11px] text-osu-f1 sm:flex">
-            <span>drag to crop</span>·<span>Shift = lock ratio</span>·<span>Alt = from center</span>
+            <span>{t`drag to crop`}</span>·<span>{t`Shift = lock ratio`}</span>·<span>{t`Alt = from center`}</span>
           </span>
         </div>
 
@@ -639,7 +641,7 @@ export function ImageEditorModal({
         {/* Footer: output size + apply */}
         <div className="flex flex-wrap items-center gap-3 border-t border-osu-b3/30 px-4 py-3">
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">Resize to</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">{t`Resize to`}</span>
             <input
               type="number"
               min={1}
@@ -651,8 +653,8 @@ export function ImageEditorModal({
                 setOutputWidth(Number(event.target.value));
               }}
               disabled={!img || working}
-              title="Width of the exported image, in pixels"
-              aria-label="Output width in pixels"
+              title={t`Width of the exported image, in pixels`}
+              aria-label={t`Output width in pixels`}
               className="w-20 rounded-md border border-osu-b3/50 bg-osu-b5 px-2 py-1 text-[13px] text-osu-c1 focus:border-osu-h1/40 focus:outline-none"
             />
             <span className="text-osu-f1">×</span>
@@ -667,11 +669,11 @@ export function ImageEditorModal({
                 setOutputHeight(Number(event.target.value));
               }}
               disabled={!img || working}
-              title="Height of the exported image, in pixels"
-              aria-label="Output height in pixels"
+              title={t`Height of the exported image, in pixels`}
+              aria-label={t`Output height in pixels`}
               className="w-20 rounded-md border border-osu-b3/50 bg-osu-b5 px-2 py-1 text-[13px] text-osu-c1 focus:border-osu-h1/40 focus:outline-none"
             />
-            <span className="text-[11px] text-osu-f1">px</span>
+            <span className="text-[11px] text-osu-f1">{t`px`}</span>
           </div>
           <button
             type="button"
@@ -680,15 +682,15 @@ export function ImageEditorModal({
               setOutputWidth(OSU_PROFILE_COLUMN_WIDTH);
             }}
             disabled={!img || working}
-            title={`Make it ${OSU_PROFILE_COLUMN_WIDTH}px wide - the full width of the osu! profile column`}
+            title={t`Make it ${OSU_PROFILE_COLUMN_WIDTH}px wide - the full width of the osu! profile column`}
             className="rounded-md border border-osu-b3/50 bg-osu-b5 px-2 py-1 text-[12px] font-semibold text-osu-l2 hover:text-osu-c1 cursor-pointer disabled:opacity-50"
           >
-            Full width
+            {t`Full width`}
           </button>
           <button
             type="button"
             onClick={() => setLockAspect((value) => !value)}
-            title={lockAspect ? "Aspect ratio locked" : "Aspect ratio unlocked"}
+            title={lockAspect ? t`Aspect ratio locked` : t`Aspect ratio unlocked`}
             className={`grid h-8 w-8 place-items-center rounded-md border transition-colors cursor-pointer ${
               lockAspect
                 ? "border-osu-h1/40 bg-osu-h1/20 text-osu-c1"
@@ -704,7 +706,7 @@ export function ImageEditorModal({
               disabled={working}
               className="rounded-md px-3 py-1.5 text-[12px] font-semibold text-osu-l2 hover:text-osu-c1 cursor-pointer disabled:opacity-50"
             >
-              Cancel
+              {t`Cancel`}
             </button>
             <button
               type="button"
@@ -715,7 +717,7 @@ export function ImageEditorModal({
               {working ? <Loader2 size={14} className="animate-spin" /> : null}
               {/* Applying only re-encodes and stages the result in the editor;
                   the upload happens on Copy BBCode, like every other image. */}
-              {working ? "Applying…" : "Apply"}
+              {working ? t`Applying…` : t`Apply`}
             </button>
           </div>
         </div>

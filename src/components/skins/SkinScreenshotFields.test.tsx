@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render as rtlRender, screen } from "@testing-library/react";
+import type { ReactElement, ReactNode } from "react";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../lib/i18n";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DraftScreenshot } from "../../lib/skin-screenshot-process";
 import { SkinScreenshotFields } from "./SkinScreenshotFields";
+
+// The fields read their copy through Lingui; en resolves to the source strings.
+const I18nWrap = ({ children }: { children: ReactNode }) => (
+  <I18nProvider i18n={getI18n("en")}>{children}</I18nProvider>
+);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
 
 function draft(index: number, label = ""): DraftScreenshot {
   return { blob: new Blob(["x"]), width: 1920, height: 1080, url: `blob:shot-${index}`, label };

@@ -7,6 +7,7 @@ import {
   COMMUNITY_LANGUAGES,
   COMMUNITY_MAX_PER_USER,
   type CommunityLanguage,
+  type CommunityReportReason,
 } from "../../lib/communities-shared";
 import { COUNTRY_OPTIONS, displayCountryName } from "../../lib/country";
 import { useLocale } from "../../lib/locale-context";
@@ -140,6 +141,44 @@ export function useCommunityErrorMessage() {
       const descriptor = code ? COMMUNITY_ERROR_MSGS[code] : undefined;
       return descriptor ? i18n._(descriptor) : i18n._(msg`Something went wrong. Try again.`);
     },
+    [i18n],
+  );
+}
+
+// What someone flagging a listing can say, in the reader's language. The
+// English source stays in communities-shared, which the moderator queue reads.
+const COMMUNITY_REPORT_REASON_MSGS: Record<CommunityReportReason, MessageDescriptor> = {
+  misleading: msg`Not the server it says it is`,
+  dead: msg`Dead server, or the invite does not work`,
+  spam: msg`Spam or advertising`,
+  harmful: msg`Harmful, hateful or a scam`,
+  other: msg`Something else`,
+};
+
+export function useCommunityReportReasonLabel() {
+  const { i18n } = useLingui();
+  return useMemo(
+    () => (reason: CommunityReportReason) => i18n._(COMMUNITY_REPORT_REASON_MSGS[reason] ?? COMMUNITY_REPORT_REASON_MSGS.other),
+    [i18n],
+  );
+}
+
+// Discord's own badges on a guild, in the reader's language.
+const COMMUNITY_FEATURE_MSGS: Record<string, MessageDescriptor> = {
+  PARTNERED: msg`Discord partner`,
+  VERIFIED: msg`Verified`,
+  COMMUNITY: msg`Community server`,
+  DISCOVERABLE: msg`In server discovery`,
+};
+
+export function useCommunityFeatureLabels() {
+  const { i18n } = useLingui();
+  return useMemo(
+    () => (features: string[] | undefined) =>
+      (features ?? [])
+        .map((feature) => COMMUNITY_FEATURE_MSGS[feature])
+        .filter((descriptor): descriptor is MessageDescriptor => Boolean(descriptor))
+        .map((descriptor) => i18n._(descriptor)),
     [i18n],
   );
 }

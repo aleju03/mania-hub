@@ -896,7 +896,7 @@ function ReplayPage() {
       if (score) {
         const availability = getReplayScoreAvailability(score);
         if (!availability.available) {
-          throw new Error(availability.message);
+          throw new Error(i18n._(availability.message));
         }
 
         setScoreInfo(score);
@@ -2109,7 +2109,7 @@ function ReplayViewer({
   // stage and the settings card so it scrolls under the pinned player.
   children?: ReactNode;
 }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const auth = useAuth();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2561,7 +2561,7 @@ function ReplayViewer({
   // Reads as "Remove misses" mid-sentence, so the label is lowercased before
   // it goes into the message.
   const overlayMenuTargetLabel = overlayMenu?.targetId
-    ? REPLAY_OVERLAY_LABELS[overlayMenu.targetId].toLowerCase()
+    ? i18n._(REPLAY_OVERLAY_LABELS[overlayMenu.targetId]).toLowerCase()
     : "";
   // Only odd keymodes have a lane a thumb covers, so only they can move it
   // between the two miss counters.
@@ -4858,11 +4858,11 @@ function ReplayViewer({
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
                     >
                       <Plus className="h-3.5 w-3.5 text-osu-green-light" aria-hidden="true" />
-                      {REPLAY_OVERLAY_LABELS[id]}
+                      {i18n._(REPLAY_OVERLAY_LABELS[id])}
                     </button>
                   ))
                 ) : (
-                  <div className="px-3 py-1.5 text-[12px] text-white/40">All overlays are shown</div>
+                  <div className="px-3 py-1.5 text-[12px] text-white/40">{t`All overlays are shown`}</div>
                 )}
               </>
             )}

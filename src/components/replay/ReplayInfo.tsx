@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeftRight, Check, Share2, Trash2 } from "lucide-react";
+import { useLingui } from "@lingui/react/macro";
 import { StarRatingBadge } from "#/components/maps/SearchCard";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { ModBadge } from "#/components/ui/ModBadge";
@@ -97,6 +98,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
   // under the other ruleset. The stats below mirror what the viewer is now
   // playing; score and combo can't be simulated and stay from the real play.
   const canToggleClient = Boolean(onSelectClient && beatmap && beatmap.notes.length > 0 && replay.frames.length > 0);
+  const { t } = useLingui();
   const judgingIsLazer = canToggleClient ? judgeAsLazer ?? sourceIsLazer : sourceIsLazer;
   const simActive = canToggleClient && judgingIsLazer !== sourceIsLazer;
   const sim = useMemo(() => {
@@ -147,7 +149,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             <div className="relative flex items-center gap-2 min-w-0">
               <PlayerAvatar src={avatarSrc} name={displayName} size={32} />
               <div className="min-w-0">
-                <div className={`text-[8px] uppercase tracking-wider ${playerLabelClass}`}>Player</div>
+                <div className={`text-[8px] uppercase tracking-wider ${playerLabelClass}`}>{t`Player`}</div>
                 <PlayerName
                   username={playerPageUsername}
                   className={`truncate text-sm font-bold text-white${playerNameShadow}`}
@@ -159,7 +161,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
           </div>
           <div className="relative h-7 w-px bg-osu-b3/40" />
           <div className="relative min-w-0 flex-1">
-            <div className={`text-[8px] uppercase tracking-wider ${mapLabelClass}`}>Map</div>
+            <div className={`text-[8px] uppercase tracking-wider ${mapLabelClass}`}>{t`Map`}</div>
             {/* h-5 matches the player name's text-sm line box so both value
                 rows share a centerline. */}
             <div className="flex h-5 items-center gap-1.5 min-w-0">
@@ -172,7 +174,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
                   <div className={`min-w-0 truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
                 )
               ) : (
-                <div className="min-w-0 truncate text-xs font-semibold text-osu-l2">Replay loaded</div>
+                <div className="min-w-0 truncate text-xs font-semibold text-osu-l2">{t`Replay loaded`}</div>
               )}
               {stars != null && <StarRatingBadge stars={stars} className="shrink-0" />}
               {displayMods.length > 0 && (
@@ -187,33 +189,33 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
         </div>
 
         <div className="mt-3 grid grid-cols-4 gap-1.5">
-          <MobileReplayStat label="Keys" value={`${replay.keyCount}K`} valueClassName="text-osu-yellow" compact />
-          <MobileReplayStat label="Acc" value={`${shownAccuracy.toFixed(2)}%`} compact />
-          <MobileReplayStat label="Score" value={h.totalScore.toLocaleString("en-US")} valueClassName={`text-white${realOnlyDim}`} compact />
-          <MobileReplayStat label="Combo" value={`${h.maxCombo}x`} valueClassName={`text-white${realOnlyDim}`} compact />
+          <MobileReplayStat label={t`Keys`} value={`${replay.keyCount}K`} valueClassName="text-osu-yellow" compact />
+          <MobileReplayStat label={t`Acc`} value={`${shownAccuracy.toFixed(2)}%`} compact />
+          <MobileReplayStat label={t`Score`} value={h.totalScore.toLocaleString("en-US")} valueClassName={`text-white${realOnlyDim}`} compact />
+          <MobileReplayStat label={t`Combo`} value={`${h.maxCombo}x`} valueClassName={`text-white${realOnlyDim}`} compact />
         </div>
         {(clientLabel || canToggleClient || playedDate || shownPp != null) && (
           <div className={`mt-1.5 grid gap-1.5 ${shownPp != null ? "grid-cols-3" : "grid-cols-2"}`}>
             {canToggleClient && onSelectClient ? (
               <div className="min-w-0 rounded-lg bg-white/5 px-1 py-1.5 text-center">
-                <div className="text-[8px] uppercase tracking-wider text-osu-f1">Client</div>
+                <div className="text-[8px] uppercase tracking-wider text-osu-f1">{t`Client`}</div>
                 <ClientToggle compact judgingIsLazer={judgingIsLazer} simActive={simActive} onSelect={onSelectClient} />
               </div>
             ) : clientLabel ? (
-              <MobileReplayStat label="Client" value={clientLabel} valueClassName={clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"} compact />
+              <MobileReplayStat label={t`Client`} value={clientLabel} valueClassName={clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"} compact />
             ) : null}
             {shownPp != null && (
               <div className="min-w-0 rounded-lg bg-white/5 px-1 py-1.5 text-center">
-                <div className="text-[8px] uppercase tracking-wider text-osu-f1">PP</div>
+                <div className="text-[8px] uppercase tracking-wider text-osu-f1">{t`PP`}</div>
                 <div className="truncate text-xs font-bold tabular-nums text-white">{Math.round(shownPp)}pp<DeltaChip delta={ppDelta} suffix="pp" /></div>
               </div>
             )}
-            {playedDate && <MobileReplayStat label="Played" value={playedDate} compact />}
+            {playedDate && <MobileReplayStat label={t`Played`} value={playedDate} compact />}
           </div>
         )}
         <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-white/5 px-3 py-2.5">
           <div className="min-w-0">
-            <div className="mb-1 text-[8px] uppercase tracking-wider text-osu-f1">Judgments</div>
+            <div className="mb-1 text-[8px] uppercase tracking-wider text-osu-f1">{t`Judgments`}</div>
             <div className="grid grid-cols-6 gap-1.5 text-center text-[11px] font-bold tabular-nums">
               <span className="rounded bg-white/10 px-1 py-1 text-osu-yellow">{shownCounts.geki}</span>
               <span className="rounded bg-white/10 px-1 py-1 text-osu-blue">{shownCounts.c300}</span>
@@ -225,7 +227,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
           </div>
           {beatmap && (
             <div className="shrink-0 text-right">
-              <div className="text-[8px] uppercase tracking-wider text-osu-f1">Notes</div>
+              <div className="text-[8px] uppercase tracking-wider text-osu-f1">{t`Notes`}</div>
               <div className="text-xs font-bold text-osu-f1">{beatmap.notes.length.toLocaleString("en-US")}</div>
             </div>
           )}
@@ -258,7 +260,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
           <div className="flex min-w-0 shrink-0 items-center gap-3">
             <PlayerAvatar src={avatarSrc} name={displayName} size={46} />
             <div className="min-w-0">
-              <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">Player</div>
+              <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">{t`Player`}</div>
               <PlayerName
                 username={playerPageUsername}
                 className="max-w-[180px] truncate text-[15px] font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]"
@@ -291,27 +293,27 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
               </div>
             )}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-6 gap-y-1.5 min-w-0">
-              <StripStat label="Keys" valueClassName="text-osu-yellow">{replay.keyCount}K</StripStat>
-              <StripStat label="Accuracy">{shownAccuracy.toFixed(2)}%<DeltaChip delta={accDelta} suffix="%" decimals={2} /></StripStat>
-              {shownPp != null && <StripStat label="PP">{Math.round(shownPp)}pp<DeltaChip delta={ppDelta} suffix="pp" /></StripStat>}
-              <StripStat label="Score" valueClassName={`text-white${realOnlyDim}`} title={simActive ? "From the real play (not simulated)" : undefined}>{h.totalScore.toLocaleString("en-US")}</StripStat>
-              <StripStat label="Combo" valueClassName={`text-white${realOnlyDim}`} title={simActive ? "From the real play (not simulated)" : undefined}>{h.maxCombo}x</StripStat>
+              <StripStat label={t`Keys`} valueClassName="text-osu-yellow">{replay.keyCount}K</StripStat>
+              <StripStat label={t`Accuracy`}>{shownAccuracy.toFixed(2)}%<DeltaChip delta={accDelta} suffix="%" decimals={2} /></StripStat>
+              {shownPp != null && <StripStat label={t`PP`}>{Math.round(shownPp)}pp<DeltaChip delta={ppDelta} suffix="pp" /></StripStat>}
+              <StripStat label={t`Score`} valueClassName={`text-white${realOnlyDim}`} title={simActive ? t`From the real play (not simulated)` : undefined}>{h.totalScore.toLocaleString("en-US")}</StripStat>
+              <StripStat label={t`Combo`} valueClassName={`text-white${realOnlyDim}`} title={simActive ? t`From the real play (not simulated)` : undefined}>{h.maxCombo}x</StripStat>
               {canToggleClient && onSelectClient ? (
                 <div>
-                  <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">Client</div>
+                  <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">{t`Client`}</div>
                   <ClientToggle judgingIsLazer={judgingIsLazer} simActive={simActive} onSelect={onSelectClient} />
                 </div>
               ) : clientLabel ? (
-                <StripStat label="Client" valueClassName={clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"}>{clientLabel}</StripStat>
+                <StripStat label={t`Client`} valueClassName={clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"}>{clientLabel}</StripStat>
               ) : null}
-              {playedDate && <StripStat label="Played">{playedDate}</StripStat>}
+              {playedDate && <StripStat label={t`Played`}>{playedDate}</StripStat>}
               <div>
-                <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">Judgments</div>
+                <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">{t`Judgments`}</div>
                 <div className="text-xs font-semibold tabular-nums [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]">
                   <span className="text-osu-yellow">{shownCounts.geki}</span><span className="text-white/40">/</span><span className="text-osu-blue">{shownCounts.c300}</span><span className="text-white/40">/</span><span className="text-osu-green-light">{shownCounts.katu}</span><span className="text-white/40">/</span><span className="text-osu-green">{shownCounts.c100}</span><span className="text-white/40">/</span><span className="text-osu-orange">{shownCounts.c50}</span><span className="text-white/40">/</span><span className="text-osu-red-light">{shownCounts.miss}</span>
                 </div>
               </div>
-              {beatmap && <StripStat label="Notes" valueClassName="text-white/80">{beatmap.notes.length.toLocaleString("en-US")}</StripStat>}
+              {beatmap && <StripStat label={t`Notes`} valueClassName="text-white/80">{beatmap.notes.length.toLocaleString("en-US")}</StripStat>}
             </div>
           </div>
           {/* No Share here: the Visual Settings playbar inside the stage already
@@ -336,10 +338,11 @@ function ClientToggle({ judgingIsLazer, simActive, onSelect, compact = false }: 
   onSelect: (lazer: boolean) => void;
   compact?: boolean;
 }) {
+  const { t } = useLingui();
   const otherLabel = judgingIsLazer ? "stable" : "lazer";
   const title = simActive
-    ? `Simulated from the replay's keypresses; score and combo still show the real play. Click to judge with ${otherLabel} rules again.`
-    : `See this play judged with ${otherLabel} windows and LN rules`;
+    ? t`Simulated from the replay's keypresses; score and combo still show the real play. Click to judge with ${otherLabel} rules again.`
+    : t`See this play judged with ${otherLabel} windows and LN rules`;
   return (
     <button
       type="button"
@@ -474,19 +477,21 @@ function PlayerAvatar({ src, name, size }: { src?: string; name: string; size: n
 // crop was barely legible: solid white text over a heavier plate, outlined the
 // same way the strip's other text is.
 function BackButton({ onClear }: { onClear: () => void }) {
+  const { t } = useLingui();
   return (
     <button
       type="button"
       onClick={onClear}
       className="rounded-lg border border-white/20 bg-white/15 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:border-white/30 hover:bg-white/25 [text-shadow:0_1px_2px_rgba(0,0,0,0.8)] cursor-pointer"
     >
-      Back
+      {t`Back`}
     </button>
   );
 }
 
 // Mobile card only; on desktop the stage's Visual Settings playbar owns Share.
 function ShareReplayButton({ shareUrl }: { shareUrl: string }) {
+  const { t } = useLingui();
   const [copied, setCopied] = useState(false);
 
   // Straight to the clipboard: the quick "grab the link" path. The controls
@@ -510,7 +515,7 @@ function ShareReplayButton({ shareUrl }: { shareUrl: string }) {
       title={shareUrl}
     >
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-      {copied ? "Copied" : "Share"}
+      {copied ? t`Copied` : t`Share`}
     </button>
   );
 }
@@ -518,16 +523,17 @@ function ShareReplayButton({ shareUrl }: { shareUrl: string }) {
 // Only shown to the uploader (or an admin), since an upload's share link is
 // public and the page cannot tell whose file it is without asking the index.
 function DeleteUploadButton({ onDelete, busy, compact = false }: { onDelete: () => void; busy: boolean; compact?: boolean }) {
+  const { t } = useLingui();
   return (
     <button
       type="button"
       onClick={onDelete}
       disabled={busy}
-      title="Delete this upload"
+      title={t`Delete this upload`}
       className={`inline-flex items-center gap-1.5 rounded-lg bg-osu-red/20 font-semibold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/30 hover:text-white disabled:cursor-wait disabled:opacity-50 ${compact ? "px-2.5 py-1.5 text-[11px]" : "px-3 py-1.5 text-xs"}`}
     >
       <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-      {busy ? "Deleting" : "Delete"}
+      {busy ? t`Deleting` : t`Delete`}
     </button>
   );
 }

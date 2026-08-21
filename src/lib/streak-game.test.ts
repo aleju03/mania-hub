@@ -203,6 +203,7 @@ describe("the projection-backed questions", () => {
   it("prints date metrics as a month, not a number", () => {
     const may2014 = Date.parse("2014-05-20T12:00:00Z");
     expect(formatStreakMonth(may2014)).toBe("May 2014");
+    expect(formatStreakMonth(may2014, "es")).toBe("may 2014");
     const en = getI18n("en");
     expect(en._(STREAK_METRIC_COPY.joined.value(may2014))).toBe("joined May 2014");
     expect(en._(STREAK_METRIC_COPY.oldestTop.reveal("tyrcs", may2014))).toBe("tyrcs's oldest top play is from May 2014.");

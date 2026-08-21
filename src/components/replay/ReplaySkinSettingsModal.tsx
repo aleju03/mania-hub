@@ -3,6 +3,9 @@ import { createPortal } from "react-dom";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, Copy, GripHorizontal, Pencil, Plus, Settings, Trash2, Upload, X } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { I18n, MessageDescriptor } from "@lingui/core";
 
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
 import {
@@ -131,31 +134,31 @@ type AssetPickerTarget =
   | { kind: "judgement"; assetKey: keyof ReplaySkinJudgementAssets; label: string }
   | { kind: "stage"; assetKey: AssetStageKey; label: string };
 
-const ASSET_COLUMN_ROWS: ReadonlyArray<{ key: keyof ReplaySkinColumnAssets; label: string }> = [
-  { key: "tap", label: "Note" },
-  { key: "lnHead", label: "LN head" },
-  { key: "lnBody", label: "LN body" },
-  { key: "lnTail", label: "LN tail" },
-  { key: "receptor", label: "Key" },
-  { key: "receptorPressed", label: "Key pressed" },
+const ASSET_COLUMN_ROWS: ReadonlyArray<{ key: keyof ReplaySkinColumnAssets; label: MessageDescriptor }> = [
+  { key: "tap", label: msg`Note` },
+  { key: "lnHead", label: msg`LN head` },
+  { key: "lnBody", label: msg`LN body` },
+  { key: "lnTail", label: msg`LN tail` },
+  { key: "receptor", label: msg`Key` },
+  { key: "receptorPressed", label: msg`Key pressed` },
 ];
-const ASSET_JUDGEMENT_ROWS: ReadonlyArray<{ key: keyof ReplaySkinJudgementAssets; label: string }> = [
-  { key: "hit0", label: "MISS" },
-  { key: "hit50", label: "50" },
-  { key: "hit100", label: "100" },
-  { key: "hit200", label: "200" },
-  { key: "hit300", label: "300" },
-  { key: "hit300g", label: "300g" },
+const ASSET_JUDGEMENT_ROWS: ReadonlyArray<{ key: keyof ReplaySkinJudgementAssets; label: MessageDescriptor }> = [
+  { key: "hit0", label: msg`MISS` },
+  { key: "hit50", label: msg`50` },
+  { key: "hit100", label: msg`100` },
+  { key: "hit200", label: msg`200` },
+  { key: "hit300", label: msg`300` },
+  { key: "hit300g", label: msg`300g` },
 ];
-const ASSET_STAGE_ROWS: ReadonlyArray<{ key: AssetStageKey; label: string }> = [
-  { key: "left", label: "Left" },
-  { key: "right", label: "Right" },
-  { key: "bottom", label: "Bottom" },
-  { key: "hint", label: "Hint" },
-  { key: "light", label: "Light" },
-  { key: "scorebarBg", label: "HP bar bg" },
-  { key: "scorebarColour", label: "HP bar fill" },
-  { key: "scorebarMarker", label: "HP bar marker" },
+const ASSET_STAGE_ROWS: ReadonlyArray<{ key: AssetStageKey; label: MessageDescriptor }> = [
+  { key: "left", label: msg`Left` },
+  { key: "right", label: msg`Right` },
+  { key: "bottom", label: msg`Bottom` },
+  { key: "hint", label: msg`Hint` },
+  { key: "light", label: msg`Light` },
+  { key: "scorebarBg", label: msg`HP bar bg` },
+  { key: "scorebarColour", label: msg`HP bar fill` },
+  { key: "scorebarMarker", label: msg`HP bar marker` },
 ];
 // A skin can hold hundreds of images; the picker renders at most this many
 // rows and asks for a narrower search beyond it, so thumbnails only ever
@@ -186,9 +189,10 @@ function getComboFontPreviewStyle(value: ReplaySkinSettings["comboFontSet"]): CS
   };
 }
 
-function getJudgementSetLabel(set: ReplaySkinSettings["judgementSet"]): string {
-  if (set === "skin") return "Skin";
-  return `Set ${Number(set.slice(3))}`;
+function getJudgementSetLabel(set: ReplaySkinSettings["judgementSet"], i18n: I18n): string {
+  if (set === "skin") return i18n._(msg`Skin`);
+  const index = Number(set.slice(3));
+  return i18n._(msg`Set ${index}`);
 }
 
 function getJudgementPreviewAsset(settings: ReplaySkinSettings): ReplaySkinImageAsset | undefined {
@@ -390,6 +394,7 @@ export function ReplaySkinSettingsModal({
   assetSourceSkin = null,
   saveScope = "viewer",
 }: ReplaySkinSettingsModalProps) {
+  const { t, i18n } = useLingui();
   const modalRef = useRef<HTMLDivElement | null>(null);
   const matchedInitialPresetRef = useRef(false);
   const [windowRect, setWindowRect] = useState<WindowRect | null>(() => {
@@ -633,7 +638,7 @@ export function ReplaySkinSettingsModal({
   const clearImportedSkinSounds = () => {
     void clearReplaySkinSounds();
     setSkinSoundsInfo(null);
-    pushStatus("Removed imported skin hitsounds");
+    pushStatus(t`Removed imported skin hitsounds`);
   };
 
   useEffect(() => {
@@ -1104,14 +1109,14 @@ export function ReplaySkinSettingsModal({
       if (!settings) {
         setDraft(preset.settings);
         setLoadedCatalogSkin(null);
-        pushStatus(`${community.skin.name} could not be downloaded, applied colors only`, "error");
+        pushStatus(t`${community.skin.name} could not be downloaded, applied colors only`, "error");
         return;
       }
       setDraft(settings);
       if (!archive) {
         setLoadedCatalogSkin(null);
         rememberHydratedPreset(preset, settings, null, cached?.sounds ?? null);
-        pushStatus(`Loaded ${preset.name}; archive tools are unavailable`, "error");
+        pushStatus(t`Loaded ${preset.name}; archive tools are unavailable`, "error");
         return;
       }
       setLoadedCatalogSkin({ skin: community.skin, archive });
@@ -1130,7 +1135,7 @@ export function ReplaySkinSettingsModal({
     if (communityBusy) return;
     const oskFileUrl = skinOskFileUrl(skin);
     if (!oskFileUrl) {
-      pushStatus("That skin has no downloadable file", "error");
+      pushStatus(t`That skin has no downloadable file`, "error");
       return;
     }
     setSkinBrowserOpen(false);
@@ -1168,11 +1173,11 @@ export function ReplaySkinSettingsModal({
         ? { name: result.summary.name, sounds: result.sounds }
         : null;
       rememberHydratedPreset(preset, adopted, archive, result.sounds);
-      pushStatus(`Loaded ${skin.name}`);
+      pushStatus(t`Loaded ${skin.name}`);
     } catch (error) {
       pushStatus(error instanceof Error && error.message.includes("skin.ini")
         ? error.message
-        : `Loading ${skin.name} failed`, "error");
+        : t`Loading ${skin.name} failed`, "error");
     } finally {
       setCommunityBusy(null);
       setImportProgress(null);
@@ -1186,7 +1191,7 @@ export function ReplaySkinSettingsModal({
     try {
       const loaded = await loadOwnerReplaySkin(record);
       if (!loaded) {
-        pushStatus("Your replay skin could not be loaded", "error");
+        pushStatus(t`Your replay skin could not be loaded`, "error");
         return;
       }
       archiveCacheRef.current.set(record.skin.id, Promise.resolve(loaded.archive));
@@ -1203,7 +1208,7 @@ export function ReplaySkinSettingsModal({
         ? { name: record.skin.name, sounds: loaded.sounds }
         : null;
       rememberHydratedPreset(preset, adopted, loaded.archive, loaded.sounds);
-      pushStatus(`Loaded ${record.skin.name}`);
+      pushStatus(t`Loaded ${record.skin.name}`);
     } finally {
       setCommunityBusy(null);
     }
@@ -1226,14 +1231,14 @@ export function ReplaySkinSettingsModal({
         myReplaySkinDraftRef.current = draft;
         setMyReplaySkinRecord(record);
         writeMyReplaySkinMemory(viewerId, record);
-        pushStatus("Saved as your replay skin");
+        pushStatus(t`Saved as your replay skin`);
       } else {
         pushStatus(result.error === "payload_too_large"
-          ? "The customized settings are too large to store"
-          : "Saving your replay skin failed", "error");
+          ? t`The customized settings are too large to store`
+          : t`Saving your replay skin failed`, "error");
       }
     } catch {
-      pushStatus("Saving your replay skin failed", "error");
+      pushStatus(t`Saving your replay skin failed`, "error");
     } finally {
       setCommunityBusy(null);
     }
@@ -1338,7 +1343,7 @@ export function ReplaySkinSettingsModal({
       setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);
       setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
       setActiveColor(null);
-      pushStatus("Loaded the built-in skin");
+      pushStatus(t`Loaded the built-in skin`);
       return;
     }
     const preset = presets.find((candidate) => candidate.id === presetId);
@@ -1399,13 +1404,13 @@ export function ReplaySkinSettingsModal({
 
   const createPresetFromDraft = () => {
     setPromptDialog({
-      title: "New preset",
-      label: "Preset name",
+      title: t`New preset`,
+      label: t`Preset name`,
       initial: selectedPreset?.name
-        ? `${selectedPreset.name} copy`
-        : draftPresetName === DEFAULT_DRAFT_PRESET_NAME ? "My mania skin" : draftPresetName,
-      placeholder: "My mania skin",
-      confirmLabel: "Create",
+        ? t`${selectedPreset.name} copy`
+        : draftPresetName === DEFAULT_DRAFT_PRESET_NAME ? t`My mania skin` : draftPresetName,
+      placeholder: t`My mania skin`,
+      confirmLabel: t`Create`,
       onSubmit: (name) => {
         const trimmed = name.trim();
         if (!trimmed) return;
@@ -1435,7 +1440,7 @@ export function ReplaySkinSettingsModal({
         persistPresets([preset, ...presets].slice(0, 24));
         setSelectedPresetId(preset.id);
         setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
-        pushStatus(`Created ${preset.name}`);
+        pushStatus(t`Created ${preset.name}`);
       },
     });
   };
@@ -1443,17 +1448,17 @@ export function ReplaySkinSettingsModal({
   const renameSelectedPreset = () => {
     const target = selectedPreset;
     setPromptDialog({
-      title: target ? "Rename preset" : "Name preset",
-      label: "Preset name",
+      title: target ? t`Rename preset` : t`Name preset`,
+      label: t`Preset name`,
       initial: target?.name ?? draftPresetName,
-      placeholder: target?.name ?? "My mania skin",
-      confirmLabel: "Rename",
+      placeholder: target?.name ?? t`My mania skin`,
+      confirmLabel: t`Rename`,
       onSubmit: (name) => {
         const trimmed = name.trim();
         if (!trimmed) return;
         if (!target) {
           setDraftPresetName(trimmed.slice(0, 80));
-          pushStatus(`Named ${trimmed.slice(0, 80)}`);
+          pushStatus(t`Named ${trimmed.slice(0, 80)}`);
           return;
         }
         const nextPreset = {
@@ -1462,7 +1467,7 @@ export function ReplaySkinSettingsModal({
           updatedAt: Date.now(),
         };
         persistPresets(presets.map((preset) => preset.id === target.id ? nextPreset : preset));
-        pushStatus(`Renamed to ${nextPreset.name}`);
+        pushStatus(t`Renamed to ${nextPreset.name}`);
       },
     });
   };
@@ -1473,7 +1478,7 @@ export function ReplaySkinSettingsModal({
     persistPresets(presets.filter((preset) => preset.id !== selectedPreset.id));
     setSelectedPresetId(DRAFT_PRESET_ID);
     setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
-    pushStatus(`Deleted ${selectedPreset.name}`);
+    pushStatus(t`Deleted ${selectedPreset.name}`);
   };
 
   const exportDraft = () => {
@@ -1496,28 +1501,28 @@ export function ReplaySkinSettingsModal({
     }
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(key).then(
-        () => pushStatus("Share code copied"),
-        () => setKeyDialog({ title: "Share code", value: key }),
+        () => pushStatus(t`Share code copied`),
+        () => setKeyDialog({ title: t`Share code`, value: key }),
       );
     } else {
-      setKeyDialog({ title: "Share code", value: key });
+      setKeyDialog({ title: t`Share code`, value: key });
     }
   };
 
   const importShareKey = () => {
     setPromptDialog({
-      title: "Import share code",
-      label: "Paste share code",
+      title: t`Import share code`,
+      label: t`Paste share code`,
       initial: "",
       placeholder: "mhreplay2.…",
-      confirmLabel: "Import",
+      confirmLabel: t`Import`,
       multiline: true,
       onSubmit: (key) => {
         const trimmed = key.trim();
         if (!trimmed) return;
         const payload = parseReplaySkinShareKey(trimmed);
         if (!payload) {
-          pushStatus("That share code could not be imported", "error");
+          pushStatus(t`That share code could not be imported`, "error");
           return;
         }
         // A code carrying a community pointer imports as the same kind of
@@ -1538,7 +1543,7 @@ export function ReplaySkinSettingsModal({
         setDraft(payload.settings);
         setSelectedPresetId(preset.id);
         setActiveColor(null);
-        pushStatus(`Imported ${preset.name}`);
+        pushStatus(t`Imported ${preset.name}`);
       },
     });
   };
@@ -1824,15 +1829,15 @@ export function ReplaySkinSettingsModal({
           : draft.lnBodyColor;
 
   const colorTargetLabel: Record<ColorTarget, string> = {
-    tap: "Note color",
-    lnHead: "LN head color",
-    lnBody: "LN body color",
-    outline: "Outline color",
+    tap: t`Note color`,
+    lnHead: t`LN head color`,
+    lnBody: t`LN body color`,
+    outline: t`Outline color`,
   };
   const showDevOverlayReset = activeTab === "overlays" && import.meta.env.DEV;
   const comboFontOptions = REPLAY_COMBO_FONT_SETS.map((set, index) => ({
     value: set,
-    label: `Set ${index + 1}`,
+    label: t`Set ${index + 1}`,
     style: getComboFontPreviewStyle(set),
   }));
   return createPortal(
@@ -1872,12 +1877,12 @@ export function ReplaySkinSettingsModal({
           >
             <GripHorizontal className="h-4 w-4 shrink-0 text-osu-f1" />
             <h3 className="text-base font-bold text-white">
-              {saveScope === "owner" ? "Customize my replay skin" : "Replay settings"}
+              {saveScope === "owner" ? t`Customize my replay skin` : t`Replay settings`}
             </h3>
             <button
               onClick={onClose}
               onPointerDown={(e) => e.stopPropagation()}
-              aria-label="Close replay settings"
+              aria-label={t`Close replay settings`}
               data-window-no-drag
               className="relative z-20 ml-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-osu-b3/50 text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
             >
@@ -1890,14 +1895,14 @@ export function ReplaySkinSettingsModal({
             onPointerDown={(e) => e.stopPropagation()}
           >
             {([
-              ["style", "Style"],
-              ["layout", "Layout"],
-              ...(showHudTab ? ([["hud", "HUD"]] as const) : []),
-              ["overlays", "Overlays"],
-              ["audio", "Audio"],
+              ["style", t`Style`],
+              ["layout", t`Layout`],
+              ...(showHudTab ? ([["hud", t`HUD`]] as const) : []),
+              ["overlays", t`Overlays`],
+              ["audio", t`Audio`],
               // Only with an archive to pick from - the assetArchive prop or a
               // community skin loaded this session; otherwise five tabs.
-              ...(activeAssetArchive ? ([["assets", "Assets"]] as const) : []),
+              ...(activeAssetArchive ? ([["assets", t`Assets`]] as const) : []),
             ] as ReadonlyArray<readonly [ReplaySkinSettingsTab, string]>).map(([tab, label]) => (
               <button
                 key={tab}
@@ -1927,7 +1932,7 @@ export function ReplaySkinSettingsModal({
             <div className={`grid gap-3 md:grid-cols-[minmax(0,1fr)_110px] ${activeTab === "audio" ? "hidden" : ""}`}>
               <div className="min-w-0 space-y-2">
                 <FancySelect
-                  label="Skin preset"
+                  label={t`Skin preset`}
                   value={selectedPresetId}
                   onChange={applyPreset}
                   options={[
@@ -1936,27 +1941,27 @@ export function ReplaySkinSettingsModal({
                   ]}
                 />
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <PresetTextButton label="New preset" onClick={createPresetFromDraft}>
+                  <PresetTextButton label={t`New preset`} onClick={createPresetFromDraft}>
                     <Plus className="h-3.5 w-3.5" />
-                    New
+                    {t`New`}
                   </PresetTextButton>
-                  <PresetIconButton label="Rename preset" onClick={renameSelectedPreset}>
+                  <PresetIconButton label={t`Rename preset`} onClick={renameSelectedPreset}>
                     <Pencil className="h-3.5 w-3.5" />
                   </PresetIconButton>
-                  <PresetIconButton label="Delete preset" onClick={deleteSelectedPreset} disabled={!selectedPreset}>
+                  <PresetIconButton label={t`Delete preset`} onClick={deleteSelectedPreset} disabled={!selectedPreset}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </PresetIconButton>
                   <span className="h-5 w-px bg-osu-b3/50" />
-                  <PresetIconButton label="Copy share code" onClick={exportDraft}>
+                  <PresetIconButton label={t`Copy share code`} onClick={exportDraft}>
                     <Copy className="h-3.5 w-3.5" />
                   </PresetIconButton>
-                  <PresetIconButton label="Import share code" onClick={importShareKey}>
+                  <PresetIconButton label={t`Import share code`} onClick={importShareKey}>
                     <Upload className="h-3.5 w-3.5" />
                   </PresetIconButton>
                 </div>
               </div>
               <FancySelect
-                label="Keymode"
+                label={t`Keymode`}
                 value={String(selectedKeyCount)}
                 onChange={(value) => setSelectedKeyCount(Number(value))}
                 options={Array.from({ length: 10 }, (_, index) => ({
@@ -1974,7 +1979,7 @@ export function ReplaySkinSettingsModal({
                     named above it rather than on your own. */}
                 {saveScope === "viewer" && liveBackendAvailable ? (
                   <section>
-                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Custom skin</div>
+                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">{t`Custom skin`}</div>
                     <div className="space-y-2 rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2">
@@ -1988,12 +1993,12 @@ export function ReplaySkinSettingsModal({
                           ) : null}
                           <span className="min-w-0 truncate text-xs font-semibold text-osu-l1">
                             {communityBusy === "import"
-                              ? `Importing… ${importProgress ?? 0}%`
+                              ? t`Importing… ${importProgress ?? 0}%`
                               : communityBusy === "preset"
-                                ? "Loading skin…"
+                                ? t`Loading skin…`
                                 : communitySkinContext
-                                  ? `${communitySkinContext.name} loaded`
-                                  : "No skin loaded in the editor"}
+                                  ? t`${communitySkinContext.name} loaded`
+                                  : t`No skin loaded in the editor`}
                           </span>
                         </div>
                         <button
@@ -2002,15 +2007,15 @@ export function ReplaySkinSettingsModal({
                           disabled={communityBusy != null}
                           className="shrink-0 cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white disabled:cursor-default disabled:opacity-50"
                         >
-                          Browse skins
+                          {t`Browse skins`}
                         </button>
                       </div>
                       <p className="text-[11px] leading-relaxed text-osu-f1/80">
-                        Picking a skin loads it into the editor and saves it as a preset under its name.
+                        {t`Picking a skin loads it into the editor and saves it as a preset under its name.`}
                       </p>
                       {communitySkinContext && communityBusy == null && !keymodeHasSkinArt ? (
                         <p className="text-[11px] leading-relaxed text-osu-yellow">
-                          This skin has no {selectedKeyCount}K art, so {selectedKeyCount}K plays render flat shapes with its colors instead.
+                          <Trans>This skin has no {selectedKeyCount}K art, so {selectedKeyCount}K plays render flat shapes with its colors instead.</Trans>
                         </p>
                       ) : null}
                     </div>
@@ -2018,7 +2023,7 @@ export function ReplaySkinSettingsModal({
                 ) : null}
                 {saveScope === "viewer" && liveBackendAvailable ? (
                   <section>
-                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">My replay skin</div>
+                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">{t`My replay skin`}</div>
                     <div className="space-y-2 rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
                       {viewerId ? (
                         <>
@@ -2033,7 +2038,7 @@ export function ReplaySkinSettingsModal({
                                 />
                               ) : null}
                               <span className="min-w-0 truncate text-xs font-semibold text-osu-l1">
-                                {myReplaySkinRecord ? myReplaySkinRecord.skin.name : "None set"}
+                                {myReplaySkinRecord ? myReplaySkinRecord.skin.name : t`None set`}
                               </span>
                             </div>
                             <span className="flex shrink-0 items-center gap-1.5">
@@ -2043,11 +2048,11 @@ export function ReplaySkinSettingsModal({
                                   onClick={() => void loadMyReplaySkinIntoDraft()}
                                   disabled={communityBusy != null || draftMatchesMyReplaySkin}
                                   title={draftMatchesMyReplaySkin
-                                    ? `The editor already holds ${myReplaySkinRecord.skin.name}`
-                                    : `Replace the draft with ${myReplaySkinRecord.skin.name}`}
+                                    ? t`The editor already holds ${myReplaySkinRecord.skin.name}`
+                                    : t`Replace the draft with ${myReplaySkinRecord.skin.name}`}
                                   className="cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white disabled:cursor-default disabled:opacity-50"
                                 >
-                                  {communityBusy === "load-mine" ? "Loading…" : "Load into editor"}
+                                  {communityBusy === "load-mine" ? t`Loading…` : t`Load into editor`}
                                 </button>
                               ) : null}
                               <button
@@ -2055,27 +2060,27 @@ export function ReplaySkinSettingsModal({
                                 onClick={() => void saveDraftAsMyReplaySkin()}
                                 disabled={!communitySkinContext || communityBusy != null || draftMatchesMyReplaySkin}
                                 title={draftMatchesMyReplaySkin
-                                  ? "This exact version is already your replay skin"
-                                  : "Saves the current draft as-is; everyone watching your replays sees it"}
+                                  ? t`This exact version is already your replay skin`
+                                  : t`Saves the current draft as-is; everyone watching your replays sees it`}
                                 className="cursor-pointer rounded-lg border border-osu-pink/40 bg-osu-pink/10 px-3 py-1.5 text-xs font-semibold text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white disabled:cursor-default disabled:opacity-45 disabled:hover:border-osu-pink/40 disabled:hover:bg-osu-pink/10 disabled:hover:text-osu-pink-light"
                               >
                                 {communityBusy === "save-mine"
-                                  ? "Saving…"
+                                  ? t`Saving…`
                                   : draftMatchesMyReplaySkin
-                                    ? "Already set"
+                                    ? t`Already set`
                                     : myReplaySkinRecord?.skin.id === communitySkinContext?.id
-                                      ? "Save changes for everyone"
-                                      : "Set as my replay skin"}
+                                      ? t`Save changes for everyone`
+                                      : t`Set as my replay skin`}
                               </button>
                             </span>
                           </div>
                           <p className="text-[11px] leading-relaxed text-osu-f1/80">
-                            Everyone watching your replays sees this skin.
+                            {t`Everyone watching your replays sees this skin.`}
                           </p>
                         </>
                       ) : (
                         <p className="text-[11px] leading-relaxed text-osu-f1">
-                          Sign in to set a replay skin for your plays.
+                          {t`Sign in to set a replay skin for your plays.`}
                         </p>
                       )}
                     </div>
@@ -2086,24 +2091,24 @@ export function ReplaySkinSettingsModal({
                     nothing left to act on. */}
                 {keymodeHasSkinArt ? null : (
                   <section>
-                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Note shape</div>
+                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">{t`Note shape`}</div>
                     <div className="grid grid-cols-3 gap-2">
                       <ReplaySkinShapeButton
                         active={draft.style === "circles"}
                         icon={<ReplaySkinShapeIcon style={MANIA_CIRCLE_ICON_STYLE} />}
-                        label="Circles"
+                        label={t`Circles`}
                         onClick={() => updateStyle("circles")}
                       />
                       <ReplaySkinShapeButton
                         active={draft.style === "bars"}
                         icon={<ReplaySkinShapeIcon style={MANIA_BAR_ICON_STYLE} />}
-                        label="Bars"
+                        label={t`Bars`}
                         onClick={() => updateStyle("bars")}
                       />
                       <ReplaySkinShapeButton
                         active={draft.style === "arrows"}
                         icon={<ReplaySkinShapeIcon style={MANIA_ARROW_ICON_STYLE} />}
-                        label="Arrows"
+                        label={t`Arrows`}
                         onClick={() => updateStyle("arrows")}
                       />
                     </div>
@@ -2113,22 +2118,22 @@ export function ReplaySkinSettingsModal({
                 {showBaseColorControls ? (
                   <section className="space-y-2 pt-2">
                     <ReplaySkinColorRow
-                      label="Note color"
-                      title="Base tap color used for any column without a per-column override."
+                      label={t`Note color`}
+                      title={t`Base tap color used for any column without a per-column override.`}
                       value={profile.tapColor}
                       selected={activeColor === "tap"}
                       onOpen={() => setActiveColor((current) => (current === "tap" ? null : "tap"))}
                     />
                     <ReplaySkinColorRow
-                      label="LN Head color"
-                      title="Base LN head color used for any column without a per-column override."
+                      label={t`LN Head color`}
+                      title={t`Base LN head color used for any column without a per-column override.`}
                       value={profile.lnHeadColor}
                       selected={activeColor === "lnHead"}
                       onOpen={() => setActiveColor((current) => (current === "lnHead" ? null : "lnHead"))}
                     />
                     <ReplaySkinColorRow
-                      label="LN Body color"
-                      title="Color of the LN body. Always global (no per-column override)."
+                      label={t`LN Body color`}
+                      title={t`Color of the LN body. Always global (no per-column override).`}
                       value={draft.lnBodyColor}
                       selected={activeColor === "lnBody"}
                       onOpen={() => setActiveColor((current) => (current === "lnBody" ? null : "lnBody"))}
@@ -2139,20 +2144,20 @@ export function ReplaySkinSettingsModal({
                 {showOutlineControls ? (
                   <section className="space-y-3 pt-1">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-semibold text-osu-l1">Outline</span>
+                      <span className="text-sm font-semibold text-osu-l1">{t`Outline`}</span>
                       <ReplaySkinSwitch checked={draft.outlineEnabled} onChange={(checked) => update({ outlineEnabled: checked })} />
                     </div>
                     {draft.outlineEnabled ? (
                       <>
                         <ReplaySkinColorRow
-                          label="Outline color"
-                          title="Stroke color for circle and arrow notes."
+                          label={t`Outline color`}
+                          title={t`Stroke color for circle and arrow notes.`}
                           value={draft.outlineColor}
                           selected={activeColor === "outline"}
                           onOpen={() => setActiveColor((current) => (current === "outline" ? null : "outline"))}
                         />
                         <LayoutNumberControl
-                          label="Outline width"
+                          label={t`Outline width`}
                           inputValue={outlineWidthInput}
                           numericValue={draft.outlineWidth}
                           min={REPLAY_SKIN_MIN_OUTLINE_WIDTH}
@@ -2172,7 +2177,7 @@ export function ReplaySkinSettingsModal({
                   {keymodeHasSkinArt ? null : (
                     <>
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-semibold text-osu-l1">{draft.style === "bars" ? "Bar colors" : "Per-column colors"}</span>
+                        <span className="text-sm font-semibold text-osu-l1">{draft.style === "bars" ? t`Bar colors` : t`Per-column colors`}</span>
                         <span className="flex items-center gap-2">
                           <ReplaySkinSwitch
                             checked={barColorSwitchChecked}
@@ -2191,7 +2196,7 @@ export function ReplaySkinSettingsModal({
                           <button
                             type="button"
                             onClick={() => setColumnEditorOpen((value) => !value)}
-                            aria-label="Edit per-column colors"
+                            aria-label={t`Edit per-column colors`}
                             className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-osu-b3/60 bg-osu-b5/70 text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
                           >
                             <Settings className="h-4 w-4" />
@@ -2199,13 +2204,13 @@ export function ReplaySkinSettingsModal({
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-semibold text-osu-l1">Cut LN tail</span>
+                        <span className="text-sm font-semibold text-osu-l1">{t`Cut LN tail`}</span>
                         <ReplaySkinSwitch checked={draft.percy} onChange={(checked) => update({ percy: checked })} />
                       </div>
                     </>
                   )}
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-osu-l1">Upscroll</span>
+                    <span className="text-sm font-semibold text-osu-l1">{t`Upscroll`}</span>
                     <ReplaySkinSwitch checked={draft.upscroll} onChange={(checked) => update({ upscroll: checked })} />
                   </div>
                 </section>
@@ -2213,7 +2218,7 @@ export function ReplaySkinSettingsModal({
             ) : activeTab === "layout" ? (
               <section className="space-y-5">
                 <LayoutNumberControl
-                  label="Column width"
+                  label={t`Column width`}
                   inputValue={columnWidthInput}
                   numericValue={profile.columnWidth}
                   min={REPLAY_SKIN_MIN_COLUMN_WIDTH}
@@ -2225,7 +2230,7 @@ export function ReplaySkinSettingsModal({
                   onResetToDefault={() => updateProfile({ columnWidth: 30, columnWidths: [] })}
                 />
                 <LayoutNumberControl
-                  label="Column spacing"
+                  label={t`Column spacing`}
                   inputValue={columnSpacingInput}
                   numericValue={profile.columnSpacing}
                   min={REPLAY_SKIN_MIN_COLUMN_SPACING}
@@ -2237,7 +2242,7 @@ export function ReplaySkinSettingsModal({
                   onResetToDefault={() => updateProfile({ columnSpacing: 0, columnSpacings: [] })}
                 />
                 <LayoutNumberControl
-                  label="Column start"
+                  label={t`Column start`}
                   inputValue={columnStartInput}
                   numericValue={columnStartValue}
                   min={0}
@@ -2247,11 +2252,11 @@ export function ReplaySkinSettingsModal({
                   onInputChange={setColumnStartInput}
                   onCommit={commitColumnStartInput}
                   onResetToDefault={() => updateProfile({ columnStart: null })}
-                  hint="Stage's left edge, skin.ini ColumnStart."
+                  hint={t`Stage's left edge, skin.ini ColumnStart.`}
                 />
                 {showNoteHeightScale ? (
                   <LayoutNumberControl
-                    label="Note height"
+                    label={t`Note height`}
                     inputValue={noteHeightScaleInput}
                     numericValue={profile.noteHeightScale}
                     min={REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE}
@@ -2261,11 +2266,11 @@ export function ReplaySkinSettingsModal({
                     onInputChange={handleNoteHeightScaleInputChange}
                     onCommit={commitNoteHeightScaleInput}
                     onResetToDefault={() => updateProfile({ noteHeightScale: noteHeightDefault })}
-                    hint={draft.style === "bars" ? "Bar note height." : "Imported note image height scaling."}
+                    hint={draft.style === "bars" ? t`Bar note height.` : t`Imported note image height scaling.`}
                   />
                 ) : null}
                 <LayoutNumberControl
-                  label="Hit position"
+                  label={t`Hit position`}
                   inputValue={hitPositionInput}
                   numericValue={hitPositionValue}
                   min={OSU_MANIA_MIN_HIT_POSITION}
@@ -2275,10 +2280,10 @@ export function ReplaySkinSettingsModal({
                   onInputChange={handleHitPositionInputChange}
                   onCommit={commitHitPositionInput}
                   onResetToDefault={() => resetStagePosition("hitPosition", 402)}
-                  hint="Higher values move receptors lower."
+                  hint={t`Higher values move receptors lower.`}
                 />
                 <LayoutNumberControl
-                  label="ScorePosition"
+                  label={t`ScorePosition`}
                   inputValue={scorePositionInput}
                   numericValue={scorePositionValue}
                   min={OSU_MANIA_MIN_HIT_POSITION}
@@ -2288,11 +2293,11 @@ export function ReplaySkinSettingsModal({
                   onInputChange={handleScorePositionInputChange}
                   onCommit={commitScorePositionInput}
                   onResetToDefault={() => resetStagePosition("scorePosition", OSU_MANIA_DEFAULT_SCORE_POSITION)}
-                  hint="Hitburst and judgement height."
+                  hint={t`Hitburst and judgement height.`}
                 />
                 {showHudTab ? null : (
                   <LayoutNumberControl
-                    label="Judgement size"
+                    label={t`Judgement size`}
                     inputValue={judgementScaleInput}
                     numericValue={currentJudgementScale}
                     min={REPLAY_SKIN_MIN_JUDGEMENT_SCALE}
@@ -2302,11 +2307,11 @@ export function ReplaySkinSettingsModal({
                     onInputChange={handleJudgementScaleInputChange}
                     onCommit={commitJudgementScaleInput}
                     onResetToDefault={() => updateJudgementScale(REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE)}
-                    hint="Scales the skin's hitburst art."
+                    hint={t`Scales the skin's hitburst art.`}
                   />
                 )}
                 <LayoutNumberControl
-                  label="ComboPosition"
+                  label={t`ComboPosition`}
                   inputValue={comboPositionInput}
                   numericValue={comboPositionValue}
                   min={OSU_MANIA_MIN_HIT_POSITION}
@@ -2316,7 +2321,7 @@ export function ReplaySkinSettingsModal({
                   onInputChange={handleComboPositionInputChange}
                   onCommit={commitComboPositionInput}
                   onResetToDefault={() => resetStagePosition("comboPosition", OSU_MANIA_DEFAULT_COMBO_POSITION)}
-                  hint="Combo counter height."
+                  hint={t`Combo counter height.`}
                 />
               </section>
             ) : activeTab === "hud" ? (
@@ -2327,7 +2332,7 @@ export function ReplaySkinSettingsModal({
                 {keymodeHasComboArt ? null : (
                   <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
                     <FancySelect
-                      label="Combo font"
+                      label={t`Combo font`}
                       value={draft.comboFontSet}
                       onChange={(value) => update({ comboFontSet: value as ReplaySkinSettings["comboFontSet"] })}
                       options={comboFontOptions}
@@ -2343,7 +2348,7 @@ export function ReplaySkinSettingsModal({
                   </div>
                 )}
                 <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
-                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-osu-f1">Judgement set</span>
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-osu-f1">{t`Judgement set`}</span>
                   <JudgementSetGallery
                     value={draft.judgementSet}
                     onChange={(value) => update({ judgementSet: value })}
@@ -2370,56 +2375,56 @@ export function ReplaySkinSettingsModal({
             ) : activeTab === "assets" && activeAssetArchive ? (
               <section className="space-y-4">
                 <p className="text-[11px] leading-relaxed text-osu-f1">
-                  Swap any element for another image from {activeAssetSourceName ?? "this skin"}, or click it in the
+                  <Trans>Swap any element for another image from {activeAssetSourceName ?? t`this skin`}, or click it in the
                   preview to find its row. Note and key art draws under the Bars style; cleared elements fall back to
-                  flat shapes.
+                  flat shapes.</Trans>
                 </p>
                 {columns.map((column) => (
                   <div key={`asset-column-${column}`} className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
-                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Column {column + 1}</div>
+                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1"><Trans>Column {column + 1}</Trans></div>
                     <div className="space-y-1.5">
                       {ASSET_COLUMN_ROWS.map(({ key, label }) => (
                         <ReplaySkinAssetRow
                           key={key}
                           rowId={`column:${column}:${key}`}
                           highlighted={highlightedAssetId === `column:${column}:${key}`}
-                          label={label}
+                          label={i18n._(label)}
                           asset={profile.assets.columns[column]?.[key]}
-                          onChange={() => setAssetPicker({ kind: "column", column, assetKey: key, label })}
-                          onClear={() => applyAssetPick({ kind: "column", column, assetKey: key, label }, undefined, false)}
+                          onChange={() => setAssetPicker({ kind: "column", column, assetKey: key, label: i18n._(label) })}
+                          onClear={() => applyAssetPick({ kind: "column", column, assetKey: key, label: i18n._(label) }, undefined, false)}
                         />
                       ))}
                     </div>
                   </div>
                 ))}
                 <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Judgements</div>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">{t`Judgements`}</div>
                   <div className="space-y-1.5">
                     {ASSET_JUDGEMENT_ROWS.map(({ key, label }) => (
                       <ReplaySkinAssetRow
                         key={key}
                         rowId={`judgement:${key}`}
                         highlighted={highlightedAssetId === `judgement:${key}`}
-                        label={label}
+                        label={i18n._(label)}
                         asset={profile.assets.judgements[key]}
-                        onChange={() => setAssetPicker({ kind: "judgement", assetKey: key, label })}
-                        onClear={() => applyAssetPick({ kind: "judgement", assetKey: key, label }, undefined, false)}
+                        onChange={() => setAssetPicker({ kind: "judgement", assetKey: key, label: i18n._(label) })}
+                        onClear={() => applyAssetPick({ kind: "judgement", assetKey: key, label: i18n._(label) }, undefined, false)}
                       />
                     ))}
                   </div>
                 </div>
                 <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Stage</div>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">{t`Stage`}</div>
                   <div className="space-y-1.5">
                     {ASSET_STAGE_ROWS.map(({ key, label }) => (
                       <ReplaySkinAssetRow
                         key={key}
                         rowId={`stage:${key}`}
                         highlighted={highlightedAssetId === `stage:${key}`}
-                        label={label}
+                        label={i18n._(label)}
                         asset={profile.assets.stage[key]}
-                        onChange={() => setAssetPicker({ kind: "stage", assetKey: key, label })}
-                        onClear={() => applyAssetPick({ kind: "stage", assetKey: key, label }, undefined, false)}
+                        onChange={() => setAssetPicker({ kind: "stage", assetKey: key, label: i18n._(label) })}
+                        onClear={() => applyAssetPick({ kind: "stage", assetKey: key, label: i18n._(label) }, undefined, false)}
                       />
                     ))}
                   </div>
@@ -2429,8 +2434,8 @@ export function ReplaySkinSettingsModal({
               <section className="max-w-xl space-y-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <span className="text-sm font-semibold text-osu-l1">Hitsounds</span>
-                    <div className="text-[10px] text-osu-f1">Key presses play the note's hitsound, like in game. Misses trigger the combo break sound.</div>
+                    <span className="text-sm font-semibold text-osu-l1">{t`Hitsounds`}</span>
+                    <div className="text-[10px] text-osu-f1">{t`Key presses play the note's hitsound, like in game. Misses trigger the combo break sound.`}</div>
                   </div>
                   <ReplaySkinSwitch
                     checked={audioSettings.hitsoundsEnabled}
@@ -2442,8 +2447,8 @@ export function ReplaySkinSettingsModal({
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <span className="text-sm font-semibold text-osu-l1">Beatmap hitsounds</span>
-                        <div className="text-[10px] text-osu-f1">The map's own samples and keysounds, when it has them.</div>
+                        <span className="text-sm font-semibold text-osu-l1">{t`Beatmap hitsounds`}</span>
+                        <div className="text-[10px] text-osu-f1">{t`The map's own samples and keysounds, when it has them.`}</div>
                       </div>
                       <ReplaySkinSwitch
                         checked={audioSettings.beatmapHitsounds}
@@ -2461,8 +2466,8 @@ export function ReplaySkinSettingsModal({
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <span className="text-sm font-semibold text-osu-l1">Key press hitsounds</span>
-                        <div className="text-[10px] text-osu-f1">Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds.</div>
+                        <span className="text-sm font-semibold text-osu-l1">{t`Key press hitsounds`}</span>
+                        <div className="text-[10px] text-osu-f1">{t`Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds.`}</div>
                       </div>
                       <ReplaySkinSwitch
                         checked={audioSettings.keypressHitsounds}
@@ -2479,8 +2484,8 @@ export function ReplaySkinSettingsModal({
 
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <span className="text-sm font-semibold text-osu-l1">Combo break sound</span>
-                      <div className="text-[10px] text-osu-f1">Plays when a combo above 20 is lost.</div>
+                      <span className="text-sm font-semibold text-osu-l1">{t`Combo break sound`}</span>
+                      <div className="text-[10px] text-osu-f1">{t`Plays when a combo above 20 is lost.`}</div>
                     </div>
                     <ReplaySkinSwitch
                       checked={audioSettings.comboBreakSound}
@@ -2491,11 +2496,13 @@ export function ReplaySkinSettingsModal({
                   <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <span className="text-sm font-semibold text-osu-l1">Skin hitsounds</span>
+                        <span className="text-sm font-semibold text-osu-l1">{t`Skin hitsounds`}</span>
                         <div className="truncate text-[10px] text-osu-f1">
                           {skinSoundsInfo
-                            ? `${skinSoundsInfo.keys.length} ${skinSoundsInfo.keys.length === 1 ? "sound" : "sounds"} from ${skinSoundsInfo.name ?? "an imported skin"}`
-                            : "Load a custom skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."}
+                            ? (skinSoundsInfo.keys.length === 1
+                              ? t`${skinSoundsInfo.keys.length} sound from ${skinSoundsInfo.name ?? t`an imported skin`}`
+                              : t`${skinSoundsInfo.keys.length} sounds from ${skinSoundsInfo.name ?? t`an imported skin`}`)
+                            : t`Load a custom skin in the Style tab to use its hitsounds. Without them, the default osu! samples play.`}
                         </div>
                       </div>
                       {skinSoundsInfo ? (
@@ -2504,7 +2511,7 @@ export function ReplaySkinSettingsModal({
                           onClick={clearImportedSkinSounds}
                           className="shrink-0 cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
                         >
-                          Remove
+                          {t`Remove`}
                         </button>
                       ) : null}
                     </div>
@@ -2522,13 +2529,13 @@ export function ReplaySkinSettingsModal({
                             </button>
                           ))}
                         </div>
-                        <div className="text-[10px] text-osu-f1/70">Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay.</div>
+                        <div className="text-[10px] text-osu-f1/70">{t`Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay.`}</div>
                       </div>
                     ) : null}
                   </div>
                 </div>
 
-                <div className="text-[10px] text-osu-f1">Audio settings apply immediately.</div>
+                <div className="text-[10px] text-osu-f1">{t`Audio settings apply immediately.`}</div>
               </section>
             )}
           </div>
@@ -2537,7 +2544,7 @@ export function ReplaySkinSettingsModal({
             className={`${isCompactWindow ? "border-t border-osu-b3/50 p-4 sm:p-5" : "overflow-y-auto border-l border-osu-b3/50 p-5"} ${isFullWidthTab ? "hidden" : ""}`}
           >
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-white">Preview</span>
+              <span className="text-sm font-semibold text-white">{t`Preview`}</span>
               <div className="grid grid-cols-2 rounded-md bg-osu-b5/70 p-0.5 text-[10px] font-bold uppercase tracking-wider">
                 {(["tap", "ln"] as const).map((mode) => (
                   <button
@@ -2548,7 +2555,7 @@ export function ReplaySkinSettingsModal({
                       previewMode === mode ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"
                     }`}
                   >
-                    {mode === "tap" ? "Notes" : "LN"}
+                    {mode === "tap" ? t`Notes` : t`LN`}
                   </button>
                 ))}
               </div>
@@ -2593,14 +2600,14 @@ export function ReplaySkinSettingsModal({
               }}
               className="relative z-20 mr-auto cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
             >
-              Reset
+              {t`Reset`}
             </button>
           ) : showDevOverlayReset ? (
             <button
               onClick={() => setOverlayDraft(DEFAULT_REPLAY_OVERLAY_SETTINGS)}
               className="relative z-20 mr-auto cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
             >
-              Reset defaults
+              {t`Reset defaults`}
             </button>
           ) : (
             <div className="mr-auto" />
@@ -2609,7 +2616,7 @@ export function ReplaySkinSettingsModal({
             onClick={onClose}
             className="relative z-20 cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
           >
-            Cancel
+            {t`Cancel`}
           </button>
           {saveScope === "viewer" && viewerId && communitySkinContext ? (
             <button
@@ -2617,22 +2624,22 @@ export function ReplaySkinSettingsModal({
               onClick={() => void saveDraftAsMyReplaySkin()}
               disabled={communityBusy != null || draftMatchesMyReplaySkin}
               title={draftMatchesMyReplaySkin
-                ? "This exact version is already shown to everyone watching your replays"
-                : "Save this editor version as the skin everyone sees on your replays"}
+                ? t`This exact version is already shown to everyone watching your replays`
+                : t`Save this editor version as the skin everyone sees on your replays`}
               className="relative z-20 cursor-pointer rounded-lg border border-osu-pink/40 bg-osu-pink/10 px-4 py-2 text-xs font-semibold text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white disabled:cursor-default disabled:opacity-45 disabled:hover:border-osu-pink/40 disabled:hover:bg-osu-pink/10 disabled:hover:text-osu-pink-light"
             >
               {communityBusy === "save-mine"
-                ? "Saving…"
+                ? t`Saving…`
                 : draftMatchesMyReplaySkin
-                  ? "Saved for everyone"
-                  : "Save for everyone"}
+                  ? t`Saved for everyone`
+                  : t`Save for everyone`}
             </button>
           ) : null}
           <button
             onClick={save}
             className="relative z-20 cursor-pointer rounded-lg bg-osu-pink px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-osu-pink-light"
           >
-            {saveScope === "owner" ? "Save for everyone" : "Apply for me"}
+            {saveScope === "owner" ? t`Save for everyone` : t`Apply for me`}
           </button>
         </div>
 
@@ -2676,7 +2683,7 @@ export function ReplaySkinSettingsModal({
       {columnEditorOpen ? (
         <DraggableColorPopover
           key="per-column"
-          title={draft.style === "bars" ? "Bar colors" : "Per-column colors"}
+          title={draft.style === "bars" ? t`Bar colors` : t`Per-column colors`}
           width={296}
           anchorRef={modalRef}
           storageKey="per-column"
@@ -2721,10 +2728,10 @@ export function ReplaySkinSettingsModal({
           <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
             <span>
               {selectedColumns.length === 0
-                ? "Select columns to edit"
+                ? t`Select columns to edit`
                 : selectedColumns.length === 1
-                  ? `Column ${primarySelected + 1}`
-                  : `${selectedColumns.length} columns selected`}
+                  ? t`Column ${primarySelected + 1}`
+                  : t`${selectedColumns.length} columns selected`}
             </span>
             {selectedColumns.length < selectedKeyCount ? (
               <button
@@ -2732,7 +2739,7 @@ export function ReplaySkinSettingsModal({
                 onClick={() => setSelectedColumns(columns)}
                 className="cursor-pointer text-osu-f1 transition-colors hover:text-white"
               >
-                Select all
+                {t`Select all`}
               </button>
             ) : null}
           </div>
@@ -2749,7 +2756,7 @@ export function ReplaySkinSettingsModal({
                   overrideKind === kind ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"
                 }`}
               >
-                {kind === "tap" ? "Note" : "LN Head"}
+                {kind === "tap" ? t`Note` : t`LN Head`}
               </button>
             ))}
           </div>
@@ -2764,7 +2771,7 @@ export function ReplaySkinSettingsModal({
                 onClick={() => updateOverrideColors(overrideKind, selectedColumns, "")}
                 className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:text-white"
               >
-                Use base
+                {t`Use base`}
               </button>
             </div>
           ) : null}
@@ -2829,8 +2836,8 @@ export function ReplaySkinSettingsModal({
           onCopy={() => {
             if (navigator.clipboard?.writeText) {
               navigator.clipboard.writeText(keyDialog.value).then(
-                () => pushStatus("Share code copied"),
-                () => pushStatus("Could not copy to clipboard", "error"),
+                () => pushStatus(t`Share code copied`),
+                () => pushStatus(t`Could not copy to clipboard`, "error"),
               );
             }
           }}
@@ -2902,6 +2909,7 @@ function JudgementSetGallery({
   onScaleCommit: () => void;
   onScaleReset: () => void;
 }) {
+  const { t, i18n } = useLingui();
   const tiles: Array<ReplaySkinSettings["judgementSet"]> = ["skin", ...REPLAY_JUDGEMENT_SETS];
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -2924,7 +2932,7 @@ function JudgementSetGallery({
               className="mb-2 flex w-full cursor-pointer items-center gap-2 text-left"
             >
               <span className={`shrink-0 text-[11px] font-bold uppercase tracking-wider ${isSelected ? "text-osu-pink-light" : "text-osu-f1"}`}>
-                {getJudgementSetLabel(set)}
+                {getJudgementSetLabel(set, i18n)}
               </span>
             </button>
             {isSelected ? (
@@ -2941,7 +2949,7 @@ function JudgementSetGallery({
               <button
                 type="button"
                 onClick={() => onChange(set)}
-                aria-label={`Select ${getJudgementSetLabel(set)} judgement set`}
+                aria-label={t`Select ${getJudgementSetLabel(set, i18n)} judgement set`}
                 className="flex h-full w-full cursor-pointer items-center justify-around gap-2 px-2"
               >
                 {JUDGEMENT_TILE_PREVIEW_KEYS.map((assetKey) => {
@@ -2995,6 +3003,7 @@ function JudgementScaleTileControl({
   onCommit: () => void;
   onResetToDefault: () => void;
 }) {
+  const { t } = useLingui();
   const safeValue = Math.max(REPLAY_SKIN_MIN_JUDGEMENT_SCALE, Math.min(REPLAY_SKIN_MAX_JUDGEMENT_SCALE, Number.isFinite(numericValue) ? numericValue : REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE));
   const fillRatio = (safeValue - REPLAY_SKIN_MIN_JUDGEMENT_SCALE) / (REPLAY_SKIN_MAX_JUDGEMENT_SCALE - REPLAY_SKIN_MIN_JUDGEMENT_SCALE);
   const isDefault = safeValue === REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE;
@@ -3006,7 +3015,7 @@ function JudgementScaleTileControl({
         disabled={isDefault}
         className="cursor-pointer text-[9px] font-bold uppercase tracking-wide text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-45 disabled:hover:text-osu-f1"
       >
-        Size
+        {t`Size`}
       </button>
       <input
         type="range"
@@ -3055,6 +3064,7 @@ function ReplaySkinPreview({
   onSelectionChange: (next: number[]) => void;
   onIdentifyAsset?: (target: AssetPickerTarget) => void;
 }) {
+  const { t, i18n } = useLingui();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [previewWidth, setPreviewWidth] = useState(() => expectedWidth ?? 260);
   useIsomorphicLayoutEffect(() => {
@@ -3152,7 +3162,7 @@ function ReplaySkinPreview({
     return {
       className: "pointer-events-auto cursor-pointer",
       handlers: {
-        title: `Find ${target.label} in the Assets tab`,
+        title: t`Find ${target.label} in the Assets tab`,
         onPointerDown: (event: ReactPointerEvent) => event.stopPropagation(),
         onClick: (event: ReactMouseEvent) => {
           event.stopPropagation();
@@ -3162,11 +3172,13 @@ function ReplaySkinPreview({
     };
   };
   const identifyColumn = (column: number, assetKey: keyof ReplaySkinColumnAssets) => {
-    const label = ASSET_COLUMN_ROWS.find((row) => row.key === assetKey)?.label ?? assetKey;
+    const found = ASSET_COLUMN_ROWS.find((row) => row.key === assetKey)?.label;
+    const label = found ? i18n._(found) : assetKey;
     return identify({ kind: "column", column, assetKey, label });
   };
   const identifyStage = (assetKey: AssetStageKey) => {
-    const label = ASSET_STAGE_ROWS.find((row) => row.key === assetKey)?.label ?? assetKey;
+    const found = ASSET_STAGE_ROWS.find((row) => row.key === assetKey)?.label;
+    const label = found ? i18n._(found) : assetKey;
     return identify({ kind: "stage", assetKey, label });
   };
   // Whichever judgement the card is showing, so its row is the one that opens.
@@ -3179,7 +3191,10 @@ function ReplaySkinPreview({
     ? {
         kind: "judgement",
         assetKey: skinJudgementKey,
-        label: ASSET_JUDGEMENT_ROWS.find((row) => row.key === skinJudgementKey)?.label ?? skinJudgementKey,
+        label: (() => {
+          const found = ASSET_JUDGEMENT_ROWS.find((row) => row.key === skinJudgementKey)?.label;
+          return found ? i18n._(found) : skinJudgementKey;
+        })(),
       }
     : null);
 
@@ -4057,15 +4072,15 @@ function PresetTextButton({
 }
 
 
-const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, string> = {
-  keypresses: "Per-column press count.",
-  kps: "Keys pressed per second.",
-  misses: "Left vs right hand miss totals.",
-  accuracy: "Current accuracy percentage.",
-  pp: "Live performance points.",
-  judgements: "Hit counts and unstable rate.",
-  progress: "Map completion percentage.",
-  leaderboard: "Ingame scoreboard with live rank climbing. Tab toggles it.",
+const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, MessageDescriptor> = {
+  keypresses: msg`Per-column press count.`,
+  kps: msg`Keys pressed per second.`,
+  misses: msg`Left vs right hand miss totals.`,
+  accuracy: msg`Current accuracy percentage.`,
+  pp: msg`Live performance points.`,
+  judgements: msg`Hit counts and unstable rate.`,
+  progress: msg`Map completion percentage.`,
+  leaderboard: msg`Ingame scoreboard with live rank climbing. Tab toggles it.`,
 };
 
 const REPLAY_OVERLAY_PREVIEWS: Partial<Record<ReplayOverlayId, string>> = {
@@ -4087,6 +4102,7 @@ function ReplayOverlaySettingsRow({
   placement: ReplayOverlaySettings[ReplayOverlayId];
   onChange: (patch: Partial<ReplayOverlaySettings[ReplayOverlayId]>) => void;
 }) {
+  const { i18n } = useLingui();
   const enabled = placement.enabled;
   const toggle = () => onChange({ enabled: !enabled });
   return (
@@ -4148,10 +4164,10 @@ function ReplayOverlaySettingsRow({
       </div>
       <div className="border-t border-osu-b3/40 px-3 py-2">
         <div className={`text-sm font-semibold ${enabled ? "text-white" : "text-osu-l1"}`}>
-          {REPLAY_OVERLAY_LABELS[id]}
+          {i18n._(REPLAY_OVERLAY_LABELS[id])}
         </div>
         <div className="mt-0.5 text-[11px] leading-snug text-osu-f1">
-          {REPLAY_OVERLAY_DESCRIPTIONS[id]}
+          {i18n._(REPLAY_OVERLAY_DESCRIPTIONS[id])}
         </div>
       </div>
     </div>
@@ -4460,6 +4476,7 @@ function DraggableColorPopover({
   onClose: () => void;
   storageKey?: string;
 }) {
+  const { t } = useLingui();
   const ref = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const dragState = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
@@ -4575,7 +4592,7 @@ function DraggableColorPopover({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close picker"
+          aria-label={t`Close picker`}
           className="ml-auto grid h-6 w-6 cursor-pointer place-items-center rounded-md text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white"
           onPointerDown={(e) => e.stopPropagation()}
         >
@@ -4635,6 +4652,7 @@ function ReplaySkinPromptDialog({
   onCancel: () => void;
   onConfirm: (value: string) => void;
 }) {
+  const { t } = useLingui();
   const [value, setValue] = useState(initial);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -4711,7 +4729,7 @@ function ReplaySkinPromptDialog({
             onClick={onCancel}
             className="cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
           >
-            Cancel
+            {t`Cancel`}
           </button>
           <button
             type="button"
@@ -4738,6 +4756,7 @@ function ReplaySkinKeyDialog({
   onClose: () => void;
   onCopy: () => void;
 }) {
+  const { t } = useLingui();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     const target = textareaRef.current;
@@ -4777,7 +4796,7 @@ function ReplaySkinKeyDialog({
             }}
             className="w-full resize-none rounded-md border border-osu-b3/60 bg-osu-b5/70 px-3 py-2 font-mono text-[11px] text-osu-c1 outline-none focus:border-osu-pink/70"
           />
-          <div className="text-[10px] text-osu-f1">Select all and copy, or use the button below.</div>
+          <div className="text-[10px] text-osu-f1">{t`Select all and copy, or use the button below.`}</div>
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-osu-b3/50 px-5 py-3">
           <button
@@ -4785,7 +4804,7 @@ function ReplaySkinKeyDialog({
             onClick={onClose}
             className="cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
           >
-            Close
+            {t`Close`}
           </button>
           <button
             type="button"
@@ -4793,7 +4812,7 @@ function ReplaySkinKeyDialog({
             className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-osu-pink px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-osu-pink-light"
           >
             <Copy className="h-3.5 w-3.5" />
-            Copy
+            {t`Copy`}
           </button>
         </div>
       </motion.div>
@@ -4814,6 +4833,7 @@ function ReplaySkinCatalogBrowserDialog({
   onPick: (skin: SkinSummary) => void;
   onClose: () => void;
 }) {
+  const { t } = useLingui();
   const [query, setQuery] = useState("");
   // 0 is no filter, matching the /skins catalog's own keys row.
   const [keymode, setKeymode] = useState(0);
@@ -4861,8 +4881,8 @@ function ReplaySkinCatalogBrowserDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-osu-b3/50 px-5 py-3">
-          <div className="text-sm font-bold text-white">Browse skins</div>
-          <div className="mt-0.5 text-[10px] text-osu-f1">Pick one to load it into the editor.</div>
+          <div className="text-sm font-bold text-white">{t`Browse skins`}</div>
+          <div className="mt-0.5 text-[10px] text-osu-f1">{t`Pick one to load it into the editor.`}</div>
         </div>
         <div className="space-y-2 px-5 py-4">
           <input
@@ -4870,7 +4890,7 @@ function ReplaySkinCatalogBrowserDialog({
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search skins by name"
+            placeholder={t`Search skins by name`}
             onKeyDown={(event) => {
               if (event.key === "Escape") onClose();
             }}
@@ -4889,17 +4909,17 @@ function ReplaySkinCatalogBrowserDialog({
                     : "bg-osu-b5/70 text-osu-f1 hover:bg-osu-b3/60 hover:text-white"
                 }`}
               >
-                {keys === 0 ? "any" : `${keys}K`}
+                {keys === 0 ? t`any` : `${keys}K`}
               </button>
             ))}
           </div>
           <div className="max-h-[340px] overflow-y-auto rounded-md border border-osu-b3/50 bg-osu-b5/40">
             {status === "error" ? (
-              <div className="px-3 py-4 text-[11px] text-osu-f1">The skin list could not be loaded. Try again.</div>
+              <div className="px-3 py-4 text-[11px] text-osu-f1">{t`The skin list could not be loaded. Try again.`}</div>
             ) : status === "loading" && results.length === 0 ? (
-              <div className="px-3 py-4 text-[11px] text-osu-f1">Loading skins…</div>
+              <div className="px-3 py-4 text-[11px] text-osu-f1">{t`Loading skins…`}</div>
             ) : results.length === 0 ? (
-              <div className="px-3 py-4 text-[11px] text-osu-f1">No skins match that search.</div>
+              <div className="px-3 py-4 text-[11px] text-osu-f1">{t`No skins match that search.`}</div>
             ) : (
               results.map((skin) => (
                 <button
@@ -4934,7 +4954,7 @@ function ReplaySkinCatalogBrowserDialog({
             onClick={onClose}
             className="cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
           >
-            Cancel
+            {t`Cancel`}
           </button>
         </div>
       </motion.div>
@@ -4957,6 +4977,7 @@ function ReplaySkinAssetRow({
   onChange: () => void;
   onClear: () => void;
 }) {
+  const { t } = useLingui();
   return (
     <div
       data-asset-row={rowId}
@@ -4976,7 +4997,7 @@ function ReplaySkinAssetRow({
             </span>
           </>
         ) : (
-          <span className="text-[11px] text-osu-f1">default</span>
+          <span className="text-[11px] text-osu-f1">{t`default`}</span>
         )}
       </span>
       <span className="flex shrink-0 items-center gap-1.5">
@@ -4985,7 +5006,7 @@ function ReplaySkinAssetRow({
           onClick={onChange}
           className="cursor-pointer rounded-md bg-osu-b3/50 px-2.5 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
         >
-          Change
+          {t`Change`}
         </button>
         {asset ? (
           <button
@@ -4993,7 +5014,7 @@ function ReplaySkinAssetRow({
             onClick={onClear}
             className="cursor-pointer rounded-md px-2 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-white"
           >
-            Clear
+            {t`Clear`}
           </button>
         ) : null}
       </span>
@@ -5050,6 +5071,7 @@ function ReplaySkinAssetPickerDialog({
   onPick: (asset: ReplaySkinImageAsset, applyToAllColumns: boolean) => void;
   onClose: () => void;
 }) {
+  const { t } = useLingui();
   const [query, setQuery] = useState("");
   const [applyToAll, setApplyToAll] = useState(false);
   const [picking, setPicking] = useState<string | null>(null);
@@ -5088,10 +5110,10 @@ function ReplaySkinAssetPickerDialog({
       >
         <div className="border-b border-osu-b3/50 px-5 py-3">
           <div className="text-sm font-bold text-white">
-            Change {target.label}
-            {target.kind === "column" ? ` · Column ${target.column + 1}` : ""}
+            <Trans>Change {target.label}</Trans>
+            {target.kind === "column" ? ` · ${t`Column ${target.column + 1}`}` : ""}
           </div>
-          {sourceName ? <div className="mt-0.5 text-[10px] text-osu-f1">Images from {sourceName}</div> : null}
+          {sourceName ? <div className="mt-0.5 text-[10px] text-osu-f1"><Trans>Images from {sourceName}</Trans></div> : null}
         </div>
         <div className="space-y-2 px-5 py-4">
           <input
@@ -5099,7 +5121,7 @@ function ReplaySkinAssetPickerDialog({
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search images by file name"
+            placeholder={t`Search images by file name`}
             onKeyDown={(event) => {
               if (event.key === "Escape") onClose();
             }}
@@ -5107,7 +5129,7 @@ function ReplaySkinAssetPickerDialog({
           />
           <div className="max-h-[320px] overflow-y-auto rounded-md border border-osu-b3/50 bg-osu-b5/40">
             {visible.length === 0 ? (
-              <div className="px-3 py-4 text-[11px] text-osu-f1">No images match that search.</div>
+              <div className="px-3 py-4 text-[11px] text-osu-f1">{t`No images match that search.`}</div>
             ) : (
               visible.map((entry) => (
                 <button
@@ -5123,7 +5145,7 @@ function ReplaySkinAssetPickerDialog({
                     <span className="block truncate font-mono text-[10px] text-osu-f1">{entry.path}</span>
                   </span>
                   {picking === entry.path ? (
-                    <span className="shrink-0 text-[10px] font-semibold text-osu-f1">Loading…</span>
+                    <span className="shrink-0 text-[10px] font-semibold text-osu-f1">{t`Loading…`}</span>
                   ) : null}
                 </button>
               ))
@@ -5131,7 +5153,7 @@ function ReplaySkinAssetPickerDialog({
           </div>
           {matches.length > visible.length ? (
             <div className="text-[10px] text-osu-f1">
-              Showing {visible.length} of {matches.length} images. Refine your search to see the rest.
+              <Trans>Showing {visible.length} of {matches.length} images. Refine your search to see the rest.</Trans>
             </div>
           ) : null}
           {target.kind === "column" ? (
@@ -5142,7 +5164,7 @@ function ReplaySkinAssetPickerDialog({
                 onChange={(event) => setApplyToAll(event.target.checked)}
                 className="h-3.5 w-3.5 cursor-pointer accent-osu-pink"
               />
-              Apply to all columns
+              {t`Apply to all columns`}
             </label>
           ) : null}
         </div>

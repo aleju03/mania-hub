@@ -10,6 +10,7 @@ import { buildManiaCardRenderDataFromSkills } from "../../../components/player/m
 import { CountryFlag } from "../../../components/ui/CountryFlag";
 import { formatDate, formatOrdinal } from "../../../lib/format";
 import { useViewerTimeZone } from "../../../lib/use-viewer-time-zone";
+import { useLocale } from "../../../lib/locale-context";
 import {
   fetchLivePackSharedCard,
   isLiveBackendConfigured,
@@ -286,6 +287,7 @@ function PullPage() {
 
 function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
   const { t, i18n } = useLingui();
+  const locale = useLocale();
   const tier = sharedCardTier(shared);
   const accent = tierAccentRgb(tier);
   const tierLabel = shared.card.tierLabel ?? MANIA_TIER_STYLES[tier].label;
@@ -333,7 +335,7 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           <div
             className={`text-[13px] tabular-nums ${shared.serial === 1 ? "font-bold text-amber-300" : "text-osu-f1"}`}
           >
-            <Trans>{formatOrdinal(shared.serial)} person to pull this card</Trans>
+            <Trans>{formatOrdinal(shared.serial, locale)} person to pull this card</Trans>
             {shared.mintedTotal > 0 && shared.mintedTotal !== shared.serial && (
               // Skip the total when it just repeats the serial ("61st ... out of 61").
               <span className="text-osu-f1">

@@ -1,3 +1,6 @@
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { I18n, MessageDescriptor } from "@lingui/core";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ArrowLeft } from "lucide-react";
 import {
@@ -12,6 +15,7 @@ import {
 import { useAuth } from "../../lib/auth-context";
 import { rememberMapsCollection } from "../../lib/analytics-maps";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
+import { useLocale } from "../../lib/locale-context";
 import { danScaleImage, danScaleLabel, type DanScaleContext } from "../../lib/dan-images";
 import { MapDetailModal } from "./MapDetailModal";
 import { MapPreviewPlayerBar, useMapPreviewAudio } from "./MapPreviewAudio";
@@ -35,14 +39,14 @@ interface Props {
   liveBackendEnabled: boolean;
 }
 
-const PATTERN_DESCRIPTION: Record<string, string> = {
-  jack: "Repeated notes hammered on the same columns.",
-  stream: "Fast single-note runs flowing across the keys.",
-  jumpstream: "Streams broken up by two-note jumps.",
-  handstream: "Streams thickened with three-note hand chords.",
-  stamina: "Long, dense charts that test endurance.",
-  tech: "Shifting, irregular patterns that punish bad reading.",
-  ln: "Long-note and hold-heavy charts.",
+const PATTERN_DESCRIPTION: Record<string, MessageDescriptor> = {
+  jack: msg`Repeated notes hammered on the same columns.`,
+  stream: msg`Fast single-note runs flowing across the keys.`,
+  jumpstream: msg`Streams broken up by two-note jumps.`,
+  handstream: msg`Streams thickened with three-note hand chords.`,
+  stamina: msg`Long, dense charts that test endurance.`,
+  tech: msg`Shifting, irregular patterns that punish bad reading.`,
+  ln: msg`Long-note and hold-heavy charts.`,
 };
 
 type Axis = "dan" | "msd";
@@ -137,16 +141,20 @@ function collectionCovers(summary: LiveMapCollectionSummary): number[] {
 
 // "2d 4h" until the next rotation; empty once it is due (the rebuild queues on
 // the backend's next staleness check).
-function rotationCountdown(rotation: LiveMapCollectionsRotation | null): string | null {
+function rotationCountdown(rotation: LiveMapCollectionsRotation | null, i18n: I18n): string | null {
   if (!rotation?.nextRefreshAt) return null;
   const remaining = Date.parse(rotation.nextRefreshAt) - Date.now();
   if (!Number.isFinite(remaining)) return null;
-  if (remaining <= 0) return "any moment now";
+  if (remaining <= 0) return i18n._(msg`any moment now`);
   const hours = Math.floor(remaining / 3_600_000);
   const days = Math.floor(hours / 24);
-  if (days > 0) return `in ${days}d ${hours % 24}h`;
-  if (hours > 0) return `in ${hours}h`;
-  return `in ${Math.max(1, Math.floor(remaining / 60_000))}m`;
+  if (days > 0) {
+    const restHours = hours % 24;
+    return i18n._(msg`in ${days}d ${restHours}h`);
+  }
+  if (hours > 0) return i18n._(msg`in ${hours}h`);
+  const minutes = Math.max(1, Math.floor(remaining / 60_000));
+  return i18n._(msg`in ${minutes}m`);
 }
 
 function SegmentedControl<T extends string | number>({
@@ -237,7 +245,7 @@ function CollectionTile({ summary, onClick }: { summary: LiveMapCollectionSummar
       </div>
       <div className="min-w-0 px-3 py-2.5">
         <div className="truncate text-[14px] font-extrabold leading-tight text-osu-l1">{label}</div>
-        <div className="mt-0.5 text-[10.5px] text-osu-f1">{summary.memberCount} maps</div>
+        <div className="mt-0.5 text-[10.5px] text-osu-f1"><Plural value={summary.memberCount} one="# map" other="# maps" /></div>
       </div>
       {/* The accent edge fades in as an overlay's opacity, not as the button's
           own border-color: opacity animates on the compositor, while a
@@ -255,10 +263,11 @@ function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxi
   const [error, setError] = useState<string | null>(null);
   const [rebuilding, setRebuilding] = useState(false);
   const canRebuild = useAuth().canUseAdminFeatures;
+  const { t, i18n } = useLingui();
 
   useEffect(() => {
     if (!liveBackendEnabled) {
-      setError("Collections are unavailable right now. Try again in a bit.");
+      setError(t`Collections are unavailable right now. Try again in a bit.`);
       return;
     }
     let cancelled = false;
@@ -269,7 +278,7 @@ function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxi
         setRotation(data.rotation);
       })
       .catch(() => {
-        if (!cancelled) setError("Couldn't load collections.");
+        if (!cancelled) setError(t`Couldn't load collections.`);
       });
     return () => {
       cancelled = true;
@@ -289,7 +298,7 @@ function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxi
       setRotation(data.rotation);
       setError(null);
     } catch {
-      setError("Rebuild failed.");
+      setError(t`Rebuild failed.`);
     } finally {
       setRebuilding(false);
     }
@@ -321,12 +330,12 @@ function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxi
     return [...map.entries()];
   }, [usable, keyFilter, axis]);
 
-  const countdown = rotationCountdown(rotation);
+  const countdown = rotationCountdown(rotation, i18n);
 
   if (error) return <div className="py-16 text-center text-[13px] text-osu-f1">{error}</div>;
-  if (!collections) return <div className="py-16 text-center text-[13px] text-osu-f1">Loading collections...</div>;
+  if (!collections) return <div className="py-16 text-center text-[13px] text-osu-f1">{t`Loading collections...`}</div>;
   if (usable.length === 0) {
-    return <div className="py-16 text-center text-[13px] text-osu-f1">Collections are being rebuilt. Check back in a few minutes.</div>;
+    return <div className="py-16 text-center text-[13px] text-osu-f1">{t`Collections are being rebuilt. Check back in a few minutes.`}</div>;
   }
 
   return (
@@ -344,16 +353,16 @@ function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxi
             options={["dan", "msd"]}
             value={axis}
             onChange={onAxisChange}
-            render={(option) => (option === "dan" ? "Dan est." : "MSD")}
+            render={(option) => (option === "dan" ? t`Dan est.` : t`MSD`)}
           />
         </div>
         <div className="flex items-center gap-2.5">
           <p className="text-[12px] text-osu-f1">
-            Every pack is a random sample of its difficulty bucket
+            {t`Every pack is a random sample of its difficulty bucket`}
             {countdown ? (
-              <>
+              <Trans>
                 {" · "}next rotation <span className="font-semibold text-osu-l2">{countdown}</span>
-              </>
+              </Trans>
             ) : null}
           </p>
           {canRebuild && (
@@ -361,14 +370,14 @@ function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxi
               onClick={handleRebuild}
               disabled={rebuilding}
               className="shrink-0 rounded-lg border border-osu-red/30 bg-osu-red/20 px-2 py-1 text-[10px] font-semibold text-osu-red transition-colors hover:bg-osu-red/30 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-              title="Force a fresh collection rotation now (admin only)"
+              title={t`Force a fresh collection rotation now (admin only)`}
             >
-              {rebuilding ? "Rebuilding..." : "Rebuild now"}
+              {rebuilding ? t`Rebuilding...` : t`Rebuild now`}
             </button>
           )}
         </div>
       </div>
-      {groups.length === 0 && <div className="py-12 text-center text-[13px] text-osu-f1">No {keyFilter}K collections yet.</div>}
+      {groups.length === 0 && <div className="py-12 text-center text-[13px] text-osu-f1"><Trans>No {keyFilter}K collections yet.</Trans></div>}
       {groups.map(([pattern, list]) => (
         <section key={pattern} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1 border-b border-osu-b3/25 pb-2.5">
@@ -379,9 +388,9 @@ function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxi
                 style={{ background: PATTERN_COLOR[pattern] ?? "#cfcfe6" }}
               />
               <h2 className="text-[22px] font-extrabold tracking-tight text-osu-l1">{patternLabel(pattern)}</h2>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-osu-pink-light/80">{list.length} packs</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-osu-pink-light/80"><Plural value={list.length} one="# pack" other="# packs" /></span>
             </div>
-            <p className="text-[12.5px] text-osu-f1">{PATTERN_DESCRIPTION[pattern] ?? ""}</p>
+            <p className="text-[12.5px] text-osu-f1">{PATTERN_DESCRIPTION[pattern] ? i18n._(PATTERN_DESCRIPTION[pattern]) : ""}</p>
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
             {list.map((summary) => (
@@ -409,13 +418,15 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
   const [mapEntry, setMapEntry] = useState<LiveMapSearchEntry | null>(null);
   const loadedId = useRef<string | null>(null);
   const preview = useMapPreviewAudio();
+  const { t } = useLingui();
+  const locale = useLocale();
   const { stop: stopPreview } = preview;
 
   useEffect(() => () => stopPreview(), [stopPreview]);
 
   useEffect(() => {
     if (!liveBackendEnabled) {
-      setError("Collections are unavailable right now. Try again in a bit.");
+      setError(t`Collections are unavailable right now. Try again in a bit.`);
       return;
     }
     let cancelled = false;
@@ -425,14 +436,14 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
       .then((data) => {
         if (cancelled) return;
         if (!data) {
-          setError("Collection not found.");
+          setError(t`Collection not found.`);
           return;
         }
         setDetail(data);
         loadedId.current = id;
       })
       .catch(() => {
-        if (!cancelled) setError("Couldn't load this collection.");
+        if (!cancelled) setError(t`Couldn't load this collection.`);
       });
     return () => {
       cancelled = true;
@@ -457,13 +468,13 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
         className="group self-start inline-flex items-center gap-1.5 rounded-lg bg-osu-b4 px-2.5 py-1.5 text-[11px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3 hover:text-white"
       >
         <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" aria-hidden="true" />
-        <span>All collections</span>
+        <span>{t`All collections`}</span>
       </button>
 
       {error ? (
         <div className="py-16 text-center text-[13px] text-osu-f1">{error}</div>
       ) : !detail ? (
-        <div className="py-16 text-center text-[13px] text-osu-f1">Loading collection...</div>
+        <div className="py-16 text-center text-[13px] text-osu-f1">{t`Loading collection...`}</div>
       ) : (
         <>
           <div className="flex items-center gap-3.5 border-b border-osu-b3/25 pb-3">
@@ -473,8 +484,8 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
                 {patternLabel(detail.pattern ?? "")} · {detail.keyCount ?? "?"}K · {bucketLabel(detail)}
               </h1>
               <p className="mt-0.5 text-[11px] text-osu-f1/70">
-                {formatNumber(detail.items.length)} maps · rotated {formatTimeAgo(detail.refreshedAt)}
-                {newCount > 0 ? ` · ${newCount} new this rotation` : ""}
+                <Trans>{formatNumber(detail.items.length)} maps · rotated {formatTimeAgo(detail.refreshedAt, locale)}</Trans>
+                {newCount > 0 ? ` · ${t`${newCount} new this rotation`}` : ""}
               </p>
             </div>
           </div>

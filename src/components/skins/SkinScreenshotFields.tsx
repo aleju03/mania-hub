@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Star, X } from "lucide-react";
 import { useRef } from "react";
 import { SKIN_MAX_SCREENSHOTS, SKIN_SCREENSHOT_LABEL_MAX_LENGTH } from "../../lib/skins";
@@ -39,21 +40,22 @@ export function SkinScreenshotFields({
   onCover?: (index: number | null) => void;
   disabled?: boolean;
 }) {
+  const { t } = useLingui();
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-        Screenshots
+        {t`Screenshots`}
         {onAdd && (
-          <span className="normal-case tracking-normal text-osu-f1/70"> (optional, up to {SKIN_MAX_SCREENSHOTS})</span>
+          <span className="normal-case tracking-normal text-osu-f1/70"> <Trans>(optional, up to {SKIN_MAX_SCREENSHOTS})</Trans></span>
         )}
       </span>
       {screenshots.map((shot, index) => (
         <div key={shot.url} className="flex items-center gap-2">
           <img
             src={shot.url}
-            alt={`Screenshot ${index + 1}`}
+            alt={t`Screenshot ${index + 1}`}
             loading="lazy"
             className="h-11 w-[74px] shrink-0 rounded-md border border-osu-b3/40 object-cover"
           />
@@ -63,8 +65,8 @@ export function SkinScreenshotFields({
             maxLength={SKIN_SCREENSHOT_LABEL_MAX_LENGTH}
             disabled={disabled}
             onChange={(event) => onRename(index, event.target.value)}
-            placeholder={`Shot ${index + 1}`}
-            aria-label={`Name for screenshot ${index + 1}`}
+            placeholder={t`Shot ${index + 1}`}
+            aria-label={t`Name for screenshot ${index + 1}`}
             className="min-w-0 flex-1 rounded-lg border border-osu-b3/30 bg-osu-b4 px-2.5 py-1.5 text-[12.5px] text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
           />
           {onCover && (
@@ -73,8 +75,8 @@ export function SkinScreenshotFields({
               disabled={disabled}
               onClick={() => onCover(cover === index ? null : index)}
               aria-pressed={cover === index}
-              title={cover === index ? "Fronts the browse card" : "Use this screenshot as the card cover"}
-              aria-label={cover === index ? "Fronts the browse card" : `Use screenshot ${index + 1} as the card cover`}
+              title={cover === index ? t`Fronts the browse card` : t`Use this screenshot as the card cover`}
+              aria-label={cover === index ? t`Fronts the browse card` : t`Use screenshot ${index + 1} as the card cover`}
               className={`shrink-0 rounded p-1 transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50 ${
                 cover === index ? "text-osu-pink" : "text-osu-f1 hover:text-osu-l1"
               }`}
@@ -87,7 +89,7 @@ export function SkinScreenshotFields({
               type="button"
               disabled={disabled}
               onClick={() => onRemove(index)}
-              aria-label={`Remove screenshot ${index + 1}`}
+              aria-label={t`Remove screenshot ${index + 1}`}
               className="shrink-0 rounded p-1 text-osu-f1 transition-colors cursor-pointer hover:text-white disabled:cursor-default disabled:opacity-50"
             >
               <X className="h-3.5 w-3.5" />
@@ -101,7 +103,7 @@ export function SkinScreenshotFields({
           onClick={() => inputRef.current?.click()}
           className="flex h-11 items-center justify-center rounded-md border border-dashed border-osu-b3/60 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-osu-l2"
         >
-          Add a screenshot
+          {t`Add a screenshot`}
         </button>
       )}
       {onAdd && (

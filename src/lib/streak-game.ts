@@ -142,8 +142,14 @@ export interface StreakMetricCopy {
    ms, so "more" means later. The UI locale is a catalog choice, so map it onto
    the Intl tag the month name should follow; the "en" default keeps every
    existing call site printing exactly what it printed before. */
+const STREAK_MONTH_LOCALE: Record<AppLocale, string> = {
+  en: "en-US",
+  "zh-CN": "zh-CN",
+  es: "es-419",
+};
+
 export function formatStreakMonth(ms: number, locale: AppLocale = "en"): string {
-  return new Date(ms).toLocaleDateString(locale === "zh-CN" ? "zh-CN" : "en-US", {
+  return new Date(ms).toLocaleDateString(STREAK_MONTH_LOCALE[locale], {
     month: "short",
     year: "numeric",
     timeZone: "UTC",

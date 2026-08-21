@@ -1,24 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { DEFAULT_THEME_HUE, DEFAULT_THEME_SAT, useAppStore, useHasHydrated } from "../../store";
+import { useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 
 interface ThemePickerProps {
   variant?: "desktop" | "mobile";
 }
 
-const PRESET_HUES: ReadonlyArray<{ hue: number; name: string }> = [
-  { hue: 333, name: "pink" },
-  { hue: 355, name: "rose" },
-  { hue: 15, name: "red" },
-  { hue: 30, name: "orange" },
-  { hue: 50, name: "amber" },
-  { hue: 95, name: "lime" },
-  { hue: 140, name: "green" },
-  { hue: 170, name: "teal" },
-  { hue: 200, name: "cyan" },
-  { hue: 225, name: "blue" },
-  { hue: 260, name: "indigo" },
-  { hue: 290, name: "purple" },
+const PRESET_HUES: ReadonlyArray<{ hue: number; name: MessageDescriptor }> = [
+  { hue: 333, name: msg`pink` },
+  { hue: 355, name: msg`rose` },
+  { hue: 15, name: msg`red` },
+  { hue: 30, name: msg`orange` },
+  { hue: 50, name: msg`amber` },
+  { hue: 95, name: msg`lime` },
+  { hue: 140, name: msg`green` },
+  { hue: 170, name: msg`teal` },
+  { hue: 200, name: msg`cyan` },
+  { hue: 225, name: msg`blue` },
+  { hue: 260, name: msg`indigo` },
+  { hue: 290, name: msg`purple` },
 ];
 
 const RAINBOW_STRIP_GRADIENT =
@@ -155,6 +158,7 @@ function PaletteIcon({ className }: { className?: string }) {
 }
 
 export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
+  const { t, i18n } = useLingui();
   const [open, setOpen] = useState(false);
   const hue = useAppStore((state) => state.themeHue);
   const saturation = useAppStore((state) => state.themeSaturation);
@@ -201,13 +205,13 @@ export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
             ? "flex items-center justify-center w-9 h-9 rounded-lg hover:bg-osu-b3/50 transition-colors cursor-pointer text-osu-pink-light"
             : "flex items-center gap-3 w-full px-3 py-2 rounded-lg bg-osu-b4/60 hover:bg-osu-b4 transition-colors cursor-pointer text-osu-pink-light"
         }
-        title="Theme color"
-        aria-label="Theme color"
+        title={t`Theme color`}
+        aria-label={t`Theme color`}
         aria-expanded={open}
       >
         <PaletteIcon className="w-5 h-5" />
         {variant === "mobile" ? (
-          <span className="text-[12px] font-semibold capitalize">theme color</span>
+          <span className="text-[12px] font-semibold capitalize">{t`theme color`}</span>
         ) : null}
       </button>
 
@@ -226,7 +230,7 @@ export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
           >
             <div className="flex items-center justify-between mb-3 px-1">
               <div className="text-[10px] font-semibold text-osu-l2 uppercase tracking-wider">
-                Theme color
+                {t`Theme color`}
               </div>
               <button
                 type="button"
@@ -234,7 +238,7 @@ export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
                 disabled={isDefault}
                 className="text-[10px] font-semibold text-osu-f1 hover:text-white disabled:opacity-30 disabled:hover:text-osu-f1 transition-colors cursor-pointer disabled:cursor-default"
               >
-                Reset
+                {t`Reset`}
               </button>
             </div>
             <div className="grid grid-cols-6 gap-2">
@@ -245,8 +249,8 @@ export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
                     key={presetHue}
                     type="button"
                     onClick={() => setThemeHue(presetHue)}
-                    title={name}
-                    aria-label={name}
+                    title={i18n._(name)}
+                    aria-label={i18n._(name)}
                     aria-pressed={isActive}
                     className={`relative aspect-square rounded-md cursor-pointer transition-transform hover:scale-110 focus:outline-none ${
                       isActive ? "scale-110" : ""
@@ -281,7 +285,7 @@ export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
                 value={displayHue}
                 min={0}
                 max={359}
-                ariaLabel="Theme hue"
+                ariaLabel={t`Theme hue`}
                 gradient={RAINBOW_STRIP_GRADIENT}
                 thumbColor={`hsl(${displayHue}, 100%, 65%)`}
                 onChange={setThemeHue}
@@ -290,7 +294,7 @@ export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
                 value={displaySat}
                 min={0}
                 max={100}
-                ariaLabel="Theme saturation"
+                ariaLabel={t`Theme saturation`}
                 gradient={getSaturationStripGradient(displayHue)}
                 thumbColor={`hsl(${displayHue}, ${displaySat}%, ${45 + (displaySat / 100) * 20}%)`}
                 onChange={setThemeSaturation}

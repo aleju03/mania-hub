@@ -1,3 +1,5 @@
+import { Trans, useLingui } from "@lingui/react/macro";
+import { useLocale } from "#/lib/locale-context";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -127,6 +129,8 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 }
 
 function CollectorHeader({ profile }: { profile: LivePackCollectorProfile }) {
+  const { t } = useLingui();
+  const locale = useLocale();
   const { collector, completion, ranks } = profile;
   // Floored for the same reason the boards floor it: 99.99% is not 100%.
   const poolPercent =
@@ -164,60 +168,62 @@ function CollectorHeader({ profile }: { profile: LivePackCollectorProfile }) {
           </div>
           <div className="mt-0.5 text-[11px] text-osu-f1">
             {collector.joinedAt > 0
-              ? `First card ${formatTimeAgo(new Date(collector.joinedAt).toISOString())}`
-              : "Collecting"}
+              ? t`First card ${formatTimeAgo(new Date(collector.joinedAt).toISOString())}`
+              : t`Collecting`}
           </div>
         </div>
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
         <Stat
-          label="cards"
+          label={t`cards`}
           value={formatNumber(collector.cards)}
-          hint={`${formatOrdinal(ranks.cards)} biggest`}
+          hint={t`${formatOrdinal(ranks.cards, locale)} biggest`}
         />
         <Stat
-          label="copies"
+          label={t`copies`}
           value={formatNumber(collector.copies)}
-          hint={collector.duplicates > 0 ? `${formatNumber(collector.duplicates)} duplicate` : null}
+          hint={collector.duplicates > 0 ? t`${formatNumber(collector.duplicates)} duplicate` : null}
         />
         <Stat
-          label="packs opened"
-          value={collector.packsOpened === null ? "unknown" : formatNumber(collector.packsOpened)}
-          hint={ranks.packsOpened === null ? null : `${formatOrdinal(ranks.packsOpened)} most`}
+          label={t`packs opened`}
+          value={collector.packsOpened === null ? t`unknown` : formatNumber(collector.packsOpened)}
+          hint={ranks.packsOpened === null ? null : t`${formatOrdinal(ranks.packsOpened, locale)} most`}
         />
         {/* "roster" rather than "GOATs": the grid can hold more GOAT-tier
             cards than this counts, since /admin/collections can mint one for a
             player who is not on the honorary roster. */}
         <Stat
-          label="GOAT roster"
+          label={t`GOAT roster`}
           value={`${completion.goatsOwned}/${completion.goatsTotal}`}
-          hint={completion.goatsOwned >= completion.goatsTotal ? "all of them" : null}
+          hint={completion.goatsOwned >= completion.goatsTotal ? t`all of them` : null}
         />
       </div>
 
       {poolPercent !== null && (
         <div className="mt-5 text-[12px] text-osu-f1">
-          Holds{" "}
-          <span translate="no" className="font-bold text-white tabular-nums">
-            {formatNumber(completion.poolOwnedCount)}
-          </span>{" "}
-          of the{" "}
-          <span translate="no" className="font-bold text-white tabular-nums">
-            {formatNumber(completion.poolTotal)}
-          </span>{" "}
-          pullable players,{" "}
-          <span translate="no" className="font-bold text-white tabular-nums">
-            {poolPercent}%
-          </span>
+          <Trans>
+            Holds{" "}
+            <span translate="no" className="font-bold text-white tabular-nums">
+              {formatNumber(completion.poolOwnedCount)}
+            </span>{" "}
+            of the{" "}
+            <span translate="no" className="font-bold text-white tabular-nums">
+              {formatNumber(completion.poolTotal)}
+            </span>{" "}
+            pullable players,{" "}
+            <span translate="no" className="font-bold text-white tabular-nums">
+              {poolPercent}%
+            </span>
+          </Trans>
           {collector.firstFinds > 0 ? (
-            <>
+            <Trans>
               , and got to{" "}
               <span translate="no" className="font-bold text-white tabular-nums">
                 {formatNumber(collector.firstFinds)}
               </span>{" "}
               of their cards first
-            </>
+            </Trans>
           ) : null}
           .
         </div>
@@ -239,6 +245,7 @@ function CardGrid({
   liftedCardKey: string | null;
   onSpotlight: (target: CardSpotlightTarget, cardKey: string) => void;
 }) {
+  const { t } = useLingui();
   const cards = (page?.cards ?? []) as CollectedCard[];
   const { onThumbnailError } = useCardThumbnails(cards);
 
@@ -253,7 +260,7 @@ function CardGrid({
   }
 
   if (cards.length === 0) {
-    return <div className="py-12 text-center text-[12px] text-osu-f1">No cards match that.</div>;
+    return <div className="py-12 text-center text-[12px] text-osu-f1">{t`No cards match that.`}</div>;
   }
 
   return (
@@ -302,6 +309,7 @@ export function CollectorShelf({ collector, tab }: {
      instead of to the default one. */
   tab?: "showcase" | "stats" | "collectors";
 }) {
+  const { t } = useLingui();
   const [profile, setProfile] = useState<LivePackCollectorProfile | null>(null);
   const [missing, setMissing] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -445,7 +453,7 @@ export function CollectorShelf({ collector, tab }: {
     return (
       <div className="py-20 text-center">
         <div className="text-[13px] text-osu-l2">
-          <span className="font-bold text-white">{collector}</span> has not opened a pack.
+          <Trans><span className="font-bold text-white">{collector}</span> has not opened a pack.</Trans>
         </div>
         <BackLink tab={tab} />
       </div>
@@ -455,7 +463,7 @@ export function CollectorShelf({ collector, tab }: {
   if (failed) {
     return (
       <div className="py-20 text-center">
-        <div className="text-[13px] text-osu-l2">Could not load that collection.</div>
+        <div className="text-[13px] text-osu-l2">{t`Could not load that collection.`}</div>
         <BackLink tab={tab} />
       </div>
     );
@@ -523,7 +531,7 @@ export function CollectorShelf({ collector, tab }: {
 
       {profile.showcase.length > 0 && (
         <Section className="mt-10">
-          <SectionHeading>showcase</SectionHeading>
+          <SectionHeading>{t`showcase`}</SectionHeading>
           <div className="mt-3">
             <ShowcaseCards
               cards={profile.showcase}
@@ -554,7 +562,7 @@ export function CollectorShelf({ collector, tab }: {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Find a player"
+              placeholder={t`Find a player`}
               className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4/50 py-1.5 pl-7 pr-2 text-[12px] text-white outline-none transition-colors placeholder:text-osu-f1 focus:border-osu-pink/50"
             />
           </label>
@@ -611,7 +619,7 @@ export function CollectorShelf({ collector, tab }: {
               onClick={() => setPage(currentPage - 1)}
               className="cursor-pointer px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
             >
-              Previous
+              {t`Previous`}
             </button>
             <span translate="no" className="text-osu-f1 tabular-nums">
               {currentPage + 1} / {totalPages}
@@ -622,7 +630,7 @@ export function CollectorShelf({ collector, tab }: {
               onClick={() => setPage(currentPage + 1)}
               className="cursor-pointer px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
             >
-              Next
+              {t`Next`}
             </button>
           </div>
         )}
@@ -638,6 +646,7 @@ export function CollectorShelf({ collector, tab }: {
 }
 
 function BackLink({ tab }: { tab?: "showcase" | "stats" | "collectors" }) {
+  const { t } = useLingui();
   return (
     <Link
       to="/packs/collections"
@@ -645,7 +654,7 @@ function BackLink({ tab }: { tab?: "showcase" | "stats" | "collectors" }) {
       className="mt-4 inline-flex items-center gap-1.5 text-[12px] font-semibold text-osu-f1 transition-colors hover:text-white"
     >
       <ArrowLeft size={13} />
-      All collections
+      {t`All collections`}
     </Link>
   );
 }

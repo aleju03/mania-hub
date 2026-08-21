@@ -14,6 +14,11 @@ export type AbuseBucket =
   | "sseConnect"
   | "replayVideo"
   | "skinUpload"
+  // Translation reports from the settings panel. Bridge-forwarded like every
+  // frontend call, so this one is checked against the visitor's forwarded
+  // address directly rather than through checkRate (which re-buckets bridge
+  // traffic into one site-wide budget).
+  | "translationReport"
   // Server-to-server calls from the frontend (see isBridge). Deliberately far
   // above any public bucket: one address carries every signed-in visitor here,
   // so this is a backstop against a leaked bridge token, not a user throttle.
@@ -165,13 +170,15 @@ function limitForBucket(config: Config, bucket: AbuseBucket): number {
       return Math.max(1, config.replayVideoRatePerMinute ?? 2);
     case "skinUpload":
       return Math.max(1, config.skinUploadRatePerMinute ?? 40);
+    case "translationReport":
+      return Math.max(1, config.translationReportRatePerHour ?? 10);
     case "bridge":
       return Math.max(1, config.bridgeRatePerMinute ?? 6000);
   }
 }
 
 function windowMsForBucket(bucket: AbuseBucket): number {
-  return bucket === "countryActivateNew" ? 60 * 60_000 : 60_000;
+  return bucket === "countryActivateNew" || bucket === "translationReport" ? 60 * 60_000 : 60_000;
 }
 
 function firstForwardedFor(value: string | string[] | undefined): string | null {

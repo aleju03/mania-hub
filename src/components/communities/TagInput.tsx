@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import { useState } from "react";
 import { X } from "lucide-react";
 import {
@@ -20,12 +21,14 @@ export function TagInput({
   // Deliberately not a language or a country: whatever sits here is what half
   // the directory ends up tagged with, and those two are already their own
   // fields. These are kinds of server instead.
-  placeholder = "tournaments, mapping, casual",
+  placeholder,
 }: {
   tags: string[];
   onChange: (tags: string[]) => void;
   placeholder?: string;
 }) {
+  const { t } = useLingui();
+  const emptyPlaceholder = placeholder ?? t`tournaments, mapping, casual`;
   const [draft, setDraft] = useState("");
   const full = tags.length >= COMMUNITY_MAX_TAGS;
 
@@ -48,7 +51,7 @@ export function TagInput({
           <button
             type="button"
             onClick={() => onChange(tags.filter((entry) => entry !== tag))}
-            aria-label={`Remove ${tag}`}
+            aria-label={t`Remove ${tag}`}
             className="text-osu-f1 transition-colors cursor-pointer hover:text-white"
           >
             <X className="h-3 w-3" />
@@ -73,9 +76,9 @@ export function TagInput({
           }
         }}
         onBlur={() => add(draft)}
-        placeholder={full ? "" : tags.length === 0 ? placeholder : "add another"}
+        placeholder={full ? "" : tags.length === 0 ? emptyPlaceholder : t`add another`}
         disabled={full}
-        aria-label="Tags"
+        aria-label={t`Tags`}
         className="min-w-[7rem] flex-1 bg-transparent px-1 py-0.5 text-[13px] text-osu-l1 placeholder:text-osu-f1/55 focus:outline-none disabled:cursor-default"
       />
     </div>
@@ -84,8 +87,8 @@ export function TagInput({
         three examples rather than as how to type them. */}
     <span className="mt-1 block text-[11px] leading-relaxed text-osu-f1/70">
       {full
-        ? `That is all ${COMMUNITY_MAX_TAGS}. Remove one to add another.`
-        : `Comma after each one. Up to ${COMMUNITY_MAX_TAGS}, and they become filters people browse by, so use words someone would actually search for.`}
+        ? t`That is all ${COMMUNITY_MAX_TAGS}. Remove one to add another.`
+        : t`Comma after each one. Up to ${COMMUNITY_MAX_TAGS}, and they become filters people browse by, so use words someone would actually search for.`}
     </span>
     </div>
   );

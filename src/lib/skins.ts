@@ -1,4 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
+import { getI18n } from "./i18n";
+import type { AppLocale } from "./locale";
 import { getLiveBackendUrl, getServerLiveBackendUrl } from "./live-backend";
 import type { PreviewBackdrop } from "./skin-preview-backdrops";
 import type { SkinPreviewChartSnippet } from "./skin-preview-patterns";
@@ -1232,10 +1236,25 @@ export async function uploadSkinPreviewsParallel<T extends SkinPreviewUploadItem
   if (failed) throw firstError;
 }
 
-export function skinPreviewUploadLabel(activeKeys: readonly number[], completed: number, total: number): string {
-  if (activeKeys.length === 1) return `Uploading the ${activeKeys[0]}K preview.`;
-  if (activeKeys.length > 1) return `Uploading ${activeKeys.map((keys) => `${keys}K`).join(", ")} previews.`;
-  return completed >= total ? "Previews uploaded." : "Uploading previews.";
+function tr(locale: AppLocale, descriptor: MessageDescriptor): string {
+  return getI18n(locale)._(descriptor);
+}
+
+export function skinPreviewUploadLabel(
+  activeKeys: readonly number[],
+  completed: number,
+  total: number,
+  locale: AppLocale = "en",
+): string {
+  if (activeKeys.length === 1) {
+    const keys = activeKeys[0];
+    return tr(locale, msg`Uploading the ${keys}K preview.`);
+  }
+  if (activeKeys.length > 1) {
+    const list = activeKeys.map((keys) => `${keys}K`).join(", ");
+    return tr(locale, msg`Uploading ${list} previews.`);
+  }
+  return completed >= total ? tr(locale, msg`Previews uploaded.`) : tr(locale, msg`Uploading previews.`);
 }
 
 export async function finishSkinUpload(

@@ -1,3 +1,5 @@
+import { Trans, useLingui } from "@lingui/react/macro";
+import { useLocale } from "#/lib/locale-context";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, RefreshCw, Star, Upload, X } from "lucide-react";
@@ -68,6 +70,8 @@ export function SkinUpdateModal({
   onClose: () => void;
   onUpdated: (skin: SkinSummary) => void;
 }) {
+  const { t } = useLingui();
+  const locale = useLocale();
   const [step, setStep] = useState<UpdateStep>("pick");
   const [dragActive, setDragActive] = useState(false);
   const [reading, setReading] = useState<{ name: string; percent: number | null } | null>(null);
@@ -191,7 +195,7 @@ export function SkinUpdateModal({
     setError(null);
     setDuplicate(null);
     if (picked.size > SKIN_OSK_MAX_BYTES) {
-      setError(`This file is ${formatSkinFileSize(picked.size)}. The limit is 50 MB.`);
+      setError(t`This file is ${formatSkinFileSize(picked.size)}. The limit is 50 MB.`);
       return;
     }
     setReading({ name: picked.name, percent: null });
@@ -223,7 +227,7 @@ export function SkinUpdateModal({
       setCoverKeymode(cover);
       setStep("review");
     } catch (importError) {
-      setError(importError instanceof Error ? importError.message : "This .osk could not be read.");
+      setError(importError instanceof Error ? importError.message : t`This .osk could not be read.`);
     } finally {
       setReading(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -272,7 +276,7 @@ export function SkinUpdateModal({
       }
     })()
       .catch(() => {
-        if (!cancelled) setError("The previews could not be rendered.");
+        if (!cancelled) setError(t`The previews could not be rendered.`);
       })
       .finally(() => {
         if (!cancelled) setRendering(false);
@@ -287,7 +291,7 @@ export function SkinUpdateModal({
     if (!file || previewEntries.length === 0) return;
     setError(null);
     setDuplicate(null);
-    setProgress({ done: 0, total: 0, label: "Preparing the update." });
+    setProgress({ done: 0, total: 0, label: t`Preparing the update.` });
     setStep("uploading");
     try {
       // A still-valid ticket survives a retry, so a network blip does not cost
@@ -297,8 +301,8 @@ export function SkinUpdateModal({
         if (!started.ok) {
           setStep("review");
           setError(started.error === "not_logged_in"
-            ? "Log in with osu! again to update this skin."
-            : "This skin could not be updated right now. Try again.");
+            ? t`Log in with osu! again to update this skin.`
+            : t`This skin could not be updated right now. Try again.`);
           return;
         }
         ticketRef.current = { id: started.id, token: started.token };
@@ -309,8 +313,11 @@ export function SkinUpdateModal({
 
       // The .osk goes first: it is what decides the keymodes the previews are
       // then filed under, and a rejected file costs no preview uploads.
-      const oskLabel = (sent: number) =>
-        `Uploading the new skin file, ${formatSkinFileSize(sent) || "0 MB"} of ${formatSkinFileSize(file.size)}.`;
+      const oskLabel = (sent: number) => {
+        const done = formatSkinFileSize(sent) || "0 MB";
+        const size = formatSkinFileSize(file.size);
+        return t`Uploading the new skin file, ${done} of ${size}.`;
+      };
       setProgress({ done: 0, total: totalBytes, label: oskLabel(0) });
       await uploadSkinPart({
         id: ticket.id,
@@ -339,12 +346,12 @@ export function SkinUpdateModal({
         ({ sentBytes, activeKeys, completed, total }) => setProgress({
           done: previewBase + sentBytes,
           total: totalBytes,
-          label: skinPreviewUploadLabel(activeKeys, completed, total),
+          label: skinPreviewUploadLabel(activeKeys, completed, total, locale),
         }),
       );
       doneBytes = totalBytes;
 
-      setProgress({ done: totalBytes, total: totalBytes, label: "Saving." });
+      setProgress({ done: totalBytes, total: totalBytes, label: t`Saving.` });
       const updated = await finishSkinEdit(
         ticket.id,
         ticket.token,
@@ -438,13 +445,13 @@ export function SkinUpdateModal({
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-osu-b3/30 px-4 py-3 sm:px-5">
                 <span className="min-w-0 truncate text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">
-                  update {skin.name}
+                  <Trans>update {skin.name}</Trans>
                 </span>
                 {!uploading && (
                   <button
                     type="button"
                     onClick={handleDismiss}
-                    aria-label="Close"
+                    aria-label={t`Close`}
                     className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-osu-f1 transition-colors cursor-pointer hover:bg-osu-b3/50 hover:text-white"
                   >
                     <X className="h-4 w-4" strokeWidth={2.4} />
@@ -487,12 +494,12 @@ export function SkinUpdateModal({
                       <div className="flex min-h-[200px] flex-col items-center justify-center gap-2.5 px-6 py-8 text-center">
                         {reading ? (
                           <div className="w-full max-w-[340px]">
-                            <div className="truncate text-sm font-semibold text-white">Reading {reading.name}</div>
+                            <div className="truncate text-sm font-semibold text-white"><Trans>Reading {reading.name}</Trans></div>
                             <div className="mt-3 h-2 overflow-hidden rounded-full bg-osu-b5">
                               <div className="h-full bg-osu-pink transition-[width] duration-100" style={{ width: `${reading.percent ?? 2}%` }} />
                             </div>
                             <div className="mt-1.5 text-[11px] tabular-nums text-osu-f1">
-                              {reading.percent == null ? "Opening the archive..." : `Decoding the skin's images, ${reading.percent}%`}
+                              {reading.percent == null ? t`Opening the archive...` : t`Decoding the skin's images, ${reading.percent}%`}
                             </div>
                           </div>
                         ) : (
@@ -500,9 +507,9 @@ export function SkinUpdateModal({
                             <Upload className={`h-8 w-8 transition-colors ${dragActive ? "text-osu-pink-light" : "text-osu-f1"}`} aria-hidden="true" />
                             <div>
                               <div className="text-sm font-semibold text-white">
-                                {dragActive ? "Drop to read it" : "Drop the new .osk here, or click to browse"}
+                                {dragActive ? t`Drop to read it` : t`Drop the new .osk here, or click to browse`}
                               </div>
-                              <div className="mt-1 text-[11px] text-osu-f1">Up to 50 MB.</div>
+                              <div className="mt-1 text-[11px] text-osu-f1">{t`Up to 50 MB.`}</div>
                             </div>
                           </>
                         )}
@@ -516,8 +523,7 @@ export function SkinUpdateModal({
                       onChange={(event) => void handleFiles(event.target.files)}
                     />
                     <p className="mt-3 text-[11.5px] leading-relaxed text-osu-f1">
-                      The skin page keeps its name, description, link and download count. Only the file people get and the
-                      previews rendered from it are replaced.
+                      {t`The skin page keeps its name, description, link and download count. Only the file people get and the previews rendered from it are replaced.`}
                     </p>
                     {error && <p className="mt-3 text-[12px] font-semibold text-osu-red-light">{error}</p>}
                   </>
@@ -579,9 +585,9 @@ export function SkinUpdateModal({
                           >
                             <div className="aspect-video w-full bg-osu-b4">
                               {render ? (
-                                <img src={render.url} alt={`${keys}K thumbnail`} className="h-full w-full object-cover" />
+                                <img src={render.url} alt={t`${keys}K thumbnail`} className="h-full w-full object-cover" />
                               ) : (
-                                <div className="flex h-full items-center justify-center text-[10px] text-osu-f1/60">rendering</div>
+                                <div className="flex h-full items-center justify-center text-[10px] text-osu-f1/60">{t`rendering`}</div>
                               )}
                             </div>
                             <div className={`flex items-center gap-1 px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums ${
@@ -589,10 +595,10 @@ export function SkinUpdateModal({
                             }`}>
                               {keys}K
                               {coverKeymode === keys && (
-                                <Star size={9} className={selected ? "text-white" : "text-osu-pink"} aria-label="card cover" />
+                                <Star size={9} className={selected ? "text-white" : "text-osu-pink"} aria-label={t`card cover`} />
                               )}
                               {addedKeymodes.includes(keys) && (
-                                <span className={selected ? "text-white/80" : "text-osu-green"} title="New in this build" aria-hidden="true">+</span>
+                                <span className={selected ? "text-white/80" : "text-osu-green"} title={t`New in this build`} aria-hidden="true">+</span>
                               )}
                             </div>
                           </button>
@@ -621,16 +627,16 @@ export function SkinUpdateModal({
 
                     {/* What actually changes on the published skin. */}
                     <dl className="mt-3 rounded-lg border border-osu-b3/25 bg-osu-b4 px-3 py-1 text-[12px]">
-                      <ChangeRow label="File">
+                      <ChangeRow label={t`File`}>
                         <span className="flex items-center gap-1.5 tabular-nums text-osu-l1">
-                          <span className="text-osu-f1">{formatSkinFileSize(skin.oskSizeBytes) || "unknown"}</span>
+                          <span className="text-osu-f1">{formatSkinFileSize(skin.oskSizeBytes) || t`unknown`}</span>
                           <ArrowRight className="h-3 w-3 text-osu-f1" aria-hidden="true" />
-                          <span>{formatSkinFileSize(file?.size ?? 0) || "unknown"}</span>
+                          <span>{formatSkinFileSize(file?.size ?? 0) || t`unknown`}</span>
                         </span>
                       </ChangeRow>
-                      <ChangeRow label="Keymodes">
+                      <ChangeRow label={t`Keymodes`}>
                         <span className="text-osu-l1">
-                          {keymodes.map((keys) => `${keys}K`).join(", ") || "none"}
+                          {keymodes.map((keys) => `${keys}K`).join(", ") || t`none`}
                           {addedKeymodes.length > 0 && (
                             <span className="ml-1.5 text-osu-green">+{addedKeymodes.map((keys) => `${keys}K`).join(", ")}</span>
                           )}
@@ -639,14 +645,13 @@ export function SkinUpdateModal({
                           )}
                         </span>
                       </ChangeRow>
-                      <ChangeRow label="Previews">
-                        <span className="text-osu-l1 tabular-nums">{keymodes.length} re-rendered</span>
+                      <ChangeRow label={t`Previews`}>
+                        <span className="text-osu-l1 tabular-nums"><Trans>{keymodes.length} re-rendered</Trans></span>
                       </ChangeRow>
                     </dl>
                     {droppedKeymodes.length > 0 && (
                       <p className="mt-2 text-[11px] font-semibold text-osu-yellow">
-                        The new file has no {droppedKeymodes.map((keys) => `${keys}K`).join(", ")} block, so those previews
-                        are dropped from the skin page.
+                        <Trans>The new file has no {droppedKeymodes.map((keys) => `${keys}K`).join(", ")} block, so those previews are dropped from the skin page.</Trans>
                       </p>
                     )}
 
@@ -689,21 +694,21 @@ export function SkinUpdateModal({
                             className="flex items-center gap-1.5 rounded-full bg-osu-pink px-6 py-2 text-[13px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-50"
                           >
                             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                            Update the skin
+                            {t`Update the skin`}
                           </button>
                           <button
                             type="button"
                             onClick={() => setStep("pick")}
                             className="text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
                           >
-                            Pick another file
+                            {t`Pick another file`}
                           </button>
                           <button
                             type="button"
                             onClick={handleDismiss}
                             className="text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
                           >
-                            Cancel
+                            {t`Cancel`}
                           </button>
                         </div>
                       )}

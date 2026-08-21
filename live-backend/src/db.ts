@@ -347,6 +347,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migratePlayerSkillAccModel(target);
   await migrateActivityMapsBestPayload(target);
   await migrateGoatPoll(target);
+  await migrateTranslationReports(target);
   await setMigrationSentinel(target, SCHEMA_MIGRATION_META_KEY, {
     startedAt: startedAtIso,
     completedAt: new Date().toISOString(),
@@ -2377,6 +2378,43 @@ async function migrateUserSignatures(db: Db): Promise<void> {
   if (!columns.includes("time_zone")) {
     await db.execute("alter table user_signatures add column time_zone text");
   }
+}
+
+async function migrateTranslationReports(db: Db): Promise<void> {
+  // Reader-submitted reports about the site's UI translations (see
+  // features/translation-reports.ts). Open to signed-out visitors, so user_id
+  // is nullable and `reporter_key` carries the opaque per-reporter bucket the
+  // caps key on ("user:<id>" or "ip:<hash>"), never shown on the admin board.
+  // status is new|resolved|dismissed, timestamps are epoch ms. Durable:
+  // retention never prunes this table.
+  await db.execute(`
+    create table if not exists translation_reports (
+      id text primary key,
+      locale text not null,
+      status text not null default 'new',
+      source_text text not null,
+      suggestion text,
+      note text,
+      page_path text,
+      user_id integer,
+      username text,
+      admin_note text,
+      created_at integer not null,
+      updated_at integer not null,
+      reviewed_at integer,
+      reporter_key text not null default 'anon'
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_translation_reports_status
+      on translation_reports(status, created_at desc)
+  `);
+  // The per-reporter cap and the duplicate guard both scan one reporter's
+  // recent rows on every submit.
+  await db.execute(`
+    create index if not exists idx_translation_reports_reporter
+      on translation_reports(reporter_key, created_at desc)
+  `);
 }
 
 async function migrateAdminTodos(db: Db): Promise<void> {

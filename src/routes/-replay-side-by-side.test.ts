@@ -145,7 +145,7 @@ describe("side by side tab", () => {
     // holds them would fade the outermost digits away with its edges.
     expect(viewSource).toContain("[mask-image:linear-gradient(to_right,transparent,black_24%,black_76%,transparent)]");
     // "Accuracy" no longer fits beside two percentages this size.
-    expect(viewSource).toContain('{ label: "Acc", format: (s) => `${s.accuracy.toFixed(2)}%`');
+    expect(viewSource).toContain("{ label: msg`Acc`, format: (s) => `${s.accuracy.toFixed(2)}%`");
   });
 
   it("keeps the height for the playfields on a short viewport", () => {
@@ -188,8 +188,8 @@ describe("side by side tab", () => {
     const inputs = pickerSource.match(/<input\b/g) ?? [];
     expect(inputs).toHaveLength(1);
     expect(pickerSource).toContain("const queryScoreId = parseReplayScoreInput(query);");
-    expect(pickerSource).toContain('"Search a player, or paste a score link..."');
-    expect(pickerSource).toContain("`Filter ${player.username}'s runs...`");
+    expect(pickerSource).toContain("t`Search a player, or paste a score link...`");
+    expect(pickerSource).toContain("t`Filter ${player.username}'s runs...`");
     // Picking a row fills whichever card is active, so the cards are the target
     // selector rather than each carrying their own form.
     expect(pickerSource).toContain("next[activeSlot] = score;");

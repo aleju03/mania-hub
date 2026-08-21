@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Pencil } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { track } from "#/lib/analytics";
@@ -39,6 +40,7 @@ export function ShowcaseTab({ shelfSlots }: { shelfSlots: number }) {
 }
 
 function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }) {
+  const { t } = useLingui();
   const auth = useAuth();
   const viewer = auth.viewer;
   const [cards, setCards] = useState<ServerPackCollectionCard[] | null>(null);
@@ -85,12 +87,14 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
   if (!viewer) {
     return (
       <Section>
-        <SectionHeading>your showcase</SectionHeading>
+        <SectionHeading>{t`your showcase`}</SectionHeading>
         <p className="mt-2 text-[12px] text-osu-f1">
-          <a href="/api/auth/osu" className="font-semibold text-osu-pink-light hover:text-white">
-            Log in with osu!
-          </a>{" "}
-          to put your own cards up here.
+          <Trans>
+            <a href="/api/auth/osu" className="font-semibold text-osu-pink-light hover:text-white">
+              Log in with osu!
+            </a>{" "}
+            to put your own cards up here.
+          </Trans>
         </p>
       </Section>
     );
@@ -101,7 +105,7 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
   return (
     <Section>
       <div className="flex items-center gap-3">
-        <SectionHeading>your showcase</SectionHeading>
+        <SectionHeading>{t`your showcase`}</SectionHeading>
         <button
           type="button"
           onClick={() => {
@@ -111,7 +115,7 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
           className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white"
         >
           <Pencil size={12} />
-          Edit
+          {t`Edit`}
         </button>
       </div>
       {/* An empty shelf draws nothing at all: no card-shaped holes, and no
@@ -163,6 +167,7 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
 }
 
 function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
+  const { t } = useLingui();
   const [page, setPage] = useState(0);
   /* A card you just picked sorts to the front, which is page one, so a save
      takes you back there. Adjusted during render rather than in an effect so
@@ -210,10 +215,12 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
      1.5px when the number arrives steps the whole grid under it. */
   const header = (
     <div className="flex items-baseline gap-3">
-      <SectionHeading>showcases</SectionHeading>
+      <SectionHeading>{t`showcases`}</SectionHeading>
       <span className="ml-auto shrink-0 text-[11px] text-osu-f1 tabular-nums">
         {result && result.total > 0
-          ? `${result.total.toLocaleString("en-US")} ${result.total === 1 ? "card" : "cards"}`
+          ? (result.total === 1
+            ? t`${result.total.toLocaleString("en-US")} card`
+            : t`${result.total.toLocaleString("en-US")} cards`)
           : "\u00a0"}
       </span>
     </div>
@@ -223,7 +230,7 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
     return (
       <Section>
         {header}
-        <p className="mt-2 text-[12px] text-osu-f1">Could not load the showcases.</p>
+        <p className="mt-2 text-[12px] text-osu-f1">{t`Could not load the showcases.`}</p>
       </Section>
     );
   }
@@ -244,7 +251,7 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
       <Section>
         {header}
         <p className="mt-2 text-[12px] text-osu-f1">
-          Nobody has picked cards yet. Yours would be the first.
+          {t`Nobody has picked cards yet. Yours would be the first.`}
         </p>
       </Section>
     );
@@ -267,7 +274,7 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
             onClick={() => setPage(page - 1)}
             className="cursor-pointer px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
           >
-            Previous
+            {t`Previous`}
           </button>
           <span translate="no" className="text-osu-f1 tabular-nums">
             {page + 1} / {totalPages}
@@ -278,7 +285,7 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
             onClick={() => setPage(page + 1)}
             className="cursor-pointer px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
           >
-            Next
+            {t`Next`}
           </button>
         </div>
       )}

@@ -11,6 +11,9 @@ import { PatternRadar } from "./PatternRadar";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
+import { useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 import {
   PATTERN_COLOR,
   SubPatternChip,
@@ -73,23 +76,24 @@ export interface MapDetailPlayContext {
 }
 
 function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
+  const { t } = useLingui();
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{play.username}&apos;s play</span>
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`${play.username}'s play`}</span>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-lg bg-osu-b4/50 px-4 py-2.5">
-        {play.accuracy != null && <Stat label="Accuracy" value={formatAccuracy(play.accuracy)} />}
-        {play.pp != null && <Stat label="PP" value={formatPP(play.pp)} />}
+        {play.accuracy != null && <Stat label={t`Accuracy`} value={formatAccuracy(play.accuracy)} />}
+        {play.pp != null && <Stat label={t`PP`} value={formatPP(play.pp)} />}
         {play.rateMod && (
           <div className="flex flex-col">
             <ModBadge mod={play.rateMod.acronym} rate={play.rateMod.rate} size={0.7} />
-            <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">Rate</span>
+            <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{t`Rate`}</span>
           </div>
         )}
         {play.playedAt && (
           <div className="flex flex-col" title={formatTimeAgoTooltip(play.playedAt)}>
             <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{formatTimeAgo(play.playedAt)}</span>
             <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">
-              {play.source === "top" ? "profile top play" : "tracked history"}
+              {play.source === "top" ? t`profile top play` : t`tracked history`}
             </span>
           </div>
         )}
@@ -128,9 +132,10 @@ function PendingStat({ label }: { label: string }) {
 // list is rated, so this block is coming for all of them; holding its shape
 // keeps the modal from resizing under the cursor when the numbers arrive.
 function PendingMsdBlock() {
+  const { t } = useLingui();
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">MSD</span>
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`MSD`}</span>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-osu-b4/40 px-3.5 py-2.5">
         <div className="flex min-h-10 items-center gap-4 sm:border-r sm:border-white/10 sm:pr-5">
           <Skeleton className="h-10 w-10 rounded-full" />
@@ -150,6 +155,17 @@ function PendingMsdBlock() {
 // by value, Overall stays the headline.
 const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"];
 
+// Display names for the strip; the keys above stay MinaCalc's own.
+const MSD_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
+  Stream: msg`Stream`,
+  Jumpstream: msg`Jumpstream`,
+  Handstream: msg`Handstream`,
+  Stamina: msg`Stamina`,
+  JackSpeed: msg`Jackspeed`,
+  Chordjack: msg`Chordjack`,
+  Technical: msg`Technical`,
+};
+
 /** The +/- tier suffix of a dan verdict ("2--" -> "--"), which badge art can't show. */
 function danSuffix(label: string): string {
   return label.match(/[+-]+$/)?.[0] ?? "";
@@ -161,6 +177,7 @@ function danSuffix(label: string): string {
 // The skillset names are MinaCalc's 4K taxonomy for every keymode; the
 // ClustersBlock below is where charts speak their own keymode's language.
 function MsdBlock({ entry, msdLn }: { entry: LiveMapSearchEntry; msdLn?: Record<string, number> | null }) {
+  const { t, i18n } = useLingui();
   // The LN-adjusted (tail-aware) values simply ARE the msd shown when the
   // chart has holds: they match what the skill-rating engine credits a play
   // here. Bulk search rows carry them, so the final number shows from first
@@ -185,9 +202,9 @@ function MsdBlock({ entry, msdLn }: { entry: LiveMapSearchEntry; msdLn?: Record<
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">MSD</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`MSD`}</span>
         {entry.vibro && (
-          <span className="text-[9.5px] font-semibold text-[#ffcf70]">vibro chart, estimates unreliable</span>
+          <span className="text-[9.5px] font-semibold text-[#ffcf70]">{t`vibro chart, estimates unreliable`}</span>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-osu-b4/40 px-3.5 py-2.5">
@@ -209,13 +226,13 @@ function MsdBlock({ entry, msdLn }: { entry: LiveMapSearchEntry; msdLn?: Record<
                 ) : null}
               </span>
               <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">
-                {dan.family === "ln" ? "LN dan est." : "dan est."}
+                {dan.family === "ln" ? t`LN dan est.` : t`dan est.`}
               </span>
             </div>
           )}
           <div className="flex flex-col">
             <span className="text-[18px] font-bold tabular-nums leading-none text-osu-l1">{overall.toFixed(2)}</span>
-            <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">Overall</span>
+            <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">{t`Overall`}</span>
           </div>
         </div>
         {/* Even columns keep the values aligned no matter how long the labels run. */}
@@ -230,7 +247,7 @@ function MsdBlock({ entry, msdLn }: { entry: LiveMapSearchEntry; msdLn?: Record<
                 {value.toFixed(2)}
               </span>
               <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/55">
-                {name === "JackSpeed" ? "Jackspeed" : name}
+                {i18n._(MSD_SKILLSET_LABELS[name] ?? name)}
               </span>
             </div>
           ))}
@@ -280,6 +297,7 @@ function groupClusters(clusters: LiveChartAnalysisCluster[]): ClusterGroup[] {
 // difficulty, so the value per pattern is the BPM it runs at. One inline row,
 // importance-ordered with the dominant pattern tinted; no box of its own.
 function ClustersBlock({ analysis, pending }: { analysis: LiveChartAnalysisDetail | null; pending: boolean }) {
+  const { t } = useLingui();
   const groups =
     analysis && analysis.status === "ready" && analysis.clusters.length > 0 ? groupClusters(analysis.clusters) : [];
   // Done loading and genuinely nothing to show: collapse the row entirely.
@@ -292,7 +310,7 @@ function ClustersBlock({ analysis, pending }: { analysis: LiveChartAnalysisDetai
   // let the strip wrap there instead of clipping pattern info.
   return (
     <div className="flex shrink-0 flex-wrap items-baseline gap-x-4 gap-y-1.5 overflow-hidden sm:h-[22px] sm:flex-nowrap">
-      <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Patterns</span>
+      <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`Patterns`}</span>
       {groups.map((group, index) => (
         <span key={group.name} className="flex shrink-0 items-baseline gap-1.5">
           <span
@@ -301,13 +319,13 @@ function ClustersBlock({ analysis, pending }: { analysis: LiveChartAnalysisDetai
             }`}
           >
             {group.bpmMin === group.bpmMax ? `${group.mixed ? "~" : ""}${group.bpmMin}` : `${group.bpmMin}-${group.bpmMax}`}
-            <span className="ml-0.5 text-[9px] font-normal text-osu-f1/55">bpm</span>
+            <span className="ml-0.5 text-[9px] font-normal text-osu-f1/55">{t`bpm`}</span>
           </span>
           <span className="text-[9px] uppercase tracking-wide text-osu-f1/55">{group.name}</span>
         </span>
       ))}
       {pending && groups.length === 0 && (
-        <span className="text-[9px] uppercase tracking-wide text-osu-f1/35">analyzing…</span>
+        <span className="text-[9px] uppercase tracking-wide text-osu-f1/35">{t`analyzing…`}</span>
       )}
     </div>
   );
@@ -328,6 +346,7 @@ export function MapDetailModal({
   // than as zeroes. "missing"/"error": that fetch is done and brought nothing.
   status?: "ready" | "pending" | "missing" | "error";
 }) {
+  const { t } = useLingui();
   // Which diff of the set is in focus; defaults to the entry's representative.
   const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
@@ -441,7 +460,7 @@ export function MapDetailModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  aria-label="Close"
+                  aria-label={t`Close`}
                   className="absolute top-2.5 right-2.5 z-10 grid h-7 w-7 place-items-center rounded-full bg-black/50 text-white/80 hover:bg-black/70 hover:text-white transition-colors cursor-pointer"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="h-4 w-4">
@@ -506,13 +525,13 @@ export function MapDetailModal({
                   <div className="grid grid-cols-4 gap-2 rounded-lg bg-osu-b4/50 px-4 py-2.5">
                     {numbersKnown ? (
                       <>
-                        <Stat label="BPM" value={String(Math.round(active.bpm))} />
-                        <Stat label="Length" value={formatDuration(active.length)} />
-                        <Stat label="Plays" value={formatNumber(active.playCount)} />
-                        <Stat label="LN notes" value={formatNumber(active.lnCount)} />
+                        <Stat label={t`BPM`} value={String(Math.round(active.bpm))} />
+                        <Stat label={t`Length`} value={formatDuration(active.length)} />
+                        <Stat label={t`Plays`} value={formatNumber(active.playCount)} />
+                        <Stat label={t`LN notes`} value={formatNumber(active.lnCount)} />
                       </>
                     ) : (
-                      ["BPM", "Length", "Plays", "LN notes"].map((label) => <PendingStat key={label} label={label} />)
+                      [t`BPM`, t`Length`, t`Plays`, t`LN notes`].map((label) => <PendingStat key={label} label={label} />)
                     )}
                   </div>
                 ) : null}
@@ -526,8 +545,8 @@ export function MapDetailModal({
                 {status === "missing" || status === "error" ? (
                   <span className="text-[11.5px] text-osu-f1">
                     {status === "missing"
-                      ? "This chart is not in the map catalog, so there is nothing to show beyond the play itself."
-                      : "Could not load the map details."}
+                      ? t`This chart is not in the map catalog, so there is nothing to show beyond the play itself.`
+                      : t`Could not load the map details.`}
                   </span>
                 ) : null}
 
@@ -541,7 +560,7 @@ export function MapDetailModal({
                     family identity chips and the BPM cluster readout above. */}
                 {subTags.length > 0 && (
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
-                    <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Tags</span>
+                    <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`Tags`}</span>
                     {subTags.map((pattern) => (
                       <SubPatternChip key={pattern} pattern={pattern} />
                     ))}
@@ -551,7 +570,7 @@ export function MapDetailModal({
                 {/* Pattern profile: radar + the raw numbers */}
                 {!active.msd && patterns.length > 0 && (
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Pattern profile</span>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`Pattern profile`}</span>
                     <div className="grid items-center gap-3 rounded-lg bg-osu-b4/40 p-3 sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)]">
                       <div className="flex justify-center">
                         <PatternRadar patterns={active.patterns} />
@@ -620,14 +639,14 @@ export function MapDetailModal({
                           <path d="m7 10 5 4 5-4" />
                           <path d="M5 20h14" />
                         </svg>
-                        Download .osz
+                        {t`Download .osz`}
                       </a>
                       <a
                         href={osuDirectUrl(entry.beatmapsetId)}
                         className="hidden items-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:inline-flex"
                       >
                         <OsuLogo className="h-3.5 w-3.5" />
-                        Open in osu!
+                        {t`Open in osu!`}
                       </a>
                     </>
                   ) : null}
@@ -648,7 +667,7 @@ export function MapDetailModal({
                       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                     </svg>
-                    {shareCopied ? "Link copied!" : "Share"}
+                    {shareCopied ? t`Link copied!` : t`Share`}
                   </button>
                 </div>
               </div>

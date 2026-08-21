@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import { useMemo, useState } from "react";
 import { track } from "#/lib/analytics";
 import { collectionsCardProperties } from "#/lib/analytics-collections";
@@ -18,6 +19,7 @@ import { useCardThumbnails } from "../useCardThumbnails";
  * A tile is keyed by owner and card together: two collectors showing the same
  * card are two tiles, and they are not the same tile at different sizes. */
 export function ShowcaseWallGrid({ entries }: { entries: LivePackShowcaseWallCard[] }) {
+  const { t } = useLingui();
   const cards = useMemo(() => entries.map((entry) => entry.card as CollectedCard), [entries]);
   const { onThumbnailError } = useCardThumbnails(cards);
   const [spotlight, setSpotlight] = useState<CardSpotlightTarget | null>(null);
@@ -68,7 +70,7 @@ export function ShowcaseWallGrid({ entries }: { entries: LivePackShowcaseWallCar
               }}
               style={liftedId === tileId ? { visibility: "hidden" } : undefined}
               className="w-full cursor-pointer transition-transform duration-[120ms] hover:-translate-y-1"
-              aria-label={`Inspect ${card.username}'s maniacard`}
+              aria-label={t`Inspect ${card.username}'s maniacard`}
             >
               <CollectionCardTile
                 card={card}

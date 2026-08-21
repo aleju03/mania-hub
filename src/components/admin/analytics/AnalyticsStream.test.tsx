@@ -3,7 +3,10 @@
    fed straight from captured events: a visitor with an odd row shape (no
    timestamp, no map details, an event kind we have no phrasing for) must never
    blank the admin dashboard. */
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render as rtlRender, screen, within } from "@testing-library/react";
+import type { ReactElement, ReactNode } from "react";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../../lib/i18n";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ANALYTICS_STREAM_MODE_STORAGE_KEY } from "../../../lib/analytics-monitor";
 import {
@@ -14,6 +17,14 @@ import {
 import { AnalyticsLiveBoard } from "./AnalyticsLiveBoard";
 import { AnalyticsPulse } from "./AnalyticsPulse";
 import { AnalyticsStream } from "./AnalyticsStream";
+
+// The flag chips these cards draw read their copy through Lingui, so renders
+// need the provider; en resolves to the source strings.
+const I18nWrap = ({ children }: { children: ReactNode }) => (
+  <I18nProvider i18n={getI18n("en")}>{children}</I18nProvider>
+);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
+
 
 const NOW = 1_800_000_000_000;
 

@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import {
   cloneElement,
   Fragment,
@@ -294,6 +295,7 @@ export function BBCodePreview({
   highlightOffset?: number | null;
   onSelectSourceSpan?: (span: BBSourceSpan) => void;
 }) {
+  const { t } = useLingui();
   const nodes = useMemo(() => parseBBCode(source, { spans: true }), [source]);
   const target = useMemo(() => {
     if (highlightOffset == null) return null;
@@ -309,7 +311,7 @@ export function BBCodePreview({
   }, [target]);
 
   if (nodes.length === 0) {
-    return <div className="text-osu-f1 text-sm py-6 text-center">Nothing to preview yet.</div>;
+    return <div className="text-osu-f1 text-sm py-6 text-center">{t`Nothing to preview yet.`}</div>;
   }
   return <>{renderNodes(nodes, "bb", { target, targetRef, onSelectSourceSpan })}</>;
 }

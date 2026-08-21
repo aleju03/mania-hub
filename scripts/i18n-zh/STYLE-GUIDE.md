@@ -7,10 +7,11 @@ Voice: a native osu!mania player writing UI copy in Simplified Chinese. Must rea
 - mapper -> 谱师 | keymode / keys -> 键数 (4K/7K stay as-is) | ranked / loved / qualified -> unchanged
 - snipe -> 狙击 | top plays -> 最佳成绩 | tracker -> 追踪器 | farm -> 刷图 (activity) / 刷分 (score push)
 - FC -> 全连 (in "FC choke" contexts keep "FC 断连") | choke -> 断连 | replay -> 回放
-- skin -> 皮肤 | pack / packs (card packs) -> 卡包 | collections (card binder) -> 收藏册
+- skin -> 皮肤 | pack / packs (card packs) -> 卡包 | collections (card binder) -> 收藏册 | album (card album) -> 卡册 (never 专辑)
 - favourites -> 收藏 | play count -> 游玩次数 | accuracy -> 准确率 | leaderboard / rankings -> 排行榜
 - score -> 成绩 (a play) / 分数 (the number) | mods -> Mod (DT/HT/MR stay as-is) | grades (SS/S/A) stay as-is
-- dan -> 段位 | stream -> 交互 | jack -> 叠键 | chordjack -> 和弦叠键 | jumpstream -> 双押交互 | handstream -> 三押交互 | stamina -> 耐力 | technical -> 技术
+- dan -> 段位 | stamina -> 耐力 | technical -> 技术
+- Patterns follow the official zh osu!mania RC: stream -> 切换 | trill -> 交互 (never for streams) | jack -> 叠键 | minijack -> 小叠 | handjack -> 三押叠 | chordjack -> 和弦叠键 | jumpstream -> 双押切 | handstream -> 三押切 | quadstream -> 四押切 | chordstream -> 和弦切 | dumpstream -> 乱切 | bracket -> 衩 | roll -> 楼梯 | jumptrill -> 对拍 | vibro stays Vibro
 - LN / long note -> 长条 (LN may stay LN) | rice -> 单点
 - country/region -> always 国家/地区 (never 国家 alone)
 - goal -> 目标 | streak (higher/lower game) -> 连胜 | card -> 卡片 | shard -> 碎片

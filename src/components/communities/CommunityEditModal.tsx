@@ -1,8 +1,8 @@
+import { useLingui } from "@lingui/react/macro";
 import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import {
   COMMUNITY_PITCH_MAX_LENGTH,
-  communityErrorMessage,
   type CommunitySummary,
 } from "../../lib/communities-shared";
 import { deleteMyCommunity, updateMyCommunity } from "../../lib/communities";
@@ -11,7 +11,7 @@ import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { SelectMenu } from "../ui/SelectMenu";
 import { CommunityStatusNote } from "./CommunityStatusNote";
 import { AccessScopePicker } from "./AccessScopePicker";
-import { useCountrySelectOptions, useLanguageSelectOptions } from "./field-options";
+import { useCommunityErrorMessage, useCountrySelectOptions, useLanguageSelectOptions } from "./field-options";
 import { TagInput } from "./TagInput";
 
 /*
@@ -40,6 +40,8 @@ export function CommunityEditModal({
   onRemoved: (id: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useLingui();
+  const errorMessage = useCommunityErrorMessage();
   const auth = useAuth();
   const countryOptions = useCountrySelectOptions(auth.viewer?.countryCode ?? null);
   const languageOptions = useLanguageSelectOptions();
@@ -72,13 +74,13 @@ export function CommunityEditModal({
         data: { id: community.id, invite, pitch, countryCode, language, tags, accessScopes, accessHidden },
       });
       if (!result.ok) {
-        setError(communityErrorMessage(result.error));
+        setError(errorMessage(result.error));
         return;
       }
       onChanged(result.community);
       onClose();
     } catch {
-      setError("Could not save that. Try again.");
+      setError(t`Could not save that. Try again.`);
     } finally {
       setBusy(false);
     }
@@ -94,9 +96,9 @@ export function CommunityEditModal({
         onClose();
         return;
       }
-      setError("Could not remove that listing.");
+      setError(t`Could not remove that listing.`);
     } catch {
-      setError("Could not remove that listing.");
+      setError(t`Could not remove that listing.`);
     } finally {
       setBusy(false);
     }
@@ -135,7 +137,7 @@ export function CommunityEditModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t`Close`}
             className="shrink-0 text-osu-f1 transition-colors cursor-pointer hover:text-white"
           >
             <X className="h-4 w-4" />
@@ -147,7 +149,7 @@ export function CommunityEditModal({
 
           <label className="block">
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-              What is it for
+              {t`What is it for`}
             </span>
             <textarea
               value={pitch}
@@ -162,7 +164,7 @@ export function CommunityEditModal({
 
           <div>
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-              Tags
+              {t`Tags`}
             </span>
             <TagInput tags={tags} onChange={setTags} />
           </div>
@@ -170,37 +172,37 @@ export function CommunityEditModal({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                Country
+                {t`Country`}
               </span>
               <SelectMenu
                 value={countryCode}
                 options={countryOptions}
                 onChange={setCountryCode}
-                ariaLabel="Country"
+                ariaLabel={t`Country`}
                 block
                 searchable
-                searchPlaceholder="Search countries"
+                searchPlaceholder={t`Search countries`}
               />
             </div>
             <div>
               <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-                Language
+                {t`Language`}
               </span>
               <SelectMenu
                 value={language}
                 options={languageOptions}
                 onChange={setLanguage}
-                ariaLabel="Language"
+                ariaLabel={t`Language`}
                 block
                 searchable
-                searchPlaceholder="Search languages"
+                searchPlaceholder={t`Search languages`}
               />
             </div>
           </div>
 
           <div>
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-              Who can join
+              {t`Who can join`}
             </span>
             <AccessScopePicker
               scopes={accessScopes}
@@ -214,13 +216,13 @@ export function CommunityEditModal({
 
           <label className="block">
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-              New invite link
+              {t`New invite link`}
             </span>
             <input
               type="text"
               value={invite}
               onChange={(event) => setInvite(event.target.value)}
-              placeholder="leave empty to keep the current one"
+              placeholder={t`leave empty to keep the current one`}
               className={FIELD_CLASS}
             />
           </label>
@@ -235,12 +237,12 @@ export function CommunityEditModal({
               className="inline-flex items-center justify-center gap-2 rounded-full bg-osu-pink px-4 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-40"
             >
               {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-              Save
+              {t`Save`}
             </button>
             {/* Removing asks in the row it lives in rather than through a
                 browser dialog, the same two-step shape the skin delete uses. */}
             <div className="ml-auto flex items-center gap-3 text-[12px]">
-              {confirmingRemove && <span className="text-osu-f1">Take it down for good?</span>}
+              {confirmingRemove && <span className="text-osu-f1">{t`Take it down for good?`}</span>}
               <button
                 type="button"
                 onClick={() => (confirmingRemove ? void remove() : setConfirmingRemove(true))}
@@ -249,7 +251,7 @@ export function CommunityEditModal({
                   confirmingRemove ? "text-osu-red hover:brightness-125" : "text-osu-f1 hover:text-osu-red-light"
                 }`}
               >
-                {confirmingRemove ? "remove" : "remove listing"}
+                {confirmingRemove ? t`remove` : t`remove listing`}
               </button>
               {confirmingRemove && (
                 <button
@@ -258,7 +260,7 @@ export function CommunityEditModal({
                   disabled={busy}
                   className="font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-white disabled:opacity-40"
                 >
-                  keep it
+                  {t`keep it`}
                 </button>
               )}
             </div>

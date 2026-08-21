@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import { Link } from "@tanstack/react-router";
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -28,6 +29,7 @@ function Row({
     onRemove: () => void;
   };
 }) {
+  const { t } = useLingui();
   return (
     <li className="flex items-center gap-2 py-1">
       <span className={`w-4 shrink-0 text-right text-[11px] tabular-nums ${isViewer ? "text-white" : "text-osu-f1"}`}>
@@ -67,7 +69,7 @@ function Row({
               onClick={moderation.onRemove}
               className="rounded bg-osu-red px-1.5 py-0.5 text-[10px] font-semibold text-white transition-colors hover:bg-osu-red-light disabled:opacity-50 cursor-pointer"
             >
-              {moderation.busy ? "..." : "remove"}
+              {moderation.busy ? "..." : t`remove`}
             </button>
             <button
               type="button"
@@ -75,15 +77,15 @@ function Row({
               onClick={moderation.onCancel}
               className="text-[10px] text-osu-f1 transition-colors hover:text-white disabled:opacity-50 cursor-pointer"
             >
-              no
+              {t`no`}
             </button>
           </span>
         ) : (
           <button
             type="button"
             onClick={moderation.onArm}
-            title={`Remove ${entry.username}'s streak`}
-            aria-label={`Remove ${entry.username}'s streak`}
+            title={t`Remove ${entry.username}'s streak`}
+            aria-label={t`Remove ${entry.username}'s streak`}
             className="shrink-0 rounded p-0.5 text-osu-f1/50 transition-colors hover:bg-osu-red/20 hover:text-osu-red-light cursor-pointer"
           >
             <Trash2 className="h-3 w-3" />
@@ -143,6 +145,7 @@ export function StreakLeaderboard({
   canModerate?: boolean;
   onRemoved?: () => void;
 }) {
+  const { t } = useLingui();
   const [expanded, setExpanded] = useState(false);
   const [armed, setArmed] = useState<number | null>(null);
   const [removing, setRemoving] = useState<number | null>(null);
@@ -154,7 +157,7 @@ export function StreakLeaderboard({
     setRemoveError(null);
     removeLiveStreakBest({ data: { userId: entry.userId, pool: board.pool } })
       .then(() => onRemoved?.())
-      .catch((error) => setRemoveError(error instanceof Error ? error.message : "Removal failed."))
+      .catch((error) => setRemoveError(error instanceof Error ? error.message : t`Removal failed.`))
       .finally(() => { setRemoving(null); setArmed(null); });
   };
 
@@ -178,20 +181,20 @@ export function StreakLeaderboard({
   return (
     <div className="w-full">
       <div className="flex items-baseline justify-between gap-2 border-b border-osu-b3/40 pb-1.5">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">Longest blitz streaks</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">{t`Longest blitz streaks`}</h2>
         {compact && board && board.entries.length > 3 && (
           <button
             type="button"
             onClick={() => setExpanded((open) => !open)}
             className="text-[11px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
           >
-            {expanded ? "less" : "all 10"}
+            {expanded ? t`less` : t`all 10`}
           </button>
         )}
       </div>
 
       {failed ? (
-        <div className="pt-3 text-[12px] text-osu-f1">The board is not answering right now.</div>
+        <div className="pt-3 text-[12px] text-osu-f1">{t`The board is not answering right now.`}</div>
       ) : !board ? (
         <ul className="pt-2" aria-hidden>
           {[0, 1, 2].map((slot) => (
@@ -201,7 +204,7 @@ export function StreakLeaderboard({
           ))}
         </ul>
       ) : board.entries.length === 0 ? (
-        <div className="pt-3 text-[12px] text-osu-f1">Nobody has finished a blitz run yet.</div>
+        <div className="pt-3 text-[12px] text-osu-f1">{t`Nobody has finished a blitz run yet.`}</div>
       ) : (
         <>
           {/* translate="no" on the rows: usernames and streak counts, redrawn

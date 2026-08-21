@@ -18,14 +18,17 @@ describe("lingui macro on plain .ts", () => {
   it("resolves through per-locale instances with source-string fallback", () => {
     const en = getI18n("en");
     expect(en._(descriptor)).toBe("i18n canary message");
-    // zh-CN has no translation for the canary; the source string must come
+    // New translated locales have no translation for the canary; the source string must come
     // back rather than an id or an empty string.
     const zh = getI18n("zh-CN");
+    const es = getI18n("es");
     expect(zh._(descriptor)).toBe("i18n canary message");
+    expect(es._(descriptor)).toBe("i18n canary message");
   });
 
   it("returns the same shared instance per locale", () => {
     expect(getI18n("en")).toBe(getI18n("en"));
     expect(getI18n("zh-CN")).not.toBe(getI18n("en"));
+    expect(getI18n("es")).not.toBe(getI18n("en"));
   });
 });

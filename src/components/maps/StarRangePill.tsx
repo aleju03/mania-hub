@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { starRatingColor, starSpectrumGradient } from "./SearchCard";
 
@@ -25,6 +26,7 @@ const SPECTRUM_END = 9;
 const TAIL_FRACTION = 0.15;
 
 export function StarRangePill({ lo, hi, min, max, step, onChange, ariaLabel }: Props) {
+  const { t } = useLingui();
   const active = min > 0 || max > 0;
   const [localMin, setLocalMin] = useState(min > 0 ? min : lo);
   const [localMax, setLocalMax] = useState(max > 0 ? max : hi);
@@ -283,7 +285,7 @@ export function StarRangePill({ lo, hi, min, max, step, onChange, ariaLabel }: P
         <div
           role="slider"
           tabIndex={0}
-          aria-label={`${ariaLabel} minimum`}
+          aria-label={t`${ariaLabel} minimum`}
           aria-valuemin={lo}
           aria-valuemax={hi}
           aria-valuenow={localMin}
@@ -297,7 +299,7 @@ export function StarRangePill({ lo, hi, min, max, step, onChange, ariaLabel }: P
         <div
           role="slider"
           tabIndex={0}
-          aria-label={`${ariaLabel} maximum`}
+          aria-label={t`${ariaLabel} maximum`}
           aria-valuemin={lo}
           aria-valuemax={hi}
           aria-valuenow={localMax}
@@ -320,7 +322,7 @@ export function StarRangePill({ lo, hi, min, max, step, onChange, ariaLabel }: P
             else if (e.key === "Escape") setEditing(false);
           }}
           placeholder="3.6-6.7"
-          aria-label={`${ariaLabel} range`}
+          aria-label={t`${ariaLabel} range`}
           className="shrink-0 w-24 bg-transparent text-[11px] font-semibold tabular-nums text-osu-l2 border-b border-osu-b3 outline-none focus:border-osu-pink placeholder:text-osu-f1/30"
         />
       ) : (
@@ -339,7 +341,7 @@ export function StarRangePill({ lo, hi, min, max, step, onChange, ariaLabel }: P
               );
               setEditing(true);
             }}
-            title="Type a range: 3.6-6.7, 5+, <4"
+            title={t`Type a range: 3.6-6.7, 5+, <4`}
             className={`text-left text-[11px] font-semibold tabular-nums cursor-text transition-[filter,color] ${active ? "hover:brightness-125" : "text-osu-f1/55 hover:text-osu-f1"}`}
             style={active ? { color: starRatingColor(Math.min(midStars, 6)) } : undefined}
           >
@@ -349,7 +351,7 @@ export function StarRangePill({ lo, hi, min, max, step, onChange, ariaLabel }: P
             <button
               type="button"
               onClick={() => onChange(0, 0)}
-              title="Clear"
+              title={t`Clear`}
               className="text-[11px] font-semibold text-osu-f1/50 hover:text-osu-pink-light cursor-pointer"
             >
               ✕

@@ -1,3 +1,6 @@
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { I18n, MessageDescriptor } from "@lingui/core";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Activity, ArrowLeft, BarChart3, Clock3, ExternalLink, Gauge, Keyboard, Music2, Star, Target } from "lucide-react";
@@ -129,6 +132,7 @@ export const Route = createFileRoute("/farm-helper/map/$beatmapId")({
 });
 
 function FarmMapDetailPage() {
+  const { t, i18n } = useLingui();
   const { beatmapId: beatmapIdRaw } = Route.useParams();
   const search = Route.useSearch();
   const navigate = useNavigate();
@@ -147,7 +151,7 @@ function FarmMapDetailPage() {
   useEffect(() => {
     if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) {
       setLoading(false);
-      setError("Invalid beatmap id.");
+      setError(t`Invalid beatmap id.`);
       return;
     }
 
@@ -163,7 +167,7 @@ function FarmMapDetailPage() {
         setSelectedBeatmapId(selected?.id ?? beatmapId);
       })
       .catch(() => {
-        if (!cancelled) setError("Couldn't load this beatmapset.");
+        if (!cancelled) setError(t`Couldn't load this beatmapset.`);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -207,8 +211,8 @@ function FarmMapDetailPage() {
   }, [selectedBeatmap]);
 
   const metrics = useMemo(
-    () => buildMapMetrics(selectedBeatmap, analysisState.status === "ready" ? analysisState.entry : null, farmRate),
-    [analysisState, farmRate, selectedBeatmap],
+    () => buildMapMetrics(selectedBeatmap, analysisState.status === "ready" ? analysisState.entry : null, i18n, farmRate),
+    [analysisState, farmRate, i18n, selectedBeatmap],
   );
   const radarReady = analysisState.status === "ready" && metrics.radar.some((axis) => axis.value > 0);
   const osuUrl = selectedBeatmap?.url ?? (beatmapset ? `https://osu.ppy.sh/beatmapsets/${beatmapset.id}#mania/${selectedBeatmapId ?? beatmapId}` : `https://osu.ppy.sh/beatmaps/${beatmapId}`);
@@ -224,7 +228,7 @@ function FarmMapDetailPage() {
     <div className="relative flex min-h-screen flex-col bg-osu-b5">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title="Farm map detail"
+        title={t`Farm map detail`}
         right={
           <button
             type="button"
@@ -238,7 +242,7 @@ function FarmMapDetailPage() {
             className="inline-flex items-center gap-1.5 rounded-lg bg-osu-b4 px-2.5 py-1.5 text-[11px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            <span>farm helper</span>
+            <span>{t`farm helper`}</span>
           </button>
         }
       />
@@ -248,7 +252,7 @@ function FarmMapDetailPage() {
           <DetailSkeleton farmContext={farmContext} farmRate={farmRate} />
         ) : error ? (
           <div className="mx-auto max-w-md py-16 text-center">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">map unavailable</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">{t`map unavailable`}</div>
             <h2 className="mt-1 text-lg font-bold text-osu-c1">{error}</h2>
           </div>
         ) : beatmapset && selectedBeatmap ? (
@@ -278,14 +282,14 @@ function FarmMapDetailPage() {
                     {beatmapset.title}
                   </h1>
                   <div className="mt-1 truncate text-sm font-medium text-osu-f1">
-                    {beatmapset.artist} / mapped by {beatmapset.creator}
+                    <Trans>{beatmapset.artist} / mapped by {beatmapset.creator}</Trans>
                   </div>
                   <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-osu-f1">
                     <span className="truncate font-semibold text-osu-l2">[{selectedBeatmap.version}]</span>
                     {/* Stars stay unscaled like the board; the (NM) tag ties them
                         to 1.0x while BPM/length next door are rate-adjusted. */}
-                    <span className="tabular-nums text-osu-yellow" title={farmRate !== 1 ? "star rating shown for 1.0x" : undefined}>
-                      {selectedBeatmap.difficultyRating.toFixed(2)} stars
+                    <span className="tabular-nums text-osu-yellow" title={farmRate !== 1 ? t`star rating shown for 1.0x` : undefined}>
+                      <Trans>{selectedBeatmap.difficultyRating.toFixed(2)} stars</Trans>
                       {farmRate !== 1 ? <span className="ml-1 text-[10px] font-semibold text-osu-f1">(NM)</span> : null}
                     </span>
                     <span>{Math.round(selectedBeatmap.cs)}K</span>
@@ -320,14 +324,14 @@ function FarmMapDetailPage() {
                     className="inline-flex items-center justify-center gap-2 rounded-md bg-osu-pink px-3 py-2 text-[12px] font-bold text-white transition-colors hover:bg-osu-pink-light"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    <span>view on osu! web</span>
+                    <span>{t`view on osu! web`}</span>
                   </a>
                   <a
                     href={`osu://dl/${beatmapset.id}`}
                     className="hidden items-center justify-center gap-2 rounded-md bg-osu-b6/80 px-3 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white lg:inline-flex"
                   >
                     <Music2 className="h-3.5 w-3.5" />
-                    <span>open in osu! client</span>
+                    <span>{t`open in osu! client`}</span>
                   </a>
                 </div>
               </div>
@@ -346,8 +350,8 @@ function FarmMapDetailPage() {
                 <section className="rounded-lg border border-osu-b3/25 bg-osu-b4 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">analysis</div>
-                      <h2 className="mt-0.5 text-base font-bold text-osu-c1">Map shape</h2>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">{t`analysis`}</div>
+                      <h2 className="mt-0.5 text-base font-bold text-osu-c1">{t`Map shape`}</h2>
                     </div>
                     <BarChart3 className="h-4 w-4 text-osu-pink" />
                   </div>
@@ -362,22 +366,22 @@ function FarmMapDetailPage() {
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <MetricTile icon={<Keyboard className="h-3.5 w-3.5" />} label="objects" value={formatNumber(metrics.objects)} />
-                      <MetricTile icon={<Activity className="h-3.5 w-3.5" />} label="avg nps" value={metrics.avgNps.toFixed(1)} />
-                      <MetricTile icon={<Target className="h-3.5 w-3.5" />} label="OD" value={metrics.od.toFixed(1)} />
-                      <MetricTile icon={<Clock3 className="h-3.5 w-3.5" />} label="long notes" value={`${Math.round(metrics.lnFraction * 100)}%`} />
+                      <MetricTile icon={<Keyboard className="h-3.5 w-3.5" />} label={t`objects`} value={formatNumber(metrics.objects)} />
+                      <MetricTile icon={<Activity className="h-3.5 w-3.5" />} label={t`avg nps`} value={metrics.avgNps.toFixed(1)} />
+                      <MetricTile icon={<Target className="h-3.5 w-3.5" />} label={t`OD`} value={metrics.od.toFixed(1)} />
+                      <MetricTile icon={<Clock3 className="h-3.5 w-3.5" />} label={t`long notes`} value={`${Math.round(metrics.lnFraction * 100)}%`} />
                       {metrics.msdOverall != null ? (
                         <MetricTile
                           icon={<Gauge className="h-3.5 w-3.5" />}
-                          label="msd"
+                          label={t`msd`}
                           value={metrics.msdOverall.toFixed(2)}
-                          detail={metrics.vibro ? "vibro chart, estimate unreliable" : metrics.msdTopSkillset}
+                          detail={metrics.vibro ? t`vibro chart, estimate unreliable` : metrics.msdTopSkillset}
                         />
                       ) : null}
                       {metrics.dan ? (
                         <MetricTile
                           icon={<Star className="h-3.5 w-3.5" />}
-                          label={metrics.dan.family === "ln" ? "LN dan est." : "dan est."}
+                          label={metrics.dan.family === "ln" ? t`LN dan est.` : t`dan est.`}
                           value={
                             metrics.danImage ? (
                               // The logo IS the number; the +/- tier suffix rides top-right like an exponent.
@@ -409,30 +413,30 @@ function FarmMapDetailPage() {
                         // and lead with the peer play share instead.
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">farm verdict</div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">{t`farm verdict`}</div>
                             <div className="mt-1 text-2xl font-black tabular-nums text-osu-c1">
-                              {farmContext.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : "unknown"}
+                              {farmContext.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : t`unknown`}
                             </div>
-                            <div className="text-[10px] font-semibold text-osu-f1">of players near you farm this</div>
+                            <div className="text-[10px] font-semibold text-osu-f1">{t`of players near you farm this`}</div>
                           </div>
                           <div className="grid min-w-[150px] gap-1.5">
-                            <CompactRow label="your score" value={subjectScoreLabel(farmContext)} />
+                            <CompactRow label={t`your score`} value={subjectScoreLabel(farmContext, i18n)} />
                           </div>
                         </div>
                       ) : (
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">farm verdict</div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">{t`farm verdict`}</div>
                             <div className="mt-1 text-2xl font-black tabular-nums text-osu-pink">
                               {farmContext?.gain != null
                                 ? `+${formatPp(farmContext.gain)}${!farmContext.gainUnit || farmContext.gainUnit === "pp" ? "pp" : ` ${farmContext.gainUnit}`}`
-                                : "unknown"}
+                                : t`unknown`}
                             </div>
                           </div>
                           <div className="grid min-w-[150px] gap-1.5">
-                            <CompactRow label="your score" value={subjectScoreLabel(farmContext)} />
-                            <CompactRow label="target" value={farmContext?.benchmark != null ? `${formatPp(farmContext.benchmark)}pp` : "unknown"} />
-                            <CompactRow label="peers farming" value={farmContext?.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : "unknown"} />
+                            <CompactRow label={t`your score`} value={subjectScoreLabel(farmContext, i18n)} />
+                            <CompactRow label={t`target`} value={farmContext?.benchmark != null ? `${formatPp(farmContext.benchmark)}pp` : t`unknown`} />
+                            <CompactRow label={t`peers farming`} value={farmContext?.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : t`unknown`} />
                           </div>
                         </div>
                       )}
@@ -442,7 +446,7 @@ function FarmMapDetailPage() {
                   {showFarmersPanel && farmContext?.userKey ? (
                     <section className="flex max-h-[640px] min-h-[360px] flex-col overflow-hidden rounded-lg border border-osu-b3/25 bg-osu-b4">
                       <div className="shrink-0 border-b border-osu-b3/20 p-3">
-                        <h2 className="text-base font-bold text-osu-c1">Who farms this</h2>
+                        <h2 className="text-base font-bold text-osu-c1">{t`Who farms this`}</h2>
                       </div>
                       <FarmersList
                         userKey={farmContext.userKey}
@@ -517,20 +521,20 @@ function normalizeBeatmap(beatmap: OsuBeatmap): DetailBeatmap {
 // The 8-family pattern mix stored in the backend catalog, in the same order
 // the /maps PatternRadar uses. Values are already normalized to the chart's
 // dominant family (max = 1).
-const RADAR_AXES: Array<{ id: string; label: string }> = [
-  { id: "jack", label: "Jack" },
-  { id: "stream", label: "Stream" },
-  { id: "jumpstream", label: "Jumpstream" },
-  { id: "handstream", label: "Handstream" },
-  { id: "stamina", label: "Stamina" },
-  { id: "chordjack", label: "Chordjack" },
-  { id: "tech", label: "Tech" },
-  { id: "ln", label: "LN" },
+const RADAR_AXES: Array<{ id: string; label: MessageDescriptor }> = [
+  { id: "jack", label: msg`Jack` },
+  { id: "stream", label: msg`Stream` },
+  { id: "jumpstream", label: msg`Jumpstream` },
+  { id: "handstream", label: msg`Handstream` },
+  { id: "stamina", label: msg`Stamina` },
+  { id: "chordjack", label: msg`Chordjack` },
+  { id: "tech", label: msg`Tech` },
+  { id: "ln", label: msg`LN` },
 ];
 
 const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"];
 
-function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEntry | null, rate = 1) {
+function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEntry | null, i18n: I18n, rate = 1) {
   const normalizedRate = Math.max(0.1, rate);
   const lengthSec = Math.max(1, (selected?.totalLength ?? 0) / normalizedRate);
   const objects = (selected?.countCircles ?? 0) + (selected?.countSliders ?? 0);
@@ -551,7 +555,7 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
         .map((name) => ({ name, value: Number(msd[name] ?? 0) }))
         .filter(({ value }) => value >= 1)
         .sort((a, b) => b.value - a.value)
-        .map(({ name }) => (name === "JackSpeed" ? "Jackspeed" : name))[0] ?? null
+        .map(({ name }) => (name === "JackSpeed" ? i18n._(msg`Jackspeed`) : name))[0] ?? null
     : null;
 
   return {
@@ -568,7 +572,7 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
       ? getDanImageSrc(danBareLabel(dan.label), dan.family === "ln" ? "ln" : undefined, entry?.keyCount ?? 4)
       : null,
     radar: entry
-      ? RADAR_AXES.map((axis) => ({ label: axis.label, value: clamp01(entry.patterns[axis.id] ?? 0) }))
+      ? RADAR_AXES.map((axis) => ({ label: i18n._(axis.label), value: clamp01(entry.patterns[axis.id] ?? 0) }))
       : [],
   };
 }
@@ -699,10 +703,11 @@ function AnalysisLoadingState() {
 }
 
 function AnalysisUnavailableState() {
+  const { t } = useLingui();
   return (
     <div className="mt-4 rounded-md border border-osu-b3/20 bg-osu-b5/35 px-3 py-10 text-center">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">analysis unavailable</div>
-      <div className="mt-1 text-[12px] font-semibold text-osu-l2">This chart isn't analyzed yet.</div>
+      <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">{t`analysis unavailable`}</div>
+      <div className="mt-1 text-[12px] font-semibold text-osu-l2">{t`This chart isn't analyzed yet.`}</div>
     </div>
   );
 }
@@ -738,11 +743,12 @@ function DifficultyStrip({
   speedRateBeatmapId: number;
   onSelect: (beatmapId: number) => void;
 }) {
+  const { t } = useLingui();
   return (
     <div className="mt-4 border-t border-osu-b3/20 pt-3">
       <div className="mb-2 flex items-center justify-between gap-3 px-1">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">difficulty</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">{t`difficulty`}</div>
         </div>
         <Star className="h-4 w-4 text-osu-yellow" />
       </div>
@@ -835,17 +841,19 @@ function ContextBadge({ children }: { children: ReactNode }) {
 // A10 survival: the farm helper judged this lane a risky clear for this
 // player, so label it honestly instead of selling it as a farm.
 function ClearRiskBadge() {
+  const { t } = useLingui();
   return (
     <span
       className="inline-flex rounded-full border border-osu-orange/40 bg-osu-orange/10 px-2.5 py-1 text-[10px] font-bold uppercase leading-none text-osu-orange"
-      title="Finishing this looks risky for you; treat it as a clear attempt, not a farm"
+      title={t`Finishing this looks risky for you; treat it as a clear attempt, not a farm`}
     >
-      clear attempt
+      {t`clear attempt`}
     </span>
   );
 }
 
 function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext | null; farmRate: number }) {
+  const { t } = useLingui();
   const hasKnownMap = Boolean(farmContext?.title);
   // Same gates as the loaded page: verdict skeleton only when verdict numbers
   // exist, farmers skeleton only when a user is attached. Anything looser
@@ -885,13 +893,13 @@ function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext
                 {farmContext?.title}
               </h1>
               <div className="mt-1 truncate text-sm font-medium text-osu-f1">
-                {farmContext?.artist ?? "unknown artist"} / mapped by {farmContext?.creator ?? "unknown"}
+                <Trans>{farmContext?.artist ?? t`unknown artist`} / mapped by {farmContext?.creator ?? t`unknown`}</Trans>
               </div>
               <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-osu-f1">
                 {farmContext?.version ? <span className="truncate font-semibold text-osu-l2">[{farmContext.version}]</span> : null}
                 {farmContext?.stars != null ? (
-                  <span className="tabular-nums text-osu-yellow" title={farmRate !== 1 ? "star rating shown for 1.0x" : undefined}>
-                    {farmContext.stars.toFixed(2)} stars
+                  <span className="tabular-nums text-osu-yellow" title={farmRate !== 1 ? t`star rating shown for 1.0x` : undefined}>
+                    <Trans>{farmContext.stars.toFixed(2)} stars</Trans>
                     {farmRate !== 1 ? <span className="ml-1 text-[10px] font-semibold text-osu-f1">(NM)</span> : null}
                   </span>
                 ) : null}
@@ -913,7 +921,7 @@ function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext
                   className="inline-flex items-center justify-center gap-2 rounded-md bg-osu-pink px-3 py-2 text-[12px] font-bold text-white transition-colors hover:bg-osu-pink-light"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
-                  <span>view on osu! web</span>
+                  <span>{t`view on osu! web`}</span>
                 </a>
               ) : (
                 <Skeleton className="h-9 w-full rounded-md" />
@@ -924,7 +932,7 @@ function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext
                   className="hidden items-center justify-center gap-2 rounded-md bg-osu-b6/80 px-3 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white lg:inline-flex"
                 >
                   <Music2 className="h-3.5 w-3.5" />
-                  <span>open in osu! client</span>
+                  <span>{t`open in osu! client`}</span>
                 </a>
               ) : null}
             </div>
@@ -1019,12 +1027,12 @@ function clamp01(value: number): number {
 // The board only sees the player's top plays, so a lane with no score of
 // theirs means "not in your top plays", never "never played" - and when their
 // pb on the map sits under other mods, name it instead of reporting a blank.
-function subjectScoreLabel(context: FarmMapContext | null): string {
+function subjectScoreLabel(context: FarmMapContext | null, i18n: I18n): string {
   if (context?.subjectPp != null) return `${formatPp(context.subjectPp)}pp`;
   if (context?.subjectOtherLanePp != null) {
     return `${formatPp(context.subjectOtherLanePp)}pp ${SPEED_LABELS[context.subjectOtherLaneSpeed ?? "normal"]}`;
   }
-  return "not in top plays";
+  return i18n._(msg`not in top plays`);
 }
 
 function readFarmMapContext(beatmapId: number, search: FarmMapSearch): FarmMapContext | null {

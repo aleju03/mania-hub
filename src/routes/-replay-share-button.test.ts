@@ -20,9 +20,9 @@ describe("replay share button", () => {
       "utf8",
     );
 
-    expect(controlsSource).toContain('aria-label="Share this replay"');
+    expect(controlsSource).toContain("aria-label={t`Share this replay`}");
     expect(controlsSource).toContain("withReplayShareTime(replayShareUrl, shareAtTimestamp ? sharePlayheadWallMs / 1000 : null)");
-    expect(controlsSource).toContain("Start at {formatReplayMs(sharePlayheadWallMs)}");
+    expect(controlsSource).toContain("<Trans>Start at {formatReplayMs(sharePlayheadWallMs)}</Trans>");
     expect(controlsSource).toContain("navigator.share?.({ url: shareLink");
     // Desktop Chrome supports navigator.share and answers it with a QR-code
     // window, so the sheet stays behind a touch pointer.

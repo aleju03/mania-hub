@@ -1,3 +1,6 @@
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
+
 export const REPLAY_OVERLAY_SETTINGS_STORAGE_KEY = "mania-hub-replay-overlays";
 export const REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT = "mania-hub:replay-overlay-settings-change";
 
@@ -16,15 +19,15 @@ export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "p
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
 // Shared by the settings modal and the stage's right-click overlay menu.
-export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, string> = {
-  keypresses: "Keypresses",
-  kps: "KPS counter",
-  misses: "L/R miss counter",
-  accuracy: "Accuracy",
-  pp: "PP counter",
-  judgements: "Judgements",
-  progress: "Progress pie",
-  leaderboard: "Leaderboard",
+export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, MessageDescriptor> = {
+  keypresses: msg`Keypresses`,
+  kps: msg`KPS counter`,
+  misses: msg`L/R miss counter`,
+  accuracy: msg`Accuracy`,
+  pp: msg`PP counter`,
+  judgements: msg`Judgements`,
+  progress: msg`Progress pie`,
+  leaderboard: msg`Leaderboard`,
 };
 
 export interface ReplayOverlayPlacement {
