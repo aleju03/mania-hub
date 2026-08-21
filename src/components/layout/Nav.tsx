@@ -1186,7 +1186,7 @@ export function Nav() {
                   }`}
                 >
                   <Settings className="h-5 w-5" strokeWidth={2.1} />
-                  settings
+                  {t`Settings`}
                 </button>
               </div>
 
