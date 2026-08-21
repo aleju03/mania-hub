@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { useLingui } from "@lingui/react/macro";
 import { playGhostActionSfx, playGhostSpeechSfx, preloadGhostSfx } from "#/lib/ghost-sfx";
 import {
   findGhostAction,
@@ -52,6 +53,7 @@ export interface GhostSpriteProps {
 }
 
 export function GhostSprite({ visualRef, character, speech, action, scale, onSay }: GhostSpriteProps) {
+  const { t } = useLingui();
   const containerRef = useRef<HTMLDivElement>(null);
   const spriteRef = useRef<HTMLDivElement>(null);
   const hitboxRef = useRef<HTMLButtonElement>(null);
@@ -290,7 +292,7 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
             type="button"
             disabled={!onSay}
             tabIndex={onSay ? 0 : -1}
-            aria-label={`Say something to ${drawn.name}`}
+            aria-label={t`Say something to ${drawn.name}`}
             aria-hidden={onSay ? undefined : true}
             onClick={onSay ? () => setAnswering((open) => !open) : undefined}
             className={`absolute appearance-none border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 ${
@@ -393,6 +395,7 @@ export function GhostBubbleBox({ children }: { children: ReactNode }) {
    black-and-white box his own lines use: it is a whisper to whoever is driving,
    not a chat feature. */
 function GhostReplyBox({ name, onSend, onClose }: { name: string; onSend: (text: string) => void; onClose: () => void }) {
+  const { t } = useLingui();
   const [text, setText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -417,8 +420,8 @@ function GhostReplyBox({ name, onSend, onClose }: { name: string; onSend: (text:
             if (!text.trim()) onClose();
           }}
           maxLength={GHOST_REPLY_MAX_LENGTH}
-          placeholder="say something back"
-          aria-label={`Say something to ${name}`}
+          placeholder={t`say something back`}
+          aria-label={t`Say something to ${name}`}
           className="w-[min(240px,55vw)] bg-transparent text-[13px] font-semibold text-white outline-none placeholder:text-white/40"
         />
         <button

@@ -5,7 +5,8 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
 import { CLIENT_CACHE_TTL } from "../lib/cache";
-import { getCountryName, isGlobalScope } from "../lib/country";
+import { displayCountryName, isGlobalScope } from "../lib/country";
+import { useLocale } from "../lib/locale-context";
 import { isRegionScope } from "../lib/regions";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatTimeAgoTooltip, formatPpGain } from "../lib/format";
 import { getBeatmapUrl, getBeatmapKeymodeLabel, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
@@ -88,7 +89,7 @@ function hasPopoffsInRange(popoffs: PopOff[], range: TimeRange): boolean {
 export const Route = createFileRoute("/top-plays")({
   head: ({ match }) => {
     const country = match.search.country;
-    const countryName = country ? getCountryName(country) : null;
+    const countryName = country ? displayCountryName(country, match.context.locale) : null;
     const i18n = getI18n(match.context.locale);
     return pageSeo({
       title: countryName ? i18n._(msg`Top mania plays in ${countryName}`) : i18n._(msg`Top osu!mania plays`),
@@ -174,7 +175,8 @@ function PopOffsPage() {
   const currentLiveSnapshotKeyRef = useRef<string | null>(null);
   const seenPopoffKeysRef = useRef<Set<string> | null>(null);
   const prevPopoffListKeyRef = useRef<string | null>(null);
-  const countryName = getCountryName(selectedCountry);
+  const locale = useLocale();
+  const countryName = displayCountryName(selectedCountry, locale);
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   // Multi-country scopes (Global, regions) show each row's country flag.
   const selectedIsMultiCountry = selectedIsGlobal || isRegionScope(selectedCountry);

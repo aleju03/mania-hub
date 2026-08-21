@@ -3,9 +3,10 @@ import {
   UNKNOWN_FLAG_URL,
   getCountryFlagLargeUrl,
   getCountryFlagUrl,
-  getCountryName,
+  displayCountryName,
   isGlobalScope,
 } from "../../lib/country";
+import { useLocale } from "../../lib/locale-context";
 import { isRegionScope } from "../../lib/regions";
 import { RegionIcon } from "./RegionIcon";
 import { useLingui } from "@lingui/react/macro";
@@ -49,8 +50,9 @@ export function CountryFlag({
   className?: string;
 }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const normalized = code?.trim().toUpperCase() || "XX";
-  const title = normalized === "XX" ? t`Unknown country` : getCountryName(normalized);
+  const title = normalized === "XX" ? t`Unknown country` : displayCountryName(normalized, locale);
   const labelProps = decorative ? { alt: "", title: undefined } : { alt: title, title };
   const outerClassName = `inline-flex shrink-0 items-center justify-center overflow-hidden align-middle ${sizeClass[size]} ${muted ? "opacity-50 saturate-75" : ""} ${className}`;
 

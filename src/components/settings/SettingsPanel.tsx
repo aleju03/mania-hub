@@ -237,7 +237,8 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   };
 
   // One button in one place: the confirm lives inside it, so nothing around it
-  // moves and the width is fixed for the longer of the two labels.
+  // moves. Both labels render stacked in the same cell (the inactive one
+  // invisible), so the width always fits the longer of the two in every locale.
   const resetButton = (
     <button
       type="button"
@@ -249,7 +250,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
         resetReplaySettings();
         setConfirmingReset(false);
       }}
-      className={`group inline-flex h-8 w-[104px] cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-[11px] font-bold transition-colors ${
+      className={`group inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-[11px] font-bold transition-colors ${
         confirmingReset
           ? "border-osu-red/60 bg-osu-red/15 text-osu-red-light hover:bg-osu-red/30"
           : "border-osu-b3/60 bg-osu-b5/70 text-osu-f1 hover:border-osu-red/60 hover:bg-osu-red/10 hover:text-osu-red"
@@ -258,7 +259,12 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
       <RotateCcw
         className={`h-3 w-3 duration-300 ${confirmingReset ? "" : "transition-transform group-hover:-rotate-180"}`}
       />
-      {confirmingReset ? t`Sure?` : t`Reset all`}
+      <span className="grid">
+        <span aria-hidden="true" className="invisible col-start-1 row-start-1">
+          {confirmingReset ? t`Reset all` : t`Sure?`}
+        </span>
+        <span className="col-start-1 row-start-1 whitespace-nowrap">{confirmingReset ? t`Sure?` : t`Reset all`}</span>
+      </span>
     </button>
   );
 

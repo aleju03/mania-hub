@@ -12,7 +12,8 @@ import { CommunitySubmitModal } from "../components/communities/CommunitySubmitM
 import { Pagination } from "../components/ui/Pagination";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { useAuth } from "../lib/auth-context";
-import { getCountryName } from "../lib/country";
+import { displayCountryName } from "../lib/country";
+import { useLocale } from "../lib/locale-context";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { DiscordLogo, DISCORD_BLURPLE } from "../components/ui/DiscordLogo";
 import { OsuLogo } from "../components/ui/OsuLogo";
@@ -264,6 +265,7 @@ function CommunityCardSkeleton() {
 
 function CommunitiesPage() {
   const { t } = useLingui();
+  const locale = useLocale();
   const search = Route.useSearch();
   const { q = "", page = 0, sort = "members", country = "", lang = "", tag = "", discord = "" } = search;
   const navigate = useNavigate();
@@ -519,7 +521,7 @@ function CommunitiesPage() {
                         {facet.value !== COMMUNITY_INTERNATIONAL && (
                           <CountryFlag code={facet.value} size="sm" decorative />
                         )}
-                        {facet.value === COMMUNITY_INTERNATIONAL ? t`international` : getCountryName(facet.value)}
+                        {facet.value === COMMUNITY_INTERNATIONAL ? t`international` : displayCountryName(facet.value, locale)}
                       </span>
                     )}
                   </FacetRow>
@@ -581,7 +583,7 @@ function CommunitiesPage() {
 
           <div className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 sm:px-5">
             {loading && !data ? (
-              <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {Array.from({ length: 6 }, (_, index) => (
                   <CommunityCardSkeleton key={index} />
                 ))}
@@ -606,14 +608,14 @@ function CommunitiesPage() {
                 <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
                   {filtered
                     ? country
-                      ? t`Nothing listed for ${country === COMMUNITY_INTERNATIONAL ? t`international servers` : getCountryName(country)} yet.`
+                      ? t`Nothing listed for ${country === COMMUNITY_INTERNATIONAL ? t`international servers` : displayCountryName(country, locale)} yet.`
                       : t`Try a wider filter.`
                     : t`Run an osu!mania server? Post it and it shows up here once it is approved.`}
                 </p>
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {communities.map((community) => (
                     <CommunityCard
                       key={community.id}

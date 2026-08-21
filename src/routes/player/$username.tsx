@@ -79,7 +79,8 @@ import {
 } from "../../lib/player-shell-cache";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
-import { getCountryName, isSupportedCountryCode } from "../../lib/country";
+import { displayCountryName, isSupportedCountryCode } from "../../lib/country";
+import { useLocale } from "../../lib/locale-context";
 import { preservePlayerCountryFlagState } from "../../lib/player-profile-navigation";
 
 // The BBCode editor (toolbar + parser + preview) only loads when someone
@@ -1102,6 +1103,7 @@ export function PlayerProfilePage({
   const [tabState, setTab] = useState<PlayerTab>(() => normalizePlayerTab(initialTab));
   const auth = useAuth();
   const { t, i18n } = useLingui();
+  const locale = useLocale();
   const tab = tabState;
   const playerTabs = PLAYER_TABS;
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
@@ -1662,7 +1664,7 @@ export function PlayerProfilePage({
   const profileCountryCode = isSupportedCountryCode(user.country_code)
     ? user.country_code.trim().toUpperCase()
     : null;
-  const profileCountryName = profileCountryCode ? getCountryName(profileCountryCode) : null;
+  const profileCountryName = profileCountryCode ? displayCountryName(profileCountryCode, locale) : null;
   // showCountryFlag rides on history state, which SSR can't see but the
   // browser restores on reload — render the flag only once hydration is done
   // so the server and first client render agree (React #418 otherwise).

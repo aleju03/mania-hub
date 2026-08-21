@@ -33,11 +33,11 @@ msgstr " o "
 
 #: src/components/packs/CardSpotlight.tsx
 msgid ", {ordinalText} of {totalText} to pull it"
-msgstr ", {ordinalText} de {totalText} para sacarla"
+msgstr ", {ordinalText} de {totalText} en sacar esta carta"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid ", {ordinalText} to pull it"
-msgstr ", {ordinalText} para sacarla"
+msgstr ", {ordinalText} en sacar esta carta"
 
 #. placeholder {0}: formatNumber(collector.firstFinds)
 #: src/components/packs/collections/CollectorShelf.tsx
@@ -177,6 +177,11 @@ msgstr "{0, plural, one {# snipe} other {# snipes}}"
 msgid "{0, plural, one {+# more collector} other {+# more collectors}}"
 msgstr "{0, plural, one {+# coleccionista más} other {+# coleccionistas más}}"
 
+#. placeholder {0}: streakShardValue(streak)
+#: src/components/packs/StreakGame.tsx
+msgid "{0, plural, one {Claim # shard} other {Claim # shards}}"
+msgstr "{0, plural, one {Reclamar # fragmento} other {Reclamar # fragmentos}}"
+
 #. placeholder {0}: report.owners
 #: src/components/packs/CardCollectors.tsx
 msgid "{0, plural, one {collector} other {collectors}}"
@@ -288,6 +293,8 @@ msgid "{0} cards"
 msgstr "{0} cartas"
 
 #. placeholder {0}: 0
+#. placeholder {0}: charCount.toLocaleString("en-US")
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "{0} characters"
 msgstr "{0} caracteres"
@@ -460,7 +467,7 @@ msgstr "{0} de {1} plays analizadas"
 #. placeholder {1}: mint.mintedTotal.toLocaleString("en-US")
 #: src/components/packs/PackSummary.tsx
 msgid "{0} of {1} to pull this"
-msgstr "{0} de {1} para sacar esta"
+msgstr "{0} de {1} en sacar esta carta"
 
 #. placeholder {0}: maps.length
 #: src/routes/player/$username.tsx
@@ -589,7 +596,7 @@ msgstr "{0} a {1}"
 #. placeholder {0}: formatOrdinal(mint.serial, locale)
 #: src/components/packs/PackSummary.tsx
 msgid "{0} to pull this"
-msgstr "{0} para sacar esta"
+msgstr "{0} en sacar esta carta"
 
 #. placeholder {0}: formatNumber(globalRankingsTotal)
 #: src/routes/rankings.tsx
@@ -691,7 +698,7 @@ msgstr "Solo {0}K"
 #. placeholder {0}: mode.keyCount
 #: src/components/player/SkillBreakdown.tsx
 msgid "{0}K skill rating"
-msgstr "Rating de habilidad {0}K"
+msgstr "Rating de skill {0}K"
 
 #. placeholder {0}: Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)
 #: src/routes/player/$username.tsx
@@ -846,6 +853,10 @@ msgstr "{goatMissing, plural, one {más # carta GOAT sin conseguir} other {más 
 msgid "{have} / {want} plays"
 msgstr "{have} / {want} plays"
 
+#: src/routes/farm-helper.tsx
+msgid "{hiddenByMarks, plural, one {# map hidden by your marks} other {# maps hidden by your marks}}"
+msgstr "{hiddenByMarks, plural, one {# mapa oculto por tus marcas} other {# mapas ocultos por tus marcas}}"
+
 #: src/routes/player/$username.tsx
 msgid "{hiddenCount, plural, one {Show # more map} other {Show # more maps}}"
 msgstr "{hiddenCount, plural, one {Mostrar # mapa más} other {Mostrar # mapas más}}"
@@ -892,6 +903,10 @@ msgstr "Miniatura {keys}K"
 msgid "{label} dan"
 msgstr "{label} dan"
 
+#: src/components/player/SkillPlaysModal.tsx
+msgid "{label} rating"
+msgstr "rating de {label}"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "{label}: {share} of {population} tracked {keyCount}K mains"
 msgstr "{label}: {share} de {population} mains {keyCount}K trackeados"
@@ -903,6 +918,10 @@ msgstr "quedan {left} a {at}pp o más"
 #: src/components/me/GoalsPanel.tsx
 msgid "{left}% to go"
 msgstr "falta {left}%"
+
+#: src/routes/farm-helper.tsx
+msgid "{mapCount, plural, one {across # map} other {across # maps}}"
+msgstr "{mapCount, plural, one {en # mapa} other {en # mapas}}"
 
 #: src/routes/maps.tsx
 msgid "{message} ({percent}%)"
@@ -1044,6 +1063,10 @@ msgstr "El {pct}% de los jugadores cerca de tu pp farmea esto. Ya tienes {yourPp
 msgid "{pending} still analyzing"
 msgstr "{pending} aún en análisis"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "{pendingImageCount, plural, one {# image uploads on copy} other {# images upload on copy}}"
+msgstr "{pendingImageCount, plural, one {# imagen se sube al copiar} other {# imágenes se suben al copiar}}"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
 msgstr "El replay de {playerName} cargó, pero su beatmap no está en osu! (sin subir o eliminado), así que no se puede descargar el chart."
@@ -1080,6 +1103,10 @@ msgstr "{rangeStart}–{pageEnd} de {totalText} cartas"
 #: src/components/packs/CollectionPanel.tsx
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "{rangeStart}–{pageEnd} de {totalText} jugadores"
+
+#: src/routes/farm-helper.tsx
+msgid "{sample, plural, one {# player sampled around your pp} other {# players sampled around your pp}}"
+msgstr "{sample, plural, one {# jugador muestreado cerca de tu pp} other {# jugadores muestreados cerca de tu pp}}"
 
 #: src/lib/streak-game.ts
 msgid "{score} ranked score"
@@ -1255,7 +1282,7 @@ msgstr "<0>{0}</0> jugadores están en exactamente una colección."
 #. placeholder {0}: odds.percent
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "<0>{0}</0> pull chance"
-msgstr "<0>{0}</0> de probabilidad de sacarla"
+msgstr "<0>{0}</0> de probabilidad de sacar esta carta"
 
 #. placeholder {0}: selectedLive.length
 #: src/components/packs/PackSummary.tsx
@@ -1283,6 +1310,10 @@ msgstr "<0>{selectedCount}</0> seleccionadas"
 #: src/routes/discord.tsx
 msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
 msgstr "<0>/subscribe feed:Top plays country:{country}</0> publica cada nuevo top play de {country} en el canal donde se use. Los demás feeds son snipes y nuevos mapas de farm, y <1>min_pp</1> omite los scores por debajo de un umbral. <2>/subscriptions</2> lista los feeds activos de un servidor y <3>/unsubscribe</3> detiene uno. Para suscribirte se necesita el permiso Administrar servidor."
+
+#: src/routes/farm-helper.tsx
+msgid "<0>+pp</0> is the estimated gain if you hit the target score, after weighting against your current top plays."
+msgstr "<0>+pp</0> es la ganancia estimada si logras el puntaje objetivo, ponderada contra tus top plays actuales."
 
 #: src/routes/maps.tsx
 msgid "<0>First time loading {countryName} maps.</0> Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own."
@@ -1447,7 +1478,7 @@ msgstr "Una línea sobre la skin"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "A live feed of your tracked plays, your playstyle fingerprint, when you play, and records the osu! profile never shows you."
-msgstr "Un feed en vivo de tus jugadas rastreadas, tu huella de estilo de juego, cuándo juegas y récords que el perfil de osu! nunca te muestra."
+msgstr "Un feed en vivo de tus jugadas trackeadas, tu huella de estilo de juego, cuándo juegas y récords que el perfil de osu! nunca te muestra."
 
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "A maniacard pulled from a booster pack. Open your own packs and build a collection."
@@ -1505,6 +1536,7 @@ msgid "Account menu"
 msgstr "Menú de cuenta"
 
 #: src/components/packs/album/AlbumView.tsx
+#: src/components/player/SkillPlaysModal.tsx
 msgid "accuracy"
 msgstr "Acc"
 
@@ -1571,11 +1603,15 @@ msgstr "La actividad se registra automáticamente para el top 100 de cada país.
 
 #: src/routes/player/$username.tsx
 msgid "Activity is recorded for the top 100 of each tracked country. If this is your profile, log in with osu! to add yourself to the tracker."
-msgstr "La actividad se registra para el top 100 de cada país rastreado. Si este es tu perfil, inicia sesión con osu! para agregarte al tracker."
+msgstr "La actividad se registra para el top 100 de cada país trackeado. Si este es tu perfil, inicia sesión con osu! para agregarte al tracker."
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Actual size"
+msgstr "Tamaño real"
 
 #: src/components/packs/collections/ShowcaseCards.tsx
 msgid "Add a card to your showcase"
-msgstr "Agrega una carta a tu vitrina"
+msgstr "Agrega una carta a tus destacados"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "Add a screenshot"
@@ -1645,6 +1681,14 @@ msgstr "Álbum"
 #: src/components/packs/album/AlbumView.tsx
 msgid "Albums"
 msgstr "Álbumes"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Align left"
+msgstr "Alinear a la izquierda"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Align right"
+msgstr "Alinear a la derecha"
 
 #: src/routes/communities.tsx
 msgid "all"
@@ -1735,6 +1779,14 @@ msgstr "ámbar"
 msgid "an imported skin"
 msgstr "una skin importada"
 
+#: src/routes/farm-helper.tsx
+msgid "An old PB you could probably beat."
+msgstr "Un PB viejo que probablemente podrías superar."
+
+#: src/routes/farm-helper.tsx
+msgid "an old score you could probably beat"
+msgstr "un puntaje viejo que probablemente podrías superar"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "analysis"
 msgstr "análisis"
@@ -1754,6 +1806,7 @@ msgstr "y {0} más"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/farm-helper.tsx
 #: src/routes/skins.tsx
 msgid "any"
 msgstr "cualquiera"
@@ -1886,6 +1939,7 @@ msgstr "Proporción desbloqueada"
 msgid "Assets"
 msgstr "Recursos"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/bbcode.tsx
 msgid "Audio"
@@ -1909,8 +1963,8 @@ msgid "Auto"
 msgstr "Auto"
 
 #: src/components/ui/Avatar.tsx
-#~ msgid "avatar"
-#~ msgstr "avatar"
+msgid "avatar"
+msgstr "avatar"
 
 #: src/routes/player/$username.tsx
 msgid "Avg active day"
@@ -1947,6 +2001,7 @@ msgid "Back to menu"
 msgstr "Volver al menú"
 
 #: src/components/packs/PackSummary.tsx
+#: src/components/packs/StreakGame.tsx
 msgid "Back to packs"
 msgstr "Volver a los packs"
 
@@ -2037,6 +2092,10 @@ msgstr "Color base de la cabeza de las LN, usado en cualquier columna sin color 
 msgid "Base tap color used for any column without a per-column override."
 msgstr "Color base de tap, usado en cualquier columna sin color propio."
 
+#: src/routes/farm-helper.tsx
+msgid "based on what players near the same pp are farming:"
+msgstr "basado en lo que farmean jugadores con pp similar:"
+
 #: src/routes/bbcode.tsx
 msgid "BBCode"
 msgstr "BBCode"
@@ -2046,6 +2105,11 @@ msgstr "BBCode"
 #: src/routes/bbcode.tsx
 msgid "BBCode editor"
 msgstr "Editor de BBCode"
+
+#. placeholder {0}: mark.beatmapId
+#: src/routes/farm-helper.tsx
+msgid "beatmap #{0}"
+msgstr "beatmap #{0}"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM, length and dan."
@@ -2059,6 +2123,10 @@ msgstr "Hitsounds del beatmap"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Beatmap Lookup"
 msgstr "Búsqueda de beatmaps"
+
+#: src/routes/maps.tsx
+msgid "Beatmap page"
+msgstr "Página del beatmap"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmaps"
@@ -2080,6 +2148,10 @@ msgstr "Beatmaps jugados en {countryName}"
 #: src/components/me/GoalsPanel.tsx
 msgid "best"
 msgstr "mejor"
+
+#: src/components/packs/StreakGame.tsx
+msgid "best {best}"
+msgstr "mejor {best}"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "best {best}%"
@@ -2109,6 +2181,11 @@ msgstr "Atenuación"
 msgid "Big play"
 msgstr "PP Play"
 
+#. placeholder {0}: formatGainWithUnit(biggest, unit)
+#: src/routes/farm-helper.tsx
+msgid "biggest {0}"
+msgstr "mayor {0}"
+
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "biggest collections"
 msgstr "colecciones más grandes"
@@ -2123,7 +2200,7 @@ msgstr "mayor salto primero"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Black playfield"
-msgstr "Campo de juego negro"
+msgstr "Playfield negro"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
@@ -2249,6 +2326,7 @@ msgstr "Diseño integrado"
 msgid "Bulgarian"
 msgstr "Búlgaro"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Bullet list"
 msgstr "Lista con viñetas"
@@ -2334,8 +2412,9 @@ msgstr "Cartas encontradas"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back."
-msgstr "Cartas tuyas de jugadores que ya no se pueden sacar: salieron del top 100 de todos los países rastreados y no se han inscrito. Si regresan, vuelven al grupo y vuelven a contar para completar el álbum."
+msgstr "Cartas tuyas de jugadores que ya no se pueden sacar: salieron del top 100 de todos los países trackeados y no se han inscrito. Si regresan, vuelven al grupo y vuelven a contar para completar el álbum."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Center"
 msgstr "Centrar"
@@ -2343,6 +2422,10 @@ msgstr "Centrar"
 #: src/routes/tracker.tsx
 msgid "Ch"
 msgstr "Ch"
+
+#: src/routes/farm-helper.tsx
+msgid "change"
+msgstr "cambiar"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -2357,6 +2440,10 @@ msgstr "Cambiar {0}"
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
 msgstr "Cambiar mapa"
+
+#: src/routes/farm-helper.tsx
+msgid "change player"
+msgstr "cambiar jugador"
 
 #: src/routes/__root.tsx
 msgid "changelog"
@@ -2383,6 +2470,7 @@ msgid "Chart loaded. Still fetching the replay."
 msgstr "Mapa cargado. Aún buscando el replay."
 
 #: src/components/maps/ChartPreviewPanel.tsx
+#: src/routes/maps.tsx
 msgid "chart preview"
 msgstr "vista previa del mapa"
 
@@ -2475,6 +2563,7 @@ msgstr "CJ"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
+#: src/routes/farm-helper.tsx
 msgid "clear"
 msgstr "limpiar"
 
@@ -2492,9 +2581,14 @@ msgstr "Limpiar"
 msgid "Clear all"
 msgstr "Limpiar todo"
 
+#: src/routes/farm-helper.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "clear attempt"
 msgstr "intento de pasarlo"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Clear editor"
+msgstr "Limpiar editor"
 
 #: src/routes/snipes.tsx
 msgid "Clear filters"
@@ -2517,6 +2611,7 @@ msgstr "Quitar filtro de jugador"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
 msgid "Clear search"
 msgstr "Limpiar búsqueda"
@@ -2571,6 +2666,14 @@ msgid "Click Add to Discord and pick a server where you have Manage Server."
 msgstr "Haz clic en Agregar a Discord y elige un servidor donde tengas el permiso Administrar servidor."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Click again to clear"
+msgstr "Haz clic de nuevo para limpiar"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Click again to discard edits"
+msgstr "Haz clic de nuevo para descartar los cambios"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Click an image first. Imagemap turns that image into clickable areas."
 msgstr "Primero haz clic en una imagen. Imagemap convierte esa imagen en áreas clicables."
 
@@ -2617,6 +2720,7 @@ msgstr "Cliente"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/GoatPollVoters.tsx
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -2626,6 +2730,7 @@ msgstr "Cliente"
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
+#: src/routes/__root.tsx
 #: src/routes/player/$username.tsx
 msgid "Close"
 msgstr "Cerrar"
@@ -2650,6 +2755,10 @@ msgstr "Cerrar selector"
 msgid "Close player"
 msgstr "Cerrar reproductor"
 
+#: src/routes/farm-helper.tsx
+msgid "Close preview"
+msgstr "Cerrar vista previa"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Close replay settings"
 msgstr "Cerrar ajustes del replay"
@@ -2666,6 +2775,7 @@ msgstr "Cerrar plays de habilidad"
 msgid "closed"
 msgstr "cerrada"
 
+#: src/components/communities/CommunityCard.tsx
 #: src/routes/communities_.$id.tsx
 msgid "Closed"
 msgstr "Cerrado"
@@ -2674,6 +2784,7 @@ msgstr "Cerrado"
 msgid "closest to every pullable player"
 msgstr "más cerca de tener a cada jugador sacable"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Code block"
 msgstr "Bloque de código"
@@ -2682,6 +2793,7 @@ msgstr "Bloque de código"
 msgid "Collapse"
 msgstr "Contraer"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Collapsible box"
 msgstr "Cuadro plegable"
@@ -2930,7 +3042,7 @@ msgstr "No se pudieron cargar las estadísticas de los packs."
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "Could not load the showcases."
-msgstr "No se pudieron cargar las vitrinas."
+msgstr "No se pudieron cargar los destacados."
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load these plays"
@@ -3102,6 +3214,10 @@ msgstr "No se pudo cargar este jugador en este momento."
 #: src/components/packs/RevealStage.tsx
 msgid "Couldn't load this player's plays right now. The card is in your collection and will mint itself there."
 msgstr "No se pudieron cargar las plays de este jugador en este momento. La carta está en tu colección y se acuñará allí."
+
+#: src/routes/farm-helper.tsx
+msgid "couldn't load this view"
+msgstr "no se pudo cargar esta vista"
 
 #: src/routes/farm-helper.tsx
 msgid "Couldn't load this view"
@@ -3354,6 +3470,10 @@ msgstr "Oscurece el fondo del beatmap para que las notas se mantengan legibles."
 msgid "Dead server, or the invite does not work"
 msgstr "Servidor caído, o la invitación no funciona"
 
+#: src/components/packs/StreakGame.tsx
+msgid "Dealing a matchup…"
+msgstr "Repartiendo un duelo…"
+
 #. placeholder {0}: reading.percent
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -3482,6 +3602,10 @@ msgstr "Dirección"
 msgid "Direction & long notes"
 msgstr "Dirección y notas largas"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Discard draft"
+msgstr "Descartar borrador"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "disconnect"
 msgstr "desconectar"
@@ -3599,6 +3723,7 @@ msgstr "Descargas"
 msgid "Downscroll"
 msgstr "Downscroll"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Draft autosaves locally"
 msgstr "El borrador se guarda automáticamente en este navegador"
@@ -3724,6 +3849,10 @@ msgstr "Consigue <0/> <1/>"
 msgid "Earn <0/> <1/> on {mapSlot}"
 msgstr "Logra <0/> <1/> en {mapSlot}"
 
+#: src/routes/farm-helper.tsx
+msgid "easy"
+msgstr "fácil"
+
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/communities_.$id.tsx
 msgid "Edit"
@@ -3787,6 +3916,10 @@ msgstr "Fin"
 msgid "End here"
 msgstr "Terminar aquí"
 
+#: src/components/packs/StreakGame.tsx
+msgid "End the run"
+msgstr "Terminar la racha"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "Ends {endsLabel}"
 msgstr "Termina {endsLabel}"
@@ -3816,10 +3949,18 @@ msgstr "error"
 msgid "Estimate a chart's dan level, with its dan emblem."
 msgstr "Estima el nivel de dan de un chart, con su emblema de dan."
 
+#: src/routes/farm-helper.tsx
+msgid "estimated gain"
+msgstr "ganancia estimada"
+
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Estimated pp gain from replacing your previous best score on this map"
 msgstr "Ganancia de pp estimada al reemplazar tu mejor score anterior en este mapa"
+
+#: src/routes/farm-helper.tsx
+msgid "estimates are rough until we've analyzed more of this player's plays"
+msgstr "las estimaciones son aproximadas hasta que analicemos más plays de este jugador"
 
 #: src/components/communities/field-options.tsx
 msgid "Estonian"
@@ -3836,6 +3977,10 @@ msgstr "Cada carta salió en dos partes"
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "every collector"
 msgstr "todos los coleccionistas"
+
+#: src/routes/farm-helper.tsx
+msgid "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
+msgstr "Todos los mapas de farm que los jugadores cerca de tu pp realmente juegan, ordenados por cuántos lo tienen. Los mapas con clear se quedan, para que veas dónde ya estás."
 
 #: src/routes/maps.tsx
 msgid "Every favourited map is equally likely. Players with bigger collections show up more often as a result."
@@ -3877,6 +4022,10 @@ msgstr "Todos"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Everyone watching your replays sees this skin."
 msgstr "Todos los que vean tus replays verán esta skin."
+
+#: src/routes/farm-helper.tsx
+msgid "everything"
+msgstr "todo"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
@@ -3932,6 +4081,10 @@ msgstr "Farm Helper"
 #: src/routes/farm-helper.tsx
 msgid "Farm Helper"
 msgstr "Farm Helper"
+
+#: src/routes/farm-helper.tsx
+msgid "Farm helper needs a player's top 200, and this account has never been loaded here. Opening their profile once is enough."
+msgstr "Farm helper necesita el top 200 de un jugador, y esta cuenta nunca se ha cargado aquí. Con abrir su perfil una vez basta."
 
 #: src/routes/farm-helper.tsx
 msgid "Farm Helper needs the server"
@@ -4001,6 +4154,10 @@ msgstr "Feeds"
 #: src/routes/discord.tsx
 msgid "Feeds are currently disabled on the backend."
 msgstr "Los feeds están desactivados en el backend por ahora."
+
+#: src/routes/farm-helper.tsx
+msgid "feels off for your level? mark it and your recs will adjust"
+msgstr "¿se siente raro para tu nivel? márcalo y tus recs se ajustarán"
 
 #: src/routes/replay.tsx
 msgid "Fetching the replay and finding its beatmap."
@@ -4081,6 +4238,14 @@ msgid "Filter by keymode"
 msgstr "Filtrar por modo"
 
 #: src/routes/farm-helper.tsx
+msgid "Filter maps"
+msgstr "Filtrar mapas"
+
+#: src/routes/farm-helper.tsx
+msgid "filter maps..."
+msgstr "filtrar mapas..."
+
+#: src/routes/farm-helper.tsx
 msgid "filtered out"
 msgstr "filtrados"
 
@@ -4135,6 +4300,11 @@ msgstr "Buscar un álbum"
 msgid "Find an osu!mania Discord server to join, or post your own."
 msgstr "Encuentra un servidor de Discord de osu!mania al que unirte, o publica el tuyo."
 
+#. placeholder {0}: viewer.username
+#: src/routes/farm-helper.tsx
+msgid "Find farm maps for {0}"
+msgstr "Buscar mapas de farm para {0}"
+
 #: src/routes/farm-helper.tsx
 msgid "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs."
 msgstr "Encuentra mapas de farm de osu!mania que valgan la pena jugar, según jugadores cercanos, clears pendientes, scores mejorables y PBs antiguos."
@@ -4144,6 +4314,7 @@ msgstr "Encuentra mapas de farm de osu!mania que valgan la pena jugar, según ju
 msgid "find player..."
 msgstr "buscar jugador..."
 
+#: src/routes/farm-helper.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Finishing this looks risky for you; treat it as a clear attempt, not a farm"
 msgstr "Terminarlo se ve arriesgado para ti; trátalo como un intento de clear, no como farm"
@@ -4193,6 +4364,10 @@ msgstr "Primera vez que alguien sacó esta carta"
 msgid "first to find a card"
 msgstr "primero en encontrar una carta"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Fit"
+msgstr "Ajustar"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "flat"
 msgstr "plano"
@@ -4214,6 +4389,10 @@ msgstr "Voltear horizontalmente"
 msgid "Flip vertical"
 msgstr "Voltear verticalmente"
 
+#: src/routes/farm-helper.tsx
+msgid "for"
+msgstr "para"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "for banned or deleted"
 msgstr "para baneados o eliminados"
@@ -4226,9 +4405,17 @@ msgstr "Para embeds de Discord"
 msgid "For screenshots that have nothing to do with the skin."
 msgstr "Para capturas que no tienen nada que ver con la skin."
 
+#: src/routes/farm-helper.tsx
+msgid "for you"
+msgstr "para ti"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Force a fresh collection rotation now (admin only)"
 msgstr "Forzar una nueva rotación de colecciones ahora (solo admin)"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "formatting copied - right-click text to paste"
+msgstr "formato copiado - clic derecho en el texto para pegarlo"
 
 #. placeholder {0}: formatNumber(card.mintedTotal)
 #: src/components/packs/collections/RecordBoards.tsx
@@ -4273,6 +4460,10 @@ msgstr "Completo"
 #: src/components/me/MyDataPanel.tsx
 msgid "Full activity"
 msgstr "Actividad completa"
+
+#: src/routes/farm-helper.tsx
+msgid "full breakdown"
+msgstr "análisis completo"
 
 #: src/routes/tracker.tsx
 msgid "Full combos only (0 misses)"
@@ -4431,6 +4622,7 @@ msgstr "Rank"
 msgid "Gradient"
 msgstr "Degradado"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Gradient text"
 msgstr "Texto con degradado"
@@ -4459,6 +4651,10 @@ msgstr "Verde"
 msgid "Grid"
 msgstr "Cuadrícula"
 
+#: src/components/packs/StreakGame.tsx
+msgid "Guess at random"
+msgstr "Adivinar al azar"
+
 #: src/components/maps/SearchCard.tsx
 msgid "Handjack"
 msgstr "Handjack"
@@ -4470,6 +4666,10 @@ msgstr "Handjack"
 #: src/routes/player/$username.tsx
 msgid "Handstream"
 msgstr "Handstream"
+
+#: src/routes/farm-helper.tsx
+msgid "hard"
+msgstr "difícil"
 
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "hardest cards to find"
@@ -4495,6 +4695,7 @@ msgstr "¿Los replays de {hidden} se han visto más o menos que los de {shown}?"
 msgid "Have <0/> plays worth <1/> or more"
 msgstr "Ten <0/> plays que valgan <1/> o más"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Heading"
 msgstr "Encabezado"
@@ -4515,6 +4716,10 @@ msgstr "oculta"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hidden"
 msgstr "Oculto"
+
+#: src/routes/farm-helper.tsx
+msgid "hidden from your recs until you clear it or set a score on it"
+msgstr "oculto de tus recs hasta que lo pases o pongas un puntaje en él"
 
 #. placeholder {0}: hiddenList.length
 #: src/components/settings/SettingsPanel.tsx
@@ -4539,11 +4744,11 @@ msgstr "Ocultando {label}"
 
 #: src/routes/packs.tsx
 msgid "Higher or lower"
-msgstr "Mayor o menor"
+msgstr "Higher or Lower"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Higher or lower is unavailable right now. Try again in a bit."
-msgstr "Mayor o menor no está disponible por ahora. Inténtalo de nuevo en un rato."
+msgstr "Higher or Lower no está disponible por ahora. Inténtalo de nuevo en un rato."
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Higher values make notes travel faster across the playfield."
@@ -4716,6 +4921,10 @@ msgstr "Error al subir la imagen."
 msgid "Image URL"
 msgstr "URL de la imagen"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Imagemap (clickable areas on an image)"
+msgstr "Imagemap (áreas clicables sobre una imagen)"
+
 #: src/routes/bbcode.tsx
 msgid "Imagemap (image with clickable areas)"
 msgstr "Imagemap (imagen con áreas clicables)"
@@ -4813,6 +5022,7 @@ msgstr "Indonesio"
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
 msgstr "Scoreboard del juego con subida de rank en vivo. Se activa con la tecla Tab."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Inline code"
 msgstr "Código en línea"
@@ -4906,6 +5116,10 @@ msgstr "Jackspeed"
 msgid "Japanese"
 msgstr "Japonés"
 
+#: src/components/communities/CommunityCard.tsx
+msgid "Join"
+msgstr "Unirse"
+
 #: src/routes/communities_.$id.tsx
 msgid "Join server"
 msgstr "Unirse al servidor"
@@ -4987,6 +5201,10 @@ msgstr "Historial de teclas"
 msgid "Key hitsounds"
 msgstr "Hitsounds de teclas"
 
+#: src/routes/farm-helper.tsx
+msgid "Key mode"
+msgstr "Modo de teclas"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Key press hitsounds"
 msgstr "Hitsounds al presionar teclas"
@@ -5021,6 +5239,7 @@ msgstr "Modos de teclas"
 msgid "Keypresses"
 msgstr "Pulsaciones"
 
+#: src/routes/farm-helper.tsx
 #: src/routes/skins.tsx
 msgid "keys"
 msgstr "teclas"
@@ -5032,7 +5251,7 @@ msgstr "teclas"
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "Keys"
-msgstr "Teclas"
+msgstr "Modo"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Keys pressed per second."
@@ -5763,6 +5982,7 @@ msgid "mapped by {0} · {1} plays"
 msgstr "mapeado por {0} · {1} plays"
 
 #: src/components/layout/Nav.tsx
+#: src/routes/farm-helper.tsx
 msgid "maps"
 msgstr "Mapas"
 
@@ -5782,14 +6002,30 @@ msgstr "Error al construir los mapas."
 msgid "Maps played"
 msgstr "Mapas jugados"
 
+#: src/routes/farm-helper.tsx
+msgid "maps players near you farm"
+msgstr "mapas que farmean jugadores cerca de ti"
+
 #: src/routes/maps.tsx
 msgid "Maps ready."
 msgstr "Mapas listos."
+
+#: src/routes/farm-helper.tsx
+msgid "maps worth farming"
+msgstr "mapas farmeables"
 
 #. placeholder {0}: formatNumber(Math.max(0, event.totalScore - event.victimTotalScore!))
 #: src/routes/snipes.tsx
 msgid "Margin <0>+{0}</0>"
 msgstr "Margen <0>+{0}</0>"
+
+#: src/routes/farm-helper.tsx
+msgid "marked easy"
+msgstr "marcado fácil"
+
+#: src/routes/farm-helper.tsx
+msgid "marked hard"
+msgstr "marcado difícil"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Matching against the replay's checksum."
@@ -5810,6 +6046,10 @@ msgstr "PP máx."
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
 msgstr "Media"
+
+#: src/routes/farm-helper.tsx
+msgid "median"
+msgstr "mediana"
 
 #: src/routes/farm-helper.tsx
 msgid "median {median}pp"
@@ -5951,7 +6191,7 @@ msgstr "Más score"
 msgid "More servers"
 msgstr "Más servidores"
 
-#. placeholder {0}: getCountryName(country)
+#. placeholder {0}: displayCountryName(country, locale)
 #: src/routes/communities_.$id.tsx
 msgid "More servers from {0}"
 msgstr "Más servidores de {0}"
@@ -6073,9 +6313,17 @@ msgstr "Nombrar preset"
 msgid "Named {0}"
 msgstr "Guardado como {0}"
 
+#: src/routes/farm-helper.tsx
+msgid "nearby players outscore you"
+msgstr "jugadores cercanos te superan"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "Necesita un enlace de web.archive.org a su perfil de osu!."
+
+#: src/routes/farm-helper.tsx
+msgid "never loaded here"
+msgstr "nunca cargado aquí"
 
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/RevealStage.tsx
@@ -6155,6 +6403,11 @@ msgstr "Siguiente área"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Next asset"
 msgstr "Siguiente archivo"
+
+#. placeholder {0}: nextStreakMilestone(streak).at
+#: src/components/packs/StreakGame.tsx
+msgid "next bonus at {0} in a row"
+msgstr "próximo bonus con {0} seguidos"
 
 #: src/components/packs/RevealStage.tsx
 msgid "Next card"
@@ -6498,7 +6751,11 @@ msgstr "Ningún snipe coincide con los filtros actuales."
 
 #: src/routes/snipes.tsx
 msgid "No snipes tracked yet for {countryName}."
-msgstr "Aún no hay snipes rastreados para {countryName}."
+msgstr "Aún no hay snipes trackeados para {countryName}."
+
+#: src/components/packs/StreakGame.tsx
+msgid "No streak this time."
+msgstr "Sin racha esta vez."
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "No top plays found"
@@ -6510,23 +6767,23 @@ msgstr "Ningún top play coincide con esos controles."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No top plays recorded yet. As you set new personal bests while tracked, they're saved here."
-msgstr "Aún no hay top plays registrados. Cuando consigues nuevos récords personales mientras estás rastreado, se guardan aquí."
+msgstr "Aún no hay top plays registrados. Cuando consigues nuevos récords personales mientras estás trackeado, se guardan aquí."
 
 #: src/routes/player/$username.tsx
 msgid "No tracked plays found"
-msgstr "No se encontraron plays rastreadas"
+msgstr "No se encontraron plays trackeadas"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays match those controls."
-msgstr "Ninguna play rastreada coincide con esos controles."
+msgstr "Ninguna play trackeada coincide con esos controles."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays. Play some ranked maps and they show up here live, or check your top plays."
-msgstr "No hay plays rastreadas. Juega unos mapas ranked y aparecerán aquí en vivo, o revisa tus top plays."
+msgstr "No hay plays trackeadas. Juega unos mapas ranked y aparecerán aquí en vivo, o revisa tus top plays."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays. Play some ranked maps and they show up here live."
-msgstr "No hay plays rastreadas. Juega unos mapas ranked y aparecerán aquí en vivo."
+msgstr "No hay plays trackeadas. Juega unos mapas ranked y aparecerán aquí en vivo."
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Nobody else can open it. Set it as your replay skin and it plays in your replays."
@@ -6562,7 +6819,7 @@ msgstr "Aquí no hay nadie llamado \"{debounced}\"."
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nobody we track has a scored run on this map. Search a player, or paste a score link."
-msgstr "Nadie de los que rastreamos tiene una run con score en este mapa. Busca a un jugador o pega un enlace de score."
+msgstr "Nadie de los que trackeamos tiene una run con score en este mapa. Busca a un jugador o pega un enlace de score."
 
 #: src/components/packs/GoatPoll.tsx
 msgid "Nominate"
@@ -6664,11 +6921,11 @@ msgstr "No es el servidor que dice ser"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Not tracked"
-msgstr "No rastreado"
+msgstr "No trackeado"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Not tracked yet"
-msgstr "Aún no se rastrea"
+msgstr "Aún no se trackea"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Note"
@@ -6718,7 +6975,7 @@ msgstr "Nada de las plays cargadas coincide con \"{trimmedQuery}\"."
 msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
 msgstr "No se publica nada hasta que lo revises y lo envíes, y el acceso termina apenas lo hagas."
 
-#. placeholder {0}: country === COMMUNITY_INTERNATIONAL ? t`international servers` : getCountryName(country)
+#. placeholder {0}: country === COMMUNITY_INTERNATIONAL ? t`international servers` : displayCountryName(country, locale)
 #: src/routes/communities.tsx
 msgid "Nothing listed for {0} yet."
 msgstr "Aún no hay nada listado para {0}."
@@ -6739,6 +6996,7 @@ msgstr "Aún no hay nada que previsualizar."
 msgid "Nothing uploaded yet."
 msgstr "Aún no has subido nada."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Notice"
 msgstr "Aviso"
@@ -6751,6 +7009,7 @@ msgstr "ahora"
 msgid "now #{nowRank}"
 msgstr "ahora #{nowRank}"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Numbered list"
 msgstr "Lista numerada"
@@ -6782,6 +7041,15 @@ msgstr "de {0}"
 msgid "of {0} pullable"
 msgstr "de {0} sacables"
 
+#. placeholder {0}: allowance.cap
+#: src/components/packs/StreakGame.tsx
+msgid "of {0} shards left today"
+msgstr "de {0} fragmentos restantes hoy"
+
+#: src/routes/farm-helper.tsx
+msgid "of players near you"
+msgstr "de jugadores cerca de ti"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "of players near you farm this"
 msgstr "de jugadores cerca de ti farmean esto"
@@ -6808,7 +7076,7 @@ msgstr "antiguo"
 
 #: src/routes/farm-helper.tsx
 msgid "old pb"
-msgstr "pb antiguo"
+msgstr "pb viejo"
 
 #: src/lib/streak-game.ts
 msgid "Older"
@@ -6867,6 +7135,10 @@ msgstr "En línea"
 msgid "Only me"
 msgstr "Solo yo"
 
+#: src/components/communities/CommunityCard.tsx
+msgid "Only people from here can join"
+msgstr "Solo gente de aquí puede unirse"
+
 #: src/routes/farm-helper.tsx
 msgid "Only skillboost maps right now"
 msgstr "Por ahora solo hay mapas skillboost"
@@ -6923,11 +7195,16 @@ msgstr "Abrir otro"
 msgid "Open beatmap on osu!"
 msgstr "Abrir beatmap en osu!"
 
+#: src/routes/maps.tsx
+msgid "Open beatmap page on osu!"
+msgstr "Abrir la página del beatmap en osu!"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open image in new tab"
 msgstr "Abrir imagen en una nueva pestaña"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/routes/maps.tsx
 msgid "Open in osu!"
 msgstr "Abrir en osu!"
 
@@ -6936,6 +7213,7 @@ msgid "open in osu! client"
 msgstr "abrir en el cliente de osu!"
 
 #: src/components/maps/SearchCard.tsx
+#: src/routes/maps.tsx
 msgid "Open in osu! client"
 msgstr "Abrir en el cliente de osu!"
 
@@ -6946,6 +7224,10 @@ msgstr "Abrir en el editor de BBCode"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open link"
 msgstr "Abrir enlace"
+
+#: src/routes/farm-helper.tsx
+msgid "Open map on osu!"
+msgstr "Abrir mapa en osu!"
 
 #: src/components/layout/Nav.tsx
 msgid "open packs"
@@ -6972,6 +7254,10 @@ msgstr "Abre el modal del día con datos simulados de un día ocupado"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Open the in-browser replay viewer for a score."
 msgstr "Abre el visor de replays en el navegador para un score."
+
+#: src/routes/farm-helper.tsx
+msgid "open their profile"
+msgstr "abrir su perfil"
 
 #: src/routes/communities_.$id.tsx
 msgid "open to"
@@ -7002,6 +7288,14 @@ msgstr "Abriendo..."
 #: src/components/settings/TranslationReportForm.tsx
 msgid "optional"
 msgstr "opcional"
+
+#: src/routes/farm-helper.tsx
+msgid "or pick someone else"
+msgstr "o elige a alguien más"
+
+#: src/routes/farm-helper.tsx
+msgid "or someone else"
+msgstr "o alguien más"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "orange"
@@ -7051,7 +7345,7 @@ msgstr "clasificación de osu!mania y tracker de scores en vivo"
 
 #: src/routes/replay.tsx
 msgid "osu!mania replay watcher"
-msgstr "Monitor de replays de osu!mania"
+msgstr "Visor de replays de osu!mania"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "osu!mania replays only"
@@ -7081,6 +7375,10 @@ msgstr "Otro"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "out of {0}"
 msgstr "de {0}"
+
+#: src/components/packs/StreakGame.tsx
+msgid "Out of time."
+msgstr "Se acabó el tiempo."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Outline"
@@ -7252,7 +7550,7 @@ msgstr "Recuento de pulsaciones por columna."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "percentiles are among tracked players"
-msgstr "percentiles calculados entre jugadores rastreados"
+msgstr "percentiles calculados entre jugadores trackeados"
 
 #: src/routes/player/$username.tsx
 msgid "Performance"
@@ -7282,9 +7580,17 @@ msgstr "Elige una meta arriba. El progreso se actualiza conforme llegan tus play
 msgid "Pick another file"
 msgstr "Elige otro archivo"
 
+#: src/routes/farm-helper.tsx
+msgid "Pick any map on the left to preview it here."
+msgstr "Elige cualquier mapa a la izquierda para verlo aquí."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Pick one to load it into the editor."
 msgstr "Elige uno para cargarlo en el editor."
+
+#: src/routes/farm-helper.tsx
+msgid "pick the active one again to flip direction"
+msgstr "elige el activo de nuevo para invertir el orden"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Pick the server you want to post."
@@ -7296,7 +7602,7 @@ msgstr "Elige dos scores"
 
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Pick your showcase"
-msgstr "Elige tu vitrina"
+msgstr "Elige tus destacados"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Picking a backdrop or a pattern re-renders that playfield from the uploaded .osk while preserving its other saved choice. Patterns are cut from real charts, one keymode at a time. Keymodes left alone keep the previews they were published with."
@@ -7323,6 +7629,10 @@ msgstr "Fijados"
 msgid "play"
 msgstr "reproducir"
 
+#: src/components/packs/StreakGame.tsx
+msgid "Play again"
+msgstr "Jugar de nuevo"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Play both replays"
 msgstr "Reproducir ambos replays"
@@ -7339,6 +7649,10 @@ msgstr "Hábitos de juego y desglose del estilo de juego: días activos, sesione
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Play preview"
 msgstr "Reproducir vista previa"
+
+#: src/routes/farm-helper.tsx
+msgid "play this"
+msgstr "juegan este"
 
 #: src/routes/skins_.$id.tsx
 msgid "Play this skin in your own replays for everyone who watches them"
@@ -7461,6 +7775,22 @@ msgid "Polish"
 msgstr "Polaco"
 
 #: src/routes/farm-helper.tsx
+msgid "popular"
+msgstr "popular"
+
+#: src/routes/farm-helper.tsx
+msgid "popular near you"
+msgstr "popular cerca de ti"
+
+#: src/routes/farm-helper.tsx
+msgid "popular nearby, you haven't played it"
+msgstr "popular cerca, no lo has jugado"
+
+#: src/routes/farm-helper.tsx
+msgid "Popular with the players around you, and you have no top play on it with these mods."
+msgstr "Popular entre los jugadores a tu alrededor, y no tienes top play en él con estos mods."
+
+#: src/routes/farm-helper.tsx
 msgid "popularity"
 msgstr "popularidad"
 
@@ -7480,6 +7810,7 @@ msgstr "Publica tu servidor de Discord"
 msgid "Post your server"
 msgstr "Publica tu servidor"
 
+#: src/components/communities/CommunityCard.tsx
 #: src/routes/communities_.$id.tsx
 msgid "posted by"
 msgstr "publicado por"
@@ -7568,6 +7899,12 @@ msgstr "vista previa"
 msgid "Preview"
 msgstr "Vista previa"
 
+#. placeholder {0}: rec.title
+#. placeholder {1}: rec.version
+#: src/routes/farm-helper.tsx
+msgid "Preview {0} [{1}]"
+msgstr "Vista previa de {0} [{1}]"
+
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Preview position"
 msgstr "Posición de la vista previa"
@@ -7654,6 +7991,7 @@ msgstr "Perfil"
 msgid "Profile banner"
 msgstr "Banner del perfil"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Profile link"
 msgstr "Enlace de perfil"
@@ -7663,6 +8001,7 @@ msgid "Profile stats"
 msgstr "Estadísticas del perfil"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/SkillPlaysModal.tsx
 msgid "profile top play"
 msgstr "top play del perfil"
 
@@ -7808,7 +8147,7 @@ msgstr "Ranked (PP)"
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
-msgstr "Clasificado por el skill rating de {label} según los plays detrás de esta calificación de perfil, incluido el historial con seguimiento."
+msgstr "Clasificado por el skill rating de {label} según los plays detrás de esta calificación de perfil, incluido el historial trackeado."
 
 #. placeholder {0}: entry.ranked_score.toLocaleString("en-US")
 #: src/components/packs/album/AlbumView.tsx
@@ -7834,11 +8173,11 @@ msgstr "Velocidad"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
-msgstr "calificado con {plays} plays de los top plays y el historial con seguimiento, DT y HT a su velocidad real, acc ponderada por la proporción de MAX:300 contra las ventanas de OD de cada chart, charts vibro sin rankear excluidos"
+msgstr "calificado con {plays} plays de los top plays y el historial trackeado, DT y HT a su velocidad real, acc ponderada por la proporción de MAX:300 contra las ventanas de OD de cada chart, charts vibro sin rankear excluidos"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
-msgstr "calificado con {plays} plays de tus top plays y tu historial con seguimiento, DT y HT a su velocidad real, acc ponderada por la proporción de MAX:300 contra las ventanas de OD de cada chart, charts vibro sin rankear excluidos"
+msgstr "calificado con {plays} plays de tus top plays y tu historial trackeado, DT y HT a su velocidad real, acc ponderada por la proporción de MAX:300 contra las ventanas de OD de cada chart, charts vibro sin rankear excluidos"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
@@ -8099,6 +8438,11 @@ msgstr "eliminar"
 msgid "Remove"
 msgstr "Eliminar"
 
+#. placeholder {0}: player.username
+#: src/routes/farm-helper.tsx
+msgid "Remove {0} from recent"
+msgstr "Quitar a {0} de recientes"
+
 #. placeholder {0}: entry.title
 #: src/components/replay/ReplayRecentlyViewed.tsx
 msgid "Remove {0} from recently watched"
@@ -8304,6 +8648,10 @@ msgid "Reset orientation"
 msgstr "Restablecer orientación"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Reset to current page"
+msgstr "Restablecer a la página actual"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Resize / crop"
 msgstr "Redimensionar / recortar"
 
@@ -8314,6 +8662,14 @@ msgstr "Redimensionar / recortar…"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Resize to"
 msgstr "Redimensionar a"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Resizing image..."
+msgstr "Redimensionando imagen..."
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Restored an unsaved draft from this browser."
+msgstr "Se restauró un borrador sin guardar de este navegador."
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Resume chart preview"
@@ -8491,6 +8847,19 @@ msgstr "Guardando."
 msgid "Saving…"
 msgstr "Guardando…"
 
+#: src/components/ghost/GhostSprite.tsx
+msgid "say something back"
+msgstr "dile algo de vuelta"
+
+#. placeholder {0}: drawn.name
+#: src/components/ghost/GhostSprite.tsx
+msgid "Say something to {0}"
+msgstr "Dile algo a {0}"
+
+#: src/components/ghost/GhostSprite.tsx
+msgid "Say something to {name}"
+msgstr "Dile algo a {name}"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Scale the image to fit"
 msgstr "Escalar la imagen para que quepa"
@@ -8587,6 +8956,10 @@ msgstr "Busca un jugador o pega un ID de score"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Search a player, or paste a score link..."
 msgstr "Busca un jugador o pega un link de score..."
+
+#: src/routes/farm-helper.tsx
+msgid "search a player..."
+msgstr "buscar un jugador..."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Search any beatmap by title, artist, or mapper..."
@@ -8892,6 +9265,7 @@ msgstr "Ajustes de {0}"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
+#: src/components/packs/StreakGame.tsx
 #: src/routes/packs.tsx
 msgid "shards"
 msgstr "fragmentos"
@@ -9003,7 +9377,7 @@ msgstr "Mostrar más"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Show my name under spectators when watching a replay"
-msgstr "Mostrar mi nombre entre los espectadores al ver un replay"
+msgstr "Mostrar mi nombre entre los espectadores al ver una repetición"
 
 #: src/routes/top-plays.tsx
 msgid "Show non-4K plays"
@@ -9031,15 +9405,15 @@ msgstr "Mostrar el nombre del sitio en el render"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "showcase"
-msgstr "vitrina"
+msgstr "destacados"
 
 #: src/routes/packs_.collections.tsx
 msgid "Showcase"
-msgstr "Vitrina"
+msgstr "Destacados"
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "showcases"
-msgstr "vitrinas"
+msgstr "destacados"
 
 #. placeholder {0}: visible.length
 #. placeholder {1}: matches.length
@@ -9073,7 +9447,11 @@ msgstr "Mezclando jugadores..."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Side by Side"
-msgstr "Lado a lado"
+msgstr "Comparativa"
+
+#: src/components/packs/StreakGame.tsx
+msgid "Sign in and runs like that pay shards."
+msgstr "Inicia sesión y rachas así pagan fragmentos."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -9320,6 +9698,10 @@ msgstr "Algo salió mal."
 msgid "Something went wrong. Try again."
 msgstr "Algo salió mal. Inténtalo de nuevo."
 
+#: src/routes/farm-helper.tsx
+msgid "sort"
+msgstr "ordenar"
+
 #: src/routes/player/$username.tsx
 #: src/routes/tracker.tsx
 msgid "Sort"
@@ -9365,6 +9747,7 @@ msgstr "Espectadores"
 msgid "Speedjack"
 msgstr "Speedjack"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
 msgstr "Texto spoiler"
@@ -9503,6 +9886,10 @@ msgstr "Storyboard"
 msgid "Storyboard…"
 msgstr "Storyboard…"
 
+#: src/components/packs/StreakGame.tsx
+msgid "streak"
+msgstr "racha"
+
 #: src/routes/player/$username.tsx
 msgid "Streak"
 msgstr "Racha"
@@ -9527,6 +9914,7 @@ msgstr "Streams interrumpidos por saltos de dos notas."
 msgid "Streams thickened with three-note hand chords."
 msgstr "Streams engrosados con acordes de tres notas."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Strikethrough"
 msgstr "Tachado"
@@ -9646,7 +10034,7 @@ msgstr "toca uno para previsualizar su respuesta"
 
 #: src/components/packs/RevealStage.tsx
 msgid "Tap the stack or drag the top card to draw"
-msgstr "Toca la pila o arrastra la carta de arriba para sacar"
+msgstr "Toca el mazo o arrastra la carta de arriba para sacar"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "target"
@@ -9664,9 +10052,17 @@ msgstr "Meta de plays"
 msgid "Target rank"
 msgstr "Meta de rank"
 
+#: src/routes/farm-helper.tsx
+msgid "target score"
+msgstr "puntaje objetivo"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Target total pp"
 msgstr "Meta de pp totales"
+
+#: src/routes/farm-helper.tsx
+msgid "targets on this chart will aim higher until you set the score"
+msgstr "los objetivos en este chart apuntarán más alto hasta que pongas el puntaje"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Targets track themselves from your mania plays: a pp number, a play worth, a play count, an accuracy, a clear, or a grade."
@@ -9720,6 +10116,7 @@ msgstr "Texto (opcional)"
 msgid "Text (replaces the selection)"
 msgstr "Texto (reemplaza la selección)"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Text color"
 msgstr "Color de texto"
@@ -9728,6 +10125,7 @@ msgstr "Color de texto"
 msgid "Text color…"
 msgstr "Color de texto…"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Text size"
 msgstr "Tamaño de texto"
@@ -9771,6 +10169,10 @@ msgstr "Son muchos reportes para un solo día. Inténtalo de nuevo mañana."
 #: src/components/communities/TagInput.tsx
 msgid "That is all {COMMUNITY_MAX_TAGS}. Remove one to add another."
 msgstr "Llegaste al máximo de {COMMUNITY_MAX_TAGS}. Quita uno para agregar otro."
+
+#: src/components/packs/StreakGame.tsx
+msgid "That is today's shard allowance spent. The streak still counts."
+msgstr "Eso es todo el límite de fragmentos de hoy. La racha igual cuenta."
 
 #: src/components/communities/field-options.tsx
 msgid "That is your own listing."
@@ -10095,11 +10497,11 @@ msgstr "Estos jugadores terminaron los mismos mapas con segundos de diferencia, 
 
 #: src/lib/replay-side-by-side.ts
 msgid "These runs used different rates ({leftRate}x vs {rightRate}x). Side by side needs both at the same rate."
-msgstr "Estas runs usaron rates distintos ({leftRate}x vs {rightRate}x). Lado a lado necesita ambas al mismo rate."
+msgstr "Estas runs usaron rates distintos ({leftRate}x vs {rightRate}x). La comparativa necesita ambas al mismo rate."
 
 #: src/lib/replay-side-by-side.ts
 msgid "These scores are on different maps. Side by side plays two runs of the same beatmap."
-msgstr "Estos scores son de mapas distintos. Lado a lado reproduce dos runs del mismo beatmap."
+msgstr "Estos scores son de mapas distintos. La comparativa reproduce dos runs del mismo beatmap."
 
 #: src/components/packs/GoatPoll.tsx
 msgid "They're already a GOAT."
@@ -10301,6 +10703,18 @@ msgstr "Mostrar u ocultar el menú"
 msgid "Toggles"
 msgstr "Opciones"
 
+#: src/routes/farm-helper.tsx
+msgid "too easy"
+msgstr "muy fácil"
+
+#: src/routes/farm-helper.tsx
+msgid "too hard"
+msgstr "muy difícil"
+
+#: src/routes/farm-helper.tsx
+msgid "too hard hides the lane from your gain views; setting a real score also clears a mark"
+msgstr "muy difícil oculta el mapa de tus vistas de ganancia; poner un puntaje real también limpia la marca"
+
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Too many reports just now. Try again in a bit."
 msgstr "Demasiados reportes en este momento. Inténtalo de nuevo en un rato."
@@ -10383,7 +10797,7 @@ msgstr "Top play"
 
 #: src/routes/index.tsx
 msgid "Top players"
-msgstr "Mejores jugadores"
+msgstr "Rankings"
 
 #: src/components/layout/Nav.tsx
 #: src/components/me/MyDataPanel.tsx
@@ -10421,8 +10835,9 @@ msgid "Tracked"
 msgstr "Seguidos"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/SkillPlaysModal.tsx
 msgid "tracked history"
-msgstr "historial del Tracker"
+msgstr "historial trackeado"
 
 #. placeholder {0}: anchor?.beatmapset?.title ?? t`this map`
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -10490,6 +10905,10 @@ msgstr "mar"
 #: src/components/me/MyDataPanel.tsx
 msgid "Tuesdays"
 msgstr "Martes"
+
+#: src/routes/farm-helper.tsx
+msgid "tune your recs"
+msgstr "ajusta tus recs"
 
 #: src/routes/player/$username.tsx
 msgid "Tung tung sahur keycap"
@@ -10713,6 +11132,10 @@ msgstr "Subiendo las vistas previas de {list}."
 msgid "Uploading gives you a share link for the replay. Sign in with osu! to upload."
 msgstr "Al subirlo obtienes un enlace para compartir el replay. Inicia sesión con osu! para subirlo."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Uploading image..."
+msgstr "Subiendo imagen..."
+
 #: src/lib/skins.ts
 msgid "Uploading previews."
 msgstr "Subiendo vistas previas."
@@ -10804,6 +11227,10 @@ msgstr "usuario"
 msgid "Username"
 msgstr "Nombre de usuario"
 
+#: src/routes/farm-helper.tsx
+msgid "username..."
+msgstr "usuario..."
+
 #: src/components/communities/field-options.tsx
 msgid "Verified"
 msgstr "Verificado"
@@ -10859,6 +11286,14 @@ msgstr "Ver detalles"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "View it"
 msgstr "Verlo"
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "View map details"
+msgstr "Ver detalles del mapa"
+
+#: src/routes/farm-helper.tsx
+msgid "View mode"
+msgstr "Modo de vista"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "View on a {label} background"
@@ -10920,6 +11355,7 @@ msgstr "Visibilidad"
 msgid "Visible to"
 msgstr "Visible para"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Visual"
 msgstr "Visual"
@@ -11000,7 +11436,7 @@ msgstr "Ver replays con la skin del jugador"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Watch side by side"
-msgstr "Ver lado a lado"
+msgstr "Ver comparativa"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Watch two runs of the same map at once"
@@ -11051,11 +11487,19 @@ msgstr "¿Para qué sirve?"
 
 #: src/routes/communities_.$id.tsx
 msgid "What it is for"
-msgstr "Para qué sirve"
+msgstr "Descripción"
+
+#: src/routes/farm-helper.tsx
+msgid "what nearby players actually farm"
+msgstr "lo que los jugadores cercanos realmente farmean"
 
 #: src/routes/farm-helper.tsx
 msgid "what players near you played last"
 msgstr "lo último que jugaron los jugadores cerca de ti"
+
+#: src/routes/farm-helper.tsx
+msgid "what you're browsing"
+msgstr "lo que estás viendo"
 
 #: src/components/layout/ChangelogModal.tsx
 msgid "What's new"
@@ -11091,6 +11535,10 @@ msgstr "mientras estuviste en el tracker"
 msgid "Who can join"
 msgstr "Quién puede unirse"
 
+#: src/routes/farm-helper.tsx
+msgid "who farms this"
+msgstr "quién farmea este"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Who farms this"
 msgstr "Quién farmea este mapa"
@@ -11103,9 +11551,17 @@ msgstr "Quién tiene tu carta"
 msgid "Who the server is for, what happens in it, when it is busy. Line breaks are kept."
 msgstr "Para quién es el servidor, qué pasa en él, cuándo está activo. Los saltos de línea se conservan."
 
+#: src/routes/farm-helper.tsx
+msgid "who you're compared to"
+msgstr "con quién te comparamos"
+
 #: src/lib/packs.ts
 msgid "Whole pool, new cards first"
 msgstr "Todo el pool, cartas nuevas primero"
+
+#: src/routes/farm-helper.tsx
+msgid "why a map shows up"
+msgstr "por qué aparece un mapa"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Width of the exported image, in pixels"
@@ -11136,9 +11592,17 @@ msgstr "Escribe una descripción corta del servidor."
 msgid "Write and preview osu! profile BBCode for your me! page, with a live preview and one-click copy."
 msgstr "Escribe y previsualiza el BBCode de perfil de osu! para tu página me!, con vista previa en vivo y copia con un clic."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Write BBCode here, or paste your current me! page source..."
+msgstr "Escribe BBCode aquí, o pega el código de tu página me! actual..."
+
 #: src/routes/player/$username.tsx
 msgid "Write one in the BBCode editor"
 msgstr "Escribe uno en el editor de BBCode"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."
+msgstr "Escribe tu página aquí. Selecciona texto y usa la barra de herramientas para darle formato. Clic derecho para más opciones, o pega una imagen para agregarla."
 
 #: src/components/packs/StreakGame.tsx
 msgid "wrong"
@@ -11162,6 +11626,14 @@ msgid "You"
 msgstr "Tú"
 
 #: src/routes/farm-helper.tsx
+msgid "You already beat the players near you here, but a higher-acc rerun is still worth pp."
+msgstr "Ya superaste a los jugadores cerca de ti aquí, pero una repetición con más acc todavía vale pp."
+
+#: src/routes/farm-helper.tsx
+msgid "You already beat the players near you here, but a higher-acc rerun is still worth pp. Hidden by default until you achieve one of its scores."
+msgstr "Ya superaste a los jugadores cerca de ti aquí, pero una repetición con más acc todavía vale pp. Oculto por defecto hasta que logres uno de sus puntajes."
+
+#: src/routes/farm-helper.tsx
 msgid "You already beat the typical score here with {yourPp}pp. A cleaner acc run is worth about {target}pp."
 msgstr "Ya superaste el score típico de aquí con {yourPp}pp. Una run con mejor acc vale unos {target}pp."
 
@@ -11173,9 +11645,25 @@ msgstr "Estás cortando las cartas"
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
 msgstr "Puedes listar hasta {COMMUNITY_MAX_PER_USER} servidores."
 
+#: src/routes/farm-helper.tsx
+msgid "you could gain"
+msgstr "ganancia potencial"
+
+#: src/components/packs/StreakGame.tsx
+msgid "You got {streak} right, a new best."
+msgstr "Acertaste {streak}, un nuevo récord."
+
+#: src/components/packs/StreakGame.tsx
+msgid "You got {streak} right."
+msgstr "Acertaste {streak}."
+
 #: src/components/communities/field-options.tsx
 msgid "You have a few reports waiting to be read already. Give a moderator a chance to catch up."
 msgstr "Ya tienes algunos reportes esperando ser leídos. Dale un chance a un moderador para ponerse al día."
+
+#: src/routes/farm-helper.tsx
+msgid "You have a score, but players near you score higher on it."
+msgstr "Tienes puntaje, pero jugadores cerca de ti puntúan más alto."
 
 #: src/routes/skins.tsx
 msgid "You have not published a skin yet"
@@ -11190,8 +11678,20 @@ msgid "you have too many active marks, clear some first"
 msgstr "tienes demasiadas marcas activas, borra algunas primero"
 
 #: src/routes/farm-helper.tsx
+msgid "You marked this too easy"
+msgstr "Marcaste este como muy fácil"
+
+#: src/routes/farm-helper.tsx
+msgid "You marked this too hard"
+msgstr "Marcaste este como muy difícil"
+
+#: src/routes/farm-helper.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
 msgstr "Estás en {yourPp}pp mientras los jugadores cerca de ti promedian {median}pp, así que hay margen de mejora en una rerun."
+
+#: src/components/packs/StreakGame.tsx
+msgid "You stopped at {streak} in a row."
+msgstr "Te detuviste en {streak} seguidos."
 
 #. placeholder {0}: nf(reachTargetNum)
 #: src/components/me/GoalsPanel.tsx
@@ -11233,6 +11733,10 @@ msgstr "tu {yourPp}pp · {age} de antigüedad"
 msgid "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
 msgstr "Tu score de {yourPp}pp tiene {age} de antigüedad. El 25% superior de los jugadores cerca de ti está en {p75}pp."
 
+#: src/routes/farm-helper.tsx
+msgid "your best"
+msgstr "tu mejor"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 msgstr "Tu mejor score en el último mapa que alguien mostró en el canal (de /recent, /map, ...). También /c y /compare. Pasa un nombre para buscar a otra persona."
@@ -11249,6 +11753,10 @@ msgstr "Tu descripción se verá aquí."
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Your dynamic renders were turned off."
 msgstr "Se desactivaron tus renders dinámicos."
+
+#: src/routes/farm-helper.tsx
+msgid "your marks"
+msgstr "tus marcas"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
@@ -11305,7 +11813,7 @@ msgstr "Tu servidor aparecerá aquí cuando sea aprobado. Hasta entonces puedes 
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "your showcase"
-msgstr "tu vitrina"
+msgstr "tus destacados"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -11324,6 +11832,7 @@ msgstr "Tus subidas"
 msgid "Your username and avatar"
 msgstr "Tu nombre de usuario y avatar"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "Video de YouTube"

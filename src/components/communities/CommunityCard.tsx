@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Plural, useLingui } from "@lingui/react/macro";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { Lock, Pencil, Users } from "lucide-react";
 import { track } from "../../lib/analytics";
 import { communityEventProperties, rememberCommunityName } from "../../lib/analytics-communities";
@@ -161,10 +161,10 @@ export function CommunityCard({
                the card is still worth having read. */
             <span
               className="inline-flex items-center gap-1.5 rounded-full bg-osu-b3/45 px-4 py-1.5 text-[12.5px] font-bold text-osu-f1"
-              title={preview ? undefined : "Only people from here can join"}
+              title={preview ? undefined : t`Only people from here can join`}
             >
               {!preview && <Lock className="h-3 w-3" aria-hidden="true" />}
-              {preview ? "Join" : (accessLabel ?? "Closed")}
+              {preview ? t`Join` : (accessLabel ?? t`Closed`)}
             </span>
           ) : (
             <a
@@ -174,13 +174,13 @@ export function CommunityCard({
               onClick={() => track("community_join", communityEventProperties(community))}
               className="relative z-10 inline-flex items-center justify-center rounded-full bg-osu-pink px-4 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110"
             >
-              Join
+              <Trans>Join</Trans>
             </a>
           )}
           {/* The osu! account that posted it, with the osu! avatar: the Discord
               account is only the proof of ownership and is never shown here. */}
           <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-osu-f1/70">
-            posted by
+            <Trans>posted by</Trans>
             <Avatar userId={community.ownerUserId} size={16} />
             <span className="min-w-0 truncate font-semibold text-osu-l2">{community.ownerUsername}</span>
           </span>

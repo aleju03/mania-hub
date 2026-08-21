@@ -6,7 +6,8 @@ import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
 import { getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryName, isGlobalScope } from "../lib/country";
+import { displayCountryName, isGlobalScope } from "../lib/country";
+import { useLocale } from "../lib/locale-context";
 import { isRegionScope } from "../lib/regions";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy } from "../lib/format";
@@ -88,7 +89,7 @@ export const Route = createFileRoute("/rankings")({
   },
   head: ({ match }) => {
     const country = match.search.country;
-    const countryName = country ? getCountryName(country) : null;
+    const countryName = country ? displayCountryName(country, match.context.locale) : null;
     const i18n = getI18n(match.context.locale);
     return pageSeo({
       title: countryName ? i18n._(msg`${countryName} mania rankings`) : i18n._(msg`Country mania rankings`),
@@ -125,7 +126,8 @@ function RankingsPage() {
   const pageData = page === 1 ? cachedPageOneData : pageTwoData;
   const [rankingsLoading, setRankingsLoading] = useState(!(page === 1 ? cachedPageOneData : pageTwoData));
   const [deltasLoading, setDeltasLoading] = useState(false);
-  const countryName = getCountryName(selectedCountry);
+  const locale = useLocale();
+  const countryName = displayCountryName(selectedCountry, locale);
   const totalPlayers = cachedPageOneData?.total ?? pageData?.total ?? 0;
   const hasNextPage = totalPlayers > 50;
   const { warming } = useCountryWarming(selectedCountry);

@@ -330,6 +330,7 @@ function SkillPlayRow({
   // to it) buys more than the request costs, so the modal usually opens whole.
   onPrefetch: () => void;
 }) {
+  const { t } = useLingui();
   const rateMod = rateModFor(play.rate);
   return (
     <button
@@ -338,7 +339,7 @@ function SkillPlayRow({
       onPointerEnter={onPrefetch}
       onFocus={onPrefetch}
       className="group flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-xl border border-transparent bg-osu-b4/55 px-2 py-2 text-left transition-colors hover:border-osu-b3/30 hover:bg-osu-b4 sm:gap-3 sm:px-3"
-      title="View map details"
+      title={t`View map details`}
     >
       <span className="w-6 shrink-0 text-right text-[11px] font-bold tabular-nums text-osu-f1 sm:w-7 sm:text-xs">{position}.</span>
       <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded-md bg-osu-b3/35 sm:h-12 sm:w-20">
@@ -364,7 +365,7 @@ function SkillPlayRow({
           </span>
           <span className="rounded bg-osu-b3/35 px-1 py-0.5 font-bold text-osu-yellow">{play.keyCount}K</span>
           {rateMod ? <ModBadge mod={rateMod.acronym} rate={rateMod.rate} size={0.8} /> : null}
-          <span>{play.source === "top" ? "profile top play" : "tracked history"}</span>
+          <span>{play.source === "top" ? t`profile top play` : t`tracked history`}</span>
           {play.playedAt ? (
             <span className="hidden sm:inline" title={formatTimeAgoTooltip(play.playedAt)}>{formatTimeAgo(play.playedAt)}</span>
           ) : null}
@@ -374,7 +375,7 @@ function SkillPlayRow({
         {play.accuracy != null ? (
           <div>
             <div className="text-xs font-semibold tabular-nums text-osu-l2">{formatAccuracy(play.accuracy)}</div>
-            <div className="mt-0.5 text-[8px] uppercase tracking-wide text-osu-f1">accuracy</div>
+            <div className="mt-0.5 text-[8px] uppercase tracking-wide text-osu-f1">{t`accuracy`}</div>
           </div>
         ) : null}
         {play.pp != null ? (
@@ -386,7 +387,7 @@ function SkillPlayRow({
       </div>
       <div className="w-14 shrink-0 text-right sm:w-16">
         <div className="text-base font-black leading-none tabular-nums sm:text-lg" style={{ color }}>{play.rating.toFixed(2)}</div>
-        <div className="mt-1 truncate text-[8px] font-semibold uppercase tracking-wide text-osu-f1" title={`${label} rating`}>{label}</div>
+        <div className="mt-1 truncate text-[8px] font-semibold uppercase tracking-wide text-osu-f1" title={t`${label} rating`}>{label}</div>
       </div>
     </button>
   );

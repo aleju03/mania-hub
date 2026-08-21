@@ -1,4 +1,4 @@
-import { Trans, useLingui } from "@lingui/react/macro";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { Trans as MessageTrans } from "@lingui/react";
 /* The runtime <Trans>, alongside the macro one above. The question sentence
    is a message descriptor picked out of a table at render (which metric was
@@ -1262,8 +1262,8 @@ export function StreakGame({
                   {streak}
                 </motion.div>
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
-                  streak
-                  {!blitz && best > 0 && <span className="ml-1.5 normal-case tracking-normal">best {best}</span>}
+                  <Trans>streak</Trans>
+                  {!blitz && best > 0 && <span className="ml-1.5 normal-case tracking-normal"><Trans>best {best}</Trans></span>}
                 </div>
               </div>
             </div>
@@ -1300,7 +1300,7 @@ export function StreakGame({
                     }}
                   />
                 ) : (
-                  <span className="font-semibold text-osu-f1">Dealing a matchup…</span>
+                  <span className="font-semibold text-osu-f1"><Trans>Dealing a matchup…</Trans></span>
                 )}
               </div>
               {blitz && clockDeadline !== null && !over && (
@@ -1312,7 +1312,7 @@ export function StreakGame({
               <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-osu-f1">
                 {!over && (
                   <span>
-                    next bonus at {nextStreakMilestone(streak).at} in a row
+                    <Trans>next bonus at {nextStreakMilestone(streak).at} in a row</Trans>
                     <span className="ml-1 font-semibold text-white tabular-nums">
                       +{nextStreakMilestone(streak).bonus}
                     </span>
@@ -1322,7 +1322,7 @@ export function StreakGame({
                   <span className="flex items-center gap-1.5">
                     <Recycle className="h-3 w-3" />
                     <span className="tabular-nums">{allowance.remainingToday}</span>
-                    <span>of {allowance.cap} shards left today</span>
+                    <span><Trans>of {allowance.cap} shards left today</Trans></span>
                   </span>
                 )}
               </div>
@@ -1336,7 +1336,7 @@ export function StreakGame({
                   onClick={onExit}
                   className="mt-5 inline-block rounded-full bg-osu-pink px-6 py-2 text-sm font-bold text-white transition hover:brightness-110 cursor-pointer"
                 >
-                  Back to packs
+                  <Trans>Back to packs</Trans>
                 </button>
               </div>
             ) : dealing || !round || !copy ? (
@@ -1393,30 +1393,32 @@ export function StreakGame({
                     >
                       <div className="text-sm font-bold text-white">
                         {endedBy === "cashout"
-                          ? `You stopped at ${streak} in a row.`
+                          ? t`You stopped at ${streak} in a row.`
                           : endedBy === "timeout" && round.rightValue === null
-                            ? "Out of time."
+                            ? t`Out of time.`
                             : i18n._(copy.reveal(round.right.player.username, round.rightValue ?? 0, locale))}
                       </div>
                       <div className="text-[12px] text-osu-f1">
                         {streak === 0
-                          ? "No streak this time."
-                          : `You got ${streak} right${newBest ? ", a new best" : ""}.`}
+                          ? t`No streak this time.`
+                          : newBest
+                            ? t`You got ${streak} right, a new best.`
+                            : t`You got ${streak} right.`}
                       </div>
                       {earned !== null && earned > 0 && (
                         <div className="flex items-center gap-1.5 text-[12px] font-bold text-emerald-400">
                           <Recycle className="h-3.5 w-3.5" />
                           <span className="tabular-nums">+{earned}</span>
-                          <span>shards</span>
+                          <span><Trans>shards</Trans></span>
                         </div>
                       )}
                       {earned === 0 && streak > 0 && (
                         <div className="text-[11px] text-osu-f1">
-                          That is today's shard allowance spent. The streak still counts.
+                          <Trans>That is today's shard allowance spent. The streak still counts.</Trans>
                         </div>
                       )}
                       {!auth.viewer && streak > 0 && auth.loginAvailable && (
-                        <div className="text-[11px] text-osu-f1">Sign in and runs like that pay shards.</div>
+                        <div className="text-[11px] text-osu-f1"><Trans>Sign in and runs like that pay shards.</Trans></div>
                       )}
                       <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
                         <button
@@ -1424,7 +1426,7 @@ export function StreakGame({
                           onClick={() => void start()}
                           className="rounded-full bg-osu-pink px-7 py-2.5 text-sm font-bold text-white transition hover:brightness-110 cursor-pointer"
                         >
-                          Play again
+                          <Trans>Play again</Trans>
                         </button>
                       </div>
                     </motion.div>
@@ -1473,7 +1475,7 @@ export function StreakGame({
                       ))}
                     </div>
                       {timedOut ? (
-                        <div className="text-[12px] font-bold text-rose-400">Out of time.</div>
+                        <div className="text-[12px] font-bold text-rose-400"><Trans>Out of time.</Trans></div>
                       ) : (
                         <div className="flex flex-wrap items-center justify-center gap-3">
                           {/* For a round nobody has a read on. It is a coin
@@ -1485,7 +1487,7 @@ export function StreakGame({
                           <button
                             type="button"
                             onClick={rollDice}
-                            aria-label="Guess at random"
+                            aria-label={t`Guess at random`}
                             disabled={revealed || rolled !== null}
                             className={`inline-flex items-center gap-1.5 rounded-full border px-5 py-2 text-[12px] font-bold transition active:scale-95 ${
                               revealed || rolled
@@ -1519,10 +1521,10 @@ export function StreakGame({
                               {auth.viewer ? (
                                 <>
                                   <Recycle className="h-3.5 w-3.5" />
-                                  {`Claim ${streakShardValue(streak)} ${streakShardValue(streak) === 1 ? "shard" : "shards"}`}
+                                  <Plural value={streakShardValue(streak)} one="Claim # shard" other="Claim # shards" />
                                 </>
                               ) : (
-                                "End the run"
+                                <Trans>End the run</Trans>
                               )}
                             </button>
                           )}
@@ -1537,7 +1539,7 @@ export function StreakGame({
                     onClick={onExit}
                     className="text-[11px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
                   >
-                    Back to packs
+                    <Trans>Back to packs</Trans>
                   </button>
                 </div>
               </>

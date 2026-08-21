@@ -56,7 +56,7 @@ import {
   X,
   Youtube,
 } from "lucide-react";
-import { Trans, useLingui } from "@lingui/react/macro";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { buildGradientBBCode, containsBBCode, gradientCharColors, normalizeHexColor, parseYoutubeInput, shiftHexHue, type BBAlign, type BBSourceSpan } from "../../../lib/bbcode";
 import {
@@ -3451,34 +3451,34 @@ export function BBCodeEditor({
 
       {/* Toolbar */}
       <div className="flex items-center gap-0.5 px-3 py-2 border-b border-osu-b3/30 overflow-x-auto">
-        <ToolButton label="Bold" active={editMode === "visual" && inlineStates.bold} onClick={() => applyInline("bold", "b", "text")}><Bold size={15} /></ToolButton>
-        <ToolButton label="Italic" active={editMode === "visual" && inlineStates.italic} onClick={() => applyInline("italic", "i", "text")}><Italic size={15} /></ToolButton>
-        <ToolButton label="Underline" active={editMode === "visual" && inlineStates.underline} onClick={() => applyInline("underline", "u", "text")}><Underline size={15} /></ToolButton>
-        <ToolButton label="Strikethrough" active={editMode === "visual" && inlineStates.strike} onClick={() => applyInline("strikeThrough", "s", "text")}><Strikethrough size={15} /></ToolButton>
-        <ToolButton label="Spoiler text" onClick={() => applyWrap("spoiler", undefined, "[spoiler]", "[/spoiler]", "secret")}><EyeOff size={15} /></ToolButton>
+        <ToolButton label={t`Bold`} active={editMode === "visual" && inlineStates.bold} onClick={() => applyInline("bold", "b", "text")}><Bold size={15} /></ToolButton>
+        <ToolButton label={t`Italic`} active={editMode === "visual" && inlineStates.italic} onClick={() => applyInline("italic", "i", "text")}><Italic size={15} /></ToolButton>
+        <ToolButton label={t`Underline`} active={editMode === "visual" && inlineStates.underline} onClick={() => applyInline("underline", "u", "text")}><Underline size={15} /></ToolButton>
+        <ToolButton label={t`Strikethrough`} active={editMode === "visual" && inlineStates.strike} onClick={() => applyInline("strikeThrough", "s", "text")}><Strikethrough size={15} /></ToolButton>
+        <ToolButton label={t`Spoiler text`} onClick={() => applyWrap("spoiler", undefined, "[spoiler]", "[/spoiler]", "secret")}><EyeOff size={15} /></ToolButton>
         <ToolDivider />
-        <ToolButton label="Text color" active={dialog === "color" || (editMode === "visual" && selectionColor != null)} onClick={() => openDialog("color")}><Palette size={15} /></ToolButton>
-        <ToolButton label="Gradient text" active={dialog === "gradient"} onClick={() => openDialog("gradient")}><Rainbow size={15} /></ToolButton>
-        <ToolButton label="Text size" active={dialog === "size" || (editMode === "visual" && selectionSize != null)} onClick={() => openDialog("size")}><ALargeSmall size={15} /></ToolButton>
+        <ToolButton label={t`Text color`} active={dialog === "color" || (editMode === "visual" && selectionColor != null)} onClick={() => openDialog("color")}><Palette size={15} /></ToolButton>
+        <ToolButton label={t`Gradient text`} active={dialog === "gradient"} onClick={() => openDialog("gradient")}><Rainbow size={15} /></ToolButton>
+        <ToolButton label={t`Text size`} active={dialog === "size" || (editMode === "visual" && selectionSize != null)} onClick={() => openDialog("size")}><ALargeSmall size={15} /></ToolButton>
         <ToolDivider />
-        <ToolButton label="Link" active={dialog === "link"} onClick={() => openDialog("link")}><Link size={15} /></ToolButton>
-        <ToolButton label="Image" active={dialog === "image"} onClick={() => openDialog("image")}><Image size={15} /></ToolButton>
-        <ToolButton label="YouTube video" active={dialog === "youtube"} onClick={() => openDialog("youtube")}><Youtube size={15} /></ToolButton>
-        <ToolButton label="Audio" active={dialog === "audio"} onClick={() => openDialog("audio")}><Music size={15} /></ToolButton>
-        <ToolButton label="Profile link" active={dialog === "profile"} onClick={() => openDialog("profile")}><UserRound size={15} /></ToolButton>
+        <ToolButton label={t`Link`} active={dialog === "link"} onClick={() => openDialog("link")}><Link size={15} /></ToolButton>
+        <ToolButton label={t`Image`} active={dialog === "image"} onClick={() => openDialog("image")}><Image size={15} /></ToolButton>
+        <ToolButton label={t`YouTube video`} active={dialog === "youtube"} onClick={() => openDialog("youtube")}><Youtube size={15} /></ToolButton>
+        <ToolButton label={t`Audio`} active={dialog === "audio"} onClick={() => openDialog("audio")}><Music size={15} /></ToolButton>
+        <ToolButton label={t`Profile link`} active={dialog === "profile"} onClick={() => openDialog("profile")}><UserRound size={15} /></ToolButton>
         <ToolDivider />
-        <ToolButton label="Heading" onClick={() => applyWrap("heading", undefined, "[heading]", "[/heading]", "Heading")}><Heading1 size={15} /></ToolButton>
-        <ToolButton label="Align left" active={editMode === "visual" && selectionAlign === "left"} onClick={() => applyWrap("left", undefined, "[left]", "[/left]", "text")}><AlignLeft size={15} /></ToolButton>
-        <ToolButton label="Center" active={editMode === "visual" && selectionAlign === "centre"} onClick={() => applyWrap("centre", undefined, "[centre]", "[/centre]", "text")}><AlignCenter size={15} /></ToolButton>
-        <ToolButton label="Align right" active={editMode === "visual" && selectionAlign === "right"} onClick={() => applyWrap("right", undefined, "[right]", "[/right]", "text")}><AlignRight size={15} /></ToolButton>
+        <ToolButton label={t`Heading`} onClick={() => applyWrap("heading", undefined, "[heading]", "[/heading]", "Heading")}><Heading1 size={15} /></ToolButton>
+        <ToolButton label={t`Align left`} active={editMode === "visual" && selectionAlign === "left"} onClick={() => applyWrap("left", undefined, "[left]", "[/left]", "text")}><AlignLeft size={15} /></ToolButton>
+        <ToolButton label={t`Center`} active={editMode === "visual" && selectionAlign === "centre"} onClick={() => applyWrap("centre", undefined, "[centre]", "[/centre]", "text")}><AlignCenter size={15} /></ToolButton>
+        <ToolButton label={t`Align right`} active={editMode === "visual" && selectionAlign === "right"} onClick={() => applyWrap("right", undefined, "[right]", "[/right]", "text")}><AlignRight size={15} /></ToolButton>
         <ToolButton label="Quote" onClick={() => applyWrap("quote", undefined, "[quote]", "[/quote]", "quote")}><TextQuote size={15} /></ToolButton>
-        <ToolButton label="Notice" onClick={() => applyWrap("notice", undefined, "[notice]\n", "\n[/notice]", "important")}><Megaphone size={15} /></ToolButton>
-        <ToolButton label="Collapsible box" active={dialog === "box"} onClick={() => openDialog("box")}><ChevronsDownUp size={15} /></ToolButton>
-        <ToolButton label="Inline code" onClick={() => applyWrap("c", undefined, "[c]", "[/c]", "code")}><Braces size={15} /></ToolButton>
-        <ToolButton label="Code block" onClick={() => applyWrap("codeblock", undefined, "[code]\n", "\n[/code]", "code")}><Code size={15} /></ToolButton>
-        <ToolButton label="Bullet list" onClick={() => insertList(false)}><List size={15} /></ToolButton>
-        <ToolButton label="Numbered list" onClick={() => insertList(true)}><ListOrdered size={15} /></ToolButton>
-        <ToolButton label="Imagemap (clickable areas on an image)" onClick={applyImagemapTool}>
+        <ToolButton label={t`Notice`} onClick={() => applyWrap("notice", undefined, "[notice]\n", "\n[/notice]", "important")}><Megaphone size={15} /></ToolButton>
+        <ToolButton label={t`Collapsible box`} active={dialog === "box"} onClick={() => openDialog("box")}><ChevronsDownUp size={15} /></ToolButton>
+        <ToolButton label={t`Inline code`} onClick={() => applyWrap("c", undefined, "[c]", "[/c]", "code")}><Braces size={15} /></ToolButton>
+        <ToolButton label={t`Code block`} onClick={() => applyWrap("codeblock", undefined, "[code]\n", "\n[/code]", "code")}><Code size={15} /></ToolButton>
+        <ToolButton label={t`Bullet list`} onClick={() => insertList(false)}><List size={15} /></ToolButton>
+        <ToolButton label={t`Numbered list`} onClick={() => insertList(true)}><ListOrdered size={15} /></ToolButton>
+        <ToolButton label={t`Imagemap (clickable areas on an image)`} onClick={applyImagemapTool}>
           <Map size={15} />
         </ToolButton>
         <div className="ml-auto pl-2 flex items-center gap-0.5 shrink-0">
@@ -3493,7 +3493,7 @@ export function BBCodeEditor({
                   : "text-osu-f1 border border-transparent hover:text-osu-l2"
               }`}
             >
-              {mode === "visual" ? "Visual" : "BBCode"}
+              {mode === "visual" ? t`Visual` : "BBCode"}
             </button>
           ))}
         </div>
@@ -3501,7 +3501,7 @@ export function BBCodeEditor({
 
       {restoredDraft ? (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-osu-b3/30 text-[12px] text-osu-yellow">
-          Restored an unsaved draft from this browser.
+          <Trans>Restored an unsaved draft from this browser.</Trans>
           <button
             type="button"
             onClick={() => {
@@ -3512,7 +3512,7 @@ export function BBCodeEditor({
             }}
             className="underline text-osu-l2 hover:text-osu-c1 cursor-pointer"
           >
-            Discard draft
+            <Trans>Discard draft</Trans>
           </button>
         </div>
       ) : null}
@@ -3526,8 +3526,8 @@ export function BBCodeEditor({
             <button
               type="button"
               onClick={dismissOverlay}
-              title="Close"
-              aria-label="Close"
+              title={t`Close`}
+              aria-label={t`Close`}
               className="absolute top-1.5 right-1.5 z-10 grid h-6 w-6 place-items-center rounded-md text-osu-f1 hover:text-white hover:bg-osu-b3/60 transition-colors cursor-pointer"
             >
               <X size={15} />
@@ -3545,7 +3545,7 @@ export function BBCodeEditor({
                 {uploadStatus.kind === "uploading" || uploadStatus.kind === "resizing" ? (
                   <>
                     <span className="h-3.5 w-3.5 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
-                    {uploadStatus.kind === "resizing" ? "Resizing image..." : "Uploading image..."}
+                    {uploadStatus.kind === "resizing" ? t`Resizing image...` : t`Uploading image...`}
                   </>
                 ) : (
                   <>
@@ -3590,7 +3590,7 @@ export function BBCodeEditor({
             onDragOver={handleDragOver}
             onInput={scheduleVisualSync}
             onBlur={() => flushVisual()}
-            data-placeholder="Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."
+            data-placeholder={t`Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it.`}
             className="bbcode-content bbcode-editor-surface py-3 text-sm text-osu-l2 focus:outline-none"
           />
         </div>
@@ -3628,7 +3628,7 @@ export function BBCodeEditor({
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 spellCheck={false}
-                placeholder="Write BBCode here, or paste your current me! page source..."
+                placeholder={t`Write BBCode here, or paste your current me! page source...`}
                 style={{ paddingBottom: surfacePadBottom }}
                 className={`${paneHeightClass} w-full resize-none bg-transparent px-4 py-3 text-[13px] leading-relaxed font-mono text-osu-l2 placeholder:text-osu-f1 focus:outline-none`}
               />
@@ -3656,20 +3656,20 @@ export function BBCodeEditor({
 
       {/* Footer */}
       <div className="flex items-center gap-3 px-4 py-2 border-t border-osu-b3/30 text-[12px] text-osu-f1">
-        <span>{charCount.toLocaleString("en-US")} characters</span>
-        <span className="hidden sm:inline">Draft autosaves locally</span>
+        <span><Trans>{charCount.toLocaleString("en-US")} characters</Trans></span>
+        <span className="hidden sm:inline"><Trans>Draft autosaves locally</Trans></span>
         {pendingImageCount > 0 ? (
           <span className="text-osu-c1">
-            {pendingImageCount} image{pendingImageCount > 1 ? "s" : ""} upload on copy
+            <Plural value={pendingImageCount} one="# image uploads on copy" other="# images upload on copy" />
           </span>
         ) : null}
         {hasCapturedFormat ? (
-          <span className="hidden sm:inline text-osu-c1">formatting copied - right-click text to paste</span>
+          <span className="hidden sm:inline text-osu-c1"><Trans>formatting copied - right-click text to paste</Trans></span>
         ) : null}
         {/* Only worth offering while the pane is too narrow for a profile. */}
         {fitScale < 0.999 ? (
           <div className="flex items-center gap-0.5">
-            {([["fit", "Fit"], ["full", "Actual size"]] as const).map(([mode, label]) => (
+            {([["fit", t`Fit`], ["full", t`Actual size`]] as const).map(([mode, label]) => (
               <button
                 key={mode}
                 type="button"
@@ -3693,8 +3693,8 @@ export function BBCodeEditor({
           }`}
         >
           {confirmReset
-            ? (baseSource ? "Click again to discard edits" : "Click again to clear")
-            : (baseSource ? "Reset to current page" : "Clear editor")}
+            ? (baseSource ? t`Click again to discard edits` : t`Click again to clear`)
+            : (baseSource ? t`Reset to current page` : t`Clear editor`)}
         </button>
       </div>
 

@@ -518,6 +518,8 @@ function NotFoundPage() {
 const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
 
 function KofiSupportButton() {
+  // getI18n rather than useLingui for the same reason as RootErrorComponent.
+  const i = getI18n(useLocale());
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
@@ -566,7 +568,7 @@ function KofiSupportButton() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                aria-label="Close"
+                aria-label={i._(msg`Close`)}
                 className="cursor-pointer rounded-md p-1 text-osu-f1 transition-colors hover:bg-osu-b3/60 hover:text-white"
               >
                 <X className="h-4 w-4" />

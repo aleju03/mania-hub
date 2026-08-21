@@ -5,7 +5,8 @@ import { msg } from "@lingui/core/macro";
 import { motion } from "framer-motion";
 import { getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryName, isGlobalScope } from "../lib/country";
+import { displayCountryName, isGlobalScope } from "../lib/country";
+import { useLocale } from "../lib/locale-context";
 import { isRegionScope } from "../lib/regions";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
@@ -95,7 +96,7 @@ export const Route = createFileRoute("/")({
   },
   head: ({ match }) => {
     const country = match.search.country;
-    const countryName = country ? getCountryName(country) : null;
+    const countryName = country ? displayCountryName(country, match.context.locale) : null;
     const i18n = getI18n(match.context.locale);
     return pageSeo({
       title: i18n._(HOME_SEO_TITLE_MSG),
@@ -351,6 +352,7 @@ function selectFeaturedHomePopoffs(popoffs: LeanHomePopoff[], limit = 3): LeanHo
 
 function HomePage() {
   const { t } = useLingui();
+  const locale = useLocale();
   const navigate = useNavigate();
   const { country } = Route.useSearch();
   const loaderData = Route.useLoaderData();
@@ -407,7 +409,7 @@ function HomePage() {
   // stale-while-revalidate instead.
   const displayablePopoffsCount = (selectedIsGlobal ? filterHomeGlobalPopoffs(popoffs) : popoffs).length;
   const [loadingPopoffs, setLoadingPopoffs] = useState(() => displayablePopoffsCount === 0);
-  const countryName = getCountryName(selectedCountry);
+  const countryName = displayCountryName(selectedCountry, locale);
   const homeTopPlaysRange = selectedIsGlobal ? "24h" : hydrated ? topPlaysRange : "7d";
 
   useEffect(() => {

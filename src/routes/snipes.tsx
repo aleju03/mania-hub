@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
-import { getCountryName, isGlobalScope } from "../lib/country";
+import { displayCountryName, isGlobalScope } from "../lib/country";
+import { useLocale } from "../lib/locale-context";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo } from "../lib/format";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -63,7 +64,7 @@ function readRange(value: unknown): RangeFilter {
 export const Route = createFileRoute("/snipes")({
   head: ({ match }) => {
     const country = match.search.country;
-    const countryName = country ? getCountryName(country) : null;
+    const countryName = country ? displayCountryName(country, match.context.locale) : null;
     const i18n = getI18n(match.context.locale);
     return {
       meta: [
@@ -92,7 +93,8 @@ function SnipesPage() {
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = search.country ?? fallbackCountry;
-  const countryName = getCountryName(selectedCountry);
+  const locale = useLocale();
+  const countryName = displayCountryName(selectedCountry, locale);
 
   // Stale-response guard: compares against the component's view of the
   // current resolved country (route search > store fallback). The store

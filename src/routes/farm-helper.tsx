@@ -2,7 +2,7 @@ import { createFileRoute, Link, Outlet, useMatches, useNavigate } from "@tanstac
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trans, useLingui } from "@lingui/react/macro";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg, plural } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import {
@@ -1100,7 +1100,7 @@ function SubjectBar({
   onKeyMode: (next: LiveFarmHelperKeyMode) => void;
   onChangePlayer: () => void;
 }) {
-  const { i18n } = useLingui();
+  const { t, i18n } = useLingui();
   const unit = gainUnitLabel(visibleSnapshot ?? snapshot);
   // Locked skillboost rows are off the default view (and out of the server's
   // headline total), so the map count and biggest-gain figures skip them too.
@@ -1152,13 +1152,13 @@ function SubjectBar({
                   onClick={onChangePlayer}
                   className="shrink-0 rounded-full border border-osu-b3/40 px-2 py-[3px] text-[10px] font-semibold uppercase tracking-wide text-osu-f1 transition-colors hover:border-osu-pink/50 hover:text-osu-c1"
                 >
-                  change
+                  <Trans>change</Trans>
                 </button>
               </div>
               {refreshing ? (
                 <Skeleton className="mt-1.5 h-2.5 w-48 max-w-full" />
               ) : loadFailed ? (
-                <div className="mt-0.5 text-[11px] text-osu-red-light">couldn't load this view</div>
+                <div className="mt-0.5 text-[11px] text-osu-red-light"><Trans>couldn't load this view</Trans></div>
               ) : (
                 <div className="mt-0.5 truncate text-[11px] text-osu-f1">{peerBandRangeLabel(snapshot, i18n)}</div>
               )}
@@ -1167,10 +1167,10 @@ function SubjectBar({
 
           <div className="shrink-0 sm:border-l sm:border-osu-b3/25 sm:pl-5">
             <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">
-              {view === "popular" ? "popular near you" : "you could gain"}
+              {view === "popular" ? <Trans>popular near you</Trans> : <Trans>you could gain</Trans>}
             </div>
             {loadFailed ? (
-              <div className="mt-1 text-[13px] font-bold text-osu-f1">unavailable</div>
+              <div className="mt-1 text-[13px] font-bold text-osu-f1"><Trans>unavailable</Trans></div>
             ) : refreshing || !visibleSnapshot ? (
               <div className="mt-1.5 space-y-1.5">
                 <Skeleton className="h-7 w-32" />
@@ -1180,9 +1180,9 @@ function SubjectBar({
               <>
                 <div className="text-2xl font-black leading-tight tabular-nums text-osu-c1">
                   {formatPp(visibleSnapshot.totalQualifying || mapCount)}
-                  <span className="ml-1.5 text-sm font-bold text-osu-f1">maps</span>
+                  <span className="ml-1.5 text-sm font-bold text-osu-f1"><Trans>maps</Trans></span>
                 </div>
-                <div className="text-[11px] text-osu-f1">what nearby players actually farm</div>
+                <div className="text-[11px] text-osu-f1"><Trans>what nearby players actually farm</Trans></div>
               </>
             ) : (
               <>
@@ -1191,8 +1191,8 @@ function SubjectBar({
                   <span className="ml-1.5 text-sm font-bold text-osu-pink/90">{unit}</span>
                 </div>
                 <div className="text-[11px] text-osu-f1">
-                  across {formatPp(mapCount)} map{mapCount === 1 ? "" : "s"}
-                  {biggest > 0 ? ` · biggest ${formatGainWithUnit(biggest, unit)}` : ""}
+                  <Plural value={mapCount} one="across # map" other="across # maps" />
+                  {biggest > 0 ? <>{" · "}<Trans>biggest {formatGainWithUnit(biggest, unit)}</Trans></> : null}
                 </div>
               </>
             )}
@@ -1201,8 +1201,8 @@ function SubjectBar({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-osu-b3/20 bg-osu-b5/40 px-3 py-2 sm:px-4">
-        <div className="flex items-center gap-1" role="group" aria-label="View mode">
-          {([["gain", "for you"], ["popular", "popular"]] as const).map(([value, label]) => (
+        <div className="flex items-center gap-1" role="group" aria-label={t`View mode`}>
+          {([["gain", t`for you`], ["popular", t`popular`]] as const).map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -1222,8 +1222,8 @@ function SubjectBar({
         <span className="hidden h-4 w-px bg-osu-b3/40 sm:block" />
 
         <div className="ml-auto flex items-center gap-2 sm:ml-0">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-osu-f1/70">keys</span>
-          <div className="flex overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label="Key mode">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-osu-f1/70"><Trans>keys</Trans></span>
+          <div className="flex overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label={t`Key mode`}>
             {(["any", "4k", "7k"] as const).map((mode) => (
               <button
                 key={mode}
@@ -1234,7 +1234,7 @@ function SubjectBar({
                   keyMode === mode ? "bg-osu-b3 text-osu-l2" : "bg-transparent text-osu-f1 hover:text-osu-l2"
                 }`}
               >
-                {mode}
+                {mode === "any" ? t`any` : mode}
               </button>
             ))}
           </div>
@@ -1271,12 +1271,13 @@ function BoardToolbar({
   onSort: (next: SortMode) => void;
   countLabel: string | null;
 }) {
+  const { t, i18n } = useLingui();
   const tabs: Array<{ value: ReasonFilter; label: string; dot: string }> = [
-    { value: "all", label: "everything", dot: "bg-osu-f1" },
-    { value: "missing", label: "missing", dot: REASON_META.missing.accent },
-    { value: "improve", label: "improve", dot: REASON_META.improve.accent },
-    { value: "stale", label: "old pb", dot: REASON_META.stale.accent },
-    { value: "push", label: "skillboost", dot: REASON_META.push.accent },
+    { value: "all", label: t`everything`, dot: "bg-osu-f1" },
+    { value: "missing", label: i18n._(REASON_META.missing.label), dot: REASON_META.missing.accent },
+    { value: "improve", label: i18n._(REASON_META.improve.label), dot: REASON_META.improve.accent },
+    { value: "stale", label: i18n._(REASON_META.stale.label), dot: REASON_META.stale.accent },
+    { value: "push", label: i18n._(REASON_META.push.label), dot: REASON_META.push.accent },
   ];
 
   return (
@@ -1304,7 +1305,7 @@ function BoardToolbar({
           </div>
         ) : (
           <div className="w-full min-w-0 text-[12px] font-semibold text-osu-l2 sm:w-auto sm:flex-1">
-            maps players near you farm
+            <Trans>maps players near you farm</Trans>
             {countLabel ? <span className="ml-1.5 font-normal text-osu-f1">{countLabel}</span> : null}
           </div>
         )}
@@ -1322,21 +1323,22 @@ function BoardToolbar({
 }
 
 function ToolbarSearch({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const { t } = useLingui();
   return (
     <div className="relative min-w-0 flex-1 sm:w-[200px] sm:flex-none">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="filter maps..."
-        aria-label="Filter maps"
+        placeholder={t`filter maps...`}
+        aria-label={t`Filter maps`}
         className="w-full rounded-lg border border-osu-b3/30 bg-osu-b4/70 py-1.5 pl-8 pr-7 text-[12px] text-osu-c1 placeholder:text-osu-f1 transition-colors focus:border-osu-h1/40 focus:outline-none"
       />
       {value ? (
         <button
           type="button"
           onClick={() => onChange("")}
-          aria-label="Clear search"
+          aria-label={t`Clear search`}
           className="absolute right-2 top-1/2 -translate-y-1/2 text-osu-f1 transition-colors hover:text-osu-l2"
         >
           <X className="h-3 w-3" />
@@ -1385,7 +1387,7 @@ function SortMenu({
         aria-haspopup="menu"
         className="flex items-center gap-1.5 rounded-lg border border-osu-b3/30 bg-osu-b4/70 px-2.5 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors hover:border-osu-b3/60 hover:text-osu-c1"
       >
-        <span className="text-osu-f1">sort</span>
+        <span className="text-osu-f1"><Trans>sort</Trans></span>
         {i18n._(active.label)}
         <span aria-hidden className="text-osu-pink">{sortDir === "desc" ? "↓" : "↑"}</span>
         <ChevronDown className={`h-3 w-3 text-osu-f1 transition-transform ${open ? "rotate-180" : ""}`} />
@@ -1426,7 +1428,7 @@ function SortMenu({
             );
           })}
           <div className="border-t border-osu-b3/30 px-3 py-1.5 text-[10px] text-osu-f1">
-            pick the active one again to flip direction
+            <Trans>pick the active one again to flip direction</Trans>
           </div>
         </div>
       ) : null}
@@ -1458,7 +1460,7 @@ function RecRow({
   /** Owner-only: the viewer's active feedback mark on this lane. */
   markedVerdict?: FarmHelperFeedbackVerdict | null;
 }) {
-  const { i18n } = useLingui();
+  const { t, i18n } = useLingui();
   const meta = REASON_META[rec.reason];
   const cover = rec.listCover || rec.cover;
 
@@ -1474,7 +1476,7 @@ function RecRow({
           onSelect();
         }
       }}
-      aria-label={`Preview ${rec.title} [${rec.version}]`}
+      aria-label={t`Preview ${rec.title} [${rec.version}]`}
       className={`group relative cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-osu-pink/60 ${
         selected ? "bg-osu-b3/50" : "hover:bg-osu-b3/25"
       }`}
@@ -1515,17 +1517,17 @@ function RecRow({
                 className={`shrink-0 font-bold uppercase tracking-wide ${
                   markedVerdict === "too_hard" ? "text-osu-orange" : "text-osu-green-light"
                 }`}
-                title={markedVerdict === "too_hard" ? "You marked this too hard" : "You marked this too easy"}
+                title={markedVerdict === "too_hard" ? t`You marked this too hard` : t`You marked this too easy`}
               >
-                {markedVerdict === "too_hard" ? "marked hard" : "marked easy"}
+                {markedVerdict === "too_hard" ? t`marked hard` : t`marked easy`}
               </span>
             ) : null}
             {rec.clearRisk ? (
               <span
                 className="shrink-0 font-bold uppercase tracking-wide text-osu-orange"
-                title="Finishing this looks risky for you; treat it as a clear attempt, not a farm"
+                title={t`Finishing this looks risky for you; treat it as a clear attempt, not a farm`}
               >
-                clear attempt
+                <Trans>clear attempt</Trans>
               </span>
             ) : null}
             <span className="shrink-0 tabular-nums text-osu-yellow">★{rec.stars.toFixed(2)}</span>
@@ -1556,7 +1558,7 @@ function RecRow({
               <div className="text-[15px] font-black leading-none tabular-nums text-osu-c1">
                 {Math.round(rec.peerFraction * 100)}%
               </div>
-              <div className="mt-0.5 text-[9px] uppercase tracking-wide text-osu-f1">play this</div>
+              <div className="mt-0.5 text-[9px] uppercase tracking-wide text-osu-f1"><Trans>play this</Trans></div>
               <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-osu-b6">
                 <div className="h-full rounded-full bg-osu-blue/60" style={{ width: `${clampPct(barPct)}%` }} />
               </div>
@@ -1631,7 +1633,7 @@ function RecPreview({
   onClose: () => void;
   className?: string;
 }) {
-  const { i18n } = useLingui();
+  const { t, i18n } = useLingui();
   const bar = comparisonBar(rec, i18n);
   const meta = REASON_META[rec.reason];
   const cover = rec.cover || rec.listCover;
@@ -1650,7 +1652,7 @@ function RecPreview({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close preview"
+          aria-label={t`Close preview`}
           className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-lg bg-black/50 text-white/80 transition-colors hover:bg-black/70 hover:text-white"
         >
           <X className="h-3.5 w-3.5" />
@@ -1670,9 +1672,9 @@ function RecPreview({
             {rec.clearRisk ? (
               <span
                 className="rounded-full bg-osu-orange/15 px-2 py-[3px] text-[10px] font-bold uppercase tracking-wide text-osu-orange"
-                title="Finishing this looks risky for you; treat it as a clear attempt, not a farm"
+                title={t`Finishing this looks risky for you; treat it as a clear attempt, not a farm`}
               >
-                clear attempt
+                <Trans>clear attempt</Trans>
               </span>
             ) : null}
             <span className="tabular-nums text-osu-yellow">★{rec.stars.toFixed(2)}</span>
@@ -1691,13 +1693,13 @@ function RecPreview({
               // Show the peer play share instead.
               <div className="flex items-end justify-between gap-3">
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1">of players near you</div>
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1"><Trans>of players near you</Trans></div>
                   <div className="mt-0.5 text-2xl font-black leading-none tabular-nums text-osu-c1">
                     {Math.round(rec.peerFraction * 100)}%
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1">your best</div>
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1"><Trans>your best</Trans></div>
                   <div className="mt-0.5 text-[14px] font-bold tabular-nums text-osu-c1">
                     {subjectBestLabel(rec, i18n)}
                   </div>
@@ -1706,14 +1708,14 @@ function RecPreview({
             ) : (
               <div className="flex items-end justify-between gap-3">
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1">estimated gain</div>
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1"><Trans>estimated gain</Trans></div>
                   <div className="mt-0.5 text-2xl font-black leading-none tabular-nums text-osu-pink">
                     +{formatPp(rec.estimatedPpGain)}
                     <span className="ml-1 text-[13px] font-bold text-osu-pink/70">{gainUnit}</span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1">target score</div>
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1"><Trans>target score</Trans></div>
                   <div className="mt-0.5 text-[14px] font-bold tabular-nums text-osu-c1">{formatPp(rec.benchmarkPp)}pp</div>
                 </div>
               </div>
@@ -1731,8 +1733,8 @@ function RecPreview({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <PreviewStat label="play this" value={`${Math.round(rec.peerFraction * 100)}%`} tone="text-osu-blue" />
-            <PreviewStat label="median" value={`${formatPp(rec.peerPpMedian)}pp`} tone="text-osu-c1" />
+            <PreviewStat label={t`play this`} value={`${Math.round(rec.peerFraction * 100)}%`} tone="text-osu-blue" />
+            <PreviewStat label={t`median`} value={`${formatPp(rec.peerPpMedian)}pp`} tone="text-osu-c1" />
           </div>
 
           <div className="flex gap-2">
@@ -1741,15 +1743,15 @@ function RecPreview({
               onClick={onOpenDetail}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-osu-pink px-3 py-2 text-[12px] font-bold text-white transition-colors hover:bg-osu-pink-light"
             >
-              full breakdown
+              <Trans>full breakdown</Trans>
               <ArrowRight className="h-3.5 w-3.5" />
             </button>
             <a
               href={rec.mapUrl}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Open map on osu!"
-              title="Open map on osu!"
+              aria-label={t`Open map on osu!`}
+              title={t`Open map on osu!`}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-osu-b3/40 text-osu-l2 transition-colors hover:border-osu-b3/70 hover:text-osu-c1"
             >
               <ExternalLink className="h-4 w-4" />
@@ -1759,7 +1761,7 @@ function RecPreview({
 
         {feedback ? (
           <div className="border-t border-osu-b3/25 px-3.5 py-3">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">tune your recs</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1"><Trans>tune your recs</Trans></div>
             <div className="mt-2 flex gap-2">
               <button
                 type="button"
@@ -1772,7 +1774,7 @@ function RecPreview({
                     : "border-osu-b3/40 text-osu-f1 hover:border-osu-orange/50 hover:text-osu-l2"
                 } ${feedback.pending ? "cursor-default opacity-60" : ""}`}
               >
-                too hard
+                <Trans>too hard</Trans>
               </button>
               <button
                 type="button"
@@ -1785,22 +1787,22 @@ function RecPreview({
                     : "border-osu-b3/40 text-osu-f1 hover:border-osu-green-light/50 hover:text-osu-l2"
                 } ${feedback.pending ? "cursor-default opacity-60" : ""}`}
               >
-                too easy
+                <Trans>too easy</Trans>
               </button>
             </div>
             <p className="mt-1.5 text-[10.5px] leading-snug text-osu-f1">
               {feedback.activeVerdict === "too_hard"
-                ? "hidden from your recs until you clear it or set a score on it"
+                ? t`hidden from your recs until you clear it or set a score on it`
                 : feedback.activeVerdict === "too_easy"
-                  ? "targets on this chart will aim higher until you set the score"
-                  : "feels off for your level? mark it and your recs will adjust"}
+                  ? t`targets on this chart will aim higher until you set the score`
+                  : t`feels off for your level? mark it and your recs will adjust`}
             </p>
             {feedback.error ? <p className="mt-1 text-[10.5px] leading-snug text-osu-red-light">{feedback.error}</p> : null}
           </div>
         ) : null}
 
         <div className="border-t border-osu-b3/25">
-          <div className="px-3.5 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1">who farms this</div>
+          <div className="px-3.5 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1"><Trans>who farms this</Trans></div>
           <FarmersList
             userKey={String(snapshot.userId)}
             beatmapId={rec.beatmapId}
@@ -1846,12 +1848,12 @@ function ReadingGuide({
   /** Skillboost rows are off the everything view until the player lands one. */
   pushLocked?: boolean;
 }) {
-  const { i18n } = useLingui();
+  const { t, i18n } = useLingui();
   const sample = snapshot.peerBand.count || snapshot.peerBand.farmDataCount;
   return (
     <div className="overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b4">
       <div className="border-b border-osu-b3/20 px-3.5 py-2.5">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">who you're compared to</div>
+        <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1"><Trans>who you're compared to</Trans></div>
         {refreshing ? (
           <div className="mt-1.5 space-y-1.5">
             <Skeleton className="h-3 w-44 max-w-full" />
@@ -1862,7 +1864,7 @@ function ReadingGuide({
             <div className="mt-0.5 text-[12px] font-semibold text-osu-c1">{peerBandRangeLabel(snapshot, i18n)}</div>
             {sample > 0 ? (
               <div className="text-[11px] text-osu-f1">
-                {formatPp(sample)} player{sample === 1 ? "" : "s"} sampled around your pp
+                <Plural value={sample} one="# player sampled around your pp" other="# players sampled around your pp" />
               </div>
             ) : null}
           </>
@@ -1871,38 +1873,40 @@ function ReadingGuide({
 
       <div className="space-y-2.5 px-3.5 py-3">
         <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">
-          {view === "popular" ? "what you're browsing" : "why a map shows up"}
+          {view === "popular" ? <Trans>what you're browsing</Trans> : <Trans>why a map shows up</Trans>}
         </div>
         {view === "popular" ? (
           <p className="text-[12px] leading-snug text-osu-l2">
-            Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay
-            in, so you can see where you already stand.
+            <Trans>
+              Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay
+              in, so you can see where you already stand.
+            </Trans>
           </p>
         ) : (
           <>
             <GuideItem
               reason="missing"
               count={counts?.missing ?? null}
-              body="Popular with the players around you, and you have no top play on it with these mods."
+              body={t`Popular with the players around you, and you have no top play on it with these mods.`}
             />
             <GuideItem
               reason="improve"
               count={counts?.improve ?? null}
-              body="You have a score, but players near you score higher on it."
+              body={t`You have a score, but players near you score higher on it.`}
             />
-            <GuideItem reason="stale" count={counts?.stale ?? null} body="An old PB you could probably beat." />
+            <GuideItem reason="stale" count={counts?.stale ?? null} body={t`An old PB you could probably beat.`} />
             <GuideItem
               reason="push"
               count={counts?.push ?? null}
               body={
                 pushLocked
-                  ? "You already beat the players near you here, but a higher-acc rerun is still worth pp. Hidden by default until you achieve one of its scores."
-                  : "You already beat the players near you here, but a higher-acc rerun is still worth pp."
+                  ? t`You already beat the players near you here, but a higher-acc rerun is still worth pp. Hidden by default until you achieve one of its scores.`
+                  : t`You already beat the players near you here, but a higher-acc rerun is still worth pp.`
               }
             />
             {hiddenByMarks > 0 ? (
               <p className="text-[11px] leading-snug text-osu-orange">
-                {formatPp(hiddenByMarks)} map{hiddenByMarks === 1 ? "" : "s"} hidden by your marks
+                <Plural value={hiddenByMarks} one="# map hidden by your marks" other="# maps hidden by your marks" />
               </p>
             ) : null}
           </>
@@ -1911,13 +1915,15 @@ function ReadingGuide({
 
       <div className="space-y-2 border-t border-osu-b3/20 px-3.5 py-3 text-[11px] leading-snug text-osu-f1">
         <p>
-          <span className="font-bold text-osu-pink">+pp</span> is the estimated gain if you hit the target score, after weighting
-          against your current top plays.
+          <Trans>
+            <span className="font-bold text-osu-pink">+pp</span> is the estimated gain if you hit the target score, after weighting
+            against your current top plays.
+          </Trans>
         </p>
         {snapshot.modelsReady === false ? (
-          <p className="text-osu-yellow">estimates are rough until we've analyzed more of this player's plays</p>
+          <p className="text-osu-yellow"><Trans>estimates are rough until we've analyzed more of this player's plays</Trans></p>
         ) : null}
-        <p className="text-osu-f1/80">Pick any map on the left to preview it here.</p>
+        <p className="text-osu-f1/80"><Trans>Pick any map on the left to preview it here.</Trans></p>
       </div>
     </div>
   );
@@ -1980,6 +1986,7 @@ function MarksManager({
   error: { key: string; message: string } | null;
   onClear: (mark: ActiveFeedbackMark) => void;
 }) {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   return (
     <div className="overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b4">
@@ -1990,7 +1997,7 @@ function MarksManager({
         className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left transition-colors hover:bg-osu-b3/25"
       >
         <span className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">
-          your marks
+          <Trans>your marks</Trans>
           <span className="ml-1.5 tabular-nums text-osu-f1/70">{formatPp(marks.length)}</span>
         </span>
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform ${open ? "rotate-180" : ""}`} />
@@ -2008,7 +2015,7 @@ function MarksManager({
                         mark.verdict === "too_hard" ? "text-osu-orange" : "text-osu-green-light"
                       }`}
                     >
-                      {mark.verdict === "too_hard" ? "hard" : "easy"}
+                      {mark.verdict === "too_hard" ? t`hard` : t`easy`}
                     </span>
                     <a
                       href={`https://osu.ppy.sh/beatmaps/${mark.beatmapId}`}
@@ -2016,7 +2023,7 @@ function MarksManager({
                       rel="noopener noreferrer"
                       className="min-w-0 flex-1 truncate text-[12px] font-semibold text-osu-c1 transition-colors hover:text-osu-pink"
                     >
-                      {titles.get(mark.beatmapId) ?? `beatmap #${mark.beatmapId}`}
+                      {titles.get(mark.beatmapId) ?? t`beatmap #${mark.beatmapId}`}
                     </a>
                     <span className="shrink-0 text-[10px] font-semibold uppercase tabular-nums text-osu-f1">
                       {speedBucketLabel(mark.speedBucket)}
@@ -2029,7 +2036,7 @@ function MarksManager({
                         pending ? "cursor-default opacity-60" : ""
                       }`}
                     >
-                      clear
+                      <Trans>clear</Trans>
                     </button>
                   </div>
                   {error?.key === mark.key ? (
@@ -2040,7 +2047,7 @@ function MarksManager({
             })}
           </div>
           <p className="border-t border-osu-b3/20 px-3.5 py-2 text-[10px] leading-snug text-osu-f1">
-            too hard hides the lane from your gain views; setting a real score also clears a mark
+            <Trans>too hard hides the lane from your gain views; setting a real score also clears a mark</Trans>
           </p>
         </div>
       ) : null}
@@ -2194,6 +2201,7 @@ function PlayerPicker({ viewer, onPick, keyMode, view }: {
   keyMode: LiveFarmHelperKeyMode;
   view: LiveFarmHelperView;
 }) {
+  const { t } = useLingui();
   const [recents, setRecents] = useState<RecentPlayer[]>([]);
   const pickIntentProps = usePickIntent(keyMode, view, viewer);
   const viewerId = viewer?.id;
@@ -2214,14 +2222,14 @@ function PlayerPicker({ viewer, onPick, keyMode, view }: {
         {viewer ? (
           <div>
             <div className="text-3xl font-black leading-tight text-osu-c1">
-              <div>maps worth farming</div>
+              <div><Trans>maps worth farming</Trans></div>
               <div className="mt-3 flex items-center justify-center gap-3 lg:justify-start">
-                <span>for</span>
+                <span><Trans>for</Trans></span>
                 <button
                   type="button"
                   onClick={() => onPick(String(viewer.id))}
                   {...pickIntentProps(String(viewer.id))}
-                  aria-label={`Find farm maps for ${viewer.username}`}
+                  aria-label={t`Find farm maps for ${viewer.username}`}
                   className="group inline-flex items-center gap-2.5 rounded-xl border border-osu-b3/30 bg-osu-b4 py-1.5 pl-2 pr-3 text-lg font-bold text-osu-c1 transition-colors duration-150 hover:border-osu-pink/60 hover:bg-osu-b3"
                 >
                   <Avatar url={viewer.avatarUrl} userId={viewer.id} size={30} />
@@ -2235,20 +2243,20 @@ function PlayerPicker({ viewer, onPick, keyMode, view }: {
             <div className="mt-7 flex w-full items-center gap-3">
               <span className="h-px flex-1 bg-osu-b3/30" />
               <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-osu-f1">
-                or someone else
+                <Trans>or someone else</Trans>
               </span>
               <span className="h-px flex-1 bg-osu-b3/30" />
             </div>
           </div>
         ) : (
           <div className="text-3xl font-black leading-tight text-osu-c1">
-            <div>maps worth farming</div>
+            <div><Trans>maps worth farming</Trans></div>
             <div className="mt-3 flex items-center justify-center gap-3 lg:justify-start">
-              <span>for</span>
+              <span><Trans>for</Trans></span>
               <SearchInput
                 onSearch={searchPlayers}
                 onSelect={(user) => onPick(user.username)}
-                placeholder="username..."
+                placeholder={t`username...`}
                 className="w-full max-w-60 font-normal"
               />
             </div>
@@ -2257,13 +2265,13 @@ function PlayerPicker({ viewer, onPick, keyMode, view }: {
 
         {viewer ? (
           <div className="mx-auto mt-4 w-full max-w-md lg:mx-0">
-            <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="username..." />
+            <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder={t`username...`} />
           </div>
         ) : null}
 
         {recents.length > 0 ? (
           <div className="mt-3">
-            <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1">recent</div>
+            <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1"><Trans>recent</Trans></div>
             <div className="flex flex-wrap justify-center gap-1.5 lg:justify-start">
               {recents.map((player) => (
                 <div
@@ -2282,7 +2290,7 @@ function PlayerPicker({ viewer, onPick, keyMode, view }: {
                   <button
                     type="button"
                     onClick={() => removeRecent(player.userId)}
-                    aria-label={`Remove ${player.username} from recent`}
+                    aria-label={t`Remove ${player.username} from recent`}
                     className="flex h-5 w-5 shrink-0 items-center justify-center text-osu-f1 transition-colors hover:text-osu-c1"
                   >
                     <X className="h-3 w-3" />
@@ -2295,22 +2303,22 @@ function PlayerPicker({ viewer, onPick, keyMode, view }: {
 
         <div className="mx-auto mt-9 w-fit space-y-2 text-left lg:mx-0">
           <p className="mb-2.5 text-xs text-osu-f1">
-            based on what players near the same pp are farming:
+            <Trans>based on what players near the same pp are farming:</Trans>
           </p>
           <PickerLegend
             icon={<Target className="h-3.5 w-3.5 shrink-0 text-osu-blue" />}
-            label="missing"
-            body="popular nearby, you haven't played it"
+            label={t`missing`}
+            body={t`popular nearby, you haven't played it`}
           />
           <PickerLegend
             icon={<TrendingUp className="h-3.5 w-3.5 shrink-0 text-osu-green-light" />}
-            label="improve"
-            body="nearby players outscore you"
+            label={t`improve`}
+            body={t`nearby players outscore you`}
           />
           <PickerLegend
             icon={<History className="h-3.5 w-3.5 shrink-0 text-osu-yellow" />}
-            label="old pb"
-            body="an old score you could probably beat"
+            label={t`old pb`}
+            body={t`an old score you could probably beat`}
           />
         </div>
       </div>
@@ -2398,13 +2406,16 @@ function peerBandRangeLabel(snapshot: LiveFarmHelperSnapshot, i18n: I18nLike): s
    never been viewed here lands right here. The screen leads with the name that
    was searched and offers the one thing that fixes it. */
 function UnknownSubjectNotice({ subject, onPick }: { subject: string; onPick: (key: string) => void }) {
+  const { t } = useLingui();
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-lg flex-col items-center justify-center py-10 text-center">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">never loaded here</div>
+      <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1"><Trans>never loaded here</Trans></div>
       <h2 className="mt-2 max-w-full break-words text-3xl font-black leading-tight text-osu-c1">{subject}</h2>
       <p className="mt-3 max-w-sm text-sm leading-relaxed text-osu-f1">
-        Farm helper needs a player's top 200, and this account has never been loaded here. Opening their
-        profile once is enough.
+        <Trans>
+          Farm helper needs a player's top 200, and this account has never been loaded here. Opening their
+          profile once is enough.
+        </Trans>
       </p>
 
       <Link
@@ -2412,12 +2423,12 @@ function UnknownSubjectNotice({ subject, onPick }: { subject: string; onPick: (k
         params={{ username: subject }}
         className="group mt-7 inline-flex items-center gap-2 rounded-xl border border-osu-b3/30 bg-osu-b4 py-2 pl-4 pr-3 text-sm font-bold text-osu-c1 transition-colors duration-150 hover:border-osu-pink/60 hover:bg-osu-b3"
       >
-        open their profile
+        <Trans>open their profile</Trans>
         <ArrowRight className="h-4 w-4 shrink-0 text-osu-pink transition-transform group-hover:translate-x-0.5" />
       </Link>
 
       <div className="mt-4 w-full max-w-xs">
-        <ChangeSubjectButton onPick={onPick} label="or pick someone else" quiet />
+        <ChangeSubjectButton onPick={onPick} label={t`or pick someone else`} quiet />
       </div>
     </div>
   );
@@ -2425,13 +2436,14 @@ function UnknownSubjectNotice({ subject, onPick }: { subject: string; onPick: (k
 
 function ChangeSubjectButton({
   onPick,
-  label = "change player",
+  label,
   quiet = false,
 }: {
   onPick: (key: string) => void;
   label?: string;
   quiet?: boolean;
 }) {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -2447,7 +2459,7 @@ function ChangeSubjectButton({
   if (open) {
     return (
       <div ref={ref} className="w-full">
-        <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="search a player..." />
+        <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder={t`search a player...`} />
       </div>
     );
   }
@@ -2461,7 +2473,7 @@ function ChangeSubjectButton({
           : "w-full rounded-lg bg-osu-b3/60 px-3 py-2 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
       }
     >
-      {label}
+      {label ?? t`change player`}
     </button>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLingui } from "@lingui/react/macro";
 
 type ParsedAvatarUrl = {
   userId: number;
@@ -60,6 +61,7 @@ export function Avatar({
   shape?: "circle" | "square";
   online?: boolean;
 }) {
+  const { t } = useLingui();
   const [imageFailed, setImageFailed] = useState(false);
   const shapeClass = shape === "square" ? "rounded-none" : "rounded-full";
   const onlineClass = online
@@ -75,7 +77,7 @@ export function Avatar({
     return (
       <img
         src={imageUrl}
-        alt="avatar"
+        alt={t`avatar`}
         width={size}
         height={size}
         className={`${shapeClass} ${onlineClass} flex-shrink-0 object-cover`}

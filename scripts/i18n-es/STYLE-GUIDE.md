@@ -7,7 +7,7 @@ Voice: a native Latin American osu!mania player writing clear, neutral Spanish. 
 - Use informal singular `tú` where the English addresses the reader. Prefer concise UI copy and natural rewrites over word-for-word translation.
 - Keep `osu!`, `osu!mania`, usernames, song/map titles, skin names, mod acronyms, key modes (`4K`, `7K`), grades (`SS`, `S`, `A`), `pp`, `SR`, `FC`, `LN`, `DT`, `HT`, `MR`, and dan names unchanged.
 - Prefer terms Latin American osu!mania players will recognize. When the community normally uses the English term (`beatmap`, `mapper`, `skin`, `replay`, `mods`, `stream`, `jack`, `chordjack`), keep it rather than inventing a formal translation.
-- Translate ordinary UI concepts consistently: `settings` -> `ajustes`, `country/region` -> `país/región`, `goal` -> `objetivo`, `rankings` -> `clasificación`, `accuracy` -> `precisión`, `collection` -> `colección`.
+- Translate ordinary UI concepts consistently: `settings` -> `ajustes`, `country/region` -> `país/región`, `goal` -> `objetivo`, `rankings` -> `rankings`, `accuracy` -> `precisión`, `collection` -> `colección`. Tracking terminology uses the community verb: `tracked` -> `trackeado` (never `rastreado`).
 - Keep feature names consistent across navigation, headings, empty states, and explanations. Establish a glossary entry before choosing different translations for `top plays`, `snipes`, `tracker`, `farm`, `packs`, or arcade-game terminology.
 
 ## Hard rules

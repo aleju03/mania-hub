@@ -186,6 +186,11 @@ msgstr "{0, plural, other {# 次狙击}}"
 msgid "{0, plural, one {+# more collector} other {+# more collectors}}"
 msgstr "{0, plural, other {还有 # 位收藏者}}"
 
+#. placeholder {0}: streakShardValue(streak)
+#: src/components/packs/StreakGame.tsx
+msgid "{0, plural, one {Claim # shard} other {Claim # shards}}"
+msgstr "{0, plural, other {领取 # 个碎片}}"
+
 #. placeholder {0}: report.owners
 #: src/components/packs/CardCollectors.tsx
 msgid "{0, plural, one {collector} other {collectors}}"
@@ -297,6 +302,8 @@ msgid "{0} cards"
 msgstr "{0} 张卡片"
 
 #. placeholder {0}: 0
+#. placeholder {0}: charCount.toLocaleString("en-US")
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "{0} characters"
 msgstr "{0} 个字符"
@@ -855,6 +862,10 @@ msgstr "{goatMissing, plural, other {另有 # 张 GOAT 卡片未收集}}"
 msgid "{have} / {want} plays"
 msgstr "{have} / {want} 个成绩"
 
+#: src/routes/farm-helper.tsx
+msgid "{hiddenByMarks, plural, one {# map hidden by your marks} other {# maps hidden by your marks}}"
+msgstr "{hiddenByMarks, plural, other {有 # 张谱面被你的标记隐藏}}"
+
 #: src/routes/player/$username.tsx
 msgid "{hiddenCount, plural, one {Show # more map} other {Show # more maps}}"
 msgstr "{hiddenCount, plural, other {再显示 # 张谱面}}"
@@ -901,6 +912,10 @@ msgstr "{keys}K 缩略图"
 msgid "{label} dan"
 msgstr "{label} 段位"
 
+#: src/components/player/SkillPlaysModal.tsx
+msgid "{label} rating"
+msgstr "{label} 评分"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "{label}: {share} of {population} tracked {keyCount}K mains"
 msgstr "{label}：已追踪的 {population} 名 {keyCount}K 主玩家中占 {share}"
@@ -912,6 +927,10 @@ msgstr "还差 {left} 个 {at}pp+ 的成绩"
 #: src/components/me/GoalsPanel.tsx
 msgid "{left}% to go"
 msgstr "还差 {left}%"
+
+#: src/routes/farm-helper.tsx
+msgid "{mapCount, plural, one {across # map} other {across # maps}}"
+msgstr "{mapCount, plural, other {共 # 张谱面}}"
 
 #: src/routes/maps.tsx
 msgid "{message} ({percent}%)"
@@ -1053,6 +1072,10 @@ msgstr "与你 pp 相近的玩家中有 {pct}% 在刷这张。你在这里已有
 msgid "{pending} still analyzing"
 msgstr "还有 {pending} 个正在分析"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "{pendingImageCount, plural, one {# image uploads on copy} other {# images upload on copy}}"
+msgstr "{pendingImageCount, plural, other {# 张图片将在复制时上传}}"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
 msgstr "{playerName} 的回放已加载，但对应谱面不在 osu! 上(未提交或已删除)，因此无法下载谱面。"
@@ -1089,6 +1112,10 @@ msgstr "第 {rangeStart}–{pageEnd} 张 / 共 {totalText} 张卡片"
 #: src/components/packs/CollectionPanel.tsx
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "第 {rangeStart}–{pageEnd} 名 / 共 {totalText} 名玩家"
+
+#: src/routes/farm-helper.tsx
+msgid "{sample, plural, one {# player sampled around your pp} other {# players sampled around your pp}}"
+msgstr "{sample, plural, other {采样了你 pp 附近的 # 名玩家}}"
 
 #: src/lib/streak-game.ts
 msgid "{score} ranked score"
@@ -1292,6 +1319,10 @@ msgstr "已选 <0>{selectedCount}</0> 个"
 #: src/routes/discord.tsx
 msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
 msgstr "<0>/subscribe feed:Top plays country:{country}</0> 会把每个新的 {country} 最佳成绩发到运行该命令的频道里。其他 feed 还有狙击和新刷分谱面，<1>min_pp</1> 可以跳过低于阈值的成绩。<2>/subscriptions</2> 列出服务器已启用的 feed，<3>/unsubscribe</3> 停止其中一个。订阅需要「管理服务器」权限。"
+
+#: src/routes/farm-helper.tsx
+msgid "<0>+pp</0> is the estimated gain if you hit the target score, after weighting against your current top plays."
+msgstr "<0>+pp</0> 是你达到目标分数后的预计收益，已按你当前的最佳成绩加权。"
 
 #: src/routes/maps.tsx
 msgid "<0>First time loading {countryName} maps.</0> Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own."
@@ -1514,6 +1545,7 @@ msgid "Account menu"
 msgstr "账号菜单"
 
 #: src/components/packs/album/AlbumView.tsx
+#: src/components/player/SkillPlaysModal.tsx
 msgid "accuracy"
 msgstr "准确率"
 
@@ -1581,6 +1613,10 @@ msgstr "每个国家/地区前 100 名的活跃度会自动记录。你还不在
 #: src/routes/player/$username.tsx
 msgid "Activity is recorded for the top 100 of each tracked country. If this is your profile, log in with osu! to add yourself to the tracker."
 msgstr "活跃度只记录每个已追踪国家/地区的前 100 名。如果这是你的主页，用 osu! 登录就可以把自己加进追踪器。"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Actual size"
+msgstr "实际大小"
 
 #: src/components/packs/collections/ShowcaseCards.tsx
 msgid "Add a card to your showcase"
@@ -1654,6 +1690,14 @@ msgstr "卡册"
 #: src/components/packs/album/AlbumView.tsx
 msgid "Albums"
 msgstr "卡册"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Align left"
+msgstr "左对齐"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Align right"
+msgstr "右对齐"
 
 #: src/routes/communities.tsx
 msgid "all"
@@ -1744,6 +1788,14 @@ msgstr "琥珀"
 msgid "an imported skin"
 msgstr "导入的皮肤"
 
+#: src/routes/farm-helper.tsx
+msgid "An old PB you could probably beat."
+msgstr "一个你多半能超过的旧 PB。"
+
+#: src/routes/farm-helper.tsx
+msgid "an old score you could probably beat"
+msgstr "一个你多半能超过的旧成绩"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "analysis"
 msgstr "分析"
@@ -1763,6 +1815,7 @@ msgstr "还有 {0} 位"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/farm-helper.tsx
 #: src/routes/skins.tsx
 msgid "any"
 msgstr "不限"
@@ -1895,6 +1948,7 @@ msgstr "未锁定宽高比"
 msgid "Assets"
 msgstr "素材"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/bbcode.tsx
 msgid "Audio"
@@ -1918,8 +1972,8 @@ msgid "Auto"
 msgstr "自动"
 
 #: src/components/ui/Avatar.tsx
-#~ msgid "avatar"
-#~ msgstr "头像"
+msgid "avatar"
+msgstr "头像"
 
 #: src/routes/player/$username.tsx
 msgid "Avg active day"
@@ -1956,6 +2010,7 @@ msgid "Back to menu"
 msgstr "返回菜单"
 
 #: src/components/packs/PackSummary.tsx
+#: src/components/packs/StreakGame.tsx
 msgid "Back to packs"
 msgstr "返回卡包"
 
@@ -2046,6 +2101,10 @@ msgstr "没有单独设置的列所使用的长条头基础颜色。"
 msgid "Base tap color used for any column without a per-column override."
 msgstr "没有单独设置的列所使用的单点基础颜色。"
 
+#: src/routes/farm-helper.tsx
+msgid "based on what players near the same pp are farming:"
+msgstr "基于相近 pp 的玩家都在刷什么："
+
 #: src/routes/bbcode.tsx
 msgid "BBCode"
 msgstr "BBCode"
@@ -2055,6 +2114,11 @@ msgstr "BBCode"
 #: src/routes/bbcode.tsx
 msgid "BBCode editor"
 msgstr "BBCode 编辑器"
+
+#. placeholder {0}: mark.beatmapId
+#: src/routes/farm-helper.tsx
+msgid "beatmap #{0}"
+msgstr "谱面 #{0}"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM, length and dan."
@@ -2068,6 +2132,10 @@ msgstr "谱面打击音"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Beatmap Lookup"
 msgstr "谱面查找"
+
+#: src/routes/maps.tsx
+msgid "Beatmap page"
+msgstr "谱面页面"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmaps"
@@ -2089,6 +2157,10 @@ msgstr "{countryName} 玩过的谱面"
 #: src/components/me/GoalsPanel.tsx
 msgid "best"
 msgstr "最佳"
+
+#: src/components/packs/StreakGame.tsx
+msgid "best {best}"
+msgstr "最佳 {best}"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "best {best}%"
@@ -2117,6 +2189,11 @@ msgstr "背景变暗"
 #: src/components/me/GoalsPanel.tsx
 msgid "Big play"
 msgstr "大分"
+
+#. placeholder {0}: formatGainWithUnit(biggest, unit)
+#: src/routes/farm-helper.tsx
+msgid "biggest {0}"
+msgstr "最大 {0}"
 
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "biggest collections"
@@ -2258,6 +2335,7 @@ msgstr "内置布局"
 msgid "Bulgarian"
 msgstr "保加利亚语"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Bullet list"
 msgstr "无序列表"
@@ -2345,6 +2423,7 @@ msgstr "找到的卡片"
 msgid "Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back."
 msgstr "你持有的、已经抽不到的玩家卡片：他们在每个已追踪国家/地区都掉出了前 100 名，也没有主动加入。如果他们回来，就会重新进入卡池和完成度统计。"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Center"
 msgstr "居中"
@@ -2352,6 +2431,10 @@ msgstr "居中"
 #: src/routes/tracker.tsx
 msgid "Ch"
 msgstr "断"
+
+#: src/routes/farm-helper.tsx
+msgid "change"
+msgstr "更换"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -2366,6 +2449,10 @@ msgstr "更换{0}"
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
 msgstr "更换谱面"
+
+#: src/routes/farm-helper.tsx
+msgid "change player"
+msgstr "更换玩家"
 
 #: src/routes/__root.tsx
 msgid "changelog"
@@ -2392,6 +2479,7 @@ msgid "Chart loaded. Still fetching the replay."
 msgstr "谱面已加载。仍在获取回放。"
 
 #: src/components/maps/ChartPreviewPanel.tsx
+#: src/routes/maps.tsx
 msgid "chart preview"
 msgstr "谱面预览"
 
@@ -2484,6 +2572,7 @@ msgstr "CJ"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
+#: src/routes/farm-helper.tsx
 msgid "clear"
 msgstr "清除"
 
@@ -2501,9 +2590,14 @@ msgstr "清除"
 msgid "Clear all"
 msgstr "清除全部"
 
+#: src/routes/farm-helper.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "clear attempt"
 msgstr "通关尝试"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Clear editor"
+msgstr "清空编辑器"
 
 #: src/routes/snipes.tsx
 msgid "Clear filters"
@@ -2526,6 +2620,7 @@ msgstr "清除玩家筛选"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
 msgid "Clear search"
 msgstr "清除搜索"
@@ -2580,6 +2675,14 @@ msgid "Click Add to Discord and pick a server where you have Manage Server."
 msgstr "点击「添加到 Discord」，选择一个你拥有「管理服务器」权限的服务器。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Click again to clear"
+msgstr "再点一次以清空"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Click again to discard edits"
+msgstr "再点一次以放弃修改"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Click an image first. Imagemap turns that image into clickable areas."
 msgstr "请先点击一张图片。Imagemap 会把这张图片变成可点击的区域。"
 
@@ -2626,6 +2729,7 @@ msgstr "客户端"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/GoatPollVoters.tsx
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -2635,6 +2739,7 @@ msgstr "客户端"
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
+#: src/routes/__root.tsx
 #: src/routes/player/$username.tsx
 msgid "Close"
 msgstr "关闭"
@@ -2659,6 +2764,10 @@ msgstr "关闭选择器"
 msgid "Close player"
 msgstr "关闭播放器"
 
+#: src/routes/farm-helper.tsx
+msgid "Close preview"
+msgstr "关闭预览"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Close replay settings"
 msgstr "关闭回放设置"
@@ -2675,6 +2784,7 @@ msgstr "关闭技能成绩"
 msgid "closed"
 msgstr "已结束"
 
+#: src/components/communities/CommunityCard.tsx
 #: src/routes/communities_.$id.tsx
 msgid "Closed"
 msgstr "不开放"
@@ -2683,6 +2793,7 @@ msgstr "不开放"
 msgid "closest to every pullable player"
 msgstr "最接近集齐所有可抽玩家"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Code block"
 msgstr "代码块"
@@ -2691,6 +2802,7 @@ msgstr "代码块"
 msgid "Collapse"
 msgstr "收起"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Collapsible box"
 msgstr "折叠框"
@@ -3113,6 +3225,10 @@ msgid "Couldn't load this player's plays right now. The card is in your collecti
 msgstr "现在无法加载这名玩家的成绩。卡片已经在你的收藏册里，会自行完成生成。"
 
 #: src/routes/farm-helper.tsx
+msgid "couldn't load this view"
+msgstr "无法加载此视图"
+
+#: src/routes/farm-helper.tsx
 msgid "Couldn't load this view"
 msgstr "无法加载此视图"
 
@@ -3363,6 +3479,10 @@ msgstr "调暗谱面背景，让音符更清晰。"
 msgid "Dead server, or the invite does not work"
 msgstr "服务器已废弃，或邀请链接失效"
 
+#: src/components/packs/StreakGame.tsx
+msgid "Dealing a matchup…"
+msgstr "正在发牌…"
+
 #. placeholder {0}: reading.percent
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -3491,6 +3611,10 @@ msgstr "方向"
 msgid "Direction & long notes"
 msgstr "方向与长键"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Discard draft"
+msgstr "丢弃草稿"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "disconnect"
 msgstr "断开连接"
@@ -3608,6 +3732,7 @@ msgstr "下载量"
 msgid "Downscroll"
 msgstr "下落式"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Draft autosaves locally"
 msgstr "草稿会自动保存在本地"
@@ -3733,6 +3858,10 @@ msgstr "拿到 <0/>（<1/>）"
 msgid "Earn <0/> <1/> on {mapSlot}"
 msgstr "在 {mapSlot} 上拿到 <0/>（<1/>）"
 
+#: src/routes/farm-helper.tsx
+msgid "easy"
+msgstr "易"
+
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/communities_.$id.tsx
 msgid "Edit"
@@ -3796,6 +3925,10 @@ msgstr "结束"
 msgid "End here"
 msgstr "在此结束"
 
+#: src/components/packs/StreakGame.tsx
+msgid "End the run"
+msgstr "结束本局"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "Ends {endsLabel}"
 msgstr "{endsLabel} 结束"
@@ -3825,10 +3958,18 @@ msgstr "错误"
 msgid "Estimate a chart's dan level, with its dan emblem."
 msgstr "估算谱面的段位等级，并附上段位徽章。"
 
+#: src/routes/farm-helper.tsx
+msgid "estimated gain"
+msgstr "预计收益"
+
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Estimated pp gain from replacing your previous best score on this map"
 msgstr "以此成绩替换你在该谱面上的先前最佳后估计增加的 pp"
+
+#: src/routes/farm-helper.tsx
+msgid "estimates are rough until we've analyzed more of this player's plays"
+msgstr "在分析该玩家更多成绩之前，估算会比较粗略"
 
 #: src/components/communities/field-options.tsx
 msgid "Estonian"
@@ -3845,6 +3986,10 @@ msgstr "每张卡都碎成了两半"
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "every collector"
 msgstr "全部收藏者"
+
+#: src/routes/farm-helper.tsx
+msgid "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
+msgstr "你 pp 附近的玩家实际在打的所有刷分谱面，按持有人数排序。已通关的谱面也会保留，方便你看到自己已有的位置。"
 
 #: src/routes/maps.tsx
 msgid "Every favourited map is equally likely. Players with bigger collections show up more often as a result."
@@ -3886,6 +4031,10 @@ msgstr "所有人"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Everyone watching your replays sees this skin."
 msgstr "看你回放的人都会看到这套皮肤。"
+
+#: src/routes/farm-helper.tsx
+msgid "everything"
+msgstr "全部"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
@@ -3941,6 +4090,10 @@ msgstr "刷 pp 助手"
 #: src/routes/farm-helper.tsx
 msgid "Farm Helper"
 msgstr "刷图助手"
+
+#: src/routes/farm-helper.tsx
+msgid "Farm helper needs a player's top 200, and this account has never been loaded here. Opening their profile once is enough."
+msgstr "Farm Helper 需要玩家的前 200 成绩，而这个账号从未在这里加载过。打开一次该玩家的个人主页即可。"
 
 #: src/routes/farm-helper.tsx
 msgid "Farm Helper needs the server"
@@ -4010,6 +4163,10 @@ msgstr "Feed"
 #: src/routes/discord.tsx
 msgid "Feeds are currently disabled on the backend."
 msgstr "后端当前已关闭 feed。"
+
+#: src/routes/farm-helper.tsx
+msgid "feels off for your level? mark it and your recs will adjust"
+msgstr "感觉和你的水平不符？标记一下，推荐就会随之调整"
 
 #: src/routes/replay.tsx
 msgid "Fetching the replay and finding its beatmap."
@@ -4090,6 +4247,14 @@ msgid "Filter by keymode"
 msgstr "按键数筛选"
 
 #: src/routes/farm-helper.tsx
+msgid "Filter maps"
+msgstr "筛选谱面"
+
+#: src/routes/farm-helper.tsx
+msgid "filter maps..."
+msgstr "筛选谱面…"
+
+#: src/routes/farm-helper.tsx
 msgid "filtered out"
 msgstr "已被筛掉"
 
@@ -4144,6 +4309,11 @@ msgstr "查找卡册"
 msgid "Find an osu!mania Discord server to join, or post your own."
 msgstr "找一个 osu!mania 的 Discord 服务器加入，或者发布你自己的。"
 
+#. placeholder {0}: viewer.username
+#: src/routes/farm-helper.tsx
+msgid "Find farm maps for {0}"
+msgstr "为 {0} 查找刷分谱面"
+
 #: src/routes/farm-helper.tsx
 msgid "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs."
 msgstr "根据水平相近的玩家、没打过的谱面、可提升的成绩和陈旧的个人最好成绩，找出值得刷的 osu!mania 谱面。"
@@ -4153,6 +4323,7 @@ msgstr "根据水平相近的玩家、没打过的谱面、可提升的成绩和
 msgid "find player..."
 msgstr "查找玩家..."
 
+#: src/routes/farm-helper.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Finishing this looks risky for you; treat it as a clear attempt, not a farm"
 msgstr "以你的水平打完这张有风险，把它当作通关尝试而不是刷分"
@@ -4202,6 +4373,10 @@ msgstr "这张卡片首次被抽出"
 msgid "first to find a card"
 msgstr "最先找到卡片"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Fit"
+msgstr "适应宽度"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "flat"
 msgstr "纯色"
@@ -4223,6 +4398,10 @@ msgstr "水平翻转"
 msgid "Flip vertical"
 msgstr "垂直翻转"
 
+#: src/routes/farm-helper.tsx
+msgid "for"
+msgstr "为"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "for banned or deleted"
 msgstr "针对被封禁或已删除的账号"
@@ -4235,9 +4414,17 @@ msgstr "用于 Discord 嵌入"
 msgid "For screenshots that have nothing to do with the skin."
 msgstr "用于与皮肤无关的截图。"
 
+#: src/routes/farm-helper.tsx
+msgid "for you"
+msgstr "为你推荐"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Force a fresh collection rotation now (admin only)"
 msgstr "立即强制轮换收藏册（仅管理员）"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "formatting copied - right-click text to paste"
+msgstr "已复制格式，右键文本即可粘贴"
 
 #. placeholder {0}: formatNumber(card.mintedTotal)
 #: src/components/packs/collections/RecordBoards.tsx
@@ -4282,6 +4469,10 @@ msgstr "完整"
 #: src/components/me/MyDataPanel.tsx
 msgid "Full activity"
 msgstr "完整活跃度"
+
+#: src/routes/farm-helper.tsx
+msgid "full breakdown"
+msgstr "完整分析"
 
 #: src/routes/tracker.tsx
 msgid "Full combos only (0 misses)"
@@ -4440,6 +4631,7 @@ msgstr "评级"
 msgid "Gradient"
 msgstr "渐变"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Gradient text"
 msgstr "渐变文字"
@@ -4468,6 +4660,10 @@ msgstr "绿色"
 msgid "Grid"
 msgstr "网格"
 
+#: src/components/packs/StreakGame.tsx
+msgid "Guess at random"
+msgstr "随机猜一个"
+
 #: src/components/maps/SearchCard.tsx
 msgid "Handjack"
 msgstr "三押叠"
@@ -4479,6 +4675,10 @@ msgstr "三押叠"
 #: src/routes/player/$username.tsx
 msgid "Handstream"
 msgstr "三押切"
+
+#: src/routes/farm-helper.tsx
+msgid "hard"
+msgstr "难"
 
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "hardest cards to find"
@@ -4504,6 +4704,7 @@ msgstr "{hidden} 的回放观看次数比 {shown} 多还是少？"
 msgid "Have <0/> plays worth <1/> or more"
 msgstr "持有 <0/> 个 <1/> 以上的成绩"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Heading"
 msgstr "标题"
@@ -4524,6 +4725,10 @@ msgstr "已隐藏"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hidden"
 msgstr "已隐藏"
+
+#: src/routes/farm-helper.tsx
+msgid "hidden from your recs until you clear it or set a score on it"
+msgstr "已从你的推荐中隐藏，直到你通关或在上面打出成绩"
 
 #. placeholder {0}: hiddenList.length
 #: src/components/settings/SettingsPanel.tsx
@@ -4725,6 +4930,10 @@ msgstr "图片上传失败。"
 msgid "Image URL"
 msgstr "图片链接"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Imagemap (clickable areas on an image)"
+msgstr "图片热区（图片上的可点击区域）"
+
 #: src/routes/bbcode.tsx
 msgid "Imagemap (image with clickable areas)"
 msgstr "Imagemap (带可点击区域的图片)"
@@ -4822,6 +5031,7 @@ msgstr "印尼语"
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
 msgstr "游戏内排行榜，实时显示名次变化。按 Tab 开关。"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Inline code"
 msgstr "行内代码"
@@ -4915,6 +5125,10 @@ msgstr "叠键速度"
 msgid "Japanese"
 msgstr "日语"
 
+#: src/components/communities/CommunityCard.tsx
+msgid "Join"
+msgstr "加入"
+
 #: src/routes/communities_.$id.tsx
 msgid "Join server"
 msgstr "加入服务器"
@@ -4996,6 +5210,10 @@ msgstr "按键历史"
 msgid "Key hitsounds"
 msgstr "按键音效"
 
+#: src/routes/farm-helper.tsx
+msgid "Key mode"
+msgstr "键数模式"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Key press hitsounds"
 msgstr "按键打击音"
@@ -5030,6 +5248,7 @@ msgstr "键数"
 msgid "Keypresses"
 msgstr "按键数"
 
+#: src/routes/farm-helper.tsx
 #: src/routes/skins.tsx
 msgid "keys"
 msgstr "键数"
@@ -5772,6 +5991,7 @@ msgid "mapped by {0} · {1} plays"
 msgstr "谱师 {0} · {1} 次游玩"
 
 #: src/components/layout/Nav.tsx
+#: src/routes/farm-helper.tsx
 msgid "maps"
 msgstr "谱面"
 
@@ -5791,14 +6011,30 @@ msgstr "谱面数据构建失败。"
 msgid "Maps played"
 msgstr "打过的谱面"
 
+#: src/routes/farm-helper.tsx
+msgid "maps players near you farm"
+msgstr "你附近的玩家在刷的谱面"
+
 #: src/routes/maps.tsx
 msgid "Maps ready."
 msgstr "谱面数据已就绪。"
+
+#: src/routes/farm-helper.tsx
+msgid "maps worth farming"
+msgstr "值得刷的谱面"
 
 #. placeholder {0}: formatNumber(Math.max(0, event.totalScore - event.victimTotalScore!))
 #: src/routes/snipes.tsx
 msgid "Margin <0>+{0}</0>"
 msgstr "领先 <0>+{0}</0>"
+
+#: src/routes/farm-helper.tsx
+msgid "marked easy"
+msgstr "已标记太易"
+
+#: src/routes/farm-helper.tsx
+msgid "marked hard"
+msgstr "已标记太难"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Matching against the replay's checksum."
@@ -5819,6 +6055,10 @@ msgstr "最高 PP"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
 msgstr "平均偏差"
+
+#: src/routes/farm-helper.tsx
+msgid "median"
+msgstr "中位数"
 
 #: src/routes/farm-helper.tsx
 msgid "median {median}pp"
@@ -5960,7 +6200,7 @@ msgstr "更多分数"
 msgid "More servers"
 msgstr "更多服务器"
 
-#. placeholder {0}: getCountryName(country)
+#. placeholder {0}: displayCountryName(country, locale)
 #: src/routes/communities_.$id.tsx
 msgid "More servers from {0}"
 msgstr "更多来自{0}的服务器"
@@ -6082,9 +6322,17 @@ msgstr "为预设命名"
 msgid "Named {0}"
 msgstr "已命名为 {0}"
 
+#: src/routes/farm-helper.tsx
+msgid "nearby players outscore you"
+msgstr "附近玩家的分数比你高"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "需要一个指向其 osu! 主页的 web.archive.org 链接。"
+
+#: src/routes/farm-helper.tsx
+msgid "never loaded here"
+msgstr "从未在此加载过"
 
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/RevealStage.tsx
@@ -6164,6 +6412,11 @@ msgstr "下一个区域"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Next asset"
 msgstr "下一个素材"
+
+#. placeholder {0}: nextStreakMilestone(streak).at
+#: src/components/packs/StreakGame.tsx
+msgid "next bonus at {0} in a row"
+msgstr "连对 {0} 次得下一个奖励"
 
 #: src/components/packs/RevealStage.tsx
 msgid "Next card"
@@ -6509,6 +6762,10 @@ msgstr "没有符合当前筛选的狙击。"
 msgid "No snipes tracked yet for {countryName}."
 msgstr "{countryName} 还没有狙击记录。"
 
+#: src/components/packs/StreakGame.tsx
+msgid "No streak this time."
+msgstr "这次没有连胜。"
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "No top plays found"
 msgstr "未找到最佳成绩"
@@ -6727,7 +6984,7 @@ msgstr "已加载的成绩里没有符合「{trimmedQuery}」的。"
 msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
 msgstr "在你确认并提交之前不会发布任何内容，提交之后授权立即结束。"
 
-#. placeholder {0}: country === COMMUNITY_INTERNATIONAL ? t`international servers` : getCountryName(country)
+#. placeholder {0}: country === COMMUNITY_INTERNATIONAL ? t`international servers` : displayCountryName(country, locale)
 #: src/routes/communities.tsx
 msgid "Nothing listed for {0} yet."
 msgstr "{0} 还没有任何条目。"
@@ -6748,6 +7005,7 @@ msgstr "还没有可预览的内容。"
 msgid "Nothing uploaded yet."
 msgstr "还没有上传任何内容。"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Notice"
 msgstr "提示框"
@@ -6760,6 +7018,7 @@ msgstr "当前"
 msgid "now #{nowRank}"
 msgstr "当前第 {nowRank} 名"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Numbered list"
 msgstr "有序列表"
@@ -6790,6 +7049,15 @@ msgstr "共 {0}"
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "of {0} pullable"
 msgstr "共 {0} 位可抽"
+
+#. placeholder {0}: allowance.cap
+#: src/components/packs/StreakGame.tsx
+msgid "of {0} shards left today"
+msgstr "/ 今日共 {0} 个碎片"
+
+#: src/routes/farm-helper.tsx
+msgid "of players near you"
+msgstr "占附近玩家比例"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "of players near you farm this"
@@ -6876,6 +7144,10 @@ msgstr "在线"
 msgid "Only me"
 msgstr "仅自己"
 
+#: src/components/communities/CommunityCard.tsx
+msgid "Only people from here can join"
+msgstr "只有来自该地区的玩家才能加入"
+
 #: src/routes/farm-helper.tsx
 msgid "Only skillboost maps right now"
 msgstr "当前只有提升技能的谱面"
@@ -6932,11 +7204,16 @@ msgstr "再开一个"
 msgid "Open beatmap on osu!"
 msgstr "在 osu! 上打开谱面"
 
+#: src/routes/maps.tsx
+msgid "Open beatmap page on osu!"
+msgstr "在 osu! 上打开谱面页面"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open image in new tab"
 msgstr "在新标签页打开图片"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/routes/maps.tsx
 msgid "Open in osu!"
 msgstr "在 osu! 中打开"
 
@@ -6945,6 +7222,7 @@ msgid "open in osu! client"
 msgstr "在 osu! 客户端打开"
 
 #: src/components/maps/SearchCard.tsx
+#: src/routes/maps.tsx
 msgid "Open in osu! client"
 msgstr "在 osu! 客户端中打开"
 
@@ -6955,6 +7233,10 @@ msgstr "在 BBCode 编辑器中打开"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open link"
 msgstr "打开链接"
+
+#: src/routes/farm-helper.tsx
+msgid "Open map on osu!"
+msgstr "在 osu! 上打开谱面"
 
 #: src/components/layout/Nav.tsx
 msgid "open packs"
@@ -6981,6 +7263,10 @@ msgstr "用模拟的高强度数据打开当天弹窗"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Open the in-browser replay viewer for a score."
 msgstr "在浏览器里打开某个成绩的回放播放器。"
+
+#: src/routes/farm-helper.tsx
+msgid "open their profile"
+msgstr "打开其个人主页"
 
 #: src/routes/communities_.$id.tsx
 msgid "open to"
@@ -7011,6 +7297,14 @@ msgstr "正在打开…"
 #: src/components/settings/TranslationReportForm.tsx
 msgid "optional"
 msgstr "选填"
+
+#: src/routes/farm-helper.tsx
+msgid "or pick someone else"
+msgstr "或选择其他玩家"
+
+#: src/routes/farm-helper.tsx
+msgid "or someone else"
+msgstr "或其他玩家"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "orange"
@@ -7090,6 +7384,10 @@ msgstr "其他"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "out of {0}"
 msgstr "共 {0} 人"
+
+#: src/components/packs/StreakGame.tsx
+msgid "Out of time."
+msgstr "时间到。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Outline"
@@ -7291,9 +7589,17 @@ msgstr "在上面选一个目标，你的 mania 成绩一落地进度就会更�
 msgid "Pick another file"
 msgstr "换一个文件"
 
+#: src/routes/farm-helper.tsx
+msgid "Pick any map on the left to preview it here."
+msgstr "点击左侧任意谱面即可在此预览。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Pick one to load it into the editor."
 msgstr "选一个载入编辑器。"
+
+#: src/routes/farm-helper.tsx
+msgid "pick the active one again to flip direction"
+msgstr "再次点击当前选项可切换排序方向"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Pick the server you want to post."
@@ -7332,6 +7638,10 @@ msgstr "已置顶"
 msgid "play"
 msgstr "播放"
 
+#: src/components/packs/StreakGame.tsx
+msgid "Play again"
+msgstr "再来一局"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Play both replays"
 msgstr "播放两份回放"
@@ -7348,6 +7658,10 @@ msgstr "游玩习惯与打法分析：活跃天数、游玩场次和技能构成
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Play preview"
 msgstr "播放试听"
+
+#: src/routes/farm-helper.tsx
+msgid "play this"
+msgstr "在刷这张"
 
 #: src/routes/skins_.$id.tsx
 msgid "Play this skin in your own replays for everyone who watches them"
@@ -7470,6 +7784,22 @@ msgid "Polish"
 msgstr "波兰语"
 
 #: src/routes/farm-helper.tsx
+msgid "popular"
+msgstr "热门"
+
+#: src/routes/farm-helper.tsx
+msgid "popular near you"
+msgstr "你附近的热门"
+
+#: src/routes/farm-helper.tsx
+msgid "popular nearby, you haven't played it"
+msgstr "附近很热门，你还没打过"
+
+#: src/routes/farm-helper.tsx
+msgid "Popular with the players around you, and you have no top play on it with these mods."
+msgstr "在你附近的玩家中很热门，而你在这些 Mod 下还没有它的最佳成绩。"
+
+#: src/routes/farm-helper.tsx
 msgid "popularity"
 msgstr "热门程度"
 
@@ -7489,6 +7819,7 @@ msgstr "发布你的 Discord 服务器"
 msgid "Post your server"
 msgstr "发布你的服务器"
 
+#: src/components/communities/CommunityCard.tsx
 #: src/routes/communities_.$id.tsx
 msgid "posted by"
 msgstr "发布者"
@@ -7577,6 +7908,12 @@ msgstr "预览"
 msgid "Preview"
 msgstr "预览"
 
+#. placeholder {0}: rec.title
+#. placeholder {1}: rec.version
+#: src/routes/farm-helper.tsx
+msgid "Preview {0} [{1}]"
+msgstr "预览 {0} [{1}]"
+
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Preview position"
 msgstr "试听进度"
@@ -7663,6 +8000,7 @@ msgstr "个人资料"
 msgid "Profile banner"
 msgstr "个人资料横幅"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Profile link"
 msgstr "主页链接"
@@ -7672,6 +8010,7 @@ msgid "Profile stats"
 msgstr "个人资料数据"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/SkillPlaysModal.tsx
 msgid "profile top play"
 msgstr "个人最佳成绩"
 
@@ -8108,6 +8447,11 @@ msgstr "移除"
 msgid "Remove"
 msgstr "移除"
 
+#. placeholder {0}: player.username
+#: src/routes/farm-helper.tsx
+msgid "Remove {0} from recent"
+msgstr "从最近记录中移除 {0}"
+
 #. placeholder {0}: entry.title
 #: src/components/replay/ReplayRecentlyViewed.tsx
 msgid "Remove {0} from recently watched"
@@ -8313,6 +8657,10 @@ msgid "Reset orientation"
 msgstr "重置方向"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Reset to current page"
+msgstr "重置为当前页面"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Resize / crop"
 msgstr "调整尺寸 / 裁剪"
 
@@ -8323,6 +8671,14 @@ msgstr "调整尺寸 / 裁剪…"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Resize to"
 msgstr "缩放至"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Resizing image..."
+msgstr "正在缩放图片…"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Restored an unsaved draft from this browser."
+msgstr "已从此浏览器恢复未保存的草稿。"
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Resume chart preview"
@@ -8500,6 +8856,19 @@ msgstr "正在保存。"
 msgid "Saving…"
 msgstr "保存中…"
 
+#: src/components/ghost/GhostSprite.tsx
+msgid "say something back"
+msgstr "回一句吧"
+
+#. placeholder {0}: drawn.name
+#: src/components/ghost/GhostSprite.tsx
+msgid "Say something to {0}"
+msgstr "对 {0} 说点什么"
+
+#: src/components/ghost/GhostSprite.tsx
+msgid "Say something to {name}"
+msgstr "对 {name} 说点什么"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Scale the image to fit"
 msgstr "缩放图片以适应"
@@ -8596,6 +8965,10 @@ msgstr "搜索玩家，或粘贴成绩 ID"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Search a player, or paste a score link..."
 msgstr "搜索玩家，或粘贴成绩链接…"
+
+#: src/routes/farm-helper.tsx
+msgid "search a player..."
+msgstr "搜索玩家…"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Search any beatmap by title, artist, or mapper..."
@@ -8901,6 +9274,7 @@ msgstr "{0} 的设置"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
+#: src/components/packs/StreakGame.tsx
 #: src/routes/packs.tsx
 msgid "shards"
 msgstr "碎片"
@@ -9044,7 +9418,7 @@ msgstr "展示柜"
 
 #: src/routes/packs_.collections.tsx
 msgid "Showcase"
-msgstr "展示"
+msgstr "展示柜"
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "showcases"
@@ -9083,6 +9457,10 @@ msgstr "正在洗牌…"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Side by Side"
 msgstr "并排对比"
+
+#: src/components/packs/StreakGame.tsx
+msgid "Sign in and runs like that pay shards."
+msgstr "登录后，这样的连胜就能赚碎片。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -9329,6 +9707,10 @@ msgstr "出了点问题。"
 msgid "Something went wrong. Try again."
 msgstr "出错了。请重试。"
 
+#: src/routes/farm-helper.tsx
+msgid "sort"
+msgstr "排序"
+
 #: src/routes/player/$username.tsx
 #: src/routes/tracker.tsx
 msgid "Sort"
@@ -9374,6 +9756,7 @@ msgstr "观众"
 msgid "Speedjack"
 msgstr "高速叠键"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
 msgstr "剧透文字"
@@ -9512,6 +9895,10 @@ msgstr "故事板"
 msgid "Storyboard…"
 msgstr "故事板…"
 
+#: src/components/packs/StreakGame.tsx
+msgid "streak"
+msgstr "连胜"
+
 #: src/routes/player/$username.tsx
 msgid "Streak"
 msgstr "连续天数"
@@ -9536,6 +9923,7 @@ msgstr "被双押打断的切换。"
 msgid "Streams thickened with three-note hand chords."
 msgstr "加入三押和弦的切换。"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Strikethrough"
 msgstr "删除线"
@@ -9673,9 +10061,17 @@ msgstr "目标成绩数"
 msgid "Target rank"
 msgstr "目标排名"
 
+#: src/routes/farm-helper.tsx
+msgid "target score"
+msgstr "目标分数"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Target total pp"
 msgstr "目标总 pp"
+
+#: src/routes/farm-helper.tsx
+msgid "targets on this chart will aim higher until you set the score"
+msgstr "在你打出成绩之前，这张谱面的目标会定得更高"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Targets track themselves from your mania plays: a pp number, a play worth, a play count, an accuracy, a clear, or a grade."
@@ -9729,6 +10125,7 @@ msgstr "文字(可选)"
 msgid "Text (replaces the selection)"
 msgstr "文字(会替换选中内容)"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Text color"
 msgstr "文字颜色"
@@ -9737,6 +10134,7 @@ msgstr "文字颜色"
 msgid "Text color…"
 msgstr "文字颜色…"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Text size"
 msgstr "文字大小"
@@ -9780,6 +10178,10 @@ msgstr "今天提交的反馈已经够多了，明天再来吧。"
 #: src/components/communities/TagInput.tsx
 msgid "That is all {COMMUNITY_MAX_TAGS}. Remove one to add another."
 msgstr "已经是 {COMMUNITY_MAX_TAGS} 个了。要再加就先删一个。"
+
+#: src/components/packs/StreakGame.tsx
+msgid "That is today's shard allowance spent. The streak still counts."
+msgstr "今日的碎片额度已用完。连胜仍然有效。"
 
 #: src/components/communities/field-options.tsx
 msgid "That is your own listing."
@@ -10310,6 +10712,18 @@ msgstr "切换菜单"
 msgid "Toggles"
 msgstr "开关"
 
+#: src/routes/farm-helper.tsx
+msgid "too easy"
+msgstr "太简单"
+
+#: src/routes/farm-helper.tsx
+msgid "too hard"
+msgstr "太难"
+
+#: src/routes/farm-helper.tsx
+msgid "too hard hides the lane from your gain views; setting a real score also clears a mark"
+msgstr "「太难」会把该谱面从你的收益视图中隐藏；打出真实成绩也会清除标记"
+
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Too many reports just now. Try again in a bit."
 msgstr "提交太频繁了，请稍后再试。"
@@ -10430,6 +10844,7 @@ msgid "Tracked"
 msgstr "已追踪"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/SkillPlaysModal.tsx
 msgid "tracked history"
 msgstr "追踪记录"
 
@@ -10499,6 +10914,10 @@ msgstr "二"
 #: src/components/me/MyDataPanel.tsx
 msgid "Tuesdays"
 msgstr "周二"
+
+#: src/routes/farm-helper.tsx
+msgid "tune your recs"
+msgstr "调整你的推荐"
 
 #: src/routes/player/$username.tsx
 msgid "Tung tung sahur keycap"
@@ -10722,6 +11141,10 @@ msgstr "正在上传 {list} 的预览图。"
 msgid "Uploading gives you a share link for the replay. Sign in with osu! to upload."
 msgstr "上传后会得到这个回放的分享链接。请用 osu! 登录后上传。"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Uploading image..."
+msgstr "正在上传图片…"
+
 #: src/lib/skins.ts
 msgid "Uploading previews."
 msgstr "正在上传预览图。"
@@ -10813,6 +11236,10 @@ msgstr "用户名"
 msgid "Username"
 msgstr "用户名"
 
+#: src/routes/farm-helper.tsx
+msgid "username..."
+msgstr "用户名…"
+
 #: src/components/communities/field-options.tsx
 msgid "Verified"
 msgstr "已认证"
@@ -10868,6 +11295,14 @@ msgstr "查看详情"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "View it"
 msgstr "查看"
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "View map details"
+msgstr "查看谱面详情"
+
+#: src/routes/farm-helper.tsx
+msgid "View mode"
+msgstr "视图模式"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "View on a {label} background"
@@ -10929,6 +11364,7 @@ msgstr "可见范围"
 msgid "Visible to"
 msgstr "可见范围"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Visual"
 msgstr "可视化"
@@ -11060,11 +11496,19 @@ msgstr "这个服务器是做什么的"
 
 #: src/routes/communities_.$id.tsx
 msgid "What it is for"
-msgstr "这个服务器是做什么的"
+msgstr "服务器简介"
+
+#: src/routes/farm-helper.tsx
+msgid "what nearby players actually farm"
+msgstr "附近玩家实际在刷的谱面"
 
 #: src/routes/farm-helper.tsx
 msgid "what players near you played last"
 msgstr "与你水平相近的玩家最近在打什么"
+
+#: src/routes/farm-helper.tsx
+msgid "what you're browsing"
+msgstr "你在浏览的内容"
 
 #: src/components/layout/ChangelogModal.tsx
 msgid "What's new"
@@ -11100,6 +11544,10 @@ msgstr "追踪期间"
 msgid "Who can join"
 msgstr "谁可以加入"
 
+#: src/routes/farm-helper.tsx
+msgid "who farms this"
+msgstr "谁在刷这张"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Who farms this"
 msgstr "谁在刷这张"
@@ -11112,9 +11560,17 @@ msgstr "谁拥有你的卡片"
 msgid "Who the server is for, what happens in it, when it is busy. Line breaks are kept."
 msgstr "服务器面向哪些人、里面在做什么、什么时候热闹。换行会保留。"
 
+#: src/routes/farm-helper.tsx
+msgid "who you're compared to"
+msgstr "你在和谁比较"
+
 #: src/lib/packs.ts
 msgid "Whole pool, new cards first"
 msgstr "整个卡池，新卡优先"
+
+#: src/routes/farm-helper.tsx
+msgid "why a map shows up"
+msgstr "谱面为何出现在这里"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Width of the exported image, in pixels"
@@ -11145,9 +11601,17 @@ msgstr "写一段简短的服务器介绍。"
 msgid "Write and preview osu! profile BBCode for your me! page, with a live preview and one-click copy."
 msgstr "为你的 me! 页面编写并预览 osu! 主页 BBCode，支持实时预览和一键复制。"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Write BBCode here, or paste your current me! page source..."
+msgstr "在这里编写 BBCode，或粘贴你当前 me! 页面的源码…"
+
 #: src/routes/player/$username.tsx
 msgid "Write one in the BBCode editor"
 msgstr "在 BBCode 编辑器里写一段"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."
+msgstr "在这里编写你的页面。选中文本后用工具栏设置格式，右键查看更多操作，或粘贴图片直接添加。"
 
 #: src/components/packs/StreakGame.tsx
 msgid "wrong"
@@ -11171,6 +11635,14 @@ msgid "You"
 msgstr "你"
 
 #: src/routes/farm-helper.tsx
+msgid "You already beat the players near you here, but a higher-acc rerun is still worth pp."
+msgstr "你在这张上已经超过了附近玩家，但更高 acc 的重打仍然值 pp。"
+
+#: src/routes/farm-helper.tsx
+msgid "You already beat the players near you here, but a higher-acc rerun is still worth pp. Hidden by default until you achieve one of its scores."
+msgstr "你在这张上已经超过了附近玩家，但更高 acc 的重打仍然值 pp。默认隐藏，直到你达成其中一个目标成绩。"
+
+#: src/routes/farm-helper.tsx
 msgid "You already beat the typical score here with {yourPp}pp. A cleaner acc run is worth about {target}pp."
 msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。打一次准确率更干净的能拿到大约 {target}pp。"
 
@@ -11182,9 +11654,25 @@ msgstr "你正在划开卡片"
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
 msgstr "你最多可以发布 {COMMUNITY_MAX_PER_USER} 个服务器。"
 
+#: src/routes/farm-helper.tsx
+msgid "you could gain"
+msgstr "潜在收益"
+
+#: src/components/packs/StreakGame.tsx
+msgid "You got {streak} right, a new best."
+msgstr "你答对了 {streak} 题，创下新纪录。"
+
+#: src/components/packs/StreakGame.tsx
+msgid "You got {streak} right."
+msgstr "你答对了 {streak} 题。"
+
 #: src/components/communities/field-options.tsx
 msgid "You have a few reports waiting to be read already. Give a moderator a chance to catch up."
 msgstr "你已经有几条举报还没被处理。给管理员一点时间。"
+
+#: src/routes/farm-helper.tsx
+msgid "You have a score, but players near you score higher on it."
+msgstr "你有成绩，但附近玩家的分数更高。"
 
 #: src/routes/skins.tsx
 msgid "You have not published a skin yet"
@@ -11199,8 +11687,20 @@ msgid "you have too many active marks, clear some first"
 msgstr "你标记的谱面太多了，先清掉一些"
 
 #: src/routes/farm-helper.tsx
+msgid "You marked this too easy"
+msgstr "你已把这张标记为太简单"
+
+#: src/routes/farm-helper.tsx
+msgid "You marked this too hard"
+msgstr "你已把这张标记为太难"
+
+#: src/routes/farm-helper.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
 msgstr "你是 {yourPp}pp，而水平相近的玩家平均 {median}pp，所以再打一次还有提升空间。"
+
+#: src/components/packs/StreakGame.tsx
+msgid "You stopped at {streak} in a row."
+msgstr "你在连对 {streak} 次后收手了。"
 
 #. placeholder {0}: nf(reachTargetNum)
 #: src/components/me/GoalsPanel.tsx
@@ -11242,6 +11742,10 @@ msgstr "你的 {yourPp}pp · 已过去 {age}"
 msgid "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
 msgstr "你这个 {yourPp}pp 的成绩已经过去 {age}。水平相近的玩家中前四分之一在 {p75}pp。"
 
+#: src/routes/farm-helper.tsx
+msgid "your best"
+msgstr "你的最佳"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 msgstr "你在频道里最后展示过的那张谱面上的最好成绩(来自 /recent、/map 等)。也可以用 /c 和 /compare。带上用户名可以查别人。"
@@ -11258,6 +11762,10 @@ msgstr "你的描述会显示在这里。"
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Your dynamic renders were turned off."
 msgstr "你的动态渲染图已被关闭。"
+
+#: src/routes/farm-helper.tsx
+msgid "your marks"
+msgstr "你的标记"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
@@ -11333,6 +11841,7 @@ msgstr "你的上传"
 msgid "Your username and avatar"
 msgstr "你的用户名和头像"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "YouTube 视频"

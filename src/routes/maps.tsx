@@ -8,7 +8,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Dices } from "lucide-react";
 import { getBeatmapFile } from "../lib/osu";
 import { LiveBackendRequired } from "../components/LiveDataEmptyState";
-import { getCountryName, isGlobalScope } from "../lib/country";
+import { displayCountryName, isGlobalScope } from "../lib/country";
+import { useLocale } from "../lib/locale-context";
 import { isRegionScope } from "../lib/regions";
 import { RegionIcon } from "../components/ui/RegionIcon";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
@@ -611,7 +612,7 @@ export const Route = createFileRoute("/maps")({
       });
     }
     const country = match.search.country;
-    const countryName = country ? getCountryName(country) : null;
+    const countryName = country ? displayCountryName(country, match.context.locale) : null;
     return pageSeo({
       title: countryName ? i18n._(msg`Beatmaps played in ${countryName}`) : i18n._(msg`Beatmaps played by your country`),
       description: countryName
@@ -792,7 +793,8 @@ function MapsPage() {
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
   const totalRandomActive = triStateActive(randomStatus) + triStateActive(randomKey) + triStateActive(randomPattern) + (rStars > 0 || rStarsMax > 0 ? 1 : 0);
-  const countryName = getCountryName(selectedCountry);
+  const locale = useLocale();
+  const countryName = displayCountryName(selectedCountry, locale);
   // Header title tracks the active lens; search/collections keep "Mania maps".
   const lensTitle = isGlobalScope(selectedCountry)
     ? tab === "popular"
@@ -2575,6 +2577,7 @@ function MapDetailsContent({
   country: string;
   onClose: () => void;
 }) {
+  const { t } = useLingui();
   const setId =
     details.kind === "favourite" ? details.fav.beatmapsetId : details.map.beatmapsetId;
   const covers = details.kind === "favourite" ? details.fav.covers : details.map.covers;
@@ -2749,9 +2752,9 @@ function MapDetailsContent({
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-osu-b3/70 hover:bg-osu-b3 text-white/85 hover:text-white text-[12px] font-semibold transition-colors cursor-pointer"
-          title="Open beatmap page on osu!"
+          title={t`Open beatmap page on osu!`}
         >
-          <span>Beatmap page</span>
+          <span><Trans>Beatmap page</Trans></span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3" aria-hidden>
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
             <polyline points="15 3 21 3 21 9" />
@@ -2761,10 +2764,10 @@ function MapDetailsContent({
         <a
           href={osuDirectUrl}
           className="hidden items-center gap-1.5 px-3 py-2 rounded-lg bg-osu-b3/70 hover:bg-osu-b3 text-white/85 hover:text-white text-[12px] font-semibold transition-colors cursor-pointer sm:inline-flex"
-          title="Open in osu! client"
+          title={t`Open in osu! client`}
         >
           <OsuLogo className="h-[14px] w-[14px]" />
-          <span>Open in osu!</span>
+          <span><Trans>Open in osu!</Trans></span>
         </a>
       </div>
     </>
@@ -5242,7 +5245,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
             >
               <path d="M8 5v14l11-7z" />
             </svg>
-            <span>chart preview</span>
+            <span><Trans>chart preview</Trans></span>
           </button>
         ) : null}
         {replayPreviewError ? (

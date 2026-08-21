@@ -4,7 +4,8 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { getCountryName, isGlobalScope } from "../lib/country";
+import { displayCountryName, isGlobalScope } from "../lib/country";
+import { useLocale } from "../lib/locale-context";
 import { isRegionScope } from "../lib/regions";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber, formatPpGain } from "../lib/format";
 import {
@@ -239,7 +240,7 @@ export const Route = createFileRoute("/tracker")({
   },
   head: ({ match }) => {
     const country = match.search.country;
-    const countryName = country ? getCountryName(country) : null;
+    const countryName = country ? displayCountryName(country, match.context.locale) : null;
     const i18n = getI18n(match.context.locale);
     return {
       meta: [
@@ -465,7 +466,8 @@ function ScoresPage() {
   }, []);
   const trackerPpGainEntries = useAppStore((state) => state.trackerPpGainsByCountry[selectedCountry] ?? EMPTY_SCORE_GAINS);
   const setTrackerPpGains = useAppStore((state) => state.setTrackerPpGains);
-  const countryName = getCountryName(selectedCountry);
+  const locale = useLocale();
+  const countryName = displayCountryName(selectedCountry, locale);
   const hasActiveScoreFilters = selectedPlayerIds.length > 0
     || filter !== "all"
     || gradeFilter !== "all"

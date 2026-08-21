@@ -14,7 +14,7 @@ import { DiscordLogo, DISCORD_BLURPLE } from "../components/ui/DiscordLogo";
 import { track } from "../lib/analytics";
 import { communityEventProperties, rememberCommunityName } from "../lib/analytics-communities";
 import { useAuth } from "../lib/auth-context";
-import { getCountryName } from "../lib/country";
+import { displayCountryName } from "../lib/country";
 import { formatTimeAgo, intlLocaleTag } from "../lib/format";
 import { useLingui } from "@lingui/react/macro";
 import { useLocale } from "../lib/locale-context";
@@ -133,6 +133,7 @@ function largeIconUrl(url: string): string {
  */
 function OtherServers({ community, className }: { community: CommunitySummary; className?: string }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const [rows, setRows] = useState<CommunitySummary[] | null>(null);
   const [scoped, setScoped] = useState(false);
 
@@ -182,7 +183,7 @@ function OtherServers({ community, className }: { community: CommunitySummary; c
   const where = scoped && country
     ? country === COMMUNITY_INTERNATIONAL
       ? t`More international servers`
-      : t`More servers from ${getCountryName(country)}`
+      : t`More servers from ${displayCountryName(country, locale)}`
     : t`More servers`;
 
   return (
@@ -409,7 +410,7 @@ function CommunityDetailPage() {
                             {showFlag && <CountryFlag code={row.countryCode} size="sm" decorative />}
                             {row.countryCode === COMMUNITY_INTERNATIONAL
                               ? t`international`
-                              : getCountryName(row.countryCode)}
+                              : displayCountryName(row.countryCode, locale)}
                           </Link>
                         )}
                         {language && (
