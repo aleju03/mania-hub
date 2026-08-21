@@ -785,7 +785,10 @@ function SkinPanel({
                     className="h-10 w-[71px] shrink-0 rounded-md object-cover"
                   />
                 ) : null}
-                <div className="min-w-0 flex-1">
+                {/* A floor on the text column: below it the button group wraps to
+                    its own row instead of crushing the name to a letter, which
+                    the longer es/zh button labels hit well before English. */}
+                <div className="min-w-[140px] flex-1">
                   <div className="truncate text-[13px] font-semibold text-osu-l1">{myReplaySkin.skin.name}</div>
                   <div className="text-[11px] text-osu-f1">
                     {myReplaySkin.private ? t`private · updated ${updatedAtLabel}` : t`updated ${updatedAtLabel}`}
