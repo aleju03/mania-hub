@@ -230,6 +230,23 @@ describe("computeManiaSkills", () => {
     expect(computeKeymodePpPrestige(15_000, [])).toBeGreaterThan(0);
   });
 
+  test("reads a 6K profile on 6K PP economics, not the default band", () => {
+    const pure6k = [{ keyMode: 6, weight: 1 }];
+    // Only ~720 ranked 6K maps exist, so a 6K specialist's standing lives in
+    // single digits of thousands of pp. 9.3k is one of the strongest known 6K
+    // profiles in the world; the default band read it as zero prestige. The
+    // shared 24k top keeps that from over-rewarding: real credit, not a tier
+    // of free altitude for topping a tiny niche.
+    const strongSpecialist = computeKeymodePpPrestige(9_300, pure6k);
+    expect(strongSpecialist).toBeGreaterThan(0.25);
+    expect(strongSpecialist).toBeLessThan(0.4);
+    // An unknown keymode (5K) still falls back to the default band.
+    expect(computeKeymodePpPrestige(9_300, [{ keyMode: 5, weight: 1 }])).toBe(0);
+    // Full prestige costs the same 24k it costs every other keymode.
+    expect(computeKeymodePpPrestige(13_000, pure6k)).toBeLessThan(0.6);
+    expect(computeKeymodePpPrestige(24_000, pure6k)).toBe(1);
+  });
+
   test("blends a hybrid's prestige band smoothly instead of snapping on the main keymode", () => {
     const pp = 16_000;
     const pure7k = computeKeymodePpPrestige(pp, [{ keyMode: 7, weight: 1 }]);

@@ -112,6 +112,23 @@ const BASELINES: Record<number, KeymodeBaseline> = {
     objects: [280, 1800],
     apex: [9.5, 11.5],
   },
+  // 6K reads against its own pool instead of the compromise default. The pool
+  // is tiny (720 ranked maps against 4K's 16k, hardest exactly 10.0*), so this
+  // is the default band with every top pulled down to where 6K charts actually
+  // end; floors stay put, so gaining the entry can only lift an existing card.
+  // Apex is anchored the same way as the other keymodes (2026-08-21 survey of
+  // the world's hardest 6K scoreboards): the best credible 6K-specialist play
+  // sits at 9.89 rate-adjusted stars, so the floor opens just above the sr
+  // band and the best specialist alive reads it as a feat, not a freebie.
+  6: {
+    pp: [70, 1200],
+    sr: [3.0, 8.5],
+    bpm: [120, 235],
+    density: [3.0, 10.5],
+    length: [65, 245],
+    objects: [300, 2000],
+    apex: [9.0, 11.0],
+  },
   7: {
     pp: [90, 1700],
     sr: [3.4, 9.0],
@@ -484,8 +501,21 @@ function calibrateDisplaySkillValues(cardPower: number, values: number[]): numbe
 // board. The thing that actually separates the underrated 4K profiles is
 // sustained scoreboard-caliber accuracy, and that has its own additive term
 // now (POLISH_WEIGHT); raw pp standing keeps its original meaning.
+//
+// The tops are deliberately the same 24k everywhere: full prestige means the
+// same raw pp no matter the keymode, and the keymode premium lives in the
+// floor alone. 6K (2026-08-21 survey): pp only exists on ranked charts and
+// only 720 ranked 6K maps exist against 4K's 16k, so a pure 6K profile tops
+// out near half the other economies - the world's hardest 6K scoreboards are
+// held almost entirely by 7K mains posting ~1% of their pp there, and the only
+// true specialists found on them sit at ~12.8k, ~11k and ~9.3k profile pp.
+// The 6k floor opens prestige where a serious 6K profile starts instead of
+// reading it as zero, but the shared top keeps "best of a tiny niche" from
+// rating as world class: the strongest known specialist reads ~0.51 here,
+// against the ~0.15 the 4K band would hand the same pp.
 const PP_PRESTIGE_BANDS: Record<number, [number, number]> = {
   4: [12_000, 24_000],
+  6: [6_000, 24_000],
   7: [10_500, 24_000],
 };
 const DEFAULT_PP_PRESTIGE_BAND: [number, number] = [11_500, 24_000];
