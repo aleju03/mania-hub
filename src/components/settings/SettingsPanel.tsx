@@ -55,9 +55,10 @@ import {
   writeReplayVolume,
 } from "../../lib/replay-preferences";
 import {
+  appliedCommunityReplaySkinKey,
   clearMyReplaySkin,
   fetchMyReplaySkinCached,
-  loadAppliedCommunityReplaySkinSettings,
+  loadAppliedReplaySkinSettings,
   peekMyReplaySkinMemory,
   readAppliedCommunityReplaySkin,
   replaySkinSettingsEmbedAssets,
@@ -139,8 +140,11 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
   const [volume, setVolume] = useState(readReplayVolume);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
+  const skinSettingsRef = useRef(skinSettings);
   const [overlaySettings, setOverlaySettings] = useState(readReplayOverlaySettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
+  const [skinSettingsLoading, setSkinSettingsLoading] = useState(false);
+  const skinSettingsLoadRequestRef = useRef(0);
   /* Starts at defaults on both server and first client render (the appearance
      panel renders a different subtree when the cursor is enabled, so reading
      localStorage during render would break hydration); real values load after
@@ -159,25 +163,18 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   }, []);
 
   useEffect(() => {
+    skinSettingsRef.current = skinSettings;
+  }, [skinSettings]);
+
+  useEffect(() => () => {
+    skinSettingsLoadRequestRef.current += 1;
+  }, []);
+
+  useEffect(() => {
     if (!confirmingReset) return;
     const timer = setTimeout(() => setConfirmingReset(false), 4000);
     return () => clearTimeout(timer);
   }, [confirmingReset]);
-
-  // The stored settings are asset-free while a skin is applied, so rebuild the
-  // decoded copy from the pointer on mount: the editor and its preview open on
-  // the skin that is actually in play instead of on flat defaults.
-  useEffect(() => {
-    const applied = readAppliedCommunityReplaySkin();
-    if (!applied) return;
-    let cancelled = false;
-    void loadAppliedCommunityReplaySkinSettings(applied).then((full) => {
-      if (!cancelled && full) setSkinSettings(full);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const updateCursor = (patch: Partial<CursorSettings>) => {
     const next = normalizeCursorSettings({ ...cursorSettings, ...patch });
@@ -216,7 +213,49 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     persistSkinSettings(normalizeReplaySkinSettings({ ...skinSettings, ...patch, version: 2 }));
   };
 
+  // A community skin's localStorage copy intentionally has no decoded image
+  // data. The quick settings panel does not draw that art, so downloading,
+  // unzipping and decoding the full .osk while the drawer opens only blocks
+  // unrelated interactions (most noticeably a quick switch to Appearance).
+  // Pay that cost only when the full editor actually needs the assets.
+  const openAdvancedSkinEditor = () => {
+    const applied = readAppliedCommunityReplaySkin();
+    if (!applied || replaySkinSettingsEmbedAssets(skinSettingsRef.current)) {
+      setSkinSettingsOpen(true);
+      return;
+    }
+
+    const appliedKey = appliedCommunityReplaySkinKey(applied);
+    const requestId = ++skinSettingsLoadRequestRef.current;
+    setSkinSettingsLoading(true);
+    void loadAppliedReplaySkinSettings()
+      .then((full) => {
+        if (skinSettingsLoadRequestRef.current !== requestId) return;
+        const currentApplied = readAppliedCommunityReplaySkin();
+        if (full && currentApplied && appliedCommunityReplaySkinKey(currentApplied) === appliedKey) {
+          // Scroll direction remains editable in the lightweight panel. Keep
+          // the latest click if it changed while the archive was loading; all
+          // skin-derived geometry and decoded assets come from the full copy.
+          const merged = normalizeReplaySkinSettings({
+            ...full,
+            upscroll: skinSettingsRef.current.upscroll,
+          });
+          skinSettingsRef.current = merged;
+          setSkinSettings(merged);
+        }
+        setSkinSettingsOpen(true);
+      })
+      .catch(() => {
+        if (skinSettingsLoadRequestRef.current === requestId) setSkinSettingsOpen(true);
+      })
+      .finally(() => {
+        if (skinSettingsLoadRequestRef.current === requestId) setSkinSettingsLoading(false);
+      });
+  };
+
   const resetReplaySettings = () => {
+    skinSettingsLoadRequestRef.current += 1;
+    setSkinSettingsLoading(false);
     setScrollSpeed(DEFAULT_REPLAY_SCROLL_SPEED);
     writeReplayScrollSpeed(DEFAULT_REPLAY_SCROLL_SPEED);
     setBgDim(80);
@@ -279,7 +318,8 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
         <SkinPanel
           skinSettings={skinSettings}
           onUpdateSkin={updateSkin}
-          onOpenAdvanced={() => setSkinSettingsOpen(true)}
+          onOpenAdvanced={openAdvancedSkinEditor}
+          advancedLoading={skinSettingsLoading}
         />
       ) : null}
       {activeTab === "viewer" ? (
@@ -602,10 +642,12 @@ function SkinPanel({
   skinSettings,
   onUpdateSkin,
   onOpenAdvanced,
+  advancedLoading,
 }: {
   skinSettings: ReplaySkinSettings;
   onUpdateSkin: (patch: Partial<ReplaySkinSettings>) => void;
   onOpenAdvanced: () => void;
+  advancedLoading: boolean;
 }) {
   const { t, i18n } = useLingui();
   const auth = useAuth();
@@ -751,9 +793,11 @@ function SkinPanel({
           <button
             type="button"
             onClick={onOpenAdvanced}
-            className="group inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-osu-pink/40 bg-osu-pink/10 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white"
+            disabled={advancedLoading}
+            aria-busy={advancedLoading}
+            className="group inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-osu-pink/40 bg-osu-pink/10 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white disabled:cursor-wait disabled:opacity-70"
           >
-            <Pencil className="h-3 w-3" />
+            {advancedLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pencil className="h-3 w-3" />}
             <Trans>Viewer editor</Trans>
           </button>
         }

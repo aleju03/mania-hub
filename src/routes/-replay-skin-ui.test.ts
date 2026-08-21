@@ -92,8 +92,13 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("writeAppliedCommunityReplaySkin");
     expect(source).toContain("writeReplaySkinSettings(community.assetFree)");
     expect(source).toContain("replaySkinSettingsWithoutAssets");
-    // And the decoded copy comes back from the pointer on mount.
-    expect(source).toContain("loadAppliedCommunityReplaySkinSettings");
+    // The quick panel only needs the asset-free settings. Decoding a whole
+    // .osk on drawer mount can stall an unrelated Appearance-tab click, so the
+    // cached full-art load starts only when the viewer editor is requested.
+    expect(source).not.toContain("loadAppliedCommunityReplaySkinSettings");
+    expect(source).toContain("const openAdvancedSkinEditor = () => {");
+    expect(source).toContain("void loadAppliedReplaySkinSettings()");
+    expect(source).toContain("onOpenAdvanced={openAdvancedSkinEditor}");
   });
 
   it("reuses the last known replay-skin state when the settings drawer remounts", () => {
