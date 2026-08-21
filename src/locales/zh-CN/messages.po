@@ -284,7 +284,7 @@ msgstr "{0} 个卡册"
 #. placeholder {0}: formatOrdinal(ranks.cards, locale)
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "{0} biggest"
-msgstr "第 {0} 多"
+msgstr "{0} 大"
 
 #. placeholder {0}: result.total.toLocaleString("en-US")
 #: src/components/packs/collections/ShowcaseTab.tsx
@@ -442,7 +442,7 @@ msgstr "{0} 个月"
 #. placeholder {0}: formatOrdinal(ranks.packsOpened, locale)
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "{0} most"
-msgstr "第 {0} 多"
+msgstr "{0} 多"
 
 #. placeholder {0}: formatPp(recs.length)
 #. placeholder {0}: index + 1
@@ -628,7 +628,7 @@ msgstr "{0}，由 {1} 上传的 {keymodes} osu!mania 皮肤。下载 .osk 或浏
 #. placeholder {2}: day.sessionCount
 #: src/routes/player/$username.tsx
 msgid "{0}: {1} plays, {2} sessions"
-msgstr "{0}：{1} 次游玩，{2} 段游玩"
+msgstr "{0}：{1} 次游玩，{2} 场游玩"
 
 #. placeholder {0}: formatHour(hour)
 #: src/components/me/MyDataPanel.tsx
@@ -2022,11 +2022,11 @@ msgstr "横幅"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bar colors"
-msgstr "长条颜色"
+msgstr "条形音符颜色"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bar note height."
-msgstr "长条音符高度。"
+msgstr "条形音符高度。"
 
 #: src/routes/skins.tsx
 msgid "bars"
@@ -2132,7 +2132,7 @@ msgstr "涨幅最大优先"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Black playfield"
-msgstr "纯黑判定区"
+msgstr "纯黑游玩区域"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
@@ -4077,7 +4077,7 @@ msgstr "在下面填入{label}的成绩"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Fill the playfield with a solid black background"
-msgstr "把判定区背景填成纯黑"
+msgstr "把游玩区域背景填成纯黑"
 
 #. placeholder {0}: player.username
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -6370,7 +6370,7 @@ msgstr "还没有水平相近的玩家刷过这张。"
 
 #: src/routes/player/$username.tsx
 msgid "No pattern signal for this keymode yet."
-msgstr "这个键数还没有可用的谱面型态数据。"
+msgstr "这个键数还没有可用的谱型数据。"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "No players"
@@ -6378,7 +6378,7 @@ msgstr "没有玩家"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "No players found for \"{trimmedQuery}\"."
-msgstr "没有找到叫“{trimmedQuery}”的玩家。"
+msgstr "没有找到叫「{trimmedQuery}」的玩家。"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "No players found."
@@ -6607,7 +6607,7 @@ msgstr "目前还没有成绩可以评分。转谱和特殊键数会被跳过。
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "None of your Discord servers are ones you own or have Manage Server on, so there is nothing here you can post."
-msgstr "你的 Discord 服务器里没有一个是你拥有或拥有“管理服务器”权限的，所以这里没有你能发布的服务器。"
+msgstr "你的 Discord 服务器里没有一个是你拥有或拥有「管理服务器」权限的，所以这里没有你能发布的服务器。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "None of your plays could be rated yet. Converts and unusual keymodes are skipped."
@@ -6721,7 +6721,7 @@ msgstr "这里没有能提升你总 pp 的谱面"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nothing in the loaded plays matches \"{trimmedQuery}\"."
-msgstr "已加载的成绩里没有符合“{trimmedQuery}”的。"
+msgstr "已加载的成绩里没有符合「{trimmedQuery}」的。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
@@ -7201,11 +7201,11 @@ msgstr "谱型"
 
 #: src/routes/player/$username.tsx
 msgid "Pattern mix"
-msgstr "型态构成"
+msgstr "谱型构成"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Pattern profile"
-msgstr "型态分布"
+msgstr "谱型分布"
 
 #: src/components/maps/PatternRadar.tsx
 msgid "Pattern radar chart"
@@ -7213,7 +7213,7 @@ msgstr "谱型雷达图"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Patterns"
-msgstr "型态"
+msgstr "谱型"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "pause"
@@ -7455,7 +7455,7 @@ msgstr "每个国家/地区前 100 名的成绩会被自动记录。你还不在
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Plays when a combo above 20 is lost."
-msgstr "连击超过 20 时断连才会播放。"
+msgstr "连击超过 20 时才会播放断连音效。"
 
 #: src/routes/player/$username.tsx
 msgid "Plays with <0>{playstyleValue}</0>"
@@ -8587,7 +8587,7 @@ msgstr "搜索谱面或粘贴谱面 ID…"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Search a player to browse their plays, or paste a score link."
-msgstr "搜索一位玩家来浏览他的成绩，或粘贴成绩链接。"
+msgstr "搜索一位玩家来浏览其成绩，或粘贴成绩链接。"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Search a player, or paste a score ID"
@@ -8807,11 +8807,11 @@ msgstr "服务器列表暂时不可用"
 #. placeholder {0}: sessionIndex + 1
 #: src/routes/player/$username.tsx
 msgid "Session {0}"
-msgstr "第 {0} 段"
+msgstr "第 {0} 场"
 
 #: src/routes/player/$username.tsx
 msgid "Sessions"
-msgstr "游玩段落"
+msgstr "游玩场次"
 
 #: src/routes/snipes.tsx
 msgid "Set"
@@ -8947,7 +8947,7 @@ msgstr "色相偏移 ({signedHueShift}°)"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Shifting, irregular patterns that punish bad reading."
-msgstr "多变而不规则的型态，读谱不好就吃亏。"
+msgstr "多变而不规则的谱型，读谱不好就吃亏。"
 
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
@@ -9032,7 +9032,7 @@ msgstr "按图片真实像素尺寸显示"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Show the map's storyboard behind (and over) the playfield"
-msgstr "在判定区后面（和上面）显示谱面的故事板"
+msgstr "在游玩区域后面（和上面）显示谱面的故事板"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Show the site name on the render"
@@ -9384,11 +9384,11 @@ msgstr "stable"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage"
-msgstr "舞台"
+msgstr "面板"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage's left edge, skin.ini ColumnStart."
-msgstr "舞台左边缘，对应 skin.ini 的 ColumnStart。"
+msgstr "面板左边缘，对应 skin.ini 的 ColumnStart。"
 
 #: src/components/maps/PatternRadar.tsx
 msgid "STAM"
@@ -9542,7 +9542,7 @@ msgstr "删除线"
 
 #: src/lib/signature-shared.ts
 msgid "Strip"
-msgstr "长条"
+msgstr "横条"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stroke color for circle and arrow notes."
@@ -10016,7 +10016,7 @@ msgstr "你所在的服务器列表，好让我们列出你能发布的那些"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "The side-by-side playfields failed to mount."
-msgstr "并排判定区加载失败。"
+msgstr "并排游玩区域加载失败。"
 
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 msgid "The skin could not be loaded. Try again in a moment."
@@ -10076,11 +10076,11 @@ msgstr "他们的那张"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Their plays"
-msgstr "他的成绩"
+msgstr "该玩家的成绩"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Their runs on this map"
-msgstr "他在这张谱面上的成绩"
+msgstr "该玩家在这张谱面上的成绩"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "theme color"
@@ -10300,7 +10300,7 @@ msgstr "今天"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Toggle field input overlay"
-msgstr "开关判定区输入覆盖层"
+msgstr "开关游玩区域输入覆盖层"
 
 #: src/components/layout/Nav.tsx
 msgid "Toggle menu"
@@ -10539,7 +10539,7 @@ msgstr "输入区间：3.6-6.7、5+、<4"
 #. placeholder {0}: activity.typicalSession
 #: src/routes/player/$username.tsx
 msgid "Typical session <0>{0} plays</0>"
-msgstr "一段通常打 <0>{0} 次</0>"
+msgstr "一场通常打 <0>{0} 次</0>"
 
 #: src/components/communities/field-options.tsx
 msgid "Ukrainian"
@@ -11039,7 +11039,7 @@ msgstr "我们还没有存到 {0} 可用于回放的成绩。"
 #. placeholder {0}: player.username
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "We have no run by {0} on this map. Paste a link to their score to use it."
-msgstr "我们没有 {0} 在这张谱面上的成绩。粘贴他的成绩链接就能用。"
+msgstr "我们没有 {0} 在这张谱面上的成绩。粘贴其成绩链接就能用。"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "web.archive.org link to their osu! profile"

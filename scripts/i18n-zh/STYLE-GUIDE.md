@@ -16,6 +16,8 @@ Voice: a native osu!mania player writing UI copy in Simplified Chinese. Must rea
 - country/region -> always 国家/地区 (never 国家 alone)
 - goal -> 目标 | streak (higher/lower game) -> 连胜 | card -> 卡片 | shard -> 碎片
 - community -> 社区 | Discord terms (server, channel, command names like /track) stay English
+- playfield -> 游玩区域 | stage (skin element) -> 面板 | pattern -> 谱型 (never 型态) | play session -> 场 (游玩场次) | bars note style -> 条形 (never 长条, that means LN) | other players take 该玩家/其, never 他
+- Quotes are always 「」, never “”
 
 ## Hard rules
 1. Preserve ICU/markup EXACTLY: {0}, {name}, {count, plural, ...}, tags <0></0>, <1/>. Every placeholder/tag appears exactly once; reordering is fine and encouraged.
