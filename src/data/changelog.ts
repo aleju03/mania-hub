@@ -27,6 +27,8 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-21", text: "Skillset play lists on the skills tab now label each play's strongest skillset, so you can tell when an LN map is on your Chordjack list just for its overall" },
+  { date: "2026-08-21", text: "Fixed long notes in replays and skin previews stacking repeated note ends. NoteBodyStyle support was missing", to: "/replay" },
   { date: "2026-08-21", text: "Dynamic renders now show the map's star rating next to your newest top play", to: "/dynamic-renders" },
   { date: "2026-08-21", text: "New maniacard update to rebalance 6K players: their pp used to count for nothing, so their cards rated way below their real level", to: "/packs" },
   { date: "2026-08-21", text: "Added Spanish and Chinese translations. The site follows your browser's language, and you can change it in settings" },
