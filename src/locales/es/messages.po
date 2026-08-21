@@ -7678,7 +7678,7 @@ msgstr "Jugado"
 #. placeholder {1}: display.isLazer ? "Lazer" : "Stable"
 #: src/routes/player/$username.tsx
 msgid "Played {0} on {1}"
-msgstr "Jugó {0} el {1}"
+msgstr "Jugó {0} en {1}"
 
 #: src/components/ui/LazerBadge.tsx
 msgid "Played on osu!lazer"
