@@ -7686,8 +7686,9 @@ msgstr "Jugado en osu!lazer"
 
 #. placeholder {0}: lazer ? "Lazer" : "Stable"
 #: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Played on: <0>{0}</0>"
-msgstr "Jugado el: <0>{0}</0>"
+msgstr "Jugado en: <0>{0}</0>"
 
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/rankings.tsx
@@ -8877,6 +8878,7 @@ msgstr "score"
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Score"
 msgstr "Score"
 
@@ -11308,6 +11310,7 @@ msgid "View on osu!"
 msgstr "Ver en osu!"
 
 #: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "View on osu! →"
 msgstr "Ver en osu! →"
 

@@ -7695,6 +7695,7 @@ msgstr "在 osu!lazer 上游玩"
 
 #. placeholder {0}: lazer ? "Lazer" : "Stable"
 #: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Played on: <0>{0}</0>"
 msgstr "游玩客户端：<0>{0}</0>"
 
@@ -8886,6 +8887,7 @@ msgstr "成绩"
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Score"
 msgstr "分数"
 
@@ -11317,6 +11319,7 @@ msgid "View on osu!"
 msgstr "在 osu! 上查看"
 
 #: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "View on osu! →"
 msgstr "在 osu! 上查看 →"
 

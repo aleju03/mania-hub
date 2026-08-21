@@ -2094,14 +2094,14 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 <CoverBackdrop url={score.beatmapset.covers["cover@2x"] || score.beatmapset.covers.cover} />
               )}
               <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
-                <StatCell label="Score" value={totalScore != null ? formatNumber(totalScore) : "-"} />
-                <StatCell label="Combo" value={`${formatNumber(score.max_combo)}x`} />
+                <StatCell label={t`Score`} value={totalScore != null ? formatNumber(totalScore) : "-"} />
+                <StatCell label={t`Combo`} value={`${formatNumber(score.max_combo)}x`} />
                 {judgementStats.map((judgement, i) => (
                   <StatCell key={judgement.label} label={judgement.label} value={formatNumber(judgement.value)} color={judgement.className} className={JUDGEMENT_MOBILE_ORDER_CLASS[i]} />
                 ))}
                 {score.beatmap?.difficulty_rating != null && (
                   <StatCell
-                    label="Stars"
+                    label={t`Stars`}
                     value={<StarRatingBadge stars={score.beatmap.difficulty_rating} size={1.2} />}
                     className="max-sm:order-8"
                   />
@@ -2116,7 +2116,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               </div>
               <div className="relative mt-2 flex items-center justify-between gap-2">
                 <span className="text-[10px] text-osu-f1">
-                  Played on: <span className={lazer ? "text-osu-pink-light" : "text-osu-l2"}>{lazer ? "Lazer" : "Stable"}</span>
+                  <Trans>Played on: <span className={lazer ? "text-osu-pink-light" : "text-osu-l2"}>{lazer ? "Lazer" : "Stable"}</span></Trans>
                 </span>
                 {scoreUrl ? (
                   <a
@@ -2125,7 +2125,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                     rel="noreferrer"
                     className="text-[10px] text-osu-f1 hover:text-osu-pink-light underline-offset-2 hover:underline transition-colors"
                   >
-                    View on osu! →
+                    <Trans>View on osu! →</Trans>
                   </a>
                 ) : <span />}
               </div>
