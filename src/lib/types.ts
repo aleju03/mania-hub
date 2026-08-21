@@ -497,6 +497,10 @@ export interface InsightScoreSnapshot {
   artist: string;
   version: string;
   pp: number | null;
+  /* The map's own star rating, as osu! reports it on the beatmap - not
+     mod-adjusted, which is the same number every star pill on the site
+     draws. Null for a stored snapshot minted before the field existed. */
+  stars: number | null;
   rank: string;
   coverUrl: string;
   beatmapUrl: string;

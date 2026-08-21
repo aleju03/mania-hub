@@ -127,6 +127,7 @@ function scoreToSnapshot(score: OsuScore): InsightScoreSnapshot {
     artist: score.beatmapset?.artist ?? "",
     version: score.beatmap?.version ?? "",
     pp: score.pp,
+    stars: Number.isFinite(score.beatmap?.difficulty_rating) ? score.beatmap!.difficulty_rating : null,
     rank: display.rank,
     coverUrl: score.beatmapset?.covers?.cover ?? "",
     beatmapUrl: score.beatmap?.url ?? `https://osu.ppy.sh/b/${score.beatmap?.id ?? 0}`,

@@ -54,6 +54,7 @@ import type { ResolvedSignature } from "../../../lib/signature-resolve";
 import { buildPpCumulativeDistribution, calculateUserProfileInsights } from "../../../lib/profile-insights";
 import type { InsightScoreSnapshot, OsuScore, UserProfileInsights } from "../../../lib/types";
 import { MOD_BADGE_FILE_NAMES, MOD_BADGE_TYPE_COLORS } from "../../../components/ui/ModBadge";
+import { starRatingColor } from "../../../components/ui/StarRating";
 
 const SURFACE = "#120d15";
 const TEXT_DIM = "#9c8fa8";
@@ -1740,6 +1741,42 @@ function renderModBadge(badge: RenderModBadge, index: number): ReactNode {
   ]);
 }
 
+/* The star pill the site draws everywhere a map is named, in satori's terms:
+   osu-web's difficulty colour behind the number, with the expert-plus yellow
+   text above 6.5* where dark text stops reading. The glyph is a data-url svg
+   because satori has no currentColor to tint an icon with.
+
+   Sized to the title it sits beside rather than to the small print under it -
+   a pill set at badge size next to 16px type reads as a footnote, and the star
+   rating is the second thing anyone looks at on a top play. */
+function starPill(stars: number, fontSize: number): ReactNode {
+  const text = stars >= 6.5 ? "#ffd966" : "#171a1c";
+  const glyph = Math.round(fontSize * 0.95);
+  return h("div", {
+    key: "stars",
+    style: {
+      display: "flex", alignItems: "center", gap: "4px", flexShrink: 0,
+      padding: `${Math.round(fontSize * 0.3)}px ${Math.round(fontSize * 0.65)}px`,
+      borderRadius: "999px",
+      background: starRatingColor(stars),
+      color: text, fontSize: `${fontSize}px`, fontWeight: 700, lineHeight: 1,
+    },
+  }, [
+    h("img", {
+      key: "glyph",
+      src: svgDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${glyph}" height="${glyph}" viewBox="0 0 24 24">`
+        + `<path fill="${text}" d="M12 1.7l3.1 6.9 7.2.8-5.4 5 1.5 7.2L12 17.9l-6.4 3.7 1.5-7.2-5.4-5 7.2-.8L12 1.7z"/>`
+        + `</svg>`,
+      ),
+      width: glyph,
+      height: glyph,
+      style: { width: `${glyph}px`, height: `${glyph}px` },
+    }),
+    h("div", { key: "n" }, stars.toFixed(2)),
+  ]);
+}
+
 /* The newest top play, on its own beatmap cover - which is how the profile
    page draws this card, and without it the row is just four lines of text
    where the page has a picture.
@@ -1814,10 +1851,17 @@ function topPlayCard(
           key: "l",
           style: { fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: label },
         }, "Newest top play"),
-        h("div", {
-          key: "t",
-          style: { ...line, fontSize: "16px", fontWeight: 900, lineHeight: 1.15 },
-        }, clamp(snapshot.title, compact ? 28 : 44)),
+        /* Title and star pill on one line: the pill is what a reader wants
+           beside the map's name, and it is the one number this card carried
+           nowhere else. The title clamps shorter than it used to, by roughly
+           the pill's own width, so the pair still fits the card. */
+        h("div", { key: "t", style: { display: "flex", alignItems: "center", gap: "6px", minWidth: "0" } }, [
+          h("div", {
+            key: "n",
+            style: { ...line, fontSize: "16px", fontWeight: 900, lineHeight: 1.15 },
+          }, clamp(snapshot.title, compact ? 21 : 38)),
+          snapshot.stars != null ? starPill(snapshot.stars, 11) : h("div", { key: "stars" }),
+        ]),
         h("div", { key: "a", style: { ...line, fontSize: "11px", color: secondary } },
           clamp(`${snapshot.artist} [${snapshot.version}]`, compact ? 40 : 56)),
         modBadges.length > 0 || date
