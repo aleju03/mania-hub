@@ -10593,6 +10593,10 @@ msgstr "此页面不存在。"
 msgid "This page will load automatically once {name} is ready."
 msgstr "{name} 就绪后，此页面会自动加载。"
 
+#: src/components/player/SkillPlaysModal.tsx
+msgid "This play's strongest skillset"
+msgstr "这个成绩最强的技能组"
+
 #: src/components/packs/RevealStage.tsx
 msgid "This player's card refused to mint. Not enough ranked play data."
 msgstr "这名玩家的卡片无法生成。ranked 成绩数据不足。"

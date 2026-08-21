@@ -293,6 +293,11 @@ export interface PlayerSkillPlay {
   playedAt: string | null;
   source: "top" | "tracked";
   scoreId: number | null;
+  // The play's highest non-Overall MSD skillset. A skillset list ranks by one
+  // component of every play, so a dense LN file can lead "top Chordjack plays"
+  // purely by riding a big overall (MinaCalc reads stacked hold heads as
+  // chords); this names what actually drove the play so the modal can say so.
+  topSkillset: string | null;
 }
 
 export interface PlayerSkillPlaysPage {
@@ -1455,9 +1460,25 @@ export async function getPlayerSkillPlays(
       playedAt: typeof play.endedAt === "string" && Number.isFinite(Date.parse(play.endedAt)) ? play.endedAt : null,
       source: play.source === "top" ? "top" : "tracked",
       scoreId: scoreId != null && Number.isSafeInteger(scoreId) && scoreId > 0 ? scoreId : null,
+      topSkillset: dominantSkillset(play.values),
     };
   });
   return { items, total: matches.length, limit, offset };
+}
+
+/** The highest non-Overall MSD skillset of a play's SSR vector, if any. */
+function dominantSkillset(values: Record<string, number> | undefined): string | null {
+  let best: string | null = null;
+  let bestValue = 0;
+  for (const skillset of SKILL_RATING_SKILLSETS) {
+    if (skillset === "Overall") continue;
+    const value = Number(values?.[skillset] ?? 0);
+    if (Number.isFinite(value) && value > bestValue) {
+      best = skillset;
+      bestValue = value;
+    }
+  }
+  return best;
 }
 
 interface PlayerSkillPlayMetadata {

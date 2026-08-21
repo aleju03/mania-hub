@@ -11,6 +11,7 @@ import {
   type LivePlayerSkillPlay,
 } from "../../lib/live-backend";
 import { formatAccuracy, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
+import { MSD_SKILLSET_META } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { ModBadge } from "../ui/ModBadge";
 import { MapDetailModal } from "../maps/MapDetailModal";
@@ -253,6 +254,7 @@ export function SkillPlaysModal({
                       key={`${play.beatmapId}:${play.rate}:${play.scoreId ?? play.playedAt ?? index}`}
                       play={play}
                       position={index + 1}
+                      axis={axis}
                       label={label}
                       color={color}
                       onOpen={() => openDetail(play)}
@@ -316,6 +318,7 @@ export function SkillPlaysModal({
 function SkillPlayRow({
   play,
   position,
+  axis,
   label,
   color,
   onOpen,
@@ -323,6 +326,7 @@ function SkillPlayRow({
 }: {
   play: LivePlayerSkillPlay;
   position: number;
+  axis: string;
   label: string;
   color: string;
   onOpen: () => void;
@@ -330,8 +334,15 @@ function SkillPlayRow({
   // to it) buys more than the request costs, so the modal usually opens whole.
   onPrefetch: () => void;
 }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const rateMod = rateModFor(play.rate);
+  // The list ranks by one skillset component of every play, so a dense LN
+  // chart can lead "top Chordjack plays" purely by riding a big overall. When
+  // a different skillset actually drove the play, its chip says so; only on
+  // MSD axes - the pattern lists already require charts made of the pattern.
+  const topSkillsetMeta = !axis.startsWith("pattern:") && play.topSkillset && play.topSkillset !== axis
+    ? MSD_SKILLSET_META.find((meta) => meta.key === play.topSkillset) ?? null
+    : null;
   return (
     <button
       type="button"
@@ -364,6 +375,15 @@ function SkillPlayRow({
             {play.artist}<span className="md:hidden"> · [{play.version}]</span>
           </span>
           <span className="rounded bg-osu-b3/35 px-1 py-0.5 font-bold text-osu-yellow">{play.keyCount}K</span>
+          {topSkillsetMeta ? (
+            <span
+              className="rounded bg-osu-b3/35 px-1 py-0.5 font-bold"
+              style={{ color: topSkillsetMeta.color }}
+              title={t`This play's strongest skillset`}
+            >
+              {i18n._(topSkillsetMeta.labelMsg)}
+            </span>
+          ) : null}
           {rateMod ? <ModBadge mod={rateMod.acronym} rate={rateMod.rate} size={0.8} /> : null}
           <span>{play.source === "top" ? t`profile top play` : t`tracked history`}</span>
           {play.playedAt ? (

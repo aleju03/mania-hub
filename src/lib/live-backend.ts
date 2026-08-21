@@ -29,6 +29,10 @@ export interface LivePlayerSkillPlay {
   playedAt: string | null;
   source: "top" | "tracked";
   scoreId: number | null;
+  // The play's highest non-Overall MSD skillset; a skillset list ranks by one
+  // component of every play, so this names what actually drove the play.
+  // Optional: older backend payloads predate it.
+  topSkillset?: string | null;
 }
 
 export interface LivePlayerSkillPlaysPage {

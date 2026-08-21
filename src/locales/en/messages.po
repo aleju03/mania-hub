@@ -10584,6 +10584,10 @@ msgstr "This page doesn't exist."
 msgid "This page will load automatically once {name} is ready."
 msgstr "This page will load automatically once {name} is ready."
 
+#: src/components/player/SkillPlaysModal.tsx
+msgid "This play's strongest skillset"
+msgstr "This play's strongest skillset"
+
 #: src/components/packs/RevealStage.tsx
 msgid "This player's card refused to mint. Not enough ranked play data."
 msgstr "This player's card refused to mint. Not enough ranked play data."
