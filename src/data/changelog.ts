@@ -27,6 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-21", text: "Added Spanish and Chinese translations. The site follows your browser's language, and you can change it in settings" },
   { date: "2026-08-19", text: "New feature: dynamic renders for your osu! page, under your avatar menu", to: "/dynamic-renders" },
   { date: "2026-08-19", text: "Collections: showcase your cards, browse anyone else's, and some pack stats", to: "/packs/collections" },
   { date: "2026-08-19", text: "A skin you uploaded private now shows up as new on the skins page the day you make it public, not the day you uploaded it", to: "/skins" },
