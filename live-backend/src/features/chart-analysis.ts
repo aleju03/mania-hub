@@ -2480,28 +2480,32 @@ async function enqueueMsdPoisonRecovery(queue: JobQueue, cursor: number): Promis
   );
 }
 
-// One-shot sweep for the inverse cluster BPM bug (fixed 2026-08-16 in
-// vendor/leoblack/patterns/clustering.js). Density/Inverse pattern windows
-// carry MsPerBeat 0 as a "no meaningful tempo" sentinel, but the mixed-BPM
-// cluster pool averaged those zeros in with real windows, so an inverse-heavy
-// chart's mixed Density cluster read as a four-digit BPM ("~4497BPM Mixed
-// Inverse") and its importance (amount x multiplier x BPM) inflated with it,
-// sorting the junk chip first on /maps. The wrong number is baked into
-// classification_json, so affected rows need a re-analysis; the signature (a
-// mixed Density cluster with a nonzero BPM) selects every row whose pool
-// could have contained sentinels. Rows whose pool had none re-store the same
-// clusters, and all-sentinel pools were already BPM 0 and are skipped. Same
-// playbook as the sweeps above: chunked, self-chaining, boot-seeded, done in
-// meta. Enqueue-only chunks; no inline recompute.
+// One-shot sweep for the inverse cluster BPM bug (v1 fixed the mixed pools
+// 2026-08-16 in vendor/leoblack/patterns/clustering.js; v2 covers the shape
+// v1 missed). Density/Inverse pattern windows carry MsPerBeat 0 as a "no
+// meaningful tempo" sentinel, and v1 stopped mixed pools from averaging the
+// zeros in. But a NON-mixed pool seeded near the sentinel still collected the
+// few windows whose row gaps are real-but-tiny (LN tails milliseconds before
+// the next head, grace notes), and those voted: 29k inverse windows plus a
+// handful of 1ms-gap ones stored "15000BPM Inverse", importance (amount x
+// multiplier x BPM) sorting the junk chip first on /maps - the same artifact
+// fires without the sentinel too ("20000BPM Coordination", "15000BPM Jacks").
+// The fix (CLUSTER_TIMED_MIN_MSPB in the vendored config) makes sub-10ms-gap
+// windows untimed everywhere, which caps any computable cluster BPM at 1500;
+// every stored cluster at or above that ceiling is the artifact and is the v2
+// signature. The wrong number is baked into classification_json, so affected
+// rows need a re-analysis. Same playbook as the sweeps above: chunked,
+// self-chaining, boot-seeded, done in meta. Enqueue-only chunks; no inline
+// recompute.
 export const INVERSE_CLUSTER_BPM_JOB = "recompute_inverse_cluster_bpm_sweep";
-const INVERSE_CLUSTER_BPM_META_KEY = "inverse_cluster_bpm_recovery_done:v1";
+const INVERSE_CLUSTER_BPM_META_KEY = "inverse_cluster_bpm_recovery_done:v2";
 const INVERSE_CLUSTER_BPM_CHUNK = 200;
 
+// 60000 / CLUSTER_TIMED_MIN_MSPB: the highest BPM the fixed pool math can
+// produce, so >= it is unreachable now and marks a pre-fix row.
 const INVERSE_CLUSTER_BPM_SIGNATURE_SQL = `exists (
   select 1 from json_each(classification_json, '$.clusters') as cluster
-  where json_extract(cluster.value, '$.pattern') = 'Density'
-    and json_extract(cluster.value, '$.mixed') = 1
-    and json_extract(cluster.value, '$.bpm') > 0
+  where json_extract(cluster.value, '$.bpm') >= 1500
 )`;
 
 export interface InverseClusterBpmChunkResult {

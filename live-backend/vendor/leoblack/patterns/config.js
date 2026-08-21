@@ -96,6 +96,13 @@ export const PATTERNS_CONFIG = {
     LN_MODE_HIGH_THRESHOLD: 0.9,
     HB_ROW_RATIO_THRESHOLD: 0.1,
     BPM_CLUSTER_THRESHOLD: 5.0,
+    // A window's MsPerBeat is its row gap x4 (primitives.js), so 40 here is a
+    // 10ms row gap: LN tails landing just before the next head, grace notes,
+    // stacked rows. Below it a window carries no tempo, only presence, and it
+    // must not vote in a cluster's BPM (clustering.js) - the pools that let
+    // them vote read "15000BPM Inverse" / "20000BPM Coordination" on /maps.
+    // Also the ceiling of any computable cluster BPM: 60000 / 40 = 1500.
+    CLUSTER_TIMED_MIN_MSPB: 40.0,
     PATTERN_STABILITY_THRESHOLD: 5.0,
     IMPORTANT_CLUSTER_RATIO: 0.5,
     CATEGORY_JS_HS_SECONDARY_RATIO: 0.4,

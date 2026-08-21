@@ -278,11 +278,16 @@ function groupClusters(clusters: LiveChartAnalysisCluster[]): ClusterGroup[] {
   const groups = new Map<string, ClusterGroup>();
   for (const cluster of clusters) {
     const name = clusterPatternName(cluster);
+    // BPM 0 is the analyzer's "no meaningful tempo" pool (inverse windows, LN
+    // tail gaps); it renders as the name alone and must not drag a real
+    // sibling's range down to "0-247bpm".
     const bpm = Math.round(cluster.bpm);
     const existing = groups.get(name);
     if (existing) {
-      existing.bpmMin = Math.min(existing.bpmMin, bpm);
-      existing.bpmMax = Math.max(existing.bpmMax, bpm);
+      if (bpm > 0) {
+        existing.bpmMin = existing.bpmMin > 0 ? Math.min(existing.bpmMin, bpm) : bpm;
+        existing.bpmMax = Math.max(existing.bpmMax, bpm);
+      }
       existing.mixed = existing.mixed || cluster.mixed;
     } else {
       groups.set(name, { name, bpmMin: bpm, bpmMax: bpm, mixed: cluster.mixed });
@@ -313,15 +318,23 @@ function ClustersBlock({ analysis, pending }: { analysis: LiveChartAnalysisDetai
       <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`Patterns`}</span>
       {groups.map((group, index) => (
         <span key={group.name} className="flex shrink-0 items-baseline gap-1.5">
+          {group.bpmMax > 0 && (
+            <span
+              className={`text-[12.5px] font-semibold tabular-nums leading-none ${
+                index === 0 ? "text-osu-pink-light" : "text-osu-l2"
+              }`}
+            >
+              {group.bpmMin === group.bpmMax ? `${group.mixed ? "~" : ""}${group.bpmMin}` : `${group.bpmMin}-${group.bpmMax}`}
+              <span className="ml-0.5 text-[9px] font-normal text-osu-f1/55">{t`bpm`}</span>
+            </span>
+          )}
           <span
-            className={`text-[12.5px] font-semibold tabular-nums leading-none ${
-              index === 0 ? "text-osu-pink-light" : "text-osu-l2"
+            className={`text-[9px] uppercase tracking-wide ${
+              group.bpmMax === 0 && index === 0 ? "text-osu-pink-light" : "text-osu-f1/55"
             }`}
           >
-            {group.bpmMin === group.bpmMax ? `${group.mixed ? "~" : ""}${group.bpmMin}` : `${group.bpmMin}-${group.bpmMax}`}
-            <span className="ml-0.5 text-[9px] font-normal text-osu-f1/55">{t`bpm`}</span>
+            {group.name}
           </span>
-          <span className="text-[9px] uppercase tracking-wide text-osu-f1/55">{group.name}</span>
         </span>
       ))}
       {pending && groups.length === 0 && (

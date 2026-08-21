@@ -19,27 +19,36 @@ function patternAmount(sortedStartsEnds) {
     return totalTime;
 }
 
+// Density/Inverse windows carry MsPerBeat 0 as a "no meaningful tempo"
+// sentinel (resolvedMspb in findPatterns.js), and any window under
+// CLUSTER_TIMED_MIN_MSPB is the same physical artifact measured instead of
+// zeroed: LN tails landing milliseconds before the next head, grace notes,
+// stacked rows. Neither says anything about tempo, so neither votes.
+function isTimedMspb(value) {
+    return value >= PATTERNS_CONFIG.CLUSTER_TIMED_MIN_MSPB;
+}
+
 function createClusterBuilder(value) {
+    const timed = isTimedMspb(value);
     return {
-    SumMs: value > 0 ? value : 0,
-    TimedCount: value > 0 ? 1 : 0,
+    SumMs: timed ? value : 0,
+    TimedCount: timed ? 1 : 0,
     OriginalMsPerBeat: value,
     Count: 1,
     BPM: null,
     add(v) {
             this.Count += 1;
-            if (v > 0) {
+            if (isTimedMspb(v)) {
         this.SumMs += v;
         this.TimedCount += 1;
             }
     },
     calculate() {
-            // Density/Inverse windows carry MsPerBeat 0 as a "no meaningful
-            // tempo" sentinel (resolvedMspb in findPatterns.js): their row
-            // gaps are LN tails landing milliseconds before the next head.
-            // Averaging the sentinel in dilutes a mixed pool toward zero and
-            // 60000/average explodes into four-digit BPMs, so only timed
-            // windows vote; a pool of nothing but sentinels stays BPM 0.
+            // Averaging untimed windows in dilutes a mixed pool toward zero
+            // and 60000/average explodes into four/five-digit BPMs (the
+            // non-mixed pool seeded at the sentinel had the mirror failure:
+            // a few sub-10ms-gap windows voting read as "15000BPM Inverse").
+            // Only timed windows vote; a pool with none stays BPM 0.
             this.BPM = this.TimedCount === 0 ? 0 : Math.round(60000.0 / (this.SumMs / this.TimedCount));
     },
     get Value() {

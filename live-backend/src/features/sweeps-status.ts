@@ -393,8 +393,8 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
   chartAnalysisSweep({
     id: "inverse-cluster-bpm",
     label: "Inverse cluster BPM sweep",
-    description: "Re-analyzes rows whose mixed Density pattern cluster stored a BPM inflated by inverse windows' zero-tempo sentinel.",
-    doneKey: "inverse_cluster_bpm_recovery_done:v1",
+    description: "Re-analyzes rows whose stored pattern clusters carry a BPM at or above 1500, the ceiling the timed-window floor makes computable (v1 swept the mixed-pool sentinel dilution; v2 the non-mixed pools where tiny tail-gap windows voted).",
+    doneKey: "inverse_cluster_bpm_recovery_done:v2",
     jobType: "recompute_inverse_cluster_bpm_sweep",
   }),
   {

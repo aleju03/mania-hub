@@ -48,6 +48,15 @@ and must NOT be overwritten on a re-copy:
   charts; still unfixed upstream as of 2026-08-16 (their `js/patterns` last
   changed 2026-08-09). Covered by `live-backend/tests/leoblack-clustering.test.ts`;
   the one-shot `recompute_inverse_cluster_bpm_sweep` re-analyzed stored rows.
+  Extended 2026-08-21: "timed" now means MsPerBeat at or above
+  `CLUSTER_TIMED_MIN_MSPB` (40, a 10ms row gap), not merely nonzero. A window
+  under it is the sentinel's physical cause measured instead of zeroed (an LN
+  tail milliseconds before the next head, a grace note), and letting those
+  vote left the non-mixed pool seeded at the sentinel reading "15000BPM
+  Inverse" (prod chart 5609748) - and the same artifact without any sentinel
+  ("20000BPM Coordination", "15000BPM Jacks"). The floor caps any computable
+  cluster BPM at 60000/40 = 1500; the sweep's v2 pass re-analyzes stored rows
+  at or above that ceiling.
 - The `ett/versions/minaclac-*.js` glue stays at the old pin `0b27cc8` bytes: our
   calc.js hands over `wasmBinary` and defines the CommonJS globals, so upstream's
   newer locateFile-based glue offers nothing and re-copying it would re-open the

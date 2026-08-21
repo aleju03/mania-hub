@@ -45,6 +45,36 @@ describe("LeoBlack pattern clustering", () => {
     expect(clusters[0].Importance).toBe(0);
   });
 
+  it("keeps sub-10ms-gap windows from giving the sentinel's non-mixed pool a BPM", () => {
+    // The shape the mixed-pool fix missed (prod chart 5609748): a non-mixed
+    // pool of inverse sentinels plus a few windows whose row gaps are real but
+    // tiny (LN tails landing 1ms before the next head, MsPerBeat = gap x 4).
+    // Those voted, and 60000 / 4 read as "15000BPM Inverse" on /maps.
+    const windows = [
+      ...Array.from({ length: 20 }, (_, i) => windowAt(i, { Mixed: false })),
+      windowAt(20, { SpecificType: null, Mixed: false, MsPerBeat: 4 }),
+      windowAt(21, { SpecificType: null, Mixed: false, MsPerBeat: 4 }),
+    ];
+
+    const clusters = calculateClusteredPatterns(windows);
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0].BPM).toBe(0);
+    expect(clusters[0].Importance).toBe(0);
+  });
+
+  it("keeps an all-tiny-gap pool BPM-less for sentinel-free patterns too", () => {
+    // No sentinel involved: grace/stacked rows give Jacks windows 3-10ms
+    // MsPerBeat, which used to store labels like "15000BPM Jacks".
+    const windows = Array.from({ length: 6 }, (_, i) =>
+      windowAt(i, { Pattern: "Jacks", SpecificType: "Longjacks", Mixed: false, MsPerBeat: 4 + (i % 3) }),
+    );
+
+    const clusters = calculateClusteredPatterns(windows);
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0].BPM).toBe(0);
+    expect(clusters[0].Importance).toBe(0);
+  });
+
   it("leaves ordinary non-mixed clusters untouched", () => {
     const windows = [
       windowAt(0, { SpecificType: "JS Density", Mixed: false, MsPerBeat: BPM_148_MSPB }),

@@ -27,9 +27,14 @@ async function makeDb(): Promise<Db> {
   return db;
 }
 
-// The bug's stored shape: a mixed Density cluster whose BPM was inflated by
-// averaging inverse windows' zero-tempo sentinel into the pool.
-const INFLATED_CLUSTER = { label: "~1327BPM Mixed Inverse", pattern: "Density", bpm: 1327, mixed: true, amount: 56844, importance: 113147982 };
+// The v2 bug's stored shape: a non-mixed pool seeded at the zero-tempo
+// sentinel where a few tiny tail-gap windows voted (prod chart 5609748).
+const INFLATED_CLUSTER = { label: "15000BPM Inverse", pattern: "Density", bpm: 15000, mixed: false, amount: 29729, importance: 668902500 };
+// The same artifact fires without the sentinel on other patterns.
+const INFLATED_JACKS_CLUSTER = { label: "20000BPM Coordination", pattern: "Coordination", bpm: 20000, mixed: false, amount: 5000, importance: 80000000 };
+// The v1 shape: mixed-pool sentinel dilution. Already re-analyzed by the v1
+// pass, so a stored BPM under the 1500 ceiling is healthy and stays put.
+const V1_SWEPT_CLUSTER = { label: "~1327BPM Mixed Inverse", pattern: "Density", bpm: 1327, mixed: true, amount: 56844, importance: 113147982 };
 const HEALTHY_DENSITY_CLUSTER = { label: "148BPM DCS Density", pattern: "Density", bpm: 148, mixed: false, amount: 58922, importance: 7848410 };
 const MIXED_CHORDSTREAM_CLUSTER = { label: "~148BPM Mixed Jumpstream", pattern: "Chordstream", bpm: 148, mixed: true, amount: 40000, importance: 5000000 };
 const SENTINEL_CLUSTER = { label: "~0BPM Mixed Inverse", pattern: "Density", bpm: 0, mixed: true, amount: 56844, importance: 0 };
@@ -58,7 +63,7 @@ async function seedAnalyzedChart(
 }
 
 describe("inverse cluster BPM recovery sweep", () => {
-  it("selects only rows whose mixed Density cluster stored a nonzero BPM", async () => {
+  it("selects only rows with a cluster at or above the 1500 BPM ceiling", async () => {
     const db = await makeDb();
 
     await seedAnalyzedChart(db, 1, [INFLATED_CLUSTER, HEALTHY_DENSITY_CLUSTER]);
@@ -70,10 +75,14 @@ describe("inverse cluster BPM recovery sweep", () => {
     // Non-ready rows and other analysis versions are not served anywhere.
     await seedAnalyzedChart(db, 6, [INFLATED_CLUSTER], { status: "failed" });
     await seedAnalyzedChart(db, 7, [INFLATED_CLUSTER], { version: CHART_ANALYSIS_VERSION + 1 });
+    // Sub-ceiling BPMs are the v1 shape, already re-analyzed by the v1 pass.
+    await seedAnalyzedChart(db, 8, [V1_SWEPT_CLUSTER]);
+    // The artifact fires on sentinel-free patterns too; same signature.
+    await seedAnalyzedChart(db, 9, [INFLATED_JACKS_CLUSTER]);
 
     const result = await recomputeInverseClusterBpmChunk(db, 0, 50);
     expect(result.done).toBe(true);
-    expect(result.changed).toEqual([1]);
+    expect(result.changed).toEqual([1, 9]);
   });
 
   it("pages through with the cursor instead of re-scanning", async () => {
@@ -117,7 +126,7 @@ describe("inverse cluster BPM recovery sweep", () => {
     expect(seenTypes.filter((type) => type === CHART_ANALYSIS_JOB)).toHaveLength(1);
     expect(seenTypes).not.toContain("rebuild_map_collections");
 
-    const done = (await exec(db, "select 1 from live_meta where key = ?", ["inverse_cluster_bpm_recovery_done:v1"])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = ?", ["inverse_cluster_bpm_recovery_done:v2"])).rows[0];
     expect(done).toBeTruthy();
 
     await ensureInverseClusterBpmRecoverySeeded(db, queue);
