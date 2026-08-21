@@ -389,7 +389,7 @@ function SnipesPage() {
             {!loading && !refreshing && !error && visibleSnipes.length > 0 && (
               <span className="text-[10px] text-osu-f1">
                 <Plural value={sorted.length} one="# snipe" other="# snipes" />
-                {snipesFetchedAt ? t` · updated ${formatTimeAgo(new Date(snipesFetchedAt).toISOString())}` : ""}
+                {snipesFetchedAt ? t` · updated ${formatTimeAgo(new Date(snipesFetchedAt).toISOString(), locale)}` : ""}
               </span>
             )}
           </div>
@@ -615,6 +615,7 @@ function SnipeRow({
   onToggle: (key: string) => void;
 }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const navigate = useNavigate();
 
   const keys = Math.round(event.beatmap.cs);
@@ -713,7 +714,7 @@ function SnipeRow({
               </button>
             </div>
             <span className="text-[10px] text-osu-f1 flex-shrink-0 sm:hidden">
-              {formatTimeAgo(event.timestamp)}
+              {formatTimeAgo(event.timestamp, locale)}
             </span>
           </div>
 
@@ -820,7 +821,7 @@ function SnipeRow({
             </button>
           )}
           <span className="text-[10px] text-osu-f1 w-12 text-right">
-            {formatTimeAgo(event.timestamp)}
+            {formatTimeAgo(event.timestamp, locale)}
           </span>
         </div>
       </div>
@@ -872,8 +873,8 @@ function SnipeRow({
             )}
             <VersusRow
               label={t`Set`}
-              sniper={formatTimeAgo(event.timestamp)}
-              victim={previousScoreAge ? <Trans>{previousScoreAge} earlier</Trans> : formatTimeAgo(event.victimTimestamp)}
+              sniper={formatTimeAgo(event.timestamp, locale)}
+              victim={previousScoreAge ? <Trans>{previousScoreAge} earlier</Trans> : formatTimeAgo(event.victimTimestamp, locale)}
               sniperLeads={false}
               muted
             />

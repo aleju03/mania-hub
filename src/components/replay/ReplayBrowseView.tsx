@@ -1164,6 +1164,7 @@ function PlayerBeatmapLookup({
 }
 
 function PlayerBeatmapScoreRow({ score, onOpen }: { score: OsuScore; onOpen: () => void }) {
+  const locale = useLocale();
   const timestamp = getScoreTimestamp(score);
   const judgements = getManiaJudgementStats(score);
   const totalScore = score.total_score ?? score.classic_total_score ?? score.legacy_total_score ?? score.score;
@@ -1179,7 +1180,7 @@ function PlayerBeatmapScoreRow({ score, onOpen }: { score: OsuScore; onOpen: () 
         <div className="min-w-[90px] shrink-0">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-bold text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
-            {timestamp && <span className="text-[10px] text-osu-f1" title={formatTimeAgoTooltip(timestamp)}>{formatTimeAgo(timestamp)}</span>}
+            {timestamp && <span className="text-[10px] text-osu-f1" title={formatTimeAgoTooltip(timestamp, locale)}>{formatTimeAgo(timestamp, locale)}</span>}
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 text-[10px] font-semibold text-osu-f1">
             <span>{formatNumber(score.max_combo)}x</span>

@@ -14,6 +14,7 @@ import { SkinUpdateModal } from "../components/skins/SkinUpdateModal";
 import { Avatar } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
 import { formatTimeAgo } from "../lib/format";
+import { useLocale } from "../lib/locale-context";
 import { linkify } from "../lib/linkify";
 import { skinEventProperties } from "../lib/analytics-skins";
 import { track } from "../lib/analytics";
@@ -93,6 +94,7 @@ function SkinDetailPage() {
 }
 
 function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
+  const locale = useLocale();
   // Editing the previews hands back the updated skin; holding it locally shows
   // the new cover and renders right away, without waiting out the browser
   // cache on /api/skins/get.
@@ -401,7 +403,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                           not time since the upload. The exact upload date is a
                           fact row further down. */}
                       {(skin.listedAt ?? skin.publishedAt) && (
-                        <span suppressHydrationWarning>{formatTimeAgo(skin.listedAt ?? skin.publishedAt!)}</span>
+                        <span suppressHydrationWarning>{formatTimeAgo(skin.listedAt ?? skin.publishedAt!, locale)}</span>
                       )}
                     </div>
                     {skin.description && (

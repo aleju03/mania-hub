@@ -878,7 +878,7 @@ function HomePage() {
                       ))}
                     </div>
                   )}
-                  <div className="mt-3 text-[10px] text-osu-f1/60">{formatTimeAgo(p.score.timestamp)}</div>
+                  <div className="mt-3 text-[10px] text-osu-f1/60">{formatTimeAgo(p.score.timestamp, locale)}</div>
                 </motion.div>
               ))}
             </div>
@@ -927,7 +927,7 @@ function HomePage() {
                       </Trans>
                     </div>
                     <div className="mt-0.5 text-[10px] text-osu-f1 min-w-0 truncate">
-                        [{s.version}] {s.keymodeLabel || (s.keyCount > 0 ? `${s.keyCount}K` : "")} &middot; {formatTimeAgo(s.timestamp)}
+                        [{s.version}] {s.keymodeLabel || (s.keyCount > 0 ? `${s.keyCount}K` : "")} &middot; {formatTimeAgo(s.timestamp, locale)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

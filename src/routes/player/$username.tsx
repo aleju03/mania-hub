@@ -1708,7 +1708,7 @@ export function PlayerProfilePage({
       // Relative to Date.now(), so SSR and hydration can land on different
       // sides of a minute boundary; let the client text win.
       <span key="seen" title={new Date(user.last_visit).toLocaleString("en-US")} suppressHydrationWarning>
-        <Trans>Last seen {formatDetailedTimeAgo(user.last_visit)}</Trans>
+        <Trans>Last seen {formatDetailedTimeAgo(user.last_visit, locale)}</Trans>
       </span>,
     );
   }
@@ -2260,7 +2260,7 @@ export function PlayerProfilePage({
                 {isOnlineNow ? (
                   <span
                     className="h-2 w-2 shrink-0 rounded-full bg-osu-green"
-                    title={user.is_online || !recentPlayAt ? t`Online` : t`Set a play ${formatDetailedTimeAgo(recentPlayAt)}`}
+                    title={user.is_online || !recentPlayAt ? t`Online` : t`Set a play ${formatDetailedTimeAgo(recentPlayAt, locale)}`}
                   />
                 ) : null}
               </h1>
@@ -5080,6 +5080,7 @@ function BpmExtremeRow({ label, bpm, snapshot }: { label: string; bpm: number; s
 }
 
 function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScoreSnapshot | null }) {
+  const locale = useLocale();
   const { t } = useLingui();
   const viewerTimeZone = useViewerTimeZone();
   if (!snapshot) {
@@ -5121,7 +5122,7 @@ function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScor
             {/* Relative to Date.now(): the newest top play is usually minutes old,
                 so SSR and hydration routinely land on different sides of a minute
                 boundary. Let the client text win. */}
-            <span className="text-[10px] text-white/45" suppressHydrationWarning>{formatTimeAgo(snapshot.date)}</span>
+            <span className="text-[10px] text-white/45" suppressHydrationWarning>{formatTimeAgo(snapshot.date, locale)}</span>
             {/* The viewer's own day, like the score page this links to. A play
                 set at 20:28 in Costa Rica is 02:28 UTC the next morning, and
                 the UTC day dated it one day after osu! did. No
@@ -5275,6 +5276,7 @@ function ScoreRow({
   layout?: ScoreRowLayout;
   onOpenDetails: (score: OsuScore) => void;
 }) {
+  const locale = useLocale();
   const { t } = useLingui();
   const scoreFallbackLabel = t`score`;
   const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
@@ -5311,11 +5313,11 @@ function ScoreRow({
               title. The click handler keeps the patch acting like the row. */}
           <span
             suppressHydrationWarning
-            title={formatTimeAgoTooltip(getScoreTimestamp(score))}
+            title={formatTimeAgoTooltip(getScoreTimestamp(score), locale)}
             className="pointer-events-auto"
             onClick={() => onOpenDetails(score)}
           >
-            {formatTimeAgo(getScoreTimestamp(score))}
+            {formatTimeAgo(getScoreTimestamp(score), locale)}
           </span>
         </span>
         {/* Mobile-only metadata row */}
@@ -5436,6 +5438,7 @@ function ScoreDetailStat({ label, value, color }: { label: string; value: ReactN
  *  and the links (osu! page, replay) the row used to navigate to on its own. */
 function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => void }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const scoreTitleFallback = t`Score`;
   const display = getScoreDisplayValues(score);
   const judgements = getManiaJudgementStats(score);
@@ -5598,7 +5601,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
 
             <div className="mt-5 flex flex-col gap-3 border-t border-osu-b3/20 pt-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <span className="text-[11px] text-osu-f1" suppressHydrationWarning title={formatDate(playedAt, viewerTimeZone)}>
-                <Trans>Played {formatDetailedTimeAgo(playedAt)} on {display.isLazer ? "Lazer" : "Stable"}</Trans>
+                <Trans>Played {formatDetailedTimeAgo(playedAt, locale)} on {display.isLazer ? "Lazer" : "Stable"}</Trans>
               </span>
               <div className="flex items-center justify-between gap-3 sm:justify-end">
                 {scoreUrl && (

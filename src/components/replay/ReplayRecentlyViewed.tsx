@@ -7,6 +7,7 @@ import { GradeImg } from "#/components/ui/GradeImg";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { formatAccuracy, formatPP, formatTimeAgo } from "#/lib/format";
 import type { RecentReplayEntry } from "#/lib/replay-recent";
+import { useLocale } from "#/lib/locale-context";
 
 export function ReplayRecentlyViewed({
   entries,
@@ -31,6 +32,7 @@ export function ReplayRecentlyViewed({
   className?: string;
 }) {
   const { t } = useLingui();
+  const locale = useLocale();
   if (entries.length === 0) return null;
 
   const sidebar = variant === "sidebar";
@@ -137,7 +139,7 @@ export function ReplayRecentlyViewed({
                   {entry.pp != null && (
                     <div className="text-xs font-bold text-white">{formatPP(entry.pp)}</div>
                   )}
-                  <div className="text-[10px] text-osu-f1">{formatTimeAgo(new Date(entry.viewedAt).toISOString())}</div>
+                  <div className="text-[10px] text-osu-f1">{formatTimeAgo(new Date(entry.viewedAt).toISOString(), locale)}</div>
                 </div>
               </button>
 

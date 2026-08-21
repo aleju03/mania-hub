@@ -31,7 +31,7 @@ msgstr " · 仅显示前 {0} 名"
 # skin -> 皮肤 | packs -> 卡包 | collections (cards) -> 收藏册
 # favourites -> 收藏 | play count -> 游玩次数 | accuracy -> 准确率
 # Usernames, map titles, mod acronyms stay untranslated.
-#. placeholder {0}: formatTimeAgo(new Date(snipesFetchedAt).toISOString())
+#. placeholder {0}: formatTimeAgo(new Date(snipesFetchedAt).toISOString(), locale)
 #: src/routes/snipes.tsx
 msgid " · updated {0}"
 msgstr " · 更新于 {0}"
@@ -430,8 +430,8 @@ msgstr "{0} 张谱面"
 msgid "{0} maps · rotated {1}"
 msgstr "{0} 张谱面 · {1}轮换"
 
-#. placeholder {0}: formatNumber(currentTotal)
-#. placeholder {1}: formatTimeAgo(mapsUpdatedAt)
+#. placeholder {0}: formatNumber(currentTotal, locale)
+#. placeholder {1}: formatTimeAgo(mapsUpdatedAt, locale)
 #: src/routes/maps.tsx
 msgid "{0} maps · updated {1}"
 msgstr "{0} 张谱面 · 更新于 {1}"
@@ -544,9 +544,9 @@ msgstr "{0} 次游玩"
 msgid "{0} plays in {selectedYear}"
 msgstr "{selectedYear} 年游玩 {0} 次"
 
-#. placeholder {0}: formatNumber(randomPickCount)
-#. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0)
-#. placeholder {2}: formatTimeAgo(mapsUpdatedAt)
+#. placeholder {0}: formatNumber(randomPickCount, locale)
+#. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
+#. placeholder {2}: formatTimeAgo(mapsUpdatedAt, locale)
 #: src/routes/maps.tsx
 msgid "{0} possible picks · {1} unique sets · updated {2}"
 msgstr "{0} 个可抽选项 · {1} 个不同谱面集 · 更新于 {2}"
@@ -2184,7 +2184,7 @@ msgstr "背景变暗"
 
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "big"
-#~ msgstr ""
+#~ msgstr "大"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Big play"
@@ -2547,6 +2547,7 @@ msgstr "选出新的 GOAT"
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Chordjack"
 msgstr "和弦叠键"
@@ -4332,7 +4333,7 @@ msgstr "以你的水平打完这张有风险，把它当作通关尝试而不是
 msgid "Finnish"
 msgstr "芬兰语"
 
-#. placeholder {0}: formatTimeAgo(new Date(collector.joinedAt).toISOString())
+#. placeholder {0}: formatTimeAgo(new Date(collector.joinedAt).toISOString(), locale)
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "First card {0}"
 msgstr "第一张卡片：{0}"
@@ -4640,7 +4641,9 @@ msgstr "渐变文字"
 msgid "graveyard"
 msgstr "坟场"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/maps.tsx
 msgid "Graveyard"
 msgstr "坟场"
 
@@ -5107,6 +5110,7 @@ msgstr "斜体"
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Jack"
 msgstr "叠键"
@@ -5178,6 +5182,7 @@ msgstr "跳转到某一页"
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Jumpstream"
 msgstr "双押切"
@@ -5335,7 +5340,7 @@ msgstr "收藏册末页"
 msgid "Last page"
 msgstr "最后一页"
 
-#. placeholder {0}: formatDetailedTimeAgo(user.last_visit)
+#. placeholder {0}: formatDetailedTimeAgo(user.last_visit, locale)
 #: src/routes/player/$username.tsx
 msgid "Last seen {0}"
 msgstr "最后在线 {0}"
@@ -5522,6 +5527,7 @@ msgstr "实时更新已开启"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "LN"
 msgstr "LN"
@@ -5826,11 +5832,13 @@ msgstr "本局结束。无法连接排行榜。"
 
 #: src/components/maps/SearchCard.tsx
 msgid "loved"
-msgstr "loved"
+msgstr "社区喜爱"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/maps.tsx
 msgid "Loved"
-msgstr "Loved"
+msgstr "社区喜爱"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Low PP"
@@ -5979,7 +5987,11 @@ msgstr "谱面构成"
 msgid "map unavailable"
 msgstr "谱面不可用"
 
-#. placeholder {0}: score.beatmapset.creator
+#. placeholder {0}: bm.creator
+#. placeholder {0}: entry.creator
+#. placeholder {0}: fav.creator
+#: src/components/maps/MapDetailModal.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "mapped by {0}"
 msgstr "谱师 {0}"
@@ -7545,7 +7557,9 @@ msgstr "同水平在刷"
 msgid "pending"
 msgstr "pending"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/maps.tsx
 msgid "Pending"
 msgstr "Pending"
 
@@ -7683,7 +7697,7 @@ msgstr "回放"
 msgid "Played"
 msgstr "游玩于"
 
-#. placeholder {0}: formatDetailedTimeAgo(playedAt)
+#. placeholder {0}: formatDetailedTimeAgo(playedAt, locale)
 #. placeholder {1}: display.isLazer ? "Lazer" : "Stable"
 #: src/routes/player/$username.tsx
 msgid "Played {0} on {1}"
@@ -8083,11 +8097,13 @@ msgstr "四押切"
 
 #: src/components/maps/SearchCard.tsx
 msgid "qualified"
-msgstr "qualified"
+msgstr "过审"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/maps.tsx
 msgid "Qualified"
-msgstr "Qualified"
+msgstr "过审"
 
 #: src/routes/bbcode.tsx
 msgid "Quote"
@@ -8147,7 +8163,9 @@ msgstr "卡片评级由 {0} 最佳 mania 成绩决定：以 pp 排名为主，�
 msgid "ranked"
 msgstr "ranked"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/maps.tsx
 msgid "Ranked"
 msgstr "Ranked"
 
@@ -9192,7 +9210,7 @@ msgstr "游玩场次"
 msgid "Set"
 msgstr "设定"
 
-#. placeholder {0}: formatTimeAgo(run.playedAt)
+#. placeholder {0}: formatTimeAgo(run.playedAt, locale)
 #. placeholder {0}: index + 1
 #: src/components/replay/ReplaySideBySidePicker.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -9207,7 +9225,7 @@ msgstr "第 {index} 组"
 msgid "set {span} ago"
 msgstr "{span}前打出"
 
-#. placeholder {0}: formatDetailedTimeAgo(recentPlayAt)
+#. placeholder {0}: formatDetailedTimeAgo(recentPlayAt, locale)
 #: src/routes/player/$username.tsx
 msgid "Set a play {0}"
 msgstr "{0}打了一次"
@@ -9783,6 +9801,7 @@ msgstr "耐力"
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Stamina"
 msgstr "耐力"
@@ -9909,6 +9928,7 @@ msgstr "连续天数"
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Stream"
 msgstr "切换"
@@ -9987,6 +10007,10 @@ msgstr "确定？+{lastCopyValue}"
 #: src/components/packs/PackSummary.tsx
 msgid "Sure? The card leaves the collection"
 msgstr "确定？这张卡片将离开收藏册"
+
+#: src/routes/maps.tsx
+msgid "SV"
+msgstr "SV"
 
 #. placeholder {0}: activeAssetSourceName ?? t`this skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -10090,6 +10114,7 @@ msgstr "撕开 maniacard 补充包：随机的 osu!mania 玩家被制成收藏�
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Tech"
 msgstr "技术"
@@ -10831,6 +10856,10 @@ msgstr "最高 pp"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Top-play feed"
 msgstr "最佳成绩 feed"
+
+#: src/routes/maps.tsx
+msgid "Tournament"
+msgstr "比赛"
 
 #: src/components/communities/TagInput.tsx
 msgid "tournaments, mapping, casual"

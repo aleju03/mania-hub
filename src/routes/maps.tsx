@@ -1,6 +1,7 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { Trans, Plural, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
@@ -223,12 +224,26 @@ function beatmapStatusBadgeClass(status: string): string {
 }
 
 function BeatmapStatusBadge({ status, className = "" }: { status: string; className?: string }) {
+  const { i18n } = useLingui();
+  const normalized = status.toLowerCase();
+  const descriptor = MAP_STATUS_LABELS[normalized];
   return (
     <span className={`${beatmapStatusBadgeClass(status)} ${className}`}>
-      {status}
+      {descriptor ? i18n._(descriptor) : status}
     </span>
   );
 }
+
+const MAP_STATUS_LABELS: Record<string, MessageDescriptor> = {
+  ranked: msg`Ranked`,
+  approved: msg`Ranked`,
+  qualified: msg`Qualified`,
+  loved: msg`Loved`,
+  graveyard: msg`Graveyard`,
+  pending: msg`Pending`,
+  wip: msg`Pending`,
+  other: msg`Other`,
+};
 
 const DEFAULT_MAPS_SEARCH: MapsSearch = {
   // Search leads the view bar and is the landing tab; the country lenses follow.
@@ -382,16 +397,16 @@ const FARMED_PP_MIN = 200;
 const FARMED_PP_MAX = 1000;
 const FARMED_PP_STEP = 25;
 
-const RANDOM_PATTERN_LABEL: Record<RandomPattern, string> = {
-  jack: "Jack",
-  chordjack: "Chordjack",
-  stream: "Stream",
-  jumpstream: "Jumpstream",
-  stamina: "Stamina",
-  tech: "Tech",
-  ln: "LN",
-  sv: "SV",
-  tiebreaker: "Tournament",
+const RANDOM_PATTERN_LABEL: Record<RandomPattern, MessageDescriptor> = {
+  jack: msg`Jack`,
+  chordjack: msg`Chordjack`,
+  stream: msg`Stream`,
+  jumpstream: msg`Jumpstream`,
+  stamina: msg`Stamina`,
+  tech: msg`Tech`,
+  ln: msg`LN`,
+  sv: msg`SV`,
+  tiebreaker: msg`Tournament`,
 };
 
 // The search tab's pattern palette, extended for the two tags that aren't
@@ -1406,7 +1421,7 @@ function MapsPage() {
                 onClick={() => updateMapsSearch({ rStatus: cycleTriStateCsv(rStatusRaw, s) })}
                 onContextMenu={() => updateMapsSearch({ rStatus: reverseCycleTriStateCsv(rStatusRaw, s) })}
               >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {i18n._(MAP_STATUS_LABELS[s])}
               </TriStatePill>
             ))}
           </ChipGroup>
@@ -1420,7 +1435,7 @@ function MapsPage() {
                 onClick={() => updateMapsSearch({ rKey: cycleTriStateCsv(rKeyRaw, k) })}
                 onContextMenu={() => updateMapsSearch({ rKey: reverseCycleTriStateCsv(rKeyRaw, k) })}
               >
-                {k.toUpperCase()}
+                {k === "other" ? t`Other` : k.toUpperCase()}
               </TriStatePill>
             ))}
           </ChipGroup>
@@ -1435,7 +1450,7 @@ function MapsPage() {
                 onClick={() => updateMapsSearch({ rPattern: cycleTriStateCsv(rPatternRaw, p) })}
                 onContextMenu={() => updateMapsSearch({ rPattern: reverseCycleTriStateCsv(rPatternRaw, p) })}
               >
-                {RANDOM_PATTERN_LABEL[p]}
+                {i18n._(RANDOM_PATTERN_LABEL[p])}
               </TriStatePill>
             ))}
           </ChipGroup>
@@ -1485,7 +1500,7 @@ function MapsPage() {
             <StatusChip
               key={s}
               id={s}
-              label={s === "other" ? t`Other` : s.charAt(0).toUpperCase() + s.slice(1)}
+              label={i18n._(MAP_STATUS_LABELS[s])}
               active={statusFilter === s}
               onClick={() => updateMapsSearch({ status: statusFilter === s ? "all" : s, page: 0 })}
             />
@@ -1568,9 +1583,9 @@ function MapsPage() {
             {showMapsSummary && mapsUpdatedAt && (
               <span className="text-[10px] text-osu-f1">
                 {tab === "random" ? (
-                  <Trans>{formatNumber(randomPickCount)} possible picks · {formatNumber(randomDraw?.uniqueSets ?? 0)} unique sets &middot; updated {formatTimeAgo(mapsUpdatedAt)}</Trans>
+                  <Trans>{formatNumber(randomPickCount, locale)} possible picks · {formatNumber(randomDraw?.uniqueSets ?? 0, locale)} unique sets &middot; updated {formatTimeAgo(mapsUpdatedAt, locale)}</Trans>
                 ) : (
-                  <Trans>{formatNumber(currentTotal)} maps &middot; updated {formatTimeAgo(mapsUpdatedAt)}</Trans>
+                  <Trans>{formatNumber(currentTotal, locale)} maps &middot; updated {formatTimeAgo(mapsUpdatedAt, locale)}</Trans>
                 )}
               </span>
             )}
@@ -3111,6 +3126,7 @@ function ModalPlayerList<T extends { id: number; username: string; rank?: number
 }
 
 function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: string }) {
+  const locale = useLocale();
   const enabled = isLiveBackendConfigured() && entry.players.length < entry.playerCount;
   const { players: serverPlayers, loadedOnce, total, control } = useMapsDetailsPlayers({
     country,
@@ -3149,7 +3165,7 @@ function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: st
             key={p.id}
             rank={rank}
             player={p}
-            sublabel={p.playedAt ? formatTimeAgo(p.playedAt) : undefined}
+            sublabel={p.playedAt ? formatTimeAgo(p.playedAt, locale) : undefined}
             onClick={() => {
               const url = p.scoreUrl || `https://osu.ppy.sh/users/${p.id}/mania`;
               window.open(url, "_blank", "noopener,noreferrer");
@@ -3442,7 +3458,7 @@ function FavouriteCard({
       </button>
 
       <div className="px-2.5 py-2">
-        <div className="text-[10px] text-osu-f1 truncate">mapped by {fav.creator}</div>
+        <div className="text-[10px] text-osu-f1 truncate"><Trans>mapped by {fav.creator}</Trans></div>
 
         <div className="flex items-center gap-3 mt-1.5">
           <div className="flex items-center gap-1">
@@ -4939,7 +4955,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         <div className="px-4 py-3 space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] text-osu-f1 truncate">mapped by {bm.creator}</div>
+            <div className="text-[11px] text-osu-f1 truncate"><Trans>mapped by {bm.creator}</Trans></div>
             {mapMetadata.length > 0 && (
               <div className="text-[10px] text-osu-f1/80 truncate">{mapMetadata.join(" / ")}</div>
             )}

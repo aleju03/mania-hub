@@ -6,6 +6,8 @@ import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { CountryFlag } from "../ui/CountryFlag";
 import { useAuth } from "../../lib/auth-context";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
+import { useLocale } from "../../lib/locale-context";
+import type { AppLocale } from "../../lib/locale";
 import { HONORARY_PLAYERS, type HonoraryPlayer } from "../../lib/honorary-players";
 import {
   fetchLiveBackendHonoraryPulls,
@@ -45,8 +47,8 @@ export function GoatHoldersButton() {
   );
 }
 
-function timeAgo(at: number | null | undefined): string | null {
-  return at && at > 0 ? formatTimeAgo(new Date(at).toISOString()) : null;
+function timeAgo(at: number | null | undefined, locale: AppLocale): string | null {
+  return at && at > 0 ? formatTimeAgo(new Date(at).toISOString(), locale) : null;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -55,6 +57,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function GoatHoldersModal({ onClose }: { onClose: () => void }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const [report, setReport] = useState<LiveBackendHonoraryPulls | null>(null);
   const [unsupported, setUnsupported] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -177,7 +180,7 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
                     <span translate="no" className="font-bold text-amber-200">
                       {honoraryLabel(latest.cardUserId) ?? latest.cardUsername ?? `#${latest.cardUserId}`}
                     </span>
-                    <span className="text-[13px] text-osu-f1">{timeAgo(latest.pulledAt)}</span>
+                    <span className="text-[13px] text-osu-f1">{timeAgo(latest.pulledAt, locale)}</span>
                   </div>
                 </div>
               ) : null}
@@ -301,6 +304,7 @@ function GoatHolderRow({
   onToggle: () => void;
 }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const owners = pulls.owners;
   const hidden = pulls.ownerCount - owners.length;
   const label = player.cardName ?? player.username;
@@ -321,7 +325,7 @@ function GoatHolderRow({
         <span translate="no" className="min-w-0 flex-1 truncate text-[13px] font-bold text-white">{label}</span>
         {/* The timestamp is the first thing to go when the row gets tight; it
             reappears per holder once the row is open. */}
-        <span className="hidden flex-shrink-0 text-[11px] text-osu-f1 sm:inline">{timeAgo(pulls.lastPulledAt)}</span>
+        <span className="hidden flex-shrink-0 text-[11px] text-osu-f1 sm:inline">{timeAgo(pulls.lastPulledAt, locale)}</span>
         <span className="flex-shrink-0 text-[11px] text-osu-f1">
           <span className="text-[14px] font-bold tabular-nums text-amber-200">{formatNumber(pulls.ownerCount)}</span>{" "}
           <Plural value={pulls.ownerCount} one="holder" other="holders" />
@@ -352,7 +356,7 @@ function GoatHolderRow({
                 {owner.username}
                 {owner.copies > 1 ? ` x${owner.copies}` : ""}
               </Link>
-              <span className="flex-shrink-0 text-[11px] text-osu-f1">{timeAgo(owner.firstPulledAt)}</span>
+              <span className="flex-shrink-0 text-[11px] text-osu-f1">{timeAgo(owner.firstPulledAt, locale)}</span>
             </div>
           ))}
           {hidden > 0 ? (

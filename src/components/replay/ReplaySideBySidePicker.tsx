@@ -25,6 +25,7 @@ import { parseReplayScoreInput } from "#/lib/replay-score-input";
 import { formatSideBySideIssue, getSideBySideCandidateIssue, getSideBySideIssue } from "#/lib/replay-side-by-side";
 import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp, scoreHasReplay } from "#/lib/score";
 import type { OsuScore } from "#/lib/types";
+import { useLocale } from "#/lib/locale-context";
 
 /* Setup screen for the Side by Side tab: pick the two runs, then watch them on
    one clock. It is built as the matchup it produces, two cards facing each
@@ -739,6 +740,7 @@ function PickerBody({
   onLoadMoreRuns: () => void;
 }) {
   const { t, i18n } = useLingui();
+  const locale = useLocale();
   const anchorBeatmapId = anchor?.beatmap?.id ?? null;
   const slotLabelLower = slotLabel.toLowerCase();
   const useLabel = t`Use as the ${slotLabelLower} run`;
@@ -837,7 +839,7 @@ function PickerBody({
           <SectionLabel>{t`Their runs on this map`}</SectionLabel>
           {playerBoard.map((run) => boardRow(run, {
             leading: avatar(run.avatarUrl, run.userId),
-            primary: run.playedAt ? t`Set ${formatTimeAgo(run.playedAt)}` : t`This run`,
+            primary: run.playedAt ? t`Set ${formatTimeAgo(run.playedAt, locale)}` : t`This run`,
           }))}
         </>
       );

@@ -168,7 +168,7 @@ function CollectorHeader({ profile }: { profile: LivePackCollectorProfile }) {
           </div>
           <div className="mt-0.5 text-[11px] text-osu-f1">
             {collector.joinedAt > 0
-              ? t`First card ${formatTimeAgo(new Date(collector.joinedAt).toISOString())}`
+              ? t`First card ${formatTimeAgo(new Date(collector.joinedAt).toISOString(), locale)}`
               : t`Collecting`}
           </div>
         </div>

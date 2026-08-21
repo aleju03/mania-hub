@@ -5,6 +5,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { rememberSkinName, skinEventProperties } from "../../lib/analytics-skins";
 import { track } from "../../lib/analytics";
 import { formatCompactCount, formatTimeAgo } from "../../lib/format";
+import { useLocale } from "../../lib/locale-context";
 import { formatSkinFileSize, keymodeLabel, pingSkinView, rememberSkinsBrowseEntry, skinDownloadUrl, type SkinSummary } from "../../lib/skins";
 import { Avatar } from "../ui/Avatar";
 
@@ -117,6 +118,7 @@ export function SkinPreviewImage({
 // skins and would otherwise give no way to tell whose is whose.
 export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: { skin: SkinSummary; previewKeys?: number; showUploader?: boolean; onClick?: () => void }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const accent = skin.accentColor ?? SKIN_FALLBACK_ACCENT;
   const isPrivate = skin.visibility === "private";
   const selectedPreviewKeys = previewKeys ?? skin.filterKeys ?? undefined;
@@ -258,7 +260,7 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
             {(skin.listedAt ?? skin.publishedAt) && (
               <>
                 {(skin.author || showUploader) && <span aria-hidden="true">·</span>}
-                <span className="shrink-0" suppressHydrationWarning>{formatTimeAgo(skin.listedAt ?? skin.publishedAt!)}</span>
+                <span className="shrink-0" suppressHydrationWarning>{formatTimeAgo(skin.listedAt ?? skin.publishedAt!, locale)}</span>
               </>
             )}
             {skin.oskSizeBytes ? (

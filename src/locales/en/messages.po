@@ -22,7 +22,7 @@ msgstr " · next rotation <0>{countdown}</0>"
 msgid " · top {0} shown"
 msgstr " · top {0} shown"
 
-#. placeholder {0}: formatTimeAgo(new Date(snipesFetchedAt).toISOString())
+#. placeholder {0}: formatTimeAgo(new Date(snipesFetchedAt).toISOString(), locale)
 #: src/routes/snipes.tsx
 msgid " · updated {0}"
 msgstr " · updated {0}"
@@ -421,8 +421,8 @@ msgstr "{0} maps"
 msgid "{0} maps · rotated {1}"
 msgstr "{0} maps · rotated {1}"
 
-#. placeholder {0}: formatNumber(currentTotal)
-#. placeholder {1}: formatTimeAgo(mapsUpdatedAt)
+#. placeholder {0}: formatNumber(currentTotal, locale)
+#. placeholder {1}: formatTimeAgo(mapsUpdatedAt, locale)
 #: src/routes/maps.tsx
 msgid "{0} maps · updated {1}"
 msgstr "{0} maps · updated {1}"
@@ -535,9 +535,9 @@ msgstr "{0} plays"
 msgid "{0} plays in {selectedYear}"
 msgstr "{0} plays in {selectedYear}"
 
-#. placeholder {0}: formatNumber(randomPickCount)
-#. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0)
-#. placeholder {2}: formatTimeAgo(mapsUpdatedAt)
+#. placeholder {0}: formatNumber(randomPickCount, locale)
+#. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
+#. placeholder {2}: formatTimeAgo(mapsUpdatedAt, locale)
 #: src/routes/maps.tsx
 msgid "{0} possible picks · {1} unique sets · updated {2}"
 msgstr "{0} possible picks · {1} unique sets · updated {2}"
@@ -2538,6 +2538,7 @@ msgstr "Choose a new GOAT"
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Chordjack"
 msgstr "Chordjack"
@@ -4323,7 +4324,7 @@ msgstr "Finishing this looks risky for you; treat it as a clear attempt, not a f
 msgid "Finnish"
 msgstr "Finnish"
 
-#. placeholder {0}: formatTimeAgo(new Date(collector.joinedAt).toISOString())
+#. placeholder {0}: formatTimeAgo(new Date(collector.joinedAt).toISOString(), locale)
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "First card {0}"
 msgstr "First card {0}"
@@ -4631,7 +4632,9 @@ msgstr "Gradient text"
 msgid "graveyard"
 msgstr "graveyard"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/maps.tsx
 msgid "Graveyard"
 msgstr "Graveyard"
 
@@ -5098,6 +5101,7 @@ msgstr "Italic"
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Jack"
 msgstr "Jack"
@@ -5169,6 +5173,7 @@ msgstr "Jump to a page"
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Jumpstream"
 msgstr "Jumpstream"
@@ -5326,7 +5331,7 @@ msgstr "Last collection page"
 msgid "Last page"
 msgstr "Last page"
 
-#. placeholder {0}: formatDetailedTimeAgo(user.last_visit)
+#. placeholder {0}: formatDetailedTimeAgo(user.last_visit, locale)
 #: src/routes/player/$username.tsx
 msgid "Last seen {0}"
 msgstr "Last seen {0}"
@@ -5513,6 +5518,7 @@ msgstr "Live updates on"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "LN"
 msgstr "LN"
@@ -5819,7 +5825,9 @@ msgstr "Lost the run. The board could not be reached."
 msgid "loved"
 msgstr "loved"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/maps.tsx
 msgid "Loved"
 msgstr "Loved"
 
@@ -5970,7 +5978,11 @@ msgstr "Map shape"
 msgid "map unavailable"
 msgstr "map unavailable"
 
-#. placeholder {0}: score.beatmapset.creator
+#. placeholder {0}: bm.creator
+#. placeholder {0}: entry.creator
+#. placeholder {0}: fav.creator
+#: src/components/maps/MapDetailModal.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "mapped by {0}"
 msgstr "mapped by {0}"
@@ -7536,7 +7548,9 @@ msgstr "peers farming"
 msgid "pending"
 msgstr "pending"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/maps.tsx
 msgid "Pending"
 msgstr "Pending"
 
@@ -7674,7 +7688,7 @@ msgstr "playback"
 msgid "Played"
 msgstr "Played"
 
-#. placeholder {0}: formatDetailedTimeAgo(playedAt)
+#. placeholder {0}: formatDetailedTimeAgo(playedAt, locale)
 #. placeholder {1}: display.isLazer ? "Lazer" : "Stable"
 #: src/routes/player/$username.tsx
 msgid "Played {0} on {1}"
@@ -8076,7 +8090,9 @@ msgstr "Quadstream"
 msgid "qualified"
 msgstr "qualified"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/maps.tsx
 msgid "Qualified"
 msgstr "Qualified"
 
@@ -8138,7 +8154,9 @@ msgstr "Rank is set by {0} top mania plays: mostly pp standing, plus control, sp
 msgid "ranked"
 msgstr "ranked"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/maps.tsx
 msgid "Ranked"
 msgstr "Ranked"
 
@@ -9183,7 +9201,7 @@ msgstr "Sessions"
 msgid "Set"
 msgstr "Set"
 
-#. placeholder {0}: formatTimeAgo(run.playedAt)
+#. placeholder {0}: formatTimeAgo(run.playedAt, locale)
 #. placeholder {0}: index + 1
 #: src/components/replay/ReplaySideBySidePicker.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -9198,7 +9216,7 @@ msgstr "Set {index}"
 msgid "set {span} ago"
 msgstr "set {span} ago"
 
-#. placeholder {0}: formatDetailedTimeAgo(recentPlayAt)
+#. placeholder {0}: formatDetailedTimeAgo(recentPlayAt, locale)
 #: src/routes/player/$username.tsx
 msgid "Set a play {0}"
 msgstr "Set a play {0}"
@@ -9774,6 +9792,7 @@ msgstr "STAM"
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Stamina"
 msgstr "Stamina"
@@ -9900,6 +9919,7 @@ msgstr "Streak"
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Stream"
 msgstr "Stream"
@@ -9978,6 +9998,10 @@ msgstr "sure? +{lastCopyValue}"
 #: src/components/packs/PackSummary.tsx
 msgid "Sure? The card leaves the collection"
 msgstr "Sure? The card leaves the collection"
+
+#: src/routes/maps.tsx
+msgid "SV"
+msgstr "SV"
 
 #. placeholder {0}: activeAssetSourceName ?? t`this skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -10081,6 +10105,7 @@ msgstr "Tear open booster packs of maniacards: random osu!mania players minted a
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Tech"
 msgstr "Tech"
@@ -10822,6 +10847,10 @@ msgstr "top pp"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Top-play feed"
 msgstr "Top-play feed"
+
+#: src/routes/maps.tsx
+msgid "Tournament"
+msgstr "Tournament"
 
 #: src/components/communities/TagInput.tsx
 msgid "tournaments, mapping, casual"

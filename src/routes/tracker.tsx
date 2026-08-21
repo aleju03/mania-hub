@@ -1694,6 +1694,7 @@ const MultiFeedCard = memo(function MultiFeedCard({
   isNew: boolean;
 }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const latestRound = rounds[rounds.length - 1];
   const sample = latestRound.scores[0];
   const newest = latestRound.scores[latestRound.scores.length - 1];
@@ -1783,7 +1784,7 @@ const MultiFeedCard = memo(function MultiFeedCard({
               )}
               <span className="hidden sm:inline flex-shrink-0"><DanBadge score={winner} /></span>
             </div>
-            <span className="text-[10px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(getScoreTimestamp(newest))}</span>
+            <span className="text-[10px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(getScoreTimestamp(newest), locale)}</span>
           </div>
           <div className="text-[10px] text-osu-f1 mt-0.5 truncate">
             {rounds.length > 1 ? `${rounds.length} maps · ` : ""}{rosterNames}
@@ -1796,7 +1797,7 @@ const MultiFeedCard = memo(function MultiFeedCard({
           </span>
           <span className="text-sm font-bold">{formatPP(winner.pp)}</span>
           <span className="text-[10px] text-osu-f1 w-12 text-right">
-            {formatTimeAgo(getScoreTimestamp(newest))}
+            {formatTimeAgo(getScoreTimestamp(newest), locale)}
           </span>
         </div>
         <span
@@ -1847,7 +1848,7 @@ const MultiFeedCard = memo(function MultiFeedCard({
                     </span>
                   )}
                   <span className="ml-auto text-[10px] text-osu-f1 flex-shrink-0">
-                    {formatTimeAgo(getScoreTimestamp(roundNewest))}
+                    {formatTimeAgo(getScoreTimestamp(roundNewest), locale)}
                   </span>
                 </div>
                 {rankedRound.map((score, index) => {
@@ -1904,6 +1905,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   placement?: number | null;
 }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const navigate = useNavigate();
 
   // The profile can only show osu!'s `last_visit`, which ignores gameplay. This
@@ -1985,7 +1987,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 />
               )}
             </div>
-            <span className="text-[11px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(getScoreTimestamp(score))}</span>
+            <span className="text-[11px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(getScoreTimestamp(score), locale)}</span>
           </div>
           {/* Row 2: Beatmap title + keys (the multi card shows the map once in
               its header, so embedded member rows skip it) */}
@@ -2078,7 +2080,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
             </button>
           )}
           <span className="text-[11px] text-osu-f1 w-14 text-right">
-            {formatTimeAgo(getScoreTimestamp(score))}
+            {formatTimeAgo(getScoreTimestamp(score), locale)}
           </span>
         </div>
       </div>

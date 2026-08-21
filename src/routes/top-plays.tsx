@@ -697,7 +697,7 @@ function PopOffsPage() {
                               <CountryFlag code={p.user.country_code} size="sm" />
                             ) : null}
                           </div>
-                          <span className="text-[11px] text-osu-f1 flex-shrink-0 sm:hidden" title={formatTimeAgoTooltip(p.time)}>{formatTimeAgo(p.time)}</span>
+                          <span className="text-[11px] text-osu-f1 flex-shrink-0 sm:hidden" title={formatTimeAgoTooltip(p.time, locale)}>{formatTimeAgo(p.time, locale)}</span>
                         </div>
                         {/* Row 2: Beatmap title */}
                         <div className="flex items-center gap-2 mt-0.5">
@@ -778,8 +778,8 @@ function PopOffsPage() {
                             <Trans>▶ Watch</Trans>
                           </button>
                         )}
-                        <span className="text-[11px] text-osu-f1 w-16 text-right" title={formatTimeAgoTooltip(p.time)}>
-                          {formatTimeAgo(p.time)}
+                        <span className="text-[11px] text-osu-f1 w-16 text-right" title={formatTimeAgoTooltip(p.time, locale)}>
+                          {formatTimeAgo(p.time, locale)}
                         </span>
                       </div>
                     </div>

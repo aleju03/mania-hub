@@ -14,6 +14,7 @@ import {
 import { DEFAULT_COUNTRY_CODE } from "#/lib/country";
 import { useDocumentVisible } from "#/lib/window-activity";
 import { formatPreciseTimeAgo } from "#/lib/format";
+import { useLocale } from "#/lib/locale-context";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { CountryFlag } from "../ui/CountryFlag";
 import { useAuth } from "#/lib/auth-context";
@@ -255,6 +256,7 @@ function PulledStatsLine({ stats }: { stats: LivePackPulledStats }) {
 
 export function PackPulse({ viewerId, revealing = false }: { viewerId: number | null; revealing?: boolean }) {
   const { t } = useLingui();
+  const locale = useLocale();
   // Admins get the collector list (a prototype; the fun fact itself stays
   // visible to everyone) and the rail's inflow simulator.
   const isAdmin = canUseAdminFeatures(useAuth());
@@ -623,7 +625,7 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                           <span className="text-osu-f1/70">{t`pulled`}</span>
                         )}
                         {pull.pulledAt > 0 && (
-                          <span className="tabular-nums text-osu-f1/50"> · {formatPreciseTimeAgo(pull.pulledAt, now)}</span>
+                          <span className="tabular-nums text-osu-f1/50"> · {formatPreciseTimeAgo(pull.pulledAt, now, locale)}</span>
                         )}
                       </span>
                     </span>

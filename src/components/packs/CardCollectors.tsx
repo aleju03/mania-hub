@@ -5,6 +5,8 @@ import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { plural } from "@lingui/core/macro";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
+import { useLocale } from "../../lib/locale-context";
+import type { AppLocale } from "../../lib/locale";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "../../lib/maniacard";
 import {
   fetchServerPackCardCollectors,
@@ -24,8 +26,8 @@ import {
    first. Point at a name and the pinned footer says the rest about them, which
    keeps the detail one line long and off the list itself. */
 
-function timeAgo(at: number): string | null {
-  return at > 0 ? formatTimeAgo(new Date(at).toISOString()) : null;
+function timeAgo(at: number, locale: AppLocale): string | null {
+  return at > 0 ? formatTimeAgo(new Date(at).toISOString(), locale) : null;
 }
 
 function tierStyle(tier: ManiaCardTier | null): { label: string; rgb: string } | null {
@@ -283,8 +285,9 @@ function CollectorFooter({
   showTier: boolean;
 }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const tier = tierStyle(collector.tier);
-  const pulled = timeAgo(collector.firstPulledAt);
+  const pulled = timeAgo(collector.firstPulledAt, locale);
   const meta: string[] = [];
   // The serial they hold you at, so the run doubles as the mint order of your
   // own card. Missing on a holding older than the serial registry.

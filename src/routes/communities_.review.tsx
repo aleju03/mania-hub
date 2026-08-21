@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ExternalLink, Flag, Loader2, RefreshCw, Users } from "lucide-react";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { formatTimeAgo } from "../lib/format";
+import { useLocale } from "../lib/locale-context";
 import {
   COMMUNITY_INTERNATIONAL,
   canModerateCommunities,
@@ -65,6 +66,7 @@ function ReviewCard({
   onAction: (id: string, action: string, reason?: string) => void;
   busy: boolean;
 }) {
+  const locale = useLocale();
   const [reason, setReason] = useState("");
   const [rejecting, setRejecting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -178,7 +180,7 @@ function ReviewCard({
                 </p>
               )}
               <p className="mt-0.5 text-[11px] text-osu-f1/70">
-                {report.reporterUsername || `user ${report.reporterUserId}`}, {formatTimeAgo(report.createdAt)}
+                {report.reporterUsername || `user ${report.reporterUserId}`}, {formatTimeAgo(report.createdAt, locale)}
               </p>
             </div>
           ))}

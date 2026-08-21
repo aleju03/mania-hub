@@ -65,6 +65,13 @@ describe("formatTimeAgo", () => {
     expect(formatTimeAgo("2025-06-10T22:38:00.000Z")).toBe("1y ago");
     expect(formatTimeAgo("2014-06-04T22:38:00.000Z")).toBe("12y ago");
   });
+
+  it("uses the requested catalog for compact relative dates", () => {
+    vi.setSystemTime(new Date("2026-06-11T22:38:00.000Z"));
+
+    expect(formatTimeAgo("2025-06-10T22:38:00.000Z", "es")).toBe("hace 1y");
+    expect(formatTimeAgo("2025-06-10T22:38:00.000Z", "zh-CN")).toBe("1 年前");
+  });
 });
 
 describe("formatTimeAgoTooltip", () => {
@@ -109,6 +116,13 @@ describe("formatDetailedTimeAgo", () => {
     vi.setSystemTime(new Date("2026-06-11T22:45:00.000-06:00"));
 
     expect(formatDetailedTimeAgo("2026-06-11T18:45:00.000-06:00")).toBe("4h ago");
+  });
+
+  it("localizes both units and word order", () => {
+    vi.setSystemTime(new Date("2026-06-11T22:38:00.000-06:00"));
+
+    expect(formatDetailedTimeAgo("2026-06-11T18:45:00.000-06:00", "es")).toBe("hace 3h 53m");
+    expect(formatDetailedTimeAgo("2026-06-11T18:45:00.000-06:00", "zh-CN")).toBe("3 小时 53 分前");
   });
 });
 

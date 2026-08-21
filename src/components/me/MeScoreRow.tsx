@@ -4,6 +4,7 @@ import { formatAccuracy, formatPP, formatTimeAgo, formatTimeAgoTooltip } from ".
 import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp } from "../../lib/score";
 import type { LeanTrackerScore } from "../../lib/types";
 import { useLingui } from "@lingui/react/macro";
+import { useLocale } from "../../lib/locale-context";
 
 type MyDataScoreRow = LeanTrackerScore & { archived?: boolean; archivedExact?: boolean };
 
@@ -31,6 +32,7 @@ function coverThumb(score: MyDataScoreRow): string | null {
 // One of the player's own tracked plays, styled like a tracker feed row but compact (no avatar,
 // since every row is the same player). Used for the My Data recent-plays feed.
 export function MeScoreRow({ score, isNew, ppGain }: { score: MyDataScoreRow; isNew?: boolean; ppGain?: number }) {
+  const locale = useLocale();
   const acc = getDisplayedAccuracy(score);
   const beatmapUrl = score.beatmap?.url ?? (score.beatmap?.id ? `https://osu.ppy.sh/beatmaps/${score.beatmap.id}` : undefined);
   const keys = keymodeLabel(score);
@@ -81,8 +83,8 @@ export function MeScoreRow({ score, isNew, ppGain }: { score: MyDataScoreRow; is
           <span className="text-[13px] font-bold tabular-nums text-white">{showExactStats ? formatPP(score.pp) : t`archived`}</span>
           {ppGain != null && ppGain >= 1 ? <span className="text-[10px] font-semibold tabular-nums text-osu-green">+{Math.round(ppGain)}</span> : null}
         </div>
-        <span className="text-[9px] text-osu-f1" title={formatTimeAgoTooltip(getScoreTimestamp(score))}>
-          {formatTimeAgo(getScoreTimestamp(score))}
+        <span className="text-[9px] text-osu-f1" title={formatTimeAgoTooltip(getScoreTimestamp(score), locale)}>
+          {formatTimeAgo(getScoreTimestamp(score), locale)}
         </span>
       </div>
     </div>

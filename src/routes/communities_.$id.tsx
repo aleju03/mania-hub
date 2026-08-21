@@ -463,7 +463,7 @@ function CommunityDetailPage() {
                         </Link>
                       </Fact>
                       <Fact label={t`listed`}>
-                        <span suppressHydrationWarning>{formatTimeAgo(row.createdAt)}</span>
+                        <span suppressHydrationWarning>{formatTimeAgo(row.createdAt, locale)}</span>
                       </Fact>
                       {accessLabel && (
                         <Fact label={t`open to`}>

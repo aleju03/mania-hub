@@ -11,7 +11,8 @@ import { PatternRadar } from "./PatternRadar";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
-import { useLingui } from "@lingui/react/macro";
+import { useLocale } from "../../lib/locale-context";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import {
@@ -77,6 +78,7 @@ export interface MapDetailPlayContext {
 
 function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
   const { t } = useLingui();
+  const locale = useLocale();
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`${play.username}'s play`}</span>
@@ -90,8 +92,8 @@ function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
           </div>
         )}
         {play.playedAt && (
-          <div className="flex flex-col" title={formatTimeAgoTooltip(play.playedAt)}>
-            <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{formatTimeAgo(play.playedAt)}</span>
+          <div className="flex flex-col" title={formatTimeAgoTooltip(play.playedAt, locale)}>
+            <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{formatTimeAgo(play.playedAt, locale)}</span>
             <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">
               {play.source === "top" ? t`profile top play` : t`tracked history`}
             </span>
@@ -164,6 +166,16 @@ const MSD_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
   JackSpeed: msg`Jackspeed`,
   Chordjack: msg`Chordjack`,
   Technical: msg`Technical`,
+};
+
+const BEATMAP_STATUS_LABELS: Record<string, MessageDescriptor> = {
+  ranked: msg`Ranked`,
+  approved: msg`Ranked`,
+  qualified: msg`Qualified`,
+  loved: msg`Loved`,
+  graveyard: msg`Graveyard`,
+  pending: msg`Pending`,
+  wip: msg`Pending`,
 };
 
 /** The +/- tier suffix of a dan verdict ("2--" -> "--"), which badge art can't show. */
@@ -359,7 +371,7 @@ export function MapDetailModal({
   // than as zeroes. "missing"/"error": that fetch is done and brought nothing.
   status?: "ready" | "pending" | "missing" | "error";
 }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   // Which diff of the set is in focus; defaults to the entry's representative.
   const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
@@ -486,7 +498,11 @@ export function MapDetailModal({
                     {numbersKnown ? (
                       <>
                         <StarRatingBadge stars={active.stars} />
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-white/70">{active.status}</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
+                          {BEATMAP_STATUS_LABELS[active.status.toLowerCase()]
+                            ? i18n._(BEATMAP_STATUS_LABELS[active.status.toLowerCase()])
+                            : active.status}
+                        </span>
                       </>
                     ) : pending ? (
                       // A skeleton's tint is invisible against the banner art,
@@ -498,7 +514,7 @@ export function MapDetailModal({
                   <h2 className="mt-1 text-[17px] font-bold text-white leading-tight truncate drop-shadow">{entry.title}</h2>
                   <p className="text-[11px] text-white/75 truncate">
                     {entry.artist}
-                    {entry.creator ? <span className="text-white/50"> · mapped by {entry.creator}</span> : null}
+                    {entry.creator ? <span className="text-white/50"> · <Trans>mapped by {entry.creator}</Trans></span> : null}
                     <span className="text-white/50"> · [{active.version}]</span>
                   </p>
                 </div>

@@ -12,6 +12,7 @@ import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { useAuth } from "../lib/auth-context";
 import { formatAccuracy, formatTimeAgo } from "../lib/format";
+import { useLocale } from "../lib/locale-context";
 import { withModRate } from "../lib/score";
 import { pageSeo } from "../lib/seo";
 import {
@@ -254,6 +255,7 @@ function UploadRow({
   onDelete: () => void;
 }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const description = upload.description;
   const coverUrl = description?.beatmap?.beatmapsetId
     ? `https://assets.ppy.sh/beatmaps/${description.beatmap.beatmapsetId}/covers/list.jpg`
@@ -319,7 +321,7 @@ function UploadRow({
           {description != null && (
             <div className="text-[11px] font-semibold text-osu-l2">{formatAccuracy(description.accuracy)}</div>
           )}
-          <div className="text-[10px] text-osu-f1">{formatTimeAgo(new Date(upload.uploadedAt).toISOString())}</div>
+          <div className="text-[10px] text-osu-f1">{formatTimeAgo(new Date(upload.uploadedAt).toISOString(), locale)}</div>
         </div>
       </button>
       <button

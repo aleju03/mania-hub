@@ -16,6 +16,7 @@ import { Skeleton } from "../ui/LoadingSkeleton";
 import { ModBadge } from "../ui/ModBadge";
 import { MapDetailModal } from "../maps/MapDetailModal";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
+import { useLocale } from "../../lib/locale-context";
 
 const SKILL_PLAYS_PAGE_SIZE = 50;
 
@@ -335,6 +336,7 @@ function SkillPlayRow({
   onPrefetch: () => void;
 }) {
   const { t, i18n } = useLingui();
+  const locale = useLocale();
   const rateMod = rateModFor(play.rate);
   // The list ranks by one skillset component of every play, so a dense LN
   // chart can lead "top Chordjack plays" purely by riding a big overall. When
@@ -387,7 +389,7 @@ function SkillPlayRow({
           {rateMod ? <ModBadge mod={rateMod.acronym} rate={rateMod.rate} size={0.8} /> : null}
           <span>{play.source === "top" ? t`profile top play` : t`tracked history`}</span>
           {play.playedAt ? (
-            <span className="hidden sm:inline" title={formatTimeAgoTooltip(play.playedAt)}>{formatTimeAgo(play.playedAt)}</span>
+            <span className="hidden sm:inline" title={formatTimeAgoTooltip(play.playedAt, locale)}>{formatTimeAgo(play.playedAt, locale)}</span>
           ) : null}
         </div>
       </div>

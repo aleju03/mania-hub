@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useLingui } from "@lingui/react/macro";
 import { formatNumber, formatTimeAgo } from "#/lib/format";
+import { useLocale } from "#/lib/locale-context";
 import { honoraryAvatarUrl } from "#/lib/honorary-players";
 import {
   packCollectorParam,
@@ -135,6 +136,7 @@ function completionNote(completion: LivePackCollectorCompletion): string | null 
 
 export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const { boards, totals } = stats;
   const goatRoster = totals.goatRosterSize;
 
@@ -207,7 +209,7 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
             key={collector.userId}
             collector={collector}
             index={index}
-            value={collector.joinedAt > 0 ? formatTimeAgo(new Date(collector.joinedAt).toISOString()) : t`unknown`}
+            value={collector.joinedAt > 0 ? formatTimeAgo(new Date(collector.joinedAt).toISOString(), locale) : t`unknown`}
           />
         ))}
       </Board>

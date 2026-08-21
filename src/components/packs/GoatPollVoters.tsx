@@ -8,6 +8,7 @@ import type { GoatPollNominee } from "#/lib/live-backend";
 import { formatTimeAgo } from "#/lib/format";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { CountryFlag } from "#/components/ui/CountryFlag";
+import { useLocale } from "#/lib/locale-context";
 
 /* Who voted for one nominee, and which way.
  *
@@ -25,6 +26,7 @@ import { CountryFlag } from "#/components/ui/CountryFlag";
 
 function VoterRow({ voter, nominator }: { voter: GoatPollVoter; nominator: boolean }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const up = voter.value > 0;
   return (
     <li className="flex items-center gap-2 px-3 py-1.5">
@@ -62,7 +64,7 @@ function VoterRow({ voter, nominator }: { voter: GoatPollVoter; nominator: boole
         </span>
       )}
       <span className="ml-auto shrink-0 text-[10px] tabular-nums text-osu-f1/50">
-        {formatTimeAgo(new Date(voter.votedAt).toISOString())}
+        {formatTimeAgo(new Date(voter.votedAt).toISOString(), locale)}
       </span>
     </li>
   );
