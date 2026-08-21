@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
 
 import { ReplaySkinSettingsModal } from "../replay/ReplaySkinSettingsModal";
 import {
@@ -34,6 +35,7 @@ export function OwnerReplaySkinCustomizeModal({
   onSaved: (record: OwnerReplaySkinRecord) => void;
   onClose: () => void;
 }) {
+  const { t } = useLingui();
   const [loaded, setLoaded] = useState<LoadedOwnerReplaySkin | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -123,12 +125,12 @@ export function OwnerReplaySkinCustomizeModal({
   if (typeof document === "undefined") return null;
 
   const status = loadFailed
-    ? { message: "The skin could not be loaded. Try again in a moment.", error: true, closable: true }
+    ? { message: t`The skin could not be loaded. Try again in a moment.`, error: true, closable: true }
     : saveState === "error"
-      ? { message: "Saving your replay skin failed. Open the editor and apply again.", error: true, closable: true }
+      ? { message: t`Saving your replay skin failed. Open the editor and apply again.`, error: true, closable: true }
       : saveState === "saving"
-        ? { message: "Saving your replay skin…", error: false, closable: false }
-        : { message: "Loading the skin…", error: false, closable: true };
+        ? { message: t`Saving your replay skin…`, error: false, closable: false }
+        : { message: t`Loading the skin…`, error: false, closable: true };
 
   return createPortal(
     <>
@@ -150,7 +152,7 @@ export function OwnerReplaySkinCustomizeModal({
         className="fixed left-1/2 top-1/2 z-[131] w-[min(380px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-osu-b3/50 px-5 py-3 text-sm font-bold text-white">Customize replay skin</div>
+        <div className="border-b border-osu-b3/50 px-5 py-3 text-sm font-bold text-white"><Trans>Customize replay skin</Trans></div>
         <div className="flex items-center gap-2.5 px-5 py-4">
           {!status.error ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-osu-pink-light" /> : null}
           <p className={`text-[12px] leading-relaxed ${status.error ? "text-osu-red-light" : "text-osu-f1"}`}>
@@ -164,7 +166,7 @@ export function OwnerReplaySkinCustomizeModal({
               onClick={onClose}
               className="cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
             >
-              Close
+              <Trans>Close</Trans>
             </button>
           </div>
         ) : null}

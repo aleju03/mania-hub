@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../lib/i18n";
 import type { SkinSummary } from "../../lib/skins";
 
 vi.stubEnv("VITE_LIVE_BACKEND_URL", "https://live.test");
@@ -77,8 +79,14 @@ function archiveResponse(): unknown {
   };
 }
 
+// The modal uses <Trans>, which throws without a provider; en resolves to the
+// source strings these tests match on.
 function renderEditor(skin: SkinSummary = SKIN) {
-  return render(<SkinPreviewEditorModal skin={skin} open onClose={vi.fn()} onSaved={vi.fn()} />);
+  return render(
+    <I18nProvider i18n={getI18n("en")}>
+      <SkinPreviewEditorModal skin={skin} open onClose={vi.fn()} onSaved={vi.fn()} />
+    </I18nProvider>,
+  );
 }
 
 // The pick is what pulls the .osk down; everything under test hangs off it.

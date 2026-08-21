@@ -8,6 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
 import type { ManiaCardTier, ManiaSkills } from "#/lib/maniacard";
 import type { PackDamage } from "#/lib/pack-damage";
 import { tierRank, type PulledCard } from "#/lib/pack-collection";
@@ -198,6 +199,7 @@ function DraggableStackBackCard({
   zIndex: number;
   onDraw: () => void;
 }) {
+  const { t } = useLingui();
   const ref = useRef<HTMLDivElement | null>(null);
   const suppressClickRef = useRef(false);
   const gestureRef = useRef<{
@@ -325,7 +327,7 @@ function DraggableStackBackCard({
       onKeyDown={onKeyDown}
       role="button"
       tabIndex={0}
-      aria-label="Draw the next card"
+      aria-label={t`Draw the next card`}
     />
   );
 }
@@ -564,6 +566,7 @@ export function RevealStage({
   onCardRevealed,
   onComplete,
 }: RevealStageProps) {
+  const { t } = useLingui();
   const windowActive = useWindowActive();
   const mobileViewport = isMobileViewport();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -1354,7 +1357,7 @@ export function RevealStage({
           role="img"
           aria-label={
             activeData && phase === "shown"
-              ? `${activeData.user.username} ${activeData.tierStyle.label} maniacard`
+              ? t`${activeData.user.username} ${activeData.tierStyle.label} maniacard`
               : undefined
           }
         />
@@ -1363,7 +1366,7 @@ export function RevealStage({
         {activeFallback && phase === "shown" && (
           <img
             src={activeFallback}
-            alt={activeData ? `${activeData.user.username} maniacard` : "Maniacard"}
+            alt={activeData ? t`${activeData.user.username} maniacard` : t`Maniacard`}
             className="absolute inset-0 z-[15] h-full w-full rounded-[18px] object-cover"
             draggable={false}
           />
@@ -1375,9 +1378,11 @@ export function RevealStage({
             <div>
               <div className="text-sm font-bold text-white">{cards[index]?.player.user.username}</div>
               <div className="mt-2 text-[12px] text-osu-f1">
-                {mintFailure === "fetch"
-                  ? "Couldn't load this player's plays right now. The card is in your collection and will mint itself there."
-                  : "This player's card refused to mint. Not enough ranked play data."}
+                {mintFailure === "fetch" ? (
+                  <Trans>Couldn't load this player's plays right now. The card is in your collection and will mint itself there.</Trans>
+                ) : (
+                  <Trans>This player's card refused to mint. Not enough ranked play data.</Trans>
+                )}
               </div>
             </div>
           </div>
@@ -1407,7 +1412,7 @@ export function RevealStage({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 hover:underline underline-offset-4 decoration-osu-f1/60"
-                aria-label={`Open ${current.player.user.username}'s profile in a new tab`}
+                aria-label={t`Open ${current.player.user.username}'s profile in a new tab`}
               >
                 <img
                   src={current.player.user.avatar_url}
@@ -1423,7 +1428,7 @@ export function RevealStage({
                     never held is the thing worth noticing in this row. */}
                 {current.isNew && (
                   <span className="rounded bg-osu-pink px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-white">
-                    new
+                    <Trans>new</Trans>
                   </span>
                 )}
                 {current.tierLabel && (
@@ -1451,15 +1456,19 @@ export function RevealStage({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              {damage
-                ? "Every card came out in two pieces"
-                : phase === "preparing"
-                  ? slowDraw
-                    ? "Warming this player up... first draws can take a moment"
-                    : "Drawing player..."
-                  : skipping
-                    ? "Revealing the rest..."
-                    : "Tap the stack or drag the top card to draw"}
+              {damage ? (
+                <Trans>Every card came out in two pieces</Trans>
+              ) : phase === "preparing" ? (
+                slowDraw ? (
+                  <Trans>Warming this player up... first draws can take a moment</Trans>
+                ) : (
+                  <Trans>Drawing player...</Trans>
+                )
+              ) : skipping ? (
+                <Trans>Revealing the rest...</Trans>
+              ) : (
+                <Trans>Tap the stack or drag the top card to draw</Trans>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1474,7 +1483,7 @@ export function RevealStage({
             onClick={() => void reveal(index)}
             className="rounded-full bg-osu-pink px-6 py-2 text-sm font-bold text-white hover:brightness-110 transition cursor-pointer"
           >
-            Draw card
+            <Trans>Draw card</Trans>
           </button>
         )}
         {phase === "shown" && (
@@ -1483,7 +1492,7 @@ export function RevealStage({
             onClick={advance}
             className="rounded-full bg-osu-pink px-6 py-2 text-sm font-bold text-white hover:brightness-110 transition cursor-pointer"
           >
-            {index + 1 >= cards.length ? "See your pulls" : "Next card"}
+            {index + 1 >= cards.length ? <Trans>See your pulls</Trans> : <Trans>Next card</Trans>}
           </button>
         )}
         {!skipping && !damage && index + 1 < cards.length && (phase === "stack" || phase === "shown") && (
@@ -1492,7 +1501,7 @@ export function RevealStage({
             onClick={() => void revealRest()}
             className="text-[12px] text-osu-f1 hover:text-white transition-colors cursor-pointer"
           >
-            reveal all
+            <Trans>reveal all</Trans>
           </button>
         )}
       </div>

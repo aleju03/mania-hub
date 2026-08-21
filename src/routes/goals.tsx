@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { msg } from "@lingui/core/macro";
 
+import { getI18n } from "../lib/i18n";
 import { GoalsPanel } from "../components/me/GoalsPanel";
 import { EMPTY_GOAL_SUGGESTION_METRICS, fetchMyGoalSuggestionMetrics, type GoalSuggestionMetrics } from "../lib/goals";
 
@@ -26,13 +28,16 @@ export const Route = createFileRoute("/goals")({
       return EMPTY_GOAL_SUGGESTION_METRICS;
     }
   },
-  head: () => ({
-    meta: [
-      { title: "Goals" },
-      { name: "description", content: "" },
-      { name: "robots", content: "noindex, nofollow" },
-    ],
-  }),
+  head: ({ match }) => {
+    const i18n = getI18n(match.context.locale);
+    return {
+      meta: [
+        { title: i18n._(msg`Goals`) },
+        { name: "description", content: "" },
+        { name: "robots", content: "noindex, nofollow" },
+      ],
+    };
+  },
   component: GoalsRoute,
 });
 

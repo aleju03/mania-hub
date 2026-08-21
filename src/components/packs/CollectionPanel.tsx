@@ -2,6 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { msg, plural } from "@lingui/core/macro";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import {
   duplicateShardTotal,
@@ -43,9 +45,13 @@ type CollectionTierFilter = ManiaCardTier | "all" | "unrated" | "untracked";
    not resurface a card); "rarity" is the classic tier-then-pp order. */
 type CollectionSortMode = "rarity" | "newest";
 
-const COLLECTION_SORTS: Array<{ id: CollectionSortMode; label: string; hint: string }> = [
-  { id: "rarity", label: "Rarity", hint: "Highest tier first, then pp" },
-  { id: "newest", label: "Newest", hint: "When each card first joined your collection" },
+const COLLECTION_SORTS: Array<{
+  id: CollectionSortMode;
+  label: ReturnType<typeof msg>;
+  hint: ReturnType<typeof msg>;
+}> = [
+  { id: "rarity", label: msg`Rarity`, hint: msg`Highest tier first, then pp` },
+  { id: "newest", label: msg`Newest`, hint: msg`When each card first joined your collection` },
 ];
 
 /* How you read your own collection is a standing preference, not a transient
@@ -200,6 +206,7 @@ function CollectionPager({
   noun?: "cards" | "players";
   onPageChange: (page: number) => void;
 }) {
+  const { t } = useLingui();
   const [jumpOpen, setJumpOpen] = useState(false);
   const [jumpValue, setJumpValue] = useState("");
 
@@ -212,6 +219,9 @@ function CollectionPager({
 
   const navButton =
     "grid h-7 w-7 place-items-center rounded-lg border border-osu-b3/40 bg-osu-b4/40 text-osu-f1 transition-colors hover:bg-osu-b4/70 hover:text-white disabled:cursor-default disabled:opacity-40 cursor-pointer";
+  const jumpInputLabel = t`Page number, 1 to ${totalPages}`;
+  const totalText = total.toLocaleString("en-US");
+  const rangeStart = pageStart + 1;
 
   return (
     <div className="flex items-center gap-1.5 text-[11px] text-osu-f1">
@@ -220,7 +230,7 @@ function CollectionPager({
         onClick={() => onPageChange(0)}
         disabled={page <= 0}
         className={navButton}
-        aria-label="First collection page"
+        aria-label={t`First collection page`}
       >
         <ChevronsLeft className="h-4 w-4" />
       </button>
@@ -229,7 +239,7 @@ function CollectionPager({
         onClick={() => onPageChange(Math.max(0, page - 1))}
         disabled={page <= 0}
         className={navButton}
-        aria-label="Previous collection page"
+        aria-label={t`Previous collection page`}
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
@@ -241,25 +251,27 @@ function CollectionPager({
             submitJump();
           }}
         >
-          <span>Page</span>
-          <input
-            type="number"
-            min={1}
-            max={totalPages}
-            value={jumpValue}
-            onChange={(event) => setJumpValue(event.target.value)}
-            onBlur={submitJump}
-            onKeyDown={(event) => {
-              if (event.key !== "Escape") return;
-              setJumpValue("");
-              setJumpOpen(false);
-            }}
-            autoFocus
-            placeholder={String(page + 1)}
-            className="w-12 rounded-md border border-osu-b3/60 bg-osu-b5/70 px-1.5 py-0.5 text-center tabular-nums text-white outline-none focus:border-osu-pink/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            aria-label={`Page number, 1 to ${totalPages}`}
-          />
-          <span>of {totalPages}</span>
+          <Trans>
+            <span>Page</span>
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={jumpValue}
+              onChange={(event) => setJumpValue(event.target.value)}
+              onBlur={submitJump}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape") return;
+                setJumpValue("");
+                setJumpOpen(false);
+              }}
+              autoFocus
+              placeholder={String(page + 1)}
+              className="w-12 rounded-md border border-osu-b3/60 bg-osu-b5/70 px-1.5 py-0.5 text-center tabular-nums text-white outline-none focus:border-osu-pink/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              aria-label={jumpInputLabel}
+            />
+            <span>of {totalPages}</span>
+          </Trans>
         </form>
       ) : (
         <button
@@ -269,11 +281,17 @@ function CollectionPager({
             setJumpOpen(true);
           }}
           className="min-w-[132px] rounded-md px-2 py-0.5 text-center tabular-nums transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
-          title="Jump to a page"
+          title={t`Jump to a page`}
         >
+          {/* Both nouns spelled out per branch: the count and its noun are one
+              phrase in most languages, not a slot to drop a word into. */}
           {total === 0
-            ? `No ${noun}`
-            : `${pageStart + 1}–${pageEnd} of ${total.toLocaleString("en-US")} ${noun}`}
+            ? noun === "players"
+              ? t`No players`
+              : t`No cards`
+            : noun === "players"
+              ? t`${rangeStart}–${pageEnd} of ${totalText} players`
+              : t`${rangeStart}–${pageEnd} of ${totalText} cards`}
         </button>
       )}
       <button
@@ -281,7 +299,7 @@ function CollectionPager({
         onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
         disabled={page >= totalPages - 1}
         className={navButton}
-        aria-label="Next collection page"
+        aria-label={t`Next collection page`}
       >
         <ChevronRight className="h-4 w-4" />
       </button>
@@ -290,7 +308,7 @@ function CollectionPager({
         onClick={() => onPageChange(totalPages - 1)}
         disabled={page >= totalPages - 1}
         className={navButton}
-        aria-label="Last collection page"
+        aria-label={t`Last collection page`}
       >
         <ChevronsRight className="h-4 w-4" />
       </button>
@@ -351,6 +369,7 @@ export function CollectionPanel({
   onRecycleAll,
   onApplyMint,
 }: CollectionPanelProps) {
+  const { t, i18n } = useLingui();
   const [query, setQuery] = useState("");
   // Searching a synced collection is a server round trip per distinct query, so
   // it waits for a pause in typing instead of firing a request per keystroke.
@@ -874,19 +893,23 @@ export function CollectionPanel({
   const retiredOwned = serverPoolProgress?.retiredOwnedCount ?? 0;
   const progressPercent =
     progressPool !== null && progressPool > 0 ? Math.min(100, (progressOwned / progressPool) * 100) : null;
+  // One placeholder rather than two: the ratio is a single unit of text next
+  // to the noun, and the noun is the only part a translator moves.
+  const progressCounts = progressPool
+    ? `${progressOwned.toLocaleString("en-US")} / ${progressPool.toLocaleString("en-US")}`
+    : progressOwned.toLocaleString("en-US");
 
   return (
     <section className="mx-auto w-full max-w-[820px]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-baseline gap-2">
-            <h2 className="text-sm font-bold text-white">Collection</h2>
+            <h2 className="text-sm font-bold text-white"><Trans>Collection</Trans></h2>
             {/* translate="no": these counts rewrite as pool totals and wallet
                 pushes land; auto-translate's <font> rewrites detach the text
                 nodes React keeps updating. */}
             <span translate="no" className="text-[12px] text-osu-f1 tabular-nums">
-              {progressOwned.toLocaleString("en-US")}
-              {progressPool ? ` / ${progressPool.toLocaleString("en-US")}` : ""} players
+              <Trans>{progressCounts} players</Trans>
             </span>
           </div>
           {progressPercent !== null && collectionTotal > 0 && (
@@ -917,7 +940,9 @@ export function CollectionPanel({
                     missingOpen ? "text-white" : "text-osu-pink-light hover:text-white"
                   }`}
                 >
-                  {missingOpen ? "back to collection" : `${missingCount.toLocaleString("en-US")} missing`}
+                  {missingOpen
+                    ? t`back to collection`
+                    : t`${missingCount.toLocaleString("en-US")} missing`}
                 </button>
               )}
             </div>
@@ -936,7 +961,10 @@ export function CollectionPanel({
             >
               {wallet.shards.toLocaleString("en-US")}
             </motion.span>
-            shards
+            {/* The count keeps its own message-free span: the key on it is
+                what replays the pop, and a <Trans> around it would hand the
+                placeholder a key of its own. */}
+            <Trans>shards</Trans>
           </span>
           {recyclable > 0 && !selecting && !missingOpen && (
             <button
@@ -944,7 +972,7 @@ export function CollectionPanel({
               onClick={(event) => runRecycle(() => onRecycleAll(), event.currentTarget)}
               className="rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-2.5 py-1 text-[11px] font-semibold text-osu-pink-light transition-colors hover:border-osu-pink/50 hover:bg-osu-pink/20 hover:text-white cursor-pointer"
             >
-              Recycle duplicates +{recyclable}
+              <Trans>Recycle duplicates +{recyclable}</Trans>
             </button>
           )}
           {/* Selecting and recycling act on held cards; the missing list has
@@ -960,7 +988,7 @@ export function CollectionPanel({
               }`}
               aria-pressed={selecting}
             >
-              {selecting ? "Done" : "Select"}
+              {selecting ? t`Done` : t`Select`}
             </button>
           )}
         </div>
@@ -968,19 +996,21 @@ export function CollectionPanel({
 
       {showLoginNudge ? (
         <div className="mt-2 text-[11px] text-osu-f1">
-          Saved in this browser only.{" "}
-          <a
-            href={`/api/auth/osu?next=${encodeURIComponent("/packs")}`}
-            className="inline-flex items-center gap-1 font-semibold text-osu-pink-light hover:text-white hover:underline underline-offset-2"
-          >
-            <LogIn className="h-3 w-3" />
-            Log in with osu!
-          </a>{" "}
-          to sync your collection across devices.
+          <Trans>
+            Saved in this browser only.{" "}
+            <a
+              href={`/api/auth/osu?next=${encodeURIComponent("/packs")}`}
+              className="inline-flex items-center gap-1 font-semibold text-osu-pink-light hover:text-white hover:underline underline-offset-2"
+            >
+              <LogIn className="h-3 w-3" />
+              Log in with osu!
+            </a>{" "}
+            to sync your collection across devices.
+          </Trans>
         </div>
       ) : syncStatus !== "local" ? (
         <div className="mt-2 text-[11px] text-osu-f1">
-          {syncStatus === "synced" ? "Synced to your osu! account." : "Syncing to your osu! account..."}
+          {syncStatus === "synced" ? t`Synced to your osu! account.` : t`Syncing to your osu! account...`}
         </div>
       ) : null}
 
@@ -997,7 +1027,7 @@ export function CollectionPanel({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={missingOpen ? "find a missing player..." : "find a card..."}
+              placeholder={missingOpen ? t`find a missing player...` : t`find a card...`}
               className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4/40 py-1.5 pl-8 pr-3 text-[12px] text-white placeholder:text-osu-f1/70 outline-none transition-colors focus:border-osu-pink/40"
             />
           </div>
@@ -1008,7 +1038,9 @@ export function CollectionPanel({
               {(["all", ...ownedTiers] as Array<ManiaCardTier | "all" | null>).map((tier) => {
                 const value = tier === null ? "unrated" : tier;
                 const selected = tierFilter === value;
-                const label = tier === "all" ? "All" : tier === null ? "Unrated" : MANIA_TIER_STYLES[tier].label;
+                // Tier names themselves stay English: the same label is
+                // printed onto the card faces.
+                const label = tier === "all" ? t`All` : tier === null ? t`Unrated` : MANIA_TIER_STYLES[tier].label;
                 const count = tier === "all" ? collectionTotal : tierCounts.get(tier ?? "unrated") ?? 0;
                 const rgb = tier === "all" || tier === null ? null : tierChipRgb(tier);
                 return (
@@ -1054,10 +1086,10 @@ export function CollectionPanel({
                       ? "border-osu-pink/50 bg-osu-b4 text-white"
                       : "border-osu-b3/30 bg-osu-b4/30 text-osu-f1 hover:bg-osu-b4/70"
                   }`}
-                  title="Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back."
+                  title={t`Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back.`}
                   aria-pressed={tierFilter === "untracked"}
                 >
-                  Not tracked
+                  <Trans>Not tracked</Trans>
                   <span className="font-semibold tabular-nums opacity-65">{retiredOwned}</span>
                 </button>
               )}
@@ -1092,11 +1124,11 @@ export function CollectionPanel({
             // The list runs in pool order, so there is nothing to sort by; the
             // label says what the grid below holds instead.
             <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-              Still missing
+              <Trans>Still missing</Trans>
             </span>
           ) : (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Sort by</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Sort by</Trans></span>
               {COLLECTION_SORTS.map((option) => {
                 const isActive = sortMode === option.id;
                 return (
@@ -1105,12 +1137,12 @@ export function CollectionPanel({
                     type="button"
                     onClick={() => applySortMode(option.id)}
                     aria-pressed={isActive}
-                    title={option.hint}
+                    title={i18n._(option.hint)}
                     className={`text-[12.5px] font-semibold transition-colors cursor-pointer ${
                       isActive ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
                     }`}
                   >
-                    {option.label}
+                    {i18n._(option.label)}
                   </button>
                 );
               })}
@@ -1146,13 +1178,13 @@ export function CollectionPanel({
         <>
           {missingFailed && !activeMissingPage ? (
             <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
-              The draw pool could not be read just now. Try again in a moment.
+              <Trans>The draw pool could not be read just now. Try again in a moment.</Trans>
             </div>
           ) : activeMissingPage && activeMissingPage.total === 0 ? (
             <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
               {trimmedQuery
-                ? `No missing player matches "${activeQuery.trim()}".`
-                : "Nothing missing. Every player in the pool is in your collection."}
+                ? t`No missing player matches "${activeQuery.trim()}".`
+                : t`Nothing missing. Every player in the pool is in your collection.`}
             </div>
           ) : (
             // translate="no" like the streak board's rows: usernames and pool
@@ -1180,25 +1212,31 @@ export function CollectionPanel({
               resetScroll={false}
               className="mt-4 block text-center text-[11px] text-osu-f1 transition-colors hover:text-white"
             >
-              plus {goatMissing.toLocaleString("en-US")} GOAT card{goatMissing === 1 ? "" : "s"} still missing
+              <Plural
+                value={goatMissing}
+                one="plus # GOAT card still missing"
+                other="plus # GOAT cards still missing"
+              />
             </Link>
           )}
         </>
       ) : collectionTotal === 0 && !serverLoading && !serverPagePending ? (
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
-          No cards yet. Open a pack to start your collection.
+          <Trans>No cards yet. Open a pack to start your collection.</Trans>
         </div>
       ) : showLoadingMessage ? (
         <div className="mt-4 flex min-h-[240px] items-center justify-center gap-2 rounded-xl border border-osu-b3/40 bg-osu-b4/40 text-[12px] text-osu-f1">
           <Loader2 className="h-4 w-4 animate-spin text-osu-pink" />
-          Loading collection...
+          <Trans>Loading collection...</Trans>
         </div>
       ) : filteredTotal === 0 && !serverLoading && !serverPagePending ? (
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
           {/* Quotes the query the results actually came from, not what is in
               the box right now, so the count and the text agree while a
               debounced search is still settling. */}
-          No cards match{trimmedQuery ? ` "${activeQuery.trim()}"` : " the selected rarity"}.
+          {trimmedQuery
+            ? t`No cards match "${activeQuery.trim()}".`
+            : t`No cards match the selected rarity.`}
         </div>
       ) : (
         <div className={`mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${selecting ? "select-none" : ""}`}>
@@ -1252,7 +1290,7 @@ export function CollectionPanel({
                     }}
                     className="relative block w-full cursor-pointer"
                     aria-pressed={cardSelected}
-                    aria-label={`${cardSelected ? "Deselect" : "Select"} ${card.username}`}
+                    aria-label={cardSelected ? t`Deselect ${card.username}` : t`Select ${card.username}`}
                   >
                     <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} />
                     <span
@@ -1280,7 +1318,7 @@ export function CollectionPanel({
                     }}
                     className="block w-full transition-transform duration-150 hover:-translate-y-1 cursor-pointer"
                     style={liftedCardKey === cardKey ? { visibility: "hidden" } : undefined}
-                    aria-label={`View ${card.username}'s card`}
+                    aria-label={t`View ${card.username}'s card`}
                   >
                     <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} />
                   </button>
@@ -1290,7 +1328,10 @@ export function CollectionPanel({
                     type="button"
                     onClick={(event) => runRecycle(() => onRecycleCard(cardKey), event.currentTarget)}
                     className="mx-auto mt-1.5 flex items-center gap-1 text-[10px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
-                    title={`Recycle ${card.copies - 1} duplicate ${card.copies - 1 === 1 ? "copy" : "copies"}`}
+                    title={t`Recycle ${plural(card.copies - 1, {
+                      one: "# duplicate copy",
+                      other: "# duplicate copies",
+                    })}`}
                   >
                     <Recycle className="h-3 w-3" />
                     +{dupValue}
@@ -1309,10 +1350,10 @@ export function CollectionPanel({
                     className={`mx-auto mt-1.5 flex items-center gap-1 text-[10px] transition-colors cursor-pointer ${
                       confirming ? "font-bold text-osu-pink-light" : "text-osu-f1/70 hover:text-white"
                     }`}
-                    title="Recycle this card (removes it from your collection)"
+                    title={t`Recycle this card (removes it from your collection)`}
                   >
                     <Recycle className="h-3 w-3" />
-                    {confirming ? `sure? +${lastCopyValue}` : `+${lastCopyValue}`}
+                    {confirming ? t`sure? +${lastCopyValue}` : `+${lastCopyValue}`}
                   </button>
                 )}
               </div>
@@ -1361,7 +1402,7 @@ export function CollectionPanel({
             data-select-keep=""
           >
             <span className="text-[12px] text-osu-f1 tabular-nums">
-              <span className="font-bold text-white">{selectedCount}</span> selected
+              <Trans><span className="font-bold text-white">{selectedCount}</span> selected</Trans>
             </span>
             <button
               type="button"
@@ -1372,7 +1413,7 @@ export function CollectionPanel({
               }}
               className="text-[12px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
             >
-              select page
+              <Trans>select page</Trans>
             </button>
             {filteredTotal > pageCards.length && (
               <button
@@ -1386,7 +1427,7 @@ export function CollectionPanel({
                   selectionScope === "all" ? "font-bold text-white" : "text-osu-f1 hover:text-white"
                 }`}
               >
-                select all
+                <Trans>select all</Trans>
               </button>
             )}
             {selectedCount > 0 && (
@@ -1399,7 +1440,7 @@ export function CollectionPanel({
                 }}
                 className="text-[12px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
               >
-                clear
+                <Trans>clear</Trans>
               </button>
             )}
             <button
@@ -1431,10 +1472,13 @@ export function CollectionPanel({
             >
               <Recycle className={`h-3.5 w-3.5 ${bulkBusy ? "animate-spin" : ""}`} />
               {bulkBusy
-                ? "Recycling..."
+                ? t`Recycling...`
                 : confirmBulk
-                  ? `Sure? ${selectedCount} ${selectedCount === 1 ? "card leaves" : "cards leave"} the collection`
-                  : `Recycle +${bulkShardTotal}`}
+                  ? t`Sure? ${plural(selectedCount, {
+                      one: "# card leaves the collection",
+                      other: "# cards leave the collection",
+                    })}`
+                  : t`Recycle +${bulkShardTotal}`}
             </button>
           </div>
         </div>
@@ -1498,7 +1542,7 @@ export function CollectionPanel({
               role="menuitem"
               onClick={() => setMenu(null)}
             >
-              Open profile
+              <Trans>Open profile</Trans>
             </Link>
             <button
               type="button"
@@ -1512,7 +1556,7 @@ export function CollectionPanel({
               className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
             >
               <Check className="h-3 w-3" />
-              Select cards...
+              <Trans>Select cards...</Trans>
             </button>
             {menu.card.copies > 1 && (
               <button
@@ -1525,7 +1569,7 @@ export function CollectionPanel({
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
               >
                 <Recycle className="h-3 w-3" />
-                Recycle duplicates +{duplicateShardValue(menu.card)}
+                <Trans>Recycle duplicates +{duplicateShardValue(menu.card)}</Trans>
               </button>
             )}
             <button
@@ -1545,10 +1589,10 @@ export function CollectionPanel({
             >
               <Recycle className="h-3 w-3" />
               {menuConfirm
-                ? "Sure? The card leaves the collection"
-                : `${menu.card.copies > 1 ? "Recycle all copies" : "Recycle card"} +${
-                    wholeCardShardValue(menu.card)
-                  }`}
+                ? t`Sure? The card leaves the collection`
+                : menu.card.copies > 1
+                  ? t`Recycle all copies +${wholeCardShardValue(menu.card)}`
+                  : t`Recycle card +${wholeCardShardValue(menu.card)}`}
             </button>
           </div>
         </>

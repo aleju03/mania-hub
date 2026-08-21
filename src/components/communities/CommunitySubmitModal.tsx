@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Loader2, ShieldCheck, X } from "lucide-react";
 import {
   COMMUNITY_PITCH_MAX_LENGTH,
@@ -24,7 +24,7 @@ import { CommunityCard } from "./CommunityCard";
 // Both pickers get a filter box: one is every country, the other is most of the
 // languages people play in, and scrolling either for one entry is worse than
 // typing three letters. Shared with the edit form, so the two agree.
-import { countrySelectOptions, LANGUAGE_SELECT_OPTIONS } from "./field-options";
+import { useCountrySelectOptions, useLanguageSelectOptions } from "./field-options";
 import { AccessScopePicker } from "./AccessScopePicker";
 import { TagInput } from "./TagInput";
 
@@ -91,7 +91,8 @@ export function CommunitySubmitModal({
   onSubmitted: (community: CommunitySummary) => void;
 }) {
   const auth = useAuth();
-  const countryOptions = useMemo(() => countrySelectOptions(auth.viewer?.countryCode ?? null), [auth.viewer?.countryCode]);
+  const countryOptions = useCountrySelectOptions(auth.viewer?.countryCode ?? null);
+  const languageOptions = useLanguageSelectOptions();
   const [step, setStep] = useState<Step>(discordUsername ? "pick" : "connect");
   // null until a load has finished. The refetch guard keys on that, because
   // keying on an empty list would refetch forever for someone whose list of
@@ -620,7 +621,7 @@ export function CommunitySubmitModal({
                     </span>
                     <SelectMenu
                       value={language}
-                      options={LANGUAGE_SELECT_OPTIONS}
+                      options={languageOptions}
                       onChange={setLanguage}
                       ariaLabel="Language"
                       block

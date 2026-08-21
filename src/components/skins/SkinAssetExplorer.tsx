@@ -2,6 +2,8 @@ import JSZip from "jszip";
 import { ChevronDown, ChevronLeft, ChevronRight, FolderOpen, ImageIcon, Loader2, Music, Pause, Play, Volume2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 import {
   buildSkinAssetGroups,
   extractSkinIniStageReferences,
@@ -22,16 +24,16 @@ type ExplorerState =
   | { phase: "error" }
   | { phase: "ready"; zip: JSZip; groups: SkinAssetGroup[]; stageRefs: SkinIniStageReference[] };
 
-const GROUP_HINTS: Record<string, string> = {
-  notes: "mania-note art not tied to a keymode block",
-  keys: "receptor art",
-  stage: "mania-stage left / right / bottom / hint pieces",
-  judgements: "hit result art",
-  gameplay: "pause overlay, fail and section screens, countdown",
-  hud: "score, combo and ranking fonts, health bar",
-  lighting: "hit and hold lighting",
-  other: "everything else the archive ships",
-  sounds: "hitsounds and interface samples",
+const GROUP_HINTS: Record<string, ReturnType<typeof msg>> = {
+  notes: msg`mania-note art not tied to a keymode block`,
+  keys: msg`receptor art`,
+  stage: msg`mania-stage left / right / bottom / hint pieces`,
+  judgements: msg`hit result art`,
+  gameplay: msg`pause overlay, fail and section screens, countdown`,
+  hud: msg`score, combo and ranking fonts, health bar`,
+  lighting: msg`hit and hold lighting`,
+  other: msg`everything else the archive ships`,
+  sounds: msg`hitsounds and interface samples`,
 };
 
 export function SkinAssetExplorer({ skin }: { skin: SkinSummary }) {
@@ -146,25 +148,25 @@ export function SkinAssetExplorer({ skin }: { skin: SkinSummary }) {
             : <FolderOpen className="h-4 w-4" aria-hidden="true" />}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-bold leading-tight text-white">Inside the .osk</span>
+          <span className="block text-[13px] font-bold leading-tight text-white"><Trans>Inside the .osk</Trans></span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11.5px] text-osu-f1">
             {state.phase === "error" ? (
-              <span className="font-semibold text-osu-red-light">The archive could not be read. Tap to try again.</span>
+              <span className="font-semibold text-osu-red-light"><Trans>The archive could not be read. Tap to try again.</Trans></span>
             ) : loading ? (
-              <span>Reading the archive...</span>
+              <span><Trans>Reading the archive...</Trans></span>
             ) : counts ? (
               <>
                 <span className="flex items-center gap-1">
                   <ImageIcon className="h-3 w-3" aria-hidden="true" />
-                  <span className="tabular-nums">{counts.images}</span> images
+                  <Trans><span className="tabular-nums">{counts.images}</span> images</Trans>
                 </span>
                 <span className="flex items-center gap-1">
                   <Music className="h-3 w-3" aria-hidden="true" />
-                  <span className="tabular-nums">{counts.sounds}</span> sounds
+                  <Trans><span className="tabular-nums">{counts.sounds}</span> sounds</Trans>
                 </span>
               </>
             ) : (
-              <span>Browse every image and sound this skin ships, without downloading it.</span>
+              <span><Trans>Browse every image and sound this skin ships, without downloading it.</Trans></span>
             )}
           </span>
         </span>
@@ -179,7 +181,7 @@ export function SkinAssetExplorer({ skin }: { skin: SkinSummary }) {
       {ready && open && (
         <div className="border-t border-osu-b3/25 px-4 pb-3">
           {state.groups.length === 0 ? (
-            <p className="py-3 text-[12px] text-osu-f1">No images or sounds were found in the archive.</p>
+            <p className="py-3 text-[12px] text-osu-f1"><Trans>No images or sounds were found in the archive.</Trans></p>
           ) : (
             state.groups.map((group) => (
               <AssetGroupSection
@@ -205,6 +207,7 @@ function AssetGroupSection({
   stageRefs: SkinIniStageReference[];
   resolve: (path: string) => Promise<string | null>;
 }) {
+  const { i18n } = useLingui();
   const [open, setOpen] = useState(false);
   const hint = GROUP_HINTS[group.key];
 
@@ -219,13 +222,13 @@ function AssetGroupSection({
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform ${open ? "" : "-rotate-90"}`} aria-hidden="true" />
         <span className="text-[13px] font-bold text-white">{group.title}</span>
         <span className="text-[12px] tabular-nums text-osu-f1">{group.entries.length}</span>
-        {hint && <span className="ml-auto hidden text-[11px] text-osu-f1/70 sm:block">{hint}</span>}
+        {hint && <span className="ml-auto hidden text-[11px] text-osu-f1/70 sm:block">{i18n._(hint)}</span>}
       </button>
       {open && (
         <div className="pb-3">
           {stageRefs.length > 0 && (
             <p className="mb-2 text-[11.5px] text-osu-f1">
-              skin.ini references:{" "}
+              <Trans>skin.ini references:</Trans>{" "}
               {stageRefs.map((ref, index) => (
                 <span key={`${ref.property}-${index}`}>
                   {index > 0 && ", "}
@@ -298,6 +301,12 @@ const SURFACE_STYLES: Record<ViewerSurface, React.CSSProperties> = {
   light: { backgroundColor: "#e9e6ee" },
 };
 
+const SURFACE_LABELS: Record<ViewerSurface, ReturnType<typeof msg>> = {
+  checker: msg`checker`,
+  dark: msg`dark`,
+  light: msg`light`,
+};
+
 const FRAME_INTERVAL_MS = 90;
 
 // Full-size look at one asset, with its frames if it animates. Rendered in a
@@ -316,6 +325,7 @@ function SkinAssetViewer({
   resolve: (path: string) => Promise<string | null>;
 }) {
   const entry = entries[index];
+  const { t, i18n } = useLingui();
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
@@ -376,7 +386,7 @@ function SkinAssetViewer({
 
   if (typeof document === "undefined") return null;
 
-  const caption = entry.frameCount > 1 ? `${entry.name} · ${entry.frameCount} frames` : entry.name;
+  const caption = entry.frameCount > 1 ? t`${entry.name} · ${entry.frameCount} frames` : entry.name;
 
   return createPortal(
     <div
@@ -384,7 +394,7 @@ function SkinAssetViewer({
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label={`${entry.name} preview`}
+      aria-label={t`${entry.name} preview`}
     >
       <div
         className="flex max-h-full w-full max-w-[720px] flex-col overflow-hidden rounded-xl border border-osu-b3/40 bg-osu-b3"
@@ -398,7 +408,7 @@ function SkinAssetViewer({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t`Close`}
             className="ml-auto shrink-0 rounded p-1 text-osu-f1 transition-colors cursor-pointer hover:text-white"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -419,7 +429,7 @@ function SkinAssetViewer({
               style={actualSize && natural ? { width: natural.width, height: natural.height } : undefined}
             />
           ) : (
-            <span className="text-[12px] text-osu-f1">{failed ? "This file could not be decoded." : "Loading..."}</span>
+            <span className="text-[12px] text-osu-f1">{failed ? <Trans>This file could not be decoded.</Trans> : <Trans>Loading...</Trans>}</span>
           )}
           {entries.length > 1 && (
             <>
@@ -437,7 +447,7 @@ function SkinAssetViewer({
               className="flex shrink-0 items-center gap-1 rounded border border-osu-b3/60 px-1.5 py-0.5 text-[10.5px] font-bold text-osu-l2 transition-colors cursor-pointer hover:text-white"
             >
               {playing ? <Pause size={10} aria-hidden="true" /> : <Play size={10} aria-hidden="true" />}
-              {playing ? "pause" : "play"}
+              {playing ? <Trans>pause</Trans> : <Trans>play</Trans>}
             </button>
             {framePaths.map((framePath, frameIndex) => (
               <button
@@ -467,7 +477,7 @@ function SkinAssetViewer({
           {entries.length > 1 && (
             <>
               <span aria-hidden="true">·</span>
-              <span className="tabular-nums">{index + 1} of {entries.length}</span>
+              <span className="tabular-nums"><Trans>{index + 1} of {entries.length}</Trans></span>
             </>
           )}
           <div className="ml-auto flex items-center gap-1.5">
@@ -475,7 +485,7 @@ function SkinAssetViewer({
               type="button"
               onClick={() => setActualSize((previous) => !previous)}
               aria-pressed={actualSize}
-              title={actualSize ? "Scale the image to fit" : "Show the image at its real pixel size"}
+              title={actualSize ? t`Scale the image to fit` : t`Show the image at its real pixel size`}
               className={`rounded border px-1.5 py-0.5 text-[10.5px] font-bold transition-colors cursor-pointer ${
                 actualSize ? "border-osu-pink text-white" : "border-osu-b3/60 text-osu-l2 hover:text-white"
               }`}
@@ -483,20 +493,23 @@ function SkinAssetViewer({
               1:1
             </button>
             <div className="flex overflow-hidden rounded border border-osu-b3/60">
-              {(["checker", "dark", "light"] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setSurface(option)}
-                  aria-pressed={surface === option}
-                  title={`View on a ${option} background`}
-                  className={`px-1.5 py-0.5 text-[10.5px] font-bold transition-colors cursor-pointer ${
-                    surface === option ? "bg-osu-pink text-white" : "text-osu-l2 hover:text-white"
-                  }`}
-                >
-                  {option}
-                </button>
-              ))}
+              {(["checker", "dark", "light"] as const).map((option) => {
+                const label = i18n._(SURFACE_LABELS[option]);
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setSurface(option)}
+                    aria-pressed={surface === option}
+                    title={t`View on a ${label} background`}
+                    className={`px-1.5 py-0.5 text-[10.5px] font-bold transition-colors cursor-pointer ${
+                      surface === option ? "bg-osu-pink text-white" : "text-osu-l2 hover:text-white"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -507,13 +520,14 @@ function SkinAssetViewer({
 }
 
 function ViewerArrow({ side, disabled, onClick }: { side: "left" | "right"; disabled: boolean; onClick: () => void }) {
+  const { t } = useLingui();
   const Icon = side === "left" ? ChevronLeft : ChevronRight;
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={side === "left" ? "Previous asset" : "Next asset"}
+      aria-label={side === "left" ? t`Previous asset` : t`Next asset`}
       className={`absolute top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-1.5 text-white/90 transition-opacity cursor-pointer hover:bg-black/75 disabled:cursor-default disabled:opacity-0 ${
         side === "left" ? "left-2" : "right-2"
       }`}
@@ -553,6 +567,7 @@ export function SkinAssetTile({
   resolve: (path: string) => Promise<string | null>;
   onOpen?: () => void;
 }) {
+  const { t } = useLingui();
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const isSound = entry.kind === "sound";
@@ -589,7 +604,7 @@ export function SkinAssetTile({
       <button
         type="button"
         onClick={() => void play()}
-        title={`${caption} - click to play`}
+        title={t`${caption} - click to play`}
         className="flex items-center gap-1.5 rounded-md border border-osu-b3/40 bg-osu-b5 px-2.5 py-1.5 text-[11.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white"
       >
         <Volume2 className="h-3.5 w-3.5 text-osu-f1" aria-hidden="true" />
@@ -598,8 +613,11 @@ export function SkinAssetTile({
     );
   }
 
+  const frameNote = entry.frameCount > 1 ? t`${entry.frameCount} frames` : "";
+  const openNote = onOpen ? t`click to view` : "";
+
   return (
-    <figure className="w-[96px]" title={`${caption}${entry.frameCount > 1 ? ` - ${entry.frameCount} frames` : ""}${onOpen ? " - click to view" : ""}`}>
+    <figure className="w-[96px]" title={[caption, frameNote, openNote].filter(Boolean).join(" - ")}>
       <div
         // A plain div when nothing can open it, so the skin page keeps working
         // if a caller has no viewer to hand.
@@ -616,7 +634,7 @@ export function SkinAssetTile({
         {url ? (
           <img src={url} alt={entry.name} loading="lazy" className="max-h-full max-w-full object-contain" />
         ) : (
-          <span className="text-[10px] text-osu-f1/50">{failed ? "unreadable" : "..."}</span>
+          <span className="text-[10px] text-osu-f1/50">{failed ? <Trans>unreadable</Trans> : "..."}</span>
         )}
         {entry.frameCount > 1 && (
           <span className="absolute bottom-0.5 right-0.5 rounded bg-osu-b5/90 px-1 text-[9.5px] font-bold tabular-nums text-osu-l2">

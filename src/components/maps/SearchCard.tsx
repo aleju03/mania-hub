@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { Plural, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 import type { LiveMapSearchEntry } from "../../lib/live-backend";
 import { oszDownloadUrl } from "../../lib/beatmap-mirrors";
 import { formatDuration, formatNumber } from "../../lib/format";
@@ -33,6 +36,31 @@ export const PATTERN_LABEL: Record<string, string> = {
   lntech: "LN Tech",
 };
 
+// Same table as PATTERN_LABEL, in descriptor form: `PATTERN_LABEL` stays the
+// English one for membership checks and non-React callers, `PATTERN_LABEL_MSG`
+// is what the DOM renders through an i18n instance.
+export const PATTERN_LABEL_MSG: Record<string, MessageDescriptor> = {
+  jack: msg`Jack`,
+  stream: msg`Stream`,
+  jumpstream: msg`Jumpstream`,
+  handstream: msg`Handstream`,
+  stamina: msg`Stamina`,
+  chordjack: msg`Chordjack`,
+  tech: msg`Tech`,
+  ln: msg`LN`,
+  speedjack: msg`Speedjack`,
+  handjack: msg`Handjack`,
+  dumpstream: msg`Dumpstream`,
+  quadstream: msg`Quadstream`,
+  chordstream: msg`Chordstream`,
+  delay: msg`Delay`,
+  bracket: msg`Bracket`,
+  lngeneral: msg`LN General`,
+  lnrelease: msg`LN Release`,
+  lninverse: msg`LN Inverse`,
+  lntech: msg`LN Tech`,
+};
+
 export const PATTERN_COLOR: Record<string, string> = {
   jack: "#ec6a9c",
   stream: "#5ab2f2",
@@ -58,6 +86,19 @@ export const PATTERN_COLOR: Record<string, string> = {
 
 export function patternLabel(pattern: string): string {
   return PATTERN_LABEL[pattern] ?? pattern;
+}
+
+// Localized pattern label for DOM consumers. Unknown ids (an older payload, a
+// shared URL) fall through to the raw id, exactly like patternLabel().
+export function usePatternLabel(): (pattern: string) => string {
+  const { i18n } = useLingui();
+  return useCallback(
+    (pattern: string) => {
+      const descriptor = PATTERN_LABEL_MSG[pattern];
+      return descriptor ? i18n._(descriptor) : pattern;
+    },
+    [i18n],
+  );
 }
 
 // The star spectrum and its badge moved to ui/StarRating so score panels can
@@ -106,13 +147,13 @@ export function osuDirectUrl(beatmapsetId: number): string {
 // 302s to a healthy one; the archive bytes still flow mirror-to-browser.
 export { oszDownloadUrl } from "../../lib/beatmap-mirrors";
 
-function statusPill(status: string): { label: string; className: string } | null {
+function statusPill(status: string): { label: MessageDescriptor; className: string } | null {
   const s = status.toLowerCase();
-  if (s === "ranked" || s === "approved") return { label: "ranked", className: "bg-[#6cf27f] text-black" };
-  if (s === "loved") return { label: "loved", className: "bg-[#f26fa6] text-black" };
-  if (s === "qualified") return { label: "qualified", className: "bg-[#66ccff] text-black" };
-  if (s === "graveyard") return { label: "graveyard", className: "bg-[#4a4a52] text-white" };
-  if (s === "pending" || s === "wip") return { label: "pending", className: "bg-[#f2b56c] text-black" };
+  if (s === "ranked" || s === "approved") return { label: msg`ranked`, className: "bg-[#6cf27f] text-black" };
+  if (s === "loved") return { label: msg`loved`, className: "bg-[#f26fa6] text-black" };
+  if (s === "qualified") return { label: msg`qualified`, className: "bg-[#66ccff] text-black" };
+  if (s === "graveyard") return { label: msg`graveyard`, className: "bg-[#4a4a52] text-white" };
+  if (s === "pending" || s === "wip") return { label: msg`pending`, className: "bg-[#f2b56c] text-black" };
   return null;
 }
 
@@ -158,9 +199,10 @@ export function subPatternTags(diffs: LiveMapSearchEntry[], familyTags: string[]
 // read as attributes of the chart, distinct from the filled family chips that
 // state its identity. py compensates for the border to match chip heights.
 export function SubPatternChip({ pattern }: { pattern: string }) {
+  const label = usePatternLabel();
   return (
     <span className="px-2 py-[3px] rounded border border-osu-b3/60 text-osu-f1 text-[10px] leading-none">
-      {patternLabel(pattern)}
+      {label(pattern)}
     </span>
   );
 }
@@ -182,6 +224,8 @@ export function SearchCard({
   onOpen?: (entry: LiveMapSearchEntry) => void;
   preview?: MapPreviewAudio;
 }) {
+  const { t, i18n } = useLingui();
+  const patternName = usePatternLabel();
   const pill = statusPill(entry.status);
   const [coverFailed, setCoverFailed] = useState(false);
   const diffs = entryDiffs(entry);
@@ -200,12 +244,13 @@ export function SearchCard({
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(entry); } } : undefined}
-      title={clickable ? "View details" : undefined}
+      title={clickable ? t`View details` : undefined}
     >
       <div className="relative h-[100px] rounded-t-xl overflow-hidden">
         <div className="absolute inset-0 bg-osu-b3/40" />
         {coverFailed && (
           <div className="absolute inset-0 flex items-center justify-center">
+            {/* Stays English: the osu! "no bg" placeholder joke, in a font with no CJK glyphs. */}
             <span
               className="text-[13px] text-osu-f1/45"
               style={{ fontFamily: '"Comic Sans MS", "Comic Neue", ui-rounded, cursive', fontStyle: "italic" }}
@@ -234,7 +279,7 @@ export function SearchCard({
         />
         {pill && (
           <span className={`absolute bottom-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase leading-none ${pill.className}`}>
-            {pill.label}
+            {i18n._(pill.label)}
           </span>
         )}
         <div className="absolute bottom-0 left-0 right-0 px-3 pb-2 pr-20">
@@ -257,7 +302,9 @@ export function SearchCard({
                   />
                 ))}
               </span>
-              <span className="truncate text-[11px] text-osu-l2">{diffs.length} diffs</span>
+              <span className="truncate text-[11px] text-osu-l2">
+                <Plural value={diffs.length} one="# diff" other="# diffs" />
+              </span>
             </span>
           ) : (
             <span className="text-[11px] text-osu-l2 truncate flex-1">[{entry.version}]</span>
@@ -275,7 +322,7 @@ export function SearchCard({
                   : "px-2 py-1 rounded bg-osu-b3/50 text-osu-f1 text-[10px] leading-none"
               }
             >
-              {patternLabel(pattern)}
+              {patternName(pattern)}
             </span>
           ))}
           {subTags.map((pattern) => (
@@ -284,9 +331,9 @@ export function SearchCard({
           {vibro && (
             <span
               className="px-2 py-1 rounded bg-[#ffb02e]/15 text-[#ffcf70] text-[10px] font-semibold leading-none"
-              title="Vibro chart: difficulty estimates are unreliable"
+              title={t`Vibro chart: difficulty estimates are unreliable`}
             >
-              Vibro
+              {t`Vibro`}
             </span>
           )}
         </div>
@@ -294,8 +341,13 @@ export function SearchCard({
         <div className="flex items-center justify-between gap-2 mt-auto pt-1">
           <span className="flex min-w-0 items-center gap-1.5">
             {preview && <MapPreviewButton beatmapsetId={entry.beatmapsetId} preview={preview} />}
-            <span className="text-[10px] text-osu-f1 truncate" title={`${entry.creator ? `mapped by ${entry.creator} · ` : ""}${formatNumber(entry.playCount)} plays`}>
-              {formatNumber(entry.playCount)} plays
+            <span
+              className="text-[10px] text-osu-f1 truncate"
+              title={entry.creator
+                ? t`mapped by ${entry.creator} · ${formatNumber(entry.playCount)} plays`
+                : t`${formatNumber(entry.playCount)} plays`}
+            >
+              {t`${formatNumber(entry.playCount)} plays`}
             </span>
           </span>
           <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -303,7 +355,7 @@ export function SearchCard({
               href={osuDirectUrl(entry.beatmapsetId)}
               onClick={(e) => e.stopPropagation()}
               className="hidden items-center gap-1 px-2 py-1 rounded bg-osu-b3/50 text-osu-l2 text-[10px] hover:bg-osu-b3 transition-colors sm:inline-flex"
-              title="Open in osu! client"
+              title={t`Open in osu! client`}
             >
               <OsuLogo className="h-3 w-3" />
               osu!
@@ -312,7 +364,7 @@ export function SearchCard({
               href={oszDownloadUrl(entry.beatmapsetId)}
               onClick={(e) => e.stopPropagation()}
               className="inline-flex items-center gap-1 px-2 py-1 rounded bg-osu-pink/20 text-osu-pink-light text-[10px] font-semibold hover:bg-osu-pink/30 transition-colors"
-              title="Download .osz"
+              title={t`Download .osz`}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
                 <path d="M12 3v10" />

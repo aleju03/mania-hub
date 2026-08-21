@@ -1,3 +1,5 @@
+import type { MessageDescriptor } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import {
   fetchLiveGlobalRankings,
   fetchLivePackCardSnapshotDirect,
@@ -207,6 +209,28 @@ export const PACK_TYPES: PackTypeDef[] = [
 export function packTypeById(id: PackTypeId): PackTypeDef {
   return PACK_TYPES.find((type) => type.id === id) ?? PACK_TYPES[0];
 }
+
+/* Translatable shelf copy per pack type, resolved at render with i18n._.
+   The `name`/`blurb` fields on PACK_TYPES stay English on purpose: the canvas
+   foil art (packArt.ts) prints `name` straight onto the pack texture, and
+   rendered artifacts keep the one English form. */
+export const PACK_TYPE_NAME_LABELS: Record<PackTypeId, MessageDescriptor> = {
+  standard: msg`Standard`,
+  wild: msg`Wild`,
+  "4k": msg`4K`,
+  "7k": msg`7K`,
+  elite: msg`Elite`,
+  legend: msg`Legend`,
+};
+
+export const PACK_TYPE_BLURB_LABELS: Record<PackTypeId, MessageDescriptor> = {
+  standard: msg`Every tracked player, same odds`,
+  wild: msg`Whole pool, new cards first`,
+  "4k": msg`Main 4K players only`,
+  "7k": msg`Main 7K players only`,
+  elite: msg`Top 10%, new cards first`,
+  legend: msg`Top 2%, new cards first`,
+};
 
 // Tiny pools widen a sliced draw to a sane floor instead of repeating the
 // same handful of players every pack.

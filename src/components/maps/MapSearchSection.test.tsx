@@ -4,9 +4,11 @@
 // sort the first fetch must wait for the post-hydration restore instead of
 // firing with the SSR default and being superseded (the local-ui mirror used
 // to adopt the restored prop one commit after the fetch effect saw it).
-import { StrictMode } from "react";
+import { StrictMode, type ReactNode } from "react";
 import { act, fireEvent, render, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../lib/i18n";
 import { MapSearchSection, type MapSearchUiState } from "./MapSearchSection";
 import { fetchLiveMapSearch } from "../../lib/live-backend";
 import { writeSearchSortPreference } from "./searchSortPreference";
@@ -49,9 +51,15 @@ const DEFAULT_STATE: MapSearchUiState = {
   page: 0,
 };
 
+// The section uses <Trans>/useLingui, which need a provider; en resolves to the
+// source strings this file asserts on.
+function withI18n(node: ReactNode) {
+  return <I18nProvider i18n={getI18n("en")}>{node}</I18nProvider>;
+}
+
 function renderSection(state: MapSearchUiState) {
   return render(
-    <MapSearchSection state={state} onChange={() => {}} liveBackendEnabled={true} />,
+    withI18n(<MapSearchSection state={state} onChange={() => {}} liveBackendEnabled={true} />),
   );
 }
 
@@ -74,11 +82,13 @@ describe("MapSearchSection cold-load fetch", () => {
 
     // The parent's post-hydration restore lands as a new state prop.
     rerender(
-      <MapSearchSection
-        state={{ ...DEFAULT_STATE, sort: "stars", dir: "asc" }}
-        onChange={() => {}}
-        liveBackendEnabled={true}
-      />,
+      withI18n(
+        <MapSearchSection
+          state={{ ...DEFAULT_STATE, sort: "stars", dir: "asc" }}
+          onChange={() => {}}
+          liveBackendEnabled={true}
+        />,
+      ),
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toMatchObject({ sort: "stars", dir: "asc" });
@@ -97,18 +107,22 @@ describe("MapSearchSection cold-load fetch", () => {
     writeSearchSortPreference({ sort: "stars", dir: "asc" });
     const { rerender } = render(
       <StrictMode>
-        <MapSearchSection state={DEFAULT_STATE} onChange={() => {}} liveBackendEnabled={true} />
+        {withI18n(
+          <MapSearchSection state={DEFAULT_STATE} onChange={() => {}} liveBackendEnabled={true} />,
+        )}
       </StrictMode>,
     );
     expect(fetchMock).not.toHaveBeenCalled();
 
     rerender(
       <StrictMode>
-        <MapSearchSection
-          state={{ ...DEFAULT_STATE, sort: "stars", dir: "asc" }}
-          onChange={() => {}}
-          liveBackendEnabled={true}
-        />
+        {withI18n(
+          <MapSearchSection
+            state={{ ...DEFAULT_STATE, sort: "stars", dir: "asc" }}
+            onChange={() => {}}
+            liveBackendEnabled={true}
+          />,
+        )}
       </StrictMode>,
     );
     // StrictMode double-mounts effects, so the call count can exceed one; the
@@ -153,7 +167,7 @@ describe("MapSearchSection cold-load fetch", () => {
   it("right-clicking a neutral pattern excludes it", () => {
     const onChange = vi.fn();
     const view = render(
-      <MapSearchSection state={DEFAULT_STATE} onChange={onChange} liveBackendEnabled={true} />,
+      withI18n(<MapSearchSection state={DEFAULT_STATE} onChange={onChange} liveBackendEnabled={true} />),
     );
 
     fireEvent.contextMenu(within(view.container).getByRole("button", { name: "Jack" }));
@@ -165,7 +179,7 @@ describe("MapSearchSection cold-load fetch", () => {
   it("right-clicking neutral key and status chips excludes them", () => {
     const onChange = vi.fn();
     const view = render(
-      <MapSearchSection state={DEFAULT_STATE} onChange={onChange} liveBackendEnabled={true} />,
+      withI18n(<MapSearchSection state={DEFAULT_STATE} onChange={onChange} liveBackendEnabled={true} />),
     );
     const page = within(view.container);
 

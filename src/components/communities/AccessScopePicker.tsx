@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, ChevronDown, Globe, Lock, Search } from "lucide-react";
-import {
-  COMMUNITY_MAX_ACCESS_SCOPES,
-  describeAccessScopes,
-} from "../../lib/communities-shared";
-import { COUNTRY_OPTIONS } from "../../lib/country";
+import { COMMUNITY_MAX_ACCESS_SCOPES } from "../../lib/communities-shared";
+import { COUNTRY_OPTIONS, displayCountryName } from "../../lib/country";
+import { useLocale } from "../../lib/locale-context";
 import { CONTINENT_OPTIONS, REGION_OPTIONS } from "../../lib/regions";
 import { CountryFlag } from "../ui/CountryFlag";
 import { RegionIcon } from "../ui/RegionIcon";
@@ -32,19 +31,56 @@ interface ScopeEntry {
   code: string;
   label: string;
   leading: ReactNode;
+  // What the filter box matches on: the name as drawn plus the English one, so
+  // someone typing "France" still finds it on a page drawn in another language.
+  search: string;
 }
 
-const REGION_ENTRIES: ScopeEntry[] = [...CONTINENT_OPTIONS, ...REGION_OPTIONS].map((region) => ({
+interface ScopeRow {
+  code: string;
+  name: string;
+  leading: ReactNode;
+}
+
+const REGION_ROWS: ScopeRow[] = [...CONTINENT_OPTIONS, ...REGION_OPTIONS].map((region) => ({
   code: region.code,
-  label: region.name,
+  name: region.name,
   leading: <RegionIcon code={region.code} className="h-3.5 w-4 text-osu-f1" />,
 }));
 
-const COUNTRY_ENTRIES: ScopeEntry[] = COUNTRY_OPTIONS.map((country) => ({
+const COUNTRY_ROWS: ScopeRow[] = COUNTRY_OPTIONS.map((country) => ({
   code: country.code,
-  label: country.name,
+  name: country.name,
   leading: <CountryFlag code={country.code} size="sm" decorative />,
 }));
+
+/**
+ * What the locked card says instead of Join, in the reader's language. The
+ * English source of this lives in describeAccessScopes (communities-shared),
+ * which the moderator queue still reads; keep the two saying the same thing.
+ *
+ * Two names fit on a pill; past that it counts, because "France, Belgium,
+ * Switzerland and 4 more" is not a label.
+ */
+export function useAccessScopeSummary() {
+  const { t } = useLingui();
+  const locale = useLocale();
+  return useMemo(
+    () => (scopes: string[] | undefined) => {
+      if (!scopes || scopes.length === 0) return null;
+      const [first, second] = scopes;
+      const firstName = displayCountryName(first, locale);
+      if (scopes.length === 1) return t`${firstName} only`;
+      if (scopes.length === 2) {
+        const secondName = displayCountryName(second, locale);
+        return t`${firstName} and ${secondName}`;
+      }
+      const others = scopes.length - 1;
+      return t`${firstName} and ${others} more`;
+    },
+    [t, locale],
+  );
+}
 
 // Roughly what the popover stands to be, for deciding whether it opens downward
 // or up. Same trick as SelectMenu, which had the same problem in this modal.
@@ -59,6 +95,9 @@ export function AccessScopePicker({
   hidden: boolean;
   onChange: (next: { scopes: string[]; hidden: boolean }) => void;
 }) {
+  const { t } = useLingui();
+  const locale = useLocale();
+  const summarize = useAccessScopeSummary();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [dropUp, setDropUp] = useState(false);
@@ -88,10 +127,15 @@ export function AccessScopePicker({
 
   const search = query.trim().toLowerCase();
   const [regions, countries] = useMemo(() => {
+    const build = (rows: ScopeRow[]): ScopeEntry[] =>
+      rows.map((row) => {
+        const label = displayCountryName(row.code, locale);
+        return { code: row.code, label, leading: row.leading, search: `${label} ${row.name}`.toLowerCase() };
+      });
     const match = (entry: ScopeEntry) =>
-      search === "" || entry.label.toLowerCase().includes(search) || entry.code.toLowerCase().includes(search);
-    return [REGION_ENTRIES.filter(match), COUNTRY_ENTRIES.filter(match)];
-  }, [search]);
+      search === "" || entry.search.includes(search) || entry.code.toLowerCase().includes(search);
+    return [build(REGION_ROWS).filter(match), build(COUNTRY_ROWS).filter(match)];
+  }, [search, locale]);
 
   const toggle = (code: string) => {
     const next = scopes.includes(code) ? scopes.filter((scope) => scope !== code) : [...scopes, code];
@@ -101,7 +145,7 @@ export function AccessScopePicker({
     onChange({ scopes: next, hidden: next.length === 0 ? false : hidden });
   };
 
-  const summary = describeAccessScopes(scopes) ?? "Everyone";
+  const summary = summarize(scopes) ?? t`Everyone`;
 
   return (
     <div className="relative" ref={ref}>
@@ -113,7 +157,7 @@ export function AccessScopePicker({
           setOpen((value) => !value);
           setQuery("");
         }}
-        aria-label="Who can join"
+        aria-label={t`Who can join`}
         className="flex w-full items-center justify-between gap-2 rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[12.5px] text-osu-l1 transition-colors cursor-pointer hover:border-osu-b3/60"
       >
         <span className="flex min-w-0 items-center gap-2 truncate">
@@ -124,7 +168,11 @@ export function AccessScopePicker({
           )}
           <span className="truncate">
             {summary}
-            {restricted && hidden && <span className="text-osu-f1">, hidden from everyone else</span>}
+            {restricted && hidden && (
+              <span className="text-osu-f1">
+                <Trans>, hidden from everyone else</Trans>
+              </span>
+            )}
           </span>
         </span>
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform ${open ? "rotate-180" : ""}`} />
@@ -142,8 +190,8 @@ export function AccessScopePicker({
               type="text"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Europe, Central America, France"
-              aria-label="Search places"
+              placeholder={t`Europe, Central America, France`}
+              aria-label={t`Search places`}
               autoFocus
               className="min-w-0 flex-1 bg-transparent text-[12.5px] text-white outline-none placeholder:text-osu-f1/60"
             />
@@ -154,16 +202,18 @@ export function AccessScopePicker({
                 a second control beside the field. */}
             {search === "" && (
               <Row
-                label="Everyone"
+                label={t`Everyone`}
                 leading={<Globe className="h-3.5 w-3.5 text-osu-f1" aria-hidden="true" />}
                 picked={!restricted}
                 onClick={() => onChange({ scopes: [], hidden: false })}
               />
             )}
-            <ScopeGroup title="Regions" entries={regions} scopes={scopes} full={full} onToggle={toggle} />
-            <ScopeGroup title="Countries" entries={countries} scopes={scopes} full={full} onToggle={toggle} />
+            <ScopeGroup title={t`Regions`} entries={regions} scopes={scopes} full={full} onToggle={toggle} />
+            <ScopeGroup title={t`Countries`} entries={countries} scopes={scopes} full={full} onToggle={toggle} />
             {regions.length === 0 && countries.length === 0 && (
-              <p className="px-3 py-4 text-center text-[11.5px] text-osu-f1">Nothing by that name.</p>
+              <p className="px-3 py-4 text-center text-[11.5px] text-osu-f1">
+                <Trans>Nothing by that name.</Trans>
+              </p>
             )}
           </div>
 
@@ -176,13 +226,16 @@ export function AccessScopePicker({
                   onChange={(event) => onChange({ scopes, hidden: event.target.checked })}
                   className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-osu-pink"
                 />
-                Hide it from everyone else, instead of showing it with no way in
+                <Trans>Hide it from everyone else, instead of showing it with no way in</Trans>
               </label>
             )}
             {/* The one thing worth saying that the controls do not: this says
                 who a server is for, it does not hold a door shut. */}
             <p className={`text-[11px] leading-relaxed text-osu-f1/70 ${restricted ? "mt-1.5" : ""}`}>
-              Goes by the country on someone's osu! account, and anyone already in can still share the invite.
+              <Trans>
+                Goes by the country on someone's osu! account, and anyone already in can still share the
+                invite.
+              </Trans>
             </p>
           </div>
         </div>

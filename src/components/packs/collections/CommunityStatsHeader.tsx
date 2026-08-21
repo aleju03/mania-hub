@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { formatNumber } from "#/lib/format";
 import type { LivePackCommunityTotals } from "#/lib/live-backend";
@@ -70,6 +71,7 @@ export function CommunityStatsSkeleton() {
 }
 
 export function CommunityStatsHeader({ totals }: { totals: LivePackCommunityTotals }) {
+  const { t } = useLingui();
   const tiers = TIER_ORDER.map((tier) => ({ tier, copies: totals.tierCopies[tier] ?? 0 })).filter(
     (entry) => entry.copies > 0,
   );
@@ -79,23 +81,23 @@ export function CommunityStatsHeader({ totals }: { totals: LivePackCommunityTota
     <div className="space-y-10">
       <Section>
         <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
-          <Stat label="packs opened" value={totals.packsOpened} />
+          <Stat label={t`packs opened`} value={totals.packsOpened} />
           {/* Every copy anyone holds, duplicates counted. Not "minted": that is
               collectible-trade jargon for making a copy, which reads here as a
               mapper's name and tells nobody what the number is. */}
-          <Stat label="cards collected" value={totals.cardsMinted} />
-          <Stat label="collectors" value={totals.collectors} />
+          <Stat label={t`cards collected`} value={totals.cardsMinted} />
+          <Stat label={t`collectors`} value={totals.collectors} />
           <Stat
-            label="players carded"
+            label={t`players carded`}
             value={totals.playersCarded}
-            hint={totals.poolTotal > 0 ? `of ${formatNumber(totals.poolTotal)} pullable` : undefined}
+            hint={totals.poolTotal > 0 ? t`of ${formatNumber(totals.poolTotal)} pullable` : undefined}
           />
         </div>
       </Section>
 
       {tiers.length > 0 && (
         <Section>
-          <SectionHeading>copies in circulation</SectionHeading>
+          <SectionHeading><Trans>copies in circulation</Trans></SectionHeading>
           <div className="mt-2.5 flex flex-wrap items-baseline gap-x-5 gap-y-2">
             {tiers.map(({ tier, copies }) => (
               <div key={tier} className="flex items-baseline gap-1.5">
@@ -109,7 +111,7 @@ export function CommunityStatsHeader({ totals }: { totals: LivePackCommunityTota
             ))}
             {unrated > 0 && (
               <div className="flex items-baseline gap-1.5">
-                <span className="text-[11px] font-semibold text-osu-f1">Unrated</span>
+                <span className="text-[11px] font-semibold text-osu-f1"><Trans>Unrated</Trans></span>
                 <span translate="no" className="text-[15px] font-bold text-white tabular-nums">
                   {formatNumber(unrated)}
                 </span>
@@ -117,14 +119,18 @@ export function CommunityStatsHeader({ totals }: { totals: LivePackCommunityTota
             )}
           </div>
           <div className="mt-3 text-[11px] text-osu-f1">
-            <span translate="no" className="font-bold text-white tabular-nums">
-              {formatNumber(totals.oneOfAKind)}
-            </span>{" "}
-            players sit in exactly one collection.{" "}
-            <span translate="no" className="font-bold text-white tabular-nums">
-              {formatNumber(totals.cardsRecycled)}
-            </span>{" "}
-            copies have been recycled.
+            <Trans>
+              <span translate="no" className="font-bold text-white tabular-nums">
+                {formatNumber(totals.oneOfAKind)}
+              </span>{" "}
+              players sit in exactly one collection.
+            </Trans>{" "}
+            <Trans>
+              <span translate="no" className="font-bold text-white tabular-nums">
+                {formatNumber(totals.cardsRecycled)}
+              </span>{" "}
+              copies have been recycled.
+            </Trans>
           </div>
         </Section>
       )}

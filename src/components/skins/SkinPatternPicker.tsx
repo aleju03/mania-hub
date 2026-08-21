@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLingui } from "@lingui/react/macro";
 import { drawSkinPreviewPatterns, type SkinPreviewChartSnippet } from "../../lib/skin-preview-patterns";
 import {
   buildChartPreviewPattern,
@@ -112,13 +113,14 @@ export function SkinPatternRow({
   onPick: (choice: SkinPreviewChartSnippet | null) => void;
   disabled: boolean;
 }) {
+  const { t } = useLingui();
   const builtIn = useMemo(() => patternFor(null, pool.keys), [pool.keys]);
   return (
     <>
       <PatternButton
         pattern={builtIn}
         keys={pool.keys}
-        label="Built-in layout"
+        label={t`Built-in layout`}
         selected={selected === null}
         disabled={disabled}
         onPick={() => onPick(null)}
@@ -128,7 +130,7 @@ export function SkinPatternRow({
           key={snippet.beatmapId}
           pattern={patternFor(snippet, pool.keys)}
           keys={snippet.keys}
-          label={`${snippet.label}${snippet.stars ? ` (${snippet.stars.toFixed(2)} stars)` : ""}`}
+          label={snippet.stars ? t`${snippet.label} (${snippet.stars.toFixed(2)} stars)` : snippet.label}
           selected={selected?.beatmapId === snippet.beatmapId}
           disabled={disabled}
           onPick={() => onPick(snippet)}

@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
 
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { GradeImg } from "#/components/ui/GradeImg";
@@ -13,7 +14,7 @@ export function ReplayRecentlyViewed({
   onRemove,
   onClear,
   variant = "grid",
-  title = "Recently Watched",
+  title,
   showRemove = true,
   className = "",
 }: {
@@ -29,15 +30,17 @@ export function ReplayRecentlyViewed({
   showRemove?: boolean;
   className?: string;
 }) {
+  const { t } = useLingui();
   if (entries.length === 0) return null;
 
   const sidebar = variant === "sidebar";
+  const heading = title ?? t`Recently Watched`;
 
   return (
     <div className={`${sidebar ? "w-full" : "max-w-5xl mx-auto"} ${className}`}>
       <div className={`relative mb-3 flex items-center ${sidebar ? "justify-between gap-3" : "justify-center"}`}>
         <h4 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">
-          {title}
+          {heading}
         </h4>
         {showRemove && (
           <button
@@ -45,7 +48,7 @@ export function ReplayRecentlyViewed({
             onClick={onClear}
             className={`rounded-lg px-2 py-1 text-[11px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:bg-osu-b4 hover:text-white ${sidebar ? "-mr-2" : "absolute right-0"}`}
           >
-            Clear
+            <Trans>Clear</Trans>
           </button>
         )}
       </div>
@@ -121,7 +124,7 @@ export function ReplayRecentlyViewed({
                           />
                         )}
                         <span className="max-w-24 truncate">
-                          {entry.uploadedBy.username || (entry.uploadedBy.userId != null ? `user ${entry.uploadedBy.userId}` : "unknown")}
+                          {entry.uploadedBy.username || (entry.uploadedBy.userId != null ? t`user ${entry.uploadedBy.userId}` : t`unknown`)}
                         </span>
                       </span>
                     )}
@@ -144,7 +147,7 @@ export function ReplayRecentlyViewed({
                 <button
                   type="button"
                   onClick={() => onRemove(entry.key)}
-                  aria-label={`Remove ${entry.title} from recently watched`}
+                  aria-label={t`Remove ${entry.title} from recently watched`}
                   className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-osu-f1 transition-[opacity,color,background-color] cursor-pointer hover:bg-osu-b3 hover:text-white focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                 >
                   <X className="h-3 w-3" />

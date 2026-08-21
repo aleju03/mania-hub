@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, ChevronDown, type LucideIcon } from "lucide-react";
 
 // A small custom dropdown to replace the native <select>, so category-style pickers match the site
@@ -26,6 +27,7 @@ interface SelectMenuProps<T extends string> {
   // Adds a filter box above the list, for pickers long enough that scrolling
   // for an option is worse than typing it (the country list, say).
   searchable?: boolean;
+  /** Defaults to a translated "Search"; pass one only to name what is searched. */
   searchPlaceholder?: string;
   // Fills its container and pushes the chevron to the right, for a select
   // sitting in a form beside full-width inputs rather than in a toolbar.
@@ -45,9 +47,10 @@ export function SelectMenu<T extends string>({
   className = "",
   align = "left",
   searchable = false,
-  searchPlaceholder = "Search",
+  searchPlaceholder,
   block = false,
 }: SelectMenuProps<T>) {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [dropUp, setDropUp] = useState(false);
@@ -126,12 +129,14 @@ export function SelectMenu<T extends string>({
                 value={search}
                 autoFocus
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder={searchPlaceholder}
+                placeholder={searchPlaceholder ?? t`Search`}
                 className="mb-1 w-full rounded-md border border-osu-b3/40 bg-osu-b4 px-2 py-1.5 text-xs text-osu-l1 placeholder:text-osu-f1/55 focus:border-osu-pink/50 focus:outline-none"
               />
             )}
             {visibleOptions.length === 0 && (
-              <div className="px-2.5 py-1.5 text-xs text-osu-f1">No matches</div>
+              <div className="px-2.5 py-1.5 text-xs text-osu-f1">
+                <Trans>No matches</Trans>
+              </div>
             )}
             {visibleOptions.map((option) => {
               const OptionIcon = option.icon;

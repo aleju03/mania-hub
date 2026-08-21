@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useLingui } from "@lingui/react/macro";
 import type { AuthViewer } from "../../lib/auth-shared";
 import { fetchLiveFarmHelperNeighbors, isLiveBackendConfigured } from "../../lib/live-backend";
 
@@ -282,9 +283,12 @@ function loadNeighbors(viewerId: number): Promise<GraphSource> {
 }
 
 export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
+  const { t } = useLingui();
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const navigate = useNavigate();
+  // Read outside the canvas effect so a locale switch redraws the label.
+  const youLabel = t`you`;
   // Starts as an empty cohort so the sphere (anonymous dots + "you") renders
   // immediately; peers fill in when the fetch resolves instead of the whole
   // graph popping into an empty column.
@@ -642,7 +646,7 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
           ctx.fillStyle = pink;
           ctx.font = "700 11px system-ui";
           ctx.textAlign = "center";
-          ctx.fillText("you", center.x, center.y + centerR + 18);
+          ctx.fillText(youLabel, center.x, center.y + centerR + 18);
           ctx.restore();
           continue;
         }
@@ -725,14 +729,14 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointerleave", onPointerLeave);
     };
-  }, [nodes, viewerAvatarUrl, navigate]);
+  }, [nodes, viewerAvatarUrl, navigate, youLabel]);
 
   return (
     <div ref={wrapRef} className="relative h-[420px] w-full select-none">
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label="Players near your pp"
+        aria-label={t`Players near your pp`}
         className="absolute inset-0 h-full w-full"
         style={{ touchAction: "pan-y" }}
       />

@@ -1,6 +1,9 @@
 import { createFileRoute, Link, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { ClipboardCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { getI18n } from "../lib/i18n";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CommunityCard } from "../components/communities/CommunityCard";
@@ -98,12 +101,15 @@ export function parseCommunitiesSearch(search: Record<string, unknown>): Communi
 }
 
 export const Route = createFileRoute("/communities")({
-  head: ({ match }) => pageSeo({
-    title: "osu!mania Discord servers",
-    description: "Find an osu!mania Discord server to join, or post your own.",
-    path: "/communities",
-    origin: match.context.origin,
-  }),
+  head: ({ match }) => {
+    const i18n = getI18n(match.context.locale);
+    return pageSeo({
+      title: i18n._(msg`osu!mania Discord servers`),
+      description: i18n._(msg`Find an osu!mania Discord server to join, or post your own.`),
+      path: "/communities",
+      origin: match.context.origin,
+    });
+  },
   search: {
     middlewares: [stripSearchParams(DEFAULT_COMMUNITIES_SEARCH)],
   },
@@ -201,6 +207,7 @@ function FacetRow({
   onPick: (value: string) => void;
   children: (facet: CommunityFacet) => React.ReactNode;
 }) {
+  const { t } = useLingui();
   const [expanded, setExpanded] = useState(false);
   const shown = useMemo(
     () => (expanded ? facets : visibleFacets(facets, { active, pin, limit })),
@@ -228,7 +235,7 @@ function FacetRow({
           onClick={() => setExpanded((open) => !open)}
           className="text-[12.5px] font-semibold text-osu-f1/60 transition-colors cursor-pointer hover:text-osu-pink-light"
         >
-          {expanded ? "less" : `+${hidden} more`}
+          {expanded ? t`less` : t`+${hidden} more`}
         </button>
       )}
     </FilterRow>
@@ -256,6 +263,7 @@ function CommunityCardSkeleton() {
 }
 
 function CommunitiesPage() {
+  const { t } = useLingui();
   const search = Route.useSearch();
   const { q = "", page = 0, sort = "members", country = "", lang = "", tag = "", discord = "" } = search;
   const navigate = useNavigate();
@@ -383,9 +391,9 @@ function CommunitiesPage() {
     setShowSubmit(true);
     setConnectError(
       discord === "failed"
-        ? "Discord did not finish connecting. Try again."
+        ? t`Discord did not finish connecting. Try again.`
         : discord === "signin"
-          ? "Sign in with osu! first, then connect Discord."
+          ? t`Sign in with osu! first, then connect Discord.`
           : null,
     );
     void navigate({
@@ -393,7 +401,7 @@ function CommunitiesPage() {
       search: (prev: Record<string, unknown>) => ({ ...prev, discord: "" as DiscordFlag }),
       replace: true,
     });
-  }, [discord, navigate]);
+  }, [discord, navigate, t]);
 
   /*
    * Your own listings and everyone else's, in one grid.
@@ -456,7 +464,7 @@ function CommunitiesPage() {
         style={{ backgroundColor: DISCORD_BLURPLE }}
       >
         <DiscordLogo className="h-3.5 w-3.5" aria-hidden="true" />
-        Post your server
+        <Trans>Post your server</Trans>
       </button>
     </div>
   ) : auth.loginAvailable ? (
@@ -466,10 +474,10 @@ function CommunitiesPage() {
     <a
       href={`/api/auth/osu?next=${encodeURIComponent(`${location.pathname}${location.searchStr}`)}`}
       className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-osu-pink/45 bg-osu-pink/15 px-4 py-1.5 text-[12.5px] font-bold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white sm:w-auto"
-      title="Log in with osu! to post your server"
+      title={t`Log in with osu! to post your server`}
     >
       <OsuLogo className="h-3.5 w-3.5" />
-      Log in to post
+      <Trans>Log in to post</Trans>
     </a>
   ) : null;
 
@@ -478,7 +486,7 @@ function CommunitiesPage() {
       <div className="relative z-10 flex flex-1 flex-col overflow-clip bg-osu-b5">
         <OsuTriangleBackdrop />
         <div className="relative z-10 flex flex-1 flex-col">
-          <PageHeader iconSrc="/images/icons/chat.svg" title="osu!mania Discord servers" right={headerAction} />
+          <PageHeader iconSrc="/images/icons/chat.svg" title={t`osu!mania Discord servers`} right={headerAction} />
 
           <div className="border-b border-osu-b3/30">
             <div className="mx-auto w-full max-w-[1200px] px-4 py-3.5 sm:px-5">
@@ -486,8 +494,8 @@ function CommunitiesPage() {
                 type="text"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Search servers"
-                aria-label="Search Discord servers"
+                placeholder={t`Search servers`}
+                aria-label={t`Search Discord servers`}
                 className="w-full rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2.5 text-[14px] text-osu-l1 transition-colors placeholder:text-osu-f1/55 focus:border-osu-pink/50 focus:outline-none"
               />
 
@@ -498,8 +506,8 @@ function CommunitiesPage() {
               <div className="mt-3 flex flex-col gap-1.5">
                 {countryFacets.length > 1 && (
                   <FacetRow
-                    label="where"
-                    anyLabel="anywhere"
+                    label={t`where`}
+                    anyLabel={t`anywhere`}
                     facets={countryFacets}
                     active={country}
                     pin={auth.viewer?.countryCode}
@@ -511,7 +519,7 @@ function CommunitiesPage() {
                         {facet.value !== COMMUNITY_INTERNATIONAL && (
                           <CountryFlag code={facet.value} size="sm" decorative />
                         )}
-                        {facet.value === COMMUNITY_INTERNATIONAL ? "international" : getCountryName(facet.value)}
+                        {facet.value === COMMUNITY_INTERNATIONAL ? t`international` : getCountryName(facet.value)}
                       </span>
                     )}
                   </FacetRow>
@@ -522,8 +530,8 @@ function CommunitiesPage() {
                     meaning "do not filter", is a riddle. Matches the tags row. */}
                 {languageFacets.length > 1 && (
                   <FacetRow
-                    label="language"
-                    anyLabel="all"
+                    label={t`language`}
+                    anyLabel={t`all`}
                     facets={languageFacets}
                     active={lang}
                     onPick={(value) => applySearch({ lang: value })}
@@ -537,8 +545,8 @@ function CommunitiesPage() {
                     had to guess at. */}
                 {tagFacets.length > 1 && (
                   <FacetRow
-                    label="tags"
-                    anyLabel="all"
+                    label={t`tags`}
+                    anyLabel={t`all`}
                     facets={tagFacets}
                     active={tag}
                     onPick={(value) => applySearch({ tag: value })}
@@ -547,15 +555,15 @@ function CommunitiesPage() {
                   </FacetRow>
                 )}
 
-                <FilterRow label="sort by">
+                <FilterRow label={t`sort by`}>
                   <FilterOption active={sort === "members"} onClick={() => applySearch({ sort: "members" })}>
-                    members
+                    <Trans>members</Trans>
                   </FilterOption>
                   <FilterOption active={sort === "newest"} onClick={() => applySearch({ sort: "newest" })}>
-                    newest
+                    <Trans>newest</Trans>
                   </FilterOption>
                   <FilterOption active={sort === "name"} onClick={() => applySearch({ sort: "name" })}>
-                    name
+                    <Trans>name</Trans>
                   </FilterOption>
                   {data && (
                     <span
@@ -563,7 +571,7 @@ function CommunitiesPage() {
                       role="status"
                       aria-live="polite"
                     >
-                      {total.toLocaleString("en-US")} {total === 1 ? "server" : "servers"}
+                      <Plural value={total} one="# server" other="# servers" />
                     </span>
                   )}
                 </FilterRow>
@@ -580,27 +588,27 @@ function CommunitiesPage() {
               </div>
             ) : failed ? (
               <div className="mx-auto max-w-md px-4 py-16 text-center">
-                <div className="text-sm font-bold text-white">Servers are unavailable right now</div>
-                <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">The servers could not be loaded.</p>
+                <div className="text-sm font-bold text-white"><Trans>Servers are unavailable right now</Trans></div>
+                <p className="mt-2 text-[12px] leading-relaxed text-osu-f1"><Trans>The servers could not be loaded.</Trans></p>
                 <button
                   type="button"
                   onClick={() => setReloadTick((tick) => tick + 1)}
                   className="mt-4 rounded-full bg-osu-pink px-5 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110"
                 >
-                  Retry
+                  <Trans>Retry</Trans>
                 </button>
               </div>
             ) : communities.length === 0 ? (
               <div className="mx-auto max-w-md px-4 py-16 text-center">
                 <div className="text-sm font-bold text-white">
-                  {filtered ? "No servers match" : "No servers yet"}
+                  {filtered ? <Trans>No servers match</Trans> : <Trans>No servers yet</Trans>}
                 </div>
                 <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
                   {filtered
                     ? country
-                      ? `Nothing listed for ${country === COMMUNITY_INTERNATIONAL ? "international servers" : getCountryName(country)} yet.`
-                      : "Try a wider filter."
-                    : "Run an osu!mania server? Post it and it shows up here once it is approved."}
+                      ? t`Nothing listed for ${country === COMMUNITY_INTERNATIONAL ? t`international servers` : getCountryName(country)} yet.`
+                      : t`Try a wider filter.`
+                    : t`Run an osu!mania server? Post it and it shows up here once it is approved.`}
                 </p>
               </div>
             ) : (
@@ -648,7 +656,7 @@ function CommunitiesPage() {
         <CommunitySubmitModal
           discordUsername={discordUsername}
           discordAvatarUrl={discordAvatarUrl}
-          ownerUsername={auth.viewer?.username ?? "you"}
+          ownerUsername={auth.viewer?.username ?? t`you`}
           initialError={connectError}
           onClose={() => {
             setShowSubmit(false);

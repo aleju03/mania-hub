@@ -2,6 +2,8 @@
 import { cleanup, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../lib/i18n";
 import type { RevealedCard } from "./RevealStage";
 
 vi.mock("@tanstack/react-router", () => ({
@@ -42,17 +44,21 @@ afterEach(cleanup);
 
 describe("PackSummary", () => {
   it("reserves pull-serial space before asynchronous mint details arrive", () => {
+    // The summary uses <Trans>, which throws without a provider; en resolves
+    // to the source strings, matching what this test asserts on.
     const { container, rerender } = render(
-      <PackSummary
-        cards={[card]}
-        onOpenAnother={() => {}}
-        onOpenNext={() => {}}
-        canOpenNext={false}
-        nextPackShardCost={null}
-        serials={null}
-        onRecycleCopies={() => 0}
-        reducedMotion={true}
-      />,
+      <I18nProvider i18n={getI18n("en")}>
+        <PackSummary
+          cards={[card]}
+          onOpenAnother={() => {}}
+          onOpenNext={() => {}}
+          canOpenNext={false}
+          nextPackShardCost={null}
+          serials={null}
+          onRecycleCopies={() => 0}
+          reducedMotion={true}
+        />
+      </I18nProvider>,
     );
 
     const emptySlot = container.querySelector('[data-pull-serial-slot="0"]');
@@ -60,16 +66,18 @@ describe("PackSummary", () => {
     expect(emptySlot?.textContent).toBe("");
 
     rerender(
-      <PackSummary
-        cards={[card]}
-        onOpenAnother={() => {}}
-        onOpenNext={() => {}}
-        canOpenNext={false}
-        nextPackShardCost={null}
-        serials={new Map([["7", { serial: 3, mintedTotal: 8, isFirstGlobal: false }]])}
-        onRecycleCopies={() => 0}
-        reducedMotion={true}
-      />,
+      <I18nProvider i18n={getI18n("en")}>
+        <PackSummary
+          cards={[card]}
+          onOpenAnother={() => {}}
+          onOpenNext={() => {}}
+          canOpenNext={false}
+          nextPackShardCost={null}
+          serials={new Map([["7", { serial: 3, mintedTotal: 8, isFirstGlobal: false }]])}
+          onRecycleCopies={() => 0}
+          reducedMotion={true}
+        />
+      </I18nProvider>,
     );
 
     const filledSlot = container.querySelector('[data-pull-serial-slot="0"]');
@@ -79,17 +87,19 @@ describe("PackSummary", () => {
 
   it("lands cut cards at their recycled size before auto-recycling resolves", () => {
     const { container } = render(
-      <PackSummary
-        cards={[card]}
-        onOpenAnother={() => {}}
-        onOpenNext={() => {}}
-        canOpenNext={false}
-        nextPackShardCost={null}
-        serials={null}
-        onRecycleCopies={() => new Promise<number>(() => {})}
-        damage={{ path: [0.45, 0.5, 0.55] }}
-        reducedMotion={true}
-      />,
+      <I18nProvider i18n={getI18n("en")}>
+        <PackSummary
+          cards={[card]}
+          onOpenAnother={() => {}}
+          onOpenNext={() => {}}
+          canOpenNext={false}
+          nextPackShardCost={null}
+          serials={null}
+          onRecycleCopies={() => new Promise<number>(() => {})}
+          damage={{ path: [0.45, 0.5, 0.55] }}
+          reducedMotion={true}
+        />
+      </I18nProvider>,
     );
 
     const tile = container.querySelector('[data-pull-index="0"]');

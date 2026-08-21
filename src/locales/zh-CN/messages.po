@@ -13,6 +13,11 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#. placeholder {0}: farmers.length.toLocaleString("en-US")
+#: src/components/farm-helper/FarmersList.tsx
+msgid " · top {0} shown"
+msgstr ""
+
 # Machine-drafted zh-CN catalog, pending community review.
 # Glossary (keep consistent when reviewing):
 # pp / PP -> pp (unchanged) | star rating -> 星级 | beatmap/map -> 谱面
@@ -27,25 +32,234 @@ msgstr ""
 msgid " · updated {0}"
 msgstr " · 更新于 {0}"
 
+#: src/components/communities/AccessScopePicker.tsx
+msgid ", hidden from everyone else"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "? 7K top plays"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "? DT top plays"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "? followers"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "? hours"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "? plays"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "? ranked score"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "? replay views"
+msgstr ""
+
+#. placeholder {0}: duplicate.ownerUsername
+#: src/components/skins/SkinUploadModal.tsx
+msgid "(uploaded by {0})"
+msgstr ""
+
+#. placeholder {0}: report.distinctOwners
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "{0, plural, one {# collector} other {# collectors}}"
+msgstr ""
+
+#. placeholder {0}: collector.copies
+#. placeholder {0}: pulls.copies
+#. placeholder {0}: report.copies
+#: src/components/packs/CardCollectors.tsx
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "{0, plural, one {# copy} other {# copies}}"
+msgstr ""
+
+#. placeholder {0}: diffs.length
+#: src/components/maps/SearchCard.tsx
+msgid "{0, plural, one {# diff} other {# diffs}}"
+msgstr ""
+
+#. placeholder {0}: recs.length
+#: src/routes/farm-helper.tsx
+msgid "{0, plural, one {# map} other {# maps}}"
+msgstr ""
+
+#. placeholder {0}: community.memberCount
+#: src/components/communities/CommunityCard.tsx
+msgid "{0, plural, one {# member} other {# members}}"
+msgstr ""
+
+#. placeholder {0}: playerScores.length - replayableScores.length
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "{0, plural, one {# other score found, but no replay is available} other {# other scores found, but no replay is available}}"
+msgstr ""
+
+#. placeholder {0}: replayableScores.length
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "{0, plural, one {# replay available} other {# replays available}}"
+msgstr ""
+
 #. placeholder {0}: board.total
 #: src/routes/snipes.tsx
 msgid "{0, plural, one {# score} other {# scores}}"
 msgstr "{0, plural, other {# 个成绩}}"
+
+#. placeholder {0}: removedShots.length
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "{0, plural, one {# screenshot will be removed for good when you save.} other {# screenshots will be removed for good when you save.}}"
+msgstr ""
+
+#. placeholder {0}: data.total
+#: src/routes/skins.tsx
+msgid "{0, plural, one {# skin} other {# skins}}"
+msgstr ""
 
 #. placeholder {0}: sorted.length
 #: src/routes/snipes.tsx
 msgid "{0, plural, one {# snipe} other {# snipes}}"
 msgstr "{0, plural, other {# 次狙击}}"
 
+#. placeholder {0}: report.distinctOwners - collectors.length
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "{0, plural, one {+# more collector} other {+# more collectors}}"
+msgstr ""
+
+#. placeholder {0}: report.owners
+#: src/components/packs/CardCollectors.tsx
+msgid "{0, plural, one {collector} other {collectors}}"
+msgstr ""
+
+#. placeholder {0}: toast.count
+#: src/components/me/GoalToasts.tsx
+msgid "{0, plural, one {goal deleted} other {# goals deleted}}"
+msgstr ""
+
+#. placeholder {0}: pulls.ownerCount
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "{0, plural, one {holder} other {holders}}"
+msgstr ""
+
+#. placeholder {0}: shared.owners
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "{0, plural, one {in # collection} other {in # collections}}"
+msgstr ""
+
+#. placeholder {0}: shared.card.copies
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "{0, plural, one {x# copy} other {x# copies}}"
+msgstr ""
+
+#. placeholder {0}: community.onlineCount
+#: src/components/communities/CommunityCard.tsx
+msgid "{0, plural, other {# online}}"
+msgstr ""
+
 #. placeholder {0}: player.username
 #: src/routes/tracker.tsx
 msgid "{0} - click to filter"
 msgstr "{0} - 点击筛选"
 
+#. placeholder {0}: entry.name
+#. placeholder {1}: entry.frameCount
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "{0} · {1} frames"
+msgstr ""
+
+#. placeholder {0}: snippet.label
+#. placeholder {1}: snippet.stars.toFixed(2)
+#: src/components/skins/SkinPatternPicker.tsx
+msgid "{0} ({1} stars)"
+msgstr ""
+
+#. placeholder {0}: activeData.user.username
+#. placeholder {1}: activeData.tierStyle.label
+#: src/components/packs/RevealStage.tsx
+msgid "{0} {1} maniacard"
+msgstr ""
+
+#. placeholder {0}: nominee.down
+#: src/components/packs/GoatPoll.tsx
+msgid "{0} against"
+msgstr ""
+
+#. placeholder {0}: sections.length
+#: src/components/packs/album/AlbumView.tsx
+msgid "{0} albums"
+msgstr ""
+
+#. placeholder {0}: 0
+#: src/routes/bbcode.tsx
+msgid "{0} characters"
+msgstr ""
+
+#. placeholder {0}: formatNumber(card.owners)
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "{0} collections"
+msgstr ""
+
+#. placeholder {0}: entry.user.username
+#: src/components/packs/album/AlbumView.tsx
+msgid "{0} details"
+msgstr ""
+
 #. placeholder {0}: randomPick.player.favouriteCount
 #: src/routes/maps.tsx
 msgid "{0} favourites"
 msgstr "{0} 个收藏"
+
+#. placeholder {0}: nominee.up
+#: src/components/packs/GoatPoll.tsx
+msgid "{0} for"
+msgstr ""
+
+#. placeholder {0}: entry.frameCount
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "{0} frames"
+msgstr ""
+
+#. placeholder {0}: collector.goats
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "{0} GOAT"
+msgstr ""
+
+#. placeholder {0}: limit ?? 0
+#: src/components/packs/album/AlbumView.tsx
+msgid "{0} goats"
+msgstr ""
+
+#. placeholder {0}: formatNumber(card.owners)
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "{0} held"
+msgstr ""
+
+#. placeholder {0}: published.name
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{0} is live"
+msgstr ""
+
+#. placeholder {0}: published.name
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{0} is yours"
+msgstr ""
+
+#. placeholder {0}: activeData.user.username
+#. placeholder {0}: card.player.user.username
+#. placeholder {0}: card.username
+#: src/components/packs/album/AlbumView.tsx
+#: src/components/packs/CardTile.tsx
+#: src/components/packs/PackSummary.tsx
+#: src/components/packs/RevealStage.tsx
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "{0} maniacard"
+msgstr ""
 
 #. placeholder {0}: formatNumber(currentTotal)
 #: src/routes/maps.tsx
@@ -58,17 +272,65 @@ msgstr "{0} 张谱面"
 msgid "{0} maps · updated {1}"
 msgstr "{0} 张谱面 · 更新于 {1}"
 
+#. placeholder {0}: missingCount.toLocaleString("en-US")
+#: src/components/packs/CollectionPanel.tsx
+msgid "{0} missing"
+msgstr ""
+
 #. placeholder {0}: Math.floor(days / 30)
 #: src/routes/snipes.tsx
 msgid "{0} months"
 msgstr "{0} 个月"
+
+#. placeholder {0}: formatPp(recs.length)
+#. placeholder {0}: index + 1
+#. placeholder {1}: entries.length
+#. placeholder {1}: formatPp(totalQualifying)
+#: src/components/skins/SkinAssetExplorer.tsx
+#: src/routes/farm-helper.tsx
+msgid "{0} of {1}"
+msgstr ""
+
+#. placeholder {0}: visible.length
+#. placeholder {1}: sections.length
+#: src/components/packs/album/AlbumView.tsx
+msgid "{0} of {1} albums"
+msgstr ""
+
+#. placeholder {0}: formatOrdinal(mint.serial)
+#. placeholder {1}: mint.mintedTotal.toLocaleString("en-US")
+#: src/components/packs/PackSummary.tsx
+msgid "{0} of {1} to pull this"
+msgstr ""
+
+#. placeholder {0}: [...overriddenKeymodes.keys()].sort((a, b) => a - b).map((keys) => `${keys}K`).join(", ")
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{0} on their own"
+msgstr ""
 
 #. placeholder {0}: item.label
 #: src/routes/tracker.tsx
 msgid "{0} only"
 msgstr "仅 {0}"
 
+#. placeholder {0}: i18n._(PACK_TYPE_NAME_LABELS[odds.packId])
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "{0} pack"
+msgstr ""
+
+#. placeholder {0}: formatOrdinal(shared.serial)
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "{0} person to pull this card"
+msgstr ""
+
+#. placeholder {0}: limit ?? 0
+#: src/components/packs/album/AlbumView.tsx
+msgid "{0} players"
+msgstr ""
+
+#. placeholder {0}: formatNumber(entry.playCount)
 #. placeholder {0}: formatNumber(entry.play_count)
+#: src/components/maps/SearchCard.tsx
 #: src/routes/rankings.tsx
 msgid "{0} plays"
 msgstr "{0} 次游玩"
@@ -80,21 +342,138 @@ msgstr "{0} 次游玩"
 msgid "{0} possible picks · {1} unique sets · updated {2}"
 msgstr "{0} 个可抽选项 · {1} 个不同谱面集 · 更新于 {2}"
 
+#. placeholder {0}: entry.name
+#. placeholder {0}: skin.name
+#: src/components/skins/SkinAssetExplorer.tsx
+#: src/components/skins/SkinCard.tsx
+msgid "{0} preview"
+msgstr ""
+
 #. placeholder {0}: formatNumber(trackerWindowCount)
 #: src/routes/tracker.tsx
 msgid "{0} scores"
 msgstr "{0} 个成绩"
+
+#. placeholder {0}: formatNumber(card.owners)
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "{0} still held"
+msgstr ""
+
+#. placeholder {0}: patternName(pattern)
+#: src/components/maps/PatternPicker.tsx
+msgid "{0} subfamilies"
+msgstr ""
+
+#. placeholder {0}: formatOrdinal(mint.serial)
+#: src/components/packs/PackSummary.tsx
+msgid "{0} to pull this"
+msgstr ""
 
 #. placeholder {0}: formatNumber(globalRankingsTotal)
 #: src/routes/rankings.tsx
 msgid "{0} tracked players"
 msgstr "{0} 名被追踪玩家"
 
+#. placeholder {0}: nominee.up
+#. placeholder {1}: nominee.down
+#: src/components/packs/GoatPollVoters.tsx
+msgid "{0} up · {1} down"
+msgstr ""
+
+#. placeholder {0}: skin.name
+#. placeholder {1}: skin.ownerUsername
+#: src/routes/skins_.$id.tsx
+msgid "{0}, an osu!mania skin for {keymodes} uploaded by {1}. Download the .osk or browse more skins."
+msgstr ""
+
 #. placeholder {0}: player.username
 #. placeholder {1}: formatPpGain(player.totalGain)
 #: src/components/top-plays/PpGainsRail.tsx
 msgid "{0}: +{1}pp - click to filter"
 msgstr "{0}：+{1}pp - 点击筛选"
+
+#. placeholder {0}: card.player.user.username
+#: src/components/packs/PackSummary.tsx
+msgid "{0}'s card, cut in half"
+msgstr ""
+
+#. placeholder {0}: card.player.user.username
+#: src/components/packs/PackSummary.tsx
+msgid "{0}'s card, recycled for {recycledFor} shards"
+msgstr ""
+
+#. placeholder {0}: loadStatus.name
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "{0}'s me! page is empty."
+msgstr ""
+
+#. placeholder {0}: (odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")
+#. placeholder {1}: HONORARY_PACK_POOL.length
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "{0}% GOAT slot, then 1 of {1} on the roster"
+msgstr ""
+
+#. placeholder {0}: mode.keyCount
+#: src/components/player/SkillBreakdown.tsx
+msgid "{0}K skill rating"
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "{acc}% {speed} on {map}"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "{ALBUM_SEASON} series"
+msgstr ""
+
+#: src/components/maps/RangeSlider.tsx
+msgid "{ariaLabel} maximum"
+msgstr ""
+
+#: src/components/maps/RangeSlider.tsx
+msgid "{ariaLabel} minimum"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "{caption} - click to play"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "{changedKeymodeLabels} re-rendered"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "{checked}/{toCheck} players checked · {replaysFound} replays found"
+msgstr ""
+
+#. placeholder {0}: limit ?? 0
+#: src/components/packs/album/AlbumView.tsx
+msgid "{collectedShown}/{0} collected"
+msgstr ""
+
+#: src/routes/packs_.collections.tsx
+msgid "{collector}'s collection"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "{count, plural, one {# card} other {# cards}}"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{count} 7K top plays"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{count} DT top plays"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{count} followers"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{count} replay views"
+msgstr ""
 
 #: src/routes/rankings.tsx
 msgid "{countryName} mania rankings"
@@ -116,17 +495,162 @@ msgstr "{countryName} mania 追踪器"
 msgid "{days, plural, one {# day} other {# days}}"
 msgstr "{days, plural, other {# 天}}"
 
+#: src/lib/changelog.ts
+msgid "{days} days ago"
+msgstr ""
+
+#: src/lib/goal-format.ts
+#: src/routes/farm-helper.tsx
+msgid "{days}d"
+msgstr ""
+
+#: src/lib/format.ts
+msgid "{days}d {hours}h {mins}m"
+msgstr ""
+
+#: src/lib/format.ts
+msgid "{days}d ago"
+msgstr ""
+
+#: src/components/skins/SkinCard.tsx
+msgid "{downloadCountLabel} downloads"
+msgstr ""
+
+#: src/components/skins/SkinCard.tsx
+msgid "{downloadCountLabel} downloads, {viewCountLabel} views"
+msgstr ""
+
+#: src/components/packs/PackSummary.tsx
+msgid "{dupeCount, plural, one {duplicate} other {duplicates}}"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "{error}. Press Enter or click to try replay #{scoreId}."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{files} files in {groupCount} groups"
+msgstr ""
+
+#: src/components/communities/AccessScopePicker.tsx
+msgid "{firstName} and {others} more"
+msgstr ""
+
+#: src/components/communities/AccessScopePicker.tsx
+msgid "{firstName} and {secondName}"
+msgstr ""
+
+#: src/components/communities/AccessScopePicker.tsx
+msgid "{firstName} only"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "{from} to {to}"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
+msgstr ""
+
 #: src/routes/snipes.tsx
 msgid "{hours, plural, one {# hour} other {# hours}}"
 msgstr "{hours, plural, other {# 小时}}"
+
+#: src/lib/streak-game.ts
+msgid "{hours} hours"
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "{hours}h"
+msgstr ""
+
+#: src/lib/format.ts
+msgid "{hours}h {mins}m"
+msgstr ""
+
+#: src/lib/format.ts
+msgid "{hours}h {remainingMins}m ago"
+msgstr ""
+
+#: src/lib/format.ts
+msgid "{hours}h ago"
+msgstr ""
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "{keyCount}K skillset"
+msgstr ""
+
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "{keymodeLabel} only"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{keys}K thumbnail"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{label} dan"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{label}: {share} of {population} tracked {keyCount}K mains"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "{message} ({percent}%)"
 msgstr "{message}（{percent}%）"
 
+#: src/lib/format.ts
+#: src/lib/goal-format.ts
+msgid "{mins}m"
+msgstr ""
+
+#: src/lib/format.ts
+msgid "{mins}m ago"
+msgstr ""
+
+#: src/lib/changelog.ts
+#: src/lib/format.ts
+msgid "{months} months ago"
+msgstr ""
+
+#: src/lib/goal-format.ts
+#: src/routes/farm-helper.tsx
+msgid "{months}mo"
+msgstr ""
+
+#: src/lib/format.ts
+msgid "{months}mo ago"
+msgstr ""
+
 #: src/components/CountryWarming.tsx
 msgid "{name} added to queue, come back later :)"
 msgstr "{name} 已加入队列，稍后再来看看吧 :)"
+
+#: src/lib/streak-game.ts
+msgid "{name} had {count} 7K top plays."
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{name} had {count} DT top plays."
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{name} had {plays} plays."
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{name} had {score} ranked score."
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{name} has {count} followers."
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{name} has {hours} hours of playtime."
+msgstr ""
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "{name} is ready"
@@ -140,53 +664,297 @@ msgstr "{name} 不在其中，所以下面的狙击是较早的历史记录，�
 msgid "{name} isn't one of them."
 msgstr "{name} 不在其中。"
 
+#: src/lib/streak-game.ts
+msgid "{name} joined in {month}."
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{name}'s oldest top play is from {month}."
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{name}'s replays have {count} views."
+msgstr ""
+
+#: src/components/packs/PackSummary.tsx
+msgid "{nextPackShardCost} shards"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "{ordinal} dan"
+msgstr ""
+
 #. placeholder {0}: activeTab === "regions" ? i18n._(msg`Countries`) : i18n._(msg`Regions`)
 #: src/components/layout/CountrySelector.tsx
 msgid "{otherTabMatches, plural, one {# match} other {# matches}} in <0>{0}</0>"
 msgstr "在<0>{0}</0>中找到 {otherTabMatches, plural, other {# 个匹配}}"
 
+#: src/routes/farm-helper.tsx
+msgid "{pct}% of players near you farm this"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "{pct}% of the players around your pp farm this {rowMods} and average {median}pp. Your best on the map is {otherPp}pp {otherMods}."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "{pct}% of the players around your pp farm this and average {median}pp. Your best on the map is {otherPp}pp {otherMods}."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "{pct}% of the players around your pp farm this and it is not in your top plays. They average {median}pp on it."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "{pct}% of the players around your pp farm this. You already have {yourPp}pp here against their {median}pp median."
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{pending} still analyzing"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "{playerName}'s replay loaded, but the chart file for {mapLabel} can't be downloaded right now."
+msgstr ""
+
+#: src/lib/streak-game.ts
 #: src/routes/rankings.tsx
 msgid "{plays} plays"
 msgstr "{plays} 次游玩"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{previewCount, plural, one {# preview} other {# previews}}"
+msgstr ""
 
 #: src/routes/snipes.tsx
 msgid "{previousScoreAge} earlier"
 msgstr "{previousScoreAge}前"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "{progressCounts} players"
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "{randomPickCount, plural, one {# pick} other {# possible picks}}"
 msgstr "{randomPickCount, plural, other {# 个可抽选项}}"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "{rangeStart}–{pageEnd} of {totalText} cards"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "{rangeStart}–{pageEnd} of {totalText} players"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "{score} ranked score"
+msgstr ""
+
+#: src/lib/format.ts
+msgid "{secs}s ago"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{selectedKeymode}K preview"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
+msgstr ""
+
+#: src/components/farm-helper/FarmersList.tsx
+msgid "{total, plural, one {# player farmed this} other {# players farmed this}}"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "{total, plural, one {# server} other {# servers}}"
+msgstr ""
 
 #: src/routes/top-plays.tsx
 msgid "{totalCount} top plays found"
 msgstr "找到 {totalCount} 个最佳成绩"
 
+#: src/components/maps/MapSearchSection.tsx
+msgid "{totalLabel} maps"
+msgstr ""
+
 #: src/components/layout/CountrySelector.tsx
 msgid "{tracked} tracked"
 msgstr "{tracked} 个被追踪"
+
+#: src/routes/packs.tsx
+msgid "{typeName} pack"
+msgstr ""
+
+#: src/routes/packs.tsx
+msgid "{typeName} pack, {typeBlurb}"
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "{username} maniacard"
+msgstr ""
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "{username}'s top {label} plays"
+msgstr ""
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "{username}'s top <0>{label}</0> plays"
+msgstr ""
+
+#: src/components/skins/SkinCard.tsx
+msgid "{viewCountLabel} views"
+msgstr ""
+
+#: src/lib/changelog.ts
+msgid "{weeks} weeks ago"
+msgstr ""
 
 #: src/routes/snipes.tsx
 msgid "{years, plural, one {# year} other {# years}}"
 msgstr "{years, plural, other {# 年}}"
 
+#: src/lib/changelog.ts
+msgid "{years} years ago"
+msgstr ""
+
+#: src/lib/goal-format.ts
+#: src/routes/farm-helper.tsx
+msgid "{years}y"
+msgstr ""
+
+#: src/lib/format.ts
+msgid "{years}y ago"
+msgstr ""
+
+#. placeholder {0}: entry.global_rank.toLocaleString("en-US")
+#. placeholder {0}: shared.card.globalRank.toLocaleString("en-US")
+#: src/components/packs/album/AlbumView.tsx
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "#{0} global"
+msgstr ""
+
+#: src/lib/format.ts
+msgid "#{grouped}"
+msgstr ""
+
 #: src/components/ui/Pagination.tsx
 msgid "← Prev"
 msgstr "← 上一页"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "+ bpm & length"
+msgstr ""
+
+#. placeholder {0}: formatNumber(hidden)
+#. placeholder {1}: formatNumber(ownersPerCard)
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "+{0} more (list capped at {1})"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "+{hidden} more"
+msgstr ""
+
+#. placeholder {0}: Math.ceil(nextChargeMs / 1000)
+#: src/routes/packs.tsx
+msgid "+1 in {0}s"
+msgstr ""
 
 #. placeholder {0}: s.title
 #: src/routes/index.tsx
 msgid "<0/> <1>on</1> {0}"
 msgstr "<0/><1>游玩了</1>{0}"
 
+#. placeholder {0}: formatNumber(totals.cardsRecycled)
+#: src/components/packs/collections/CommunityStatsHeader.tsx
+msgid "<0>{0}</0> copies have been recycled."
+msgstr ""
+
+#. placeholder {0}: counts.images
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "<0>{0}</0> images"
+msgstr ""
+
+#. placeholder {0}: formatNumber(totals.oneOfAKind)
+#: src/components/packs/collections/CommunityStatsHeader.tsx
+msgid "<0>{0}</0> players sit in exactly one collection."
+msgstr ""
+
+#. placeholder {0}: odds.percent
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "<0>{0}</0> pull chance"
+msgstr ""
+
+#. placeholder {0}: selectedLive.length
+#: src/components/packs/PackSummary.tsx
+msgid "<0>{0}</0> selected"
+msgstr ""
+
+#. placeholder {0}: counts.sounds
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "<0>{0}</0> sounds"
+msgstr ""
+
+#. placeholder {0}: mode!.keyCount
+#: src/components/player/SkillBreakdown.tsx
+msgid "<0>{0}K has its own rating scale.</0> A lower number than another keymode doesn't mean you're worse at it."
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "<0>{selectedCount}</0> selected"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "<0>First time loading {countryName} maps.</0> Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own."
 msgstr "<0>首次加载 {countryName} 的谱面。</0>正在扫描该地区顶尖玩家的游玩记录和收藏。这可能需要一分钟，页面会自动填充。"
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "<0>osu!lazer</0> stores maps in its own database, so it has to export one: right-click the map at song select and choose Export, picking For compatibility (.osz) if it offers both. The file lands in the exports folder (Settings > open osu! folder)."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "<0>osu!stable</0> keeps every map as plain files: open osu!/Songs, find the map's folder and drag the difficulty's .osu straight in. To get the whole thing instead, open the map in the editor and choose File > Export package - the .osz appears in osu!/Exports."
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "<0>Page</0><1/><2>of {totalPages}</2>"
+msgstr ""
+
+#. placeholder {0}: topSharePercent(overallPercentile.value)
+#. placeholder {1}: overallPercentile.population.toLocaleString("en-US")
+#. placeholder {2}: mode!.keyCount
+#. placeholder {2}: mode.keyCount
+#: src/components/player/SkillBreakdown.tsx
+msgid "<0>top {0}%</0> of {1} tracked {2}K mains"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "− bpm & length"
+msgstr ""
 
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "▶ Watch"
 msgstr "▶ 观看"
+
+#: src/lib/format.ts
+msgid "0h"
+msgstr ""
 
 #: src/routes/top-plays.tsx
 msgid "24 hours"
@@ -204,6 +972,10 @@ msgstr "3 天"
 #: src/routes/top-plays.tsx
 msgid "30 days"
 msgstr "30 天"
+
+#: src/lib/packs.ts
+msgid "4K"
+msgstr ""
 
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
@@ -230,13 +1002,58 @@ msgstr "7天国内"
 msgid "7d Global"
 msgstr "7天全球"
 
+#: src/lib/packs.ts
+msgid "7K"
+msgstr ""
+
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "a collector"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
+msgstr ""
+
 #: src/routes/__root.tsx
 msgid "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
 msgstr "刚部署的资源加载失败。应用会尝试一次干净的刷新；如果又回到这里，说明预览部署缺少构建资源。"
 
+#: src/components/skins/SkinSettingsModal.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "A line about the skin"
+msgstr ""
+
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "A maniacard pulled from a booster pack. Open your own packs and build a collection."
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "a map"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "A screenshot could not be removed. Try again."
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
+msgstr ""
+
 #: src/routes/snipes.tsx
 msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
 msgstr "狙击是指同一国家/地区的玩家在某个排行榜上反超另一名玩家，所以它只在单个国家/地区内才有意义。选择一个国家/地区查看其狙击记录，或浏览合并的谱面视图。"
+
+#: src/routes/farm-helper.tsx
+msgid "a while"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "A-Z"
+msgstr ""
 
 #: src/routes/rankings.tsx
 msgid "Acc"
@@ -250,6 +1067,10 @@ msgstr "账号"
 msgid "Account menu"
 msgstr "账号菜单"
 
+#: src/components/packs/album/AlbumView.tsx
+msgid "accuracy"
+msgstr ""
+
 #: src/routes/rankings.tsx
 msgid "Accuracy"
 msgstr "准确率"
@@ -259,14 +1080,59 @@ msgstr "准确率"
 msgid "Accuracy <0>{0}</0>"
 msgstr "准确率 <0>{0}</0>"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Add area"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Add color"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Add link…"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Add overlay"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Add to Discord"
+msgstr ""
+
+#: src/components/me/RosterOptInCard.tsx
+msgid "Adding you…"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Advanced"
 msgstr "高级"
 
+#: src/routes/packs.tsx
+msgid "Album"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Albums"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "all"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "All"
 msgstr "全部"
+
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "all keymodes"
+msgstr ""
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "all of them"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "All players"
@@ -276,6 +1142,30 @@ msgstr "所有玩家"
 msgid "Almost there..."
 msgstr "快好了..."
 
+#: src/routes/replay.tsx
+msgid "Almost there{elapsedLabel}"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "already a GOAT"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "Already on the board."
+msgstr ""
+
+#. placeholder {0}: formatNumber(hidden)
+#: src/components/packs/CardCollectors.tsx
+msgid "and {0} more"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+#: src/routes/skins.tsx
+msgid "any"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+#: src/components/maps/RangeSlider.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -286,13 +1176,73 @@ msgstr "不限"
 msgid "Any grade"
 msgstr "不限评级"
 
+#: src/components/communities/field-options.tsx
+msgid "any language"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "anyone"
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "Anyone"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Anyone watching your replays sees it. <0>customize it in settings</0>"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "anywhere"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "appearance"
 msgstr "外观"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Apply"
+msgstr ""
+
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "Apply picks to every keymode preview"
+msgstr ""
+
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "Apply picks to the {keymodeLabel} preview only"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Arabic"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "arrows"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Arrows"
 msgstr "箭头"
+
+#: src/routes/skins.tsx
+msgid "ascending"
+msgstr ""
+
+#: src/components/maps/FilterChips.tsx
+msgid "Ascending"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Audio"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Audio URL (mp3)"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Authorize. The bot needs to send messages and embed links."
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "Avg PP"
@@ -302,17 +1252,76 @@ msgstr "平均 PP"
 msgid "Avoid repeats"
 msgstr "避免重复"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "back to collection"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Back to menu"
+msgstr ""
+
+#: src/components/packs/PackSummary.tsx
+msgid "Back to packs"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Back to plain image"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Back to replay browser"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "back to skins"
+msgstr ""
+
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "backdrop"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Background dim"
 msgstr "背景暗化"
+
+#: src/components/packs/GoatPoll.tsx
+msgid "banned · proof"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "bars"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Bars"
 msgstr "条形"
 
+#: src/routes/bbcode.tsx
+msgid "BBCode"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
 msgid "BBCode editor"
 msgstr "BBCode 编辑器"
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Beatmap card: stars, keys, status, BPM, length and dan."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Beatmap Lookup"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Beatmaps"
+msgstr ""
+
+#. placeholder {0}: beatmapResults.length
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Beatmaps ({0})"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "Beatmaps played by your country"
@@ -322,14 +1331,72 @@ msgstr "你的国家/地区玩过的谱面"
 msgid "Beatmaps played in {countryName}"
 msgstr "{countryName} 玩过的谱面"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Best Scores"
+msgstr ""
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "biggest collections"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "biggest jump first"
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "Blitz"
+msgstr ""
+
 #. placeholder {0}: event.boardRank
 #: src/routes/snipes.tsx
 msgid "Board spot <0>#{0}</0>"
 msgstr "榜单位置 <0>#{0}</0>"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Bold"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Box title (empty for SPOILER)"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "BPM"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+#: src/lib/skill-axes.ts
+msgid "Bracket"
+msgstr ""
+
+#: src/components/replay/ReplaySkinColorPanel.tsx
+msgid "Bright"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Browse"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "Browse and download osu!mania skins with previews rendered from each skin's own notes, or publish a skin from an .osk file."
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Browse every image and sound this skin ships, without downloading it."
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
 msgstr "浏览按键型、段位估计和 MSD 分组的 osu!mania 轮换图包。"
+
+#: src/routes/skins_.$id.tsx
+msgid "Browse skins"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Browser-based osu!mania replay watcher and viewer for .osr files, score replays, keypress overlays, skins, and MP4 export."
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "Building maps for the first time..."
@@ -338,6 +1405,69 @@ msgstr "首次构建谱面数据..."
 #: src/routes/maps.tsx
 msgid "Building maps..."
 msgstr "正在构建谱面数据..."
+
+#: src/components/skins/SkinPatternPicker.tsx
+msgid "Built-in layout"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Bulgarian"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Bullet list"
+msgstr ""
+
+#. placeholder {0}: skin.author
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "by <0>{0}</0>"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "By Player"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Cancel"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Card albums"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Card collection"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "card cover"
+msgstr ""
+
+#: src/routes/packs.tsx
+msgid "Card Packs"
+msgstr ""
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Cards"
+msgstr ""
+
+#: src/components/packs/collections/CommunityStatsHeader.tsx
+msgid "cards collected"
+msgstr ""
+
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "Cards found"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back."
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Center"
+msgstr ""
 
 #: src/routes/tracker.tsx
 msgid "Ch"
@@ -351,22 +1481,109 @@ msgstr "更换"
 msgid "changelog"
 msgstr "更新日志"
 
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Changing the keymode label failed. Try again."
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Changing who can see this skin failed. Try again."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Chart loaded. Fetching the replay."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Chart loaded. Still fetching the replay."
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "chart preview"
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Chart preview scroll speed"
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Chart preview scroll speed value"
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Chart preview volume"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "checker"
+msgstr ""
+
 #: src/routes/rankings.tsx
 msgid "Checking 7d changes..."
 msgstr "正在检查 7 天变化..."
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Checking players · {replaysFound} replays found"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Checking scores..."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Checking the difficulties"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Chinese"
+msgstr ""
 
 #: src/routes/tracker.tsx
 msgid "Choke"
 msgstr "断连"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Choose a different replay"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "Choose a new GOAT"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+#: src/lib/skill-axes.ts
+msgid "Chordjack"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+#: src/lib/skill-axes.ts
+msgid "Chordstream"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "circles"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Circles"
 msgstr "圆形"
 
+#: src/components/maps/PatternRadar.tsx
+msgid "CJ"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/PackSummary.tsx
+msgid "clear"
+msgstr ""
+
+#: src/components/maps/RangeSlider.tsx
+#: src/components/replay/ReplayRecentlyViewed.tsx
 #: src/routes/maps.tsx
 msgid "Clear"
 msgstr "清除"
 
+#: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Clear all"
 msgstr "清除全部"
@@ -375,15 +1592,42 @@ msgstr "清除全部"
 msgid "Clear filters"
 msgstr "清除筛选"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Clear formatting"
+msgstr ""
+
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Clear player filter"
 msgstr "清除玩家筛选"
 
+#: src/components/maps/MapSearchSection.tsx
+#: src/components/replay/ReplayBrowseView.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/routes/maps.tsx
 msgid "Clear search"
 msgstr "清除搜索"
+
+#: src/routes/skins.tsx
+msgid "Clear the filters, or upload the skin yourself."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "cleared"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Click Add to Discord and pick a server where you have Manage Server."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Click an image first. Imagemap turns that image into clickable areas."
+msgstr ""
+
+#: src/components/maps/FilterChips.tsx
+#: src/components/maps/PatternPicker.tsx
+msgid "Click to include, right-click to exclude"
+msgstr ""
 
 #: src/components/ui/Pagination.tsx
 msgid "Click to jump to page"
@@ -397,6 +1641,29 @@ msgstr "点击升序排序"
 msgid "Click to sort descending"
 msgstr "点击降序排序"
 
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "click to view"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "client"
+msgstr ""
+
+#: src/components/packs/CardCollectors.tsx
+#: src/components/packs/GoatHoldersButton.tsx
+#: src/components/packs/GoatPollVoters.tsx
+#: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
+#: src/components/skins/SkinAssetExplorer.tsx
+#: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinSettingsModal.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Close"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Close editor"
+msgstr ""
+
 #: src/routes/snipes.tsx
 msgid "Close filters"
 msgstr "关闭筛选"
@@ -405,19 +1672,84 @@ msgstr "关闭筛选"
 msgid "Close settings"
 msgstr "关闭设置"
 
+#: src/components/player/SkillPlaysModal.tsx
+msgid "Close skill plays"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "closed"
+msgstr ""
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "closest to every pullable player"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Code block"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Collapse"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Collapsible box"
+msgstr ""
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "collecting the longest"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Collection"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 #: src/routes/maps.tsx
 msgid "collections"
 msgstr "收藏册"
 
+#: src/routes/packs_.collections.tsx
+msgid "Collections"
+msgstr ""
+
+#: src/components/packs/collections/CommunityStatsHeader.tsx
+msgid "collectors"
+msgstr ""
+
+#: src/components/packs/GoatHoldersButton.tsx
+#: src/routes/packs_.collections.tsx
+msgid "Collectors"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Color"
 msgstr "颜色"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Colors"
+msgstr ""
 
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Combo"
 msgstr "连击"
+
+#: src/routes/farm-helper.tsx
+msgid "common pick"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "Community vote for a new GOAT"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "compared to {range} pp"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Connect your Discord account first."
+msgstr ""
 
 #: src/routes/tracker.tsx
 msgid "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
@@ -431,6 +1763,108 @@ msgstr "连接已断开，正在重连。"
 msgid "Continents"
 msgstr "大洲"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Copied"
+msgstr ""
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Copies"
+msgstr ""
+
+#: src/components/packs/collections/CommunityStatsHeader.tsx
+msgid "copies in circulation"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Copy"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Copy BBCode"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Copy formatting"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Copy image URL"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Copy link"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Copy link URL"
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "Could not deal a blitz run. Try again in a moment."
+msgstr ""
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "Could not load more plays."
+msgstr ""
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Could not load the collector list."
+msgstr ""
+
+#: src/routes/packs_.collections.tsx
+msgid "Could not load the pack stats."
+msgstr ""
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "Could not load these plays"
+msgstr ""
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "Could not load these plays."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Could not reach Discord to check that invite. Try again in a moment."
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "Could not reach the player pool. Try again in a moment."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Could not resize the image."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Couldn't build recommendations"
+msgstr ""
+
+#: src/routes/packs.tsx
+msgid "Couldn't deal a pack"
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+#: src/routes/replay.tsx
+msgid "Couldn't delete that upload; try again."
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Couldn't find chart preview audio"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Couldn't find score details"
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Couldn't load chart preview"
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Couldn't load chart preview audio"
+msgstr ""
+
 #: src/routes/snipes.tsx
 msgid "Couldn't load live snipes."
 msgstr "无法加载实时狙击。"
@@ -438,6 +1872,14 @@ msgstr "无法加载实时狙击。"
 #: src/routes/maps.tsx
 msgid "Couldn't load maps data. Try again later."
 msgstr "无法加载谱面数据。请稍后再试。"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Couldn't load search results. Try again."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Couldn't load that me! page."
+msgstr ""
 
 #: src/routes/index.tsx
 #: src/routes/rankings.tsx
@@ -448,17 +1890,94 @@ msgstr "暂时无法加载 {countryName} 排行榜。"
 msgid "Couldn't load the board."
 msgstr "无法加载榜单。"
 
+#: src/components/farm-helper/FarmersList.tsx
+msgid "Couldn't load the farmer list. Try again."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Couldn't load the song audio for this replay."
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+msgid "Couldn't load the uploads; refresh to retry."
+msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "Couldn't load this player's plays right now. The card is in your collection and will mint itself there."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Couldn't load this view"
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Couldn't play chart preview audio"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "Couldn't reach the server."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Couldn't read that beatmap file."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Couldn't read the clipboard. Use Ctrl+V instead."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Couldn't read the original image to resize it. Its host didn't answer."
+msgstr ""
+
+#: src/components/packs/GoatPollVoters.tsx
+msgid "Couldn't read the votes."
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "Couldn't remove that nominee."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Couldn't save that. Try again in a moment."
+msgstr ""
+
+#: src/components/me/RosterOptInCard.tsx
+msgid "Couldn't turn on tracking right now. Try again in a moment."
+msgstr ""
+
+#: src/components/communities/AccessScopePicker.tsx
 #: src/components/layout/CountrySelector.tsx
 msgid "Countries"
 msgstr "国家/地区"
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Country (or global) leaderboard, top players by pp."
+msgstr ""
 
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
 msgstr "国家/地区 mania 排行榜"
 
+#: src/components/communities/field-options.tsx
+msgid "Croatian"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Current backdrop"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Cursor trail"
 msgstr "光标拖尾"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Custom"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Custom (30-200)"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Custom color"
@@ -480,13 +1999,43 @@ msgstr "自定义"
 msgid "Customize how replays look for you. This does not change the replay skin other people see on your plays."
 msgstr "自定义回放在你这里的显示效果。这不会改变其他人观看你的成绩时看到的回放皮肤。"
 
+#: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
+msgid "Customize replay skin"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Cut"
 msgstr "截断"
 
+#: src/components/communities/field-options.tsx
+msgid "Czech"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Dan (est.)"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Danger"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Danish"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "dark"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Darkens the beatmap background so notes stay readable."
 msgstr "调暗谱面背景，让音符更清晰。"
+
+#. placeholder {0}: reading.percent
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Decoding the skin's images, {0}%"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Decrease"
@@ -496,6 +2045,80 @@ msgstr "减少"
 msgid "Default volume"
 msgstr "默认音量"
 
+#: src/components/maps/SearchCard.tsx
+#: src/lib/skill-axes.ts
+msgid "Delay"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Delete"
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+msgid "Delete {rowTitle} from your uploads"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Delete area"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Delete for good?"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Delete image"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Delete imagemap"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Delete skin"
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+msgid "Delete this upload"
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+#: src/routes/replay.tsx
+msgid "Delete this upload? Its share link stops working and the file is gone for good."
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "descending"
+msgstr ""
+
+#: src/components/maps/FilterChips.tsx
+msgid "Descending"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Description <0>(optional)</0>"
+msgstr ""
+
+#. placeholder {0}: card.player.user.username
+#. placeholder {0}: card.username
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/PackSummary.tsx
+msgid "Deselect {0}"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Detected in the .osk"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "dev preview"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Did {hidden} join osu! earlier or later than {shown}?"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Difficulty"
 msgstr "难度"
@@ -512,21 +2135,246 @@ msgstr "方向与长键"
 msgid "Discord bot"
 msgstr "Discord 机器人"
 
+#: src/routes/communities.tsx
+msgid "Discord did not finish connecting. Try again."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Discord does not recognise that invite. Check it is still valid."
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "Discord servers"
 msgstr "Discord 服务器"
+
+#: src/components/me/GoalToasts.tsx
+#: src/components/me/TrackingToasts.tsx
+msgid "Dismiss"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "display"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Does {hidden} have more or fewer 7K top plays than {shown}?"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Does {hidden} have more or fewer DT top plays than {shown}?"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Does {hidden} have more or fewer followers than {shown}?"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Does {hidden} have more or fewer plays than {shown}?"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Does {hidden} have more or fewer ranked score than {shown}?"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Does {hidden} have more or less playtime than {shown}?"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Done"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Download .osk"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "Download .osz"
+msgstr ""
+
+#. placeholder {0}: skin.name
+#: src/components/skins/SkinCard.tsx
+msgid "Download {0}"
+msgstr ""
+
+#: src/components/skins/SkinCard.tsx
+msgid "Download the .osk"
+msgstr ""
+
+#. placeholder {0}: formatSkinFileSize(skin.oskSizeBytes)
+#: src/components/skins/SkinCard.tsx
+msgid "Download the .osk, {0}"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Downloading replay and beatmap{elapsedLabel}"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Downloading replay{elapsedLabel}"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Downloading the skin file"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "downloads"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Downloads"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Downscroll"
 msgstr "下落式"
 
+#: src/routes/bbcode.tsx
+msgid "Draft autosaves locally"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Drag a page or swipe to flip"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Drag an .osr here, or click to browse"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Drag the map's .osz here, or click to browse"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Drag to resize"
+msgstr ""
+
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "Draw a different set of charts"
+msgstr ""
+
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "Draw a different set of map covers"
+msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "Draw card"
+msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "Draw the next card"
+msgstr ""
+
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "drawing"
+msgstr ""
+
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "drawing covers"
+msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "Drawing player..."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Drop an .osk here, or click to browse"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Drop to check it"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Drop to load it"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Drop to read it"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Drop your own .osr file"
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "DT/NC"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "Dumpstream"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Dutch"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "Dynamic Renders"
 msgstr "动态渲染"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it."
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
 msgstr "每位玩家被抽中的概率相同，与其收藏数量无关。"
+
+#: src/lib/streak-game.ts
+msgid "Earlier"
+msgstr ""
+
+#. placeholder {0}: community.name
+#: src/components/communities/CommunityCard.tsx
+msgid "Edit {0}"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Edit link…"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "edit previews"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Edit previews"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Edit skin previews"
+msgstr ""
+
+#: src/components/communities/CommunityCard.tsx
+msgid "Edit your listing"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on your osu! page."
+msgstr ""
+
+#: src/lib/packs.ts
+msgid "Elite"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "Ends {endsLabel}"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "English"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Enter fullscreen"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "Equal chance per map"
@@ -536,22 +2384,108 @@ msgstr "每张谱面等概率"
 msgid "Equal chance per player"
 msgstr "每位玩家等概率"
 
+#: src/routes/farm-helper.tsx
+msgid "error"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Estimate a chart's dan level, with its dan emblem."
+msgstr ""
+
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Estimated pp gain from replacing your previous best score on this map"
 msgstr "以此成绩替换你在该谱面上的先前最佳后估计增加的 pp"
 
+#: src/components/communities/field-options.tsx
+msgid "Estonian"
+msgstr ""
+
+#: src/components/communities/AccessScopePicker.tsx
+msgid "Europe, Central America, France"
+msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "Every card came out in two pieces"
+msgstr ""
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "every collector"
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Every favourited map is equally likely. Players with bigger collections show up more often as a result."
 msgstr "每张被收藏的谱面等概率。因此收藏更多的玩家会更常出现。"
+
+#: src/routes/farm-helper.tsx
+msgid "Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Every osu!mania lookup as a slash command, plus live feeds that post new top plays, snipes, and farm maps into any channel."
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Every osu!mania lookup as a slash command. Link your account once with <0>/link</0> and commands like <1>/recent</1> work with no username. Live feeds auto-post new top plays, snipes and farm maps straight into any channel."
+msgstr ""
+
+#: src/routes/packs.tsx
+msgid "Every pack pays {PACK_OPEN_SHARD_REWARD} shards. Recycle duplicates for more."
+msgstr ""
+
+#: src/lib/packs.ts
+msgid "Every tracked player, same odds"
+msgstr ""
+
+#: src/components/communities/AccessScopePicker.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Everyone"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "everything else the archive ships"
+msgstr ""
+
+#: src/components/maps/FilterChips.tsx
+#: src/components/maps/PatternPicker.tsx
+msgid "Excluding (click to clear)"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Exit fullscreen"
+msgstr ""
 
 #: src/routes/snipes.tsx
 msgid "Explore Global maps"
 msgstr "浏览全球谱面"
 
+#: src/routes/replay.tsx
+msgid "Failed to load replay"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Failed to load shared replay"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Failed to load uploaded replay"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "farm helper"
 msgstr "刷 pp 助手"
+
+#: src/routes/farm-helper.tsx
+msgid "Farm Helper"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Farm Helper needs the server"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Farm map alert"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "Farmed"
@@ -573,39 +2507,191 @@ msgstr "{countryName} 的收藏"
 msgid "FC"
 msgstr "FC"
 
+#: src/lib/goal-format.ts
+msgid "FC {map} ({speed})"
+msgstr ""
+
 #: src/routes/tracker.tsx
 msgid "FC chokes only (1 miss)"
 msgstr "仅 FC 断连（1 miss）"
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Feeds"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Feeds are currently disabled on the backend."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Fetching the replay and finding its beatmap."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Fetching the replay and the chart file."
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Fewer 7K"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Fewer DT"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "fewer filters"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Fewer followers"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Fewer plays"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "File and previews"
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+msgid "File missing"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "File size"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "File updated"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Filipino"
+msgstr ""
 
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Filter by keymode"
 msgstr "按键数筛选"
 
+#: src/routes/farm-helper.tsx
+msgid "filtered out"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "filters"
 msgstr "筛选"
 
+#: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 #: src/routes/snipes.tsx
 msgid "Filters"
 msgstr "筛选"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "find a card..."
+msgstr ""
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Find a collector"
+msgstr ""
+
+#: src/components/packs/CardCollectors.tsx
+msgid "find a collector..."
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "find a missing player..."
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "find an album"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Find an album"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "Find an osu!mania Discord server to join, or post your own."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs."
+msgstr ""
+
 #: src/components/layout/Nav.tsx
+#: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "find player..."
 msgstr "查找玩家..."
+
+#: src/components/communities/field-options.tsx
+msgid "Finnish"
+msgstr ""
+
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "First collected by"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "First collection page"
+msgstr ""
+
+#: src/components/packs/PackSummary.tsx
+msgid "first ever to pull this"
+msgstr ""
 
 #: src/components/ui/Pagination.tsx
 msgid "First page"
 msgstr "第一页"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "First Places"
+msgstr ""
+
 #: src/components/CountryWarming.tsx
 msgid "First time anyone has visited {name}. Its rankings, maps and live tracking are being set up in the background."
 msgstr "这是 {name} 第一次有人访问。它的排行榜、谱面和实时追踪正在后台建立。"
 
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "first to find a card"
+msgstr ""
+
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "flat"
+msgstr ""
+
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "Flat backdrop tinted with the skin's accent"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Flip direction"
 msgstr "反转排序方向"
+
+#: src/components/packs/GoatPoll.tsx
+msgid "for banned or deleted"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "For screenshots that have nothing to do with the skin."
+msgstr ""
+
+#. placeholder {0}: formatNumber(card.mintedTotal)
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "found {0}x"
+msgstr ""
+
+#: src/routes/packs.tsx
+msgid "free"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "French"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Full"
@@ -615,9 +2701,33 @@ msgstr "完整"
 msgid "Full combos only (0 misses)"
 msgstr "仅全连（0 miss）"
 
+#: src/components/discord/CommandShowcase.tsx
+msgid "Full profile card with ranks, pp and top plays. The username is optional once you link."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Fullscreen"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "German"
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "Get {grade} {speed} on {map}"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Getting the map out of osu!"
+msgstr ""
+
 #: src/routes/index.tsx
 msgid "Global"
 msgstr "全球"
+
+#: src/routes/farm-helper.tsx
+msgid "Global mania farm helper"
+msgstr ""
 
 #: src/routes/rankings.tsx
 msgid "Global mania rankings"
@@ -639,13 +2749,104 @@ msgstr "光晕"
 msgid "Go home"
 msgstr "回到首页"
 
+#: src/lib/goal-format.ts
+msgid "Goal"
+msgstr ""
+
+#: src/components/me/GoalToasts.tsx
+msgid "goal cleared"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
+#: src/routes/goals.tsx
 msgid "Goals"
 msgstr "目标"
+
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "GOAT holders"
+msgstr ""
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "GOAT roster, {goatRoster} to find"
+msgstr ""
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "GOATs"
+msgstr ""
+
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "GOATs discovered"
+msgstr ""
+
+#: src/components/communities/AccessScopePicker.tsx
+msgid "Goes by the country on someone's osu! account, and anyone already in can still share the invite."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Gold"
+msgstr ""
 
 #: src/routes/tracker.tsx
 msgid "Grade"
 msgstr "评级"
+
+#: src/routes/bbcode.tsx
+msgid "Gradient text"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "graveyard"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Graveyard"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Greek"
+msgstr ""
+
+#: src/routes/packs.tsx
+msgid "Grid"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "Handjack"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+#: src/lib/skill-axes.ts
+msgid "Handstream"
+msgstr ""
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "hardest cards to find"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Has its own backdrop"
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "Have {count, plural, one {# {pp}pp+ play} other {# {pp}pp+ plays}}"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Have {hidden}'s replays been watched more or less than {shown}'s?"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Heading"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Hebrew"
+msgstr ""
+
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "hidden"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hidden"
@@ -660,47 +2861,295 @@ msgstr "隐藏列表（{0}）"
 msgid "Hide"
 msgstr "隐藏"
 
+#: src/components/communities/AccessScopePicker.tsx
+msgid "Hide it from everyone else, instead of showing it with no way in"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hide players"
 msgstr "隐藏玩家"
+
+#: src/routes/packs.tsx
+msgid "Higher or lower"
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "Higher or lower is unavailable right now. Try again in a bit."
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Higher values make notes travel faster across the playfield."
 msgstr "数值越高，音符在游戏区内移动越快。"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "Highest tier first, then pp"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Hindi"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "hit and hold lighting"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "hit result art"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "hitsounds and interface samples"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
 msgstr "按住 <0>C</0> 并移动光标即可画出烟雾，就像在 osu! 游戏中画图一样。它会自行消散。"
+
+#: src/components/packs/PackStage.tsx
+msgid "Hold and drag across the dotted line"
+msgstr ""
 
 #: src/components/layout/Nav.tsx
 msgid "home"
 msgstr "首页"
 
+#: src/components/packs/album/AlbumView.tsx
+msgid "Honorary roster"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "How far the colored glow reaches around the cursor core."
 msgstr "彩色光晕从光标中心向外延伸的范围。"
+
+#: src/routes/farm-helper.tsx
+msgid "how many players near you farm it"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "how many players near you have it"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "抽取方式"
 
+#: src/components/maps/PatternRadar.tsx
+msgid "HS"
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "HT/DC"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "https://... wraps the image in a link"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Hungarian"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "If you have the map, drop its .osz here and the replay plays from your copy."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Image"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Image upload failed."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Image URL"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Imagemap (image with clickable areas)"
+msgstr ""
+
+#. placeholder {0}: imagemapSelection.areaIndex + 1
+#. placeholder {1}: imagemapSelection.areaCount
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Imagemap area {0}/{1}"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "improve"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "In your collection."
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "includes"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Includes"
+msgstr ""
+
+#: src/components/maps/FilterChips.tsx
+#: src/components/maps/PatternPicker.tsx
+msgid "Including (click to exclude)"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Increase"
 msgstr "增加"
+
+#: src/components/communities/field-options.tsx
+msgid "Indonesian"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Inline code"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Insert"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Inside the .osk"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Interface language"
 msgstr "界面语言"
 
+#: src/components/communities/field-options.tsx
+#: src/routes/communities.tsx
+msgid "international"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "international servers"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Is {hidden}'s oldest top play older or newer than {shown}'s?"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "It may have been removed by its uploader."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Italian"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Italic"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+#: src/lib/skill-axes.ts
+msgid "Jack"
+msgstr ""
+
+#: src/components/maps/PatternRadar.tsx
+msgid "JACK"
+msgstr ""
+
+#: src/lib/skill-axes.ts
+msgid "Jackspeed"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Japanese"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "joined ?"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "joined {month}"
+msgstr ""
+
+#: src/components/maps/PatternRadar.tsx
+msgid "JS"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Jump to a page"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+#: src/lib/skill-axes.ts
+msgid "Jumpstream"
+msgstr ""
+
+#: src/lib/format.ts
+msgid "just now"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Keep"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Keep it"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+#: src/routes/skins_.$id.tsx
+msgid "Keymodes"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "keys"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "Keys"
 msgstr "键数"
 
+#: src/components/communities/field-options.tsx
+msgid "Korean"
+msgstr ""
+
+#. placeholder {0}: keys - 1
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Label as {0}K+1"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Label as a plain {keys}K layout"
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "Land a {pp}pp play"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+#: src/routes/skins.tsx
+msgid "lane cover"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "language"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Language"
 msgstr "语言"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Large"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "large gap"
+msgstr ""
 
 #: src/routes/tracker.tsx
 msgid "Last 24h"
@@ -711,13 +3160,49 @@ msgstr "最近 24 小时"
 msgid "Last 24h · {0} scores"
 msgstr "最近 24 小时 · {0} 个成绩"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "Last collection page"
+msgstr ""
+
 #: src/components/ui/Pagination.tsx
 msgid "Last page"
 msgstr "最后一页"
 
+#: src/lib/changelog.ts
+msgid "last year"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Later"
+msgstr ""
+
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "Latest"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Latvian"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "lazer"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "lazer edits"
+msgstr ""
+
 #: src/routes/snipes.tsx
 msgid "Leaderboard"
 msgstr "排行榜"
+
+#: src/routes/packs.tsx
+msgid "Leave the game"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Leaves a short fading trail behind the cursor."
@@ -731,9 +3216,59 @@ msgstr "左键筛选全连，右键筛选 FC 断连"
 msgid "Left click for highest star rating first, right click for lowest first"
 msgstr "左键按星级从高到低，右键从低到高"
 
+#: src/routes/replay.tsx
+msgid "Left thumb"
+msgstr ""
+
+#: src/lib/packs.ts
+msgid "Legend"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Length"
 msgstr "长度"
+
+#: src/routes/communities.tsx
+msgid "less"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Less playtime"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Less score"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Less watched"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "light"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Link"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Link copied"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "link text"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Link URL (optional)"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Lithuanian"
+msgstr ""
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "Live data is unavailable"
@@ -742,6 +3277,10 @@ msgstr "实时数据不可用"
 #: src/routes/tracker.tsx
 msgid "Live feed reconnecting"
 msgstr "实时信息流正在重连"
+
+#: src/routes/discord.tsx
+msgid "Live feeds"
+msgstr ""
 
 #: src/routes/tracker.tsx
 msgid "Live score tracker"
@@ -759,9 +3298,50 @@ msgstr "实时更新延迟"
 msgid "Live updates on"
 msgstr "实时更新已开启"
 
+#: src/components/maps/PatternRadar.tsx
+#: src/components/maps/SearchCard.tsx
+#: src/components/player/SkillBreakdown.tsx
+#: src/lib/skill-axes.ts
+msgid "LN"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "LN General"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "LN Inverse"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "LN Release"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "LN tail"
 msgstr "长键尾部"
+
+#: src/components/maps/SearchCard.tsx
+msgid "LN Tech"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Load a player's me! page"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Load more"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Load my me! page"
+msgstr ""
+
+#. placeholder {0}: loadStatus.name
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Loaded {0}'s me! page into the editor."
+msgstr ""
 
 #: src/routes/snipes.tsx
 msgid "Loading {countryName} snipes…"
@@ -771,9 +3351,18 @@ msgstr "正在加载 {countryName} 狙击…"
 msgid "Loading board…"
 msgstr "正在加载榜单…"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "Loading collection..."
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Loading maps..."
 msgstr "正在加载谱面..."
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Loading me! page..."
+msgstr ""
 
 #: src/routes/top-plays.tsx
 msgid "Loading page..."
@@ -783,29 +3372,175 @@ msgstr "正在加载页面..."
 msgid "Loading rankings..."
 msgstr "正在加载排行榜..."
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Loading scores..."
+msgstr ""
+
+#: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
+msgid "Loading the skin…"
+msgstr ""
+
 #: src/routes/top-plays.tsx
 msgid "Loading top plays..."
 msgstr "正在加载最佳成绩..."
 
+#: src/routes/packs.tsx
+msgid "Loading your collection..."
+msgstr ""
+
+#: src/components/farm-helper/FarmersList.tsx
+msgid "loading..."
+msgstr ""
+
+#: src/components/packs/CardCollectors.tsx
+#: src/components/packs/GoatHoldersButton.tsx
+#: src/components/skins/SkinAssetExplorer.tsx
+#: src/routes/replay_.uploads.tsx
 #: src/routes/snipes.tsx
 msgid "Loading..."
 msgstr "加载中..."
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "Loading…"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "Log in to post"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "Log in to upload"
+msgstr ""
 
 #: src/components/layout/Nav.tsx
 msgid "Log in with osu!"
 msgstr "使用 osu! 登录"
 
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Log in with osu! again to edit this skin."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Log in with osu! first."
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "Log in with osu! to post your server"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "Log in with osu! to upload a skin"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "Logout"
 msgstr "退出登录"
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Looking up score #{scoreId}"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Looking up the score{elapsedLabel}"
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "Lost the run. The board could not be reached."
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "loved"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Loved"
+msgstr ""
 
 #: src/routes/__root.tsx
 msgid "made by"
 msgstr "作者"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Made by <0>(from skin.ini, credited on the card)</0>"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Made for"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Made for <0>(resolution, optional)</0>"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Made for resolution"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Made for, e.g. 1920x1080"
+msgstr ""
+
+#: src/lib/packs.ts
+msgid "Main 4K players only"
+msgstr ""
+
+#: src/lib/packs.ts
+msgid "Main 7K players only"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Make imagemap"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Making sure a replay is available."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Malay"
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania 谱面"
+
+#: src/routes/skins_.$id.tsx
+#: src/routes/skins.tsx
+msgid "mania stage"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "mania-note art not tied to a keymode block"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "mania-stage left / right / bottom / hint pieces"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "maniabot - Mania Hub for Discord"
+msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "Maniacard"
+msgstr ""
+
+#: src/routes/packs_.collections.tsx
+msgid "Maniacard collections and pack stats."
+msgstr ""
+
+#: src/routes/packs.tsx
+msgid "Maniacard packs"
+msgstr ""
+
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "Maniacard pull"
+msgstr ""
+
+#. placeholder {0}: goal.beatmapId
+#: src/lib/goal-format.ts
+msgid "map #{0}"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "Map collections"
@@ -814,6 +3549,12 @@ msgstr "谱面收藏夹"
 #: src/routes/maps.tsx
 msgid "Map search"
 msgstr "谱面搜索"
+
+#. placeholder {0}: entry.creator
+#. placeholder {1}: formatNumber(entry.playCount)
+#: src/components/maps/SearchCard.tsx
+msgid "mapped by {0} · {1} plays"
+msgstr ""
 
 #: src/components/layout/Nav.tsx
 msgid "maps"
@@ -836,9 +3577,33 @@ msgstr "谱面数据已就绪。"
 msgid "Margin <0>+{0}</0>"
 msgstr "领先 <0>+{0}</0>"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Matching against the replay's checksum."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Matching the replay to its beatmap."
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Max PP"
 msgstr "最高 PP"
+
+#: src/routes/farm-helper.tsx
+msgid "median {median}pp"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "median {target}pp"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "members"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Middle lane thumb"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "Min PP"
@@ -848,6 +3613,26 @@ msgstr "最低 PP"
 msgid "Minimum PP"
 msgstr "最低 PP"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Mirror (out and back)"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "missing"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Missing from your collection."
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Moderate skin"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "moderation"
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Mods"
 msgstr "Mod"
@@ -856,6 +3641,46 @@ msgstr "Mod"
 msgid "more"
 msgstr "更多"
 
+#: src/lib/streak-game.ts
+msgid "More 7K"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "More DT"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "more filters"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "More followers"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "More plays"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "More playtime"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "More score"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "More watched"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Most cards"
+msgstr ""
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "most collected cards"
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Most farmed globally"
 msgstr "全球刷分最多"
@@ -863,6 +3688,14 @@ msgstr "全球刷分最多"
 #: src/routes/maps.tsx
 msgid "Most farmed in {countryName}"
 msgstr "{countryName} 刷分最多"
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "most packs opened"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Most played"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "Most Played"
@@ -876,17 +3709,89 @@ msgstr "全球游玩最多"
 msgid "Most played in {countryName}"
 msgstr "{countryName} 游玩最多"
 
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Mute chart preview"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
+#: src/routes/my-stats.tsx
 msgid "My Stats"
 msgstr "我的数据"
+
+#: src/routes/communities.tsx
+msgid "name"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Name"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Name and description"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "Needs a web.archive.org link to their osu! profile."
+msgstr ""
+
+#: src/components/packs/PackSummary.tsx
+#: src/components/packs/RevealStage.tsx
+msgid "new"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
+msgstr ""
 
 #: src/routes/tracker.tsx
 msgid "New scores stream in live over this connection."
 msgstr "新成绩会通过此连接实时推送。"
 
+#: src/lib/streak-game.ts
+msgid "Newer"
+msgstr ""
+
+#: src/routes/communities.tsx
+#: src/routes/skins.tsx
+msgid "newest"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+#: src/components/packs/CollectionPanel.tsx
+msgid "Newest"
+msgstr ""
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Next"
+msgstr ""
+
 #: src/components/ui/Pagination.tsx
 msgid "Next →"
 msgstr "下一页 →"
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Next album page"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Next area"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Next asset"
+msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "Next card"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Next collection page"
+msgstr ""
+
+#: src/routes/packs.tsx
+msgid "next free pack"
+msgstr ""
 
 #: src/components/ui/Pagination.tsx
 msgid "Next page"
@@ -896,9 +3801,52 @@ msgstr "下一页"
 msgid "Next Page"
 msgstr "下一页"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Next players"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "no"
+msgstr ""
+
+#. placeholder {0}: i18n._(REASON_META[reasonFilter].label)
+#: src/routes/farm-helper.tsx
+msgid "No {0} maps right now"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "No {selectedKeymode}K preview yet."
+msgstr ""
+
+#. placeholder {0}: query.trim()
+#: src/components/packs/album/AlbumView.tsx
+msgid "No album matches \"{0}\"."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "No beatmaps found for \"{query}\""
+msgstr ""
+
 #: src/routes/snipes.tsx
 msgid "No board stored for this lane yet."
 msgstr "此栏目还没有榜单数据。"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "No cards"
+msgstr ""
+
+#. placeholder {0}: activeQuery.trim()
+#: src/components/packs/CollectionPanel.tsx
+msgid "No cards match \"{0}\"."
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "No cards match the selected rarity."
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "No cards yet. Open a pack to start your collection."
+msgstr ""
 
 #: src/routes/rankings.tsx
 msgid "No change in the last 7 days"
@@ -908,6 +3856,10 @@ msgstr "最近 7 天无变化"
 msgid "No countries found"
 msgstr "未找到国家/地区"
 
+#: src/routes/farm-helper.tsx
+msgid "no data"
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "No favourites found for any player in the top 50."
 msgstr "前 50 名玩家中没有找到任何收藏。"
@@ -916,9 +3868,54 @@ msgstr "前 50 名玩家中没有找到任何收藏。"
 msgid "No favourites match your filters. Try loosening them."
 msgstr "没有符合筛选条件的收藏。试着放宽一些。"
 
+#: src/routes/farm-helper.tsx
+msgid "no gains here"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "No images or sounds were found in the archive."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "No mania difficulties"
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "No mania difficulty selected"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "No maps match these filters."
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "No maps match your filters"
 msgstr "没有符合筛选条件的谱面"
+
+#: src/routes/farm-helper.tsx
+msgid "No maps match your search"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "no matches"
+msgstr ""
+
+#: src/components/ui/SelectMenu.tsx
+msgid "No matches"
+msgstr ""
+
+#. placeholder {0}: activeQuery.trim()
+#: src/components/packs/CollectionPanel.tsx
+msgid "No missing player matches \"{0}\"."
+msgstr ""
+
+#: src/components/farm-helper/FarmersList.tsx
+msgid "No nearby players have farmed this yet."
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "No players"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "No players found."
@@ -928,6 +3925,22 @@ msgstr "未找到玩家。"
 msgid "No players hidden."
 msgstr "没有隐藏的玩家。"
 
+#: src/components/farm-helper/FarmersList.tsx
+msgid "No players match."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "no pp range"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "no preview"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "No preview available."
+msgstr ""
+
 #: src/routes/rankings.tsx
 msgid "No rank data from 7 days ago yet"
 msgstr "还没有 7 天前的排名数据"
@@ -936,6 +3949,10 @@ msgstr "还没有 7 天前的排名数据"
 #: src/routes/rankings.tsx
 msgid "No ranked players yet."
 msgstr "还没有上榜玩家。"
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "No rated {label} plays found"
+msgstr ""
 
 #: src/routes/index.tsx
 msgid "No recent scores"
@@ -957,9 +3974,45 @@ msgstr "还没有区域谱面榜单"
 msgid "No regions found"
 msgstr "未找到区域"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "No replayable scores here"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "No replays available for this player"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "No replays available from {countryCode} players on this difficulty"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "No scores found from {countryCode} players on this difficulty"
+msgstr ""
+
 #: src/routes/tracker.tsx
 msgid "No scores match this filter"
 msgstr "没有符合此筛选的成绩"
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "No scores on this difficulty"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "No servers match"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "No servers yet"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "No skins match"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "No skins yet"
+msgstr ""
 
 #: src/routes/snipes.tsx
 msgid "No snipes match the current filters."
@@ -973,13 +4026,90 @@ msgstr "{countryName} 还没有狙击记录。"
 msgid "No top plays found"
 msgstr "未找到最佳成绩"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Nobody else can open it. Set it as your replay skin and it plays in your replays."
+msgstr ""
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Nobody has opened a pack yet."
+msgstr ""
+
+#: src/components/packs/CardCollectors.tsx
+msgid "Nobody has pulled your card yet."
+msgstr ""
+
+#: src/components/packs/GoatPollVoters.tsx
+msgid "Nobody has voted on this row."
+msgstr ""
+
+#: src/components/packs/CardCollectors.tsx
+msgid "Nobody here by that name."
+msgstr ""
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Nobody here is called \"{debounced}\"."
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "Nominate"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "nominate a player..."
+msgstr ""
+
+#: src/components/packs/GoatPollVoters.tsx
+msgid "nominator"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "None of the plays could be rated yet. Converts and unusual keymodes are skipped."
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "None of your plays could be rated yet. Converts and unusual keymodes are skipped."
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "None set. <0>Pick one from the skins page</0>."
 msgstr "尚未设置。<0>去皮肤页面挑一个</0>。"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/lib/goal-format.ts
+msgid "Normal"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Norwegian"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Not enough data near your pp yet"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "not found"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "not in top plays"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Not in your collection"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "not set"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "Not signed in"
 msgstr "未登录"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Not tracked"
+msgstr ""
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Not tracked yet"
@@ -989,30 +4119,212 @@ msgstr "尚未追踪"
 msgid "Note shape"
 msgstr "音符形状"
 
+#: src/routes/skins.tsx
+msgid "notes"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Notes"
+msgstr ""
+
+#: src/components/communities/AccessScopePicker.tsx
+msgid "Nothing by that name."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Nothing here would move your total"
+msgstr ""
+
+#. placeholder {0}: country === COMMUNITY_INTERNATIONAL ? t`international servers` : getCountryName(country)
+#: src/routes/communities.tsx
+msgid "Nothing listed for {0} yet."
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Nothing missing. Every player in the pool is in your collection."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Nothing qualifies under this filter at the moment, but other reasons still have maps."
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+msgid "Nothing uploaded yet."
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Notice"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Numbered list"
+msgstr ""
+
+#. placeholder {0}: queue.waiting
+#: src/components/player/SkillBreakdown.tsx
+msgid "of {0}"
+msgstr ""
+
+#. placeholder {0}: formatNumber(totals.poolTotal)
+#: src/components/packs/collections/CommunityStatsHeader.tsx
+msgid "of {0} pullable"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Off /skins; only you see this page. Your replays keep playing in it"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Off means you are only part of the count. Needs you signed in."
 msgstr "关闭后你只计入人数统计。需要登录。"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Off the list, no download. Your replays still play in it."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "old pb"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "Older"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "oldest"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "oldest top ?"
+msgstr ""
+
+#: src/lib/streak-game.ts
+msgid "oldest top {month}"
+msgstr ""
+
+#. placeholder {0}: formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "on {0}"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "On /skins for anyone to download"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "On /skins, anyone can download the .osk."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Only me"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Only skillboost maps right now"
+msgstr ""
+
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "only you"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "only you can open these"
+msgstr ""
+
+#. placeholder {0}: card.player.user.username
 #. placeholder {0}: entry.user.username
 #. placeholder {0}: event.sniper.username
-#. placeholder {0}: event.victim.username
+#: src/components/packs/PackSummary.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 msgid "Open {0}'s profile"
 msgstr "打开 {0} 的个人资料"
+
+#. placeholder {0}: current.player.user.username
+#: src/components/packs/RevealStage.tsx
+msgid "Open {0}'s profile in a new tab"
+msgstr ""
+
+#. placeholder {0}: owner.username
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "Open {0}'s pull of {label}"
+msgstr ""
+
+#: src/components/packs/PackSummary.tsx
+msgid "Open another"
+msgstr ""
 
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 msgid "Open beatmap on osu!"
 msgstr "在 osu! 上打开谱面"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Open image in new tab"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "Open in osu! client"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Open link"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "open packs"
 msgstr "开卡包"
 
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/PackSummary.tsx
+msgid "Open profile"
+msgstr ""
+
+#. placeholder {0}: section.name
+#: src/components/packs/album/AlbumView.tsx
+msgid "Open the {0} album"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Open the album"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Open the in-browser replay viewer for a score."
+msgstr ""
+
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "Open your own packs"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Opening shared replay{elapsedLabel}"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Opening the archive..."
+msgstr ""
+
+#: src/components/packs/PackStage.tsx
+msgid "Opening what is left..."
+msgstr ""
+
+#: src/components/packs/PackStage.tsx
+msgid "Opening..."
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "osu! profile BBCode editor"
+msgstr ""
+
 #: src/routes/rankings.tsx
 msgid "osu!mania country rankings"
 msgstr "osu!mania 国家/地区排行榜"
+
+#: src/routes/communities.tsx
+msgid "osu!mania Discord servers"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "osu!mania maps played by top country players."
@@ -1026,13 +4338,54 @@ msgstr "{countryName} 顶尖玩家游玩的 osu!mania 谱面。"
 msgid "osu!mania rankings & live score tracker"
 msgstr "osu!mania 排行榜与实时成绩追踪"
 
+#: src/routes/replay.tsx
+msgid "osu!mania replay watcher"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "osu!mania replays only"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+#: src/routes/skins.tsx
+msgid "osu!mania skins"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "osu!mania skins on Mania Hub."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+#: src/routes/skins.tsx
+msgid "other"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Other"
 msgstr "其他"
 
+#. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "out of {0}"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "overall"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
+#: src/routes/packs.tsx
 msgid "packs"
 msgstr "卡包"
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Packs"
+msgstr ""
+
+#: src/components/packs/collections/CommunityStatsHeader.tsx
+msgid "packs opened"
+msgstr ""
 
 #. placeholder {0}: page + 1
 #: src/components/ui/Pagination.tsx
@@ -1043,13 +4396,101 @@ msgstr "第 {0} / {totalPages} 页"
 msgid "Page 1"
 msgstr "第 1 页"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "Page number, 1 to {totalPages}"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Parsing the file and finding its beatmap."
+msgstr ""
+
 #: src/routes/tracker.tsx
 msgid "Pass"
 msgstr "通过"
 
+#: src/lib/goal-format.ts
+msgid "Pass {map} ({speed})"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Paste"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Paste formatting"
+msgstr ""
+
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "pattern"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Pattern"
+msgstr ""
+
+#: src/components/maps/PatternRadar.tsx
+msgid "Pattern radar chart"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "pause"
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Pause chart preview"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "pause overlay, fail and section screens, countdown"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "pending"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Pending"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "percentiles are among tracked players"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Persian"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Pick a different file"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Picking a backdrop or a pattern re-renders that playfield from the uploaded .osk while preserving its other saved choice. Patterns are cut from real charts, one keymode at a time. Keymodes left alone keep the previews they were published with."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Pink"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Pinned"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "play"
+msgstr ""
+
 #: src/routes/rankings.tsx
 msgid "Play Count"
 msgstr "游玩次数"
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Play habits and a playstyle breakdown: active days, sessions and skill mix."
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Play this skin in your own replays for everyone who watches them"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "playback"
@@ -1064,13 +4505,31 @@ msgstr "游玩客户端：<0>{0}</0>"
 msgid "Player"
 msgstr "玩家"
 
+#: src/components/packs/album/AlbumView.tsx
+msgid "Player details"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
+#: src/routes/farm-helper.tsx
 msgid "players"
 msgstr "玩家"
 
+#: src/components/discord/CommandShowcase.tsx
 #: src/routes/maps.tsx
 msgid "Players"
 msgstr "玩家"
+
+#: src/components/packs/collections/CommunityStatsHeader.tsx
+msgid "players carded"
+msgstr ""
+
+#: src/components/farm-helper/NeighborhoodGraph.tsx
+msgid "Players near your pp"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Players near your pp are farming maps, but right now every one of them would add less than 1pp for you. The popular view still shows what they play."
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Players you hide are filtered out of rankings and feeds across the site. This list is stored on this browser only."
@@ -1080,10 +4539,42 @@ msgstr "被你隐藏的玩家会从全站的排行榜和信息流中过滤掉。
 msgid "Playing"
 msgstr "游玩中"
 
+#: src/components/packs/album/AlbumView.tsx
+msgid "plays"
+msgstr ""
+
 #: src/routes/maps.tsx
 #: src/routes/rankings.tsx
 msgid "Plays"
 msgstr "游玩"
+
+#: src/components/me/RosterOptInCard.tsx
+msgid "Plays are recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Please choose an .osr replay file."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Polish"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "popularity"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Portuguese"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "Post your server"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "pp gain"
+msgstr ""
 
 #: src/routes/top-plays.tsx
 msgid "PP Gain"
@@ -1093,9 +4584,54 @@ msgstr "PP 增量"
 msgid "PP Gained"
 msgstr "获得 PP"
 
+#: src/components/discord/CommandShowcase.tsx
+msgid "PP-gain map recommendations tuned to a player."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Preparing the update."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Preparing the upload."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "preview"
+msgstr ""
+
+#: src/components/skins/SkinPreviewPickers.tsx
+#: src/routes/skins_.$id.tsx
+msgid "Preview"
+msgstr ""
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Previous"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Previous album page"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Previous area"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Previous asset"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Previous collection page"
+msgstr ""
+
 #: src/components/ui/Pagination.tsx
 msgid "Previous page"
 msgstr "上一页"
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Previous players"
+msgstr ""
 
 #: src/routes/snipes.tsx
 msgid "Previously"
@@ -1104,6 +4640,12 @@ msgstr "此前"
 #: src/routes/__root.tsx
 msgid "privacy"
 msgstr "隐私"
+
+#: src/components/skins/SkinCard.tsx
+#: src/components/skins/SkinSettingsModal.tsx
+#: src/routes/skins_.$id.tsx
+msgid "private"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "private · updated {updatedAtLabel}"
@@ -1116,6 +4658,66 @@ msgstr "可能正在重启或维护。请稍后再试。"
 #: src/components/layout/Nav.tsx
 msgid "Profile"
 msgstr "个人资料"
+
+#: src/routes/bbcode.tsx
+msgid "Profile link"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "provisional"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "public"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "published"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Publishing."
+msgstr ""
+
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "pulled"
+msgstr ""
+
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "Pulled again by"
+msgstr ""
+
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "Pulled by"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Purple"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "Quadstream"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "qualified"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Qualified"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Quote"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Rainbow"
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "Ran out of players to draw."
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "Random"
@@ -1141,9 +4743,26 @@ msgstr "{countryName} 随机抽取"
 msgid "Range"
 msgstr "范围"
 
+#: src/components/maps/SearchCard.tsx
+msgid "ranked"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Ranked"
+msgstr ""
+
 #: src/routes/tracker.tsx
 msgid "Ranked (PP)"
 msgstr "Ranked（PP）"
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
+msgstr ""
+
+#. placeholder {0}: entry.ranked_score.toLocaleString("en-US")
+#: src/components/packs/album/AlbumView.tsx
+msgid "Ranked score {0}"
+msgstr ""
 
 #: src/components/layout/Nav.tsx
 msgid "rankings"
@@ -1153,13 +4772,102 @@ msgstr "排行榜"
 msgid "Rankings"
 msgstr "排行榜"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "Rarity"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "Rating the plays failed. It retries automatically, check back in a bit."
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "Rating your plays failed. It retries automatically, check back in a bit."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "raw difficulty"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Re-render every keymode"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Re-render the playfield previews, name the screenshots, or change the card cover"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Re-rendered, not saved yet"
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "Reach {pp} total pp"
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "Reach country rank #{rank}"
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "Reach global rank #{rank}"
+msgstr ""
+
+#. placeholder {0}: reading.name
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Reading {0}"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Reading the archive..."
+msgstr ""
+
+#: src/components/packs/GoatPollVoters.tsx
+msgid "Reading the ballot..."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Reading the replay file{elapsedLabel}"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Reading the skin"
+msgstr ""
+
+#: src/routes/packs.tsx
+msgid "ready"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "recent"
+msgstr ""
+
 #: src/routes/top-plays.tsx
 msgid "Recent"
 msgstr "最新"
 
+#: src/components/discord/CommandShowcase.tsx
+msgid "Recent notable top plays across a country."
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Recent plays"
 msgstr "最近游玩"
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Recent Plays"
+msgstr ""
 
 #: src/routes/index.tsx
 msgid "Recent Scores"
@@ -1177,6 +4885,75 @@ msgstr "{countryName} 最近的 osu!mania 最佳成绩与 pp 纪录。"
 msgid "Recent Top Plays"
 msgstr "最近最佳成绩"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Recently Uploaded by the Community"
+msgstr ""
+
+#: src/components/replay/ReplayRecentlyViewed.tsx
+msgid "Recently Watched"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "receptor art"
+msgstr ""
+
+#. placeholder {0}: card.copies - 1
+#: src/components/packs/CollectionPanel.tsx
+msgid "Recycle {0, plural, one {# duplicate copy} other {# duplicate copies}}"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Recycle +{bulkShardTotal}"
+msgstr ""
+
+#: src/components/packs/PackSummary.tsx
+msgid "Recycle +{selectedValue}"
+msgstr ""
+
+#: src/components/packs/PackSummary.tsx
+msgid "Recycle all +{allValue}"
+msgstr ""
+
+#. placeholder {0}: wholeCardShardValue(menu.card)
+#: src/components/packs/CollectionPanel.tsx
+msgid "Recycle all copies +{0}"
+msgstr ""
+
+#. placeholder {0}: wholeCardShardValue(menu.card)
+#: src/components/packs/CollectionPanel.tsx
+msgid "Recycle card +{0}"
+msgstr ""
+
+#: src/components/packs/PackSummary.tsx
+msgid "Recycle card +{value}"
+msgstr ""
+
+#. placeholder {0}: duplicateShardValue(menu.card)
+#: src/components/packs/CollectionPanel.tsx
+msgid "Recycle duplicates +{0}"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Recycle duplicates +{recyclable}"
+msgstr ""
+
+#: src/components/packs/PackSummary.tsx
+msgid "Recycle the rest +{allValue}"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Recycle this card (removes it from your collection)"
+msgstr ""
+
+#: src/components/packs/PackSummary.tsx
+msgid "Recycle this copy +{value}"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/PackSummary.tsx
+msgid "Recycling..."
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Refreshing maps..."
 msgstr "正在刷新谱面..."
@@ -1187,6 +4964,7 @@ msgstr "正在刷新谱面..."
 msgid "Refreshing..."
 msgstr "刷新中..."
 
+#: src/components/communities/AccessScopePicker.tsx
 #: src/components/layout/CountrySelector.tsx
 msgid "Regions"
 msgstr "区域"
@@ -1195,9 +4973,74 @@ msgstr "区域"
 msgid "Reload page"
 msgstr "重新加载页面"
 
+#: src/components/packs/GoatPoll.tsx
+msgid "remove"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/skins/SkinSettingsModal.tsx
 msgid "Remove"
 msgstr "移除"
+
+#. placeholder {0}: entry.title
+#: src/components/replay/ReplayRecentlyViewed.tsx
+msgid "Remove {0} from recently watched"
+msgstr ""
+
+#. placeholder {0}: nominee.username
+#: src/components/packs/GoatPoll.tsx
+msgid "Remove {0} from the poll"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Remove {overlayMenuTargetLabel}"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Remove color"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Remove image"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Remove link"
+msgstr ""
+
+#. placeholder {0}: index + 1
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Remove screenshot {0}"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Remove this screenshot"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Removing the screenshot failed. Try again."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "rendering"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Rendering the {selectedKeymode}K playfield..."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Replace"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Replace image…"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Replace the .osk with a newer build of this skin"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Replaces the mouse cursor with an osu!-style cursor across the site. Desktop only."
@@ -1206,6 +5049,22 @@ msgstr "在全站将鼠标光标替换为 osu! 风格光标。仅桌面端。"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Replay skin"
 msgstr "回放皮肤"
+
+#: src/routes/replay_.uploads.tsx
+msgid "Replay Uploads"
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+msgid "Replays"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Replays available"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Replays available so far"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Replays play with their player's published skin. Turn off to always use yours."
@@ -1223,23 +5082,156 @@ msgstr "重抽设置"
 msgid "Reset all"
 msgstr "重置全部"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Resize / crop"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Resize / crop…"
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Resume chart preview"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Resume this map"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+#: src/routes/communities.tsx
+#: src/routes/packs.tsx
+#: src/routes/skins.tsx
+msgid "Retry"
+msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "reveal all"
+msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "Revealing the rest..."
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "Rice"
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "right"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Right thumb"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another."
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Romanian"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Rotate every color in the selection"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "rough estimate, may be off"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "Run an osu!mania server? Post it and it shows up here once it is approved."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Russian"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Save"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Save changes"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Save your osu! account so every other command knows who you are."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "saved"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Saved in this browser only. <0><1/>Log in with osu!</0> to sync your collection across devices."
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Saving maps..."
 msgstr "正在保存谱面..."
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Saving the name and description failed. Try again."
+msgstr ""
+
+#: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
+msgid "Saving your replay skin failed. Open the editor and apply again."
+msgstr ""
+
+#: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
+msgid "Saving your replay skin…"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Saving."
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Scale the image to fit"
+msgstr ""
 
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 msgid "Score"
 msgstr "分数"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Score #{scoreId}"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "score, combo and ranking fonts, health bar"
+msgstr ""
+
 #: src/routes/tracker.tsx
 msgid "Scores"
 msgstr "成绩"
+
+#. placeholder {0}: index + 1
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Screenshot {0}"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "screenshots"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Screenshots"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Scroll direction"
 msgstr "下落方向"
 
+#: src/components/maps/ChartPreviewPanel.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Scroll speed"
 msgstr "下落速度"
@@ -1248,9 +5240,33 @@ msgstr "下落速度"
 msgid "search"
 msgstr "搜索"
 
+#: src/components/ui/SelectMenu.tsx
+msgid "Search"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Search a beatmap, then pick a difficulty"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Search a player, or paste a score ID"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Search any beatmap by title, artist, or mapper..."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Search beatmap..."
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Search by title, artist, mapper, or difficulty"
 msgstr "按标题、艺术家、谱师或难度搜索"
+
+#: src/routes/communities.tsx
+msgid "Search Discord servers"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "Search every ranked osu!mania map by title, keymode, stars, and status."
@@ -1260,25 +5276,147 @@ msgstr "按标题、键数、星级和状态搜索所有 ranked osu!mania 谱面
 msgid "Search failed. Try again."
 msgstr "搜索失败。请重试。"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Search for a beatmap above to find replays"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Search for a player above to browse their available replays"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Search for any beatmap to see this player's scores on it"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Search is unavailable right now. Try again in a bit."
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Search maps"
+msgstr ""
+
+#: src/components/communities/AccessScopePicker.tsx
+msgid "Search places"
+msgstr ""
+
+#: src/components/farm-helper/FarmersList.tsx
+msgid "search player..."
+msgstr ""
+
+#: src/components/ui/SearchInput.tsx
+msgid "Search player..."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Search player... or score ID"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Search players by username"
 msgstr "按用户名搜索玩家"
+
+#: src/routes/communities.tsx
+msgid "Search servers"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "Search skin, creator, or uploader"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "Search skins"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "Search title, artist, mapper, or difficulty"
 msgstr "搜索标题、艺术家、谱师或难度"
 
+#: src/components/maps/MapSearchSection.tsx
+msgid "Search title, artist, mapper, or filter: keys=7 stars>5 status=ranked"
+msgstr ""
+
 #: src/components/layout/CountrySelector.tsx
 msgid "Search..."
 msgstr "搜索..."
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "See every command"
+msgstr ""
+
+#. placeholder {0}: nominee.username
+#: src/components/packs/GoatPoll.tsx
+msgid "See who voted on {0}"
+msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "See your pulls"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Select"
+msgstr ""
+
+#. placeholder {0}: card.player.user.username
+#. placeholder {0}: card.username
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/PackSummary.tsx
+msgid "Select {0}"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/PackSummary.tsx
+msgid "select all"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/PackSummary.tsx
+msgid "Select cards..."
+msgstr ""
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Select country"
 msgstr "选择国家/地区"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "select page"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "select text or type it here"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Serbian"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "Servers are unavailable right now"
+msgstr ""
+
 #: src/routes/snipes.tsx
 msgid "Set"
 msgstr "设定"
+
+#: src/lib/goal-format.ts
+msgid "set {span} ago"
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "set just now"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Setting the replay skin failed. Try again."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Setting up the viewer."
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Setting up…"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "settings"
@@ -1288,20 +5426,70 @@ msgstr "设置"
 msgid "Settings"
 msgstr "设置"
 
+#. placeholder {0}: skin.name
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Settings for {0}"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/PackSummary.tsx
+#: src/routes/packs.tsx
+msgid "shards"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Shared replay"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Shift hue ({signedHueShift}°)"
+msgstr ""
+
+#. placeholder {0}: item.label
+#: src/routes/skins_.$id.tsx
+msgid "Show {0}"
+msgstr ""
+
 #. placeholder {0}: formatNumber(currentTotal)
 #: src/routes/maps.tsx
 msgid "Show {0} maps"
 msgstr "显示 {0} 张谱面"
+
+#. placeholder {0}: section.scores.length - 5
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Show {0} More"
+msgstr ""
 
 #. placeholder {0}: formatNumber(randomPickCount)
 #: src/routes/maps.tsx
 msgid "Show {0} picks"
 msgstr "显示 {0} 个选项"
 
+#: src/components/maps/MapSearchSection.tsx
+msgid "Show {totalLabel} maps"
+msgstr ""
+
 #. placeholder {0}: formatNumber(board.entries.length)
 #: src/routes/snipes.tsx
 msgid "Show all {0}"
 msgstr "显示全部 {0} 个"
+
+#: src/routes/farm-helper.tsx
+msgid "show everything"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "show fewer"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "show more"
+msgstr ""
+
+#: src/components/player/SkillPlaysModal.tsx
+#: src/routes/replay_.uploads.tsx
+msgid "Show more"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Show my name under spectators when watching a replay"
@@ -1315,6 +5503,18 @@ msgstr "显示非 4K 游玩"
 msgid "Show non-4K scores"
 msgstr "显示非 4K 成绩"
 
+#: src/routes/farm-helper.tsx
+msgid "show skillboost"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Show the image at its real pixel size"
+msgstr ""
+
+#: src/routes/packs_.collections.tsx
+msgid "Showcase"
+msgstr ""
+
 #: src/routes/tracker.tsx
 msgid "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
 msgstr "正在显示 FC 断连（1 miss）- 左键清除，右键切换为全连"
@@ -1323,9 +5523,49 @@ msgstr "正在显示 FC 断连（1 miss）- 左键清除，右键切换为全连
 msgid "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
 msgstr "正在显示全连（0 miss）- 左键切换为 FC 断连，右键清除"
 
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "shuffle"
+msgstr ""
+
+#: src/components/packs/ShuffleStage.tsx
+msgid "shuffling"
+msgstr ""
+
+#: src/components/packs/ShuffleStage.tsx
+msgid "Shuffling players..."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Side by Side"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Sign in to set a replay skin for your plays."
 msgstr "登录后可为你的成绩设置回放皮肤。"
+
+#: src/routes/skins_.$id.tsx
+msgid "Sign in to set a replay skin."
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "Sign in to vote →"
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "Sign in with osu! first, then connect Discord."
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "Sign in with osu! to play blitz."
+msgstr ""
+
+#: src/components/packs/CardCollectors.tsx
+msgid "Sign in with osu! to see who has pulled your card."
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+msgid "Sign in with osu! to see your uploads."
+msgstr ""
 
 #: src/components/layout/Nav.tsx
 msgid "Signed in as"
@@ -1336,21 +5576,89 @@ msgstr "当前登录为"
 msgid "Signed in as {0}"
 msgstr "当前登录为 {0}"
 
+#: src/components/skins/SimilarSkins.tsx
+msgid "Similar skins"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "size"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Size"
 msgstr "大小"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "Skill shape: {shape}"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "skillboost"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "skillboost {target}pp"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "skillboost only"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Skin"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "skin & layout"
 msgstr "皮肤与布局"
 
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Skin description"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Skin name"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "skin settings"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Skin settings"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "skin.ini references:"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "skins"
 msgstr "皮肤"
 
+#: src/routes/skins.tsx
+msgid "Skins are unavailable right now"
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Skips the last few players and maps you were shown."
 msgstr "跳过最近展示过的玩家和谱面。"
+
+#: src/components/packs/PackSummary.tsx
+msgid "sliced"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Slovak"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Small"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Snipe feed"
+msgstr ""
 
 #: src/components/SnipesNotTracked.tsx
 msgid "Snipe tracking runs for a small set of countries because it's an expensive operation."
@@ -1392,10 +5700,30 @@ msgstr "狙击不适用于全球视图"
 msgid "Something broke"
 msgstr "出错了"
 
+#: src/routes/farm-helper.tsx
+msgid "Something went wrong loading these maps. Try the toggle again in a moment."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Something went wrong loading this player's farm data. Try again in a moment."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Something went wrong. Try again."
+msgstr ""
+
 #: src/routes/tracker.tsx
 msgid "Sort"
 msgstr "排序"
 
+#: src/routes/communities.tsx
+#: src/routes/skins.tsx
+msgid "sort by"
+msgstr ""
+
+#: src/components/maps/FilterChips.tsx
+#: src/components/maps/MapSearchSection.tsx
+#: src/components/packs/CollectionPanel.tsx
 #: src/routes/maps.tsx
 msgid "Sort by"
 msgstr "排序方式"
@@ -1408,13 +5736,47 @@ msgstr "按星级从高到低排序 - 左键切换升序，右键清除"
 msgid "Sorting lowest star rating first - left click to clear, right click for descending"
 msgstr "按星级从低到高排序 - 左键清除，右键切换降序"
 
+#: src/components/communities/field-options.tsx
+msgid "Spanish"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Spectators"
 msgstr "观众"
 
+#: src/components/maps/SearchCard.tsx
+msgid "Speedjack"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Spoiler text"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "stable"
+msgstr ""
+
+#: src/components/maps/PatternRadar.tsx
+msgid "STAM"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+#: src/lib/skill-axes.ts
+msgid "Stamina"
+msgstr ""
+
+#: src/lib/packs.ts
+msgid "Standard"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Star rating"
 msgstr "星级"
+
+#: src/routes/farm-helper.tsx
+msgid "stars"
+msgstr ""
 
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
@@ -1427,9 +5789,58 @@ msgstr "星级"
 msgid "Stars <0>{0}</0>"
 msgstr "星级 <0>{0}</0>"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Start from your live me! page"
+msgstr ""
+
+#: src/components/me/RosterOptInCard.tsx
+msgid "Start tracking your plays"
+msgstr ""
+
+#: src/routes/packs_.collections.tsx
+msgid "Stats"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Status"
 msgstr "状态"
+
+#: src/routes/replay.tsx
+msgid "Still fetching the replay and chart."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "Still loading{elapsedLabel}"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Still missing"
+msgstr ""
+
+#. placeholder {0}: formatNumber(undiscovered.length)
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "Still out there ({0})"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+#: src/lib/skill-axes.ts
+msgid "Stream"
+msgstr ""
+
+#: src/components/maps/PatternRadar.tsx
+msgid "STREAM"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Strikethrough"
+msgstr ""
+
+#. placeholder {0}: i18n._(entries[0].labelMsg)
+#: src/components/player/SkillBreakdown.tsx
+msgid "Strongest in <0>{0}</0>"
+msgstr ""
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Subregions"
@@ -1438,6 +5849,23 @@ msgstr "子区域"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Sure?"
 msgstr "确定？"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Sure? {selectedCount, plural, one {# card leaves the collection} other {# cards leave the collection}}"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "sure? +{lastCopyValue}"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/PackSummary.tsx
+msgid "Sure? The card leaves the collection"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Swedish"
+msgstr ""
 
 #. placeholder {0}: displayCountryName(viewerCountryCode, locale)
 #: src/components/layout/Nav.tsx
@@ -1449,9 +5877,54 @@ msgstr "切换国家/地区到 {0}"
 msgid "Switch to {0}"
 msgstr "切换到 {0}"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "Synced to your osu! account."
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Syncing to your osu! account..."
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "tags"
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Tags"
 msgstr "标签"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Tap a keymode to toggle its label."
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "tap one to preview its reply"
+msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "Tap the stack or drag the top card to draw"
+msgstr ""
+
+#: src/routes/packs.tsx
+msgid "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers."
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+#: src/lib/skill-axes.ts
+msgid "Tech"
+msgstr ""
+
+#: src/components/maps/PatternRadar.tsx
+msgid "TECH"
+msgstr ""
+
+#: src/lib/skill-axes.ts
+msgid "Technical"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Tell the bot who you are once with <0>/link</0>. After that, lookups like <1>/recent</1> default to your account, no username needed."
+msgstr ""
 
 #: src/components/BackendOfflineScreen.tsx
 msgid "Temporarily offline"
@@ -1461,21 +5934,299 @@ msgstr "暂时离线"
 msgid "terms"
 msgstr "条款"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Text"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Text (optional)"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Text (replaces the selection)"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Text color"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Text color…"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Text size"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Thai"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "That does not look like a Discord invite link."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "That file isn't a supported image."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "That invite is for a different server than the one you picked."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "That is your own listing."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "That listing is not yours."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "That listing no longer exists."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "That replay file is too large to open in the browser."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "That selection has no colors to copy."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "That server is already listed."
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+#: src/routes/replay.tsx
+msgid "That upload is already gone."
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "That username doesn't look right."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "The {keys}K block resolves no note images; the preview shows flat colours."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "The {selectedKeymode}K block resolves no note images, so this preview uses flat colours."
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "The album is unavailable right now. Try again in a bit."
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "The archive could not be read. Tap to try again."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "The card cover could not be changed. Try again."
+msgstr ""
+
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "The card was recycled, never synced, or the link is wrong."
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The chart analyzer is rating the top plays right now."
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The chart analyzer is rating your top plays right now."
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "The chart file isn't available, so only the replay will load."
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "The delete failed. Try again."
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "The draw pool could not be read just now. Try again in a moment."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "The exact .osu file works too."
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "The first uploaded skin lands here."
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "The link and the .osk filename stay as published."
+msgstr ""
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "The live feed is connected. New plays will start showing up as players submit them."
 msgstr "实时信息流已连接。玩家提交新成绩后就会显示在这里。"
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "The live score feed for a country, newest first."
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "The most farmed maps in a country, ranked by activity."
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "The new GOAT"
+msgstr ""
 
 #: src/routes/__root.tsx
 msgid "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."
 msgstr "页面遇到意外错误，未能完成渲染。重新加载通常可以解决；如果反复出现，请尝试禁用浏览器扩展。"
 
+#: src/routes/farm-helper.tsx
+msgid "The player panel can stay here, but this view did not return fresh map data."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "The previews could not be rendered."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "The previews could not be updated right now. Try again."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "The previews could not be updated. Try again."
+msgstr ""
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "The rankings are here, but this country was added recently. New plays will start showing up once players submit them."
 msgstr "排行榜已就绪，但该国家/地区是最近才添加的。玩家提交新成绩后就会显示在这里。"
 
+#: src/components/packs/album/AlbumView.tsx
+msgid "The rankings lookup failed."
+msgstr ""
+
+#: src/routes/packs.tsx
+msgid "The rankings lookup failed. Try again in a moment."
+msgstr ""
+
+#: src/components/packs/ShuffleStage.tsx
+msgid "The rankings lookup is taking a moment"
+msgstr ""
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "The rating may be waiting for a fresh chart-analysis pass."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "The replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "The replay loaded, but the chart file for {mapLabel} can't be downloaded right now."
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+msgid "The replays you have uploaded to Mania Hub, with their share links and deletes."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "The screenshot names could not be saved. Try again."
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "The servers could not be loaded."
+msgstr ""
+
+#: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
+msgid "The skin could not be loaded. Try again in a moment."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "The skin file could not be downloaded, so its previews cannot be re-rendered."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "The skin file could not be read, so its previews cannot be re-rendered."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "The skin file is not in storage, so its previews cannot be re-rendered."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "The skin needs a name."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "The skin's original creator"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "The skins list could not be loaded."
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The top plays are waiting for the chart analyzer. Position in queue: {position}"
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "The tracked player pool is too small to play right now."
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "The vote just closed."
+msgstr ""
+
+#: src/components/packs/CardCollectors.tsx
+msgid "Their copy"
+msgstr ""
+
 #: src/routes/tracker.tsx
 msgid "These players finished the same maps within seconds of each other, repeatedly: a multiplayer lobby"
 msgstr "这些玩家多次在几秒内先后完成同一张谱面：这是一个多人游戏房间"
+
+#: src/components/packs/GoatPoll.tsx
+msgid "They're already a GOAT."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "This .osk could not be read."
+msgstr ""
+
+#: src/components/me/RosterOptInCard.tsx
+msgid "This country's opt-in list is full right now. Check back later."
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "This file could not be decoded."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "This file is {size}. The limit is 50 MB."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "This is how it looks on the skins page."
+msgstr ""
+
+#: src/components/packs/GoatHoldersButton.tsx
+msgid "This is not available yet. Check back soon."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "this map"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a new backdrop and pattern; later edits will preserve both."
+msgstr ""
 
 #: src/routes/__root.tsx
 msgid "This page doesn't exist."
@@ -1485,9 +6236,77 @@ msgstr "此页面不存在。"
 msgid "This page will load automatically once {name} is ready."
 msgstr "{name} 就绪后，此页面会自动加载。"
 
+#: src/components/packs/RevealStage.tsx
+msgid "This player's card refused to mint. Not enough ranked play data."
+msgstr ""
+
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "This pull is gone"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "This replay does not include a beatmap checksum."
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "This replay needs its beatmap"
+msgstr ""
+
+#: src/routes/replay.tsx
+msgid "This score is brand new. osu! takes a moment before the replay can be downloaded."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "This skin has no {selectedKeymode}K preview yet; pick a backdrop for it first."
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "This skin is not available."
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "This skin's file is not available, so its previews cannot be re-rendered."
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "This skin's settings are too large to store."
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Tiny"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "title"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Title"
+msgstr ""
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "to"
+msgstr ""
+
+#: src/lib/changelog.ts
+msgid "today"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "Toggle menu"
 msgstr "切换菜单"
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Too many requests right now, so the skin file did not come down."
+msgstr ""
+
+#: src/lib/goal-format.ts
+msgid "took {span}"
+msgstr ""
 
 #. placeholder {0}: event.boardRank
 #: src/routes/snipes.tsx
@@ -1499,6 +6318,43 @@ msgstr "占据了国家/地区榜第 {0} 名"
 #: src/routes/snipes.tsx
 msgid "Top {0} of {1}"
 msgstr "前 {0} 名（共 {1}）"
+
+#. placeholder {0}: topSharePercent(percentile.value)
+#: src/components/player/SkillBreakdown.tsx
+msgid "top {0}%"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Top {countryName} Players"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Top {GLOBAL_ALBUM_CAP}"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Top {GLOBAL_ALBUM_CAP} players"
+msgstr ""
+
+#: src/lib/packs.ts
+msgid "Top 10%, new cards first"
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "Top 1000"
+msgstr ""
+
+#: src/lib/packs.ts
+msgid "Top 2%, new cards first"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "top 25% {target}pp"
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "Top 500"
+msgstr ""
 
 #: src/routes/top-plays.tsx
 msgid "Top mania plays in {countryName}"
@@ -1524,9 +6380,25 @@ msgstr "顶尖玩家"
 msgid "top plays"
 msgstr "最佳成绩"
 
+#: src/components/discord/CommandShowcase.tsx
+msgid "Top-play feed"
+msgstr ""
+
+#: src/components/me/RosterOptInCard.tsx
+msgid "Track my plays"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Track pp and accuracy goals and how close each one is."
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "tracker"
 msgstr "追踪器"
+
+#: src/components/me/TrackingToasts.tsx
+msgid "tracking on"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Trail color"
@@ -1536,11 +6408,21 @@ msgstr "拖尾颜色"
 msgid "Trail thickness"
 msgstr "拖尾粗细"
 
+#: src/routes/farm-helper.tsx
+msgid "Try a different title, artist, or difficulty name."
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "Try a wider filter."
+msgstr ""
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "Try a wider range or check back later."
 msgstr "试试更大的范围，或稍后再来。"
 
 #: src/components/BackendOfflineScreen.tsx
+#: src/components/player/SkillPlaysModal.tsx
+#: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Try again"
 msgstr "重试"
 
@@ -1548,21 +6430,238 @@ msgstr "重试"
 msgid "Try again in a bit."
 msgstr "请稍后再试。"
 
+#: src/routes/replay.tsx
+msgid "Try this again"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Turkish"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Turn a feed on for the current channel (needs Manage Server)."
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Type <0>/help</0> for a guided tour, or <1>/</1> to see every command."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Ukrainian"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "unavailable"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Unavailable"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "Uncollected GOAT"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Underline"
+msgstr ""
+
+#: src/components/me/GoalToasts.tsx
+msgid "Undo"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+msgid "Undo re-renders"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Unhide"
 msgstr "取消隐藏"
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+#: src/components/packs/collections/RecordBoards.tsx
+#: src/components/replay/ReplayRecentlyViewed.tsx
+msgid "unknown"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/replay.tsx
+msgid "Unknown beatmap"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Unknown player"
+msgstr ""
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Unmute chart preview"
+msgstr ""
+
+#: src/components/packs/album/AlbumView.tsx
+msgid "unranked"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CommunityStatsHeader.tsx
+msgid "Unrated"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "unreadable"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Up to 50 MB."
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Update file"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "updated {updatedAtLabel}"
 msgstr "更新于 {updatedAtLabel}"
 
+#: src/components/player/SkillBreakdown.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "updating"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/replay_.uploads.tsx
+msgid "Upload"
+msgstr ""
+
+#: src/routes/replay_.uploads.tsx
+msgid "Upload a replay"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "upload a skin"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Upload a skin"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "Upload a skin and it lands here."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Upload another"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+#: src/routes/skins.tsx
+msgid "Upload skin"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Uploaded"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "uploaded by"
+msgstr ""
+
+#. placeholder {0}: skin.ownerUsername
+#: src/components/skins/SkinCard.tsx
+msgid "uploaded by <0>{0}</0>"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "uploader"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Uploading gives you a share link for the replay. Sign in with osu! to upload."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Uploading screenshot {shotNumber} of {shotCount}."
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Uploading the skin file, {sentSize} of {totalSize}."
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Upscroll"
 msgstr "上升式"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "URL"
+msgstr ""
+
+#. placeholder {0}: candidate.label
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "Use {0} as the backdrop"
+msgstr ""
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Use {selectedKeymode}K as the card cover"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Use for my replays"
+msgstr ""
+
+#. placeholder {0}: candidate.setId
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "Use map cover {0} as the backdrop"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Used when a replay or map preview opens."
 msgstr "打开回放或谱面预览时使用。"
+
+#. placeholder {0}: entry.uploadedBy.userId
+#: src/components/replay/ReplayRecentlyViewed.tsx
+msgid "user {0}"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "User id (optional)"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "username"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Username"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "Vibro"
+msgstr ""
+
+#: src/components/maps/SearchCard.tsx
+msgid "Vibro chart: difficulty estimates are unreliable"
+msgstr ""
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Video URL or id"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "Vietnamese"
+msgstr ""
+
+#. placeholder {0}: card.player.user.username
+#. placeholder {0}: card.username
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/PackSummary.tsx
+msgid "View {0}'s card"
+msgstr ""
 
 #: src/routes/index.tsx
 msgid "view all"
@@ -1572,13 +6671,91 @@ msgstr "查看全部"
 msgid "View beatmap →"
 msgstr "查看谱面 →"
 
+#: src/components/maps/SearchCard.tsx
+msgid "View details"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "View it"
+msgstr ""
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "View on a {label} background"
+msgstr ""
+
 #: src/routes/top-plays.tsx
 msgid "View on osu! →"
 msgstr "在 osu! 上查看 →"
 
+#: src/components/packs/album/AlbumView.tsx
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "View profile"
+msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "View the skin page"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "View top {entryLabel} plays"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Viewer editor"
 msgstr "回放外观编辑器"
+
+#: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Viewing <0>{selectedKeymode}K</0>"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Views"
+msgstr ""
+
+#: src/components/skins/SkinSettingsModal.tsx
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Visibility"
+msgstr ""
+
+#: src/routes/skins_.$id.tsx
+msgid "Visible to"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Visual"
+msgstr ""
+
+#. placeholder {0}: nominee.username
+#: src/components/packs/GoatPoll.tsx
+msgid "Vote against {0}"
+msgstr ""
+
+#. placeholder {0}: nominee.username
+#: src/components/packs/GoatPoll.tsx
+msgid "Vote for {0}"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "Vote for as many players as you want. Whoever finishes first will get added to the GOAT tier."
+msgstr ""
+
+#: src/components/packs/GoatPollVoters.tsx
+msgid "voted against"
+msgstr ""
+
+#: src/components/packs/GoatPollVoters.tsx
+msgid "voted for"
+msgstr ""
+
+#. placeholder {0}: nominee.username
+#: src/components/packs/GoatPollVoters.tsx
+msgid "Votes for {0}"
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "Voting's closed. Thanks for the picks."
+msgstr ""
 
 #: src/routes/snipes.tsx
 msgid "vs"
@@ -1587,6 +6764,14 @@ msgstr "vs"
 #: src/components/LiveDataEmptyState.tsx
 msgid "Waiting for new scores"
 msgstr "等待新成绩"
+
+#: src/components/packs/RevealStage.tsx
+msgid "Warming this player up... first draws can take a moment"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "Watch"
+msgstr ""
 
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
@@ -1602,14 +6787,196 @@ msgstr "观看回放"
 msgid "Watch replays with the player's skin"
 msgstr "使用玩家自己的皮肤观看回放"
 
+#: src/routes/farm-helper.tsx
+msgid "We don't have enough data on players near your pp to build recommendations. Try another key mode, or check back once more nearby players are tracked."
+msgstr ""
+
+#: src/components/packs/GoatPoll.tsx
+msgid "web.archive.org link to their osu! profile"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "what players near you played last"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "When each card first joined your collection"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "When someone overtakes a country leaderboard score, the snipe lands in your channel."
+msgstr ""
+
+#: src/routes/communities.tsx
+msgid "where"
+msgstr ""
+
+#: src/components/communities/AccessScopePicker.tsx
+msgid "Who can join"
+msgstr ""
+
+#: src/components/packs/CardCollectors.tsx
+msgid "Who has your card"
+msgstr ""
+
+#: src/lib/packs.ts
+msgid "Whole pool, new cards first"
+msgstr ""
+
+#: src/lib/packs.ts
+msgid "Wild"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "with {mods}"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "with no mods"
+msgstr ""
+
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
 msgstr "以分数取胜，而非 pp"
+
+#: src/components/communities/field-options.tsx
+msgid "Write a short description of the server."
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "Write and preview osu! profile BBCode for your me! page, with a live preview and one-click copy."
+msgstr ""
+
+#: src/components/packs/StreakGame.tsx
+msgid "wrong"
+msgstr ""
+
+#: src/lib/changelog.ts
+msgid "yesterday"
+msgstr ""
+
+#: src/components/farm-helper/NeighborhoodGraph.tsx
+#: src/components/packs/CardCollectors.tsx
+#: src/routes/communities.tsx
+#: src/routes/skins.tsx
+msgid "you"
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "You"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "You already beat the typical score here with {yourPp}pp. A cleaner acc run is worth about {target}pp."
+msgstr ""
+
+#: src/components/packs/PackStage.tsx
+msgid "You are cutting through the cards"
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
+msgstr ""
+
+#: src/components/communities/field-options.tsx
+msgid "You have a few reports waiting to be read already. Give a moderator a chance to catch up."
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "You have not published a skin yet"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remove someone to add more."
 msgstr "已达到 {HIDDEN_USERS_LIMIT} 名隐藏玩家的上限。移除一些后才能继续添加。"
 
+#: src/routes/farm-helper.tsx
+msgid "you have too many active marks, clear some first"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
+msgstr ""
+
+#: src/components/me/RosterOptInCard.tsx
+msgid "You're being tracked now"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "you're logged out, log in again to save marks"
+msgstr ""
+
+#. placeholder {0}: i18n._(entries[0].labelMsg)
+#: src/components/player/SkillBreakdown.tsx
+msgid "You're strongest in <0>{0}</0>"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "your {yourPp}pp"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "your {yourPp}pp · {age} old"
+msgstr ""
+
+#: src/routes/farm-helper.tsx
+msgid "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
+msgstr ""
+
+#: src/components/me/RosterOptInCard.tsx
+msgid "Your country isn't tracked yet, so there's nothing to record your plays against."
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
+msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
+msgstr ""
+
+#: src/components/me/TrackingToasts.tsx
+msgid "Your plays are being recorded now"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "Your private skins"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "Your private skins are on the shelf above; anything you publish lands here."
+msgstr ""
+
+#: src/components/me/RosterOptInCard.tsx
+msgid "Your recent plays are being pulled in. This page fills in within a minute or two, and keeps updating as you play."
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
+#: src/routes/skins_.$id.tsx
 msgid "Your replay skin"
 msgstr "你的回放皮肤"
+
+#: src/routes/replay_.uploads.tsx
+msgid "Your Replay Uploads"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "Your top plays are waiting for the chart analyzer. Position in queue: {position}"
+msgstr ""
+
+#: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/replay_.uploads.tsx
+msgid "Your uploads"
+msgstr ""
+
+#: src/routes/bbcode.tsx
+msgid "YouTube video"
+msgstr ""

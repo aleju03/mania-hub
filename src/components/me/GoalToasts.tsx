@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 
 import { GradeImg } from "../ui/GradeImg";
 import { OsuLogo } from "../ui/OsuLogo";
@@ -26,6 +27,7 @@ import type { GoalKind } from "../../lib/goals";
 
 export function GoalToasts() {
   const auth = useAuth();
+  const { i18n } = useLingui();
   const viewer = auth.viewer;
   const documentVisible = useDocumentVisible();
 
@@ -47,7 +49,7 @@ export function GoalToasts() {
         const data = JSON.parse((event as MessageEvent).data) as GoalCompletedPayload;
         if (data.userId !== viewerId) return;
         celebrationSeq.current += 1;
-        setCelebration({ id: celebrationSeq.current, kind: data.kind ?? "reach_pp", label: celebrationLabel(data), targetGrade: data.targetGrade ?? null });
+        setCelebration({ id: celebrationSeq.current, kind: data.kind ?? "reach_pp", label: celebrationLabel(data, i18n), targetGrade: data.targetGrade ?? null });
         playGoalClearedSound();
         if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
         celebrationTimer.current = setTimeout(() => setCelebration(null), 6500);
@@ -66,7 +68,9 @@ export function GoalToasts() {
     if (source.readyState === EventSource.OPEN) settle();
     else source.addEventListener("open", settle, { once: true });
     return () => source.close();
-  }, [documentVisible, viewerId, viewerCountry]);
+    // The i18n instance is the shared immutable one for this locale, so it is
+    // only a new dependency when the whole tree is being re-rendered anyway.
+  }, [documentVisible, viewerId, viewerCountry, i18n]);
 
   const deleteToast = useSyncExternalStore(subscribeGoalDeleteToast, getGoalDeleteToast, () => null);
 
@@ -101,7 +105,9 @@ function UndoDeleteToast({ toast, onUndo }: { toast: GoalDeleteToast | null; onU
           <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-osu-b3/45 bg-osu-b4 shadow-[0_20px_70px_rgba(0,0,0,0.55)]">
             <div className="flex items-center gap-3 p-3">
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-f1">{toast.count > 1 ? `${toast.count} goals deleted` : "goal deleted"}</div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-f1">
+                  <Plural value={toast.count} one="goal deleted" other="# goals deleted" />
+                </div>
                 <div className="mt-0.5 truncate text-[13px] font-bold text-white" title={toast.label}>
                   {toast.label}
                 </div>
@@ -111,7 +117,7 @@ function UndoDeleteToast({ toast, onUndo }: { toast: GoalDeleteToast | null; onU
                 onClick={onUndo}
                 className="shrink-0 rounded-lg border border-osu-pink/45 bg-osu-pink/15 px-3 py-1.5 text-[12px] font-bold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white"
               >
-                Undo
+                <Trans>Undo</Trans>
               </button>
             </div>
             <motion.div
@@ -170,6 +176,7 @@ function CelebrationTriangles() {
 // burst with the cleared goal, then ticks down a bar and dismisses itself. Not a section animation -
 // a deliberate moment for an earned milestone.
 function CelebrationToast({ celebration, onDismiss }: { celebration: Celebration | null; onDismiss: () => void }) {
+  const { t } = useLingui();
   return (
     <AnimatePresence>
       {celebration ? (
@@ -201,12 +208,12 @@ function CelebrationToast({ celebration, onDismiss }: { celebration: Celebration
                 )}
               </motion.span>
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-green-light">goal cleared</div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-green-light"><Trans>goal cleared</Trans></div>
                 <div className="mt-0.5 truncate text-[13.5px] font-bold text-white" title={celebration.label}>
                   {celebration.label}
                 </div>
               </div>
-              <button type="button" onClick={onDismiss} aria-label="Dismiss" className="shrink-0 self-start rounded-md p-1 text-osu-f1/70 transition-colors hover:bg-osu-b3/60 hover:text-white">
+              <button type="button" onClick={onDismiss} aria-label={t`Dismiss`} className="shrink-0 self-start rounded-md p-1 text-osu-f1/70 transition-colors hover:bg-osu-b3/60 hover:text-white">
                 <CloseGlyph />
               </button>
             </div>

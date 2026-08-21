@@ -14,6 +14,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { PageTabs } from "../layout/PageTabs";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
+import { SelectMenu } from "../ui/SelectMenu";
 import { ReplaySkinSettingsModal } from "../replay/ReplaySkinSettingsModal";
 import { OwnerReplaySkinCustomizeModal } from "./OwnerReplaySkinCustomizeModal";
 import {
@@ -379,29 +380,40 @@ function PanelGroup({ label, children, action }: { label: string; children: Reac
 }
 
 // Option labels stay in their own language on purpose: a visitor stranded in
-// the wrong locale must be able to recognize their way back.
+// the wrong locale must be able to recognize their way back. The Record is
+// keyed by AppLocale so adding a locale without a row here fails to compile.
+const LANGUAGE_OPTIONS: Record<AppLocale, { label: string; flag: string }> = {
+  en: { label: "English", flag: "US" },
+  "zh-CN": { label: "中文（简体）", flag: "CN" },
+};
+
 function LanguageGroup() {
   const { t } = useLingui();
   const locale = useLocale();
   const router = useRouter();
   return (
     <PanelGroup label={t`Language`}>
-      <SegmentedField
-        label={t`Interface language`}
-        value={locale}
-        options={[
-          { value: "en" as AppLocale, label: "English" },
-          { value: "zh-CN" as AppLocale, label: "中文" },
-        ]}
-        onChange={(next) => {
-          if (next === locale) return;
-          writeLocaleCookieClient(next);
-          // Load the catalog before invalidating so the re-render finds its
-          // messages; invalidation re-runs the root beforeLoad, which reads
-          // the cookie and swaps the provider, lang attribute and head.
-          void loadLocaleCatalog(next).then(() => router.invalidate());
-        }}
-      />
+      <div className="space-y-1.5">
+        <span className="text-[11px] font-semibold text-osu-l1">{t`Interface language`}</span>
+        <SelectMenu
+          value={locale}
+          block
+          ariaLabel={t`Interface language`}
+          options={(Object.keys(LANGUAGE_OPTIONS) as AppLocale[]).map((value) => ({
+            value,
+            label: LANGUAGE_OPTIONS[value].label,
+            leading: <CountryFlag code={LANGUAGE_OPTIONS[value].flag} size="sm" decorative />,
+          }))}
+          onChange={(next) => {
+            if (next === locale) return;
+            writeLocaleCookieClient(next);
+            // Load the catalog before invalidating so the re-render finds its
+            // messages; invalidation re-runs the root beforeLoad, which reads
+            // the cookie and swaps the provider, lang attribute and head.
+            void loadLocaleCatalog(next).then(() => router.invalidate());
+          }}
+        />
+      </div>
     </PanelGroup>
   );
 }

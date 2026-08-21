@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Trans } from "@lingui/react/macro";
 import { fetchSimilarSkins, type SimilarSkin } from "../../lib/skins";
 import { SkinCard } from "./SkinCard";
 
@@ -28,7 +29,7 @@ export function SimilarSkins({ skinRef, keys }: { skinRef: string; keys?: number
   if (skins.length === 0) return null;
   return (
     <section className="mt-8">
-      <h2 className="text-[13px] font-bold text-white">Similar skins</h2>
+      <h2 className="text-[13px] font-bold text-white"><Trans>Similar skins</Trans></h2>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {skins.map((skin) => (
           <SkinCard key={skin.id} skin={skin} previewKeys={skin.matchKeys ?? keys ?? undefined} />

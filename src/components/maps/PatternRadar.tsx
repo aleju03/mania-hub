@@ -1,15 +1,21 @@
 // Radar chart of a map's 8-family pattern vector (values 0..1). Styled to match
 // the farm-helper difficulty radar so it feels native.
 
-const AXES: Array<{ id: string; label: string }> = [
-  { id: "jack", label: "JACK" },
-  { id: "stream", label: "STREAM" },
-  { id: "jumpstream", label: "JS" },
-  { id: "handstream", label: "HS" },
-  { id: "stamina", label: "STAM" },
-  { id: "chordjack", label: "CJ" },
-  { id: "tech", label: "TECH" },
-  { id: "ln", label: "LN" },
+import { useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
+
+// Axis names are the short forms the radar has room for; they carry their own
+// descriptors because the full pattern names in SearchCard are too long here.
+const AXES: Array<{ id: string; label: MessageDescriptor }> = [
+  { id: "jack", label: msg`JACK` },
+  { id: "stream", label: msg`STREAM` },
+  { id: "jumpstream", label: msg`JS` },
+  { id: "handstream", label: msg`HS` },
+  { id: "stamina", label: msg`STAM` },
+  { id: "chordjack", label: msg`CJ` },
+  { id: "tech", label: msg`TECH` },
+  { id: "ln", label: msg`LN` },
 ];
 
 const SIZE = 260;
@@ -32,13 +38,14 @@ function polygonPoints(scale: number): string {
 }
 
 export function PatternRadar({ patterns }: { patterns: Record<string, number> }) {
+  const { t, i18n } = useLingui();
   const points = AXES.map((axis, index) => {
     const angle = -Math.PI / 2 + (index / AXES.length) * Math.PI * 2;
     const value = clamp01(patterns[axis.id] ?? 0);
     const radius = MAX_RADIUS * value;
     return {
       id: axis.id,
-      label: axis.label,
+      label: i18n._(axis.label),
       x: CENTER + Math.cos(angle) * radius,
       y: CENTER + Math.sin(angle) * radius,
       axisX: CENTER + Math.cos(angle) * MAX_RADIUS,
@@ -50,7 +57,7 @@ export function PatternRadar({ patterns }: { patterns: Record<string, number> })
   const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
 
   return (
-    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="h-auto w-full max-w-[196px] text-osu-pink" role="img" aria-label="Pattern radar chart">
+    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="h-auto w-full max-w-[196px] text-osu-pink" role="img" aria-label={t`Pattern radar chart`}>
       {RINGS.map((ring) => (
         <polygon key={ring} points={polygonPoints(ring)} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
       ))}

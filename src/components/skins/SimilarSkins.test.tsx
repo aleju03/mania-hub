@@ -1,7 +1,18 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render as rtlRender, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SimilarSkin, SkinSummary } from "../../lib/skins";
+import type { ReactElement, ReactNode } from "react";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../lib/i18n";
+
+
+// These components read copy through Lingui, so renders need the provider;
+// en resolves to the source strings the assertions match.
+const I18nWrap = ({ children }: { children: ReactNode }) => (
+  <I18nProvider i18n={getI18n("en")}>{children}</I18nProvider>
+);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock("../../lib/analytics", () => ({ track }));

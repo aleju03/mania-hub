@@ -1,4 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpDown, Recycle } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
@@ -47,6 +49,8 @@ import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
   drawPackPlayersFromServer,
+  PACK_TYPE_BLURB_LABELS,
+  PACK_TYPE_NAME_LABELS,
   PACK_TYPES,
   packTypeById,
   prefetchPackPlayerScores,
@@ -55,6 +59,7 @@ import {
   type PackTypeId,
 } from "../lib/packs";
 import type { OsuScore } from "../lib/types";
+import { getI18n } from "../lib/i18n";
 import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
 
@@ -72,13 +77,17 @@ export const Route = createFileRoute("/packs")({
         : undefined;
     return { ...(view ? { view } : {}), ...(album ? { album } : {}) };
   },
-  head: ({ match }) => pageSeo({
-    title: "Card Packs",
-    description: "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers.",
-    path: "/packs",
-    origin: match.context.origin,
-    imageKind: "packs",
-  }),
+  head: ({ match }) => {
+    const i18n = getI18n(match.context.locale);
+    return pageSeo({
+      title: i18n._(msg`Card Packs`),
+      description: i18n._(msg`Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers.`),
+      path: "/packs",
+      origin: match.context.origin,
+      imageKind: "packs",
+      imageTitle: "Card Packs",
+    });
+  },
   component: PacksPage,
 });
 
@@ -302,6 +311,7 @@ function PackTypeSelector({
   locked: boolean;
   onSelect: (id: PackTypeId) => void;
 }) {
+  const { t, i18n } = useLingui();
   return (
     <div>
       {/* wrap: six pack types no longer fit one row on phone widths */}
@@ -311,6 +321,10 @@ function PackTypeSelector({
           const affordable = canAffordPack(wallet, type);
           const accent = `rgb(${type.accent.r}, ${type.accent.g}, ${type.accent.b})`;
           const thumb = thumbs[type.id];
+          /* The foil texture keeps the English name (packArt.ts bakes it into
+             the canvas), so only the chrome around it reads from the tables. */
+          const typeName = i18n._(PACK_TYPE_NAME_LABELS[type.id]);
+          const typeBlurb = i18n._(PACK_TYPE_BLURB_LABELS[type.id]);
           return (
             <button
               key={type.id}
@@ -323,8 +337,8 @@ function PackTypeSelector({
                 !locked && affordable && !selected ? "cursor-pointer" : ""
               }`}
               aria-pressed={selected}
-              aria-label={`${type.name} pack, ${type.blurb}`}
-              title={type.blurb}
+              aria-label={t`${typeName} pack, ${typeBlurb}`}
+              title={typeBlurb}
             >
               <div
                 className={`w-full transition-transform duration-150 ${
@@ -341,7 +355,7 @@ function PackTypeSelector({
                 {thumb ? (
                   <img
                     src={thumb}
-                    alt={`${type.name} pack`}
+                    alt={t`${typeName} pack`}
                     className="h-full w-full rounded-[8px]"
                     draggable={false}
                     style={{
@@ -359,7 +373,7 @@ function PackTypeSelector({
                   className="mt-2.5 text-[13px] font-bold"
                   style={{ color: affordable || selected ? accent : "rgba(148,163,184,0.5)" }}
                 >
-                  free
+                  <Trans>free</Trans>
                 </div>
               ) : (
                 <div
@@ -376,13 +390,14 @@ function PackTypeSelector({
         })}
       </div>
       <div className="mt-5 text-center text-[11px] text-osu-f1">
-        Every pack pays {PACK_OPEN_SHARD_REWARD} shards. Recycle duplicates for more.
+        <Trans>Every pack pays {PACK_OPEN_SHARD_REWARD} shards. Recycle duplicates for more.</Trans>
       </div>
     </div>
   );
 }
 
 function PacksPage() {
+  const { t } = useLingui();
   const reducedMotion = useReducedMotion();
   const auth = useAuth();
   const { view, album: openAlbumCode } = Route.useSearch();
@@ -808,7 +823,7 @@ function PacksPage() {
       >
         <OsuTriangleBackdrop />
         <div className="relative z-10 flex flex-1 flex-col">
-          <PageHeader iconSrc="/images/icons/packs.svg" title="Maniacard packs" />
+          <PageHeader iconSrc="/images/icons/packs.svg" title={t`Maniacard packs`} />
           {/* Ambient side rails: the live pull ticker runs through every
               phase (including the reveal), only the your-card fun fact hides
               while cards are flipping. */}
@@ -846,9 +861,11 @@ function PacksPage() {
                     {charges}
                     <span className="text-osu-f1">/{MAX_PACK_CHARGES}</span>
                   </span>
-                  <span className="text-osu-f1">packs</span>
+                  <span className="text-osu-f1"><Trans>packs</Trans></span>
                   {nextChargeMs !== null && (
-                    <span className="text-osu-f1 tabular-nums">+1 in {Math.ceil(nextChargeMs / 1000)}s</span>
+                    <span className="text-osu-f1 tabular-nums">
+                      <Trans>+1 in {Math.ceil(nextChargeMs / 1000)}s</Trans>
+                    </span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-2 text-osu-f1">
@@ -856,7 +873,7 @@ function PacksPage() {
                   <span className="text-xl font-black leading-none text-white tabular-nums">
                     {shards.toLocaleString("en-US")}
                   </span>
-                  <span>shards</span>
+                  <span><Trans>shards</Trans></span>
                 </div>
                 <GoatHoldersButton />
                 {/* The solo game, played right here rather than on a page of
@@ -875,7 +892,7 @@ function PacksPage() {
                   aria-pressed={streakOpen}
                 >
                   <ArrowUpDown className="h-3 w-3" />
-                  {streakOpen ? "Leave the game" : "Higher or lower"}
+                  {streakOpen ? t`Leave the game` : t`Higher or lower`}
                 </button>
               </div>
             )}
@@ -900,14 +917,16 @@ function PacksPage() {
               />
             ) : dealError ? (
               <div className="mx-auto max-w-[420px] text-center">
-                <div className="text-sm font-bold text-white">Couldn't deal a pack</div>
-                <div className="mt-2 text-[12px] text-osu-f1">The rankings lookup failed. Try again in a moment.</div>
+                <div className="text-sm font-bold text-white"><Trans>Couldn't deal a pack</Trans></div>
+                <div className="mt-2 text-[12px] text-osu-f1">
+                  <Trans>The rankings lookup failed. Try again in a moment.</Trans>
+                </div>
                 <button
                   type="button"
                   onClick={openAnother}
                   className="mt-5 rounded-full bg-osu-pink px-6 py-2 text-sm font-bold text-white hover:brightness-110 transition cursor-pointer"
                 >
-                  Retry
+                  <Trans>Retry</Trans>
                 </button>
               </div>
             ) : (
@@ -923,19 +942,21 @@ function PacksPage() {
                     transition={{ duration: 0.15 }}
                   >
                     {!wallet ? (
-                      <div className="py-16 text-center text-[12px] text-osu-f1">Loading your collection...</div>
+                      <div className="py-16 text-center text-[12px] text-osu-f1">
+                        <Trans>Loading your collection...</Trans>
+                      </div>
                     ) : !shouldKeepPackStageMounted(canOpen, cutCommitted) ? (
                       /* The wait is the only thing worth saying here: the
                          shelf below already greys out what the wallet cannot
                          pay for, so it needs no sentence explaining it. */
                       <div className="mx-auto max-w-[420px] py-16 text-center">
                         <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
-                          next free pack
+                          <Trans>next free pack</Trans>
                         </div>
                         {/* translate="no": ticks every second; auto-translated
                             text nodes crash React on the next commit. */}
                         <div translate="no" className="mt-1.5 text-4xl font-black text-white tabular-nums">
-                          {nextChargeMs !== null ? `${Math.ceil(nextChargeMs / 1000)}s` : "ready"}
+                          {nextChargeMs !== null ? `${Math.ceil(nextChargeMs / 1000)}s` : t`ready`}
                         </div>
                       </div>
                     ) : (
@@ -1132,7 +1153,7 @@ function PacksPage() {
                         }`}
                         aria-pressed={active}
                       >
-                        {mode === "album" ? "Album" : "Grid"}
+                        {mode === "album" ? t`Album` : t`Grid`}
                       </button>
                     );
                   })}

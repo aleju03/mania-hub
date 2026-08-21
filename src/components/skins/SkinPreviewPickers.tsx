@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Shuffle } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
 import type { BackdropScope, PreviewBackdrop } from "../../lib/skin-preview-backdrops";
 import type { SkinPreviewChartSnippet } from "../../lib/skin-preview-patterns";
 import { SkinBackdropRow, SkinBackdropScopeToggle, type SkinBackdropRowPool } from "./SkinBackdropPicker";
@@ -37,13 +38,14 @@ export function SkinPreviewPickers({
   };
   disabled: boolean;
 }) {
+  const { t } = useLingui();
   const [tab, setTab] = useState<PickerTab>("backdrop");
   const showing = tab === "backdrop" ? backdrop.pool : pattern.pool;
 
   return (
     <div className="mt-3 flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Preview</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Preview</Trans></span>
         {/* Switching tabs is free even mid-render, so it stays live while the
             rows underneath are disabled. */}
         {(["backdrop", "pattern"] as const).map((option) => (
@@ -56,7 +58,7 @@ export function SkinPreviewPickers({
               tab === option ? "border-osu-pink text-osu-l1" : "border-transparent text-osu-f1/55 hover:text-osu-l2"
             }`}
           >
-            {option}
+            {option === "backdrop" ? <Trans>backdrop</Trans> : <Trans>pattern</Trans>}
           </button>
         ))}
         {tab === "backdrop" && (
@@ -71,11 +73,11 @@ export function SkinPreviewPickers({
           type="button"
           disabled={disabled || showing.drawing}
           onClick={() => showing.shuffle()}
-          title={tab === "backdrop" ? "Draw a different set of map covers" : "Draw a different set of charts"}
+          title={tab === "backdrop" ? t`Draw a different set of map covers` : t`Draw a different set of charts`}
           className="flex items-center gap-1 rounded border border-osu-b3/40 bg-osu-b5 px-1.5 py-0.5 text-[10px] font-bold text-osu-l2 transition-colors cursor-pointer hover:border-osu-f1/40 disabled:cursor-default disabled:opacity-50"
         >
           <Shuffle size={11} aria-hidden="true" />
-          {showing.drawing ? "drawing" : "shuffle"}
+          {showing.drawing ? <Trans>drawing</Trans> : <Trans>shuffle</Trans>}
         </button>
         {tab === "backdrop" && backdrop.hint}
       </div>

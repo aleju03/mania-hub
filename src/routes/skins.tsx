@@ -1,6 +1,9 @@
 import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, ChevronDown, Layers, Lock, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SkinCard } from "../components/skins/SkinCard";
 import { SkinBulkUploadModal } from "../components/skins/SkinBulkUploadModal";
@@ -85,19 +88,19 @@ const DEFAULT_SKINS_SEARCH = {
 // option sorts it descending, clicking it again flips to ascending. Only the
 // date option renames itself, because "oldest" is the word for it; the other
 // two are nouns that read the same either way and let the arrow say which.
-const SORT_OPTIONS: Array<{ label: string; ascLabel?: string; desc: SkinsSort; asc: SkinsSort }> = [
-  { label: "newest", ascLabel: "oldest", desc: "newest", asc: "oldest" },
-  { label: "downloads", desc: "downloads", asc: "downloads-asc" },
-  { label: "size", desc: "size", asc: "size-asc" },
+const SORT_OPTIONS: Array<{ key: string; label: ReturnType<typeof msg>; ascLabel?: ReturnType<typeof msg>; desc: SkinsSort; asc: SkinsSort }> = [
+  { key: "newest", label: msg`newest`, ascLabel: msg`oldest`, desc: "newest", asc: "oldest" },
+  { key: "downloads", label: msg`downloads`, desc: "downloads", asc: "downloads-asc" },
+  { key: "size", label: msg`size`, desc: "size", asc: "size-asc" },
 ];
 
 // The note-shape chips, labelled by what the notes are called in the wild.
 // "other" is everything the classifier could not call a circle, arrow or bar.
-const NOTE_SHAPE_FILTERS: Array<{ label: string; shape: SkinNoteShape }> = [
-  { label: "circles", shape: "circle" },
-  { label: "arrows", shape: "arrow" },
-  { label: "bars", shape: "bar" },
-  { label: "other", shape: "other" },
+const NOTE_SHAPE_FILTERS: Array<{ label: ReturnType<typeof msg>; shape: SkinNoteShape }> = [
+  { label: msg`circles`, shape: "circle" },
+  { label: msg`arrows`, shape: "arrow" },
+  { label: msg`bars`, shape: "bar" },
+  { label: msg`other`, shape: "other" },
 ];
 
 // 0 means no keymode filter; the options cover the keymodes skins realistically
@@ -166,13 +169,17 @@ export const Route = createFileRoute("/skins")({
     // skeletons until the effect lands.
     return await fetchSkinsListSsr();
   },
-  head: ({ match }) => pageSeo({
-    title: "osu!mania skins",
-    description: "Browse and download osu!mania skins with previews rendered from each skin's own notes, or publish a skin from an .osk file.",
-    path: "/skins",
-    origin: match.context.origin,
-    imageKind: "skins",
-  }),
+  head: ({ match }) => {
+    const i18n = getI18n(match.context.locale);
+    return pageSeo({
+      title: i18n._(msg`osu!mania skins`),
+      description: i18n._(msg`Browse and download osu!mania skins with previews rendered from each skin's own notes, or publish a skin from an .osk file.`),
+      path: "/skins",
+      origin: match.context.origin,
+      imageKind: "skins",
+      imageTitle: "osu!mania skins",
+    });
+  },
   search: {
     middlewares: [stripSearchParams(DEFAULT_SKINS_SEARCH)],
   },
@@ -219,7 +226,7 @@ function FilterOption({
       {active && direction && (
         <>
           <Arrow className="h-3 w-3 self-center" aria-hidden="true" />
-          <span className="sr-only">{direction === "desc" ? "descending" : "ascending"}</span>
+          <span className="sr-only">{direction === "desc" ? <Trans>descending</Trans> : <Trans>ascending</Trans>}</span>
         </>
       )}
     </button>
@@ -243,6 +250,7 @@ function SkinsPage() {
     q = "", page = 0, sort = "newest", k = 0, special = false, mine = false,
     cover = false, stage = false, shots = false, lazer = false, stable = false, shape = "", res = "",
   } = Route.useSearch();
+  const { t, i18n } = useLingui();
   const navigate = useNavigate();
   const location = useLocation();
   const auth = useAuth();
@@ -462,17 +470,17 @@ function SkinsPage() {
         className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-osu-pink px-4 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110 sm:w-auto"
       >
         <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-        Upload skin
+        <Trans>Upload skin</Trans>
       </button>
     </div>
   ) : auth.loginAvailable ? (
     <a
       href={loginHref}
       className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-osu-pink/45 bg-osu-pink/15 px-4 py-1.5 text-[12.5px] font-bold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white sm:w-auto"
-      title="Log in with osu! to upload a skin"
+      title={t`Log in with osu! to upload a skin`}
     >
       <OsuLogo className="h-3.5 w-3.5" />
-      Log in to upload
+      <Trans>Log in to upload</Trans>
     </a>
   ) : null;
 
@@ -484,7 +492,7 @@ function SkinsPage() {
     <div ref={scrollRestoreRef} className="relative flex min-h-screen flex-col">
       <div className="relative z-10 flex flex-1 flex-col overflow-clip">
         <div className="relative z-10 flex flex-1 flex-col">
-          <PageHeader iconSrc="/images/icons/skins.svg" title="osu!mania skins" right={headerAction} />
+          <PageHeader iconSrc="/images/icons/skins.svg" title={t`osu!mania skins`} right={headerAction} />
 
           {/* Search strip, the beatmapsets-listing pattern: big search box with
               filter rows as plain text options below it. No surface of its own
@@ -509,16 +517,16 @@ function SkinsPage() {
                   type="text"
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
-                  placeholder="Search skin, creator, or uploader"
-                  aria-label="Search skins"
+                  placeholder={t`Search skin, creator, or uploader`}
+                  aria-label={t`Search skins`}
                   className="w-full rounded-lg border border-osu-b3/30 bg-osu-b4 py-2.5 pl-10 pr-3 text-[14px] text-osu-l1 transition-colors placeholder:text-osu-f1/55 focus:border-osu-pink/50 focus:outline-none"
                 />
               </div>
 
               <div className="mt-3.5 flex flex-col gap-2">
-                <FilterRow label="keys">
+                <FilterRow label={t`keys`}>
                   <FilterOption active={k === 0} onClick={() => applySearch({ k: 0, special: false })}>
-                    any
+                    <Trans>any</Trans>
                   </FilterOption>
                   {KEYMODE_FILTERS.map((option) => {
                     const active = k === option.k && special === option.special;
@@ -541,7 +549,7 @@ function SkinsPage() {
                     aria-expanded={moreFiltersOpen}
                     className="ml-auto inline-flex items-center gap-1 text-[12.5px] font-medium text-osu-f1/75 transition-colors cursor-pointer hover:text-osu-pink-light"
                   >
-                    {moreFiltersOpen ? "fewer filters" : "more filters"}
+                    {moreFiltersOpen ? <Trans>fewer filters</Trans> : <Trans>more filters</Trans>}
                     {!moreFiltersOpen && traitFilterCount > 0 && (
                       <span className="tabular-nums text-white">{traitFilterCount}</span>
                     )}
@@ -560,9 +568,9 @@ function SkinsPage() {
                     {/* What the tap notes are, classified from each skin's own
                         note art. One shape at a time; picking the active one
                         clears it. */}
-                    <FilterRow label="notes">
+                    <FilterRow label={t`notes`}>
                       <FilterOption active={!shape} onClick={() => applySearch({ shape: "" })}>
-                        any
+                        <Trans>any</Trans>
                       </FilterOption>
                       {NOTE_SHAPE_FILTERS.map((option) => (
                         <FilterOption
@@ -570,52 +578,52 @@ function SkinsPage() {
                           active={shape === option.shape}
                           onClick={() => applySearch({ shape: shape === option.shape ? "" : option.shape })}
                         >
-                          {option.label}
+                          {i18n._(option.label)}
                         </FilterOption>
                       ))}
                     </FilterRow>
                     {/* Independent checkboxes: each chip narrows to skins that
                         ship the thing. */}
-                    <FilterRow label="includes">
+                    <FilterRow label={t`includes`}>
                       <FilterOption active={cover} onClick={() => applySearch({ cover: !cover })}>
-                        lane cover
+                        <Trans>lane cover</Trans>
                       </FilterOption>
                       <FilterOption active={stage} onClick={() => applySearch({ stage: !stage })}>
-                        mania stage
+                        <Trans>mania stage</Trans>
                       </FilterOption>
                       <FilterOption active={shots} onClick={() => applySearch({ shots: !shots })}>
-                        screenshots
+                        <Trans>screenshots</Trans>
                       </FilterOption>
                     </FilterRow>
                     {/* Client compatibility is a pick-one axis, not something
                         the archive "includes". */}
-                    <FilterRow label="client">
+                    <FilterRow label={t`client`}>
                       <FilterOption
                         active={!stable && !lazer}
                         onClick={() => applySearch({ stable: false, lazer: false })}
                       >
-                        any
+                        <Trans>any</Trans>
                       </FilterOption>
                       <FilterOption
                         active={stable}
                         onClick={() => applySearch({ stable: !stable, lazer: false })}
                       >
-                        stable
+                        <Trans>stable</Trans>
                       </FilterOption>
                       <FilterOption
                         active={lazer}
                         onClick={() => applySearch({ lazer: !lazer, stable: false })}
                       >
-                        lazer
+                        <Trans>lazer</Trans>
                       </FilterOption>
                     </FilterRow>
                     {/* The resolution the uploader said the skin is made for,
                         offered as the ones uploaders have actually answered.
                         Nobody has answered yet, no row. */}
                     {resolutionOptions.length > 0 && (
-                      <FilterRow label="display">
+                      <FilterRow label={t`display`}>
                         <FilterOption active={!res} onClick={() => applySearch({ res: "" })}>
-                          any
+                          <Trans>any</Trans>
                         </FilterOption>
                         {resolutionOptions.map((option) => (
                           <FilterOption
@@ -633,26 +641,26 @@ function SkinsPage() {
                 {/* Only worth a row to someone who has an account to filter
                     by; signed out there is no "you". */}
                 {auth.viewer && (
-                  <FilterRow label="uploader">
+                  <FilterRow label={t`uploader`}>
                     <FilterOption active={!mineActive} onClick={() => applySearch({ mine: false })}>
-                      anyone
+                      <Trans>anyone</Trans>
                     </FilterOption>
                     <FilterOption active={mineActive} onClick={() => applySearch({ mine: true })}>
-                      you
+                      <Trans>you</Trans>
                     </FilterOption>
                   </FilterRow>
                 )}
-                <FilterRow label="sort by">
+                <FilterRow label={t`sort by`}>
                   {SORT_OPTIONS.map((option) => {
                     const direction = sort === option.desc ? "desc" as const : sort === option.asc ? "asc" as const : undefined;
                     return (
                       <FilterOption
-                        key={option.label}
+                        key={option.key}
                         active={direction != null}
                         direction={direction}
                         onClick={() => applySearch({ sort: direction === "desc" ? option.asc : option.desc })}
                       >
-                        {direction === "asc" ? option.ascLabel ?? option.label : option.label}
+                        {i18n._(direction === "asc" ? option.ascLabel ?? option.label : option.label)}
                       </FilterOption>
                     );
                   })}
@@ -662,7 +670,7 @@ function SkinsPage() {
                       role="status"
                       aria-live="polite"
                     >
-                      {data.total.toLocaleString("en-US")} {data.total === 1 ? "skin" : "skins"}
+                      <Plural value={data.total} one="# skin" other="# skins" />
                     </span>
                   )}
                 </FilterRow>
@@ -684,7 +692,7 @@ function SkinsPage() {
                     {/* An admin's shelf carries every uploader's private skins,
                         so it says so rather than claiming they are theirs. */}
                     <span className="text-[13px] font-bold text-white transition-colors group-hover:text-osu-pink-light">
-                      {admin ? "Private skins" : "Your private skins"}
+                      {admin ? "Private skins" : <Trans>Your private skins</Trans>}
                     </span>
                     {privateSkins.length > 0 && (
                       <span className="text-[11px] text-osu-f1 tabular-nums">
@@ -692,7 +700,7 @@ function SkinsPage() {
                           ? privateTotal > privateSkins.length
                             ? `${privateSkins.length} of ${privateTotal.toLocaleString("en-US")}, every uploader`
                             : `${privateTotal.toLocaleString("en-US")} across every uploader`
-                          : "only you can open these"}
+                          : <Trans>only you can open these</Trans>}
                       </span>
                     )}
                     <ChevronDown
@@ -718,31 +726,31 @@ function SkinsPage() {
               </div>
             ) : failed ? (
               <div className="mx-auto max-w-md px-4 py-16 text-center">
-                <div className="text-sm font-bold text-white">Skins are unavailable right now</div>
-                <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">The skins list could not be loaded.</p>
+                <div className="text-sm font-bold text-white"><Trans>Skins are unavailable right now</Trans></div>
+                <p className="mt-2 text-[12px] leading-relaxed text-osu-f1"><Trans>The skins list could not be loaded.</Trans></p>
                 <button
                   type="button"
                   onClick={() => setReloadTick((tick) => tick + 1)}
                   className="mt-4 rounded-full bg-osu-pink px-5 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110"
                 >
-                  Retry
+                  <Trans>Retry</Trans>
                 </button>
               </div>
             ) : skins.length === 0 ? (
               <div className="mx-auto max-w-md px-4 py-16 text-center">
                 <div className="text-sm font-bold text-white">
                   {mineActive && !q && !k && !traitFiltersActive
-                    ? "You have not published a skin yet"
-                    : q || k || mineActive || traitFiltersActive ? "No skins match" : "No skins yet"}
+                    ? <Trans>You have not published a skin yet</Trans>
+                    : q || k || mineActive || traitFiltersActive ? <Trans>No skins match</Trans> : <Trans>No skins yet</Trans>}
                 </div>
                 <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
                   {mineActive && !q && !k && !traitFiltersActive
                     ? privateSkins.length > 0
-                      ? "Your private skins are on the shelf above; anything you publish lands here."
-                      : "Upload a skin and it lands here."
+                      ? <Trans>Your private skins are on the shelf above; anything you publish lands here.</Trans>
+                      : <Trans>Upload a skin and it lands here.</Trans>
                     : q || k || mineActive || traitFiltersActive
-                      ? "Clear the filters, or upload the skin yourself."
-                      : "The first uploaded skin lands here."}
+                      ? <Trans>Clear the filters, or upload the skin yourself.</Trans>
+                      : <Trans>The first uploaded skin lands here.</Trans>}
                 </p>
               </div>
             ) : (

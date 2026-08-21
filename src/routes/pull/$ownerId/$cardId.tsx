@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { msg } from "@lingui/core/macro";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { useEffect, useRef, useState } from "react";
 import { OsuTriangleBackdrop } from "../../../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../../../components/layout/PageHeader";
@@ -16,7 +18,8 @@ import {
 import { HONORARY_PACK_POOL } from "../../../lib/honorary-players";
 import { getManiaCardTier, MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "../../../lib/maniacard";
 import { parsePackCardKey } from "../../../lib/pack-collection";
-import { PACK_TYPES } from "../../../lib/packs";
+import { getI18n } from "../../../lib/i18n";
+import { PACK_TYPE_NAME_LABELS, PACK_TYPES, type PackTypeId } from "../../../lib/packs";
 import { pageSeo, pullOgImagePath } from "../../../lib/seo";
 
 export const Route = createFileRoute("/pull/$ownerId/$cardId")({
@@ -24,15 +27,18 @@ export const Route = createFileRoute("/pull/$ownerId/$cardId")({
     const pull = Math.floor(Number(search.pull) || 0);
     return pull > 0 ? { pull } : {};
   },
-  head: ({ params, match }) => pageSeo({
-    title: "Maniacard pull",
-    description: "A maniacard pulled from a booster pack. Open your own packs and build a collection.",
-    path: `/pull/${params.ownerId}/${params.cardId}`,
-    origin: match.context.origin,
-    image: pullOgImagePath(Number(params.ownerId), params.cardId),
-    imageWidth: 720,
-    imageHeight: 1080,
-  }),
+  head: ({ params, match }) => {
+    const i18n = getI18n(match.context.locale);
+    return pageSeo({
+      title: i18n._(msg`Maniacard pull`),
+      description: i18n._(msg`A maniacard pulled from a booster pack. Open your own packs and build a collection.`),
+      path: `/pull/${params.ownerId}/${params.cardId}`,
+      origin: match.context.origin,
+      image: pullOgImagePath(Number(params.ownerId), params.cardId),
+      imageWidth: 720,
+      imageHeight: 1080,
+    });
+  },
   component: PullPage,
 });
 
@@ -43,8 +49,11 @@ const CANVAS_BREATHING_INSET = "-2.5%";
 /* What the backend calls an owner it cannot name: no live users row and no
    name frozen in the pull log (a collector outside every tracked roster, on a
    card old enough to predate the pull log). There is no profile to point at,
-   so that one case stays plain text. */
+   so that one case stays plain text. The constant is the backend's sentinel,
+   matched against the payload, so it stays English; only what is printed on
+   the page goes through the catalog. */
 const UNKNOWN_OWNER_NAME = "a collector";
+const UNKNOWN_OWNER_LABEL = msg`a collector`;
 
 function isMobileViewport() {
   return (
@@ -77,7 +86,7 @@ function sharedCardTier(shared: LiveSharedPackCard): ManiaCardTier {
    that), which is worth 1 / (1 - cascade) slots on average. Figures are
    today's: the roster grows, and the pull log records the pack rather than the
    odds that applied then. */
-function goatPullOdds(packType: string): { pack: string; slotChance: number; percent: string } | null {
+function goatPullOdds(packType: string): { packId: PackTypeId; slotChance: number; percent: string } | null {
   const definition = PACK_TYPES.find((type) => type.id === packType);
   const poolSize = HONORARY_PACK_POOL.length;
   if (!definition || poolSize === 0) return null;
@@ -87,7 +96,8 @@ function goatPullOdds(packType: string): { pack: string; slotChance: number; per
   // Two significant figures: these run from 0.015% to 0.18%, so a fixed number
   // of decimals either rounds the small ones to zero or pads the large ones.
   const percent = Number((chance * 100).toPrecision(2));
-  return { pack: definition.name, slotChance: definition.honoraryChance, percent: `${percent}%` };
+  // The id, not the name: the pack's shelf name is translated at render.
+  return { packId: definition.id, slotChance: definition.honoraryChance, percent: `${percent}%` };
 }
 
 function tierAccentRgb(tier: ManiaCardTier): string {
@@ -98,6 +108,7 @@ function tierAccentRgb(tier: ManiaCardTier): string {
 /* The pulled card itself: live 3D when WebGL cooperates, a 600px 2D render of
    the same front otherwise, a tier skeleton when the mint has no skills. */
 function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
+  const { t } = useLingui();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
@@ -176,7 +187,7 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
       {staticImage ? (
         <img
           src={staticImage}
-          alt={`${shared.card.username} maniacard`}
+          alt={t`${shared.card.username} maniacard`}
           className="h-full w-full rounded-[14px] object-cover"
           style={{ opacity: canvasReady ? 0 : 1, transition: "opacity 0.2s ease-out" }}
           draggable={false}
@@ -195,7 +206,7 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
           touchAction: "none",
         }}
         role="img"
-        aria-label={canvasReady ? `${shared.card.username} maniacard` : undefined}
+        aria-label={canvasReady ? t`${shared.card.username} maniacard` : undefined}
       />
     </div>
   );
@@ -207,6 +218,7 @@ type PullPageState =
   | { status: "ready"; shared: LiveSharedPackCard };
 
 function PullPage() {
+  const { t } = useLingui();
   const { ownerId, cardId } = Route.useParams();
   const { pull } = Route.useSearch();
   const [state, setState] = useState<PullPageState>({ status: "loading" });
@@ -243,7 +255,7 @@ function PullPage() {
       <div className="relative z-10 flex flex-1 flex-col overflow-clip bg-osu-b5">
         <OsuTriangleBackdrop />
         <div className="relative z-10 flex flex-1 flex-col">
-          <PageHeader iconSrc="/images/icons/packs.svg" title="Maniacard pull" />
+          <PageHeader iconSrc="/images/icons/packs.svg" title={t`Maniacard pull`} />
           <div className="mx-auto w-full max-w-[720px] flex-1 px-4 py-10 sm:px-5 sm:py-14">
             {state.status === "loading" && (
               <div className="flex flex-col items-center">
@@ -252,15 +264,15 @@ function PullPage() {
             )}
             {state.status === "missing" && (
               <div className="mx-auto max-w-[420px] py-14 text-center">
-                <div className="text-sm font-bold text-white">This pull is gone</div>
+                <div className="text-sm font-bold text-white"><Trans>This pull is gone</Trans></div>
                 <div className="mt-2 text-[12px] text-osu-f1">
-                  The card was recycled, never synced, or the link is wrong.
+                  <Trans>The card was recycled, never synced, or the link is wrong.</Trans>
                 </div>
                 <Link
                   to="/packs"
                   className="mt-6 inline-block rounded-full bg-osu-pink px-6 py-2 text-sm font-bold text-white transition hover:brightness-110"
                 >
-                  Open your own packs
+                  <Trans>Open your own packs</Trans>
                 </Link>
               </div>
             )}
@@ -273,6 +285,7 @@ function PullPage() {
 }
 
 function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
+  const { t, i18n } = useLingui();
   const tier = sharedCardTier(shared);
   const accent = tierAccentRgb(tier);
   const tierLabel = shared.card.tierLabel ?? MANIA_TIER_STYLES[tier].label;
@@ -281,8 +294,8 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
   const displayedPullAt = exactPull?.pulledAt ?? shared.card.firstPulledAt;
   const viewerTimeZone = useViewerTimeZone();
   const pullLabel = exactPull
-    ? exactPull.isNew ? "Pulled by" : "Pulled again by"
-    : "First collected by";
+    ? exactPull.isNew ? t`Pulled by` : t`Pulled again by`
+    : t`First collected by`;
   return (
     <div className="flex flex-col items-center">
       <PulledCardArt shared={shared} />
@@ -303,9 +316,14 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
         </div>
         <div className="text-[12px] text-osu-f1 tabular-nums">
           {Math.round(shared.card.pp).toLocaleString("en-US")}pp
-          {shared.card.globalRank > 0 && <> &middot; #{shared.card.globalRank.toLocaleString("en-US")} global</>}
+          {shared.card.globalRank > 0 && (
+            <> &middot; <Trans>#{shared.card.globalRank.toLocaleString("en-US")} global</Trans></>
+          )}
           {shared.owners > 0 && (
-            <> &middot; in {shared.owners.toLocaleString("en-US")} {shared.owners === 1 ? "collection" : "collections"}</>
+            <>
+              {" "}&middot;{" "}
+              <Plural value={shared.owners} one="in # collection" other="in # collections" />
+            </>
           )}
         </div>
         {typeof shared.serial === "number" && shared.serial > 0 && (
@@ -315,17 +333,20 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           <div
             className={`text-[13px] tabular-nums ${shared.serial === 1 ? "font-bold text-amber-300" : "text-osu-f1"}`}
           >
-            {formatOrdinal(shared.serial)} person to pull this card
+            <Trans>{formatOrdinal(shared.serial)} person to pull this card</Trans>
             {shared.mintedTotal > 0 && shared.mintedTotal !== shared.serial && (
               // Skip the total when it just repeats the serial ("61st ... out of 61").
-              <span className="text-osu-f1"> out of {shared.mintedTotal.toLocaleString("en-US")}</span>
+              <span className="text-osu-f1">
+                {" "}
+                <Trans>out of {shared.mintedTotal.toLocaleString("en-US")}</Trans>
+              </span>
             )}
           </div>
         )}
         <div className="text-[12px] text-osu-f1">
           {pullLabel}{" "}
           {shared.owner.username === UNKNOWN_OWNER_NAME ? (
-            <span className="font-bold text-white">{shared.owner.username}</span>
+            <span className="font-bold text-white">{i18n._(UNKNOWN_OWNER_LABEL)}</span>
           ) : (
             <Link
               to="/player/$username"
@@ -336,9 +357,17 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
             </Link>
           )}
           {displayedPullAt > 0 && (
-            <span className="tabular-nums"> on {formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)}</span>
+            <span className="tabular-nums">
+              {" "}
+              <Trans>on {formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)}</Trans>
+            </span>
           )}
-          {shared.card.copies > 1 && <span className="tabular-nums"> &middot; x{shared.card.copies} copies</span>}
+          {shared.card.copies > 1 && (
+            <span className="tabular-nums">
+              {" "}&middot;{" "}
+              <Plural value={shared.card.copies} one="x# copy" other="x# copies" />
+            </span>
+          )}
         </div>
         {odds && (
           // Only shown when the log says this card arrived as a GOAT, so a
@@ -347,10 +376,12 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           // is the pack and the long odds.
           <div
             className="text-[12px] text-osu-f1"
-            title={`${(odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")}% GOAT slot, then 1 of ${HONORARY_PACK_POOL.length} on the roster`}
+            title={t`${(odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")}% GOAT slot, then 1 of ${HONORARY_PACK_POOL.length} on the roster`}
           >
-            {odds.pack} pack &middot;{" "}
-            <span className="font-bold tabular-nums text-amber-200">{odds.percent}</span> pull chance
+            <Trans>{i18n._(PACK_TYPE_NAME_LABELS[odds.packId])} pack</Trans> &middot;{" "}
+            <Trans>
+              <span className="font-bold tabular-nums text-amber-200">{odds.percent}</span> pull chance
+            </Trans>
           </div>
         )}
         <div className="mt-3 flex items-center gap-2">
@@ -358,14 +389,14 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
             to="/packs"
             className="rounded-full bg-osu-pink px-5 py-2 text-[12px] font-bold text-white transition hover:brightness-110"
           >
-            Open your own packs
+            <Trans>Open your own packs</Trans>
           </Link>
           <Link
             to="/player/$username"
             params={{ username: shared.card.username }}
             className="rounded-full bg-osu-b3/80 px-5 py-2 text-[12px] font-bold text-white transition hover:bg-osu-b3"
           >
-            View profile
+            <Trans>View profile</Trans>
           </Link>
         </div>
       </div>

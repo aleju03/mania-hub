@@ -2,6 +2,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Star, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 import { useSkinBackdropPool } from "./SkinBackdropPicker";
 import { useSkinPatternPool } from "./SkinPatternPicker";
 import { SkinPreviewPickers } from "./SkinPreviewPickers";
@@ -57,14 +59,14 @@ interface LoadingState {
 // that the retry still reads as part of the same click.
 const AUTO_RETRY_DELAY_MS = 1500;
 
-function skinFileFailureMessage(phase: "download" | "parse", status: number | null): string {
-  if (phase === "parse") return "The skin file could not be read, so its previews cannot be re-rendered.";
-  if (status === 429) return "Too many requests right now, so the skin file did not come down.";
+function skinFileFailureMessage(phase: "download" | "parse", status: number | null): ReturnType<typeof msg> {
+  if (phase === "parse") return msg`The skin file could not be read, so its previews cannot be re-rendered.`;
+  if (status === 429) return msg`Too many requests right now, so the skin file did not come down.`;
   // The gallery images on this page come straight off the skin row and can be
   // served by a different host than the .osk, so "the previews are right
   // there" is no evidence the archive is reachable.
-  if (status === 404) return "The skin file is not in storage, so its previews cannot be re-rendered.";
-  return "The skin file could not be downloaded, so its previews cannot be re-rendered.";
+  if (status === 404) return msg`The skin file is not in storage, so its previews cannot be re-rendered.`;
+  return msg`The skin file could not be downloaded, so its previews cannot be re-rendered.`;
 }
 
 export function SkinPreviewEditorModal({
@@ -78,6 +80,7 @@ export function SkinPreviewEditorModal({
   onClose: () => void;
   onSaved: (skin: SkinSummary) => void;
 }) {
+  const { t, i18n } = useLingui();
   const [loading, setLoading] = useState<LoadingState | null>(null);
   const [imported, setImported] = useState<ReplaySkinImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -169,8 +172,8 @@ export function SkinPreviewEditorModal({
   const editorBackdropPool = useMemo(() => {
     const selected = backdropFor(selectedKeymode);
     if (typeof selected !== "number" || pool.candidates.some((entry) => entry.setId === selected)) return pool;
-    return { ...pool, candidates: [{ setId: selected, label: "Current backdrop" }, ...pool.candidates] };
-  }, [pool, selectedKeymode, backdropFor]);
+    return { ...pool, candidates: [{ setId: selected, label: t`Current backdrop` }, ...pool.candidates] };
+  }, [pool, selectedKeymode, backdropFor, t]);
   const editorPatternPool = useMemo(() => {
     const selected = patternFor(selectedKeymode);
     if (!selected || patternPool.candidates.some((entry) => entry.beatmapId === selected.beatmapId)) return patternPool;
@@ -195,7 +198,7 @@ export function SkinPreviewEditorModal({
     if (!open || !needsSkinFile || imported) return;
     const oskUrl = skinOskFileUrl(skin);
     if (!oskUrl) {
-      setError("This skin's file is not available, so its previews cannot be re-rendered.");
+      setError(t`This skin's file is not available, so its previews cannot be re-rendered.`);
       return;
     }
     let cancelled = false;
@@ -207,7 +210,7 @@ export function SkinPreviewEditorModal({
     let retrying = false;
     setError(null);
     setDownloadFailed(false);
-    setLoading({ label: "Downloading the skin file", percent: null });
+    setLoading({ label: t`Downloading the skin file`, percent: null });
     (async () => {
       // A retry goes past the HTTP cache. The stored copy is often the reason
       // the first attempt failed: the same .osk is reachable by the download
@@ -243,7 +246,7 @@ export function SkinPreviewEditorModal({
             const percent = Math.min(100, Math.round((received / total) * 100));
             if (percent !== lastPercent) {
               lastPercent = percent;
-              setLoading({ label: "Downloading the skin file", percent });
+              setLoading({ label: t`Downloading the skin file`, percent });
             }
           }
         }
@@ -261,7 +264,7 @@ export function SkinPreviewEditorModal({
           const percent = steps > 0 ? Math.min(100, Math.round((done / steps) * 100)) : 0;
           if (percent !== lastPercent && !cancelled) {
             lastPercent = percent;
-            setLoading({ label: "Reading the skin", percent });
+            setLoading({ label: t`Reading the skin`, percent });
           }
         },
       });
@@ -278,11 +281,11 @@ export function SkinPreviewEditorModal({
         if (!autoRetriedRef.current && status !== 404) {
           autoRetriedRef.current = true;
           retrying = true;
-          setLoading({ label: "Downloading the skin file", percent: null });
+          setLoading({ label: t`Downloading the skin file`, percent: null });
           retryTimerRef.current = setTimeout(() => setDownloadAttempt((attempt) => attempt + 1), AUTO_RETRY_DELAY_MS);
           return;
         }
-        setError(skinFileFailureMessage(phase, status));
+        setError(i18n._(skinFileFailureMessage(phase, status)));
         setDownloadFailed(true);
       })
       .finally(() => {
@@ -291,7 +294,7 @@ export function SkinPreviewEditorModal({
     return () => {
       cancelled = true;
     };
-  }, [open, needsSkinFile, imported, skin, downloadAttempt]);
+  }, [open, needsSkinFile, imported, skin, downloadAttempt, t, i18n]);
 
   const retryDownload = useCallback(() => {
     if (retryTimerRef.current) {
@@ -352,7 +355,7 @@ export function SkinPreviewEditorModal({
       }
     })()
       .catch(() => {
-        if (!cancelled) setError("The previews could not be rendered.");
+        if (!cancelled) setError(t`The previews could not be rendered.`);
       })
       .finally(() => {
         if (!cancelled) setRendering(false);
@@ -360,7 +363,7 @@ export function SkinPreviewEditorModal({
     return () => {
       cancelled = true;
     };
-  }, [imported, pending, pendingPatterns, selectedKeymode, poolImage, backdropFor, patternFor]);
+  }, [imported, pending, pendingPatterns, selectedKeymode, poolImage, backdropFor, patternFor, t]);
 
   // "All keymodes" retargets everything the skin ships, which is also how a
   // per-keymode pick is undone; "this keymode only" touches the one on screen.
@@ -432,12 +435,12 @@ export function SkinPreviewEditorModal({
     try {
       let current: SkinSummary | null = null;
       if (uploads.length > 0) {
-        setProgress({ done: 0, total: 0, label: "Preparing the update." });
+        setProgress({ done: 0, total: 0, label: t`Preparing the update.` });
         const started = await startSkinEdit({ data: { id: skin.id, scope: "previews" } });
         if (!started.ok) {
           setError(started.error === "not_logged_in"
-            ? "Log in with osu! again to edit this skin."
-            : "The previews could not be updated right now. Try again.");
+            ? t`Log in with osu! again to edit this skin.`
+            : t`The previews could not be updated right now. Try again.`);
           setSaving(false);
           return;
         }
@@ -465,7 +468,7 @@ export function SkinPreviewEditorModal({
             label: skinPreviewUploadLabel(activeKeys, completed, total),
           }),
         );
-        setProgress({ done: totalBytes, total: totalBytes, label: "Saving." });
+        setProgress({ done: totalBytes, total: totalBytes, label: t`Saving.` });
         current = await finishSkinEdit(
           started.id,
           started.token,
@@ -488,7 +491,7 @@ export function SkinPreviewEditorModal({
         if (target) {
           const result = await setSkinCover({ data: { id: skin.id, ...target } });
           if (!result.ok) {
-            setError("The card cover could not be changed. Try again.");
+            setError(t`The card cover could not be changed. Try again.`);
             setSaving(false);
             return;
           }
@@ -500,7 +503,7 @@ export function SkinPreviewEditorModal({
           data: { id: skin.id, labels: labelDrafts.slice(0, skin.screenshots.length).map((label) => label.trim()) },
         });
         if (!result.ok) {
-          setError("The screenshot names could not be saved. Try again.");
+          setError(t`The screenshot names could not be saved. Try again.`);
           setSaving(false);
           return;
         }
@@ -512,7 +515,7 @@ export function SkinPreviewEditorModal({
       for (const index of [...removedShots].sort((a, b) => b - a)) {
         const result = await removeSkinScreenshot({ data: { id: skin.id, screenshot: index } });
         if (!result.ok || !result.skin) {
-          setError("A screenshot could not be removed. Try again.");
+          setError(t`A screenshot could not be removed. Try again.`);
           setSaving(false);
           return;
         }
@@ -538,10 +541,10 @@ export function SkinPreviewEditorModal({
       setSaving(false);
       setError(saveError instanceof SkinUploadError
         ? saveError.message
-        : "The previews could not be updated. Try again.");
+        : t`The previews could not be updated. Try again.`);
     }
   }, [saving, dirty, renders, skin.id, skin.screenshots.length, coverKeymode, coverShot, coverChanged,
-    labelsChanged, labelDrafts, removedShots, revertPreviews, onSaved, onClose, backdropFor, patternFor]);
+    labelsChanged, labelDrafts, removedShots, revertPreviews, onSaved, onClose, backdropFor, patternFor, t]);
 
   const handleDismiss = useCallback(() => {
     if (saving) return;
@@ -602,6 +605,7 @@ export function SkinPreviewEditorModal({
   const heroUrl = renders.get(selectedKeymode)?.url ?? publishedPreviewUrl(selectedKeymode) ?? skin.previewUrl;
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
   const changedKeymodes = [...renders.keys()].sort((a, b) => a - b);
+  const changedKeymodeLabels = changedKeymodes.map((keys) => `${keys}K`).join(", ");
   // The picker stays live while the archive downloads: a pick is what starts
   // that download, and further picks just queue up behind it.
   const busy = saving || rendering;
@@ -623,7 +627,7 @@ export function SkinPreviewEditorModal({
           <motion.div
             role="dialog"
             aria-modal="true"
-            aria-label="Edit skin previews"
+            aria-label={t`Edit skin previews`}
             className="modal-card-mobile-safe relative isolate z-10 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -633,12 +637,12 @@ export function SkinPreviewEditorModal({
           >
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-osu-b3/30 px-4 py-3 sm:px-5">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">edit previews</span>
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light"><Trans>edit previews</Trans></span>
                 {!saving && (
                   <button
                     type="button"
                     onClick={handleDismiss}
-                    aria-label="Close"
+                    aria-label={t`Close`}
                     className="grid h-7 w-7 place-items-center rounded-full text-osu-f1 transition-colors cursor-pointer hover:bg-osu-b3/50 hover:text-white"
                   >
                     <X className="h-4 w-4" strokeWidth={2.4} />
@@ -650,10 +654,10 @@ export function SkinPreviewEditorModal({
                 <div className="relative overflow-hidden rounded-xl border border-osu-b3/30 bg-osu-b4">
                   <div className="aspect-video w-full">
                     {heroUrl ? (
-                      <img src={heroUrl} alt={`${selectedKeymode}K preview`} className="h-full w-full object-cover" />
+                      <img src={heroUrl} alt={t`${selectedKeymode}K preview`} className="h-full w-full object-cover" />
                     ) : (
                       <div className="flex h-full items-center justify-center text-[12px] text-osu-f1">
-                        No {selectedKeymode}K preview yet.
+                        <Trans>No {selectedKeymode}K preview yet.</Trans>
                       </div>
                     )}
                   </div>
@@ -668,19 +672,19 @@ export function SkinPreviewEditorModal({
                   )}
                   {!loading && rendering && (
                     <div className="pointer-events-none absolute right-2 top-2 rounded bg-osu-b5/85 px-1.5 py-0.5 text-[10px] font-bold text-osu-l2">
-                      rendering
+                      <Trans>rendering</Trans>
                     </div>
                   )}
                 </div>
 
                 <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
                   <span className="text-osu-f1">
-                    Viewing <span className="font-bold text-osu-l2 tabular-nums">{selectedKeymode}K</span>
+                    <Trans>Viewing <span className="font-bold text-osu-l2 tabular-nums">{selectedKeymode}K</span></Trans>
                   </span>
                   {coverKeymode === selectedKeymode && coverShot == null ? (
                     <span className="flex items-center gap-1 font-bold text-osu-pink">
                       <Star size={11} aria-hidden="true" />
-                      card cover
+                      <Trans>card cover</Trans>
                     </span>
                   ) : (
                     <button
@@ -693,12 +697,12 @@ export function SkinPreviewEditorModal({
                         setCoverShot(null);
                       }}
                       title={!publishedPreviewUrl(selectedKeymode) && !renders.has(selectedKeymode)
-                        ? `This skin has no ${selectedKeymode}K preview yet; pick a backdrop for it first.`
+                        ? t`This skin has no ${selectedKeymode}K preview yet; pick a backdrop for it first.`
                         : undefined}
                       className="flex items-center gap-1 font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default disabled:opacity-50"
                     >
                       <Star size={11} aria-hidden="true" />
-                      Use {selectedKeymode}K as the card cover
+                      <Trans>Use {selectedKeymode}K as the card cover</Trans>
                     </button>
                   )}
                 </div>
@@ -720,9 +724,9 @@ export function SkinPreviewEditorModal({
                       >
                         <div className="aspect-video w-full bg-osu-b4">
                           {url ? (
-                            <img src={url} alt={`${keys}K thumbnail`} loading="lazy" className="h-full w-full object-cover" />
+                            <img src={url} alt={t`${keys}K thumbnail`} loading="lazy" className="h-full w-full object-cover" />
                           ) : (
-                            <div className="flex h-full items-center justify-center text-[10px] text-osu-f1/60">no preview</div>
+                            <div className="flex h-full items-center justify-center text-[10px] text-osu-f1/60"><Trans>no preview</Trans></div>
                           )}
                         </div>
                         <div className={`flex items-center gap-1 px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums ${
@@ -730,10 +734,10 @@ export function SkinPreviewEditorModal({
                         }`}>
                           {keys}K
                           {coverKeymode === keys && coverShot == null && (
-                            <Star size={9} className={selected ? "text-white" : "text-osu-pink"} aria-label="card cover" />
+                            <Star size={9} className={selected ? "text-white" : "text-osu-pink"} aria-label={t`card cover`} />
                           )}
                           {renders.has(keys) && (
-                            <span className={selected ? "text-white/80" : "text-osu-f1/70"} title="Re-rendered, not saved yet" aria-hidden="true">*</span>
+                            <span className={selected ? "text-white/80" : "text-osu-f1/70"} title={t`Re-rendered, not saved yet`} aria-hidden="true">*</span>
                           )}
                         </div>
                       </button>
@@ -752,7 +756,7 @@ export function SkinPreviewEditorModal({
                     keymodeLabel: `${selectedKeymode}K`,
                     hint: changedKeymodes.length > 0 ? (
                       <span className="text-[10px] text-osu-f1/55">
-                        {changedKeymodes.map((keys) => `${keys}K`).join(", ")} re-rendered
+                        <Trans>{changedKeymodeLabels} re-rendered</Trans>
                       </span>
                     ) : null,
                   }}
@@ -763,14 +767,18 @@ export function SkinPreviewEditorModal({
                   }}
                 />
                 <p className="mt-2 text-[11px] leading-relaxed text-osu-f1/70">
-                  Picking a backdrop or a pattern re-renders that playfield from the uploaded .osk while preserving
-                  its other saved choice. Patterns are cut from real charts, one keymode at a time. Keymodes left
-                  alone keep the previews they were published with.
+                  <Trans>
+                    Picking a backdrop or a pattern re-renders that playfield from the uploaded .osk while preserving
+                    its other saved choice. Patterns are cut from real charts, one keymode at a time. Keymodes left
+                    alone keep the previews they were published with.
+                  </Trans>
                 </p>
                 {!publishedRecipes.has(selectedKeymode) && publishedPreviewUrl(selectedKeymode) ? (
                   <p className="mt-1 text-[10.5px] leading-relaxed text-osu-f1/55">
-                    This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a
-                    new backdrop and pattern; later edits will preserve both.
+                    <Trans>
+                      This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a
+                      new backdrop and pattern; later edits will preserve both.
+                    </Trans>
                   </p>
                 ) : null}
 
@@ -817,8 +825,11 @@ export function SkinPreviewEditorModal({
                 )}
                 {removedShots.length > 0 && (
                   <p className="mt-1 text-[10.5px] leading-relaxed text-osu-f1/55">
-                    {removedShots.length === 1 ? "1 screenshot" : `${removedShots.length} screenshots`} will be
-                    removed for good when you save.
+                    <Plural
+                      value={removedShots.length}
+                      one="# screenshot will be removed for good when you save."
+                      other="# screenshots will be removed for good when you save."
+                    />
                   </p>
                 )}
 
@@ -831,7 +842,7 @@ export function SkinPreviewEditorModal({
                         onClick={retryDownload}
                         className="font-semibold text-osu-l2 underline underline-offset-2 transition-colors cursor-pointer hover:text-white"
                       >
-                        Try again
+                        <Trans>Try again</Trans>
                       </button>
                     )}
                   </p>
@@ -856,7 +867,7 @@ export function SkinPreviewEditorModal({
                         disabled={!dirty || awaitingRender}
                         className="rounded-full bg-osu-pink px-6 py-2 text-[13px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-50"
                       >
-                        Save changes
+                        <Trans>Save changes</Trans>
                       </button>
                       <button
                         type="button"
@@ -864,7 +875,7 @@ export function SkinPreviewEditorModal({
                         disabled={busy || loading != null}
                         className="text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default disabled:opacity-50"
                       >
-                        Re-render every keymode
+                        <Trans>Re-render every keymode</Trans>
                       </button>
                       {renders.size > 0 && (
                         <button
@@ -872,7 +883,7 @@ export function SkinPreviewEditorModal({
                           onClick={revertPreviews}
                           className="text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
                         >
-                          Undo re-renders
+                          <Trans>Undo re-renders</Trans>
                         </button>
                       )}
                       <button
@@ -880,7 +891,7 @@ export function SkinPreviewEditorModal({
                         onClick={handleDismiss}
                         className="text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
                       >
-                        Cancel
+                        <Trans>Cancel</Trans>
                       </button>
                     </div>
                   )}

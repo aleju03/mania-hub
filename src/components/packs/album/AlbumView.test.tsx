@@ -4,8 +4,8 @@
    field -- which is what "the triangle animation resets the moment i release
    the cover" was. And the shelf stays mounted behind an open album, so it needs
    a memo boundary or every page turn re-renders ~90 covers nobody can see. */
-import { useState, type ReactElement } from "react";
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { useState, type ReactElement, type ReactNode } from "react";
+import { act, cleanup, fireEvent, render as rtlRender } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AlbumShelf,
@@ -16,6 +16,15 @@ import {
   useFramePulse,
 } from "./AlbumView";
 import { buildAlbumSections, GOAT_ALBUM_ROSTER } from "./albumModel";
+import { getI18n } from "../../../lib/i18n";
+import { I18nProvider } from "@lingui/react";
+
+// The album components read copy through Lingui; en resolves to the source
+// strings these tests assert on.
+const I18nWrap = ({ children }: { children: ReactNode }) => (
+  <I18nProvider i18n={getI18n("en")}>{children}</I18nProvider>
+);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
 
 /* The three drift layers, in the order CoverTriangles renders them. */
 const LAYER_DURATIONS = [26, 40, 58];
@@ -155,20 +164,21 @@ describe("useFramePulse", () => {
 });
 
 describe("cover captions", () => {
+  const en = getI18n("en");
   it("pluralizes and localizes the card count", () => {
     const counts = new Map([
       ["CR", 1],
       ["US", 1234],
     ]);
-    expect(albumCountText(counts, "CR")).toBe("1 card");
-    expect(albumCountText(counts, "US")).toBe("1,234 cards");
-    expect(albumCountText(counts, "JP")).toBe("0 cards");
+    expect(albumCountText(counts, "CR", en)).toBe("1 card");
+    expect(albumCountText(counts, "US", en)).toBe("1,234 cards");
+    expect(albumCountText(counts, "JP", en)).toBe("0 cards");
   });
 
   it("labels the Global album by its cap", () => {
-    expect(albumSubtitle("GLOBAL")).toBe("Top 100 players");
-    expect(albumSubtitle("GOAT")).toBe("Honorary roster");
-    expect(albumSubtitle("CR")).toBe("Card collection");
+    expect(albumSubtitle("GLOBAL", en)).toBe("Top 100 players");
+    expect(albumSubtitle("GOAT", en)).toBe("Honorary roster");
+    expect(albumSubtitle("CR", en)).toBe("Card collection");
   });
 });
 

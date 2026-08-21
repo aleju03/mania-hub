@@ -2,6 +2,10 @@ import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack
 import { useState, useRef, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, Send, X } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
+import { getI18n } from "../lib/i18n";
 import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
 import { searchPlayers } from "../lib/player-search";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
@@ -183,9 +187,12 @@ const REPLAY_PLAYER_BEST_FALLBACK_LIMIT = 50;
 const REPLAY_PLAYER_RECENT_LIMIT = 25;
 const REPLAY_PLAYER_PINNED_LIMIT = 25;
 const REPLAY_PLAYER_FIRSTS_LIMIT = 50;
-const REPLAY_LANDING_SEO_TITLE = "osu!mania replay watcher";
+const REPLAY_LANDING_SEO_TITLE = msg`osu!mania replay watcher`;
+// The English original of the title above: the landing card's R2 key is
+// derived from it, so every locale shares the one English card.
+const REPLAY_LANDING_OG_TITLE = "osu!mania replay watcher";
 const REPLAY_LANDING_SEO_DESCRIPTION =
-  "Browser-based osu!mania replay watcher and viewer for .osr files, score replays, keypress overlays, skins, and MP4 export.";
+  msg`Browser-based osu!mania replay watcher and viewer for .osr files, score replays, keypress overlays, skins, and MP4 export.`;
 const REPLAY_VIDEO_EXPORT_RESOLUTIONS: Record<ReplayVideoExportOptions["resolution"], { width: number; height: number }> = {
   "720p": { width: 1280, height: 720 },
   "1080p": { width: 1920, height: 1080 },
@@ -489,7 +496,9 @@ function formatMissingBeatmapLabel(beatmapMeta: BeatmapChecksumLookupResult): st
   return `${title || `beatmap #${beatmapMeta.id}`}${version}`;
 }
 
-function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number, beatmapFileStatus: ReplayBeatmapFileStatus, scoreJustSet: boolean): { title: string; detail: string } {
+// Returns descriptors rather than strings: this runs outside a component, so
+// the caller resolves them against its own i18n instance.
+function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number, beatmapFileStatus: ReplayBeatmapFileStatus, scoreJustSet: boolean): { title: MessageDescriptor; detail: MessageDescriptor } {
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   const elapsedLabel = elapsedSeconds >= 4 ? ` (${elapsedSeconds}s)` : "";
   const chartReady = beatmapFileStatus === "cached" || beatmapFileStatus === "fetched";
@@ -497,54 +506,54 @@ function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number, beatma
   if (elapsedMs >= 8_000) {
     const isUpload = step === "upload" || step === "shared-upload";
     return {
-      title: `Still loading${elapsedLabel}`,
+      title: msg`Still loading${elapsedLabel}`,
       detail: isUpload
-        ? "Matching the replay to its beatmap."
+        ? msg`Matching the replay to its beatmap.`
         : scoreJustSet
-          ? "This score is brand new. osu! takes a moment before the replay can be downloaded."
+          ? msg`This score is brand new. osu! takes a moment before the replay can be downloaded.`
           : chartReady
-            ? "Chart loaded. Still fetching the replay."
-            : "Still fetching the replay and chart.",
+            ? msg`Chart loaded. Still fetching the replay.`
+            : msg`Still fetching the replay and chart.`,
     };
   }
 
   switch (step) {
     case "score":
       return {
-        title: `Looking up the score${elapsedLabel}`,
-        detail: "Making sure a replay is available.",
+        title: msg`Looking up the score${elapsedLabel}`,
+        detail: msg`Making sure a replay is available.`,
       };
     case "assets":
       if (beatmapFileStatus === "unavailable") {
         return {
-          title: `Downloading replay${elapsedLabel}`,
-          detail: "The chart file isn't available, so only the replay will load.",
+          title: msg`Downloading replay${elapsedLabel}`,
+          detail: msg`The chart file isn't available, so only the replay will load.`,
         };
       }
       if (chartReady) {
         return {
-          title: `Downloading replay${elapsedLabel}`,
-          detail: "Chart loaded. Fetching the replay.",
+          title: msg`Downloading replay${elapsedLabel}`,
+          detail: msg`Chart loaded. Fetching the replay.`,
         };
       }
       return {
-        title: `Downloading replay and beatmap${elapsedLabel}`,
-        detail: "Fetching the replay and the chart file.",
+        title: msg`Downloading replay and beatmap${elapsedLabel}`,
+        detail: msg`Fetching the replay and the chart file.`,
       };
     case "viewer":
       return {
-        title: `Almost there${elapsedLabel}`,
-        detail: "Setting up the viewer.",
+        title: msg`Almost there${elapsedLabel}`,
+        detail: msg`Setting up the viewer.`,
       };
     case "upload":
       return {
-        title: `Reading the replay file${elapsedLabel}`,
-        detail: "Parsing the file and finding its beatmap.",
+        title: msg`Reading the replay file${elapsedLabel}`,
+        detail: msg`Parsing the file and finding its beatmap.`,
       };
     case "shared-upload":
       return {
-        title: `Opening shared replay${elapsedLabel}`,
-        detail: "Fetching the replay and finding its beatmap.",
+        title: msg`Opening shared replay${elapsedLabel}`,
+        detail: msg`Fetching the replay and finding its beatmap.`,
       };
   }
 }
@@ -593,17 +602,18 @@ export const Route = createFileRoute("/replay")({
       && !match.search.tab
       && typeof match.search.compareA !== "number"
       && typeof match.search.t !== "number";
+    const i18n = getI18n(match.context.locale);
     const title = hasSharedScore
       ? buildReplaySeoTitle(scoreId, loaderData?.seoScore, playerName)
       : hasSharedUpload
-        ? "Shared replay"
-        : REPLAY_LANDING_SEO_TITLE;
+        ? i18n._(msg`Shared replay`)
+        : i18n._(REPLAY_LANDING_SEO_TITLE);
 
     return pageSeo({
       title,
       description: hasSharedScore
         ? ""
-        : REPLAY_LANDING_SEO_DESCRIPTION,
+        : i18n._(REPLAY_LANDING_SEO_DESCRIPTION),
       path: withSearchParams("/replay", {
         scoreId,
         beatmapsetId,
@@ -612,6 +622,8 @@ export const Route = createFileRoute("/replay")({
       }),
       origin: match.context.origin,
       image: hasSharedScore ? replayOgImagePath(scoreId) : undefined,
+      // Localized title, so the OG image key rides the English original.
+      imageTitle: hasSharedUpload ? "Shared replay" : REPLAY_LANDING_OG_TITLE,
       social: true,
       noindex: !isReplayLanding,
       appendSiteName: !hasSharedScore,
@@ -697,6 +709,9 @@ async function fetchReplayCachedProfileSnapshot(key: string): Promise<LivePlayer
 }
 
 function ReplayPage() {
+  const { t, i18n } = useLingui();
+  // The search param `t` (start timestamp) is renamed on the way in so it
+  // doesn't shadow the translation macro above.
   const { scoreId, beatmapsetId, uploadId, t: initialTime, tab, player: playerParam, compareA, compareB } = Route.useSearch();
   const sideBySide = compareA != null && compareB != null ? { left: compareA, right: compareB } : null;
   const loaderData = Route.useLoaderData();
@@ -966,7 +981,7 @@ function ReplayPage() {
         });
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load replay");
+      setError(e instanceof Error ? e.message : t`Failed to load replay`);
     } finally {
       setLoading(false);
     }
@@ -1032,7 +1047,7 @@ function ReplayPage() {
     setRecentReplays(recordRecentReplay({
       ...(scoreId != null ? { scoreId } : { uploadId: loadedUploadId ?? undefined }),
       beatmapsetId: scoreInfo?.beatmapset?.id ?? uploadedBeatmapsetId ?? beatmapsetId,
-      title: scoreInfo?.beatmapset?.title ?? beatmap?.title ?? "Unknown beatmap",
+      title: scoreInfo?.beatmapset?.title ?? beatmap?.title ?? t`Unknown beatmap`,
       artist: scoreInfo?.beatmapset?.artist ?? beatmap?.artist,
       version: scoreInfo?.beatmap?.version ?? beatmap?.version,
       keyCount: replay.keyCount,
@@ -1287,7 +1302,7 @@ function ReplayPage() {
     const uploaded = await parseUploadedReplayBuffer(buffer);
     const checksum = uploaded.replay.header.beatmapHash;
     if (!checksum) {
-      throw new Error("This replay does not include a beatmap checksum.");
+      throw new Error(t`This replay does not include a beatmap checksum.`);
     }
 
     const fallbackScoreId = extractReplayScoreIdFromFilename(options.filename);
@@ -1407,7 +1422,7 @@ function ReplayPage() {
         replay_player: pending.uploaded.replay.header.playerName,
       });
     } catch (e) {
-      setLocalBeatmapError(e instanceof Error ? e.message : "Couldn't read that beatmap file.");
+      setLocalBeatmapError(e instanceof Error ? e.message : t`Couldn't read that beatmap file.`);
     } finally {
       setLocalBeatmapLoading(false);
     }
@@ -1454,7 +1469,7 @@ function ReplayPage() {
       setUploadedBeatmapsetId(undefined);
       setUploadedReplayShareUrl(null);
       setLoadedUploadId(null);
-      setError(e instanceof Error ? e.message : "Failed to load shared replay");
+      setError(e instanceof Error ? e.message : t`Failed to load shared replay`);
     } finally {
       setLoading(false);
     }
@@ -1463,11 +1478,11 @@ function ReplayPage() {
   const handleUploadReplay = async (file: File) => {
     setError(null);
     if (!file.name.toLowerCase().endsWith(".osr")) {
-      setError("Please choose an .osr replay file.");
+      setError(t`Please choose an .osr replay file.`);
       return;
     }
     if (file.size > MAX_UPLOAD_REPLAY_BYTES) {
-      setError("That replay file is too large to open in the browser.");
+      setError(t`That replay file is too large to open in the browser.`);
       return;
     }
 
@@ -1503,7 +1518,7 @@ function ReplayPage() {
       setUploadedBeatmapsetId(undefined);
       setUploadedReplayShareUrl(null);
       setLoadedUploadId(null);
-      setError(e instanceof Error ? e.message : "Failed to load uploaded replay");
+      setError(e instanceof Error ? e.message : t`Failed to load uploaded replay`);
     } finally {
       setLoading(false);
     }
@@ -1545,14 +1560,14 @@ function ReplayPage() {
 
   const handleDeleteLoadedUpload = useCallback(async () => {
     if (!loadedUploadId || deletingUpload) return;
-    if (!window.confirm("Delete this upload? Its share link stops working and the file is gone for good.")) return;
+    if (!window.confirm(t`Delete this upload? Its share link stops working and the file is gone for good.`)) return;
     setDeletingUpload(true);
     try {
       const result = await deleteUploadedReplay({ data: { id: loadedUploadId } });
       if (!result.ok) {
         setError(result.error === "not_found"
-          ? "That upload is already gone."
-          : "Couldn't delete that upload; try again.");
+          ? t`That upload is already gone.`
+          : t`Couldn't delete that upload; try again.`);
         return;
       }
       // Nothing is left to watch, so land on the uploads page, where the list
@@ -1571,7 +1586,7 @@ function ReplayPage() {
       applyLocalBeatmapAssets(EMPTY_LOCAL_BEATMAP_ASSETS);
       navigate({ to: "/replay/uploads", replace: true });
     } catch {
-      setError("Couldn't delete that upload; try again.");
+      setError(t`Couldn't delete that upload; try again.`);
     } finally {
       setDeletingUpload(false);
     }
@@ -1601,7 +1616,7 @@ function ReplayPage() {
       } catch {
         if (cancelled) return;
         setScorePreview(null);
-        setScorePreviewError("Couldn't find score details");
+        setScorePreviewError(t`Couldn't find score details`);
       } finally {
         if (!cancelled) setScorePreviewLoading(false);
       }
@@ -1910,7 +1925,7 @@ function ReplayPage() {
       <div className={stageActive ? "hidden" : ""}>
         <PageHeader
           iconSrc="/images/icons/home.svg"
-          title={REPLAY_LANDING_SEO_TITLE}
+          title={i18n._(REPLAY_LANDING_SEO_TITLE)}
         />
       </div>
 
@@ -1935,8 +1950,8 @@ function ReplayPage() {
             ) : loading ? (
               <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center px-4 py-20 text-center">
                 <div className="mb-4 h-10 w-10 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
-                <p className="text-sm font-semibold text-osu-l2">{replayLoadingCopy.title}</p>
-                <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">{replayLoadingCopy.detail}</p>
+                <p className="text-sm font-semibold text-osu-l2">{i18n._(replayLoadingCopy.title)}</p>
+                <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">{i18n._(replayLoadingCopy.detail)}</p>
               </motion.div>
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -2094,6 +2109,7 @@ function ReplayViewer({
   // stage and the settings card so it scrolls under the pinned player.
   children?: ReactNode;
 }) {
+  const { t } = useLingui();
   const auth = useAuth();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2542,6 +2558,11 @@ function ReplayViewer({
   const hiddenOverlayIds = overlayMenu && !overlayMenu.targetId
     ? REPLAY_OVERLAY_IDS.filter((id) => !overlaySettings[id]?.enabled)
     : [];
+  // Reads as "Remove misses" mid-sentence, so the label is lowercased before
+  // it goes into the message.
+  const overlayMenuTargetLabel = overlayMenu?.targetId
+    ? REPLAY_OVERLAY_LABELS[overlayMenu.targetId].toLowerCase()
+    : "";
   // Only odd keymodes have a lane a thumb covers, so only they can move it
   // between the two miss counters.
   const thumbLaneAvailable = replay.keyCount % 2 === 1;
@@ -4111,7 +4132,7 @@ function ReplayViewer({
       return;
     }
     cancelReplayEndAudioFade();
-    setAudioError("Couldn't load the song audio for this replay.");
+    setAudioError(t`Couldn't load the song audio for this replay.`);
     shouldResumeAudioRef.current = false;
   };
 
@@ -4201,10 +4222,12 @@ function ReplayViewer({
     if (!stage.pauseContinue || !stage.pauseRetry || !stage.pauseBack) return null;
     return {
       overlay: stage.pauseOverlay,
+      // The art carries the wording; the label is only what a screen reader
+      // announces, so it is the one part that translates.
       buttons: [
-        { key: "Resume this map", asset: stage.pauseContinue, onClick: resumeFromPauseMenu },
-        { key: "Try this again", asset: stage.pauseRetry, onClick: restartFromPauseMenu },
-        { key: "Back to menu", asset: stage.pauseBack, onClick: onClear },
+        { key: "continue", label: t`Resume this map`, asset: stage.pauseContinue, onClick: resumeFromPauseMenu },
+        { key: "retry", label: t`Try this again`, asset: stage.pauseRetry, onClick: restartFromPauseMenu },
+        { key: "back", label: t`Back to menu`, asset: stage.pauseBack, onClick: onClear },
       ],
     };
   })();
@@ -4755,7 +4778,7 @@ function ReplayViewer({
           <button
             type="button"
             onClick={onClear}
-            aria-label="Back to replay browser"
+            aria-label={t`Back to replay browser`}
             className={`absolute left-2 top-2 z-30 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/50 text-white/85 transition-opacity active:scale-95 sm:hidden ${
               mobileFullscreenButtonVisible ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
@@ -4766,8 +4789,8 @@ function ReplayViewer({
         <button
           type="button"
           onClick={toggleReplayFullscreen}
-          aria-label={isCanvasFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-          title={isCanvasFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          aria-label={isCanvasFullscreen ? t`Exit fullscreen` : t`Enter fullscreen`}
+          title={isCanvasFullscreen ? t`Exit fullscreen` : t`Fullscreen`}
           className={`absolute bottom-3 right-3 z-30 h-8 w-8 cursor-pointer items-center justify-center rounded-sm text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] transition hover:bg-white/10 hover:text-white hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white/50 active:scale-95 sm:h-9 sm:w-9 ${
             isCanvasFullscreen
               ? fullscreenChromeVisible ? "flex opacity-90" : "flex opacity-0"
@@ -4793,7 +4816,7 @@ function ReplayViewer({
               <>
                 {overlayMenu.targetId === "misses" && thumbLaneAvailable && (
                   <>
-                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">Middle lane thumb</div>
+                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Middle lane thumb</Trans></div>
                     {(["left", "right"] as const).map((hand) => (
                       <button
                         key={hand}
@@ -4808,7 +4831,7 @@ function ReplayViewer({
                           className={`h-3.5 w-3.5 text-osu-pink ${missThumbHand === hand ? "" : "invisible"}`}
                           aria-hidden="true"
                         />
-                        {hand === "left" ? "Left thumb" : "Right thumb"}
+                        {hand === "left" ? <Trans>Left thumb</Trans> : <Trans>Right thumb</Trans>}
                       </button>
                     ))}
                     <div className="my-1 h-px bg-white/10" />
@@ -4820,12 +4843,12 @@ function ReplayViewer({
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
                 >
                   <X className="h-3.5 w-3.5 text-osu-red-light" aria-hidden="true" />
-                  Remove {REPLAY_OVERLAY_LABELS[overlayMenu.targetId].toLowerCase()}
+                  <Trans>Remove {overlayMenuTargetLabel}</Trans>
                 </button>
               </>
             ) : (
               <>
-                <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">Add overlay</div>
+                <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Add overlay</Trans></div>
                 {hiddenOverlayIds.length > 0 ? (
                   hiddenOverlayIds.map((id) => (
                     <button
@@ -4965,12 +4988,12 @@ function ReplayViewer({
                     <div className="absolute inset-0 bg-black/60" />
                   )}
                   <div className="relative flex flex-col items-center">
-                    {skinPauseMenu.buttons.map(({ key, asset, onClick }) => (
+                    {skinPauseMenu.buttons.map(({ key, label, asset, onClick }) => (
                       <button
                         key={key}
                         type="button"
                         onClick={onClick}
-                        aria-label={key}
+                        aria-label={label}
                         className="pointer-events-auto cursor-pointer transition-transform hover:scale-[1.03] active:scale-95"
                         // Native pixels in the game's 480-unit screen, as a
                         // share of the stage's height: the art lands at the
@@ -4985,12 +5008,12 @@ function ReplayViewer({
               ) : (
                 <div className="flex flex-col gap-9">
                   {[
-                    { label: "Resume this map", Icon: Send, onClick: resumeFromPauseMenu },
-                    { label: "Try this again", Icon: Repeat2, onClick: restartFromPauseMenu },
-                    { label: "Back to menu", Icon: Menu, onClick: onClear },
-                  ].map(({ label, Icon, onClick }) => (
+                    { key: "continue", label: t`Resume this map`, Icon: Send, onClick: resumeFromPauseMenu },
+                    { key: "retry", label: t`Try this again`, Icon: Repeat2, onClick: restartFromPauseMenu },
+                    { key: "back", label: t`Back to menu`, Icon: Menu, onClick: onClear },
+                  ].map(({ key, label, Icon, onClick }) => (
                     <button
-                      key={label}
+                      key={key}
                       type="button"
                       onClick={onClick}
                       className="pointer-events-auto group flex cursor-pointer items-center gap-5 text-left"

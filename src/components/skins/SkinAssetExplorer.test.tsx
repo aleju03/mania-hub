@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../lib/i18n";
 import type { SkinSummary } from "../../lib/skins";
 
 vi.stubEnv("VITE_LIVE_BACKEND_URL", "https://live.test");
@@ -36,9 +38,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// The explorer uses <Trans>, which throws without a provider; en resolves to
+// the source strings, matching what these tests assert on.
+function renderExplorer(skin: SkinSummary) {
+  return render(
+    <I18nProvider i18n={getI18n("en")}>
+      <SkinAssetExplorer skin={skin} />
+    </I18nProvider>,
+  );
+}
+
 describe("SkinAssetExplorer", () => {
   it("reads as one clickable strip before the archive is opened", () => {
-    render(<SkinAssetExplorer skin={SKIN} />);
+    renderExplorer(SKIN);
 
     const strip = screen.getByRole("button", { name: /inside the \.osk/i });
     expect(strip.getAttribute("aria-expanded")).toBe("false");
@@ -50,7 +62,7 @@ describe("SkinAssetExplorer", () => {
   it("says so when the archive cannot be read, and takes another click", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("offline"));
     vi.stubGlobal("fetch", fetchMock);
-    render(<SkinAssetExplorer skin={SKIN} />);
+    renderExplorer(SKIN);
 
     fireEvent.click(screen.getByRole("button", { name: /inside the \.osk/i }));
     await waitFor(() => expect(screen.getByText(/could not be read/i)).toBeTruthy());
@@ -61,7 +73,7 @@ describe("SkinAssetExplorer", () => {
   });
 
   it("has no strip at all for a skin with no stored file", () => {
-    render(<SkinAssetExplorer skin={{ ...SKIN, oskUrl: null }} />);
+    renderExplorer({ ...SKIN, oskUrl: null });
     expect(screen.queryByRole("button", { name: /inside the \.osk/i })).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Check, Recycle } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { formatOrdinal } from "#/lib/format";
 import {
   copiesShardValue,
@@ -115,6 +116,7 @@ export function PackSummary({
   reducedMotion,
   flyFrom = null,
 }: PackSummaryProps) {
+  const { t } = useLingui();
   const instant = flyFrom !== null;
   /* The ring marks the best card in the hand, which is a tier question before
      it is a rank one: an honorary card carries no meaningful global rank, so
@@ -482,7 +484,7 @@ export function PackSummary({
         {damage && (
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-black leading-none text-white tabular-nums">{cards.length}</span>
-            <span className="text-[12px] text-osu-f1">sliced</span>
+            <span className="text-[12px] text-osu-f1"><Trans>sliced</Trans></span>
           </div>
         )}
         <div className="flex items-baseline gap-2">
@@ -491,13 +493,13 @@ export function PackSummary({
           >
             {newCount}
           </span>
-          <span className="text-[12px] text-osu-f1">new</span>
+          <span className="text-[12px] text-osu-f1"><Trans>new</Trans></span>
         </div>
         {dupeCount > 0 && (
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-black leading-none text-osu-f1 tabular-nums">{dupeCount}</span>
             <span className="text-[12px] text-osu-f1">
-              duplicate{dupeCount === 1 ? "" : "s"}
+              <Plural value={dupeCount} one="duplicate" other="duplicates" />
             </span>
           </div>
         )}
@@ -519,7 +521,7 @@ export function PackSummary({
             >
               +{recycledShards}
             </motion.span>
-            <span className="text-[12px] text-osu-f1">shards</span>
+            <span className="text-[12px] text-osu-f1"><Trans>shards</Trans></span>
           </motion.div>
         )}
       </div>
@@ -611,12 +613,14 @@ export function PackSummary({
                 aria-pressed={selecting ? isSelected : undefined}
                 aria-label={
                   isRecycled
-                    ? `${card.player.user.username}'s card, recycled for ${recycledFor} shards`
+                    ? t`${card.player.user.username}'s card, recycled for ${recycledFor} shards`
                     : damage
-                      ? `${card.player.user.username}'s card, cut in half`
+                      ? t`${card.player.user.username}'s card, cut in half`
                       : selecting
-                        ? `${isSelected ? "Deselect" : "Select"} ${card.player.user.username}`
-                        : `View ${card.player.user.username}'s card`
+                        ? isSelected
+                          ? t`Deselect ${card.player.user.username}`
+                          : t`Select ${card.player.user.username}`
+                        : t`View ${card.player.user.username}'s card`
                 }
               >
                 <div
@@ -651,14 +655,14 @@ export function PackSummary({
                       }`}
                       style={turnDelayStyle}
                     >
-                      new
+                      <Trans>new</Trans>
                     </span>
                   )}
                   {(() => {
                     const face = card.thumbnail ? (
                       <img
                         src={card.thumbnail}
-                        alt={`${card.player.user.username} maniacard`}
+                        alt={t`${card.player.user.username} maniacard`}
                         className={`h-full w-full object-cover transition-[opacity,filter] duration-500 ${
                           isRecycled ? "opacity-20 grayscale" : ""
                         }`}
@@ -717,7 +721,7 @@ export function PackSummary({
                   to="/player/$username"
                   params={{ username: card.player.user.username }}
                   className="flex items-center justify-center gap-1.5 hover:underline underline-offset-4 decoration-osu-f1/60"
-                  aria-label={`Open ${card.player.user.username}'s profile`}
+                  aria-label={t`Open ${card.player.user.username}'s profile`}
                 >
                   <CountryFlag code={card.player.user.country_code} size="xs" decorative />
                   <span className="truncate text-[13px] font-bold text-white">{card.player.user.username}</span>
@@ -756,10 +760,10 @@ export function PackSummary({
                     >
                       {mint
                         ? first
-                          ? "first ever to pull this"
+                          ? t`first ever to pull this`
                           : latest
-                            ? `${formatOrdinal(mint.serial)} to pull this`
-                            : `${formatOrdinal(mint.serial)} of ${mint.mintedTotal.toLocaleString("en-US")} to pull this`
+                            ? t`${formatOrdinal(mint.serial)} to pull this`
+                            : t`${formatOrdinal(mint.serial)} of ${mint.mintedTotal.toLocaleString("en-US")} to pull this`
                         : null}
                     </div>
                   );
@@ -781,9 +785,11 @@ export function PackSummary({
               : "bg-osu-b4/60 text-osu-f1/70"
           }`}
         >
-          Open another
+          <Trans>Open another</Trans>
           {nextPackShardCost !== null && (
-            <span className="ml-1.5 font-semibold tabular-nums opacity-80">{nextPackShardCost} shards</span>
+            <span className="ml-1.5 font-semibold tabular-nums opacity-80">
+              <Trans>{nextPackShardCost} shards</Trans>
+            </span>
           )}
         </button>
         <button
@@ -791,7 +797,7 @@ export function PackSummary({
           onClick={onOpenAnother}
           className="rounded-full bg-osu-h2 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-osu-pink-dark cursor-pointer"
         >
-          Back to packs
+          <Trans>Back to packs</Trans>
         </button>
       </div>
       {livePositions.length > 0 && (
@@ -805,8 +811,10 @@ export function PackSummary({
           <Recycle className={`h-3.5 w-3.5 ${recycleBusy ? "animate-spin" : ""}`} />
           <span className="tabular-nums">
             {recycleBusy
-              ? "Recycling..."
-              : `${recycled.size > 0 ? "Recycle the rest" : "Recycle all"} +${allValue}`}
+              ? t`Recycling...`
+              : recycled.size > 0
+                ? t`Recycle the rest +${allValue}`
+                : t`Recycle all +${allValue}`}
           </span>
         </button>
       )}
@@ -818,14 +826,14 @@ export function PackSummary({
             data-select-keep=""
           >
             <span className="text-[12px] text-osu-f1 tabular-nums">
-              <span className="font-bold text-white">{selectedLive.length}</span> selected
+              <Trans><span className="font-bold text-white">{selectedLive.length}</span> selected</Trans>
             </span>
             <button
               type="button"
               onClick={() => setSelected(new Set(livePositions))}
               className="text-[12px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
             >
-              select all
+              <Trans>select all</Trans>
             </button>
             {selectedLive.length > 0 && (
               <button
@@ -833,7 +841,7 @@ export function PackSummary({
                 onClick={() => setSelected(new Set())}
                 className="text-[12px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
               >
-                clear
+                <Trans>clear</Trans>
               </button>
             )}
             <button
@@ -843,7 +851,7 @@ export function PackSummary({
               className="flex items-center gap-1.5 rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-40"
             >
               <Recycle className={`h-3.5 w-3.5 ${recycleBusy ? "animate-spin" : ""}`} />
-              {recycleBusy ? "Recycling..." : `Recycle +${selectedValue}`}
+              {recycleBusy ? t`Recycling...` : t`Recycle +${selectedValue}`}
             </button>
           </div>
         </div>
@@ -887,7 +895,7 @@ export function PackSummary({
                 role="menuitem"
                 onClick={() => setMenu(null)}
               >
-                Open profile
+                <Trans>Open profile</Trans>
               </Link>
               <button
                 type="button"
@@ -900,7 +908,7 @@ export function PackSummary({
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
               >
                 <Check className="h-3 w-3" />
-                Select cards...
+                <Trans>Select cards...</Trans>
               </button>
               <button
                 type="button"
@@ -920,8 +928,10 @@ export function PackSummary({
               >
                 <Recycle className="h-3 w-3" />
                 {menuConfirm
-                  ? "Sure? The card leaves the collection"
-                  : `${leavesCollection ? "Recycle card" : "Recycle this copy"} +${value}`}
+                  ? t`Sure? The card leaves the collection`
+                  : leavesCollection
+                    ? t`Recycle card +${value}`
+                    : t`Recycle this copy +${value}`}
               </button>
             </div>
           </>

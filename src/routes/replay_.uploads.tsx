@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { ArrowLeft, Trash2 } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 
+import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { avatarImageSrc } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
@@ -25,18 +28,24 @@ import {
 // uploader's files, with the uploader named on each row.
 
 export const Route = createFileRoute("/replay_/uploads")({
-  head: ({ match }) => pageSeo({
-    title: "Your Replay Uploads",
-    description: "The replays you have uploaded to Mania Hub, with their share links and deletes.",
-    path: "/replay/uploads",
-    origin: match.context.origin,
-    // Per-viewer content; there is nothing here for a crawler.
-    noindex: true,
-  }),
+  head: ({ match }) => {
+    const i18n = getI18n(match.context.locale);
+    return pageSeo({
+      title: i18n._(msg`Your Replay Uploads`),
+      description: i18n._(msg`The replays you have uploaded to Mania Hub, with their share links and deletes.`),
+      path: "/replay/uploads",
+      origin: match.context.origin,
+      // Localized title, so the OG image key rides the English original.
+      imageTitle: "Your Replay Uploads",
+      // Per-viewer content; there is nothing here for a crawler.
+      noindex: true,
+    });
+  },
   component: ReplayUploadsPage,
 });
 
 function ReplayUploadsPage() {
+  const { t } = useLingui();
   const auth = useAuth();
   const navigate = useNavigate();
   const isAdmin = auth.canUseAdminFeatures;
@@ -68,7 +77,7 @@ function ReplayUploadsPage() {
       setPage(result.page);
     } catch {
       if (requestRef.current !== requestId) return;
-      setNotice("Couldn't load the uploads; refresh to retry.");
+      setNotice(t`Couldn't load the uploads; refresh to retry.`);
     } finally {
       if (requestRef.current === requestId) setLoading(false);
     }
@@ -88,21 +97,21 @@ function ReplayUploadsPage() {
 
   const handleDelete = useCallback(async (upload: MyUploadedReplay) => {
     if (busyId) return;
-    if (!window.confirm("Delete this upload? Its share link stops working and the file is gone for good.")) return;
+    if (!window.confirm(t`Delete this upload? Its share link stops working and the file is gone for good.`)) return;
     setBusyId(upload.id);
     setNotice(null);
     try {
       const result = await deleteUploadedReplay({ data: { id: upload.id } });
       if (!result.ok) {
         setNotice(result.error === "not_found"
-          ? "That upload is already gone."
-          : "Couldn't delete that upload; try again.");
+          ? t`That upload is already gone.`
+          : t`Couldn't delete that upload; try again.`);
         return;
       }
       setUploads((previous) => previous.filter((item) => item.id !== upload.id));
       setTotal((previous) => Math.max(0, previous - 1));
     } catch {
-      setNotice("Couldn't delete that upload; try again.");
+      setNotice(t`Couldn't delete that upload; try again.`);
     } finally {
       setBusyId(null);
     }
@@ -123,11 +132,13 @@ function ReplayUploadsPage() {
     }
   }, [allOwners, backfilling, load]);
 
-  const title = allOwners ? "All uploads" : "Your uploads";
+  // "All uploads" is admin-only and stays English, like the rest of the
+  // admin-gated controls on this page.
+  const title = allOwners ? "All uploads" : t`Your uploads`;
 
   return (
     <div className="flex-1">
-      <PageHeader iconSrc="/images/icons/home.svg" title="Replay Uploads" />
+      <PageHeader iconSrc="/images/icons/home.svg" title={t`Replay Uploads`} />
       <div className="bg-osu-b5 min-h-[80vh]">
         <div className="mx-auto max-w-[1200px] px-3 py-3 sm:px-5 sm:py-6">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto max-w-3xl">
@@ -138,7 +149,7 @@ function ReplayUploadsPage() {
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:text-white"
               >
                 <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                Replays
+                <Trans>Replays</Trans>
               </Link>
               <h3 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">
                 {title}{total > 0 ? ` (${total})` : ""}
@@ -176,7 +187,7 @@ function ReplayUploadsPage() {
 
             {!canSee ? (
               <p className="py-12 text-center text-sm text-osu-f1">
-                Sign in with osu! to see your uploads.
+                <Trans>Sign in with osu! to see your uploads.</Trans>
               </p>
             ) : loading && uploads.length === 0 ? (
               <div className="flex flex-col gap-2">
@@ -186,13 +197,13 @@ function ReplayUploadsPage() {
               </div>
             ) : uploads.length === 0 ? (
               <p className="py-12 text-center text-sm text-osu-f1">
-                {allOwners ? "Nobody has uploaded a replay yet." : "Nothing uploaded yet."}{" "}
+                {allOwners ? "Nobody has uploaded a replay yet." : t`Nothing uploaded yet.`}{" "}
                 <Link
                   to="/replay"
                   search={{ tab: "upload" }}
                   className="font-semibold text-osu-pink-light transition-colors hover:text-white"
                 >
-                  Upload a replay
+                  <Trans>Upload a replay</Trans>
                 </Link>
               </p>
             ) : (
@@ -218,7 +229,7 @@ function ReplayUploadsPage() {
                   disabled={loading}
                   className="rounded-lg bg-osu-b4 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors cursor-pointer hover:bg-osu-b3 hover:text-white disabled:opacity-40"
                 >
-                  {loading ? "Loading..." : "Show more"}
+                  {loading ? <Trans>Loading...</Trans> : <Trans>Show more</Trans>}
                 </button>
               </div>
             )}
@@ -242,6 +253,7 @@ function UploadRow({
   onOpen: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useLingui();
   const description = upload.description;
   const coverUrl = description?.beatmap?.beatmapsetId
     ? `https://assets.ppy.sh/beatmaps/${description.beatmap.beatmapsetId}/covers/list.jpg`
@@ -253,10 +265,10 @@ function UploadRow({
       .filter(Boolean)
       .join(" ")
     : "";
-  const rowTitle = description?.beatmap?.title || upload.originalFilename || "Upload";
+  const rowTitle = description?.beatmap?.title || upload.originalFilename || t`Upload`;
   const subtitle = description
     ? `${chart ? `${chart} // ` : ""}${description.playerName}`
-    : "File missing";
+    : t`File missing`;
   const mods = description ? withModRate(description.mods, description.modRate) : [];
 
   return (
@@ -314,8 +326,8 @@ function UploadRow({
         type="button"
         onClick={onDelete}
         disabled={busy}
-        aria-label={`Delete ${rowTitle} from your uploads`}
-        title="Delete this upload"
+        aria-label={t`Delete ${rowTitle} from your uploads`}
+        title={t`Delete this upload`}
         className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-osu-f1 transition-colors cursor-pointer hover:bg-osu-red/20 hover:text-osu-red-light disabled:cursor-wait disabled:opacity-40"
       >
         <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />

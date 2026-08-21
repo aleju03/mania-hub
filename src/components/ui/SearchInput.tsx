@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useLingui } from "@lingui/react/macro";
 import { avatarImageSrc } from "./Avatar";
 import { CountryFlag } from "./CountryFlag";
 
@@ -15,7 +16,7 @@ export function SearchInput({
   onSelect,
   onSubmit,
   onQueryChange,
-  placeholder = "Search player...",
+  placeholder,
   className = "",
   disabledIds,
   disabledNote,
@@ -32,6 +33,7 @@ export function SearchInput({
   disabledIds?: ReadonlySet<number>;
   disabledNote?: string;
 }) {
+  const { t } = useLingui();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -97,7 +99,7 @@ export function SearchInput({
           onSubmit(query);
         }}
         onFocus={() => results.length > 0 && setOpen(true)}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t`Search player...`}
         className="w-full px-4 py-2.5 rounded-lg bg-osu-b4 text-osu-c1 text-sm placeholder:text-osu-f1 border border-osu-b3/50 focus:border-osu-h1/40 focus:outline-none transition-colors duration-[120ms] shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)]"
       />
       {loading && (

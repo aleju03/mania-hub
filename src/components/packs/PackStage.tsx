@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { Trans } from "@lingui/react/macro";
 import { packDamageFromCut, type PackDamage } from "#/lib/pack-damage";
 import type { PackTypeDef } from "#/lib/packs";
 import { useWindowActive } from "#/lib/window-activity";
@@ -952,11 +953,11 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType }: 
         <div className={`text-sm font-semibold ${slicing && !ripping ? "text-osu-pink-light" : "text-white"}`}>
           {ripping
             ? slicing
-              ? "Opening what is left..."
-              : "Opening..."
+              ? <Trans>Opening what is left...</Trans>
+              : <Trans>Opening...</Trans>
             : slicing
-              ? "You are cutting through the cards"
-              : "Hold and drag across the dotted line"}
+              ? <Trans>You are cutting through the cards</Trans>
+              : <Trans>Hold and drag across the dotted line</Trans>}
         </div>
       </div>
     </div>

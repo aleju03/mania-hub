@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLiveFarmHelperFarmers,
   type LiveFarmHelperFarmer,
@@ -29,6 +30,7 @@ export function FarmersList({
   keyMode: LiveFarmHelperKeyMode;
   className?: string;
 }) {
+  const { t } = useLingui();
   const [farmers, setFarmers] = useState<LiveFarmHelperFarmer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -98,7 +100,7 @@ export function FarmersList({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="search player..."
+            placeholder={t`search player...`}
             disabled={loading}
             className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4 px-3 py-1.5 text-[11px] text-osu-c1 placeholder:text-osu-f1 transition-colors focus:border-osu-h1/40 focus:outline-none"
           />
@@ -113,10 +115,12 @@ export function FarmersList({
             ))}
           </div>
         ) : failed ? (
-          <div className="py-10 text-center text-sm text-osu-f1">Couldn't load the farmer list. Try again.</div>
+          <div className="py-10 text-center text-sm text-osu-f1">
+            <Trans>Couldn't load the farmer list. Try again.</Trans>
+          </div>
         ) : visible.length === 0 ? (
           <div className="py-10 text-center text-sm text-osu-f1">
-            {q ? "No players match." : "No nearby players have farmed this yet."}
+            {q ? <Trans>No players match.</Trans> : <Trans>No nearby players have farmed this yet.</Trans>}
           </div>
         ) : (
           <div className="space-y-1">
@@ -156,11 +160,16 @@ export function FarmersList({
       </div>
 
       <div className="shrink-0 border-t border-osu-b3/30 px-3 py-2 text-[10px] text-osu-f1">
-        {loading
-          ? "loading..."
-          : `${total.toLocaleString("en-US")} player${total === 1 ? "" : "s"} farmed this${
-              farmers.length < total ? ` · top ${farmers.length.toLocaleString("en-US")} shown` : ""
-            }`}
+        {loading ? (
+          <Trans>loading...</Trans>
+        ) : (
+          <>
+            <Plural value={total} one="# player farmed this" other="# players farmed this" />
+            {farmers.length < total ? (
+              <Trans> · top {farmers.length.toLocaleString("en-US")} shown</Trans>
+            ) : null}
+          </>
+        )}
       </div>
     </div>
   );

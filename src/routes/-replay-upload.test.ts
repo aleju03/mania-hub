@@ -10,7 +10,7 @@ describe("replay upload mode", () => {
     const apiSource = fs.readFileSync(path.resolve(__dirname, "api/replay-upload.ts"), "utf8");
 
     expect(browseSource).toContain('export type ReplayBrowseMode = "player" | "beatmap" | "side-by-side" | "upload"');
-    expect(browseSource).toContain('{ mode: "upload", label: "Upload" }');
+    expect(browseSource).toContain('{ mode: "upload", label: msg`Upload` }');
     expect(browseSource).toContain("<UploadReplayBrowser");
     expect(browseSource).toContain('accept=".osr,application/octet-stream"');
     expect(browseSource).toContain("Uploading gives you a share link");

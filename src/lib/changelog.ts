@@ -1,4 +1,8 @@
+import { msg } from "@lingui/core/macro";
+
 import { type ChangelogUpdate } from "../data/changelog";
+import { getI18n } from "./i18n";
+import type { AppLocale } from "./locale";
 
 const DAY_MS = 86_400_000;
 
@@ -33,20 +37,28 @@ function siteDayStart(date: string): number {
  * it, so the vagueness at the top of each bucket never costs the reader
  * anything.
  */
-export function formatReleaseAge(date: string, now: number = Date.now()): string {
+export function formatReleaseAge(
+  date: string,
+  now: number = Date.now(),
+  locale: AppLocale = "en",
+): string {
+  const i18n = getI18n(locale);
   const day = siteDayStart(date);
   if (Number.isNaN(day)) return "";
   const today =
     Math.floor((now + SITE_UTC_OFFSET_MS) / DAY_MS) * DAY_MS - SITE_UTC_OFFSET_MS;
   const days = Math.round((today - day) / DAY_MS);
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 14) return `${days} days ago`;
-  if (days < 60) return `${Math.floor(days / 7)} weeks ago`;
+  if (days <= 0) return i18n._(msg`today`);
+  if (days === 1) return i18n._(msg`yesterday`);
+  if (days < 14) return i18n._(msg`${days} days ago`);
+  if (days < 60) {
+    const weeks = Math.floor(days / 7);
+    return i18n._(msg`${weeks} weeks ago`);
+  }
   const months = Math.floor(days / 30);
-  if (months < 12) return `${months} months ago`;
+  if (months < 12) return i18n._(msg`${months} months ago`);
   const years = Math.floor(days / 365);
-  return years === 1 ? "last year" : `${years} years ago`;
+  return years === 1 ? i18n._(msg`last year`) : i18n._(msg`${years} years ago`);
 }
 
 export interface ChangelogDay {

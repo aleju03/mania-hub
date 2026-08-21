@@ -3,8 +3,19 @@
    unmounted: coming back to the stats meant its skeletons again and two more
    requests for numbers it had just been told. What this covers is the second
    click, which should cost nothing. */
-import { act, render } from "@testing-library/react";
+import { act, render as rtlRender } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
+import type { ReactElement, ReactNode } from "react";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../lib/i18n";
+
+
+// These components read copy through Lingui, so renders need the provider;
+// en resolves to the source strings the assertions match.
+const I18nWrap = ({ children }: { children: ReactNode }) => (
+  <I18nProvider i18n={getI18n("en")}>{children}</I18nProvider>
+);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
 
 const collector = {
   userId: 2531335,

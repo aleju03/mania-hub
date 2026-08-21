@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { PATTERN_COLOR, patternLabel } from "./SearchCard";
+import { useLingui } from "@lingui/react/macro";
+import { PATTERN_COLOR, usePatternLabel } from "./SearchCard";
 import { playPatternHit } from "./patternSfx";
 import type { TriStateMode } from "../../lib/maps-random-filter";
 
@@ -76,6 +77,8 @@ function PatternChip({
   attachRight?: boolean;
   className?: string;
 }) {
+  const { t } = useLingui();
+  const patternName = usePatternLabel();
   const color = PATTERN_COLOR[pattern] ?? "#cfcfe6";
   // Bumped on each select so the burst ring remounts and replays.
   const [burst, setBurst] = useState(0);
@@ -96,10 +99,10 @@ function PatternChip({
 
   const radius = attachRight ? "rounded-md rounded-r-none" : "rounded-md";
   const title = mode === "include"
-    ? "Including (click to exclude)"
+    ? t`Including (click to exclude)`
     : mode === "exclude"
-      ? "Excluding (click to clear)"
-      : "Click to include, right-click to exclude";
+      ? t`Excluding (click to clear)`
+      : t`Click to include, right-click to exclude`;
   return (
     <motion.button
       type="button"
@@ -138,7 +141,7 @@ function PatternChip({
           transition={{ duration: 0.4, ease: "easeOut" }}
         />
       )}
-      <span className={`relative z-10 ${mode === "exclude" ? "opacity-70" : ""}`}>{patternLabel(pattern)}</span>
+      <span className={`relative z-10 ${mode === "exclude" ? "opacity-70" : ""}`}>{patternName(pattern)}</span>
       {mode === "exclude" && (
         <span
           aria-hidden="true"
@@ -163,13 +166,15 @@ function SubfamilyCaret({
   count: number;
   onClick: () => void;
 }) {
+  const { t } = useLingui();
+  const patternName = usePatternLabel();
   const color = PATTERN_COLOR[pattern] ?? "#cfcfe6";
   return (
     <button
       type="button"
       onClick={onClick}
       aria-expanded={open}
-      aria-label={`${patternLabel(pattern)} subfamilies`}
+      aria-label={t`${patternName(pattern)} subfamilies`}
       className="grid w-5 shrink-0 place-items-center rounded-md rounded-l-none cursor-pointer transition-colors"
       style={
         count > 0
@@ -208,6 +213,8 @@ export function PatternPicker({
   keys?: string[];
   onToggle: (pattern: string, reverse: boolean) => void;
 }) {
+  const { t } = useLingui();
+  const patternName = usePatternLabel();
   const [openFamily, setOpenFamily] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const { options, subfamilies } = pickerVocabulary(keys);
@@ -284,7 +291,7 @@ export function PatternPicker({
             {open && (
               <div
                 role="group"
-                aria-label={`${patternLabel(pattern)} subfamilies`}
+                aria-label={t`${patternName(pattern)} subfamilies`}
                 className="absolute left-0 top-[calc(100%+6px)] z-30 flex w-max max-w-[min(280px,80vw)] flex-wrap gap-1.5 rounded-lg bg-osu-b4 p-2 ring-1 ring-white/10 shadow-xl"
               >
                 {subs.map((sub) => (

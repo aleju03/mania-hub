@@ -22,7 +22,7 @@ import {
 import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../../lib/maniacard";
 import type { ManiaSkills } from "../../../lib/maniacard";
 import { formatDate } from "../../../lib/format";
-import { describeGoal, nf, trimZeros } from "../../../lib/goal-format";
+import { describeGoalEnglish, nf, trimZeros } from "../../../lib/goal-format";
 import type { UserGoal } from "../../../lib/goals";
 import {
   formatTopShare,
@@ -759,7 +759,7 @@ function goalRow(goal: UserGoal, width: number, accent: string, dim: string, com
         // flexShrink on the label, not the value: a long map name should be
         // the thing that gives way, never the number the image exists for.
         style: { fontSize: compact ? "13px" : "15px", fontWeight: 700, color: "#ffffff", overflow: "hidden", flexShrink: 1, minWidth: "0" },
-      }, clamp(describeGoal(goal), compact ? 46 : 54)),
+      }, clamp(describeGoalEnglish(goal), compact ? 46 : 54)),
       h("div", {
         key: "v",
         style: { fontSize: compact ? "12px" : "13px", color: dim, whiteSpace: "nowrap", flexShrink: 0 },
@@ -807,7 +807,7 @@ async function renderGoals(ctx: SignatureRenderContext): Promise<Buffer> {
         style: { display: "flex", flexDirection: "column", justifyContent: "center", gap: "12px", padding: "0 26px", width: "100%" },
       }, [
         h("div", { key: "top", style: { display: "flex", justifyContent: "space-between", alignItems: "baseline" } }, [
-          h("div", { key: "l", style: { fontSize: "16px", fontWeight: 700, overflow: "hidden" } }, clamp(describeGoal(goal), 40)),
+          h("div", { key: "l", style: { fontSize: "16px", fontWeight: 700, overflow: "hidden" } }, clamp(describeGoalEnglish(goal), 40)),
           h("div", { key: "p", style: { fontSize: "24px", fontWeight: 900, color: accent } }, `${Math.round(pct)}%`),
         ]),
         bar(spec.width - 52, pct, accent, 10),

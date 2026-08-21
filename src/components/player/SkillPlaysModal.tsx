@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLivePlayerSkillPlaysDirect,
   loadLiveMapSearchEntry,
@@ -68,6 +69,7 @@ export function SkillPlaysModal({
   color,
   onClose,
 }: SkillPlaysModalProps) {
+  const { t } = useLingui();
   const [items, setItems] = useState<LivePlayerSkillPlay[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -119,7 +121,7 @@ export function SkillPlaysModal({
       })
       .catch((fetchError) => {
         if (controller.signal.aborted) return;
-        setError(fetchError instanceof Error ? fetchError.message : "Could not load these plays.");
+        setError(fetchError instanceof Error ? fetchError.message : t`Could not load these plays.`);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -141,7 +143,7 @@ export function SkillPlaysModal({
       setTotal(page.total);
     } catch (fetchError) {
       if (!mountedRef.current) return;
-      setError(fetchError instanceof Error ? fetchError.message : "Could not load more plays.");
+      setError(fetchError instanceof Error ? fetchError.message : t`Could not load more plays.`);
     } finally {
       if (mountedRef.current) setLoadingMore(false);
     }
@@ -192,7 +194,7 @@ export function SkillPlaysModal({
           <motion.div
             role="dialog"
             aria-modal="true"
-            aria-label={`${username}'s top ${label} plays`}
+            aria-label={t`${username}'s top ${label} plays`}
             className="modal-card-mobile-safe flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-osu-b3/25 bg-osu-b5 shadow-[0_18px_70px_rgba(0,0,0,0.65)] sm:max-h-[calc(100vh-2rem)]"
             onClick={(event) => event.stopPropagation()}
             initial={{ opacity: 0, y: 10, scale: 0.985 }}
@@ -203,18 +205,18 @@ export function SkillPlaysModal({
             <header className="relative shrink-0 overflow-hidden border-b border-osu-b3/25 bg-osu-b4 px-4 py-4 sm:px-6 sm:py-5">
               <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: color }} />
               <div className="pr-10">
-                <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-osu-f1">{keyCount}K skillset</div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-osu-f1"><Trans>{keyCount}K skillset</Trans></div>
                 <h2 className="mt-1 text-xl font-black text-white sm:text-2xl">
-                  {username}&apos;s top <span style={{ color }}>{label}</span> plays
+                  <Trans>{username}'s top <span style={{ color }}>{label}</span> plays</Trans>
                 </h2>
                 <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-osu-f1 sm:text-xs">
-                  Ranked by {label} skill rating from the plays behind this profile rating, including tracked history.
+                  <Trans>Ranked by {label} skill rating from the plays behind this profile rating, including tracked history.</Trans>
                 </p>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Close skill plays"
+                aria-label={t`Close skill plays`}
                 className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white sm:right-4 sm:top-4"
               >
                 <X size={16} />
@@ -229,10 +231,10 @@ export function SkillPlaysModal({
               ) : items.length === 0 ? (
                 <div className="px-4 py-14 text-center">
                   <div className="text-sm font-semibold text-osu-l2">
-                    {error ? "Could not load these plays" : `No rated ${label} plays found`}
+                    {error ? t`Could not load these plays` : t`No rated ${label} plays found`}
                   </div>
                   <div className="mt-1 text-xs text-osu-f1">
-                    {error ?? "The rating may be waiting for a fresh chart-analysis pass."}
+                    {error ?? t`The rating may be waiting for a fresh chart-analysis pass.`}
                   </div>
                   {error ? (
                     <button
@@ -240,7 +242,7 @@ export function SkillPlaysModal({
                       onClick={() => setReloadKey((key) => key + 1)}
                       className="mt-4 rounded-lg bg-osu-pink/15 px-4 py-2 text-xs font-semibold text-osu-pink-light hover:bg-osu-pink/25"
                     >
-                      Try again
+                      <Trans>Try again</Trans>
                     </button>
                   ) : null}
                 </div>
@@ -274,7 +276,7 @@ export function SkillPlaysModal({
                     disabled={loadingMore}
                     className="rounded-lg border border-osu-b3/30 bg-osu-b4 px-5 py-2 text-xs font-semibold text-osu-l2 transition-colors hover:border-osu-pink/30 hover:bg-osu-b3/50 hover:text-white disabled:cursor-wait disabled:opacity-60"
                   >
-                    {loadingMore ? "Loading…" : "Show more"}
+                    {loadingMore ? t`Loading…` : t`Show more`}
                   </button>
                 </div>
               ) : null}

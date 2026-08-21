@@ -1,15 +1,13 @@
 import { Link } from "@tanstack/react-router";
+import { Plural, useLingui } from "@lingui/react/macro";
 import { Lock, Pencil, Users } from "lucide-react";
 import { track } from "../../lib/analytics";
 import { communityEventProperties, rememberCommunityName } from "../../lib/analytics-communities";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
-import {
-  COMMUNITY_INTERNATIONAL,
-  communityLanguageLabel,
-  describeAccessScopes,
-  type CommunitySummary,
-} from "../../lib/communities-shared";
+import { COMMUNITY_INTERNATIONAL, type CommunitySummary } from "../../lib/communities-shared";
+import { useAccessScopeSummary } from "./AccessScopePicker";
+import { useCommunityLanguageLabel } from "./field-options";
 import { CommunityStatusNote } from "./CommunityStatusNote";
 
 /* One Discord server on the directory. The banner and icon are Discord's own,
@@ -17,10 +15,6 @@ import { CommunityStatusNote } from "./CommunityStatusNote";
    served through /api/community-image so the guild id stays server-side. Either
    way these are plain <img> tags with no canvas involved, so none of the reasons
    /api/avatar exists apply here. */
-
-function memberLabel(count: number): string {
-  return count === 1 ? "1 member" : `${count.toLocaleString("en-US")} members`;
-}
 
 export function CommunityCard({
   community,
@@ -34,9 +28,10 @@ export function CommunityCard({
   preview?: boolean;
   onEdit?: () => void;
 }) {
-  const language = communityLanguageLabel(community.language);
+  const { t } = useLingui();
+  const language = useCommunityLanguageLabel()(community.language);
   const showFlag = community.countryCode != null && community.countryCode !== COMMUNITY_INTERNATIONAL;
-  const accessLabel = describeAccessScopes(community.accessScopes);
+  const accessLabel = useAccessScopeSummary()(community.accessScopes);
 
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 transition-colors hover:border-osu-b3/50">
@@ -91,12 +86,12 @@ export function CommunityCard({
           <div className="mt-0.5 flex items-center gap-3 text-[11px] text-osu-f1 tabular-nums">
             <span className="inline-flex items-center gap-1">
               <Users className="h-3 w-3" aria-hidden="true" />
-              {memberLabel(community.memberCount)}
+              <Plural value={community.memberCount} one="# member" other="# members" />
             </span>
             {community.onlineCount > 0 && (
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
-                {community.onlineCount.toLocaleString("en-US")} online
+                <Plural value={community.onlineCount} other="# online" />
               </span>
             )}
           </div>
@@ -107,8 +102,8 @@ export function CommunityCard({
           <button
             type="button"
             onClick={onEdit}
-            aria-label={`Edit ${community.name}`}
-            title="Edit your listing"
+            aria-label={t`Edit ${community.name}`}
+            title={t`Edit your listing`}
             className="relative z-10 shrink-0 rounded-lg p-1.5 text-osu-f1 transition-colors cursor-pointer hover:bg-osu-b3/40 hover:text-white"
           >
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />

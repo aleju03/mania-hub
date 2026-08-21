@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { fetchGoatPollVoters, type GoatPollVoter } from "#/lib/goat-poll";
 import type { GoatPollNominee } from "#/lib/live-backend";
 import { formatTimeAgo } from "#/lib/format";
@@ -23,12 +24,13 @@ import { CountryFlag } from "#/components/ui/CountryFlag";
  */
 
 function VoterRow({ voter, nominator }: { voter: GoatPollVoter; nominator: boolean }) {
+  const { t } = useLingui();
   const up = voter.value > 0;
   return (
     <li className="flex items-center gap-2 px-3 py-1.5">
       <ChevronDown
         className={`h-3.5 w-3.5 shrink-0 ${up ? "rotate-180 text-osu-pink" : "text-osu-red-light/80"}`}
-        aria-label={up ? "voted for" : "voted against"}
+        aria-label={up ? t`voted for` : t`voted against`}
       />
       {voter.avatarUrl ? (
         <img
@@ -56,7 +58,7 @@ function VoterRow({ voter, nominator }: { voter: GoatPollVoter; nominator: boole
       {voter.countryCode && <CountryFlag code={voter.countryCode} size="xs" />}
       {nominator && (
         <span className="shrink-0 rounded bg-osu-b3/60 px-1 py-px text-[9px] font-semibold uppercase tracking-wider text-osu-f1/70">
-          nominator
+          <Trans>nominator</Trans>
         </span>
       )}
       <span className="ml-auto shrink-0 text-[10px] tabular-nums text-osu-f1/50">
@@ -76,6 +78,7 @@ export function GoatPollVotersModal({
   nominee: GoatPollNominee | null;
   onClose: () => void;
 }) {
+  const { t } = useLingui();
   const open = nominee != null;
   const [voters, setVoters] = useState<GoatPollVoter[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -137,7 +140,7 @@ export function GoatPollVotersModal({
           <motion.div
             role="dialog"
             aria-modal="true"
-            aria-label={`Votes for ${nominee.username}`}
+            aria-label={t`Votes for ${nominee.username}`}
             // This dialog used to carry translate="no" as crash armor against
             // auto-translate's <font> rewrites; dom-translate-guard.ts absorbs
             // that now, so the status prose translates and only the name spans
@@ -164,13 +167,15 @@ export function GoatPollVotersModal({
               <span className="flex min-w-0 flex-col leading-tight">
                 <span translate="no" className="truncate text-sm font-bold text-white">{nominee.username}</span>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
-                  {nominee.up} up · {nominee.down} down
+                  <Trans>
+                    {nominee.up} up · {nominee.down} down
+                  </Trans>
                 </span>
               </span>
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Close"
+                aria-label={t`Close`}
                 className="ml-auto cursor-pointer rounded-md p-1 text-osu-f1 transition-colors hover:bg-osu-b3/60 hover:text-white"
               >
                 <X className="h-4 w-4" />
@@ -179,11 +184,11 @@ export function GoatPollVotersModal({
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1">
               {failed ? (
-                <div className="px-4 py-6 text-center text-[12px] text-osu-f1">Couldn&apos;t read the votes.</div>
+                <div className="px-4 py-6 text-center text-[12px] text-osu-f1"><Trans>Couldn&apos;t read the votes.</Trans></div>
               ) : voters == null ? (
-                <div className="px-4 py-6 text-center text-[12px] text-osu-f1">Reading the ballot...</div>
+                <div className="px-4 py-6 text-center text-[12px] text-osu-f1"><Trans>Reading the ballot...</Trans></div>
               ) : voters.length === 0 ? (
-                <div className="px-4 py-6 text-center text-[12px] text-osu-f1">Nobody has voted on this row.</div>
+                <div className="px-4 py-6 text-center text-[12px] text-osu-f1"><Trans>Nobody has voted on this row.</Trans></div>
               ) : (
                 <>
                   {ups.length > 0 && (

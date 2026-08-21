@@ -1,4 +1,7 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { I18n } from "@lingui/core";
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../../lib/cache";
@@ -692,7 +695,10 @@ function ManiacardArt({ player }: { player: ShowcasePlayer }) {
 // Command previews
 // ---------------------------------------------------------------------------
 
-function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Command[] {
+// Command labels, invocations and everything the render() closures emit mirror
+// the real bot's English output and stay English; only the page-chrome blurbs
+// and the descriptive feed-preview labels resolve through i18n.
+function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null, i18n: I18n): Command[] {
   const fallback = fallbackPlayers(sample.commandCountry)[0];
   const pick = (index: number): ShowcasePlayer => sample.players[index] ?? sample.viewer ?? fallback;
   const self = sample.viewer ?? pick(0);
@@ -875,7 +881,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
   return [
     {
       id: "link", label: "/link", invocation: linkUsername ? `/link ${linkUsername}` : "/link", group: "You", accent: PINK,
-      blurb: "Save your osu! account so every other command knows who you are.",
+      blurb: i18n._(msg`Save your osu! account so every other command knows who you are.`),
       render: () => (
         <TextReply>
           {linkUsername ? <>Linked to <b style={{ color: D.white }}>{linkUsername}</b>.</> : "Linked."} Commands now default to this account.
@@ -884,7 +890,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "me", label: "/me", invocation: "/me", group: "You", accent: PINK,
-      blurb: "Your personal dashboard: ranks, pp, activity totals and goal progress.",
+      blurb: i18n._(msg`Your personal dashboard: ranks, pp, activity totals and goal progress.`),
       render: () => (
         <Embed accent={PINK} thumb={<AvatarThumb userId={authorAvatar(pLink, self)} />}>
           <EmbedAuthor name={authorName(pLink, self)} />
@@ -910,7 +916,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "player", label: "/player", invocation: `/player ${playerName}`, group: "Players", accent: PINK,
-      blurb: "Full profile card with ranks, pp and top plays. The username is optional once you link.",
+      blurb: i18n._(msg`Full profile card with ranks, pp and top plays. The username is optional once you link.`),
       render: () => (
         <Embed accent={PINK} thumb={<AvatarThumb userId={authorAvatar(pProfile, profile)} />}>
           <EmbedAuthor name={authorName(pProfile, profile)} />
@@ -939,7 +945,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "recent", label: "/recent", invocation: "/recent", group: "Players", accent: PINK,
-      blurb: "Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next.",
+      blurb: i18n._(msg`Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next.`),
       render: () => {
         const [latest, ...earlier] = recentRows;
         return (
@@ -970,7 +976,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "maniacard", label: "/maniacard", invocation: `/maniacard ${pCard?.username ?? commandName(card)}`, group: "Players", accent: PINK,
-      blurb: "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating.",
+      blurb: i18n._(msg`A shareable skill-tier card: control, speed and precision under a tier badge, with star rating.`),
       render: () => (
         <Embed accent={PINK}>
           <EmbedAuthor name={authorName(pCard, card)} />
@@ -982,7 +988,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "activity", label: "/activity", invocation: "/activity", group: "Players", accent: PINK,
-      blurb: "Play habits and a playstyle breakdown: active days, sessions and skill mix.",
+      blurb: i18n._(msg`Play habits and a playstyle breakdown: active days, sessions and skill mix.`),
       render: () => (
         <Embed accent={PINK} thumb={<AvatarThumb userId={authorAvatar(pActivity, activity)} />}>
           <EmbedAuthor name={authorName(pActivity, activity)} />
@@ -1008,7 +1014,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "goals", label: "/goals", invocation: "/goals", group: "Players", accent: PINK,
-      blurb: "Track pp and accuracy goals and how close each one is.",
+      blurb: i18n._(msg`Track pp and accuracy goals and how close each one is.`),
       render: () => (
         <Embed accent={PINK} thumb={<AvatarThumb userId={authorAvatar(pGoals, goals)} />}>
           <EmbedAuthor name={authorName(pGoals, goals)} />
@@ -1028,7 +1034,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "vs", label: "/vs", invocation: `/vs ${vsRightName}`, group: "Players", accent: PINK,
-      blurb: "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account.",
+      blurb: i18n._(msg`Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account.`),
       render: () => (
         // One plain line per stat in title order (left value = left player),
         // then the neutral pp-gap closer - exactly the bot's compare layout.
@@ -1047,7 +1053,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "pb", label: "/pb", invocation: "/pb", group: "Players", accent: PINK,
-      blurb: "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else.",
+      blurb: i18n._(msg`Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else.`),
       render: () => (
         <Embed accent={PINK} thumb={<Thumb src={coverOf(pbView.cover)} />}>
           <EmbedAuthor name={authorName(pProfile, pb)} />
@@ -1070,7 +1076,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "farm", label: "/farm", invocation: `/farm ${pFarm?.username ?? commandName(farm)} ${farmKeyMode}`, group: "Players", accent: PINK,
-      blurb: "PP-gain map recommendations tuned to a player.",
+      blurb: i18n._(msg`PP-gain map recommendations tuned to a player.`),
       render: () => (
         <Embed accent={PINK} thumb={<AvatarThumb userId={authorAvatar(pFarm, farm)} />}>
           <EmbedAuthor name={authorName(pFarm, farm)} />
@@ -1090,7 +1096,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "rankings", label: "/rankings", invocation: `/rankings ${sample.commandCountry}`, group: "Browse", accent: PINK,
-      blurb: "Country (or global) leaderboard, top players by pp.",
+      blurb: i18n._(msg`Country (or global) leaderboard, top players by pp.`),
       render: () => (
         <Embed accent={PINK} thumb={!sample.isGlobal ? <FlagThumb country={sample.commandCountry} /> : rankRows[0]?.userId ? <AvatarThumb userId={rankRows[0].userId} /> : undefined}>
           <EmbedTitle>{rankingsTitle}</EmbedTitle>
@@ -1107,7 +1113,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "top", label: "/top", invocation: `/top ${sample.commandCountry}`, group: "Browse", accent: GOLD,
-      blurb: "Recent notable top plays across a country.",
+      blurb: i18n._(msg`Recent notable top plays across a country.`),
       render: () => (
         <Embed accent={GOLD} thumb={!sample.isGlobal ? <FlagThumb country={sample.commandCountry} /> : topRows[0]?.userId ? <AvatarThumb userId={topRows[0].userId} /> : undefined}>
           <EmbedTitle>Recent top plays</EmbedTitle>
@@ -1128,7 +1134,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "tracker", label: "/tracker", invocation: `/tracker ${sample.commandCountry}`, group: "Browse", accent: PINK,
-      blurb: "The live score feed for a country, newest first.",
+      blurb: i18n._(msg`The live score feed for a country, newest first.`),
       render: () => (
         <Embed accent={PINK} thumb={!sample.isGlobal ? <FlagThumb country={sample.commandCountry} /> : trackerRows[0]?.userId ? <AvatarThumb userId={trackerRows[0].userId} /> : undefined}>
           <EmbedTitle>{latestScoresTitle}</EmbedTitle>
@@ -1142,7 +1148,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "maps", label: "/maps", invocation: `/maps ${sample.commandCountry}`, group: "Browse", accent: PINK,
-      blurb: "The most farmed maps in a country, ranked by activity.",
+      blurb: i18n._(msg`The most farmed maps in a country, ranked by activity.`),
       render: () => (
         <Embed accent={PINK}>
           <EmbedTitle>{mapsTitle}</EmbedTitle>
@@ -1157,7 +1163,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "randomfarm", label: "/randomfarm", invocation: `/randomfarm ${sample.commandCountry} keys:4k`, group: "Browse", accent: PINK,
-      blurb: "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another.",
+      blurb: i18n._(msg`Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another.`),
       render: () => (
         <Embed accent={PINK} thumb={<Thumb src={coverOf(rf?.cover)} />}>
           <EmbedTitle linked>{rf?.title ?? "xi - Blue Zenith [4K Black Another]"}</EmbedTitle>
@@ -1181,7 +1187,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "randomfav", label: "/randomfav", invocation: `/randomfav ${sample.commandCountry} pattern:Jack`, group: "Browse", accent: PINK,
-      blurb: "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another.",
+      blurb: i18n._(msg`Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another.`),
       render: () => (
         <Embed accent={PINK} thumb={<Thumb src={coverOf(rv?.cover)} />}>
           <EmbedTitle linked>{rv?.title ?? "xi - Blue Zenith"}</EmbedTitle>
@@ -1205,7 +1211,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "dan", label: "/dan", invocation: "/dan 1234567", group: "Beatmaps", accent: PINK,
-      blurb: "Estimate a chart's dan level, with its dan emblem.",
+      blurb: i18n._(msg`Estimate a chart's dan level, with its dan emblem.`),
       render: () => (
         <Embed accent={PINK} thumb={<img src={danEmblem} alt="" className="h-16 w-16 object-contain" loading="lazy" />}>
           <EmbedTitle linked>{mapInfo?.title ?? "xi - Blue Zenith [4K Black Another]"}</EmbedTitle>
@@ -1221,7 +1227,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "map", label: "/map", invocation: "/map 1234567", group: "Beatmaps", accent: PINK,
-      blurb: "Beatmap card: stars, keys, status, BPM, length and dan.",
+      blurb: i18n._(msg`Beatmap card: stars, keys, status, BPM, length and dan.`),
       render: () => (
         <Embed accent={PINK} thumb={<Thumb src={coverOf(mapInfo?.cover)} />}>
           <EmbedTitle linked>{mapInfo?.title ?? "xi - Blue Zenith [4K Black Another]"}</EmbedTitle>
@@ -1240,7 +1246,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "replay", label: "/replay", invocation: "/replay 1234567", group: "Beatmaps", accent: PINK,
-      blurb: "Open the in-browser replay viewer for a score.",
+      blurb: i18n._(msg`Open the in-browser replay viewer for a score.`),
       render: () => (
         <Embed accent={PINK}>
           <EmbedTitle linked>Replay viewer</EmbedTitle>
@@ -1255,8 +1261,8 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       ),
     },
     {
-      id: "alert-maps", label: "Farm map alert", invocation: "auto-posted", group: "Feeds", accent: GOLD,
-      blurb: "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps.",
+      id: "alert-maps", label: i18n._(msg`Farm map alert`), invocation: "auto-posted", group: "Feeds", accent: GOLD,
+      blurb: i18n._(msg`New farm maps, auto-posted to any channel that ran /subscribe feed:new maps.`),
       render: () => (
         <Embed accent={GOLD} thumb={<Thumb src={coverOf(feedNew?.cover)} />}>
           <EmbedTitle>New farm map</EmbedTitle>
@@ -1272,8 +1278,8 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       ),
     },
     {
-      id: "feed-top", label: "Top-play feed", invocation: "auto-posted", group: "Feeds", accent: GOLD,
-      blurb: "When someone lands a new top play, it drops in your channel automatically, in full detail.",
+      id: "feed-top", label: i18n._(msg`Top-play feed`), invocation: "auto-posted", group: "Feeds", accent: GOLD,
+      blurb: i18n._(msg`When someone lands a new top play, it drops in your channel automatically, in full detail.`),
       render: () => (
         <Embed accent={GOLD} thumb={<Thumb src={coverOf(feedTop?.cover)} />}>
           <EmbedAuthor name={feedTop?.username ?? feed.username} />
@@ -1299,8 +1305,8 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       ),
     },
     {
-      id: "feed-snipe", label: "Snipe feed", invocation: "auto-posted", group: "Feeds", accent: SNIPE,
-      blurb: "When someone overtakes a country leaderboard score, the snipe lands in your channel.",
+      id: "feed-snipe", label: i18n._(msg`Snipe feed`), invocation: "auto-posted", group: "Feeds", accent: SNIPE,
+      blurb: i18n._(msg`When someone overtakes a country leaderboard score, the snipe lands in your channel.`),
       render: () => {
         // Only the synthetic (no-fixture) path shows the example rank; a real
         // snipe with a null board rank correctly omits the "from #N" suffix.
@@ -1331,7 +1337,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "subscribe", label: "/subscribe", invocation: `/subscribe feed:Top plays country:${sample.commandCountry} min_pp:600`, group: "Feeds", accent: GREEN,
-      blurb: "Turn a feed on for the current channel (needs Manage Server).",
+      blurb: i18n._(msg`Turn a feed on for the current channel (needs Manage Server).`),
       render: () => (
         <TextReply>
           This channel will now receive <b style={{ color: D.white }}>Top plays</b> for {sample.countryLabel} (600pp and up). Make sure the bot can send messages here.
@@ -1342,9 +1348,21 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
 }
 
 const GROUPS = ["You", "Players", "Browse", "Beatmaps", "Feeds"];
+
+// The group strings above double as stable ids (row keys, chip filtering), so
+// they stay English; this parallel map carries the picker's display labels.
+const GROUP_LABELS: Record<string, ReturnType<typeof msg>> = {
+  You: msg`You`,
+  Players: msg`Players`,
+  Browse: msg`Browse`,
+  Beatmaps: msg`Beatmaps`,
+  Feeds: msg`Feeds`,
+};
+
 const DEFAULT_COMMAND_ID = "link";
 
 export function CommandShowcase() {
+  const { i18n } = useLingui();
   const auth = useAuth();
   const rawScope = useSelectedCountry();
   // The bot has no region commands; a region scope demos the global forms.
@@ -1438,19 +1456,21 @@ export function CommandShowcase() {
   // the tier is known to be snipes.
   const { featureTier } = useCountryWarming(selectedCountry);
   const commands = useMemo(() => {
-    const all = buildCommands(sample, activeFixture);
+    const all = buildCommands(sample, activeFixture, i18n);
     return featureTier === "snipes" ? all : all.filter((cmd) => cmd.id !== "feed-snipe");
-  }, [sample, activeFixture, featureTier]);
+  }, [sample, activeFixture, featureTier, i18n]);
   const selected = commands.find((c) => c.id === selectedId) ?? commands[0];
 
   return (
     <section className="rounded-2xl border border-osu-b3/30 bg-osu-b4 p-4 sm:p-5">
       <div className="mb-1 flex flex-wrap items-baseline gap-x-2">
-        <h2 className="text-[14px] font-bold text-white">See every command</h2>
-        <span className="text-[11px] text-osu-l3">tap one to preview its reply</span>
+        <h2 className="text-[14px] font-bold text-white"><Trans>See every command</Trans></h2>
+        <span className="text-[11px] text-osu-l3"><Trans>tap one to preview its reply</Trans></span>
       </div>
       <p className="mb-3 text-[12px] text-osu-l3">
-        Tell the bot who you are once with <code className="font-semibold text-white">/link</code>. After that, lookups like <code className="font-semibold text-white">/recent</code> default to your account, no username needed.
+        <Trans>
+          Tell the bot who you are once with <code className="font-semibold text-white">/link</code>. After that, lookups like <code className="font-semibold text-white">/recent</code> default to your account, no username needed.
+        </Trans>
       </p>
 
       <div className="space-y-4">
@@ -1460,7 +1480,7 @@ export function CommandShowcase() {
         <div className="space-y-1.5">
           {GROUPS.map((group) => (
             <div key={group} className="flex items-start gap-x-2">
-              <span className="w-16 shrink-0 pt-1.5 text-right text-[9px] font-semibold uppercase tracking-wider text-osu-f1">{group}</span>
+              <span className="w-16 shrink-0 pt-1.5 text-right text-[9px] font-semibold uppercase tracking-wider text-osu-f1">{i18n._(GROUP_LABELS[group])}</span>
               <div className="flex min-w-0 flex-1 flex-wrap gap-x-1.5 gap-y-1">
                 {commands.filter((c) => c.group === group).map((cmd) => {
                   const active = cmd.id === selectedId;

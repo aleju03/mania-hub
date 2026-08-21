@@ -1,6 +1,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ExternalLink, Trash2, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 import { useAuth } from "#/lib/auth-context";
 import { canUseAdminFeatures } from "#/lib/auth-shared";
 import {
@@ -47,7 +49,7 @@ const REFRESH_MS = 20_000;
 // Nominating a banned or deleted account needs proof it existed, because osu!'s
 // search cannot return a restricted user and we would otherwise be taking the
 // nominator's word for a name nobody can look up.
-const PROOF_HINT = "web.archive.org link to their osu! profile";
+const PROOF_HINT = msg`web.archive.org link to their osu! profile`;
 // Rows shown before the list is cut off. Past this the board stops being
 // something you read and starts being something you scroll past, which on a
 // phone means scrolling past it to reach the packs.
@@ -76,13 +78,15 @@ const HONORARY_IDS: ReadonlySet<number> = new Set(HONORARY_PLAYERS.map((player) 
 const RAIL_MIN_WIDTH = 1650;
 const RAIL_LAYOUT = "min-[1650px]:absolute min-[1650px]:left-[calc(50%+500px)] min-[1650px]:top-[176px] min-[1650px]:mb-0 min-[1650px]:w-[280px] min-[1650px]:border-0 min-[1650px]:pt-0";
 
-const STATUS_MESSAGES: Partial<Record<GoatPollWriteStatus, string>> = {
-  already_nominated: "Already on the board.",
-  already_honorary: "They're already a GOAT.",
-  invalid_username: "That username doesn't look right.",
-  invalid_proof: `Needs a ${PROOF_HINT}.`,
-  poll_closed: "The vote just closed.",
-  unavailable: "Couldn't reach the server.",
+/* Resolved at render with i18n._; the proof hint reads the same as the
+   placeholder below, spelled out here so the sentence translates as one. */
+const STATUS_MESSAGES: Partial<Record<GoatPollWriteStatus, ReturnType<typeof msg>>> = {
+  already_nominated: msg`Already on the board.`,
+  already_honorary: msg`They're already a GOAT.`,
+  invalid_username: msg`That username doesn't look right.`,
+  invalid_proof: msg`Needs a web.archive.org link to their osu! profile.`,
+  poll_closed: msg`The vote just closed.`,
+  unavailable: msg`Couldn't reach the server.`,
 };
 
 /* True once the viewport has room for the gutter rail. Nothing here renders
@@ -100,8 +104,10 @@ function useRailWidth(): boolean {
   return wide;
 }
 
-function formatRemaining(ms: number): string {
-  if (ms <= 0) return "closed";
+/* The h/m/s units stay English: they are written into the label once a second
+   and read as a compact clock everywhere. */
+function formatRemaining(ms: number, i18n: ReturnType<typeof useLingui>["i18n"]): string {
+  if (ms <= 0) return i18n._(msg`closed`);
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -156,6 +162,7 @@ function PollPie({
   onExpire: () => void;
   size?: number;
 }) {
+  const { i18n } = useLingui();
   const pathRef = useRef<SVGPathElement>(null);
   const labelRef = useRef<HTMLSpanElement>(null);
   const visible = useDocumentVisible();
@@ -168,14 +175,14 @@ function PollPie({
       const remaining = closesAt - (Date.now() + offset);
       const progress = Math.max(0, Math.min(1, 1 - remaining / span));
       if (pathRef.current) pathRef.current.setAttribute("d", wedgePath(center, center, radius, progress));
-      if (labelRef.current) labelRef.current.textContent = formatRemaining(remaining);
+      if (labelRef.current) labelRef.current.textContent = formatRemaining(remaining, i18n);
       if (remaining <= 0) onExpire();
     };
     paint();
     if (!visible) return;
     const timer = setInterval(paint, 1000);
     return () => clearInterval(timer);
-  }, [closesAt, span, center, radius, visible, offset, onExpire]);
+  }, [closesAt, span, center, radius, visible, offset, onExpire, i18n]);
 
   return (
     // translate="no": the label rewrites every second; auto-translated text
@@ -196,7 +203,7 @@ function PollPie({
         <circle cx={center} cy={center} r={Math.max(1.5, radius * 0.16)} fill="#f0f0f0" fillOpacity={0.75} />
       </svg>
       <span ref={labelRef} className="text-[11px] font-bold tabular-nums text-osu-c1/85">
-        {formatRemaining(closesAt - (Date.now() + offset))}
+        {formatRemaining(closesAt - (Date.now() + offset), i18n)}
       </span>
     </span>
   );
@@ -231,6 +238,7 @@ function NomineeRow({
   onInspect?: () => void;
   onVote: (nomineeId: string, next: number) => void;
 }) {
+  const { t } = useLingui();
   // Clicking the arrow you already picked clears the vote, so undoing does not
   // need a third control.
   const cast = (value: number) => onVote(nominee.id, vote === value ? 0 : value);
@@ -262,7 +270,7 @@ function NomineeRow({
           <button
             type="button"
             onClick={onInspect}
-            title={`See who voted on ${nominee.username}`}
+            title={t`See who voted on ${nominee.username}`}
             className="flex min-w-0 cursor-pointer items-center gap-1.5 text-left transition-opacity hover:opacity-70"
           >
             {nameLine}
@@ -277,7 +285,7 @@ function NomineeRow({
             rel="noreferrer noopener"
             className="flex items-center gap-1 text-[9px] font-medium uppercase tracking-[0.1em] text-osu-f1/50 transition-colors hover:text-osu-pink"
           >
-            banned · proof
+            <Trans>banned · proof</Trans>
             <ExternalLink className="h-2.5 w-2.5" />
           </a>
         )}
@@ -292,7 +300,7 @@ function NomineeRow({
             onClick={moderation.onRemove}
             className="cursor-pointer rounded bg-osu-red px-1.5 py-0.5 text-[10px] font-semibold text-white transition-colors hover:bg-osu-red-light disabled:opacity-50"
           >
-            {moderation.busy ? "..." : "remove"}
+            {moderation.busy ? "..." : <Trans>remove</Trans>}
           </button>
           <button
             type="button"
@@ -300,7 +308,7 @@ function NomineeRow({
             onClick={moderation.onCancel}
             className="cursor-pointer text-[10px] text-osu-f1 transition-colors hover:text-white disabled:opacity-50"
           >
-            no
+            <Trans>no</Trans>
           </button>
         </span>
       ) : (
@@ -309,8 +317,8 @@ function NomineeRow({
           <button
             type="button"
             onClick={moderation.onArm}
-            aria-label={`Remove ${nominee.username} from the poll`}
-            title={`Remove ${nominee.username} from the poll`}
+            aria-label={t`Remove ${nominee.username} from the poll`}
+            title={t`Remove ${nominee.username} from the poll`}
             className="grid h-6 w-6 cursor-pointer place-items-center rounded p-0.5 text-osu-f1/40 transition-colors hover:bg-osu-red/20 hover:text-osu-red-light"
           >
             <Trash2 className="h-3 w-3" />
@@ -320,14 +328,14 @@ function NomineeRow({
             net one the board sorts on. Fixed width and right/left aligned
             against their arrow, so the cluster lines up down the list however
             many digits a row carries. */}
-        <span className="w-6 text-right text-[9px] tabular-nums text-osu-f1/35" title={`${nominee.up} for`}>
+        <span className="w-6 text-right text-[9px] tabular-nums text-osu-f1/35" title={t`${nominee.up} for`}>
           ({nominee.up})
         </span>
         <button
           type="button"
           disabled={disabled}
           onClick={() => cast(1)}
-          aria-label={`Vote for ${nominee.username}`}
+          aria-label={t`Vote for ${nominee.username}`}
           aria-pressed={vote === 1}
           className={`grid h-6 w-6 place-items-center rounded transition-colors ${
             disabled ? "cursor-default text-osu-f1/20" : "cursor-pointer hover:text-osu-c1"
@@ -346,7 +354,7 @@ function NomineeRow({
           type="button"
           disabled={disabled}
           onClick={() => cast(-1)}
-          aria-label={`Vote against ${nominee.username}`}
+          aria-label={t`Vote against ${nominee.username}`}
           aria-pressed={vote === -1}
           className={`grid h-6 w-6 place-items-center rounded transition-colors ${
             disabled ? "cursor-default text-osu-f1/20" : "cursor-pointer hover:text-osu-c1"
@@ -354,7 +362,7 @@ function NomineeRow({
         >
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
-        <span className="w-6 text-left text-[9px] tabular-nums text-osu-f1/35" title={`${nominee.down} against`}>
+        <span className="w-6 text-left text-[9px] tabular-nums text-osu-f1/35" title={t`${nominee.down} against`}>
           ({nominee.down})
         </span>
       </span>
@@ -364,6 +372,7 @@ function NomineeRow({
 }
 
 export function GoatPoll() {
+  const { t, i18n } = useLingui();
   const auth = useAuth();
   const visible = useDocumentVisible();
   const wide = useRailWidth();
@@ -514,9 +523,10 @@ export function GoatPoll() {
         );
       }
       if (result.votes) setVotes(result.votes);
-      setMessage(result.ok ? null : STATUS_MESSAGES[result.status] ?? null);
+      const status = result.ok ? undefined : STATUS_MESSAGES[result.status];
+      setMessage(status ? i18n._(status) : null);
     },
-    [],
+    [i18n],
   );
 
   const handleVote = useCallback(
@@ -549,12 +559,12 @@ export function GoatPoll() {
       try {
         applyResult(await nominateGoatPollPlayer({ data: input }));
       } catch {
-        setMessage(STATUS_MESSAGES.unavailable ?? null);
+        setMessage(STATUS_MESSAGES.unavailable ? i18n._(STATUS_MESSAGES.unavailable) : null);
       } finally {
         setBusy(false);
       }
     },
-    [canVote, busy, applyResult],
+    [canVote, busy, applyResult, i18n],
   );
 
   /* Moderation is true-admin only — `admin` above is the wider dev-access flag
@@ -576,13 +586,13 @@ export function GoatPoll() {
                 prev ? { ...prev, nominees: result.nominees!, totalNominees: result.nominees!.length } : prev,
               );
             }
-            if (!result.ok) setMessage("Couldn't remove that nominee.");
+            if (!result.ok) setMessage(t`Couldn't remove that nominee.`);
           })
-          .catch(() => setMessage("Couldn't remove that nominee."))
+          .catch(() => setMessage(t`Couldn't remove that nominee.`))
           .finally(() => { setRemoving(null); setArmed(null); });
       },
     }),
-    [armed, removing],
+    [armed, removing, t],
   );
 
   /* One server round trip per click, which is the point: the board arrives a
@@ -634,7 +644,7 @@ export function GoatPoll() {
       {/* Past the deadline there is nothing left to choose, and the board below
           has stopped being a ballot and become the answer. */}
       <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-osu-c1/85">
-        {closed ? "The new GOAT" : "Choose a new GOAT"}
+        {closed ? <Trans>The new GOAT</Trans> : <Trans>Choose a new GOAT</Trans>}
       </span>
     </>
   );
@@ -642,10 +652,10 @@ export function GoatPoll() {
   return (
     <section
       className={`mb-6 border-t border-osu-b3/30 pt-2.5 ${RAIL_LAYOUT}`}
-      aria-label="Community vote for a new GOAT"
+      aria-label={t`Community vote for a new GOAT`}
     >
       {wide ? (
-        <div className="flex items-center gap-2" title={`Ends ${endsLabel}`}>
+        <div className="flex items-center gap-2" title={t`Ends ${endsLabel}`}>
           {heading}
         </div>
       ) : (
@@ -654,7 +664,7 @@ export function GoatPoll() {
           onClick={() => setExpanded((value) => !value)}
           aria-expanded={expanded}
           className="flex w-full cursor-pointer items-center gap-2 text-left"
-          title={`Ends ${endsLabel}`}
+          title={t`Ends ${endsLabel}`}
         >
           {heading}
           <ChevronDown
@@ -679,9 +689,13 @@ export function GoatPoll() {
             className={wide || !sliding ? undefined : "overflow-hidden"}
           >
             <p className="mt-2 text-[10px] leading-snug text-osu-f1/80">
-              {closed
-                ? "Voting's closed. Thanks for the picks."
-                : "Vote for as many players as you want. Whoever finishes first will get added to the GOAT tier."}
+              {closed ? (
+                <Trans>Voting's closed. Thanks for the picks.</Trans>
+              ) : (
+                <Trans>
+                  Vote for as many players as you want. Whoever finishes first will get added to the GOAT tier.
+                </Trans>
+              )}
             </p>
 
             {!closed && (
@@ -704,8 +718,8 @@ export function GoatPoll() {
                       // click rather than as a message after it. The server fn
                       // still checks: this is the explanation, not the gate.
                       disabledIds={HONORARY_IDS}
-                      disabledNote="already a GOAT"
-                      placeholder="nominate a player..."
+                      disabledNote={t`already a GOAT`}
+                      placeholder={t`nominate a player...`}
                       className="w-full"
                     />
                     <button
@@ -715,7 +729,7 @@ export function GoatPoll() {
                       aria-expanded={manualOpen}
                     >
                       <TriangleAlert className="h-2.5 w-2.5" />
-                      for banned or deleted
+                      <Trans>for banned or deleted</Trans>
                     </button>
                     <AnimatePresence initial={false}>
                       {manualOpen && (
@@ -730,13 +744,13 @@ export function GoatPoll() {
                             <input
                               value={manualName}
                               onChange={(event) => setManualName(event.target.value)}
-                              placeholder="username"
+                              placeholder={t`username`}
                               className="w-full rounded-md border border-osu-b3/40 bg-osu-b4/60 px-2.5 py-1.5 text-[12px] text-osu-c1 placeholder:text-osu-f1 focus:border-osu-h1/40 focus:outline-none"
                             />
                             <input
                               value={manualProof}
                               onChange={(event) => setManualProof(event.target.value)}
-                              placeholder={PROOF_HINT}
+                              placeholder={t(PROOF_HINT)}
                               className="w-full rounded-md border border-osu-b3/40 bg-osu-b4/60 px-2.5 py-1.5 text-[12px] text-osu-c1 placeholder:text-osu-f1 focus:border-osu-h1/40 focus:outline-none"
                             />
                             <button
@@ -754,7 +768,7 @@ export function GoatPoll() {
                               }}
                               className="cursor-pointer self-start rounded-full bg-osu-pink/90 px-3 py-1 text-[11px] font-bold text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-40"
                             >
-                              Nominate
+                              <Trans>Nominate</Trans>
                             </button>
                           </div>
                         </motion.div>
@@ -766,7 +780,7 @@ export function GoatPoll() {
                     href={`/api/auth/osu?next=${encodeURIComponent("/packs")}`}
                     className="text-[11px] font-semibold text-osu-pink transition-colors hover:text-osu-pink-light"
                   >
-                    Sign in to vote →
+                    <Trans>Sign in to vote →</Trans>
                   </a>
                 )}
               </div>
@@ -810,7 +824,7 @@ export function GoatPoll() {
                         onClick={showMore}
                         className="cursor-pointer text-[10px] text-osu-f1/60 transition-colors hover:text-osu-c1"
                       >
-                        show more
+                        <Trans>show more</Trans>
                       </button>
                     )}
                     {grown && (
@@ -819,7 +833,7 @@ export function GoatPoll() {
                         onClick={showFewer}
                         className="cursor-pointer text-[10px] text-osu-f1/60 transition-colors hover:text-osu-c1"
                       >
-                        show fewer
+                        <Trans>show fewer</Trans>
                       </button>
                     )}
                   </div>

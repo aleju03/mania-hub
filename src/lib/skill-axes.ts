@@ -11,33 +11,47 @@
 // Colors are per-skill site identity and stay decorative: identity is always
 // carried by the text label on the mark.
 
+import type { MessageDescriptor } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "./my-data";
+
+// Every axis carries both forms of its name: `label` is the English one the
+// server-side dynamic renders draw (those images stay English, and the
+// renderers run outside any i18n instance), `labelMsg` is what DOM consumers
+// resolve through `i18n._` so the site's own charts speak the visitor's
+// language.
+export interface SkillAxisMeta {
+  key: string;
+  label: string;
+  labelMsg: MessageDescriptor;
+  color: string;
+}
 
 // Etterna's skillset taxonomy (from the MinaCalc analysis), with colors from
 // the same palette the old pattern fingerprint used. Native for 4K only.
-export const MSD_SKILLSET_META: Array<{ key: string; label: string; color: string }> = [
-  { key: "Stream", label: "Stream", color: "#8f6bd8" },
-  { key: "Jumpstream", label: "Jumpstream", color: "#6f87d8" },
-  { key: "Handstream", label: "Handstream", color: "#b06bc0" },
-  { key: "Stamina", label: "Stamina", color: "#ad6b5d" },
-  { key: "JackSpeed", label: "Jackspeed", color: "#c66f84" },
-  { key: "Chordjack", label: "Chordjack", color: "#c59a5c" },
-  { key: "Technical", label: "Technical", color: "#83a86f" },
+export const MSD_SKILLSET_META: SkillAxisMeta[] = [
+  { key: "Stream", label: "Stream", labelMsg: msg`Stream`, color: "#8f6bd8" },
+  { key: "Jumpstream", label: "Jumpstream", labelMsg: msg`Jumpstream`, color: "#6f87d8" },
+  { key: "Handstream", label: "Handstream", labelMsg: msg`Handstream`, color: "#b06bc0" },
+  { key: "Stamina", label: "Stamina", labelMsg: msg`Stamina`, color: "#ad6b5d" },
+  { key: "JackSpeed", label: "Jackspeed", labelMsg: msg`Jackspeed`, color: "#c66f84" },
+  { key: "Chordjack", label: "Chordjack", labelMsg: msg`Chordjack`, color: "#c59a5c" },
+  { key: "Technical", label: "Technical", labelMsg: msg`Technical`, color: "#83a86f" },
 ];
 
 // Non-4K axes come from the in-house pattern detector instead (MinaCalc's
 // skillset names are 4K vocabulary): each value is the aggregate of the
 // player's Overall SSRs on charts tagged with that pattern. Family ids only;
 // subtypes (speedjack, lnrelease, ...) stay a maps-page concern.
-export const PATTERN_RATING_META: Array<{ key: string; label: string; color: string }> = [
-  { key: "chordstream", label: "Chordstream", color: "#5ab2f2" },
-  { key: "bracket", label: "Bracket", color: "#f3c24a" },
-  { key: "delay", label: "Delay", color: "#46c7b8" },
-  { key: "stream", label: "Stream", color: "#8f6bd8" },
-  { key: "jack", label: "Jack", color: "#ec6a9c" },
-  { key: "chordjack", label: "Chordjack", color: "#c59a5c" },
-  { key: "tech", label: "Tech", color: "#83cf6b" },
-  { key: "ln", label: "LN", color: "#f07474" },
+export const PATTERN_RATING_META: SkillAxisMeta[] = [
+  { key: "chordstream", label: "Chordstream", labelMsg: msg`Chordstream`, color: "#5ab2f2" },
+  { key: "bracket", label: "Bracket", labelMsg: msg`Bracket`, color: "#f3c24a" },
+  { key: "delay", label: "Delay", labelMsg: msg`Delay`, color: "#46c7b8" },
+  { key: "stream", label: "Stream", labelMsg: msg`Stream`, color: "#8f6bd8" },
+  { key: "jack", label: "Jack", labelMsg: msg`Jack`, color: "#ec6a9c" },
+  { key: "chordjack", label: "Chordjack", labelMsg: msg`Chordjack`, color: "#c59a5c" },
+  { key: "tech", label: "Tech", labelMsg: msg`Tech`, color: "#83cf6b" },
+  { key: "ln", label: "LN", labelMsg: msg`LN`, color: "#f07474" },
 ];
 
 // Drop trickle keymodes (a few stray plays in an off-keymode) so callers only
@@ -49,10 +63,7 @@ export function qualifyingSkillModes(skills: MyDataSkillBreakdown | null): MyDat
   return qualifying.length > 0 ? qualifying : modes.slice(0, 1);
 }
 
-export interface SkillAxisEntry {
-  key: string;
-  label: string;
-  color: string;
+export interface SkillAxisEntry extends SkillAxisMeta {
   value: number;
   // The percentile lookup key: skillset name for MSD axes, `pattern:{id}` for
   // pattern-derived axes.
@@ -78,7 +89,7 @@ export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
   // Etterna's taxonomy has no LN skillset, so the 4K card grafts in the LN
   // pattern axis (same rating scale: Overall SSRs on LN-tagged charts).
   const ln = (mode.patterns ?? []).find((entry) => entry.id === "ln");
-  if (ln && ln.rating >= 1) entries.push({ key: "ln", label: "LN", color: "#f07474", value: ln.rating, axis: "pattern:ln" });
+  if (ln && ln.rating >= 1) entries.push({ key: "ln", label: "LN", labelMsg: msg`LN`, color: "#f07474", value: ln.rating, axis: "pattern:ln" });
   return entries.sort((a, b) => b.value - a.value);
 }
 
@@ -87,9 +98,14 @@ export function skillRatingAccent(mode: MyDataSkillMode | null): string {
   return skillModeEntries(mode)[0]?.color ?? "#8f6bd8";
 }
 
+export function topSharePercent(percentile: number): number {
+  return Math.max(1, Math.round(100 - percentile));
+}
+
+// English form, for the dynamic-render images. DOM callers phrase it through
+// the catalog instead (`t`top ${topSharePercent(v)}%``).
 export function formatTopShare(percentile: number): string {
-  const top = Math.max(1, Math.round(100 - percentile));
-  return `top ${top}%`;
+  return `top ${topSharePercent(percentile)}%`;
 }
 
 // --- Radar geometry ---

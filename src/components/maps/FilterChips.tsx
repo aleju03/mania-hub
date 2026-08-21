@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { motion } from "framer-motion";
+import { useLingui } from "@lingui/react/macro";
 import type { TriStateMode } from "../../lib/maps-random-filter";
 
 // The filter-chip language shared by the maps search tab and the browse tabs
@@ -91,6 +92,7 @@ export function TriStatePill({
   pill?: boolean;
   children: React.ReactNode;
 }) {
+  const { t } = useLingui();
   const style: CSSProperties = color
     ? mode === "include"
       ? { background: color, color: "#11111a" }
@@ -115,10 +117,10 @@ export function TriStatePill({
             opacity: hasAnyActive ? 0.55 : 1,
           };
   const title = mode === "include"
-    ? "Including (click to exclude)"
+    ? t`Including (click to exclude)`
     : mode === "exclude"
-      ? "Excluding (click to clear)"
-      : "Click to include, right-click to exclude";
+      ? t`Excluding (click to clear)`
+      : t`Click to include, right-click to exclude`;
   return (
     <motion.button
       type="button"
@@ -166,6 +168,7 @@ export interface SortOption {
 // Custom sort dropdown for the mobile toolbar, styled like the random tab's
 // difficulty picker so it doesn't fall back to the OS-native select look.
 export function SortSelect({ options, value, onChange }: { options: SortOption[]; value: string; onChange: (id: string) => void }) {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -194,7 +197,7 @@ export function SortSelect({ options, value, onChange }: { options: SortOption[]
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="Sort by"
+        aria-label={t`Sort by`}
         className={`inline-flex items-center gap-1.5 rounded-md pl-3 pr-2 py-2 text-[12.5px] font-semibold cursor-pointer transition-colors ${
           open ? "bg-osu-b3 text-osu-l1" : "bg-osu-b4 text-osu-l2"
         }`}
@@ -249,14 +252,16 @@ export function SortSelect({ options, value, onChange }: { options: SortOption[]
 }
 
 export function DirButton({ dir, onToggle }: { dir: string; onToggle: () => void }) {
+  const { t } = useLingui();
+  const dirLabel = dir === "asc" ? t`Ascending` : t`Descending`;
   return (
     <motion.button
       type="button"
       whileTap={{ scale: 0.94 }}
       onClick={onToggle}
       className="inline-flex items-center justify-center rounded-md px-2.5 py-2 bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1 transition-colors cursor-pointer"
-      title={dir === "asc" ? "Ascending" : "Descending"}
-      aria-label={dir === "asc" ? "Ascending" : "Descending"}
+      title={dirLabel}
+      aria-label={dirLabel}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
         {dir === "asc" ? <path d="M12 19V5m-6 6 6-6 6 6" /> : <path d="M12 5v14m-6-6 6 6 6-6" />}

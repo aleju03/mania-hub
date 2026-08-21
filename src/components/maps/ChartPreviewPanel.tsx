@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Gauge, Loader2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { getBeatmapFile } from "../../lib/osu";
 import { getBeatmapAudioUrl } from "../../lib/audio-url";
@@ -84,6 +85,7 @@ export function ChartPreviewPanel({
   // (the skin page previews an uploaded skin, not the local one).
   skinSettingsOverride?: ReplaySkinSettings | null;
 }) {
+  const { t } = useLingui();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioStartSecondsRef = useRef(0);
   const audioStartPendingRef = useRef(false);
@@ -306,7 +308,7 @@ export function ChartPreviewPanel({
         if (cancelled) return;
         setPreviewBeatmap(null);
         setReady(false);
-        setError("Couldn't load chart preview");
+        setError(t`Couldn't load chart preview`);
       })
       .finally(() => {
         if (!cancelled) setPreviewLoading(false);
@@ -384,7 +386,7 @@ export function ChartPreviewPanel({
         audioClockSampleRef.current = null;
         audioClockAnchorRef.current = null;
         setAudioLoading(false);
-        setError("Couldn't find chart preview audio");
+        setError(t`Couldn't find chart preview audio`);
       }
       return;
     }
@@ -448,7 +450,7 @@ export function ChartPreviewPanel({
         audioClockSampleRef.current = null;
         audioClockAnchorRef.current = null;
         setAudioLoading(false);
-        setError("Couldn't play chart preview audio");
+        setError(t`Couldn't play chart preview audio`);
         setPlaying(false);
       }
     }
@@ -729,7 +731,7 @@ export function ChartPreviewPanel({
           }`}
         >
           <Play className="h-3 w-3 fill-current" />
-          <span>chart preview</span>
+          <span><Trans>chart preview</Trans></span>
         </button>
       ) : null}
 
@@ -756,11 +758,11 @@ export function ChartPreviewPanel({
               <span className="text-osu-f1"> / {Math.round(selectedBeatmap.cs)}K / {selectedBeatmap.version}</span>
             </>
           ) : (
-            <span className="text-osu-f1">No mania difficulty selected</span>
+            <span className="text-osu-f1"><Trans>No mania difficulty selected</Trans></span>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-md bg-osu-b6/35 px-1.5 py-1 text-osu-f1" title="Scroll speed">
+          <div className="flex items-center gap-1.5 rounded-md bg-osu-b6/35 px-1.5 py-1 text-osu-f1" title={t`Scroll speed`}>
             <Gauge className="h-3.5 w-3.5 shrink-0" />
             <input
               type="range"
@@ -769,14 +771,14 @@ export function ChartPreviewPanel({
               step={1}
               value={scrollSpeed}
               onChange={(e) => applyScrollSpeed(Number(e.target.value))}
-              aria-label="Chart preview scroll speed"
+              aria-label={t`Chart preview scroll speed`}
               className="h-1 w-16 shrink-0 cursor-pointer appearance-none rounded-full bg-osu-b3 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-yellow"
             />
             <input
               type="text"
               inputMode="numeric"
               value={scrollSpeedInput}
-              aria-label="Chart preview scroll speed value"
+              aria-label={t`Chart preview scroll speed value`}
               onFocus={() => setEditingScrollSpeed(true)}
               onChange={(event) => setScrollSpeedInput(event.target.value.replace(/[^\d]/g, "").slice(0, 2))}
               onBlur={commitScrollSpeedInput}
@@ -797,7 +799,7 @@ export function ChartPreviewPanel({
               type="button"
               onClick={togglePlayback}
               disabled={!canToggle}
-              aria-label={playing ? "Pause chart preview" : "Resume chart preview"}
+              aria-label={playing ? t`Pause chart preview` : t`Resume chart preview`}
               className="grid h-7 w-7 place-items-center rounded-md bg-osu-b3/80 text-osu-l2 transition-colors hover:bg-osu-b2 hover:text-white disabled:cursor-default disabled:opacity-70 disabled:hover:bg-osu-b3/80 disabled:hover:text-osu-l2"
             >
               {!canToggle ? (
@@ -812,7 +814,7 @@ export function ChartPreviewPanel({
           <button
             type="button"
             onClick={toggleMute}
-            aria-label={volume === 0 ? "Unmute chart preview" : "Mute chart preview"}
+            aria-label={volume === 0 ? t`Unmute chart preview` : t`Mute chart preview`}
             className="grid h-7 w-7 place-items-center rounded-md text-osu-f1 transition-colors hover:bg-osu-b3/70 hover:text-white"
           >
             {volume === 0 ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
@@ -824,7 +826,7 @@ export function ChartPreviewPanel({
             step={0.05}
             value={volume}
             onChange={(e) => applyVolume(Number(e.target.value))}
-            aria-label="Chart preview volume"
+            aria-label={t`Chart preview volume`}
             className="h-1 w-16 shrink-0 cursor-pointer appearance-none rounded-full bg-osu-b3 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink"
           />
         </div>
@@ -857,7 +859,7 @@ export function ChartPreviewPanel({
           onEnded={finishPreview}
           onError={() => {
             setAudioLoading(false);
-            setError("Couldn't load chart preview audio");
+            setError(t`Couldn't load chart preview audio`);
             setPlaying(false);
             audioStartPendingRef.current = false;
             audioReadyRef.current = false;

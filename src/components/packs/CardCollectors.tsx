@@ -2,6 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Search } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { plural } from "@lingui/core/macro";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "../../lib/maniacard";
 import {
@@ -50,6 +52,7 @@ export function CardCollectorsButton({ className, children }: { className?: stri
 const FILTER_THRESHOLD = 24;
 
 function CardCollectorsModal({ onClose }: { onClose: () => void }) {
+  const { t } = useLingui();
   const [report, setReport] = useState<ServerPackCardCollectors | null>(null);
   const [signedOut, setSignedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +132,7 @@ function CardCollectorsModal({ onClose }: { onClose: () => void }) {
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t`Close`}
           className="absolute top-3 right-3 z-20 flex h-8 w-8 items-center justify-center rounded-full text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white cursor-pointer"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -138,7 +141,7 @@ function CardCollectorsModal({ onClose }: { onClose: () => void }) {
         </button>
 
         <div className="flex-shrink-0 px-4 pt-4 sm:px-5 sm:pt-5">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">Who has your card</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1"><Trans>Who has your card</Trans></div>
           {report && report.owners > 0 ? (
             <>
               <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -146,12 +149,15 @@ function CardCollectorsModal({ onClose }: { onClose: () => void }) {
                   {formatNumber(report.owners)}
                 </span>
                 <span className="text-[11px] text-osu-f1">
-                  collector{report.owners === 1 ? "" : "s"}
+                  <Plural value={report.owners} one="collector" other="collectors" />
                   {/* Only worth saying when someone holds a duplicate;
                       otherwise it repeats the number above it. */}
-                  {report.copies > report.owners
-                    ? ` · ${formatNumber(report.copies)} cop${report.copies === 1 ? "y" : "ies"}`
-                    : ""}
+                  {report.copies > report.owners ? (
+                    <>
+                      {" · "}
+                      <Plural value={report.copies} one="# copy" other="# copies" />
+                    </>
+                  ) : null}
                 </span>
               </div>
               {collectors.length > FILTER_THRESHOLD ? (
@@ -161,7 +167,7 @@ function CardCollectorsModal({ onClose }: { onClose: () => void }) {
                     type="search"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="find a collector..."
+                    placeholder={t`find a collector...`}
                     className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4/40 py-1.5 pl-8 pr-3 text-[12px] text-white placeholder:text-osu-f1/70 outline-none transition-colors focus:border-osu-pink/40"
                   />
                 </div>
@@ -174,13 +180,13 @@ function CardCollectorsModal({ onClose }: { onClose: () => void }) {
           {error ? (
             <div className="text-[12px] text-osu-red-light">{error}</div>
           ) : signedOut ? (
-            <div className="text-[12px] text-osu-f1">Sign in with osu! to see who has pulled your card.</div>
+            <div className="text-[12px] text-osu-f1"><Trans>Sign in with osu! to see who has pulled your card.</Trans></div>
           ) : report === null ? (
-            <div className="py-10 text-center text-[12px] text-osu-f1">Loading...</div>
+            <div className="py-10 text-center text-[12px] text-osu-f1"><Trans>Loading...</Trans></div>
           ) : report.owners === 0 ? (
-            <div className="text-[12px] text-osu-f1">Nobody has pulled your card yet.</div>
+            <div className="text-[12px] text-osu-f1"><Trans>Nobody has pulled your card yet.</Trans></div>
           ) : shown.length === 0 ? (
-            <div className="text-[12px] text-osu-f1">Nobody here by that name.</div>
+            <div className="text-[12px] text-osu-f1"><Trans>Nobody here by that name.</Trans></div>
           ) : (
             <>
               {/* One run of names, wrapping like a sentence. No rows to align,
@@ -206,7 +212,7 @@ function CardCollectorsModal({ onClose }: { onClose: () => void }) {
                 {hidden > 0 && !trimmedQuery ? (
                   <span className="text-[11px] text-osu-f1">
                     {" "}
-                    and {formatNumber(hidden)} more
+                    <Trans>and {formatNumber(hidden)} more</Trans>
                   </span>
                 ) : null}
               </div>
@@ -276,6 +282,7 @@ function CollectorFooter({
   cardUserId: number;
   showTier: boolean;
 }) {
+  const { t } = useLingui();
   const tier = tierStyle(collector.tier);
   const pulled = timeAgo(collector.firstPulledAt);
   const meta: string[] = [];
@@ -283,7 +290,7 @@ function CollectorFooter({
   // own card. Missing on a holding older than the serial registry.
   if (collector.serial !== null) meta.push(`#${formatNumber(collector.serial)}`);
   if (pulled) meta.push(pulled);
-  if (collector.copies > 1) meta.push(`${formatNumber(collector.copies)} copies`);
+  if (collector.copies > 1) meta.push(t`${plural(collector.copies, { one: "# copy", other: "# copies" })}`);
 
   return (
     <div className="flex flex-shrink-0 items-center gap-3 border-t border-osu-b3/15 px-4 py-3 sm:px-5">
@@ -292,7 +299,7 @@ function CollectorFooter({
           <span className="truncate text-[14px] font-bold leading-tight text-white">{collector.username}</span>
           {/* Pulling your own card out of a pack is rare enough to name. */}
           {collector.userId === cardUserId ? (
-            <span className="flex-shrink-0 text-[10px] leading-tight text-osu-f1">you</span>
+            <span className="flex-shrink-0 text-[10px] leading-tight text-osu-f1"><Trans>you</Trans></span>
           ) : null}
         </span>
         <span className="truncate text-[11px] leading-tight text-osu-f1 tabular-nums">
@@ -312,7 +319,7 @@ function CollectorFooter({
         rel="noopener noreferrer"
         className="flex-shrink-0 rounded-full border border-osu-b3/40 px-3 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:border-osu-pink/50 hover:text-white"
       >
-        Their copy
+        <Trans>Their copy</Trans>
       </Link>
     </div>
   );

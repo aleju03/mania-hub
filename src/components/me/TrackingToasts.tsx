@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Radio } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
 
 import { playTrackingStartedSound } from "../../lib/ui-sounds";
 import { COMPOSER_TRIANGLES } from "./GoalToasts";
@@ -19,6 +20,7 @@ export function showTrackingStartedToast(): void {
 }
 
 export function TrackingToasts() {
+  const { t } = useLingui();
   const [toastId, setToastId] = useState<number | null>(null);
   const seq = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,13 +70,13 @@ export function TrackingToasts() {
                 <Radio className="h-6 w-6 text-osu-pink-light" />
               </motion.span>
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">tracking on</div>
-                <div className="mt-0.5 text-[13.5px] font-bold text-white">Your plays are being recorded now</div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light"><Trans>tracking on</Trans></div>
+                <div className="mt-0.5 text-[13.5px] font-bold text-white"><Trans>Your plays are being recorded now</Trans></div>
               </div>
               <button
                 type="button"
                 onClick={() => setToastId(null)}
-                aria-label="Dismiss"
+                aria-label={t`Dismiss`}
                 className="shrink-0 self-start rounded-md p-1 text-osu-f1/70 transition-colors hover:bg-osu-b3/60 hover:text-white"
               >
                 <span className="block text-[15px] leading-none" aria-hidden="true">×</span>

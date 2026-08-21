@@ -56,6 +56,8 @@ import {
   X,
   Youtube,
 } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 import { buildGradientBBCode, containsBBCode, gradientCharColors, normalizeHexColor, parseYoutubeInput, shiftHexHue, type BBAlign, type BBSourceSpan } from "../../../lib/bbcode";
 import {
   ALIGN_SELECTOR,
@@ -107,18 +109,18 @@ const COLOR_SWATCHES = [
   "#FFD53D", "#FF7A2F", "#FF4D5E", "#9AA0B0", "#000000",
 ];
 
-const SIZE_PRESETS: Array<{ label: string; value: number }> = [
-  { label: "Tiny", value: 50 },
-  { label: "Small", value: 85 },
-  { label: "Normal", value: 100 },
-  { label: "Large", value: 150 },
+const SIZE_PRESETS: Array<{ label: ReturnType<typeof msg>; value: number }> = [
+  { label: msg`Tiny`, value: 50 },
+  { label: msg`Small`, value: 85 },
+  { label: msg`Normal`, value: 100 },
+  { label: msg`Large`, value: 150 },
 ];
 
-const GRADIENT_PRESETS: Array<{ label: string; stops: string[]; mirror: boolean }> = [
-  { label: "Gold", stops: ["#E6821E", "#FDE071"], mirror: true },
-  { label: "Pink", stops: ["#FF66AA", "#FFD1E8"], mirror: true },
-  { label: "Purple", stops: ["#B14DE8", "#FF9ECF"], mirror: false },
-  { label: "Rainbow", stops: ["#FF4D5E", "#FFB42F", "#FFE45E", "#5EE08A", "#66A4FF", "#B14DE8"], mirror: false },
+const GRADIENT_PRESETS: Array<{ label: ReturnType<typeof msg>; stops: string[]; mirror: boolean }> = [
+  { label: msg`Gold`, stops: ["#E6821E", "#FDE071"], mirror: true },
+  { label: msg`Pink`, stops: ["#FF66AA", "#FFD1E8"], mirror: true },
+  { label: msg`Purple`, stops: ["#B14DE8", "#FF9ECF"], mirror: false },
+  { label: msg`Rainbow`, stops: ["#FF4D5E", "#FFB42F", "#FFE45E", "#5EE08A", "#66A4FF", "#B14DE8"], mirror: false },
 ];
 
 const GRADIENT_MAX_STOPS = 6;
@@ -661,6 +663,7 @@ export function BBCodeEditor({
   enableLoadFromUser?: boolean;
   enableLoadOwnPage?: boolean;
 }) {
+  const { t, i18n } = useLingui();
   const draftKey = `${DRAFT_KEY_PREFIX}${userId ?? "guest"}`;
   const baseSource = initialSource ?? "";
   const [restoredDraft, setRestoredDraft] = useState(false);
@@ -1675,12 +1678,12 @@ export function BBCodeEditor({
     holder.appendChild(range.cloneContents());
     const seq = captureColorSequence(holder.innerHTML);
     if (seq.every((color) => color == null)) {
-      setUploadStatus({ kind: "error", message: "That selection has no colors to copy." });
+      setUploadStatus({ kind: "error", message: t`That selection has no colors to copy.` });
       return;
     }
     capturedColorsRef.current = seq;
     setHasCapturedFormat(true);
-  }, []);
+  }, [t]);
 
   // Paint the copied color sequence onto the right-clicked selection, stretched
   // to fit its length (so a gradient re-maps proportionally onto longer/shorter text).
@@ -1788,9 +1791,9 @@ export function BBCodeEditor({
     }
     setUploadStatus({
       kind: "error",
-      message: "Click an image first. Imagemap turns that image into clickable areas.",
+      message: t`Click an image first. Imagemap turns that image into clickable areas.`,
     });
-  }, [convertImageToImagemap, editMode, insertBBCode]);
+  }, [convertImageToImagemap, editMode, insertBBCode, t]);
 
   const insertList = useCallback((ordered: boolean) => {
     if (editMode === "visual") {
@@ -1909,7 +1912,7 @@ export function BBCodeEditor({
         }
         setUploadStatus(null);
       } catch (error) {
-        setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : "Image upload failed." });
+        setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : t`Image upload failed.` });
         return;
       }
       // Persist the resolved source so blob URLs stop lingering in state/draft.
@@ -1920,7 +1923,7 @@ export function BBCodeEditor({
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(value).then(() => setCopied(true)).catch(() => {});
     }
-  }, [editMode, flushVisual, updateSource]);
+  }, [editMode, flushVisual, t, updateSource]);
 
   const resetToProfile = useCallback(() => {
     if (!confirmReset) {
@@ -1969,11 +1972,11 @@ export function BBCodeEditor({
   }, [draftKey, updateSource]);
 
   const gradientPreview = useMemo(() => {
-    const text = textField || "preview";
+    const text = textField || t`preview`;
     const colors = gradientCharColors(text, gradientStops, gradientMirror);
     if (!colors) return null;
     return { text, colors };
-  }, [gradientMirror, gradientStops, textField]);
+  }, [gradientMirror, gradientStops, t, textField]);
 
   // ---- images: upload, link, replace, crop ---------------------------------
 
@@ -2005,7 +2008,7 @@ export function BBCodeEditor({
    */
   const stagePendingImage = useCallback((file: Blob) => {
     if (!isUploadableImage(file)) {
-      setUploadStatus({ kind: "error", message: "That file isn't a supported image." });
+      setUploadStatus({ kind: "error", message: t`That file isn't a supported image.` });
       return;
     }
     const blobUrl = registerPendingImage(file);
@@ -2015,7 +2018,7 @@ export function BBCodeEditor({
       const el = textareaRef.current;
       if (el) insertAtSelection(el, `[img]${blobUrl}[/img]`);
     }
-  }, [editMode, insertVisualHtml, registerPendingImage]);
+  }, [editMode, insertVisualHtml, registerPendingImage, t]);
 
   // Release any staged blob URLs when the editor unmounts.
   useEffect(() => {
@@ -2146,7 +2149,7 @@ export function BBCodeEditor({
         // downloads the file; nothing is uploaded until Copy BBCode.
         const staged = origin?.blob ?? pendingUploadsRef.current.get(currentSrc);
         const source = staged ?? await fetchImageBlobViaProxy(currentSrc).catch(() => {
-          throw new Error("Couldn't read the original image to resize it. Its host didn't answer.");
+          throw new Error(t`Couldn't read the original image to resize it. Its host didn't answer.`);
         });
         // A file read back off a host may be one of ours, already carrying
         // margins. The drag then sized its box, and the picture inside only
@@ -2199,7 +2202,7 @@ export function BBCodeEditor({
         endResizePreview(img);
         settleResizeStatus({
           kind: "error",
-          message: error instanceof Error ? error.message : "Could not resize the image.",
+          message: error instanceof Error ? error.message : t`Could not resize the image.`,
         });
       }
     })();
@@ -2211,6 +2214,7 @@ export function BBCodeEditor({
     releasePendingImage,
     settleResizeStatus,
     showResizeStatusSoon,
+    t,
   ]);
 
   const startImageResize = useCallback((event: PointerEvent) => {
@@ -2308,7 +2312,7 @@ export function BBCodeEditor({
     const handle = document.createElement("span");
     handle.className = "bbcode-image-resize-handle";
     handle.setAttribute("aria-hidden", "true");
-    handle.title = "Drag to resize";
+    handle.title = t`Drag to resize`;
     handle.addEventListener("pointerdown", startImageResize);
     resizeHandleRef.current = handle;
     // Dragging is the only way to learn what an image's width will be, so say it.
@@ -2326,7 +2330,7 @@ export function BBCodeEditor({
     resizeOutlineRef.current = outline;
     frame.append(outline, handle, readout);
     positionResizeHandle();
-  }, [positionResizeHandle, startImageResize]);
+  }, [positionResizeHandle, startImageResize, t]);
 
   const hideResizeHandle = useCallback(() => {
     removeImageResizeHandle(visualFrameRef.current);
@@ -2486,7 +2490,7 @@ export function BBCodeEditor({
     replaceTargetRef.current = null;
     if (!file || !img) return;
     if (!isUploadableImage(file)) {
-      setUploadStatus({ kind: "error", message: "That file isn't a supported image." });
+      setUploadStatus({ kind: "error", message: t`That file isn't a supported image.` });
       return;
     }
     const url = registerPendingImage(file);
@@ -2498,7 +2502,7 @@ export function BBCodeEditor({
     } else {
       insertImageMarkup(url);
     }
-  }, [flushVisual, insertImageMarkup, registerPendingImage, releasePendingImage]);
+  }, [flushVisual, insertImageMarkup, registerPendingImage, releasePendingImage, t]);
 
   // ---- clipboard, paste, drop ----------------------------------------------
 
@@ -2542,9 +2546,9 @@ export function BBCodeEditor({
       const text = await navigator.clipboard?.readText?.();
       if (text) insertPlainText(text);
     } catch {
-      setUploadStatus({ kind: "error", message: "Couldn't read the clipboard. Use Ctrl+V instead." });
+      setUploadStatus({ kind: "error", message: t`Couldn't read the clipboard. Use Ctrl+V instead.` });
     }
-  }, [insertPlainText, stagePendingImage]);
+  }, [insertPlainText, stagePendingImage, t]);
 
   const handlePaste = useCallback((event: ReactClipboardEvent<HTMLElement>) => {
     const items = event.clipboardData?.items;
@@ -2607,27 +2611,27 @@ export function BBCodeEditor({
     const src = img.getAttribute("src") ?? "";
     const anchor = img.closest<HTMLAnchorElement>('a[data-bb="url"]');
     const items: ContextMenuItem[] = [
-      { label: "Resize / crop…", icon: <Crop size={14} />, onSelect: () => openImageEditor(img) },
-      { label: "Replace image…", icon: <Replace size={14} />, onSelect: () => triggerReplaceImage(img) },
+      { label: t`Resize / crop…`, icon: <Crop size={14} />, onSelect: () => openImageEditor(img) },
+      { label: t`Replace image…`, icon: <Replace size={14} />, onSelect: () => triggerReplaceImage(img) },
       {
-        label: anchor ? "Edit link…" : "Add link…",
+        label: anchor ? t`Edit link…` : t`Add link…`,
         icon: anchor ? <Pencil size={14} /> : <Link size={14} />,
         onSelect: () => { selectImage(img); setFocusImageLinkTick((tick) => tick + 1); },
       },
-      { label: "Make imagemap", icon: <Map size={14} />, onSelect: () => convertImageToImagemap(img) },
+      { label: t`Make imagemap`, icon: <Map size={14} />, onSelect: () => convertImageToImagemap(img) },
     ];
     if (anchor) {
-      items.push({ label: "Remove link", icon: <Unlink size={14} />, onSelect: () => { selectImage(img); updateImageLink(""); } });
+      items.push({ label: t`Remove link`, icon: <Unlink size={14} />, onSelect: () => { selectImage(img); updateImageLink(""); } });
     }
     items.push(
       { separator: true },
-      { label: "Copy image URL", icon: <Copy size={14} />, disabled: !src, onSelect: () => { void navigator.clipboard?.writeText?.(src); } },
-      { label: "Open image in new tab", icon: <ExternalLink size={14} />, disabled: !src, onSelect: () => { window.open(src, "_blank", "noopener,noreferrer"); } },
+      { label: t`Copy image URL`, icon: <Copy size={14} />, disabled: !src, onSelect: () => { void navigator.clipboard?.writeText?.(src); } },
+      { label: t`Open image in new tab`, icon: <ExternalLink size={14} />, disabled: !src, onSelect: () => { window.open(src, "_blank", "noopener,noreferrer"); } },
       { separator: true },
-      { label: "Delete image", icon: <Trash2 size={14} />, danger: true, onSelect: () => { selectImage(img); deleteSelectedImage(); } },
+      { label: t`Delete image`, icon: <Trash2 size={14} />, danger: true, onSelect: () => { selectImage(img); deleteSelectedImage(); } },
     );
     return items;
-  }, [convertImageToImagemap, deleteSelectedImage, openImageEditor, selectImage, triggerReplaceImage, updateImageLink]);
+  }, [convertImageToImagemap, deleteSelectedImage, openImageEditor, selectImage, t, triggerReplaceImage, updateImageLink]);
 
   const buildImagemapMenuItems = useCallback(
     (mapEl: HTMLElement, clientX: number, clientY: number): ContextMenuItem[] => {
@@ -2637,20 +2641,20 @@ export function BBCodeEditor({
       if (areaEl) selectImagemapArea(areaEl);
       else imagemapElementRef.current = mapEl;
       const items: ContextMenuItem[] = [
-        { label: "Add area", icon: <Plus size={14} />, onSelect: addImagemapArea },
+        { label: t`Add area`, icon: <Plus size={14} />, onSelect: addImagemapArea },
       ];
       if (areaEl) {
-        items.push({ label: "Delete area", icon: <Trash2 size={14} />, danger: true, onSelect: deleteImagemapArea });
+        items.push({ label: t`Delete area`, icon: <Trash2 size={14} />, danger: true, onSelect: deleteImagemapArea });
       }
       items.push(
         { separator: true },
-        { label: "Back to plain image", icon: <Image size={14} />, onSelect: () => convertImagemapToImage(mapEl) },
+        { label: t`Back to plain image`, icon: <Image size={14} />, onSelect: () => convertImagemapToImage(mapEl) },
         { separator: true },
-        { label: "Delete imagemap", icon: <Trash2 size={14} />, danger: true, onSelect: () => deleteImagemap(mapEl) },
+        { label: t`Delete imagemap`, icon: <Trash2 size={14} />, danger: true, onSelect: () => deleteImagemap(mapEl) },
       );
       return items;
     },
-    [addImagemapArea, convertImagemapToImage, deleteImagemap, deleteImagemapArea, pickImagemapAreaAtPoint, selectImagemapArea],
+    [addImagemapArea, convertImagemapToImage, deleteImagemap, deleteImagemapArea, pickImagemapAreaAtPoint, selectImagemapArea, t],
   );
 
   const buildLinkMenuItems = useCallback((anchor: HTMLAnchorElement): ContextMenuItem[] => {
@@ -2658,38 +2662,38 @@ export function BBCodeEditor({
     const selection = window.getSelection();
     const hasSelection = !!selection && !selection.isCollapsed && selection.toString().length > 0;
     return [
-      { label: "Edit link…", icon: <Pencil size={14} />, onSelect: () => selectLink(anchor) },
-      { label: "Open link", icon: <ExternalLink size={14} />, disabled: !href, onSelect: () => { window.open(href, "_blank", "noopener,noreferrer"); } },
-      { label: "Copy link URL", icon: <Copy size={14} />, disabled: !href, onSelect: () => { void navigator.clipboard?.writeText?.(href); } },
+      { label: t`Edit link…`, icon: <Pencil size={14} />, onSelect: () => selectLink(anchor) },
+      { label: t`Open link`, icon: <ExternalLink size={14} />, disabled: !href, onSelect: () => { window.open(href, "_blank", "noopener,noreferrer"); } },
+      { label: t`Copy link URL`, icon: <Copy size={14} />, disabled: !href, onSelect: () => { void navigator.clipboard?.writeText?.(href); } },
       { separator: true },
       // A gradient link's colors live on the link text, so offer the painter here too.
-      { label: "Copy formatting", icon: <Copy size={14} />, disabled: !hasSelection, onSelect: copyFormatting },
-      { label: "Paste formatting", icon: <ClipboardPaste size={14} />, disabled: !hasSelection || !capturedColorsRef.current, onSelect: pasteFormatting },
+      { label: t`Copy formatting`, icon: <Copy size={14} />, disabled: !hasSelection, onSelect: copyFormatting },
+      { label: t`Paste formatting`, icon: <ClipboardPaste size={14} />, disabled: !hasSelection || !capturedColorsRef.current, onSelect: pasteFormatting },
       { separator: true },
-      { label: "Remove link", icon: <Unlink size={14} />, onSelect: () => { selectLink(anchor); removeSelectedLink(); } },
+      { label: t`Remove link`, icon: <Unlink size={14} />, onSelect: () => { selectLink(anchor); removeSelectedLink(); } },
     ];
-  }, [copyFormatting, pasteFormatting, removeSelectedLink, selectLink]);
+  }, [copyFormatting, pasteFormatting, removeSelectedLink, selectLink, t]);
 
   const buildTextMenuItems = useCallback((): ContextMenuItem[] => {
     const selection = window.getSelection();
     const hasSelection = !!selection && !selection.isCollapsed && selection.toString().length > 0;
     return [
-      { label: "Cut", icon: <Scissors size={14} />, disabled: !hasSelection, onSelect: cutSelection },
-      { label: "Copy", icon: <Copy size={14} />, disabled: !hasSelection, onSelect: copySelection },
-      { label: "Paste", icon: <ClipboardPaste size={14} />, onSelect: () => { void pasteFromClipboard(); } },
+      { label: t`Cut`, icon: <Scissors size={14} />, disabled: !hasSelection, onSelect: cutSelection },
+      { label: t`Copy`, icon: <Copy size={14} />, disabled: !hasSelection, onSelect: copySelection },
+      { label: t`Paste`, icon: <ClipboardPaste size={14} />, onSelect: () => { void pasteFromClipboard(); } },
       { separator: true },
-      { label: "Bold", icon: <Bold size={14} />, onSelect: () => applyInline("bold", "b", "text") },
-      { label: "Italic", icon: <Italic size={14} />, onSelect: () => applyInline("italic", "i", "text") },
-      { label: "Underline", icon: <Underline size={14} />, onSelect: () => applyInline("underline", "u", "text") },
-      { label: "Text color…", icon: <Palette size={14} />, onSelect: () => openDialog("color") },
-      { label: "Add link…", icon: <Link size={14} />, onSelect: () => openDialog("link") },
+      { label: t`Bold`, icon: <Bold size={14} />, onSelect: () => applyInline("bold", "b", "text") },
+      { label: t`Italic`, icon: <Italic size={14} />, onSelect: () => applyInline("italic", "i", "text") },
+      { label: t`Underline`, icon: <Underline size={14} />, onSelect: () => applyInline("underline", "u", "text") },
+      { label: t`Text color…`, icon: <Palette size={14} />, onSelect: () => openDialog("color") },
+      { label: t`Add link…`, icon: <Link size={14} />, onSelect: () => openDialog("link") },
       { separator: true },
-      { label: "Copy formatting", icon: <Copy size={14} />, disabled: !hasSelection, onSelect: copyFormatting },
-      { label: "Paste formatting", icon: <ClipboardPaste size={14} />, disabled: !hasSelection || !capturedColorsRef.current, onSelect: pasteFormatting },
+      { label: t`Copy formatting`, icon: <Copy size={14} />, disabled: !hasSelection, onSelect: copyFormatting },
+      { label: t`Paste formatting`, icon: <ClipboardPaste size={14} />, disabled: !hasSelection || !capturedColorsRef.current, onSelect: pasteFormatting },
       { separator: true },
-      { label: "Clear formatting", icon: <Eraser size={14} />, onSelect: () => execVisual("removeFormat") },
+      { label: t`Clear formatting`, icon: <Eraser size={14} />, onSelect: () => execVisual("removeFormat") },
     ];
-  }, [applyInline, copyFormatting, copySelection, cutSelection, execVisual, openDialog, pasteFormatting, pasteFromClipboard]);
+  }, [applyInline, copyFormatting, copySelection, cutSelection, execVisual, openDialog, pasteFormatting, pasteFromClipboard, t]);
 
   const handleVisualContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const root = visualRef.current;
@@ -2785,14 +2789,14 @@ export function BBCodeEditor({
     if (!imageSelection) return null;
     return (
       <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 pr-10 border-b border-osu-b3/30 bg-osu-b5/50">
-        <div className="self-center pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">Image</div>
-        <DialogField label="Link URL (optional)">
+        <div className="self-center pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1"><Trans>Image</Trans></div>
+        <DialogField label={t`Link URL (optional)`}>
           <input
             ref={imageLinkInputRef}
             type="text"
             value={imageSelection.href}
             onChange={(event) => updateImageLink(event.target.value)}
-            placeholder="https://... wraps the image in a link"
+            placeholder={t`https://... wraps the image in a link`}
             className={`${dialogInputClass} w-72`}
           />
         </DialogField>
@@ -2801,19 +2805,19 @@ export function BBCodeEditor({
           onClick={() => imageElementRef.current && openImageEditor(imageElementRef.current)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-osu-b4/70 border border-osu-b3/40 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors cursor-pointer"
         >
-          <Crop size={14} /> Resize / crop
+          <Crop size={14} /> <Trans>Resize / crop</Trans>
         </button>
         <button
           type="button"
           onClick={() => imageElementRef.current && triggerReplaceImage(imageElementRef.current)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-osu-b4/70 border border-osu-b3/40 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors cursor-pointer"
         >
-          <Replace size={14} /> Replace
+          <Replace size={14} /> <Trans>Replace</Trans>
         </button>
         <button
           type="button"
-          title="Remove image"
-          aria-label="Remove image"
+          title={t`Remove image`}
+          aria-label={t`Remove image`}
           onClick={deleteSelectedImage}
           className="grid h-8 w-8 place-items-center rounded-md border border-osu-red/40 bg-osu-red/10 text-osu-red-light hover:bg-osu-red/20 hover:text-white transition-colors cursor-pointer"
         >
@@ -2828,11 +2832,11 @@ export function BBCodeEditor({
     return (
       <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 pr-10 border-b border-osu-b3/30 bg-osu-b5/50">
         <div className="flex items-center gap-1.5 self-center pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">
-          <span>Imagemap area {imagemapSelection.areaIndex + 1}/{imagemapSelection.areaCount}</span>
+          <span><Trans>Imagemap area {imagemapSelection.areaIndex + 1}/{imagemapSelection.areaCount}</Trans></span>
           <button
             type="button"
-            title="Previous area"
-            aria-label="Previous area"
+            title={t`Previous area`}
+            aria-label={t`Previous area`}
             onClick={() => selectImagemapAreaByIndex(imagemapSelection.areaIndex - 1)}
             className="grid h-7 w-7 place-items-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white cursor-pointer"
           >
@@ -2840,8 +2844,8 @@ export function BBCodeEditor({
           </button>
           <button
             type="button"
-            title="Next area"
-            aria-label="Next area"
+            title={t`Next area`}
+            aria-label={t`Next area`}
             onClick={() => selectImagemapAreaByIndex(imagemapSelection.areaIndex + 1)}
             className="grid h-7 w-7 place-items-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white cursor-pointer"
           >
@@ -2849,7 +2853,7 @@ export function BBCodeEditor({
           </button>
         </div>
 
-        <DialogField label="URL">
+        <DialogField label={t`URL`}>
           <input
             type="text"
             value={imagemapSelection.href}
@@ -2858,7 +2862,7 @@ export function BBCodeEditor({
             className={`${dialogInputClass} w-64`}
           />
         </DialogField>
-        <DialogField label="Title">
+        <DialogField label={t`Title`}>
           <input
             type="text"
             value={imagemapSelection.title}
@@ -2869,8 +2873,8 @@ export function BBCodeEditor({
 
         <button
           type="button"
-          title="Add area"
-          aria-label="Add area"
+          title={t`Add area`}
+          aria-label={t`Add area`}
           onClick={addImagemapArea}
           className="grid h-8 w-8 place-items-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white cursor-pointer"
         >
@@ -2878,8 +2882,8 @@ export function BBCodeEditor({
         </button>
         <button
           type="button"
-          title="Delete area"
-          aria-label="Delete area"
+          title={t`Delete area`}
+          aria-label={t`Delete area`}
           onClick={deleteImagemapArea}
           className="grid h-8 w-8 place-items-center rounded-md border border-osu-red/40 bg-osu-red/10 text-osu-red-light transition-colors hover:bg-osu-red/20 hover:text-white cursor-pointer"
         >
@@ -2894,9 +2898,9 @@ export function BBCodeEditor({
     return (
       <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 pr-10 border-b border-osu-b3/30 bg-osu-b5/50">
         <div className="self-center pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">
-          Link
+          <Trans>Link</Trans>
         </div>
-        <DialogField label="URL">
+        <DialogField label={t`URL`}>
           <input
             type="text"
             value={linkSelection.href}
@@ -2905,7 +2909,7 @@ export function BBCodeEditor({
             className={`${dialogInputClass} w-80`}
           />
         </DialogField>
-        <DialogField label="Text">
+        <DialogField label={t`Text`}>
           <input
             type="text"
             value={linkSelection.text}
@@ -2915,8 +2919,8 @@ export function BBCodeEditor({
         </DialogField>
         <button
           type="button"
-          title="Remove link"
-          aria-label="Remove link"
+          title={t`Remove link`}
+          aria-label={t`Remove link`}
           onClick={removeSelectedLink}
           className="grid h-8 w-8 place-items-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white cursor-pointer"
         >
@@ -2951,6 +2955,7 @@ export function BBCodeEditor({
             applyWrap("color", color, `[color=${color}]`, "[/color]", "text");
           });
         const activeHex = normalizeHexColor(hexField);
+        const signedHueShift = `${hueShift > 0 ? "+" : ""}${hueShift}`;
         return (
           <form
             className="flex flex-wrap items-end gap-3"
@@ -2975,7 +2980,7 @@ export function BBCodeEditor({
                 />
               ))}
             </div>
-            <DialogField label="Custom">
+            <DialogField label={t`Custom`}>
               <div className="flex items-center gap-1.5">
                 <input
                   type="color"
@@ -2993,10 +2998,10 @@ export function BBCodeEditor({
               </div>
             </DialogField>
             <button type="submit" className={dialogApplyClass} disabled={!normalizeHexColor(hexField)}>
-              Apply
+              <Trans>Apply</Trans>
             </button>
             {editMode === "visual" && selectedDialogText() ? (
-              <DialogField label={`Shift hue (${hueShift > 0 ? "+" : ""}${hueShift}°)`}>
+              <DialogField label={t`Shift hue (${signedHueShift}°)`}>
                 <input
                   type="range"
                   min={-180}
@@ -3010,7 +3015,7 @@ export function BBCodeEditor({
                     setHueShift(value);
                   }}
                   className="w-40 accent-osu-pink cursor-pointer"
-                  title="Rotate every color in the selection"
+                  title={t`Rotate every color in the selection`}
                 />
               </DialogField>
             ) : null}
@@ -3034,16 +3039,16 @@ export function BBCodeEditor({
             }}
           >
             <div className="flex flex-wrap items-end gap-3">
-              <DialogField label="Text (replaces the selection)">
+              <DialogField label={t`Text (replaces the selection)`}>
                 <input
                   type="text"
                   value={textField}
                   onChange={(event) => setTextField(event.target.value)}
-                  placeholder="select text or type it here"
+                  placeholder={t`select text or type it here`}
                   className={`${dialogInputClass} w-56`}
                 />
               </DialogField>
-              <DialogField label="Colors">
+              <DialogField label={t`Colors`}>
                 <div className="flex items-center gap-1">
                   {gradientStops.map((stop, index) => (
                     <span key={index} className="relative group/stop">
@@ -3059,8 +3064,8 @@ export function BBCodeEditor({
                       {gradientStops.length > 2 ? (
                         <button
                           type="button"
-                          title="Remove color"
-                          aria-label="Remove color"
+                          title={t`Remove color`}
+                          aria-label={t`Remove color`}
                           onClick={() => setGradientStops((stops) => stops.filter((_, i) => i !== index))}
                           className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 hidden group-hover/stop:flex items-center justify-center rounded-full bg-osu-b2 text-osu-c1 text-[9px] leading-none cursor-pointer"
                         >
@@ -3072,8 +3077,8 @@ export function BBCodeEditor({
                   {gradientStops.length < GRADIENT_MAX_STOPS ? (
                     <button
                       type="button"
-                      title="Add color"
-                      aria-label="Add color"
+                      title={t`Add color`}
+                      aria-label={t`Add color`}
                       onClick={() => setGradientStops((stops) => [...stops, stops[stops.length - 1]])}
                       className="w-8 h-8 rounded-md border border-dashed border-osu-b3/60 text-osu-f1 hover:text-osu-c1 hover:border-osu-b2 transition-colors cursor-pointer text-sm"
                     >
@@ -3089,32 +3094,35 @@ export function BBCodeEditor({
                   onChange={(event) => setGradientMirror(event.target.checked)}
                   className="accent-(--color-osu-pink) cursor-pointer"
                 />
-                <span className="text-[12px] text-osu-l2">Mirror (out and back)</span>
+                <span className="text-[12px] text-osu-l2"><Trans>Mirror (out and back)</Trans></span>
               </label>
               <button type="submit" className={dialogApplyClass} disabled={!gradientPreview || !(textField || selectedDialogText())}>
-                Apply
+                <Trans>Apply</Trans>
               </button>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-1.5">
-                {GRADIENT_PRESETS.map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() => {
-                      setGradientStops(preset.stops);
-                      setGradientMirror(preset.mirror);
-                    }}
-                    className="px-2 py-1 rounded-md bg-osu-b5 border border-osu-b3/50 text-[11px] font-semibold cursor-pointer hover:bg-osu-b3 transition-colors"
-                  >
-                    {(() => {
-                      const colors = gradientCharColors(preset.label, preset.stops, preset.mirror) ?? [];
-                      return Array.from(preset.label).map((char, index) => (
+                {GRADIENT_PRESETS.map((preset, presetIndex) => {
+                  // The preset's own name is drawn in its own gradient, so the
+                  // translated label is what gets coloured character by character.
+                  const label = i18n._(preset.label);
+                  const colors = gradientCharColors(label, preset.stops, preset.mirror) ?? [];
+                  return (
+                    <button
+                      key={presetIndex}
+                      type="button"
+                      onClick={() => {
+                        setGradientStops(preset.stops);
+                        setGradientMirror(preset.mirror);
+                      }}
+                      className="px-2 py-1 rounded-md bg-osu-b5 border border-osu-b3/50 text-[11px] font-semibold cursor-pointer hover:bg-osu-b3 transition-colors"
+                    >
+                      {Array.from(label).map((char, index) => (
                         <span key={index} style={colors[index] ? { color: colors[index] } : undefined}>{char}</span>
-                      ));
-                    })()}
-                  </button>
-                ))}
+                      ))}
+                    </button>
+                  );
+                })}
               </div>
               {gradientPreview ? (
                 <div className="text-[13px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis max-w-64">
@@ -3150,11 +3158,11 @@ export function BBCodeEditor({
                   onClick={() => applySize(preset.value)}
                   className="px-2.5 py-1.5 rounded-md bg-osu-b5 border border-osu-b3/50 text-[12px] text-osu-l2 hover:bg-osu-b3 hover:text-osu-c1 transition-colors cursor-pointer"
                 >
-                  {preset.label} ({preset.value})
+                  {i18n._(preset.label)} ({preset.value})
                 </button>
               ))}
             </div>
-            <DialogField label="Custom (30-200)">
+            <DialogField label={t`Custom (30-200)`}>
               <input
                 type="number"
                 min={30}
@@ -3164,7 +3172,7 @@ export function BBCodeEditor({
                 className={`${dialogInputClass} w-24`}
               />
             </DialogField>
-            <button type="submit" className={dialogApplyClass}>Apply</button>
+            <button type="submit" className={dialogApplyClass}><Trans>Apply</Trans></button>
           </form>
         );
       }
@@ -3188,7 +3196,7 @@ export function BBCodeEditor({
               });
             }}
           >
-            <DialogField label="URL">
+            <DialogField label={t`URL`}>
               <input
                 type="url"
                 value={urlField}
@@ -3198,23 +3206,23 @@ export function BBCodeEditor({
                 autoFocus
               />
             </DialogField>
-            <DialogField label="Text (optional)">
+            <DialogField label={t`Text (optional)`}>
               <input
                 type="text"
                 value={textField}
                 onChange={(event) => setTextField(event.target.value)}
-                placeholder="link text"
+                placeholder={t`link text`}
                 className={`${dialogInputClass} w-48`}
               />
             </DialogField>
             <button type="submit" className={dialogApplyClass} disabled={!/^https?:\/\/\S+$/i.test(urlField.trim())}>
-              Insert
+              <Trans>Insert</Trans>
             </button>
           </form>
         );
       case "image":
       case "audio": {
-        const label = dialog === "image" ? "Image URL" : "Audio URL (mp3)";
+        const label = dialog === "image" ? t`Image URL` : t`Audio URL (mp3)`;
         return (
           <form
             className="flex flex-wrap items-end gap-3"
@@ -3237,7 +3245,7 @@ export function BBCodeEditor({
               />
             </DialogField>
             <button type="submit" className={dialogApplyClass} disabled={!/^https?:\/\/\S+$/i.test(urlField.trim())}>
-              Insert
+              <Trans>Insert</Trans>
             </button>
           </form>
         );
@@ -3253,7 +3261,7 @@ export function BBCodeEditor({
               applyAndClose(() => insertBBCode(`[youtube]${videoId}[/youtube]`));
             }}
           >
-            <DialogField label="Video URL or id">
+            <DialogField label={t`Video URL or id`}>
               <input
                 type="text"
                 value={urlField}
@@ -3264,7 +3272,7 @@ export function BBCodeEditor({
               />
             </DialogField>
             <button type="submit" className={dialogApplyClass} disabled={!parseYoutubeInput(urlField)}>
-              Insert
+              <Trans>Insert</Trans>
             </button>
           </form>
         );
@@ -3280,17 +3288,17 @@ export function BBCodeEditor({
               applyAndClose(() => insertBBCode(id ? `[profile=${id}]${name}[/profile]` : `[profile]${name}[/profile]`));
             }}
           >
-            <DialogField label="Username">
+            <DialogField label={t`Username`}>
               <input
                 type="text"
                 value={textField}
                 onChange={(event) => setTextField(event.target.value)}
-                placeholder="username"
+                placeholder={t`username`}
                 className={`${dialogInputClass} w-48`}
                 autoFocus
               />
             </DialogField>
-            <DialogField label="User id (optional)">
+            <DialogField label={t`User id (optional)`}>
               <input
                 type="text"
                 value={urlField}
@@ -3300,7 +3308,7 @@ export function BBCodeEditor({
               />
             </DialogField>
             <button type="submit" className={dialogApplyClass} disabled={!textField.trim()}>
-              Insert
+              <Trans>Insert</Trans>
             </button>
           </form>
         );
@@ -3322,17 +3330,17 @@ export function BBCodeEditor({
               });
             }}
           >
-            <DialogField label="Box title (empty for SPOILER)">
+            <DialogField label={t`Box title (empty for SPOILER)`}>
               <input
                 type="text"
                 value={textField}
                 onChange={(event) => setTextField(event.target.value)}
-                placeholder="title"
+                placeholder={t`title`}
                 className={`${dialogInputClass} w-56`}
                 autoFocus
               />
             </DialogField>
-            <button type="submit" className={dialogApplyClass}>Insert</button>
+            <button type="submit" className={dialogApplyClass}><Trans>Insert</Trans></button>
           </form>
         );
       default:
@@ -3347,21 +3355,26 @@ export function BBCodeEditor({
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-osu-b3/30">
         <div className="min-w-0">
-          <div className="text-[13px] font-bold text-osu-c1">BBCode editor</div>
+          <div className="text-[13px] font-bold text-osu-c1"><Trans>BBCode editor</Trans></div>
           <div className="text-[12px] text-osu-f1 truncate">
-            Edits stay in this browser. Copy the result and paste it into the me! editor on{" "}
+            {/* Two messages rather than one with a placeholder, so the link text
+                is part of what gets translated. The plain branch is the same
+                message the /bbcode skeleton renders. */}
             {userId != null && username ? (
-              <a
-                href={`https://osu.ppy.sh/users/${userId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-osu-pink-light hover:text-osu-pink underline"
-              >
-                your osu! page
-              </a>
+              <Trans>
+                Edits stay in this browser. Copy the result and paste it into the me! editor on{" "}
+                <a
+                  href={`https://osu.ppy.sh/users/${userId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-osu-pink-light hover:text-osu-pink underline"
+                >
+                  your osu! page
+                </a>.
+              </Trans>
             ) : (
-              "your osu! page"
-            )}.
+              <Trans>Edits stay in this browser. Copy the result and paste it into the me! editor on your osu! page.</Trans>
+            )}
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
@@ -3378,14 +3391,14 @@ export function BBCodeEditor({
             }`}
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
-            {copied ? "Copied" : "Copy BBCode"}
+            {copied ? <Trans>Copied</Trans> : <Trans>Copy BBCode</Trans>}
           </button>
           {onClose ? (
             <button
               type="button"
               onClick={onClose}
-              title="Close editor"
-              aria-label="Close editor"
+              title={t`Close editor`}
+              aria-label={t`Close editor`}
               className="w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
             >
               <X size={15} />
@@ -3400,38 +3413,38 @@ export function BBCodeEditor({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 border-b border-osu-b3/30 bg-osu-b5/40">
           {enableLoadFromUser ? (
             <>
-              <span className="text-[12px] font-semibold text-osu-f1 shrink-0">Load a player's me! page</span>
+              <span className="text-[12px] font-semibold text-osu-f1 shrink-0"><Trans>Load a player's me! page</Trans></span>
               <SearchInput
                 className="w-full sm:w-64"
-                placeholder="find player..."
+                placeholder={t`find player...`}
                 onSearch={searchPlayers}
                 onSelect={loadUserPage}
               />
             </>
           ) : (
             <>
-              <span className="text-[12px] font-semibold text-osu-f1 shrink-0">Start from your live me! page</span>
+              <span className="text-[12px] font-semibold text-osu-f1 shrink-0"><Trans>Start from your live me! page</Trans></span>
               <button
                 type="button"
                 onClick={() => loadUserPage({ id: userId!, username: username ?? "" })}
                 disabled={loadingUserPage}
                 className={dialogApplyClass}
               >
-                Load my me! page
+                <Trans>Load my me! page</Trans>
               </button>
             </>
           )}
           {loadingUserPage ? (
             <span className="flex items-center gap-1.5 text-[12px] text-osu-f1">
               <span className="h-3.5 w-3.5 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
-              Loading me! page...
+              <Trans>Loading me! page...</Trans>
             </span>
           ) : loadStatus?.kind === "error" ? (
-            <span className="text-[12px] text-osu-red">Couldn't load that me! page.</span>
+            <span className="text-[12px] text-osu-red"><Trans>Couldn't load that me! page.</Trans></span>
           ) : loadStatus?.kind === "empty" ? (
-            <span className="text-[12px] text-osu-yellow">{loadStatus.name}'s me! page is empty.</span>
+            <span className="text-[12px] text-osu-yellow"><Trans>{loadStatus.name}'s me! page is empty.</Trans></span>
           ) : loadStatus?.kind === "loaded" ? (
-            <span className="text-[12px] text-osu-l2">Loaded {loadStatus.name}'s me! page into the editor.</span>
+            <span className="text-[12px] text-osu-l2"><Trans>Loaded {loadStatus.name}'s me! page into the editor.</Trans></span>
           ) : null}
         </div>
       ) : null}

@@ -5,9 +5,19 @@
    newest deal may touch state now, and playCardDraw is the tell: it fires once
    per deal that actually lands on the board. */
 import { StrictMode } from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
+import type { ReactElement, ReactNode } from "react";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "#/lib/i18n";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LiveGlobalRankingEntry } from "#/lib/live-backend";
+
+// The game reads its copy through useLingui, so every render needs the
+// provider; en resolves to the source strings the assertions match.
+const Providers = ({ children }: { children: ReactNode }) => (
+  <I18nProvider i18n={getI18n("en")}>{children}</I18nProvider>
+);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: Providers });
 
 const sfx = vi.hoisted(() => ({
   playCardDraw: vi.fn(),

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { Trans } from "@lingui/react/macro";
 
 export const REPLAY_SKIN_PALETTE = [
   "#9cf2ae",
@@ -265,7 +266,7 @@ export function ReplaySkinValueSlider({
   const maxHex = rgbPartsToHex(maxR, maxG, maxB);
   return (
     <label className="flex items-center gap-2 text-[10px] font-semibold text-osu-f1">
-      <span className="w-10 shrink-0 uppercase tracking-wider">Bright</span>
+      <span className="w-10 shrink-0 uppercase tracking-wider"><Trans>Bright</Trans></span>
       <input
         type="range"
         min={0}

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import type { LiveGlobalRankingEntry } from "./live-backend";
+import { getI18n } from "./i18n";
 import {
   formatStreakMonth,
   formatStreakValue,
@@ -186,20 +187,25 @@ describe("the projection-backed questions", () => {
   });
 
   it("has a full set of copy for every metric", () => {
+    const en = getI18n("en");
     for (const metric of STREAK_METRICS) {
       const copy = STREAK_METRIC_COPY[metric];
-      expect(copy.q.prefix.length).toBeGreaterThan(0);
-      expect(copy.more).not.toBe(copy.less);
-      expect(copy.value(1_500_000_000)).not.toContain("NaN");
-      expect(copy.reveal("player", 1_500_000_000)).not.toContain("NaN");
+      // The question is one whole sentence with both card names as named
+      // placeholders, so a translation can put them wherever its word order needs.
+      expect(copy.q.message).toContain("{hidden}");
+      expect(copy.q.message).toContain("{shown}");
+      expect(en._(copy.more)).not.toBe(en._(copy.less));
+      expect(en._(copy.value(1_500_000_000))).not.toContain("NaN");
+      expect(en._(copy.reveal("player", 1_500_000_000))).not.toContain("NaN");
     }
   });
 
   it("prints date metrics as a month, not a number", () => {
     const may2014 = Date.parse("2014-05-20T12:00:00Z");
     expect(formatStreakMonth(may2014)).toBe("May 2014");
-    expect(STREAK_METRIC_COPY.joined.value(may2014)).toBe("joined May 2014");
-    expect(STREAK_METRIC_COPY.oldestTop.reveal("tyrcs", may2014)).toBe("tyrcs's oldest top play is from May 2014.");
+    const en = getI18n("en");
+    expect(en._(STREAK_METRIC_COPY.joined.value(may2014))).toBe("joined May 2014");
+    expect(en._(STREAK_METRIC_COPY.oldestTop.reveal("tyrcs", may2014))).toBe("tyrcs's oldest top play is from May 2014.");
   });
 
   it("scores date guesses by the clock: more means later", () => {
@@ -207,8 +213,9 @@ describe("the projection-backed questions", () => {
     const later = Date.parse("2019-10-05T00:00:00Z");
     // The hidden player joined later: "Later" (more) is the right call.
     expect(isStreakGuessCorrect("more", earlier, later)).toBe(true);
-    expect(STREAK_METRIC_COPY.joined.more).toBe("Later");
-    expect(STREAK_METRIC_COPY.oldestTop.less).toBe("Older");
+    const en = getI18n("en");
+    expect(en._(STREAK_METRIC_COPY.joined.more)).toBe("Later");
+    expect(en._(STREAK_METRIC_COPY.oldestTop.less)).toBe("Older");
   });
 });
 

@@ -13,9 +13,9 @@ describe("side by side tab", () => {
   it("sits between By Player and Upload and renders the picker", () => {
     // The strip renders BROWSE_TABS in order, so the order is the layout.
     const block = browseSource.slice(browseSource.indexOf("const BROWSE_TABS"));
-    const labels = Array.from(block.slice(0, block.indexOf("];")).matchAll(/label: "([^"]+)"/g), (m) => m[1]);
+    const labels = Array.from(block.slice(0, block.indexOf("];")).matchAll(/label: msg`([^`]+)`/g), (m) => m[1]);
     expect(labels).toEqual(["By Player", "Side by Side", "Upload"]);
-    expect(browseSource).toContain('{ mode: "side-by-side", label: "Side by Side" }');
+    expect(browseSource).toContain('{ mode: "side-by-side", label: msg`Side by Side` }');
     expect(browseSource).toContain("<ReplaySideBySidePicker");
   });
 

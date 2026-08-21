@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Download, Eye, Lock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { rememberSkinName, skinEventProperties } from "../../lib/analytics-skins";
 import { track } from "../../lib/analytics";
 import { formatCompactCount, formatTimeAgo } from "../../lib/format";
@@ -115,6 +116,7 @@ export function SkinPreviewImage({
 // showUploader is for the admin private shelf, which mixes every uploader's
 // skins and would otherwise give no way to tell whose is whose.
 export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: { skin: SkinSummary; previewKeys?: number; showUploader?: boolean; onClick?: () => void }) {
+  const { t } = useLingui();
   const accent = skin.accentColor ?? SKIN_FALLBACK_ACCENT;
   const isPrivate = skin.visibility === "private";
   const selectedPreviewKeys = previewKeys ?? skin.filterKeys ?? undefined;
@@ -130,6 +132,10 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
   // Absent on a summary cached before views existed, which reads as zero until
   // the list refetches rather than rendering a hole in the row.
   const viewCount = skin.viewCount ?? 0;
+  // Spelled out for the labels the icons stand in for; the icons themselves
+  // carry the compact figure.
+  const downloadCountLabel = downloadCount.toLocaleString("en-US");
+  const viewCountLabel = viewCount.toLocaleString("en-US");
   // Only a published public skin has a public number to move, same predicate
   // as the skin page's own ping; the backend refuses anything else anyway.
   const viewRef = skin.slug ?? skin.id;
@@ -179,7 +185,7 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
             <SkinPreviewImage
               key={preview.url}
               src={preview.url}
-              alt={`${skin.name} preview`}
+              alt={t`${skin.name} preview`}
               width={preview.width ?? 1280}
               height={preview.height ?? 720}
               className="h-full w-full object-cover group-hover:brightness-110"
@@ -191,7 +197,7 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
           {(skin.status === "hidden" || isPrivate) && (
             <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold uppercase leading-none tracking-wide text-white/80">
               {isPrivate && <Lock className="h-2.5 w-2.5" aria-hidden="true" />}
-              {isPrivate ? "private" : "hidden"}
+              {isPrivate ? <Trans>private</Trans> : <Trans>hidden</Trans>}
             </span>
           )}
         </div>
@@ -209,17 +215,17 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
                 the page itself spells both out. */}
             <span
               className="shrink-0 text-[11px] text-osu-f1"
-              aria-label={isPrivate ? undefined : `${downloadCount.toLocaleString("en-US")} downloads, ${viewCount.toLocaleString("en-US")} views`}
+              aria-label={isPrivate ? undefined : t`${downloadCountLabel} downloads, ${viewCountLabel} views`}
             >
               {isPrivate ? (
-                "only you"
+                <Trans>only you</Trans>
               ) : (
                 <span className="inline-flex items-center gap-2" aria-hidden="true">
-                  <span className="inline-flex items-center gap-1" title={`${downloadCount.toLocaleString("en-US")} downloads`}>
+                  <span className="inline-flex items-center gap-1" title={t`${downloadCountLabel} downloads`}>
                     <Download className="h-3 w-3" />
                     <span className="tabular-nums">{formatCompactCount(downloadCount)}</span>
                   </span>
-                  <span className="inline-flex items-center gap-1" title={`${viewCount.toLocaleString("en-US")} views`}>
+                  <span className="inline-flex items-center gap-1" title={t`${viewCountLabel} views`}>
                     <Eye className="h-3 w-3" />
                     <span className="tabular-nums">{formatCompactCount(viewCount)}</span>
                   </span>
@@ -236,13 +242,13 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
           <div className="flex items-center gap-1.5 text-[11px] text-osu-f1">
             {skin.author ? (
               <span className="truncate">
-                by <span className="font-semibold text-osu-l2">{skin.author}</span>
+                <Trans>by <span className="font-semibold text-osu-l2">{skin.author}</span></Trans>
               </span>
             ) : showUploader ? (
               <>
                 <Avatar userId={skin.ownerUserId} size={14} shape="circle" />
                 <span className="truncate">
-                  uploaded by <span className="font-semibold text-osu-l2">{skin.ownerUsername}</span>
+                  <Trans>uploaded by <span className="font-semibold text-osu-l2">{skin.ownerUsername}</span></Trans>
                 </span>
               </>
             ) : null}
@@ -268,8 +274,8 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
           <a
             href={downloadUrl}
             onClick={() => track("skin_download", skinEventProperties(skin))}
-            title={`Download the .osk${skin.oskSizeBytes ? `, ${formatSkinFileSize(skin.oskSizeBytes)}` : ""}`}
-            aria-label={`Download ${skin.name}`}
+            title={skin.oskSizeBytes ? t`Download the .osk, ${formatSkinFileSize(skin.oskSizeBytes)}` : t`Download the .osk`}
+            aria-label={t`Download ${skin.name}`}
             className="pointer-events-auto absolute bottom-1.5 right-1.5 grid h-8 w-8 place-items-center rounded-full bg-black/70 text-white opacity-100 backdrop-blur-[2px] transition-[opacity,background-color] hover:bg-osu-pink sm:opacity-0 sm:group-hover:opacity-100"
           >
             <Download className="h-4 w-4" aria-hidden="true" />

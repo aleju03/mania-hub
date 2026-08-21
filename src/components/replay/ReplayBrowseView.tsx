@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Link2, LoaderCircle, Upload } from "lucide-react";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { GradeImg } from "#/components/ui/GradeImg";
@@ -10,7 +12,8 @@ import { ModBadge } from "#/components/ui/ModBadge";
 import { SearchInput } from "#/components/ui/SearchInput";
 import { ReplayRecentlyViewed } from "#/components/replay/ReplayRecentlyViewed";
 import { ReplaySideBySidePicker } from "#/components/replay/ReplaySideBySidePicker";
-import { getCountryName } from "#/lib/country";
+import { displayCountryName } from "#/lib/country";
+import { useLocale } from "#/lib/locale-context";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "#/lib/format";
 import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp, scoreHasReplay, withModRate } from "#/lib/score";
 import { getReplayScoreAvailability } from "#/lib/replay-score-availability";
@@ -25,20 +28,20 @@ export type ReplayBrowseMode = "player" | "beatmap" | "side-by-side" | "upload";
 
 // "beatmap" is reachable by link only (opening a score from the maps search),
 // so it has no tab of its own.
-const BROWSE_TABS: { mode: ReplayBrowseMode; label: string }[] = [
-  { mode: "player", label: "By Player" },
-  { mode: "side-by-side", label: "Side by Side" },
-  { mode: "upload", label: "Upload" },
+const BROWSE_TABS: { mode: ReplayBrowseMode; label: ReturnType<typeof msg> }[] = [
+  { mode: "player", label: msg`By Player` },
+  { mode: "side-by-side", label: msg`Side by Side` },
+  { mode: "upload", label: msg`Upload` },
 ];
 type PlayerReplaySectionKey = "pinned" | "best" | "firsts" | "recent";
 type PlayerScoreGroups = { best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] };
 type PlayerScoreLoadingByGroup = Record<PlayerReplaySectionKey, boolean>;
 
-const PLAYER_REPLAY_SECTIONS: { key: PlayerReplaySectionKey; label: string }[] = [
-  { key: "pinned", label: "Pinned" },
-  { key: "best", label: "Best Scores" },
-  { key: "firsts", label: "First Places" },
-  { key: "recent", label: "Recent Plays" },
+const PLAYER_REPLAY_SECTIONS: { key: PlayerReplaySectionKey; label: ReturnType<typeof msg> }[] = [
+  { key: "pinned", label: msg`Pinned` },
+  { key: "best", label: msg`Best Scores` },
+  { key: "firsts", label: msg`First Places` },
+  { key: "recent", label: msg`Recent Plays` },
 ];
 const PLAYER_BEATMAP_SEARCH_MIN_LENGTH = 3;
 const PLAYER_BEATMAP_SEARCH_DEBOUNCE_MS = 650;
@@ -137,6 +140,7 @@ export function ReplayBrowseView({
   onRemoveRecentReplay,
   onClearRecentReplays,
 }: ReplayBrowseViewProps) {
+  const { i18n } = useLingui();
   return (
     <motion.div key="browse" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="flex justify-center mb-3">
@@ -151,7 +155,7 @@ export function ReplayBrowseView({
                   : "text-osu-f1 hover:text-white"
               }`}
             >
-              {tab.label}
+              {i18n._(tab.label)}
             </button>
           ))}
         </div>
@@ -245,12 +249,12 @@ const UPLOAD_BG_TRIANGLES: UploadBgTriangle[] = [
 // replay's derived description instead of local watch history. viewedAt is
 // repurposed as the upload time, which is exactly what the card's "x ago"
 // column should read here.
-function communityUploadToRecentEntry(upload: CommunityUploadEntry): RecentReplayEntry {
+function communityUploadToRecentEntry(upload: CommunityUploadEntry, unknownBeatmap: string): RecentReplayEntry {
   return {
     key: recentReplayUploadKey(upload.id),
     uploadId: upload.id,
     beatmapsetId: upload.beatmap?.beatmapsetId ?? undefined,
-    title: upload.beatmap?.title || upload.originalFilename || "Unknown beatmap",
+    title: upload.beatmap?.title || upload.originalFilename || unknownBeatmap,
     artist: upload.beatmap?.artist || undefined,
     version: upload.beatmap?.version || undefined,
     keyCount: upload.keyCount,
@@ -278,6 +282,7 @@ function UploadReplayBrowser({
   onUploadReplay,
   onOpenRecentReplay,
 }: Pick<ReplayBrowseViewProps, "onUploadReplay" | "onOpenRecentReplay">) {
+  const { t } = useLingui();
   const auth = useAuth();
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -293,7 +298,7 @@ function UploadReplayBrowser({
     let cancelled = false;
     getRecentCommunityUploads()
       .then((result) => {
-        const entries = result.uploads.map(communityUploadToRecentEntry);
+        const entries = result.uploads.map((upload) => communityUploadToRecentEntry(upload, t`Unknown beatmap`));
         communityUploadsCache = { entries, fetchedAt: Date.now() };
         if (!cancelled) setCommunityUploads(entries);
       })
@@ -319,7 +324,7 @@ function UploadReplayBrowser({
     <div>
       <div className="mx-auto max-w-xl">
         <h3 className="mb-3 text-center text-sm font-semibold uppercase tracking-wider text-osu-f1">
-          Drop your own .osr file
+          <Trans>Drop your own .osr file</Trans>
         </h3>
 
         <button
@@ -373,9 +378,9 @@ function UploadReplayBrowser({
             />
             <div>
               <div className="text-sm font-semibold text-white">
-                {dragActive ? "Drop to load it" : "Drag an .osr here, or click to browse"}
+                {dragActive ? t`Drop to load it` : t`Drag an .osr here, or click to browse`}
               </div>
-              <div className="mt-1 text-[11px] text-osu-f1">osu!mania replays only</div>
+              <div className="mt-1 text-[11px] text-osu-f1"><Trans>osu!mania replays only</Trans></div>
             </div>
           </div>
         </button>
@@ -390,7 +395,7 @@ function UploadReplayBrowser({
 
         <div className="mt-3 flex items-start justify-center gap-2 text-[11px] text-osu-f1">
           <Link2 className="mt-px h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-          <span>Uploading gives you a share link for the replay. Sign in with osu! to upload.</span>
+          <span><Trans>Uploading gives you a share link for the replay. Sign in with osu! to upload.</Trans></span>
         </div>
 
         {/* Everything you uploaded lives on its own page, with the deletes. */}
@@ -400,7 +405,7 @@ function UploadReplayBrowser({
               to="/replay/uploads"
               className="inline-flex items-center gap-1 rounded-lg bg-osu-b4 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
             >
-              Your uploads
+              <Trans>Your uploads</Trans>
               <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
             </Link>
           </div>
@@ -411,7 +416,7 @@ function UploadReplayBrowser({
         <ReplayRecentlyViewed
           className="mt-10"
           entries={communityUploads}
-          title="Recently Uploaded by the Community"
+          title={t`Recently Uploaded by the Community`}
           showRemove={false}
           onOpen={onOpenRecentReplay}
           onRemove={() => {}}
@@ -423,7 +428,7 @@ function UploadReplayBrowser({
         <div className="mx-auto mt-10 max-w-5xl">
           <div className="mb-3 flex justify-center">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">
-              Recently Uploaded by the Community
+              <Trans>Recently Uploaded by the Community</Trans>
             </h4>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -459,6 +464,7 @@ export function MissingBeatmapPanel({
   onPickFile: (file: File) => void;
   onCancel: () => void;
 }) {
+  const { t } = useLingui();
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -469,19 +475,23 @@ export function MissingBeatmapPanel({
     if (inputRef.current) inputRef.current.value = "";
   }, [onPickFile]);
 
-  const who = playerName ? `${playerName}'s replay` : "The replay";
+  const mapLabel = beatmapLabel ?? t`this map`;
   const detail = reason === "unlisted"
-    ? `${who} loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded.`
-    : `${who} loaded, but the chart file for ${beatmapLabel ?? "this map"} can't be downloaded right now.`;
+    ? playerName
+      ? t`${playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded.`
+      : t`The replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded.`
+    : playerName
+      ? t`${playerName}'s replay loaded, but the chart file for ${mapLabel} can't be downloaded right now.`
+      : t`The replay loaded, but the chart file for ${mapLabel} can't be downloaded right now.`;
 
   return (
     <div className="mx-auto max-w-xl">
       <h3 className="mb-3 text-center text-sm font-semibold uppercase tracking-wider text-osu-f1">
-        This replay needs its beatmap
+        <Trans>This replay needs its beatmap</Trans>
       </h3>
 
       <p className="mb-4 text-center text-xs leading-relaxed text-osu-f1">
-        {detail} If you have the map, drop its .osz here and the replay plays from your copy.
+        {detail} <Trans>If you have the map, drop its .osz here and the replay plays from your copy.</Trans>
       </p>
 
       <button
@@ -543,13 +553,13 @@ export function MissingBeatmapPanel({
           <div>
             <div className="text-sm font-semibold text-white">
               {loading
-                ? "Checking the difficulties"
+                ? t`Checking the difficulties`
                 : dragActive
-                  ? "Drop to check it"
-                  : "Drag the map's .osz here, or click to browse"}
+                  ? t`Drop to check it`
+                  : t`Drag the map's .osz here, or click to browse`}
             </div>
             <div className="mt-1 text-[11px] text-osu-f1">
-              {loading ? "Matching against the replay's checksum." : "The exact .osu file works too."}
+              {loading ? t`Matching against the replay's checksum.` : t`The exact .osu file works too.`}
             </div>
           </div>
         </div>
@@ -575,7 +585,7 @@ export function MissingBeatmapPanel({
           onClick={onCancel}
           className="cursor-pointer text-xs font-semibold text-osu-f1 transition-colors hover:text-white"
         >
-          Choose a different replay
+          <Trans>Choose a different replay</Trans>
         </button>
       </div>
     </div>
@@ -589,18 +599,22 @@ function ExportBeatmapHelp() {
   return (
     <div className="mt-5 text-[11px] leading-relaxed text-osu-f1">
       <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-osu-f1">
-        Getting the map out of osu!
+        <Trans>Getting the map out of osu!</Trans>
       </h4>
       <p className="mb-1.5">
-        <span className="font-semibold text-osu-l2">osu!stable</span> keeps every map as plain files: open
-        osu!/Songs, find the map's folder and drag the difficulty's .osu straight in. To get the whole
-        thing instead, open the map in the editor and choose File &gt; Export package - the .osz appears
-        in osu!/Exports.
+        <Trans>
+          <span className="font-semibold text-osu-l2">osu!stable</span> keeps every map as plain files: open
+          osu!/Songs, find the map's folder and drag the difficulty's .osu straight in. To get the whole
+          thing instead, open the map in the editor and choose File &gt; Export package - the .osz appears
+          in osu!/Exports.
+        </Trans>
       </p>
       <p>
-        <span className="font-semibold text-osu-l2">osu!lazer</span> stores maps in its own database, so it
-        has to export one: right-click the map at song select and choose Export, picking For compatibility
-        (.osz) if it offers both. The file lands in the exports folder (Settings &gt; open osu! folder).
+        <Trans>
+          <span className="font-semibold text-osu-l2">osu!lazer</span> stores maps in its own database, so it
+          has to export one: right-click the map at song select and choose Export, picking For compatibility
+          (.osz) if it offers both. The file lands in the exports folder (Settings &gt; open osu! folder).
+        </Trans>
       </p>
     </div>
   );
@@ -636,6 +650,7 @@ function PlayerReplayBrowser({
   "suggestionPlayers" | "onOpenPlayerScore" | "recentReplays" | "onOpenRecentReplay" | "onRemoveRecentReplay" |
   "onClearRecentReplays"
 > & { hasError: boolean }) {
+  const { t } = useLingui();
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [activePlayerSection, setActivePlayerSection] = useState<PlayerReplaySectionKey>("pinned");
 
@@ -672,10 +687,10 @@ function PlayerReplayBrowser({
     <>
       <div className="max-w-lg mx-auto mb-8">
         <h3 className="text-sm font-semibold text-osu-f1 uppercase tracking-wider mb-3 text-center">
-          Search a player, or paste a score ID
+          <Trans>Search a player, or paste a score ID</Trans>
         </h3>
         <SearchInput
-          placeholder="Search player... or score ID"
+          placeholder={t`Search player... or score ID`}
           onSearch={onPlayerSearch}
           onSelect={onSelectPlayer}
           onSubmit={onPlayerSearchSubmit}
@@ -716,7 +731,7 @@ function PlayerReplayBrowser({
       {!hasLoadingScoreSection && playerScoreGroups && !hasAnyScores && (
         <>
           <div className="text-center py-8 text-osu-f1 text-sm">
-            No replays available for this player
+            <Trans>No replays available for this player</Trans>
           </div>
         </>
       )}
@@ -750,7 +765,7 @@ function PlayerReplayBrowser({
             />
           ) : (
             <div className="text-center py-12 text-osu-f1 text-sm">
-              Search for a player above to browse their available replays
+              <Trans>Search for a player above to browse their available replays</Trans>
             </div>
           )}
         </div>
@@ -768,7 +783,7 @@ function PlayerScoreSections({
   onToggleSection,
   onOpenScore,
 }: {
-  sections: ({ key: PlayerReplaySectionKey; label: string; scores: OsuScore[] })[];
+  sections: ({ key: PlayerReplaySectionKey; label: ReturnType<typeof msg>; scores: OsuScore[] })[];
   playerScoreLoadingByGroup: PlayerScoreLoadingByGroup;
   expandedSections: Record<string, boolean>;
   activePlayerSection: PlayerReplaySectionKey;
@@ -777,6 +792,7 @@ function PlayerScoreSections({
   onOpenScore: (score: OsuScore) => void;
   playerParam?: string;
 }) {
+  const { t, i18n } = useLingui();
   if (sections.length === 0) return null;
 
   const mobileSection = sections.find((section) => section.key === activePlayerSection) ?? sections[0];
@@ -799,7 +815,7 @@ function PlayerScoreSections({
       >
         <div className="flex items-center justify-between gap-3 border-b border-osu-b3/25 bg-osu-b5/35 px-3 py-2.5">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">
-            {section.label}
+            {i18n._(section.label)}
           </h4>
           <span className="rounded bg-osu-pink/15 px-2 py-0.5 text-[10px] font-bold tabular-nums text-osu-pink-light">
             {isSectionLoading ? (
@@ -841,10 +857,10 @@ function PlayerScoreSections({
               {isSectionLoading ? (
                 <>
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-osu-pink/40 border-t-osu-pink" />
-                  <span>Loading scores...</span>
+                  <span><Trans>Loading scores...</Trans></span>
                 </>
               ) : (
-                <span>No replayable scores here</span>
+                <span><Trans>No replayable scores here</Trans></span>
               )}
             </div>
           )}
@@ -855,7 +871,7 @@ function PlayerScoreSections({
             onClick={() => onToggleSection(section.key)}
             className="replay-score-action w-full bg-osu-b5/25 px-3 py-2 text-xs font-semibold text-osu-f1 outline-none transition-colors cursor-pointer hover:bg-osu-b3/50 hover:text-white focus:outline-none focus-visible:bg-osu-b3/50 focus-visible:text-white active:outline-none"
           >
-            {isExpanded ? "Collapse" : `Show ${section.scores.length - 5} More`}
+            {isExpanded ? t`Collapse` : t`Show ${section.scores.length - 5} More`}
           </button>
         )}
       </motion.section>
@@ -878,7 +894,7 @@ function PlayerScoreSections({
                     : "bg-osu-b4 text-osu-f1 hover:bg-osu-b3 hover:text-white"
                 }`}
               >
-                {section.label}
+                {i18n._(section.label)}
                 <span className="ml-1.5 text-[10px] opacity-70">{section.scores.length}</span>
               </button>
             ))}
@@ -906,6 +922,7 @@ function PlayerBeatmapLookup({
   userId: number;
   onOpenScore: (score: OsuScore) => void;
 }) {
+  const { t } = useLingui();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<OsuBeatmapset[]>([]);
   const [searching, setSearching] = useState(false);
@@ -1001,13 +1018,13 @@ function PlayerBeatmapLookup({
       {loadingScores ? (
         <div className="flex items-center justify-center gap-2 py-4">
           <div className="w-4 h-4 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-          <span className="text-xs text-osu-f1">Checking scores...</span>
+          <span className="text-xs text-osu-f1"><Trans>Checking scores...</Trans></span>
         </div>
       ) : scoresLoaded && replayableScores.length > 0 ? (
         <div>
           <div className="px-4 py-2 bg-osu-b5/30 border-b border-osu-b3/15">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
-              {replayableScores.length} replay{replayableScores.length !== 1 ? "s" : ""} available
+              <Plural value={replayableScores.length} one="# replay available" other="# replays available" />
             </span>
           </div>
           {replayableScores.map((score) => (
@@ -1015,13 +1032,17 @@ function PlayerBeatmapLookup({
           ))}
           {playerScores.length > replayableScores.length && (
             <div className="px-4 py-2 text-[10px] text-osu-f1/80 bg-osu-b5/10 border-t border-osu-b3/10">
-              {playerScores.length - replayableScores.length} other score{playerScores.length - replayableScores.length !== 1 ? "s" : ""} found, but no replay is available
+              <Plural
+                value={playerScores.length - replayableScores.length}
+                one="# other score found, but no replay is available"
+                other="# other scores found, but no replay is available"
+              />
             </div>
           )}
         </div>
       ) : scoresLoaded ? (
         <div className="text-center py-4 text-osu-f1 text-xs">
-          No scores on this difficulty
+          <Trans>No scores on this difficulty</Trans>
         </div>
       ) : null}
     </div>
@@ -1040,7 +1061,7 @@ function PlayerBeatmapLookup({
           <circle cx="11" cy="11" r="8" />
           <path d="M21 21l-4.35-4.35" />
         </svg>
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Beatmap Lookup</h4>
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-osu-f1"><Trans>Beatmap Lookup</Trans></h4>
       </div>
 
       {/* Search input */}
@@ -1051,7 +1072,7 @@ function PlayerBeatmapLookup({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search any beatmap by title, artist, or mapper..."
+            placeholder={t`Search any beatmap by title, artist, or mapper...`}
             className="w-full px-3.5 py-2 rounded-lg bg-osu-b5 text-sm text-osu-l2 placeholder:text-osu-f1 border border-osu-b3/30 focus:border-osu-h1/40 focus:outline-none transition-colors duration-[120ms] shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
           />
           {searching && (
@@ -1064,7 +1085,7 @@ function PlayerBeatmapLookup({
               type="button"
               onClick={() => { setQuery(""); inputRef.current?.focus(); }}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
-              aria-label="Clear search"
+              aria-label={t`Clear search`}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" />
@@ -1117,7 +1138,7 @@ function PlayerBeatmapLookup({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-[10px] text-osu-f1">No mania difficulties</div>
+                    <div className="text-[10px] text-osu-f1"><Trans>No mania difficulties</Trans></div>
                   )}
                 </div>
                 {isActive && selectedDiffId && renderSelectedScores()}
@@ -1130,12 +1151,12 @@ function PlayerBeatmapLookup({
       {/* Empty state */}
       {query.trim().length < PLAYER_BEATMAP_SEARCH_MIN_LENGTH && (
         <div className="px-4 pb-3 text-center text-[11px] text-osu-f1">
-          Search for any beatmap to see this player's scores on it
+          <Trans>Search for any beatmap to see this player's scores on it</Trans>
         </div>
       )}
       {query.trim().length >= PLAYER_BEATMAP_SEARCH_MIN_LENGTH && !searching && results.length === 0 && (
         <div className="px-4 pb-3 text-center text-[11px] text-osu-f1">
-          No beatmaps found for "{query}"
+          <Trans>No beatmaps found for "{query}"</Trans>
         </div>
       )}
     </motion.div>
@@ -1179,7 +1200,7 @@ function PlayerBeatmapScoreRow({ score, onOpen }: { score: OsuScore; onOpen: () 
         </div>
       </div>
       <span className="shrink-0 rounded bg-osu-pink/20 px-2 py-0.5 text-[10px] font-semibold text-osu-pink-light">
-        Watch
+        <Trans>Watch</Trans>
       </span>
     </button>
   );
@@ -1190,6 +1211,9 @@ function PlayerSuggestions({
   suggestionPlayers,
   onSelectPlayer,
 }: Pick<ReplayBrowseViewProps, "selectedCountry" | "suggestionPlayers" | "onSelectPlayer">) {
+  const { t } = useLingui();
+  const locale = useLocale();
+  const countryName = displayCountryName(selectedCountry, locale);
   const pageSize = 12;
   const [page, setPage] = useState(0);
   const pageCount = Math.ceil(suggestionPlayers.length / pageSize);
@@ -1199,7 +1223,7 @@ function PlayerSuggestions({
     <div className="max-w-5xl mx-auto">
       <div className="relative mb-4 flex items-center justify-center">
         <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider text-center">
-          Top {getCountryName(selectedCountry)} Players
+          <Trans>Top {countryName} Players</Trans>
         </h4>
         {pageCount > 1 && (
           <div className="absolute right-0 flex items-center gap-1">
@@ -1207,7 +1231,7 @@ function PlayerSuggestions({
               type="button"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              aria-label="Previous players"
+              aria-label={t`Previous players`}
               className="p-1.5 rounded-lg bg-osu-b4 text-osu-f1 hover:bg-osu-b3 hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -1216,7 +1240,7 @@ function PlayerSuggestions({
               type="button"
               onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
               disabled={page === pageCount - 1}
-              aria-label="Next players"
+              aria-label={t`Next players`}
               className="p-1.5 rounded-lg bg-osu-b4 text-osu-f1 hover:bg-osu-b3 hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
@@ -1278,22 +1302,27 @@ function BeatmapReplayBrowser({
   "beatmapScoreLookupStatus" | "onBeatmapQueryChange" | "onSelectBeatmapset" | "onSelectDifficulty" |
   "onOpenBeatmapScore" | "onLoadMoreBeatmapScores"
 >) {
+  const { t } = useLingui();
+  const countryCode = selectedCountry.toUpperCase();
+  const replaysFound = beatmapScores.length;
+  const checked = beatmapScoreLookupStatus?.current ?? 0;
+  const toCheck = beatmapScoreLookupStatus?.total ?? 0;
   const beatmapScoreProgressLabel = beatmapScoreLookupStatus
-    ? `${beatmapScoreLookupStatus.current}/${beatmapScoreLookupStatus.total} players checked · ${beatmapScores.length} replays found`
-    : `Checking players · ${beatmapScores.length} replays found`;
+    ? t`${checked}/${toCheck} players checked · ${replaysFound} replays found`
+    : t`Checking players · ${replaysFound} replays found`;
 
   return (
     <>
       <div className="max-w-lg mx-auto mb-8">
         <h3 className="text-sm font-semibold text-osu-f1 uppercase tracking-wider mb-3 text-center">
-          Search a beatmap, then pick a difficulty
+          <Trans>Search a beatmap, then pick a difficulty</Trans>
         </h3>
         <div className="relative">
           <input
             type="text"
             value={beatmapQuery}
             onChange={(e) => onBeatmapQueryChange(e.target.value)}
-            placeholder="Search beatmap..."
+            placeholder={t`Search beatmap...`}
             className="w-full px-4 py-2.5 rounded-lg bg-osu-b4 text-osu-c1 text-sm placeholder:text-osu-f1 border border-osu-b3/50 focus:border-osu-h1/40 focus:outline-none transition-colors duration-[120ms] shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)]"
           />
           {beatmapSearchLoading && (
@@ -1307,7 +1336,7 @@ function BeatmapReplayBrowser({
       {beatmapResults.length > 0 && (
         <div className="space-y-3 mb-4">
           <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-2">
-            Beatmaps ({beatmapResults.length})
+            <Trans>Beatmaps ({beatmapResults.length})</Trans>
           </h4>
           {beatmapResults.map((beatmapset, index) => {
             const maniaDiffs = (beatmapset.beatmaps ?? [])
@@ -1348,7 +1377,7 @@ function BeatmapReplayBrowser({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-xs text-white/40">No mania difficulties</div>
+                    <div className="text-xs text-white/40"><Trans>No mania difficulties</Trans></div>
                   )}
                 </div>
               </motion.div>
@@ -1369,7 +1398,7 @@ function BeatmapReplayBrowser({
       {selectedDiffId && beatmapScores.length > 0 && (
         <div className="space-y-1.5">
           <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-2">
-            {loadingBeatmapScores ? "Replays available so far" : "Replays available"} ({beatmapScores.length})
+            {loadingBeatmapScores ? t`Replays available so far` : t`Replays available`} ({beatmapScores.length})
           </h4>
           {beatmapScores.map((score, index) => (
             <motion.div key={score.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.02 }}
@@ -1384,7 +1413,7 @@ function BeatmapReplayBrowser({
               <ScoreModBadges score={score} className="hidden sm:flex w-28 flex-shrink-0 justify-end gap-0.5" />
               <span className="text-xs text-osu-l2 flex-shrink-0">{formatAccuracy(getDisplayedAccuracy(score))}</span>
               <span className="text-sm font-bold">{formatPP(score.pp)}</span>
-              <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold">Watch</span>
+              <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold"><Trans>Watch</Trans></span>
             </motion.div>
           ))}
         </div>
@@ -1396,25 +1425,25 @@ function BeatmapReplayBrowser({
             onClick={onLoadMoreBeatmapScores}
             className="px-3 py-1.5 rounded-lg bg-osu-b4 hover:bg-osu-b3 border border-osu-b3/40 text-xs font-semibold text-osu-f1 hover:text-white transition-colors cursor-pointer"
           >
-            Load more
+            <Trans>Load more</Trans>
           </button>
         </div>
       )}
 
       {!loadingBeatmapScores && selectedDiffId && beatmapScores.length === 0 && visibleRawBeatmapScores.length > 0 && (
         <div className="text-center py-6 text-osu-f1 text-sm">
-          No replays available from {selectedCountry.toUpperCase()} players on this difficulty
+          <Trans>No replays available from {countryCode} players on this difficulty</Trans>
         </div>
       )}
       {!loadingBeatmapScores && selectedDiffId && visibleRawBeatmapScores.length === 0 && (
         <div className="text-center py-6 text-osu-f1 text-sm">
-          No scores found from {selectedCountry.toUpperCase()} players on this difficulty
+          <Trans>No scores found from {countryCode} players on this difficulty</Trans>
         </div>
       )}
 
       {!beatmapSearchLoading && beatmapResults.length === 0 && beatmapQuery.length < 2 && !selectedDiffId && (
         <div className="text-center py-12 text-osu-f1 text-sm">
-          Search for a beatmap above to find replays
+          <Trans>Search for a beatmap above to find replays</Trans>
         </div>
       )}
     </>
@@ -1434,11 +1463,12 @@ function ScoreInputPreview({
   error: string | null;
   onOpen: () => void;
 }) {
+  const { t } = useLingui();
   if (loading) {
     return (
       <div className="mt-2 flex items-center gap-2 rounded-lg bg-osu-b4/70 border border-osu-b3/30 px-3 py-2 text-xs text-osu-f1">
         <div className="w-3.5 h-3.5 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-        Looking up score #{scoreId}
+        <Trans>Looking up score #{scoreId}</Trans>
       </div>
     );
   }
@@ -1450,7 +1480,7 @@ function ScoreInputPreview({
         onClick={onOpen}
         className="mt-2 w-full rounded-lg bg-osu-b4/70 hover:bg-osu-b3 border border-osu-b3/30 px-3 py-2 text-left text-xs text-osu-f1 hover:text-white transition-colors cursor-pointer"
       >
-        {error}. Press Enter or click to try replay #{scoreId}.
+        <Trans>{error}. Press Enter or click to try replay #{scoreId}.</Trans>
       </button>
     );
   }
@@ -1474,19 +1504,19 @@ function ScoreInputPreview({
       )}
       <div className="flex-1 min-w-0">
         <div className="text-xs font-semibold text-white truncate">
-          {score.beatmapset?.title ?? `Score #${scoreId}`}
+          {score.beatmapset?.title ?? t`Score #${scoreId}`}
         </div>
         <div className="text-[10px] text-osu-f1 truncate">
           {unavailable
             ? availability.message
-            : `${score.user?.username ?? "Unknown player"}${score.beatmap?.version ? ` // [${score.beatmap.version}]` : ""}`}
+            : `${score.user?.username ?? t`Unknown player`}${score.beatmap?.version ? ` // [${score.beatmap.version}]` : ""}`}
         </div>
       </div>
       <ScoreModBadges score={score} className="hidden sm:flex flex-shrink-0 gap-0.5" hideWhenEmpty />
       <span className={`text-[10px] font-semibold uppercase tracking-wider flex-shrink-0 ${
         unavailable ? "text-osu-f1" : "text-osu-pink-light"
       }`}>
-        {unavailable ? "Unavailable" : "Watch"}
+        {unavailable ? t`Unavailable` : t`Watch`}
       </span>
     </button>
   );

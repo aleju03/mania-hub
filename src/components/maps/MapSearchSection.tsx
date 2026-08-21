@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { I18n } from "@lingui/core";
 import { motion } from "framer-motion";
 import {
   fetchLiveMapSearch,
@@ -37,6 +40,8 @@ const SEARCH_DEBOUNCE_MS = 300;
 // never lands, fetch with the default rather than strand the page on skeletons.
 const SAVED_SORT_RESTORE_TIMEOUT_MS = 1500;
 
+// "4K"/"7K" are keymode names and render as written; "Other" is copy, so
+// KeysChips swaps in the translated label for that one.
 const KEY_OPTIONS = [
   { id: "4k", label: "4K" },
   { id: "7k", label: "7K" },
@@ -44,19 +49,19 @@ const KEY_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
-  { id: "ranked", label: "Ranked" },
-  { id: "qualified", label: "Qualified" },
-  { id: "loved", label: "Loved" },
-  { id: "graveyard", label: "Graveyard" },
-  { id: "other", label: "Pending" },
+  { id: "ranked", label: msg`Ranked` },
+  { id: "qualified", label: msg`Qualified` },
+  { id: "loved", label: msg`Loved` },
+  { id: "graveyard", label: msg`Graveyard` },
+  { id: "other", label: msg`Pending` },
 ];
 
 const SORT_OPTIONS = [
-  { id: "playcount", label: "Most played" },
-  { id: "stars", label: "Difficulty" },
-  { id: "bpm", label: "BPM" },
-  { id: "length", label: "Length" },
-  { id: "date", label: "Newest" },
+  { id: "playcount", label: msg`Most played` },
+  { id: "stars", label: msg`Difficulty` },
+  { id: "bpm", label: msg`BPM` },
+  { id: "length", label: msg`Length` },
+  { id: "date", label: msg`Newest` },
 ];
 
 export interface MapSearchUiState {
@@ -131,6 +136,7 @@ function stateKey(s: MapSearchUiState): string {
 type ApplyFn = (patch: Partial<MapSearchUiState>) => void;
 
 function KeysChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  const { t } = useLingui();
   // A keymode switch changes the pattern vocabulary; drop pattern picks the
   // new keymode can't express so no filter survives without a visible chip.
   const cycleKey = (id: string, reverse = false) => {
@@ -145,7 +151,7 @@ function KeysChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
     });
   };
   return (
-    <ChipGroup label="Keys">
+    <ChipGroup label={t`Keys`}>
       {KEY_OPTIONS.map((option) => (
         <TriStatePill
           key={option.id}
@@ -154,7 +160,7 @@ function KeysChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
           onClick={() => cycleKey(option.id)}
           onContextMenu={() => cycleKey(option.id, true)}
         >
-          {option.label}
+          {option.id === "other" ? t`Other` : option.label}
         </TriStatePill>
       ))}
     </ChipGroup>
@@ -162,8 +168,9 @@ function KeysChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
 }
 
 function StatusChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  const { t, i18n } = useLingui();
   return (
-    <ChipGroup label="Status">
+    <ChipGroup label={t`Status`}>
       {STATUS_OPTIONS.map((option) => (
         <TriStatePill
           key={option.id}
@@ -180,7 +187,7 @@ function StatusChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
             apply({ statuses: next.includes, statusesExclude: next.excludes, page: 0 });
           }}
         >
-          {option.label}
+          {i18n._(option.label)}
         </TriStatePill>
       ))}
     </ChipGroup>
@@ -188,20 +195,23 @@ function StatusChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
 }
 
 function StarSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  const { t } = useLingui();
   return (
-    <StarRangePill lo={0} hi={15} min={ui.starMin} max={ui.starMax} step={0.1} ariaLabel="Star rating" onChange={(min, max) => apply({ starMin: min, starMax: max, page: 0 })} />
+    <StarRangePill lo={0} hi={15} min={ui.starMin} max={ui.starMax} step={0.1} ariaLabel={t`Star rating`} onChange={(min, max) => apply({ starMin: min, starMax: max, page: 0 })} />
   );
 }
 
 function BpmSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  const { t } = useLingui();
   return (
-    <RangeSlider lo={0} hi={400} min={ui.bpmMin} max={ui.bpmMax} step={5} ariaLabel="BPM" onChange={(min, max) => apply({ bpmMin: min, bpmMax: max, page: 0 })} />
+    <RangeSlider lo={0} hi={400} min={ui.bpmMin} max={ui.bpmMax} step={5} ariaLabel={t`BPM`} onChange={(min, max) => apply({ bpmMin: min, bpmMax: max, page: 0 })} />
   );
 }
 
 function LengthSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  const { t } = useLingui();
   return (
-    <RangeSlider lo={0} hi={600} min={ui.lenMin} max={ui.lenMax} step={5} ariaLabel="Length" format={(v) => formatDuration(v)} onChange={(min, max) => apply({ lenMin: min, lenMax: max, page: 0 })} />
+    <RangeSlider lo={0} hi={600} min={ui.lenMin} max={ui.lenMax} step={5} ariaLabel={t`Length`} format={(v) => formatDuration(v)} onChange={(min, max) => apply({ lenMin: min, lenMax: max, page: 0 })} />
   );
 }
 
@@ -244,12 +254,21 @@ function danLadderRows(context: DanScaleContext): number[][] {
   return [seq(1, 10), seq(11, 20)];
 }
 
-function danReadout(value: number, context: DanScaleContext): string {
+// The ordinal ("5th") is built here and handed to the message as a placeholder,
+// the same shape SkillBreakdown uses for its dan chips.
+function danReadout(value: number, context: DanScaleContext, i18n: I18n): string {
   const label = danScaleLabel(value, context);
   if (!/^\d+$/.test(label)) return label;
   const n = Number(label);
   const suffix = n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th";
-  return `${n}${suffix} dan`;
+  const ordinal = `${n}${suffix}`;
+  return i18n._(msg`${ordinal} dan`);
+}
+
+function danRangeReadout(lo: number, hi: number, context: DanScaleContext, i18n: I18n): string {
+  const from = danReadout(lo, context, i18n);
+  const to = danReadout(hi, context, i18n);
+  return i18n._(msg`${from} to ${to}`);
 }
 
 // The badge wall: tap a badge to filter to exactly that dan, tap it again to
@@ -265,6 +284,7 @@ function danReadout(value: number, context: DanScaleContext): string {
 // a "4K 5th dan" pick would match 7K 5th-dan charts at the same rawDan.
 // Clearing the dan never touches the keys facet.
 function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  const { t, i18n } = useLingui();
   const groups = danLadderGroups(ui);
   const ambiguous = groups.length > 1;
   const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
@@ -343,8 +363,9 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   };
   const describe = (group: DanLadderGroup, lo: number, hi?: number) => {
     const name = hi == null || hi === lo
-      ? danReadout(lo, group.context)
-      : `${danReadout(lo, group.context)} to ${danReadout(hi, group.context)}`;
+      ? danReadout(lo, group.context, i18n)
+      : danRangeReadout(lo, hi, group.context, i18n);
+    // The prefix is the keymode itself ("4K", "7K"), so it stays as written.
     return ambiguous ? `${group.label} ${name}` : name;
   };
   return (
@@ -428,9 +449,9 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
               ? describe(drag.group, Math.min(drag.anchor, drag.current), Math.max(drag.anchor, drag.current))
               : selection
                 ? selection.lo === selection.hi
-                  ? danReadout(selection.lo, groups[0].context)
-                  : `${danReadout(selection.lo, groups[0].context)} to ${danReadout(selection.hi, groups[0].context)}`
-                : "any"}
+                  ? danReadout(selection.lo, groups[0].context, i18n)
+                  : danRangeReadout(selection.lo, selection.hi, groups[0].context, i18n)
+                : t`any`}
         </span>
         {selection != null && drag == null && (
           <button
@@ -438,10 +459,10 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
             onClick={() => commit(null, null, groups[0])}
             className="lowercase text-osu-f1/50 hover:text-osu-pink-light transition-colors cursor-pointer"
           >
-            clear
+            <Trans>clear</Trans>
           </button>
         )}
-        <span className="ml-auto font-normal lowercase text-osu-f1/40">rough estimate, may be off</span>
+        <span className="ml-auto font-normal lowercase text-osu-f1/40"><Trans>rough estimate, may be off</Trans></span>
       </div>
     </div>
   );
@@ -525,13 +546,13 @@ function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply:
             <DanMini level={selection.lo} context={context} />
             {selection.hi !== selection.lo && (
               <>
-                <span className="text-[10px] opacity-70">to</span>
+                <span className="text-[10px] opacity-70"><Trans>to</Trans></span>
                 <DanMini level={selection.hi} context={context} />
               </>
             )}
           </span>
         ) : (
-          <span>Any</span>
+          <span><Trans>Any</Trans></span>
         )}
         <svg
           viewBox="0 0 20 20"
@@ -583,7 +604,7 @@ function MobileFilters({
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
           <path d="M3 6h18M7 12h10M10 18h4" />
         </svg>
-        Filters
+        <Trans>Filters</Trans>
         {collapsedFilterCount > 0 && (
           <span className="rounded-full bg-osu-pink px-1.5 text-[10px] font-bold leading-4 text-white tabular-nums">
             {collapsedFilterCount}
@@ -625,6 +646,7 @@ function MobileFilterSheet({
   hasActiveFilters: boolean;
   resultsLabel: string;
 }) {
+  const { t } = useLingui();
   // The sheet is always mounted (see above) and portals into document.body,
   // which the app hydrates as part of the whole document (hydrateRoot(document)
   // in client.tsx). A `typeof document` guard alone would render nothing on the
@@ -723,21 +745,21 @@ function MobileFilterSheet({
           onTouchCancel={handleDragEnd}
         >
           <div className="mx-auto h-1 w-9 rounded-full bg-osu-b3" aria-hidden="true" />
-          <span className="block px-4 pt-2 text-[13px] font-bold text-osu-l1">Filters</span>
+          <span className="block px-4 pt-2 text-[13px] font-bold text-osu-l1"><Trans>Filters</Trans></span>
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3.5">
           <KeysChips ui={ui} apply={apply} />
           <StatusChips ui={ui} apply={apply} />
-          <ChipGroup label="Difficulty">
+          <ChipGroup label={t`Difficulty`}>
             <StarSlider ui={ui} apply={apply} />
           </ChipGroup>
-          <ChipGroup label="Dan (est.)">
+          <ChipGroup label={t`Dan (est.)`}>
             <DanPicker ui={ui} apply={apply} inline />
           </ChipGroup>
-          <ChipGroup label="BPM">
+          <ChipGroup label={t`BPM`}>
             <BpmSlider ui={ui} apply={apply} />
           </ChipGroup>
-          <ChipGroup label="Length">
+          <ChipGroup label={t`Length`}>
             <LengthSlider ui={ui} apply={apply} />
           </ChipGroup>
         </div>
@@ -750,7 +772,7 @@ function MobileFilterSheet({
               hasActiveFilters ? "text-osu-f1 hover:text-osu-pink-light cursor-pointer" : "text-osu-f1/40 cursor-default"
             }`}
           >
-            Clear all
+            <Trans>Clear all</Trans>
           </button>
           <button
             type="button"
@@ -816,6 +838,7 @@ function SearchCardGridSkeleton() {
 }
 
 export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props) {
+  const { t, i18n } = useLingui();
   // Local source of truth so a tap updates the grid on the same frame; the URL
   // still syncs underneath (shareable links, back/forward) without gating the fetch.
   const [ui, setUi] = useState<MapSearchUiState>(state);
@@ -905,7 +928,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   useEffect(() => {
     if (!liveBackendEnabled) {
       setLoading(false);
-      setError("Search is unavailable right now. Try again in a bit.");
+      setError(t`Search is unavailable right now. Try again in a bit.`);
       return;
     }
     if (awaitingSavedSort) return;
@@ -942,7 +965,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       })
       .catch(() => {
         if (cancelled) return;
-        setError("Couldn't load search results. Try again.");
+        setError(t`Couldn't load search results. Try again.`);
         setLoading(false);
       });
     return () => {
@@ -959,12 +982,12 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   const totalCapped = (result ?? lastResultRef.current)?.totalCapped === true;
   const totalLabel = `${formatNumber(total)}${totalCapped ? "+" : ""}`;
   const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
-  const effectiveError = liveBackendEnabled ? error : "Search is unavailable right now. Try again in a bit.";
+  const effectiveError = liveBackendEnabled ? error : t`Search is unavailable right now. Try again in a bit.`;
   const hasLoadedResult = result !== null || lastResultRef.current !== null;
   const showLoadingSkeleton = !effectiveError && liveBackendEnabled && (loading || !hasLoadedResult) && items.length === 0;
   // No "updating" suffix while refreshing: the label sits next to a flex-1
   // input, so any width change resizes the search bar. It dims instead.
-  const countLabel = showLoadingSkeleton ? "Loading maps..." : `${totalLabel} maps`;
+  const countLabel = showLoadingSkeleton ? t`Loading maps...` : t`${totalLabel} maps`;
   const countRefreshing = loading && hasLoadedResult;
 
   // A stale ?page= past the last page (a shrunken result set, an old link)
@@ -999,6 +1022,12 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     (ui.lenMin > 0 || ui.lenMax > 0 ? 1 : 0) +
     (ui.danMin != null || ui.danMax != null ? 1 : 0);
 
+  // The sort table is module-scope descriptors; resolve it once per locale.
+  const sortOptions = useMemo(
+    () => SORT_OPTIONS.map((option) => ({ id: option.id, label: i18n._(option.label) })),
+    [i18n],
+  );
+
   const clearFilters = () => {
     setSearchInput("");
     apply({
@@ -1022,15 +1051,15 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search title, artist, mapper, or filter: keys=7 stars>5 status=ranked"
-              aria-label="Search maps"
+              placeholder={t`Search title, artist, mapper, or filter: keys=7 stars>5 status=ranked`}
+              aria-label={t`Search maps`}
               className={`w-full bg-osu-b4 border border-osu-b3/30 rounded-lg pl-10 py-2.5 text-[14px] text-osu-l1 placeholder:text-osu-f1/55 focus:outline-none focus:border-osu-pink/50 transition-colors ${searchInput ? "pr-10" : "pr-3"}`}
             />
             {searchInput && (
               <button
                 type="button"
                 onClick={() => setSearchInput("")}
-                aria-label="Clear search"
+                aria-label={t`Clear search`}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-md text-osu-f1/55 hover:text-osu-l1 hover:bg-osu-b3 transition-colors cursor-pointer"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
@@ -1050,7 +1079,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
 
         {/* Pattern — the headline filter, each shown as a mini note-chart */}
         <div className="flex flex-col gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Pattern</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Pattern</Trans></span>
           <PatternPicker
             selected={ui.patterns}
             excluded={ui.patternsExclude}
@@ -1070,10 +1099,10 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
             onClear={clearFilters}
             hasActiveFilters={hasActiveFilters}
             collapsedFilterCount={collapsedFilterCount}
-            resultsLabel={`Show ${totalLabel} maps`}
+            resultsLabel={t`Show ${totalLabel} maps`}
           />
           <div className="ml-auto">
-            <SortSelect options={SORT_OPTIONS} value={ui.sort} onChange={(id) => apply({ sort: id, page: 0 })} />
+            <SortSelect options={sortOptions} value={ui.sort} onChange={(id) => apply({ sort: id, page: 0 })} />
           </div>
           <DirButton dir={ui.dir} onToggle={() => apply({ sort: ui.sort, dir: ui.dir === "asc" ? "desc" : "asc", page: 0 })} />
         </div>
@@ -1083,25 +1112,25 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           <div className="flex flex-wrap gap-x-10 gap-y-4">
             <KeysChips ui={ui} apply={apply} />
             <StatusChips ui={ui} apply={apply} />
-            <ChipGroup label="Difficulty">
+            <ChipGroup label={t`Difficulty`}>
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                 <StarSlider ui={ui} apply={apply} />
                 <button type="button" onClick={() => setShowMore((value) => !value)} className="text-[11.5px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer">
-                  {showMore ? "− bpm & length" : "+ bpm & length"}
+                  {showMore ? <Trans>− bpm & length</Trans> : <Trans>+ bpm & length</Trans>}
                 </button>
               </div>
             </ChipGroup>
-            <ChipGroup label="Dan (est.)">
+            <ChipGroup label={t`Dan (est.)`}>
               <DanPicker ui={ui} apply={apply} />
             </ChipGroup>
           </div>
 
           {showMore && (
             <div className="flex flex-wrap gap-x-10 gap-y-4">
-              <ChipGroup label="BPM">
+              <ChipGroup label={t`BPM`}>
                 <BpmSlider ui={ui} apply={apply} />
               </ChipGroup>
-              <ChipGroup label="Length">
+              <ChipGroup label={t`Length`}>
                 <LengthSlider ui={ui} apply={apply} />
               </ChipGroup>
             </div>
@@ -1113,8 +1142,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
             direction caret, and clicking it again flips the direction. */}
         <div className="hidden sm:flex flex-wrap items-center justify-between gap-3 border-t border-osu-b3/15 pt-3.5">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Sort by</span>
-            {SORT_OPTIONS.map((option) => {
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Sort by</Trans></span>
+            {sortOptions.map((option) => {
               const isActive = ui.sort === option.id;
               return (
                 <button
@@ -1126,7 +1155,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
                       : apply({ sort: option.id, page: 0 })
                   }
                   aria-pressed={isActive}
-                  title={isActive ? "Flip direction" : undefined}
+                  title={isActive ? t`Flip direction` : undefined}
                   className={`inline-flex items-center gap-1 text-[12.5px] font-semibold transition-colors cursor-pointer ${
                     isActive ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
                   }`}
@@ -1148,7 +1177,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           </div>
           {hasActiveFilters && (
             <button type="button" onClick={clearFilters} className="text-[12px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer">
-              Clear all
+              <Trans>Clear all</Trans>
             </button>
           )}
         </div>
@@ -1161,7 +1190,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
             <SearchCardGridSkeleton />
           </div>
         ) : items.length === 0 && !loading ? (
-          <div className="py-16 text-center text-[13px] text-osu-f1">No maps match these filters.</div>
+          <div className="py-16 text-center text-[13px] text-osu-f1"><Trans>No maps match these filters.</Trans></div>
         ) : (
           <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">

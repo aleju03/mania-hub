@@ -2,6 +2,9 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Crown, Globe, Info } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg, plural } from "@lingui/core/macro";
+import type { getI18n } from "#/lib/i18n";
 import type { HonoraryPlayer } from "#/lib/honorary-players";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import {
@@ -476,7 +479,7 @@ function AlbumCoverFace({
           maniacards
         </div>
         <div className="mt-1 text-[9px] font-semibold uppercase tracking-[0.3em] text-white/40">
-          {ALBUM_SEASON} series
+          <Trans>{ALBUM_SEASON} series</Trans>
         </div>
       </div>
       <div className="absolute inset-x-5 bottom-[76px] top-[64px] z-[3] flex flex-col items-center justify-center">
@@ -519,7 +522,7 @@ function AlbumBackFace({ section }: { section: AlbumSection }) {
           maniacards
         </span>
         <span className="mt-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-white/40">
-          {ALBUM_SEASON} series
+          <Trans>{ALBUM_SEASON} series</Trans>
         </span>
       </div>
     </div>
@@ -567,16 +570,22 @@ export function useFramePulse(): () => void {
 }
 
 /* The shelf cover and the open book's cover face carry the same two captions,
-   so they live out here rather than in either one. */
-export function albumCountText(counts: ReadonlyMap<string, number>, code: string): string {
+   so they live out here rather than in either one. Both take the caller's i18n
+   instance: the covers are drawn from two different components and neither
+   caption belongs to either one. */
+export function albumCountText(
+  counts: ReadonlyMap<string, number>,
+  code: string,
+  i18n: ReturnType<typeof getI18n>,
+): string {
   const count = counts.get(code) ?? 0;
-  return `${count.toLocaleString("en-US")} ${count === 1 ? "card" : "cards"}`;
+  return i18n._(msg`${plural(count, { one: "# card", other: "# cards" })}`);
 }
 
-export function albumSubtitle(code: string): string {
-  if (isGlobalScope(code)) return `Top ${GLOBAL_ALBUM_CAP} players`;
-  if (isGoatAlbum(code)) return "Honorary roster";
-  return "Card collection";
+export function albumSubtitle(code: string, i18n: ReturnType<typeof getI18n>): string {
+  if (isGlobalScope(code)) return i18n._(msg`Top ${GLOBAL_ALBUM_CAP} players`);
+  if (isGoatAlbum(code)) return i18n._(msg`Honorary roster`);
+  return i18n._(msg`Card collection`);
 }
 
 /* The little mark beside an album's name. Every album but the GOATs one is a
@@ -611,6 +620,7 @@ export const AlbumShelf = memo(function AlbumShelf({
   counts: ReadonlyMap<string, number>;
   onOpen: (code: string) => void;
 }) {
+  const { t, i18n } = useLingui();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<ShelfSort>(readShelfSort);
   const ordered = useMemo(
@@ -634,14 +644,18 @@ export const AlbumShelf = memo(function AlbumShelf({
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <h2 className="text-sm font-bold text-white">Card albums</h2>
+        <h2 className="text-sm font-bold text-white"><Trans>Card albums</Trans></h2>
         <span className="text-[12px] text-osu-f1 tabular-nums">
-          {trimmed ? `${visible.length} of ${sections.length} albums` : `${sections.length} albums`}
+          {trimmed ? (
+            <Trans>{visible.length} of {sections.length} albums</Trans>
+          ) : (
+            <Trans>{sections.length} albums</Trans>
+          )}
         </span>
         <div className="ml-auto flex items-center gap-1">
           {([
-            { mode: "az", label: "A-Z" },
-            { mode: "cards", label: "Most cards" },
+            { mode: "az", label: msg`A-Z` },
+            { mode: "cards", label: msg`Most cards` },
           ] as const).map(({ mode, label }) => (
             <button
               key={mode}
@@ -654,7 +668,7 @@ export const AlbumShelf = memo(function AlbumShelf({
                   : "border-osu-b3/30 bg-osu-b4/30 text-osu-f1 hover:bg-osu-b4/70"
               }`}
             >
-              {label}
+              {i18n._(label)}
             </button>
           ))}
         </div>
@@ -662,14 +676,14 @@ export const AlbumShelf = memo(function AlbumShelf({
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="find an album"
-          aria-label="Find an album"
+          placeholder={t`find an album`}
+          aria-label={t`Find an album`}
           className="h-7 w-[180px] select-text rounded-full border border-osu-b3/40 bg-osu-b4/40 px-3 text-[12px] text-white outline-none placeholder:text-osu-f1/70 focus:border-osu-pink/50"
         />
       </div>
       {visible.length === 0 && (
         <div className="py-10 text-center text-[12px] text-osu-f1">
-          No album matches "{query.trim()}".
+          <Trans>No album matches "{query.trim()}".</Trans>
         </div>
       )}
       <div className="grid grid-cols-2 justify-items-center gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4">
@@ -685,13 +699,13 @@ export const AlbumShelf = memo(function AlbumShelf({
               contentVisibility: "auto",
               containIntrinsicSize: `${SHELF_COVER_WIDTH}px ${Math.round((PAGE_HEIGHT / PAGE_WIDTH) * SHELF_COVER_WIDTH)}px`,
             }}
-            aria-label={`Open the ${section.name} album`}
+            aria-label={t`Open the ${section.name} album`}
           >
             <ScaledCover width={SHELF_COVER_WIDTH}>
               <AlbumCoverFace
                 section={section}
-                collectedText={albumCountText(counts, section.code)}
-                subtitle={albumSubtitle(section.code)}
+                collectedText={albumCountText(counts, section.code, i18n)}
+                subtitle={albumSubtitle(section.code, i18n)}
               />
             </ScaledCover>
           </button>
@@ -718,6 +732,7 @@ function PeekStat({ label, value }: { label: string; value: string }) {
 /* The scouting card behind an album slot: everything the tracker already knows
    about the player from the rankings roster, plus the way to their profile. */
 function PlayerPeek({ target, onClose }: { target: PlayerPeekTarget | null; onClose: () => void }) {
+  const { t } = useLingui();
   useEffect(() => {
     if (!target) return;
     const onKey = (event: KeyboardEvent) => {
@@ -739,7 +754,7 @@ function PlayerPeek({ target, onClose }: { target: PlayerPeekTarget | null; onCl
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-4"
       onClick={onClose}
       role="dialog"
-      aria-label={`${entry.user.username} details`}
+      aria-label={t`${entry.user.username} details`}
     >
       <div
         className="w-full max-w-[330px] overflow-hidden rounded-xl border border-osu-b3/60 bg-osu-b5"
@@ -772,16 +787,20 @@ function PlayerPeek({ target, onClose }: { target: PlayerPeekTarget | null; onCl
             <CountryFlag code={entry.user.country_code} size="sm" decorative />
           </div>
           <div className="mt-0.5 text-[11px] text-osu-f1 tabular-nums">
-            {entry.global_rank ? `#${entry.global_rank.toLocaleString("en-US")} global` : "unranked"}
+            {entry.global_rank ? (
+              <Trans>#{entry.global_rank.toLocaleString("en-US")} global</Trans>
+            ) : (
+              <Trans>unranked</Trans>
+            )}
             {entry.country_rank ? <> &middot; #{entry.country_rank.toLocaleString("en-US")} {entry.user.country_code}</> : null}
           </div>
           <div className="mt-3 grid grid-cols-3 gap-1.5">
             <PeekStat label="pp" value={Math.round(entry.pp).toLocaleString("en-US")} />
             <PeekStat
-              label="accuracy"
+              label={t`accuracy`}
               value={entry.hit_accuracy != null ? `${entry.hit_accuracy.toFixed(2)}%` : "?"}
             />
-            <PeekStat label="plays" value={entry.play_count != null ? entry.play_count.toLocaleString("en-US") : "?"} />
+            <PeekStat label={t`plays`} value={entry.play_count != null ? entry.play_count.toLocaleString("en-US") : "?"} />
             {grades && (
               <>
                 <PeekStat label="SS" value={(grades.ssh + grades.ss).toLocaleString("en-US")} />
@@ -792,18 +811,18 @@ function PlayerPeek({ target, onClose }: { target: PlayerPeekTarget | null; onCl
           </div>
           {entry.ranked_score != null && (
             <div className="mt-2 text-[11px] text-osu-f1 tabular-nums">
-              Ranked score {entry.ranked_score.toLocaleString("en-US")}
+              <Trans>Ranked score {entry.ranked_score.toLocaleString("en-US")}</Trans>
             </div>
           )}
           <div className="mt-2 text-[11px] text-osu-f1">
-            {owned ? "In your collection." : "Missing from your collection."}
+            {owned ? <Trans>In your collection.</Trans> : <Trans>Missing from your collection.</Trans>}
           </div>
           <Link
             to="/player/$username"
             params={{ username: entry.user.username }}
             className="mt-3 block w-full rounded-full bg-osu-pink px-4 py-1.5 text-center text-[12px] font-bold text-white transition hover:brightness-110"
           >
-            View profile
+            <Trans>View profile</Trans>
           </Link>
         </div>
       </div>
@@ -826,6 +845,7 @@ function CollectedCardFace({
   onSpotlight: (card: CollectedCard, thumbnail: string | null, rect: DOMRect) => void;
   onThumbnailError: (card: CollectedCard) => void;
 }) {
+  const { t } = useLingui();
   const skeleton = thumbnail ? null : tierSkeletonThumb(cardTier(card));
   return (
     <button
@@ -837,7 +857,7 @@ function CollectedCardFace({
       {(thumbnail ?? skeleton) ? (
         <img
           src={thumbnail ?? skeleton ?? undefined}
-          alt={`${card.username} maniacard`}
+          alt={t`${card.username} maniacard`}
           className="absolute inset-0 h-full w-full object-cover"
           draggable={false}
           onLoad={(event) => noteCardThumbnailStored(card, event.currentTarget.src)}
@@ -884,6 +904,7 @@ const AlbumSlot = memo(function AlbumSlot({
   onPeek: (entry: LiveGlobalRankingEntry, owned: boolean) => void;
   onThumbnailError: (card: CollectedCard) => void;
 }) {
+  const { t } = useLingui();
   if (!entry) {
     return <div className="rounded-[7px] bg-osu-b4/25" style={{ aspectRatio: "5 / 7" }} />;
   }
@@ -907,8 +928,8 @@ const AlbumSlot = memo(function AlbumSlot({
           type="button"
           className="absolute bottom-1 right-1 z-[2] flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white/85 hover:bg-black/80 hover:text-white"
           onClick={() => onPeek(entry, true)}
-          aria-label={`${entry.user.username} details`}
-          title="Player details"
+          aria-label={t`${entry.user.username} details`}
+          title={t`Player details`}
         >
           <Info className="h-3 w-3" />
         </button>
@@ -1003,6 +1024,7 @@ export const GoatSlot = memo(function GoatSlot({
   onSpotlight: (card: CollectedCard, thumbnail: string | null, rect: DOMRect) => void;
   onThumbnailError: (card: CollectedCard) => void;
 }) {
+  const { t } = useLingui();
   if (card) {
     return (
       <div
@@ -1045,8 +1067,8 @@ export const GoatSlot = memo(function GoatSlot({
       className="overflow-hidden rounded-[7px] bg-osu-b5"
       style={{ aspectRatio: "5 / 7" }}
       role="img"
-      aria-label="Uncollected GOAT"
-      title="Not in your collection"
+      aria-label={t`Uncollected GOAT`}
+      title={t`Not in your collection`}
     >
       {back && (
         <img src={back} alt="" className="h-full w-full object-cover opacity-80" draggable={false} />
@@ -1082,6 +1104,7 @@ export function AlbumView({
       by tapping the shelf. Null is the shelf. */
   openAlbumCode?: string | null;
 }) {
+  const { t, i18n } = useLingui();
   const sections = useMemo(() => buildAlbumSections(trackedCountries ?? []), [trackedCountries]);
   const linkedCode = openAlbumCode && sections.some((section) => section.code === openAlbumCode) ? openAlbumCode : null;
   /* Seeded from the URL when the shelf already knows the album, which is the
@@ -1478,7 +1501,7 @@ export function AlbumView({
   ) {
     return (
       <div className="py-10 text-center text-[12px] text-osu-f1">
-        The album is unavailable right now. Try again in a bit.
+        <Trans>The album is unavailable right now. Try again in a bit.</Trans>
       </div>
     );
   }
@@ -1521,9 +1544,9 @@ export function AlbumView({
   /* The open book fronts the same cover the shelf shows: constant text, no
      progress. Anything roster-dependent would repaint the cover the moment the
      lookup lands; collection progress renders below the book instead. */
-  const coverText = albumCountText(walletCountByCode, openSection.code);
-  const coverSubtitle = albumSubtitle(openSection.code);
-  const headerRight = global ? `Top ${GLOBAL_ALBUM_CAP}` : limit != null ? `${collectedShown}/${limit}` : "";
+  const coverText = albumCountText(walletCountByCode, openSection.code, i18n);
+  const coverSubtitle = albumSubtitle(openSection.code, i18n);
+  const headerRight = global ? t`Top ${GLOBAL_ALBUM_CAP}` : limit != null ? `${collectedShown}/${limit}` : "";
   const rosterFailed = !goat && Boolean(openData?.error && openData.total === null);
 
   const albumPage = (pageIndex: number) => {
@@ -1620,7 +1643,7 @@ export function AlbumView({
           className="flex h-7 cursor-pointer items-center gap-1 rounded-full border border-osu-b3/40 bg-osu-b4/40 pl-1.5 pr-3 text-[12px] text-osu-f1 hover:bg-osu-b4/70 hover:text-white"
         >
           <ChevronLeft className="h-4 w-4" />
-          Albums
+          <Trans>Albums</Trans>
         </button>
         <span className="flex items-center gap-1.5 text-[12px] font-bold text-white">
           <AlbumMark code={openSection.code} />
@@ -1691,7 +1714,7 @@ export function AlbumView({
                   if (event.key === "Enter" || event.key === " ") apiRef.current?.flipNext();
                 }}
                 className="block h-full w-full cursor-pointer text-left"
-                aria-label="Open the album"
+                aria-label={t`Open the album`}
               >
                 <AlbumCoverFace
                   section={openSection}
@@ -1709,7 +1732,7 @@ export function AlbumView({
         )}
         {rosterFailed && (
           <div className="mt-4 text-center text-[12px] text-osu-f1">
-            The rankings lookup failed.{" "}
+            <Trans>The rankings lookup failed.</Trans>{" "}
             <button
               type="button"
               onClick={() => {
@@ -1721,7 +1744,7 @@ export function AlbumView({
               }}
               className="cursor-pointer font-semibold text-osu-pink-light hover:text-white"
             >
-              Retry
+              <Trans>Retry</Trans>
             </button>
           </div>
         )}
@@ -1732,16 +1755,16 @@ export function AlbumView({
           type="button"
           onClick={() => apiRef.current?.flipPrev()}
           className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-osu-b3/40 bg-osu-b4/40 text-osu-f1 hover:bg-osu-b4/70 hover:text-white"
-          aria-label="Previous album page"
+          aria-label={t`Previous album page`}
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="text-[11px] text-osu-f1">Drag a page or swipe to flip</span>
+        <span className="text-[11px] text-osu-f1"><Trans>Drag a page or swipe to flip</Trans></span>
         <button
           type="button"
           onClick={() => apiRef.current?.flipNext()}
           className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-osu-b3/40 bg-osu-b4/40 text-osu-f1 hover:bg-osu-b4/70 hover:text-white"
-          aria-label="Next album page"
+          aria-label={t`Next album page`}
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -1755,9 +1778,11 @@ export function AlbumView({
         <div className={`mx-auto mt-4 w-[min(60%,320px)]${limit == null ? " invisible" : ""}`}>
           <div className="mb-1.5 flex items-baseline justify-between">
             <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#e8c56a]">
-              {limit ?? 0} {goat ? "goats" : "players"}
+              {goat ? <Trans>{limit ?? 0} goats</Trans> : <Trans>{limit ?? 0} players</Trans>}
             </span>
-            <span className="text-[11px] font-bold text-white/80 tabular-nums">{collectedShown}/{limit ?? 0} collected</span>
+            <span className="text-[11px] font-bold text-white/80 tabular-nums">
+              <Trans>{collectedShown}/{limit ?? 0} collected</Trans>
+            </span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-[3px] bg-white/10">
             <div

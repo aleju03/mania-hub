@@ -1,6 +1,14 @@
+import { Trans, useLingui } from "@lingui/react/macro";
+import { Trans as MessageTrans } from "@lingui/react";
+/* The runtime <Trans>, alongside the macro one above. The question sentence
+   is a message descriptor picked out of a table at render (which metric was
+   drawn is not known at compile time), and this is the form that takes one:
+   the two card-coloured name spans go in as `values`, so a translation is free
+   to put them wherever its own word order wants them. */
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, ChevronUp, Dices, Recycle, Timer } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useLocale } from "#/lib/locale-context";
 import { maniaTierTextStyle } from "#/lib/maniacard";
 import { useAuth } from "#/lib/auth-context";
 import {
@@ -393,6 +401,8 @@ function CardFace({
   caption: string;
 }) {
   const player = card.player;
+  const username = player.username;
+  const { t } = useLingui();
   const reducedMotion = useReducedMotion();
   return (
     <div className="flex w-full flex-col items-center">
@@ -432,7 +442,7 @@ function CardFace({
             {card.thumbnail ? (
               <img
                 src={card.thumbnail}
-                alt={`${player.username} maniacard`}
+                alt={t`${username} maniacard`}
                 className="h-full w-full object-cover"
                 draggable={false}
               />
@@ -462,7 +472,7 @@ function CardFace({
             unreadable to anyone who cannot separate the two). */}
         {tone !== "neutral" && (
           <span className="text-[12px] font-bold uppercase tracking-wide">
-            {tone === "correct" ? "right" : "wrong"}
+            {tone === "correct" ? <Trans>right</Trans> : <Trans>wrong</Trans>}
           </span>
         )}
       </div>
@@ -528,6 +538,10 @@ export function StreakGame({
   onWalletRefresh?: () => void;
 }) {
   const auth = useAuth();
+  const { t, i18n } = useLingui();
+  /* Only the two date questions ("oldest top May 2014") need it, but the month
+     name is the one number in this game that reads differently per language. */
+  const locale = useLocale();
   const [round, setRound] = useState<Round | null>(null);
   const [verdict, setVerdict] = useState<null | "correct" | "wrong">(null);
   const [streak, setStreak] = useState(0);
@@ -706,7 +720,7 @@ export function StreakGame({
     const token = (deal.current += 1);
     const stale = () => token !== deal.current;
     if (!isLiveBackendConfigured()) {
-      setError("Higher or lower is unavailable right now. Try again in a bit.");
+      setError(t`Higher or lower is unavailable right now. Try again in a bit.`);
       setDealing(false);
       return;
     }
@@ -729,7 +743,7 @@ export function StreakGame({
       /* Blitz is played as an account, because that is what a board is a list
          of. Nothing is dealt until there is one. */
       if (!auth.viewer) {
-        setError("Sign in with osu! to play blitz.");
+        setError(t`Sign in with osu! to play blitz.`);
         setDealing(false);
         return;
       }
@@ -738,13 +752,13 @@ export function StreakGame({
         const receivedAt = Date.now();
         if (stale()) return;
         if (!run?.round) {
-          setError("Could not deal a blitz run. Try again in a moment.");
+          setError(t`Could not deal a blitz run. Try again in a moment.`);
           return;
         }
         runId.current = run.runId;
         showBlitzRound(run.round, receivedAt, token);
       } catch {
-        if (!stale()) setError("Could not deal a blitz run. Try again in a moment.");
+        if (!stale()) setError(t`Could not deal a blitz run. Try again in a moment.`);
       } finally {
         if (!stale()) setDealing(false);
       }
@@ -808,7 +822,7 @@ export function StreakGame({
       if (stale()) return;
       const metric = firstPlayer && secondPlayer ? pickStreakMetric(firstPlayer, secondPlayer, Math.random) : null;
       if (!firstPlayer || !secondPlayer || !metric) {
-        setError("The tracked player pool is too small to play right now.");
+        setError(t`The tracked player pool is too small to play right now.`);
         return;
       }
       const first = placeholderCard(firstPlayer);
@@ -826,11 +840,11 @@ export function StreakGame({
       hydrateRoundCard("right", secondPlayer, token);
       upcoming.current = nextCard(secondPlayer.userId);
     } catch {
-      if (!stale()) setError("Could not reach the player pool. Try again in a moment.");
+      if (!stale()) setError(t`Could not reach the player pool. Try again in a moment.`);
     } finally {
       if (!stale()) setDealing(false);
     }
-  }, [auth.viewer, fetchPage, hydrateRoundCard, nextCard, nextPlayer, showBlitzRound]);
+  }, [auth.viewer, fetchPage, hydrateRoundCard, nextCard, nextPlayer, showBlitzRound, t]);
 
   useEffect(() => {
     // Warmed here rather than on the first guess: building the context and its
@@ -938,7 +952,7 @@ export function StreakGame({
           }
           const metric = next ? pickStreakMetric(round.right.player, next.player, Math.random) : null;
           if (!next || !metric) {
-            setError("Ran out of players to draw.");
+            setError(t`Ran out of players to draw.`);
             busy.current = false;
             return;
           }
@@ -958,7 +972,7 @@ export function StreakGame({
         })();
       }, REVEAL_HOLD_MS);
     },
-    [finish, nextCard, round, streak],
+    [finish, nextCard, round, streak, t],
   );
 
   const guessBlitz = useCallback(
@@ -975,7 +989,7 @@ export function StreakGame({
           return;
         }
         if (!result) {
-          setError("Lost the run. The board could not be reached.");
+          setError(t`Lost the run. The board could not be reached.`);
           busy.current = false;
           return;
         }
@@ -1016,7 +1030,7 @@ export function StreakGame({
             return;
           }
           if (!next) {
-            setError("Ran out of players to draw.");
+            setError(t`Ran out of players to draw.`);
             busy.current = false;
             return;
           }
@@ -1025,7 +1039,7 @@ export function StreakGame({
         }, REVEAL_HOLD_MS);
       })();
     },
-    [finish, round, showBlitzRound],
+    [finish, round, showBlitzRound, t],
   );
 
   const guess = useCallback(
@@ -1198,7 +1212,7 @@ export function StreakGame({
             <div className="mb-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-3 sm:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="inline-flex rounded-full bg-osu-b4/70 p-0.5 text-[12px] font-bold">
-                  {([["top500", "Top 500"], ["top", "Top 1000"], ["anyone", "Anyone"]] as const).map(([value, label]) => (
+                  {([["top500", t`Top 500`], ["top", t`Top 1000`], ["anyone", t`Anyone`]] as const).map(([value, label]) => (
                     <button
                       key={value}
                       type="button"
@@ -1234,7 +1248,7 @@ export function StreakGame({
                   }`}
                 >
                   <Timer className="h-3.5 w-3.5" />
-                  Blitz
+                  <Trans>Blitz</Trans>
                 </button>
               </div>
               <div className="flex items-baseline gap-1.5 sm:flex-col sm:items-end sm:gap-0">
@@ -1266,20 +1280,25 @@ export function StreakGame({
                   below opt out, since usernames are identity, not copy. */}
               <div className="max-w-[580px] text-center text-[17px] leading-snug text-white sm:text-xl">
                 {round && copy ? (
-                  <>
-                    {copy.q.prefix}
-                    {/* The tier colour is only known once the card behind the
-                        name mints, so it eases in with the flip instead of
-                        snapping white to gold under the reader. */}
-                    <span translate="no" className="inline-block font-bold" style={{ ...NAME_TINT, ...round.right.nameStyle }}>
-                      {round.right.player.username}
-                    </span>
-                    {copy.q.middle}
-                    <span translate="no" className="inline-block font-bold" style={{ ...NAME_TINT, ...round.left.nameStyle }}>
-                      {round.left.player.username}
-                    </span>
-                    {copy.q.suffix}
-                  </>
+                  <MessageTrans
+                    id={copy.q.id}
+                    message={copy.q.message}
+                    values={{
+                      /* The tier colour is only known once the card behind the
+                         name mints, so it eases in with the flip instead of
+                         snapping white to gold under the reader. */
+                      hidden: (
+                        <span translate="no" className="inline-block font-bold" style={{ ...NAME_TINT, ...round.right.nameStyle }}>
+                          {round.right.player.username}
+                        </span>
+                      ),
+                      shown: (
+                        <span translate="no" className="inline-block font-bold" style={{ ...NAME_TINT, ...round.left.nameStyle }}>
+                          {round.left.player.username}
+                        </span>
+                      ),
+                    }}
+                  />
                 ) : (
                   <span className="font-semibold text-osu-f1">Dealing a matchup…</span>
                 )}
@@ -1338,7 +1357,7 @@ export function StreakGame({
                       <CardFace
                         card={round.left}
                         cardBack={cardBack}
-                        valueText={copy.value(leftValue)}
+                        valueText={i18n._(copy.value(leftValue, locale))}
                         tone="neutral"
                         caption={`${Math.round(round.left.player.pp).toLocaleString("en-US")}pp`}
                       />
@@ -1356,7 +1375,7 @@ export function StreakGame({
                       <CardFace
                         card={round.right}
                         cardBack={cardBack}
-                        valueText={revealed && round.rightValue !== null ? copy.value(counted) : copy.unknown}
+                        valueText={revealed && round.rightValue !== null ? i18n._(copy.value(counted, locale)) : i18n._(copy.unknown)}
                         tone={verdict ?? "neutral"}
                         caption={`${Math.round(round.right.player.pp).toLocaleString("en-US")}pp`}
                       />
@@ -1377,7 +1396,7 @@ export function StreakGame({
                           ? `You stopped at ${streak} in a row.`
                           : endedBy === "timeout" && round.rightValue === null
                             ? "Out of time."
-                            : copy.reveal(round.right.player.username, round.rightValue ?? 0)}
+                            : i18n._(copy.reveal(round.right.player.username, round.rightValue ?? 0, locale))}
                       </div>
                       <div className="text-[12px] text-osu-f1">
                         {streak === 0
@@ -1449,7 +1468,7 @@ export function StreakGame({
                           }`}
                         >
                           <Icon className="h-4 w-4" />
-                          {label}
+                          {i18n._(label)}
                         </button>
                       ))}
                     </div>

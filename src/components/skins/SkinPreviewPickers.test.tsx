@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../lib/i18n";
 import type { SkinBackdropCandidate } from "../../lib/skin-preview-backdrops";
 import type { SkinPreviewChartSnippet } from "../../lib/skin-preview-patterns";
 import { SkinPreviewPickers } from "./SkinPreviewPickers";
@@ -21,35 +23,39 @@ function renderPickers(overrides: {
   backdropShuffle?: () => void;
   patternShuffle?: () => Promise<SkinPreviewChartSnippet[]>;
 } = {}) {
+  // The pickers use <Trans>, which throws without a provider; en resolves to
+  // the source strings these tests match on.
   render(
-    <SkinPreviewPickers
-      disabled={false}
-      backdrop={{
-        pool: {
-          candidates: [COVER],
-          drawing: false,
-          shuffle: overrides.backdropShuffle ?? (() => {}),
-          drop: () => {},
-          prefetch: () => {},
-        },
-        selected: "flat",
-        onPick: () => {},
-        scope: "all",
-        onScopeChange: () => {},
-        keymodeLabel: "4K",
-      }}
-      pattern={{
-        pool: {
-          candidates: [SNIPPET],
-          keys: 4,
-          drawing: false,
-          shuffle: overrides.patternShuffle ?? (async () => []),
-          ensure: async () => [],
-        },
-        selected: null,
-        onPick: () => {},
-      }}
-    />,
+    <I18nProvider i18n={getI18n("en")}>
+      <SkinPreviewPickers
+        disabled={false}
+        backdrop={{
+          pool: {
+            candidates: [COVER],
+            drawing: false,
+            shuffle: overrides.backdropShuffle ?? (() => {}),
+            drop: () => {},
+            prefetch: () => {},
+          },
+          selected: "flat",
+          onPick: () => {},
+          scope: "all",
+          onScopeChange: () => {},
+          keymodeLabel: "4K",
+        }}
+        pattern={{
+          pool: {
+            candidates: [SNIPPET],
+            keys: 4,
+            drawing: false,
+            shuffle: overrides.patternShuffle ?? (async () => []),
+            ensure: async () => [],
+          },
+          selected: null,
+          onPick: () => {},
+        }}
+      />
+    </I18nProvider>,
   );
 }
 

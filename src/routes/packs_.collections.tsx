@@ -2,6 +2,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { getI18n } from "../lib/i18n";
 import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
@@ -52,9 +55,9 @@ const readShowcaseSlots = createIsomorphicFn()
   .client((userId: number) => readPackShowcaseSlotsClient(userId));
 
 const TABS = [
-  { id: "showcase" as const, label: "Showcase" },
-  { id: "stats" as const, label: "Stats" },
-  { id: "collectors" as const, label: "Collectors" },
+  { id: "showcase" as const, label: msg`Showcase` },
+  { id: "stats" as const, label: msg`Stats` },
+  { id: "collectors" as const, label: msg`Collectors` },
 ];
 
 type CollectionsTab = (typeof TABS)[number]["id"];
@@ -78,13 +81,14 @@ export const Route = createFileRoute("/packs_/collections")({
     };
   },
   head: ({ match }) => {
+    const i18n = getI18n(match.context.locale);
     const seo = pageSeo({
-      title: "Collections",
-      description:
-        "Maniacard collections and pack stats.",
+      title: i18n._(msg`Collections`),
+      description: i18n._(msg`Maniacard collections and pack stats.`),
       path: "/packs/collections",
       origin: match.context.origin,
       imageKind: "packs",
+      imageTitle: "Collections",
     });
     return seo;
   },
@@ -92,6 +96,7 @@ export const Route = createFileRoute("/packs_/collections")({
 });
 
 function CollectionsPage() {
+  const { t, i18n } = useLingui();
   const { collector, tab } = Route.useSearch();
   const { showcaseSlots } = Route.useRouteContext();
   const navigate = useNavigate();
@@ -122,7 +127,7 @@ function CollectionsPage() {
   if (!isLiveBackendConfigured()) {
     return (
       <div>
-        <PageHeader iconSrc="/images/icons/packs.svg" title="Collections" />
+        <PageHeader iconSrc="/images/icons/packs.svg" title={t`Collections`} />
         <LiveBackendRequired />
       </div>
     );
@@ -132,11 +137,11 @@ function CollectionsPage() {
     <div ref={scrollRestoreRef} className="flex min-h-screen flex-col">
       <PageHeader
         iconSrc="/images/icons/packs.svg"
-        title={collector ? `${collector}'s collection` : "Collections"}
+        title={collector ? t`${collector}'s collection` : t`Collections`}
       />
       {!collector && (
         <PageTabs
-          items={TABS}
+          items={TABS.map((item) => ({ id: item.id, label: i18n._(item.label) }))}
           value={activeTab}
           onChange={(next) => navigate({ to: "/packs/collections", search: next === "showcase" ? {} : { tab: next } })}
         />
@@ -371,7 +376,7 @@ export function StatsTab({ active }: { active: boolean }) {
   /* A refresh that fails keeps whatever is already on screen; only never
      having had an answer at all is worth saying out loud. */
   if (failed && !stats) {
-    return <div className="py-16 text-center text-[12px] text-osu-f1">Could not load the pack stats.</div>;
+    return <div className="py-16 text-center text-[12px] text-osu-f1"><Trans>Could not load the pack stats.</Trans></div>;
   }
 
   /* Skeletons shaped like the panels they become, so the page does not jump

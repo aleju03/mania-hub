@@ -1,4 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 import { Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { track } from "#/lib/analytics";
@@ -10,6 +12,7 @@ import {
   type LivePackCollector,
   type LivePackCollectorSort,
 } from "#/lib/live-backend";
+import { getI18n } from "#/lib/i18n";
 import { CountryFlag } from "../../ui/CountryFlag";
 import { HeadingCount, ListSurface, RowSkeleton, SectionHeading } from "./chrome";
 import { useDebounced } from "./useDebounced";
@@ -20,21 +23,25 @@ import { useDebounced } from "./useDebounced";
 
 const PAGE_SIZE = 24;
 
-const SORTS: Array<{ id: LivePackCollectorSort; label: string }> = [
-  { id: "cards", label: "Cards" },
-  { id: "copies", label: "Copies" },
-  { id: "packs", label: "Packs" },
-  { id: "goats", label: "GOATs" },
+const SORTS: Array<{ id: LivePackCollectorSort; label: ReturnType<typeof msg> }> = [
+  { id: "cards", label: msg`Cards` },
+  { id: "copies", label: msg`Copies` },
+  { id: "packs", label: msg`Packs` },
+  { id: "goats", label: msg`GOATs` },
 ];
 
 /* Whichever column the list is ordered by is the one it prints. Showing the
    card count while sorted by packs opened reads as a broken sort. */
-function sortedValue(collector: LivePackCollector, sort: LivePackCollectorSort): string {
+function sortedValue(
+  collector: LivePackCollector,
+  sort: LivePackCollectorSort,
+  i18n: ReturnType<typeof getI18n>,
+): string {
   switch (sort) {
     case "copies":
       return formatNumber(collector.copies);
     case "packs":
-      return collector.packsOpened === null ? "unknown" : formatNumber(collector.packsOpened);
+      return collector.packsOpened === null ? i18n._(msg`unknown`) : formatNumber(collector.packsOpened);
     case "goats":
       return `${collector.goats}/${collector.completion.goatsTotal}`;
     default:
@@ -43,6 +50,7 @@ function sortedValue(collector: LivePackCollector, sort: LivePackCollectorSort):
 }
 
 function DirectoryRow({ collector, sort }: { collector: LivePackCollector; sort: LivePackCollectorSort }) {
+  const { i18n } = useLingui();
   return (
     <Link
       to="/packs/collections"
@@ -66,17 +74,18 @@ function DirectoryRow({ collector, sort }: { collector: LivePackCollector; sort:
       <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-osu-l2">{collector.username}</span>
       {sort !== "goats" && collector.goats > 0 && (
         <span translate="no" className="hidden shrink-0 text-[11px] font-semibold text-amber-200 tabular-nums sm:block">
-          {collector.goats} GOAT
+          <Trans>{collector.goats} GOAT</Trans>
         </span>
       )}
       <span translate="no" className="w-20 shrink-0 text-right text-[14px] font-bold text-white tabular-nums">
-        {sortedValue(collector, sort)}
+        {sortedValue(collector, sort, i18n)}
       </span>
     </Link>
   );
 }
 
 export function CollectorDirectory() {
+  const { t, i18n } = useLingui();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<LivePackCollectorSort>("cards");
   const [page, setPage] = useState(0);
@@ -131,7 +140,7 @@ export function CollectorDirectory() {
     <ListSurface>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <SectionHeading>
-          every collector
+          <Trans>every collector</Trans>
           <HeadingCount value={result ? total : null} />
         </SectionHeading>
         <label className="relative flex min-w-[180px] flex-1 items-center sm:max-w-[260px]">
@@ -139,7 +148,7 @@ export function CollectorDirectory() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find a collector"
+            placeholder={t`Find a collector`}
             className="w-full rounded-lg border border-osu-b3/40 bg-osu-b5/60 py-1.5 pl-7 pr-2 text-[12px] text-white outline-none transition-colors placeholder:text-osu-f1 focus:border-osu-pink/50"
           />
         </label>
@@ -153,7 +162,7 @@ export function CollectorDirectory() {
                 sort === option.id ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"
               }`}
             >
-              {option.label}
+              {i18n._(option.label)}
             </button>
           ))}
         </div>
@@ -165,12 +174,12 @@ export function CollectorDirectory() {
           table. Rows are swapped, or replaced by skeletons the same height. */}
       <div className="mt-2 -mx-2">
         {failed ? (
-          <div className="py-10 text-center text-[12px] text-osu-f1">Could not load the collector list.</div>
+          <div className="py-10 text-center text-[12px] text-osu-f1"><Trans>Could not load the collector list.</Trans></div>
         ) : !result ? (
           Array.from({ length: PAGE_SIZE }, (_, index) => <RowSkeleton key={index} variant="directory" />)
         ) : result.collectors.length === 0 ? (
           <div className="py-10 text-center text-[12px] text-osu-f1">
-            {debounced ? `Nobody here is called "${debounced}".` : "Nobody has opened a pack yet."}
+            {debounced ? t`Nobody here is called "${debounced}".` : t`Nobody has opened a pack yet.`}
           </div>
         ) : (
           result.collectors.map((collector) => (
@@ -193,7 +202,7 @@ export function CollectorDirectory() {
             onClick={() => setPage(currentPage - 1)}
             className="cursor-pointer px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
           >
-            Previous
+            <Trans>Previous</Trans>
           </button>
           <span translate="no" className="text-osu-f1 tabular-nums">
             {currentPage + 1} / {formatNumber(totalPages)}
@@ -204,7 +213,7 @@ export function CollectorDirectory() {
             onClick={() => setPage(currentPage + 1)}
             className="cursor-pointer px-2 py-1 font-semibold text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-30"
           >
-            Next
+            <Trans>Next</Trans>
           </button>
         </div>
       )}

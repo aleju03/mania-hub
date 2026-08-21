@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
 import {
   drawSkinPreviewBackdrops,
   type BackdropScope,
@@ -121,6 +122,7 @@ export function SkinBackdropScopeToggle({
   keymodeLabel: string;
   disabled: boolean;
 }) {
+  const { t } = useLingui();
   return (
     <div className="flex overflow-hidden rounded border border-osu-b3/40">
       {(["all", "keymode"] as const).map((option) => (
@@ -131,13 +133,13 @@ export function SkinBackdropScopeToggle({
           onClick={() => onScopeChange(option)}
           aria-pressed={scope === option}
           title={option === "all"
-            ? "Apply picks to every keymode preview"
-            : `Apply picks to the ${keymodeLabel} preview only`}
+            ? t`Apply picks to every keymode preview`
+            : t`Apply picks to the ${keymodeLabel} preview only`}
           className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors cursor-pointer disabled:cursor-default ${
             scope === option ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2 hover:text-osu-l1"
           }`}
         >
-          {option === "all" ? "all keymodes" : `${keymodeLabel} only`}
+          {option === "all" ? t`all keymodes` : t`${keymodeLabel} only`}
         </button>
       ))}
     </div>
@@ -157,6 +159,7 @@ export function SkinBackdropRow({
   onPick: (choice: PreviewBackdrop) => void;
   disabled: boolean;
 }) {
+  const { t } = useLingui();
   return (
     <>
       <button
@@ -164,12 +167,12 @@ export function SkinBackdropRow({
         disabled={disabled}
         onClick={() => onPick("flat")}
         aria-pressed={selected === "flat"}
-        title="Flat backdrop tinted with the skin's accent"
+        title={t`Flat backdrop tinted with the skin's accent`}
         className={`grid h-8 w-[52px] shrink-0 place-items-center rounded border text-[10px] font-bold text-osu-l2 transition-colors cursor-pointer disabled:cursor-default ${
           selected === "flat" ? "border-osu-pink bg-osu-b5" : "border-osu-b3/40 bg-osu-b5 hover:border-osu-f1/40"
         }`}
       >
-        flat
+        <Trans>flat</Trans>
       </button>
       {pool.candidates.map((candidate) => (
         <button
@@ -180,7 +183,9 @@ export function SkinBackdropRow({
           onPointerEnter={() => pool.prefetch(candidate.setId)}
           onFocus={() => pool.prefetch(candidate.setId)}
           aria-pressed={selected === candidate.setId}
-          aria-label={`Use ${candidate.label || `map cover ${candidate.setId}`} as the backdrop`}
+          aria-label={candidate.label
+            ? t`Use ${candidate.label} as the backdrop`
+            : t`Use map cover ${candidate.setId} as the backdrop`}
           title={candidate.label || undefined}
           className={`h-8 w-[52px] shrink-0 overflow-hidden rounded border transition-colors cursor-pointer disabled:cursor-default ${
             selected === candidate.setId ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
@@ -196,7 +201,7 @@ export function SkinBackdropRow({
         </button>
       ))}
       {pool.candidates.length === 0 && pool.drawing && (
-        <span className="text-[10px] text-osu-f1/50">drawing covers</span>
+        <span className="text-[10px] text-osu-f1/50"><Trans>drawing covers</Trans></span>
       )}
     </>
   );

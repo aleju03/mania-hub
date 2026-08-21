@@ -7,7 +7,7 @@ describe("replay direct score input", () => {
     const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
     const browseSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayBrowseView.tsx"), "utf8");
 
-    expect(browseSource).toContain('placeholder="Search player... or score ID"');
+    expect(browseSource).toContain("placeholder={t`Search player... or score ID`}");
     expect(routeSource).toContain("onPlayerSearchSubmit={handlePlayerSearchSubmit}");
     expect(routeSource).toContain("onPlayerQueryChange={setPlayerSearchQuery}");
     expect(browseSource).toContain("<ScoreInputPreview");

@@ -5,12 +5,24 @@
    put a name to still being a voter. */
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { I18nProvider } from "@lingui/react";
 import type { GoatPollNominee } from "#/lib/live-backend";
+import { getI18n } from "#/lib/i18n";
 
 const fetchGoatPollVoters = vi.hoisted(() => vi.fn());
 vi.mock("#/lib/goat-poll", () => ({ fetchGoatPollVoters }));
 
 const { GoatPollVotersModal } = await import("./GoatPollVoters");
+
+// The modal uses <Trans>, which throws without a provider; en resolves to the
+// source strings these assertions read.
+function renderModal(props: { nominee: GoatPollNominee | null; onClose: () => void }) {
+  return render(
+    <I18nProvider i18n={getI18n("en")}>
+      <GoatPollVotersModal {...props} />
+    </I18nProvider>,
+  );
+}
 
 const nominee: GoatPollNominee = {
   id: "n1",
@@ -40,7 +52,7 @@ afterEach(() => {
 
 it("reads the ballot for the row it was opened on and names both sides", async () => {
   fetchGoatPollVoters.mockResolvedValue(voters);
-  render(<GoatPollVotersModal nominee={nominee} onClose={() => {}} />);
+  renderModal({ nominee, onClose: () => {} });
 
   expect(fetchGoatPollVoters).toHaveBeenCalledWith({ data: { nomineeId: "n1" } });
   await waitFor(() => expect(screen.getByText("Voter Seven")).toBeTruthy());
@@ -54,21 +66,21 @@ it("reads the ballot for the row it was opened on and names both sides", async (
 });
 
 it("asks for nothing while no row is open", () => {
-  render(<GoatPollVotersModal nominee={null} onClose={() => {}} />);
+  renderModal({ nominee: null, onClose: () => {} });
   expect(fetchGoatPollVoters).not.toHaveBeenCalled();
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 
 it("says so when the read fails rather than showing an empty ballot", async () => {
   fetchGoatPollVoters.mockResolvedValue(null);
-  render(<GoatPollVotersModal nominee={nominee} onClose={() => {}} />);
+  renderModal({ nominee, onClose: () => {} });
   await waitFor(() => expect(screen.getByText("Couldn't read the votes.")).toBeTruthy());
 });
 
 it("closes on escape and on the backdrop", async () => {
   fetchGoatPollVoters.mockResolvedValue([]);
   const onClose = vi.fn();
-  render(<GoatPollVotersModal nominee={nominee} onClose={onClose} />);
+  renderModal({ nominee, onClose });
   await waitFor(() => expect(screen.getByText("Nobody has voted on this row.")).toBeTruthy());
 
   fireEvent.keyDown(window, { key: "Escape" });

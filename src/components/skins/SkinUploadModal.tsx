@@ -4,6 +4,8 @@ import JSZip from "jszip";
 import { Check, ChevronDown, Copy, Star, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg, plural } from "@lingui/core/macro";
 import { skinEventProperties } from "../../lib/analytics-skins";
 import { track } from "../../lib/analytics";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
@@ -50,9 +52,9 @@ import {
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
 
-const VISIBILITY_CHOICES: ReadonlyArray<{ value: SkinVisibility; label: string; hint: string }> = [
-  { value: "public", label: "Everyone", hint: "On /skins, anyone can download the .osk." },
-  { value: "private", label: "Only me", hint: "Off the list, no download. Your replays still play in it." },
+const VISIBILITY_CHOICES: ReadonlyArray<{ value: SkinVisibility; label: ReturnType<typeof msg>; hint: ReturnType<typeof msg> }> = [
+  { value: "public", label: msg`Everyone`, hint: msg`On /skins, anyone can download the .osk.` },
+  { value: "private", label: msg`Only me`, hint: msg`Off the list, no download. Your replays still play in it.` },
 ];
 
 // The publish flow, entirely client-driven: parse the .osk in the browser
@@ -240,6 +242,7 @@ export function SkinUploadModal({
   onClose: () => void;
   onPublished: (skin: SkinSummary) => void;
 }) {
+  const { t, i18n } = useLingui();
   const [step, setStep] = useState<UploadStep>("pick");
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -586,7 +589,8 @@ export function SkinUploadModal({
     setError(null);
     setDuplicate(null);
     if (picked.size > SKIN_OSK_MAX_BYTES) {
-      setError(`This file is ${formatSkinFileSize(picked.size)}. The limit is 50 MB.`);
+      const size = formatSkinFileSize(picked.size);
+      setError(t`This file is ${size}. The limit is 50 MB.`);
       return;
     }
     setReading({ name: picked.name, percent: null });
@@ -649,12 +653,12 @@ export function SkinUploadModal({
         })
         .catch(() => setAssetGroups([]));
     } catch (importError) {
-      setError(importError instanceof Error ? importError.message : "This .osk could not be read.");
+      setError(importError instanceof Error ? importError.message : t`This .osk could not be read.`);
     } finally {
       setReading(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [revokeAssetUrls]);
+  }, [revokeAssetUrls, t]);
 
   // Render every supported keymode once per picked file and again whenever its
   // backdrop changes (4K first so the hero fills fast); switching keymodes
@@ -713,7 +717,7 @@ export function SkinUploadModal({
       }
     })()
       .catch(() => {
-        if (!cancelled) setError("The previews could not be rendered.");
+        if (!cancelled) setError(t`The previews could not be rendered.`);
       })
       .finally(() => {
         if (!cancelled) setPreviewBusy(false);
@@ -721,7 +725,7 @@ export function SkinUploadModal({
     return () => {
       cancelled = true;
     };
-  }, [imported, backdropFor, patterns, ensureBackdropImage]);
+  }, [imported, backdropFor, patterns, ensureBackdropImage, t]);
 
   const addScreenshots = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -735,11 +739,11 @@ export function SkinUploadModal({
         processed.push({ ...result, label: "" });
         screenshotUrlsRef.current.push(result.url);
       } else {
-        setError("A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB.");
+        setError(t`A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB.`);
       }
     }
     if (processed.length > 0) setScreenshots((previous) => [...previous, ...processed]);
-  }, [screenshots.length]);
+  }, [screenshots.length, t]);
 
   const renameScreenshot = useCallback((index: number, label: string) => {
     setScreenshots((previous) => previous.map((shot, i) => (i === index ? { ...shot, label } : shot)));
@@ -764,12 +768,12 @@ export function SkinUploadModal({
     if (!file || previewEntries.length === 0 || !previews.get(coverKeymode)) return;
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setError("The skin needs a name.");
+      setError(t`The skin needs a name.`);
       return;
     }
     setError(null);
     setDuplicate(null);
-    setProgress({ done: 0, total: 0, label: "Preparing the upload." });
+    setProgress({ done: 0, total: 0, label: t`Preparing the upload.` });
     setStep("uploading");
     try {
       // Reuse a still-valid ticket across retries so a network blip does not
@@ -781,7 +785,7 @@ export function SkinUploadModal({
         });
         if (!started.ok) {
           setStep("form");
-          setError(startErrorMessage(started.error));
+          setError(i18n._(startErrorMessage(started.error)));
           if (started.error === "duplicate") setDuplicate(started.duplicate);
           return;
         }
@@ -830,7 +834,9 @@ export function SkinUploadModal({
 
       for (let index = 0; index < pendingShots.length; index += 1) {
         const shot = pendingShots[index];
-        const step = `Uploading screenshot ${index + 1} of ${pendingShots.length}.`;
+        const shotNumber = index + 1;
+        const shotCount = pendingShots.length;
+        const step = t`Uploading screenshot ${shotNumber} of ${shotCount}.`;
         report(step, 0);
         await uploadSkinPart({
           id: ticket.id,
@@ -850,8 +856,11 @@ export function SkinUploadModal({
         doneBytes += shot.blob.size;
       }
 
-      const oskLabel = (sent: number) =>
-        `Uploading the skin file, ${formatSkinFileSize(sent) || "0 MB"} of ${formatSkinFileSize(file.size)}.`;
+      const oskLabel = (sent: number) => {
+        const sentSize = formatSkinFileSize(sent) || "0 MB";
+        const totalSize = formatSkinFileSize(file.size);
+        return t`Uploading the skin file, ${sentSize} of ${totalSize}.`;
+      };
       report(oskLabel(0), 0);
       await uploadSkinPart({
         id: ticket.id,
@@ -861,7 +870,7 @@ export function SkinUploadModal({
         onProgress: (sent) => report(oskLabel(sent), sent),
       });
       doneBytes += file.size;
-      report("Publishing.", 0);
+      report(t`Publishing.`, 0);
 
       const skin = await finishSkinUpload(
         ticket.id,
@@ -900,7 +909,7 @@ export function SkinUploadModal({
       }
       setStep("form");
     }
-  }, [file, name, author, description, resolution, visibility, onPublished, previews, screenshots, coverKeymode, coverShot, backdropFor, patterns]);
+  }, [file, name, author, description, resolution, visibility, onPublished, previews, screenshots, coverKeymode, coverShot, backdropFor, patterns, t, i18n]);
 
   const uploading = step === "uploading";
 
@@ -921,7 +930,7 @@ export function SkinUploadModal({
           <motion.div
             role="dialog"
             aria-modal="true"
-            aria-label="Upload a skin"
+            aria-label={t`Upload a skin`}
             className="modal-card-mobile-safe relative isolate z-10 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[880px] flex-col overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -932,12 +941,12 @@ export function SkinUploadModal({
             <div className="pointer-events-none absolute inset-0 bg-osu-b5" aria-hidden="true" />
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-osu-b3/30 px-4 py-3 sm:px-5">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">upload a skin</span>
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light"><Trans>upload a skin</Trans></span>
                 {!uploading && (
                   <button
                     type="button"
                     onClick={handleDismiss}
-                    aria-label="Close"
+                    aria-label={t`Close`}
                     className="grid h-7 w-7 place-items-center rounded-full text-osu-f1 transition-colors cursor-pointer hover:bg-osu-b3/50 hover:text-white"
                   >
                     <X className="h-4 w-4" strokeWidth={2.4} />
@@ -1068,7 +1077,7 @@ function PickStep({
         <div className="relative z-10 flex min-h-[240px] flex-col items-center justify-center gap-2.5 px-6 py-10 text-center">
           {reading ? (
             <div className="w-full max-w-[340px]">
-              <div className="truncate text-sm font-semibold text-white">Reading {reading.name}</div>
+              <div className="truncate text-sm font-semibold text-white"><Trans>Reading {reading.name}</Trans></div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-osu-b5">
                 <div
                   className="h-full bg-osu-pink transition-[width] duration-100"
@@ -1076,7 +1085,9 @@ function PickStep({
                 />
               </div>
               <div className="mt-1.5 text-[11px] tabular-nums text-osu-f1">
-                {reading.percent == null ? "Opening the archive..." : `Decoding the skin's images, ${reading.percent}%`}
+                {reading.percent == null
+                  ? <Trans>Opening the archive...</Trans>
+                  : <Trans>Decoding the skin's images, {reading.percent}%</Trans>}
               </div>
             </div>
           ) : (
@@ -1087,9 +1098,9 @@ function PickStep({
               />
               <div>
                 <div className="text-sm font-semibold text-white">
-                  {dragActive ? "Drop to read it" : "Drop an .osk here, or click to browse"}
+                  {dragActive ? <Trans>Drop to read it</Trans> : <Trans>Drop an .osk here, or click to browse</Trans>}
                 </div>
-                <div className="mt-1 text-[11px] text-osu-f1">Up to 50 MB.</div>
+                <div className="mt-1 text-[11px] text-osu-f1"><Trans>Up to 50 MB.</Trans></div>
               </div>
             </>
           )}
@@ -1119,6 +1130,7 @@ function DoneStep({
   onUploadAnother: () => void;
   onDismiss: () => void;
 }) {
+  const { t } = useLingui();
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<number | null>(null);
   const isPrivate = published.visibility === "private";
@@ -1143,12 +1155,13 @@ function DoneStep({
   }, [shareUrl]);
 
   const previewCount = published.previews.length || (published.previewUrl ? 1 : 0);
+  const shotCount = published.screenshots.length;
   const facts = [
     published.keymodes.length > 0 ? `${published.keymodes.map((keys) => `${keys}K`).join(", ")}` : null,
-    previewCount > 0 ? `${previewCount} preview${previewCount === 1 ? "" : "s"}` : null,
+    previewCount > 0 ? t`${plural(previewCount, { one: "# preview", other: "# previews" })}` : null,
     published.oskSizeBytes ? formatSkinFileSize(published.oskSizeBytes) : null,
-    published.screenshots.length > 0
-      ? `${published.screenshots.length} screenshot${published.screenshots.length === 1 ? "" : "s"}`
+    shotCount > 0
+      ? t`${plural(shotCount, { one: "# screenshot", other: "# screenshots" })}`
       : null,
   ].filter(Boolean) as string[];
 
@@ -1157,15 +1170,17 @@ function DoneStep({
       <div className="flex flex-col items-center gap-1">
         <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-osu-green">
           <Check size={13} aria-hidden="true" />
-          {isPrivate ? "saved" : "published"}
+          {isPrivate ? <Trans>saved</Trans> : <Trans>published</Trans>}
         </span>
         <h3 className="text-[17px] font-bold leading-tight text-white">
-          {published.name} is {isPrivate ? "yours" : "live"}
+          {isPrivate
+            ? <Trans>{published.name} is yours</Trans>
+            : <Trans>{published.name} is live</Trans>}
         </h3>
         <p className="text-[12px] text-osu-f1">
           {isPrivate
-            ? "Nobody else can open it. Set it as your replay skin and it plays in your replays."
-            : "This is how it looks on the skins page."}
+            ? <Trans>Nobody else can open it. Set it as your replay skin and it plays in your replays.</Trans>
+            : <Trans>This is how it looks on the skins page.</Trans>}
         </p>
       </div>
 
@@ -1184,7 +1199,7 @@ function DoneStep({
           onClick={onDismiss}
           className="rounded-full bg-osu-pink px-5 py-2 text-[13px] font-bold text-white transition hover:brightness-110"
         >
-          View the skin page
+          <Trans>View the skin page</Trans>
         </Link>
         {/* A private skin's link 404s for whoever it is sent to, so there is
             nothing here worth copying. */}
@@ -1195,7 +1210,7 @@ function DoneStep({
             className="flex items-center gap-1.5 rounded-full border border-osu-b3/40 px-4 py-2 text-[12.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-f1/40 hover:text-osu-l1"
           >
             {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
-            {copied ? "Link copied" : "Copy link"}
+            {copied ? <Trans>Link copied</Trans> : <Trans>Copy link</Trans>}
           </button>
         )}
         <button
@@ -1203,7 +1218,7 @@ function DoneStep({
           onClick={onUploadAnother}
           className="text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
         >
-          Upload another
+          <Trans>Upload another</Trans>
         </button>
       </div>
 
@@ -1306,6 +1321,7 @@ function FormStep({
   onRepick: () => void;
   onDismiss: () => void;
 }) {
+  const { t, i18n } = useLingui();
   const keymodes = imported?.summary.keymodes ?? [];
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
   const heroPreview = previews.get(selectedKeymode);
@@ -1330,16 +1346,16 @@ function FormStep({
         <div className="relative overflow-hidden rounded-xl border border-osu-b3/30 bg-osu-b4">
           <div className="aspect-video w-full">
             {heroPreview ? (
-              <img src={heroPreview.url} alt={`${selectedKeymode}K preview`} className="h-full w-full object-cover" />
+              <img src={heroPreview.url} alt={t`${selectedKeymode}K preview`} className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full items-center justify-center text-[12px] text-osu-f1">Rendering the {selectedKeymode}K playfield...</div>
+              <div className="flex h-full items-center justify-center text-[12px] text-osu-f1"><Trans>Rendering the {selectedKeymode}K playfield...</Trans></div>
             )}
           </div>
           {/* The previews on screen stay put while a new backdrop decodes, so
               the wait needs saying out loud instead of showing as a flash. */}
           {heroPreview && previewBusy && (
             <div className="pointer-events-none absolute right-2 top-2 rounded bg-osu-b5/85 px-1.5 py-0.5 text-[10px] font-bold text-osu-l2">
-              updating
+              <Trans>updating</Trans>
             </div>
           )}
         </div>
@@ -1347,11 +1363,11 @@ function FormStep({
             through the previews only changes what is on screen. A starred
             screenshot outranks all of them, so the star moves down there. */}
         <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
-          <span className="text-osu-f1">Viewing <span className="font-bold text-osu-l2 tabular-nums">{selectedKeymode}K</span></span>
+          <span className="text-osu-f1"><Trans>Viewing <span className="font-bold text-osu-l2 tabular-nums">{selectedKeymode}K</span></Trans></span>
           {selectedKeymode === coverKeymode && coverShot == null ? (
             <span className="flex items-center gap-1 font-bold text-osu-pink">
               <Star size={11} aria-hidden="true" />
-              card cover
+              <Trans>card cover</Trans>
             </span>
           ) : (
             <button
@@ -1361,7 +1377,7 @@ function FormStep({
               className="flex items-center gap-1 font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default"
             >
               <Star size={11} aria-hidden="true" />
-              Use {selectedKeymode}K as the card cover
+              <Trans>Use {selectedKeymode}K as the card cover</Trans>
             </button>
           )}
         </div>
@@ -1380,25 +1396,25 @@ function FormStep({
                 disabled={uploading}
                 onClick={() => setSelectedKeymode(keys)}
                 aria-pressed={selected}
-                title={missingNoteArt ? `The ${keys}K block resolves no note images; the preview shows flat colours.` : undefined}
+                title={missingNoteArt ? t`The ${keys}K block resolves no note images; the preview shows flat colours.` : undefined}
                 className={`w-[104px] overflow-hidden rounded-lg border text-left transition-colors duration-100 cursor-pointer disabled:cursor-default ${
                   selected ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
                 }`}
               >
                 <div className="aspect-video w-full bg-osu-b4">
                   {preview ? (
-                    <img src={preview.url} alt={`${keys}K thumbnail`} className="h-full w-full object-cover" />
+                    <img src={preview.url} alt={t`${keys}K thumbnail`} className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-[10px] text-osu-f1/60">rendering</div>
+                    <div className="flex h-full items-center justify-center text-[10px] text-osu-f1/60"><Trans>rendering</Trans></div>
                   )}
                 </div>
                 <div className={`flex items-center gap-1 px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums ${selected ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"}`}>
                   {keys}K
-                  {isCover && <Star size={9} className={selected ? "text-white" : "text-osu-pink"} aria-label="card cover" />}
+                  {isCover && <Star size={9} className={selected ? "text-white" : "text-osu-pink"} aria-label={t`card cover`} />}
                   {/* Its backdrop was set on its own, so an "all keymodes"
                       pick is what puts it back with the rest. */}
                   {overriddenKeymodes.has(keys) && (
-                    <span className={selected ? "text-white/80" : "text-osu-f1/70"} title="Has its own backdrop" aria-hidden="true">*</span>
+                    <span className={selected ? "text-white/80" : "text-osu-f1/70"} title={t`Has its own backdrop`} aria-hidden="true">*</span>
                   )}
                   {missingNoteArt && <span className={selected ? "text-white/80" : "text-osu-yellow"} aria-hidden="true">!</span>}
                 </div>
@@ -1408,7 +1424,7 @@ function FormStep({
         </div>
         {keymodesWithoutNoteArt.has(selectedKeymode) && (
           <p className="mt-2 text-[11px] font-semibold text-osu-yellow">
-            The {selectedKeymode}K block resolves no note images, so this preview uses flat colours.
+            <Trans>The {selectedKeymode}K block resolves no note images, so this preview uses flat colours.</Trans>
           </p>
         )}
 
@@ -1427,7 +1443,7 @@ function FormStep({
             keymodeLabel: `${selectedKeymode}K`,
             hint: overriddenKeymodes.size > 0 ? (
               <span className="text-[10px] text-osu-f1/55">
-                {[...overriddenKeymodes.keys()].sort((a, b) => a - b).map((keys) => `${keys}K`).join(", ")} on their own
+                <Trans>{[...overriddenKeymodes.keys()].sort((a, b) => a - b).map((keys) => `${keys}K`).join(", ")} on their own</Trans>
               </span>
             ) : null,
           }}
@@ -1441,7 +1457,7 @@ function FormStep({
 
       <div className="flex min-w-0 flex-col gap-3.5">
         <label className="flex flex-col gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Name</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Name</Trans></span>
           <input
             type="text"
             value={name}
@@ -1453,7 +1469,7 @@ function FormStep({
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-            Made by <span className="normal-case tracking-normal text-osu-f1/70">(from skin.ini, credited on the card)</span>
+            <Trans>Made by <span className="normal-case tracking-normal text-osu-f1/70">(from skin.ini, credited on the card)</span></Trans>
           </span>
           <input
             type="text"
@@ -1461,13 +1477,13 @@ function FormStep({
             maxLength={SKIN_AUTHOR_MAX_LENGTH}
             disabled={uploading}
             onChange={(event) => setAuthor(event.target.value)}
-            placeholder="The skin's original creator"
+            placeholder={t`The skin's original creator`}
             className="w-full rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13.5px] text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
           />
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-            Description <span className="normal-case tracking-normal text-osu-f1/70">(optional)</span>
+            <Trans>Description <span className="normal-case tracking-normal text-osu-f1/70">(optional)</span></Trans>
           </span>
           <textarea
             value={description}
@@ -1475,13 +1491,13 @@ function FormStep({
             rows={3}
             disabled={uploading}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder="A line about the skin"
+            placeholder={t`A line about the skin`}
             className="w-full resize-y rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] leading-relaxed text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
           />
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-            Made for <span className="normal-case tracking-normal text-osu-f1/70">(resolution, optional)</span>
+            <Trans>Made for <span className="normal-case tracking-normal text-osu-f1/70">(resolution, optional)</span></Trans>
           </span>
           <input
             type="text"
@@ -1504,7 +1520,7 @@ function FormStep({
           </datalist>
         </label>
         <div className="flex flex-col gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Visibility</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Visibility</Trans></span>
           <div className="flex gap-2">
             {VISIBILITY_CHOICES.map((choice) => (
               <button
@@ -1520,9 +1536,9 @@ function FormStep({
                 }`}
               >
                 <span className={`block text-[12.5px] font-bold ${visibility === choice.value ? "text-white" : "text-osu-l2"}`}>
-                  {choice.label}
+                  {i18n._(choice.label)}
                 </span>
-                <span className="mt-0.5 block text-[11px] leading-snug text-osu-f1">{choice.hint}</span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-osu-f1">{i18n._(choice.hint)}</span>
               </button>
             ))}
           </div>
@@ -1550,9 +1566,9 @@ function FormStep({
                     onClick={onDismiss}
                     className="underline underline-offset-2 hover:text-osu-l1"
                   >
-                    {duplicate.name || "View it"}
+                    {duplicate.name || t`View it`}
                   </Link>
-                  {duplicate.ownerUsername ? ` (uploaded by ${duplicate.ownerUsername})` : ""}
+                  {duplicate.ownerUsername ? ` ${t`(uploaded by ${duplicate.ownerUsername})`}` : ""}
                 </>
               )}
             </div>
@@ -1575,14 +1591,14 @@ function FormStep({
                 disabled={previewBusy || !heroPreview || !coverPreview}
                 className="rounded-full bg-osu-pink px-6 py-2 text-[13px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-50"
               >
-                Upload skin
+                <Trans>Upload skin</Trans>
               </button>
               <button
                 type="button"
                 onClick={onRepick}
                 className="text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
               >
-                Pick a different file
+                <Trans>Pick a different file</Trans>
               </button>
               {file && <span className="text-[11px] text-osu-f1 tabular-nums">{formatSkinFileSize(file.size)}</span>}
             </div>
@@ -1608,6 +1624,7 @@ function DetectedAssets({
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const open = groups.find((group) => group.key === openGroup) ?? null;
   const files = groups.reduce((total, group) => total + group.entries.length, 0);
+  const groupCount = groups.length;
 
   return (
     <div className="mt-3 flex flex-col gap-1.5">
@@ -1620,9 +1637,9 @@ function DetectedAssets({
         aria-expanded={expanded}
         className="flex items-center gap-1.5 self-start text-osu-f1/55 transition-colors cursor-pointer hover:text-osu-l2"
       >
-        <span className="text-[10px] font-bold uppercase tracking-[0.08em]">Detected in the .osk</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em]"><Trans>Detected in the .osk</Trans></span>
         <span className="text-[11px] tabular-nums">
-          {files} files in {groups.length} groups
+          <Trans>{files} files in {groupCount} groups</Trans>
         </span>
         <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>

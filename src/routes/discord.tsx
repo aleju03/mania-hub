@@ -1,5 +1,8 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Radio } from "lucide-react";
+import { Trans } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { CommandShowcase } from "../components/discord/CommandShowcase";
@@ -12,15 +15,19 @@ import { useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/discord")({
-  head: ({ match }) => pageSeo({
-    title: "maniabot - Mania Hub for Discord",
-    appendSiteName: false,
-    description: "Every osu!mania lookup as a slash command, plus live feeds that post new top plays, snipes, and farm maps into any channel.",
-    path: "/discord",
-    origin: match.context.origin,
-    imageKind: "discord",
-    noindex: true,
-  }),
+  head: ({ match }) => {
+    const i18n = getI18n(match.context.locale);
+    return pageSeo({
+      title: i18n._(msg`maniabot - Mania Hub for Discord`),
+      appendSiteName: false,
+      description: i18n._(msg`Every osu!mania lookup as a slash command, plus live feeds that post new top plays, snipes, and farm maps into any channel.`),
+      path: "/discord",
+      origin: match.context.origin,
+      imageKind: "discord",
+      imageTitle: "maniabot - Mania Hub for Discord",
+      noindex: true,
+    });
+  },
   beforeLoad: ({ context }) => {
     if (!canUseDevFeatures(context.auth)) {
       throw notFound();
@@ -46,7 +53,7 @@ function DiscordToolPage() {
             title="maniabot"
             right={(
               <span className="rounded bg-osu-yellow/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-osu-yellow">
-                dev preview
+                <Trans>dev preview</Trans>
               </span>
             )}
           />
@@ -74,9 +81,11 @@ function Hero({ info }: { info: DiscordPublicInfo }) {
         <div className="relative min-w-0 flex-1">
           <h1 className="text-[17px] font-bold text-white">maniabot</h1>
           <p className="mt-1 text-[13px] leading-relaxed text-osu-l2">
-            Every osu!mania lookup as a slash command. Link your account once with <code className="text-osu-pink-light">/link</code> and
-            commands like <code className="text-osu-pink-light">/recent</code> work with no username. Live feeds auto-post new top plays,
-            snipes and farm maps straight into any channel.
+            <Trans>
+              Every osu!mania lookup as a slash command. Link your account once with <code className="text-osu-pink-light">/link</code> and
+              commands like <code className="text-osu-pink-light">/recent</code> work with no username. Live feeds auto-post new top plays,
+              snipes and farm maps straight into any channel.
+            </Trans>
           </p>
         </div>
         {info.configured && info.inviteUrl ? (
@@ -88,16 +97,16 @@ function Hero({ info }: { info: DiscordPublicInfo }) {
             style={{ backgroundColor: BLURPLE }}
           >
             <DiscordLogo className="h-5 w-5" />
-            Add to Discord
+            <Trans>Add to Discord</Trans>
           </a>
         ) : null}
       </div>
 
       {info.configured ? (
         <ol className="grid gap-px border-t border-osu-b3/30 bg-osu-b3/30 text-[12px] sm:grid-cols-3">
-          <HowStep n={1} text="Click Add to Discord and pick a server where you have Manage Server." />
-          <HowStep n={2} text="Authorize. The bot needs to send messages and embed links." />
-          <HowStep n={3} text={(<>Type <code className="text-osu-pink-light">/help</code> for a guided tour, or <code className="text-osu-pink-light">/</code> to see every command.</>)} />
+          <HowStep n={1} text={<Trans>Click Add to Discord and pick a server where you have Manage Server.</Trans>} />
+          <HowStep n={2} text={<Trans>Authorize. The bot needs to send messages and embed links.</Trans>} />
+          <HowStep n={3} text={(<Trans>Type <code className="text-osu-pink-light">/help</code> for a guided tour, or <code className="text-osu-pink-light">/</code> to see every command.</Trans>)} />
         </ol>
       ) : (
         <SetupNote />
@@ -129,23 +138,27 @@ function FeedsCard({ feedsEnabled }: { feedsEnabled: boolean }) {
     <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
       <div className="mb-2 flex items-center gap-2">
         <Radio className="h-4 w-4 text-osu-pink-light" />
-        <h3 className="text-[12px] font-semibold text-white">Live feeds</h3>
+        <h3 className="text-[12px] font-semibold text-white"><Trans>Live feeds</Trans></h3>
       </div>
       <p className="text-[12px] leading-relaxed text-osu-l2">
-        <code className="text-osu-pink-light">/subscribe feed:Top plays country:{country}</code> posts every
-        new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and{" "}
-        <code className="text-osu-pink-light">min_pp</code> skips scores below a threshold.{" "}
-        <code className="text-osu-pink-light">/subscriptions</code> lists a server's active feeds,{" "}
-        <code className="text-osu-pink-light">/unsubscribe</code> stops one. Subscribing needs Manage Server.
+        <Trans>
+          <code className="text-osu-pink-light">/subscribe feed:Top plays country:{country}</code> posts every
+          new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and{" "}
+          <code className="text-osu-pink-light">min_pp</code> skips scores below a threshold.{" "}
+          <code className="text-osu-pink-light">/subscriptions</code> lists a server's active feeds,{" "}
+          <code className="text-osu-pink-light">/unsubscribe</code> stops one. Subscribing needs Manage Server.
+        </Trans>
       </p>
       {!feedsEnabled ? (
-        <p className="mt-2 text-[11px] text-osu-l3">Feeds are currently disabled on the backend.</p>
+        <p className="mt-2 text-[11px] text-osu-l3"><Trans>Feeds are currently disabled on the backend.</Trans></p>
       ) : null}
     </section>
   );
 }
 
 function SetupNote() {
+  // Operator-facing (backend env vars + admin dashboard steps), so it stays
+  // English like the rest of the admin surfaces.
   return (
     <div className="border-t border-osu-b3/30 bg-osu-b4 p-5 sm:p-6">
       <div className="flex items-center gap-2">

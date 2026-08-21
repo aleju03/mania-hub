@@ -14,6 +14,8 @@ vi.mock("../../lib/live-backend", () => ({ openLiveEventSource: mocks.openLiveEv
 vi.mock("../../lib/goals", () => ({ fetchMyGoals: mocks.fetchMyGoals }));
 vi.mock("../../lib/ui-sounds", () => ({ playGoalClearedSound: vi.fn() }));
 
+import { I18nProvider } from "@lingui/react";
+import { getI18n } from "../../lib/i18n";
 import { GoalToasts } from "./GoalToasts";
 
 type FakeSource = {
@@ -55,7 +57,12 @@ describe("GoalToasts live stream", () => {
       return source;
     });
 
-    const view = render(<GoalToasts />);
+    // The toasts use <Trans>/useLingui, which throw without a provider.
+    const view = render(
+      <I18nProvider i18n={getI18n("en")}>
+        <GoalToasts />
+      </I18nProvider>,
+    );
     await waitFor(() => expect(sources).toHaveLength(1));
 
     setVisibility("hidden");

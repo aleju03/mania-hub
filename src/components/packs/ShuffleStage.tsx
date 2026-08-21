@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { Trans } from "@lingui/react/macro";
 import { useWindowActive } from "#/lib/window-activity";
 import { getCachedCardBackDataUrl } from "./packArt";
 import { playShuffleWhisk } from "./packSfx";
@@ -65,7 +66,7 @@ export function ShuffleStage({ reducedMotion, count }: ShuffleStageProps) {
 
   return (
     <div className="flex flex-col items-center">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">shuffling</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1"><Trans>shuffling</Trans></div>
 
       <div className="relative mt-4 w-[min(340px,84vw)]" style={{ aspectRatio: "5 / 7" }}>
         {cardBack &&
@@ -124,7 +125,7 @@ export function ShuffleStage({ reducedMotion, count }: ShuffleStageProps) {
       </div>
 
       <div className="mt-5 h-[58px] text-center" aria-live="polite">
-        <div className="text-[12px] text-osu-f1">Shuffling players...</div>
+        <div className="text-[12px] text-osu-f1"><Trans>Shuffling players...</Trans></div>
         {slow && (
           <motion.div
             className="mt-1 text-[12px] text-osu-f1/70"
@@ -132,7 +133,7 @@ export function ShuffleStage({ reducedMotion, count }: ShuffleStageProps) {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
           >
-            The rankings lookup is taking a moment
+            <Trans>The rankings lookup is taking a moment</Trans>
           </motion.div>
         )}
       </div>

@@ -26,6 +26,9 @@ import {
   UserRound,
   Youtube,
 } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
@@ -34,37 +37,37 @@ import { pageSeo } from "../lib/seo";
 
 const BBCodeEditorLazy = lazy(() => import("../components/player/bbcode/BBCodeEditor"));
 
-const TOOLBAR_GROUPS: Array<Array<{ label: string; icon: ReactNode }>> = [
+const TOOLBAR_GROUPS: Array<Array<{ label: ReturnType<typeof msg>; icon: ReactNode }>> = [
   [
-    { label: "Bold", icon: <Bold size={15} /> },
-    { label: "Italic", icon: <Italic size={15} /> },
-    { label: "Underline", icon: <Underline size={15} /> },
-    { label: "Strikethrough", icon: <Strikethrough size={15} /> },
-    { label: "Spoiler text", icon: <EyeOff size={15} /> },
+    { label: msg`Bold`, icon: <Bold size={15} /> },
+    { label: msg`Italic`, icon: <Italic size={15} /> },
+    { label: msg`Underline`, icon: <Underline size={15} /> },
+    { label: msg`Strikethrough`, icon: <Strikethrough size={15} /> },
+    { label: msg`Spoiler text`, icon: <EyeOff size={15} /> },
   ],
   [
-    { label: "Text color", icon: <Palette size={15} /> },
-    { label: "Gradient text", icon: <Rainbow size={15} /> },
-    { label: "Text size", icon: <ALargeSmall size={15} /> },
+    { label: msg`Text color`, icon: <Palette size={15} /> },
+    { label: msg`Gradient text`, icon: <Rainbow size={15} /> },
+    { label: msg`Text size`, icon: <ALargeSmall size={15} /> },
   ],
   [
-    { label: "Link", icon: <Link size={15} /> },
-    { label: "Image", icon: <Image size={15} /> },
-    { label: "YouTube video", icon: <Youtube size={15} /> },
-    { label: "Audio", icon: <Music size={15} /> },
-    { label: "Profile link", icon: <UserRound size={15} /> },
+    { label: msg`Link`, icon: <Link size={15} /> },
+    { label: msg`Image`, icon: <Image size={15} /> },
+    { label: msg`YouTube video`, icon: <Youtube size={15} /> },
+    { label: msg`Audio`, icon: <Music size={15} /> },
+    { label: msg`Profile link`, icon: <UserRound size={15} /> },
   ],
   [
-    { label: "Heading", icon: <Heading1 size={15} /> },
-    { label: "Center", icon: <AlignCenter size={15} /> },
-    { label: "Quote", icon: <TextQuote size={15} /> },
-    { label: "Notice", icon: <Megaphone size={15} /> },
-    { label: "Collapsible box", icon: <ChevronsDownUp size={15} /> },
-    { label: "Inline code", icon: <Braces size={15} /> },
-    { label: "Code block", icon: <Code size={15} /> },
-    { label: "Bullet list", icon: <List size={15} /> },
-    { label: "Numbered list", icon: <ListOrdered size={15} /> },
-    { label: "Imagemap (image with clickable areas)", icon: <Map size={15} /> },
+    { label: msg`Heading`, icon: <Heading1 size={15} /> },
+    { label: msg`Center`, icon: <AlignCenter size={15} /> },
+    { label: msg`Quote`, icon: <TextQuote size={15} /> },
+    { label: msg`Notice`, icon: <Megaphone size={15} /> },
+    { label: msg`Collapsible box`, icon: <ChevronsDownUp size={15} /> },
+    { label: msg`Inline code`, icon: <Braces size={15} /> },
+    { label: msg`Code block`, icon: <Code size={15} /> },
+    { label: msg`Bullet list`, icon: <List size={15} /> },
+    { label: msg`Numbered list`, icon: <ListOrdered size={15} /> },
+    { label: msg`Imagemap (image with clickable areas)`, icon: <Map size={15} /> },
   ],
 ];
 
@@ -72,14 +75,15 @@ const TOOLBAR_GROUPS: Array<Array<{ label: string; icon: ReactNode }>> = [
     real so only the parts that depend on editor state show as skeletons,
     with matching paddings and heights so the swap doesn't shift. */
 function BBCodeEditorSkeleton({ signedIn }: { signedIn: boolean }) {
+  const { i18n } = useLingui();
   return (
     <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-osu-b3/30">
         <div className="min-w-0">
-          <div className="text-[13px] font-bold text-osu-c1">BBCode editor</div>
+          <div className="text-[13px] font-bold text-osu-c1"><Trans>BBCode editor</Trans></div>
           <div className="text-[12px] text-osu-f1 truncate">
-            Edits stay in this browser. Copy the result and paste it into the me! editor on your osu! page.
+            <Trans>Edits stay in this browser. Copy the result and paste it into the me! editor on your osu! page.</Trans>
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
@@ -89,7 +93,7 @@ function BBCodeEditorSkeleton({ signedIn }: { signedIn: boolean }) {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-osu-h1/20 border border-osu-h1/40 text-osu-c1 opacity-60"
           >
             <Copy size={14} />
-            Copy BBCode
+            <Trans>Copy BBCode</Trans>
           </button>
         </div>
       </div>
@@ -97,7 +101,7 @@ function BBCodeEditorSkeleton({ signedIn }: { signedIn: boolean }) {
       {/* Load me! page row */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 border-b border-osu-b3/30 bg-osu-b5/40">
         <span className="text-[12px] font-semibold text-osu-f1 shrink-0">
-          {signedIn ? "Start from your live me! page" : "Load a player's me! page"}
+          {signedIn ? <Trans>Start from your live me! page</Trans> : <Trans>Load a player's me! page</Trans>}
         </span>
         {signedIn ? (
           <Skeleton className="h-[30px] w-[136px] rounded-md" />
@@ -111,12 +115,12 @@ function BBCodeEditorSkeleton({ signedIn }: { signedIn: boolean }) {
         {TOOLBAR_GROUPS.map((group, groupIndex) => (
           <div key={groupIndex} className="flex items-center gap-0.5 shrink-0">
             {groupIndex > 0 ? <div className="w-px h-5 bg-osu-b3/60 mx-1 shrink-0" /> : null}
-            {group.map((tool) => (
+            {group.map((tool, toolIndex) => (
               <button
-                key={tool.label}
+                key={toolIndex}
                 type="button"
-                title={tool.label}
-                aria-label={tool.label}
+                title={i18n._(tool.label)}
+                aria-label={i18n._(tool.label)}
                 disabled
                 className="w-8 h-8 flex items-center justify-center rounded-md text-osu-l2 border border-transparent shrink-0"
               >
@@ -131,14 +135,14 @@ function BBCodeEditorSkeleton({ signedIn }: { signedIn: boolean }) {
             disabled
             className="px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide bg-osu-h1/20 text-osu-c1 border border-osu-h1/40"
           >
-            Visual
+            <Trans>Visual</Trans>
           </button>
           <button
             type="button"
             disabled
             className="px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide text-osu-f1 border border-transparent"
           >
-            BBCode
+            <Trans>BBCode</Trans>
           </button>
         </div>
       </div>
@@ -150,27 +154,32 @@ function BBCodeEditorSkeleton({ signedIn }: { signedIn: boolean }) {
 
       {/* Footer */}
       <div className="flex items-center gap-3 px-4 py-2 border-t border-osu-b3/30 text-[12px] text-osu-f1">
-        <span>0 characters</span>
-        <span className="hidden sm:inline">Draft autosaves locally</span>
+        {/* Same message as the loaded footer ("{0} characters") so the catalog holds one entry. */}
+        <span><Trans>{0} characters</Trans></span>
+        <span className="hidden sm:inline"><Trans>Draft autosaves locally</Trans></span>
       </div>
     </div>
   );
 }
 
 export const Route = createFileRoute("/bbcode")({
-  head: ({ match }) =>
-    pageSeo({
-      title: "BBCode editor",
+  head: ({ match }) => {
+    const i18n = getI18n(match.context.locale);
+    return pageSeo({
+      title: i18n._(msg`BBCode editor`),
       description:
-        "Write and preview osu! profile BBCode for your me! page, with a live preview and one-click copy.",
+        i18n._(msg`Write and preview osu! profile BBCode for your me! page, with a live preview and one-click copy.`),
       path: "/bbcode",
       origin: match.context.origin,
       imageKind: "bbcode",
-    }),
+      imageTitle: "BBCode editor",
+    });
+  },
   component: BBCodePage,
 });
 
 function BBCodePage() {
+  const { t } = useLingui();
   const { viewer } = useAuth();
 
   return (
@@ -178,7 +187,7 @@ function BBCodePage() {
       <div className="relative z-10 flex flex-1 flex-col overflow-clip bg-osu-b5">
         <OsuTriangleBackdrop />
         <div className="relative z-10 flex flex-1 flex-col">
-          <PageHeader iconSrc="/images/icons/profile.svg" title="osu! profile BBCode editor" />
+          <PageHeader iconSrc="/images/icons/profile.svg" title={t`osu! profile BBCode editor`} />
 
           <div className="mx-auto w-full max-w-[1100px] flex-1 px-4 py-5 sm:px-5">
             <Suspense fallback={<BBCodeEditorSkeleton signedIn={!!viewer} />}>

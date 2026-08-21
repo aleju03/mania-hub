@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useLingui } from "@lingui/react/macro";
 import { formatNumber, formatTimeAgo } from "#/lib/format";
 import { honoraryAvatarUrl } from "#/lib/honorary-players";
 import {
@@ -133,12 +134,13 @@ function completionNote(completion: LivePackCollectorCompletion): string | null 
 }
 
 export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
+  const { t } = useLingui();
   const { boards, totals } = stats;
   const goatRoster = totals.goatRosterSize;
 
   return (
     <div className="grid gap-x-10 gap-y-10 md:grid-cols-2">
-      <Board title="biggest collections">
+      <Board title={t`biggest collections`}>
         {boards.biggestCollections.map((collector, index) => (
           <CollectorRow
             key={collector.userId}
@@ -149,7 +151,7 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
         ))}
       </Board>
 
-      <Board title="most packs opened">
+      <Board title={t`most packs opened`}>
         {boards.packsOpened.map((collector, index) => (
           <CollectorRow
             key={collector.userId}
@@ -161,7 +163,7 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
       </Board>
 
       {boards.completion.length > 0 && (
-        <Board title="closest to every pullable player">
+        <Board title={t`closest to every pullable player`}>
           {boards.completion.map((collector, index) => (
             <CollectorRow
               key={collector.userId}
@@ -174,7 +176,7 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
         </Board>
       )}
 
-      <Board title={`GOAT roster, ${goatRoster} to find`}>
+      <Board title={t`GOAT roster, ${goatRoster} to find`}>
         {boards.goatHolders.map((collector, index) => (
           <CollectorRow
             key={collector.userId}
@@ -182,13 +184,13 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
             index={index}
             // The whole roster is the thing worth calling out; a partial run is
             // just the number.
-            note={collector.goats >= goatRoster ? "all of them" : null}
+            note={collector.goats >= goatRoster ? t`all of them` : null}
             value={`${collector.goats}/${goatRoster}`}
           />
         ))}
       </Board>
 
-      <Board title="first to find a card">
+      <Board title={t`first to find a card`}>
         {boards.firstFinds.map((collector, index) => (
           <CollectorRow
             key={collector.userId}
@@ -199,13 +201,13 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
         ))}
       </Board>
 
-      <Board title="collecting the longest">
+      <Board title={t`collecting the longest`}>
         {boards.longestStanding.map((collector, index) => (
           <CollectorRow
             key={collector.userId}
             collector={collector}
             index={index}
-            value={collector.joinedAt > 0 ? formatTimeAgo(new Date(collector.joinedAt).toISOString()) : "unknown"}
+            value={collector.joinedAt > 0 ? formatTimeAgo(new Date(collector.joinedAt).toISOString()) : t`unknown`}
           />
         ))}
       </Board>
@@ -213,25 +215,25 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
       {/* Counted in how many collectors have ever pulled the card rather than
           in how many hold it now: a serial is never given back, so recycling
           cannot make a common card look rare. */}
-      <Board title="hardest cards to find">
+      <Board title={t`hardest cards to find`}>
         {boards.rarestCards.map((card, index) => (
           <CardRow
             key={card.userId}
             card={card}
             index={index}
-            note={card.mintedTotal > 0 && card.mintedTotal !== card.owners ? `${formatNumber(card.owners)} still held` : null}
-            value={card.mintedTotal > 0 ? `found ${formatNumber(card.mintedTotal)}x` : `${formatNumber(card.owners)} held`}
+            note={card.mintedTotal > 0 && card.mintedTotal !== card.owners ? t`${formatNumber(card.owners)} still held` : null}
+            value={card.mintedTotal > 0 ? t`found ${formatNumber(card.mintedTotal)}x` : t`${formatNumber(card.owners)} held`}
           />
         ))}
       </Board>
 
-      <Board title="most collected cards">
+      <Board title={t`most collected cards`}>
         {boards.mostOwnedCards.map((card, index) => (
           <CardRow
             key={card.userId}
             card={card}
             index={index}
-            value={`${formatNumber(card.owners)} collections`}
+            value={t`${formatNumber(card.owners)} collections`}
           />
         ))}
       </Board>

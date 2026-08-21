@@ -1,6 +1,9 @@
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Check, Download, Lock, MonitorPlay, Settings } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags, SkinPreviewImage } from "../components/skins/SkinCard";
 import { SkinAssetExplorer } from "../components/skins/SkinAssetExplorer";
@@ -35,20 +38,22 @@ export const Route = createFileRoute("/skins_/$id")({
   },
   head: ({ match }) => {
     const skin = match.loaderData as SkinSummary | null | undefined;
+    const i18n = getI18n(match.context.locale);
     if (!skin) {
       return pageSeo({
-        title: "Skin",
-        description: "osu!mania skins on Mania Hub.",
+        title: i18n._(msg`Skin`),
+        description: i18n._(msg`osu!mania skins on Mania Hub.`),
         path: `/skins/${match.params.id}`,
         origin: match.context.origin,
         imageKind: "skins",
         noindex: true,
       });
     }
+    const keymodes = formatKeymodes(skin.keymodes, skin.specialKeymodes) || "mania";
     return pageSeo({
       title: skin.name,
       description: skin.description?.replace(/\s+/g, " ").slice(0, 160)
-        || `${skin.name}, an osu!mania skin for ${formatKeymodes(skin.keymodes, skin.specialKeymodes) || "mania"} uploaded by ${skin.ownerUsername}. Download the .osk or browse more skins.`,
+        || i18n._(msg`${skin.name}, an osu!mania skin for ${keymodes} uploaded by ${skin.ownerUsername}. Download the .osk or browse more skins.`),
       path: `/skins/${skin.slug ?? skin.id}`,
       origin: match.context.origin,
       // A private skin only ever renders for its uploader, so the page must not
@@ -93,6 +98,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
   // cache on /api/skins/get.
   const [edited, setEdited] = useState<SkinSummary | null>(null);
   const skin = edited?.id === loaded?.id ? edited ?? loaded : loaded;
+  const { t } = useLingui();
   const params = Route.useParams();
   const auth = useAuth();
   const navigate = useNavigate();
@@ -178,10 +184,10 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
         setReplaySkinStatus("idle");
         setReplaySkinError(
           outcome.error === "not_logged_in"
-            ? "Sign in to set a replay skin."
+            ? t`Sign in to set a replay skin.`
             : outcome.error === "payload_too_large"
-              ? "This skin's settings are too large to store."
-              : "Setting the replay skin failed. Try again.",
+              ? t`This skin's settings are too large to store.`
+              : t`Setting the replay skin failed. Try again.`,
         );
         return;
       }
@@ -194,7 +200,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
       setReplaySkinStatus("set");
     } catch {
       setReplaySkinStatus("idle");
-      setReplaySkinError("Setting the replay skin failed. Try again.");
+      setReplaySkinError(t`Setting the replay skin failed. Try again.`);
     }
   };
 
@@ -205,7 +211,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
     const previews: GalleryItem[] = skin.previews.length > 0
       ? skin.previews.map((preview) => ({ url: preview.url, width: preview.width, height: preview.height, label: keymodeLabel(preview.keys, skin.specialKeymodes), keys: preview.keys }))
       : skin.previewUrl
-        ? [{ url: skin.previewUrl, width: skin.previewWidth, height: skin.previewHeight, label: "Preview", keys: null }]
+        ? [{ url: skin.previewUrl, width: skin.previewWidth, height: skin.previewHeight, label: t`Preview`, keys: null }]
         : [];
     const screenshots: GalleryItem[] = skin.screenshots.map((shot, index) => ({
       url: shot.url,
@@ -215,7 +221,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
       keys: null,
     }));
     return [...previews, ...screenshots];
-  }, [skin]);
+  }, [skin, t]);
   const [heroIndex, setHeroIndex] = useState(() => {
     const coverIndex = skin?.previewUrl ? gallery.findIndex((item) => item.url === skin.previewUrl) : -1;
     return coverIndex >= 0 ? coverIndex : 0;
@@ -247,7 +253,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
             iconSrc="/images/icons/skins.svg"
             title={
               <Link to="/skins" search={{}} className="transition-colors hover:text-white">
-                osu!mania skins
+                <Trans>osu!mania skins</Trans>
               </Link>
             }
             right={
@@ -257,7 +263,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                 className="inline-flex items-center gap-1.5 rounded-lg bg-osu-b4 px-2.5 py-1.5 text-[11px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3 hover:text-white"
               >
                 <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>back to skins</span>
+                <span><Trans>back to skins</Trans></span>
               </button>
             }
           />
@@ -265,14 +271,14 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
           <div className="mx-auto w-full max-w-[1100px] flex-1 px-4 py-6 sm:px-5">
             {!skin ? (
               <div className="mx-auto max-w-md px-4 py-20 text-center">
-                <div className="text-sm font-bold text-white">This skin is not available.</div>
-                <p className="mt-2 text-[12px] text-osu-f1">It may have been removed by its uploader.</p>
+                <div className="text-sm font-bold text-white"><Trans>This skin is not available.</Trans></div>
+                <p className="mt-2 text-[12px] text-osu-f1"><Trans>It may have been removed by its uploader.</Trans></p>
                 <Link
                   to="/skins"
                   search={{}}
                   className="mt-4 inline-block rounded-full bg-osu-pink px-5 py-1.5 text-[12.5px] font-bold text-white transition hover:brightness-110"
                 >
-                  Browse skins
+                  <Trans>Browse skins</Trans>
                 </Link>
               </div>
             ) : (
@@ -295,7 +301,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                       />
                     ) : (
                       <div className="flex aspect-video w-full items-center justify-center text-[12px] text-osu-f1">
-                        No preview available.
+                        <Trans>No preview available.</Trans>
                       </div>
                     )}
                     {/* Accent bar, same note-art colour the browse card carries. */}
@@ -327,7 +333,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                           type="button"
                           onClick={() => setHeroIndex(index)}
                           aria-pressed={index === heroIndex}
-                          aria-label={`Show ${item.label}`}
+                          aria-label={t`Show ${item.label}`}
                           // Uploader-typed names run longer than "4K" does, so
                           // the strip truncates and the full one lives here.
                           title={item.label}
@@ -363,13 +369,13 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                       </h1>
                       {skin.status === "hidden" && (
                         <span className="rounded bg-osu-b5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-osu-f1">
-                          hidden
+                          <Trans>hidden</Trans>
                         </span>
                       )}
                       {isPrivate && (
                         <span className="inline-flex items-center gap-1 rounded bg-osu-b5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-osu-f1">
                           <Lock className="h-2.5 w-2.5" aria-hidden="true" />
-                          private
+                          <Trans>private</Trans>
                         </span>
                       )}
                     </div>
@@ -377,12 +383,12 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                       {skin.author && (
                         <>
                           <span>
-                            by <span className="font-semibold text-osu-l2">{skin.author}</span>
+                            <Trans>by <span className="font-semibold text-osu-l2">{skin.author}</span></Trans>
                           </span>
                           <span aria-hidden="true">·</span>
                         </>
                       )}
-                      <span>uploaded by</span>
+                      <span><Trans>uploaded by</Trans></span>
                       <Link
                         to="/player/$username"
                         params={{ username: skin.ownerUsername }}
@@ -426,7 +432,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                         className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-osu-pink px-5 py-2 text-[13px] font-bold text-white transition hover:brightness-110"
                       >
                         <Download className="h-4 w-4" aria-hidden="true" />
-                        Download .osk
+                        <Trans>Download .osk</Trans>
                         {skin.oskSizeBytes ? (
                           <span className="font-semibold text-white/75 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span>
                         ) : null}
@@ -438,13 +444,15 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                           <>
                             <div className="flex w-full items-center justify-center gap-2 rounded-full border border-osu-pink/45 bg-osu-pink/10 px-5 py-2 text-[13px] font-bold text-osu-pink-light">
                               <Check className="h-4 w-4" aria-hidden="true" />
-                              Your replay skin
+                              <Trans>Your replay skin</Trans>
                             </div>
                             <p className="mt-1.5 text-center text-[11px] text-osu-f1">
-                              Anyone watching your replays sees it.{" "}
-                              <Link to="/settings" className="font-semibold text-osu-l2 transition-colors hover:text-white">
-                                customize it in settings
-                              </Link>
+                              <Trans>
+                                Anyone watching your replays sees it.{" "}
+                                <Link to="/settings" className="font-semibold text-osu-l2 transition-colors hover:text-white">
+                                  customize it in settings
+                                </Link>
+                              </Trans>
                             </p>
                           </>
                         ) : (
@@ -452,11 +460,11 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                             type="button"
                             onClick={() => void setAsMyReplaySkin()}
                             disabled={replaySkinStatus === "working"}
-                            title="Play this skin in your own replays for everyone who watches them"
+                            title={t`Play this skin in your own replays for everyone who watches them`}
                             className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-osu-b3/50 px-5 py-2 text-[13px] font-bold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
                           >
                             <MonitorPlay className="h-4 w-4" aria-hidden="true" />
-                            {replaySkinStatus === "working" ? "Setting up…" : "Use for my replays"}
+                            {replaySkinStatus === "working" ? <Trans>Setting up…</Trans> : <Trans>Use for my replays</Trans>}
                           </button>
                         )}
                         {replaySkinError && (
@@ -467,51 +475,51 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                   </div>
 
                   <dl className="rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-1 text-[12.5px]">
-                    <FactRow label="Keymodes">
+                    <FactRow label={t`Keymodes`}>
                       <SkinKeymodeTags keymodes={skin.keymodes} specialKeymodes={skin.specialKeymodes} max={10} />
                     </FactRow>
                     {isPrivate ? (
-                      <FactRow label="Visible to">
-                        <span className="text-osu-l1">only you</span>
+                      <FactRow label={t`Visible to`}>
+                        <span className="text-osu-l1"><Trans>only you</Trans></span>
                       </FactRow>
                     ) : (
                       <>
-                        <FactRow label="Downloads">
+                        <FactRow label={t`Downloads`}>
                           <span className="tabular-nums text-osu-l1">{skin.downloadCount.toLocaleString("en-US")}</span>
                         </FactRow>
-                        <FactRow label="Views">
+                        <FactRow label={t`Views`}>
                           <span className="tabular-nums text-osu-l1">{(skin.viewCount ?? 0).toLocaleString("en-US")}</span>
                         </FactRow>
                       </>
                     )}
                     {noteShapes.length > 0 && (
-                      <FactRow label="Notes">
+                      <FactRow label={t`Notes`}>
                         <span className="text-osu-l1">{noteShapes.map(skinNoteShapeLabel).join(", ")}</span>
                       </FactRow>
                     )}
                     {skin.resolution && (
-                      <FactRow label="Made for">
+                      <FactRow label={t`Made for`}>
                         <span className="tabular-nums text-osu-l1">{skin.resolution}</span>
                       </FactRow>
                     )}
                     {(skin.laneCover || skin.maniaStage || skin.lazer) && (
-                      <FactRow label="Includes">
+                      <FactRow label={t`Includes`}>
                         <span className="text-osu-l1">
                           {[
-                            skin.laneCover ? "lane cover" : null,
-                            skin.maniaStage ? "mania stage" : null,
-                            skin.lazer ? "lazer edits" : null,
+                            skin.laneCover ? t`lane cover` : null,
+                            skin.maniaStage ? t`mania stage` : null,
+                            skin.lazer ? t`lazer edits` : null,
                           ].filter(Boolean).join(", ")}
                         </span>
                       </FactRow>
                     )}
                     {skin.oskSizeBytes ? (
-                      <FactRow label="File size">
+                      <FactRow label={t`File size`}>
                         <span className="tabular-nums text-osu-l1">{formatSkinFileSize(skin.oskSizeBytes)}</span>
                       </FactRow>
                     ) : null}
                     {skin.publishedAt && (
-                      <FactRow label="Uploaded">
+                      <FactRow label={t`Uploaded`}>
                         <span className="tabular-nums text-osu-l1" suppressHydrationWarning>
                           {new Date(skin.publishedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
                         </span>
@@ -520,7 +528,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                     {/* Only there once the uploader has shipped a newer build
                         of the file; a rename or a preview edit is not that. */}
                     {skin.oskUpdatedAt && (
-                      <FactRow label="File updated">
+                      <FactRow label={t`File updated`}>
                         <span className="tabular-nums text-osu-l1" suppressHydrationWarning>
                           {new Date(skin.oskUpdatedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
                         </span>
@@ -541,7 +549,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                         className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-osu-b3/50 px-5 py-2 text-[13px] font-bold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white"
                       >
                         <Settings className="h-4 w-4" aria-hidden="true" />
-                        {isOwner ? "Skin settings" : "Moderate skin"}
+                        {isOwner ? <Trans>Skin settings</Trans> : <Trans>Moderate skin</Trans>}
                       </button>
                       <SkinSettingsModal
                         skin={skin}

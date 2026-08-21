@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import {
   COMMUNITY_PITCH_MAX_LENGTH,
@@ -11,7 +11,7 @@ import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { SelectMenu } from "../ui/SelectMenu";
 import { CommunityStatusNote } from "./CommunityStatusNote";
 import { AccessScopePicker } from "./AccessScopePicker";
-import { countrySelectOptions, LANGUAGE_SELECT_OPTIONS } from "./field-options";
+import { useCountrySelectOptions, useLanguageSelectOptions } from "./field-options";
 import { TagInput } from "./TagInput";
 
 /*
@@ -41,10 +41,8 @@ export function CommunityEditModal({
   onClose: () => void;
 }) {
   const auth = useAuth();
-  const countryOptions = useMemo(
-    () => countrySelectOptions(auth.viewer?.countryCode ?? null),
-    [auth.viewer?.countryCode],
-  );
+  const countryOptions = useCountrySelectOptions(auth.viewer?.countryCode ?? null);
+  const languageOptions = useLanguageSelectOptions();
   const [pitch, setPitch] = useState(community.pitch);
   const [tags, setTags] = useState<string[]>(community.tags);
   const [countryCode, setCountryCode] = useState(community.countryCode ?? "");
@@ -190,7 +188,7 @@ export function CommunityEditModal({
               </span>
               <SelectMenu
                 value={language}
-                options={LANGUAGE_SELECT_OPTIONS}
+                options={languageOptions}
                 onChange={setLanguage}
                 ariaLabel="Language"
                 block

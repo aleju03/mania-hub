@@ -2,6 +2,9 @@ import { createFileRoute, Link, Outlet, useMatches, useNavigate } from "@tanstac
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg, plural } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 import {
   ExternalLink,
   Users,
@@ -57,6 +60,9 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { UsernameText } from "../components/ui/UsernameText";
 import { useAuth } from "../lib/auth-context";
 import { pageSeo } from "../lib/seo";
+import { getI18n } from "../lib/i18n";
+
+type I18nLike = ReturnType<typeof getI18n>;
 
 const PAGE_SIZE = 20;
 // Ask for the server max so the reason filters ("missing", "old") see the full
@@ -199,22 +205,28 @@ export const Route = createFileRoute("/farm-helper")({
     dir: parseSortDirection(search.dir),
     page: parsePage(search.page),
   }),
-  head: ({ match }) => pageSeo({
-    title: "Farm Helper",
-    description: "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs.",
-    path: "/farm-helper",
-    origin: match.context.origin,
-    imageKind: "farm-helper",
-  }),
+  head: ({ match }) => {
+    const i18n = getI18n(match.context.locale);
+    return pageSeo({
+      title: i18n._(msg`Farm Helper`),
+      description: i18n._(
+        msg`Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs.`,
+      ),
+      path: "/farm-helper",
+      origin: match.context.origin,
+      imageKind: "farm-helper",
+      imageTitle: "Farm Helper",
+    });
+  },
   component: FarmHelperLayout,
 });
 
 const REASON_META: Record<
   LiveFarmHelperRec["reason"],
-  { label: string; accent: string; text: string; soft: string; wash: string; Icon: typeof Target }
+  { label: MessageDescriptor; accent: string; text: string; soft: string; wash: string; Icon: typeof Target }
 > = {
   missing: {
-    label: "missing",
+    label: msg`missing`,
     accent: "bg-osu-blue",
     text: "text-osu-blue",
     soft: "bg-osu-blue/15",
@@ -222,7 +234,7 @@ const REASON_META: Record<
     Icon: Target,
   },
   improve: {
-    label: "improve",
+    label: msg`improve`,
     accent: "bg-osu-green-light",
     text: "text-osu-green-light",
     soft: "bg-osu-green-light/15",
@@ -230,7 +242,7 @@ const REASON_META: Record<
     Icon: TrendingUp,
   },
   stale: {
-    label: "old pb",
+    label: msg`old pb`,
     accent: "bg-osu-yellow",
     text: "text-osu-yellow",
     soft: "bg-osu-yellow/15",
@@ -238,7 +250,7 @@ const REASON_META: Record<
     Icon: History,
   },
   owned: {
-    label: "cleared",
+    label: msg`cleared`,
     accent: "bg-osu-pink",
     text: "text-osu-pink",
     soft: "bg-osu-pink/15",
@@ -246,7 +258,7 @@ const REASON_META: Record<
     Icon: Check,
   },
   push: {
-    label: "skillboost",
+    label: msg`skillboost`,
     // Red on purpose: the vivid red for accents and washes, the lighter red
     // for text so the label stays readable at 10-11px on dark rows.
     accent: "bg-osu-red",
@@ -257,12 +269,12 @@ const REASON_META: Record<
   },
 };
 
-const SORT_OPTIONS: Array<{ value: SortMode; label: string; hint: string }> = [
-  { value: "gain", label: "pp gain", hint: "biggest jump first" },
-  { value: "popularity", label: "popularity", hint: "how many players near you farm it" },
-  { value: "recent", label: "recent", hint: "what players near you played last" },
-  { value: "players", label: "players", hint: "how many players near you have it" },
-  { value: "difficulty", label: "stars", hint: "raw difficulty" },
+const SORT_OPTIONS: Array<{ value: SortMode; label: MessageDescriptor; hint: MessageDescriptor }> = [
+  { value: "gain", label: msg`pp gain`, hint: msg`biggest jump first` },
+  { value: "popularity", label: msg`popularity`, hint: msg`how many players near you farm it` },
+  { value: "recent", label: msg`recent`, hint: msg`what players near you played last` },
+  { value: "players", label: msg`players`, hint: msg`how many players near you have it` },
+  { value: "difficulty", label: msg`stars`, hint: msg`raw difficulty` },
 ];
 
 // The detail page rebuilds this exact key from its URL search params
@@ -343,6 +355,7 @@ function seedSnapshotsFromCache(subjectKey: string | null, owner: boolean): Map<
 }
 
 function FarmHelperPage() {
+  const { t, i18n } = useLingui();
   const search = Route.useSearch();
   const navigate = useNavigate();
   const auth = useAuth();
@@ -604,7 +617,7 @@ function FarmHelperPage() {
         : await setMyFarmHelperFeedback({ data: { beatmapId: lane.beatmapId, speedBucket: lane.speedBucket, verdict } });
       if (!result.ok) {
         revertMark();
-        setFeedbackError({ key, message: feedbackFailMessage(result.reason) });
+        setFeedbackError({ key, message: feedbackFailMessage(result.reason, i18n) });
         return;
       }
       const epoch = Date.now();
@@ -638,7 +651,7 @@ function FarmHelperPage() {
       }
     } catch {
       revertMark();
-      setFeedbackError({ key, message: feedbackFailMessage("failed") });
+      setFeedbackError({ key, message: feedbackFailMessage("failed", i18n) });
     } finally {
       setFeedbackPendingKey((current) => (current === key ? null : current));
     }
@@ -816,15 +829,15 @@ function FarmHelperPage() {
         <div className="relative z-10 flex flex-1 flex-col">
         <PageHeader
           iconSrc="/images/icons/rankings.svg"
-          title="Global mania farm helper"
+          title={<Trans>Global mania farm helper</Trans>}
         />
 
         <div className="mx-auto w-full max-w-[1320px] flex-1 px-4 py-5 sm:px-5">
           {!liveEnabled ? (
             <EmptyNotice
-              eyebrow="unavailable"
-              title="Farm Helper needs the server"
-              body="This tool reads cross-country farm data from the server, which isn't configured in this environment."
+              eyebrow={t`unavailable`}
+              title={t`Farm Helper needs the server`}
+              body={t`This tool reads cross-country farm data from the server, which isn't configured in this environment.`}
             />
           ) : !subjectKey ? (
             <PlayerPicker viewer={auth.viewer} onPick={setSubject} keyMode={keyMode} view={view} />
@@ -834,9 +847,9 @@ function FarmHelperPage() {
             <UnknownSubjectNotice subject={subjectKey} onPick={setSubject} />
           ) : error && !shellSnapshot ? (
             <EmptyNotice
-              eyebrow="error"
-              title="Couldn't build recommendations"
-              body="Something went wrong loading this player's farm data. Try again in a moment."
+              eyebrow={t`error`}
+              title={t`Couldn't build recommendations`}
+              body={t`Something went wrong loading this player's farm data. Try again in a moment.`}
               action={<ChangeSubjectButton onPick={setSubject} />}
             />
           ) : shellSnapshot ? (
@@ -883,20 +896,20 @@ function FarmHelperPage() {
                       !visibleSnapshot
                         ? null
                         : serverTruncated
-                          ? `${formatPp(recs.length)} of ${formatPp(totalQualifying)}`
-                          : `${formatPp(recs.length)} map${recs.length === 1 ? "" : "s"}`
+                          ? t`${formatPp(recs.length)} of ${formatPp(totalQualifying)}`
+                          : t`${plural(recs.length, { one: "# map", other: "# maps" })}`
                     }
                   />
 
                   {!visibleSnapshot ? (
                     error ? (
                       <EmptyNotice
-                        eyebrow={error === "not-found" ? "not found" : "error"}
-                        title={error === "not-found" ? "Couldn't load this view" : "Couldn't build recommendations"}
+                        eyebrow={error === "not-found" ? t`not found` : t`error`}
+                        title={error === "not-found" ? t`Couldn't load this view` : t`Couldn't build recommendations`}
                         body={
                           error === "not-found"
-                            ? "The player panel can stay here, but this view did not return fresh map data."
-                            : "Something went wrong loading these maps. Try the toggle again in a moment."
+                            ? t`The player panel can stay here, but this view did not return fresh map data.`
+                            : t`Something went wrong loading these maps. Try the toggle again in a moment.`
                         }
                       />
                     ) : (
@@ -905,17 +918,17 @@ function FarmHelperPage() {
                   ) : recs.length === 0 ? (
                     query.trim() ? (
                       <EmptyNotice
-                        eyebrow="no matches"
-                        title="No maps match your search"
-                        body="Try a different title, artist, or difficulty name."
+                        eyebrow={t`no matches`}
+                        title={t`No maps match your search`}
+                        body={t`Try a different title, artist, or difficulty name.`}
                       />
                     ) : reasonFilter !== "all" && queryFilteredRecs.length > 0 ? (
                       // The reason filter narrowed a non-empty board to zero:
                       // that is a filter result, not an achievement.
                       <EmptyNotice
-                        eyebrow="filtered out"
-                        title={`No ${REASON_META[reasonFilter].label} maps right now`}
-                        body="Nothing qualifies under this filter at the moment, but other reasons still have maps."
+                        eyebrow={t`filtered out`}
+                        title={t`No ${i18n._(REASON_META[reasonFilter].label)} maps right now`}
+                        body={t`Nothing qualifies under this filter at the moment, but other reasons still have maps.`}
                         action={
                           <button
                             type="button"
@@ -925,7 +938,7 @@ function FarmHelperPage() {
                             }}
                             className="rounded-lg bg-osu-b3/60 px-3 py-2 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
                           >
-                            show everything
+                            <Trans>show everything</Trans>
                           </button>
                         }
                       />
@@ -933,9 +946,9 @@ function FarmHelperPage() {
                       // Everything the board has is a locked skillboost row:
                       // point at the tab instead of pretending it is empty.
                       <EmptyNotice
-                        eyebrow="skillboost only"
-                        title="Only skillboost maps right now"
-                        body="Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
+                        eyebrow={t`skillboost only`}
+                        title={t`Only skillboost maps right now`}
+                        body={t`Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores.`}
                         action={
                           <button
                             type="button"
@@ -945,7 +958,7 @@ function FarmHelperPage() {
                             }}
                             className="rounded-lg bg-osu-b3/60 px-3 py-2 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
                           >
-                            show skillboost
+                            <Trans>show skillboost</Trans>
                           </button>
                         }
                       />
@@ -953,18 +966,18 @@ function FarmHelperPage() {
                       // Empty because the cohort itself is empty: be honest
                       // instead of congratulating the player.
                       <EmptyNotice
-                        eyebrow="no data"
-                        title="Not enough data near your pp yet"
-                        body="We don't have enough data on players near your pp to build recommendations. Try another key mode, or check back once more nearby players are tracked."
+                        eyebrow={t`no data`}
+                        title={t`Not enough data near your pp yet`}
+                        body={t`We don't have enough data on players near your pp to build recommendations. Try another key mode, or check back once more nearby players are tracked.`}
                       />
                     ) : view === "gain" && (visibleSnapshot.belowGainFloorCount ?? 0) > 0 ? (
                       // Peers have farm data, but every lane's estimated gain
                       // fell under the visibility floor: explain that instead
                       // of implying there is nothing to see.
                       <EmptyNotice
-                        eyebrow="no gains here"
-                        title="Nothing here would move your total"
-                        body="Players near your pp are farming maps, but right now every one of them would add less than 1pp for you. The popular view still shows what they play."
+                        eyebrow={t`no gains here`}
+                        title={t`Nothing here would move your total`}
+                        body={t`Players near your pp are farming maps, but right now every one of them would add less than 1pp for you. The popular view still shows what they play.`}
                         action={
                           <button
                             type="button"
@@ -1087,6 +1100,7 @@ function SubjectBar({
   onKeyMode: (next: LiveFarmHelperKeyMode) => void;
   onChangePlayer: () => void;
 }) {
+  const { i18n } = useLingui();
   const unit = gainUnitLabel(visibleSnapshot ?? snapshot);
   // Locked skillboost rows are off the default view (and out of the server's
   // headline total), so the map count and biggest-gain figures skip them too.
@@ -1146,7 +1160,7 @@ function SubjectBar({
               ) : loadFailed ? (
                 <div className="mt-0.5 text-[11px] text-osu-red-light">couldn't load this view</div>
               ) : (
-                <div className="mt-0.5 truncate text-[11px] text-osu-f1">{peerBandRangeLabel(snapshot)}</div>
+                <div className="mt-0.5 truncate text-[11px] text-osu-f1">{peerBandRangeLabel(snapshot, i18n)}</div>
               )}
             </div>
           </div>
@@ -1341,6 +1355,7 @@ function SortMenu({
   sortDir: SortDirection;
   onSort: (next: SortMode) => void;
 }) {
+  const { i18n } = useLingui();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const active = SORT_OPTIONS.find((option) => option.value === sortMode) ?? SORT_OPTIONS[0];
@@ -1371,7 +1386,7 @@ function SortMenu({
         className="flex items-center gap-1.5 rounded-lg border border-osu-b3/30 bg-osu-b4/70 px-2.5 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors hover:border-osu-b3/60 hover:text-osu-c1"
       >
         <span className="text-osu-f1">sort</span>
-        {active.label}
+        {i18n._(active.label)}
         <span aria-hidden className="text-osu-pink">{sortDir === "desc" ? "↓" : "↑"}</span>
         <ChevronDown className={`h-3 w-3 text-osu-f1 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -1398,9 +1413,9 @@ function SortMenu({
               >
                 <span className="min-w-0 flex-1">
                   <span className={`block text-[12px] font-semibold ${isActive ? "text-osu-pink-light" : "text-osu-c1"}`}>
-                    {option.label}
+                    {i18n._(option.label)}
                   </span>
-                  <span className="block text-[10px] leading-tight text-osu-f1">{option.hint}</span>
+                  <span className="block text-[10px] leading-tight text-osu-f1">{i18n._(option.hint)}</span>
                 </span>
                 {isActive ? (
                   <span aria-hidden className="shrink-0 text-[13px] leading-5 text-osu-pink">
@@ -1443,6 +1458,7 @@ function RecRow({
   /** Owner-only: the viewer's active feedback mark on this lane. */
   markedVerdict?: FarmHelperFeedbackVerdict | null;
 }) {
+  const { i18n } = useLingui();
   const meta = REASON_META[rec.reason];
   const cover = rec.listCover || rec.cover;
 
@@ -1493,7 +1509,7 @@ function RecRow({
             <ModList mods={rec.recommendedMods ?? []} size={0.58} className="max-w-[92px]" />
           </div>
           <div className="mt-0.5 flex min-w-0 items-center gap-x-2 text-[11px] leading-tight">
-            <span className={`shrink-0 font-bold uppercase tracking-wide ${meta.text}`}>{farmStatusLabel(rec)}</span>
+            <span className={`shrink-0 font-bold uppercase tracking-wide ${meta.text}`}>{farmStatusLabel(rec, i18n)}</span>
             {markedVerdict ? (
               <span
                 className={`shrink-0 font-bold uppercase tracking-wide ${
@@ -1572,6 +1588,7 @@ function RecRow({
 }
 
 function ReasonPill({ rec }: { rec: LiveFarmHelperRec }) {
+  const { i18n } = useLingui();
   const meta = REASON_META[rec.reason];
   const { Icon } = meta;
   return (
@@ -1579,7 +1596,7 @@ function ReasonPill({ rec }: { rec: LiveFarmHelperRec }) {
       className={`inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-bold uppercase tracking-wide ${meta.soft} ${meta.text}`}
     >
       <Icon className="h-3 w-3" />
-      {farmStatusLabel(rec)}
+      {farmStatusLabel(rec, i18n)}
     </span>
   );
 }
@@ -1614,7 +1631,8 @@ function RecPreview({
   onClose: () => void;
   className?: string;
 }) {
-  const bar = comparisonBar(rec);
+  const { i18n } = useLingui();
+  const bar = comparisonBar(rec, i18n);
   const meta = REASON_META[rec.reason];
   const cover = rec.cover || rec.listCover;
 
@@ -1664,7 +1682,7 @@ function RecPreview({
             <ModList mods={rec.recommendedMods ?? []} size={0.6} />
           </div>
 
-          <p className="text-[12px] leading-snug text-osu-l2">{whySentence(rec)}</p>
+          <p className="text-[12px] leading-snug text-osu-l2">{whySentence(rec, i18n)}</p>
 
           <div className="rounded-lg bg-osu-b5/70 p-3">
             {rec.estimatedPpGain <= 0 ? (
@@ -1681,7 +1699,7 @@ function RecPreview({
                 <div className="text-right">
                   <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1">your best</div>
                   <div className="mt-0.5 text-[14px] font-bold tabular-nums text-osu-c1">
-                    {subjectBestLabel(rec)}
+                    {subjectBestLabel(rec, i18n)}
                   </div>
                 </div>
               </div>
@@ -1828,6 +1846,7 @@ function ReadingGuide({
   /** Skillboost rows are off the everything view until the player lands one. */
   pushLocked?: boolean;
 }) {
+  const { i18n } = useLingui();
   const sample = snapshot.peerBand.count || snapshot.peerBand.farmDataCount;
   return (
     <div className="overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b4">
@@ -1840,7 +1859,7 @@ function ReadingGuide({
           </div>
         ) : (
           <>
-            <div className="mt-0.5 text-[12px] font-semibold text-osu-c1">{peerBandRangeLabel(snapshot)}</div>
+            <div className="mt-0.5 text-[12px] font-semibold text-osu-c1">{peerBandRangeLabel(snapshot, i18n)}</div>
             {sample > 0 ? (
               <div className="text-[11px] text-osu-f1">
                 {formatPp(sample)} player{sample === 1 ? "" : "s"} sampled around your pp
@@ -1905,6 +1924,7 @@ function ReadingGuide({
 }
 
 function GuideItem({ reason, count, body }: { reason: Exclude<ReasonFilter, "all">; count: number | null; body: string }) {
+  const { i18n } = useLingui();
   const meta = REASON_META[reason];
   const { Icon } = meta;
   return (
@@ -1914,7 +1934,7 @@ function GuideItem({ reason, count, body }: { reason: Exclude<ReasonFilter, "all
       </span>
       <div className="min-w-0">
         <div className="flex items-baseline gap-1.5">
-          <span className={`text-[11px] font-bold uppercase tracking-wide ${meta.text}`}>{meta.label}</span>
+          <span className={`text-[11px] font-bold uppercase tracking-wide ${meta.text}`}>{i18n._(meta.label)}</span>
           {count != null ? <span className="text-[11px] tabular-nums text-osu-f1">{formatPp(count)}</span> : null}
         </div>
         <p className="text-[11px] leading-snug text-osu-f1">{body}</p>
@@ -1937,10 +1957,10 @@ function speedBucketLabel(bucket: string): string {
   return "NM";
 }
 
-function feedbackFailMessage(reason: FarmHelperFeedbackFailReason | undefined): string {
-  if (reason === "too_many_marks") return "you have too many active marks, clear some first";
-  if (reason === "not_logged_in") return "you're logged out, log in again to save marks";
-  return "Couldn't save that. Try again in a moment.";
+function feedbackFailMessage(reason: FarmHelperFeedbackFailReason | undefined, i18n: I18nLike): string {
+  if (reason === "too_many_marks") return i18n._(msg`you have too many active marks, clear some first`);
+  if (reason === "not_logged_in") return i18n._(msg`you're logged out, log in again to save marks`);
+  return i18n._(msg`Couldn't save that. Try again in a moment.`);
 }
 
 // Owner-only management surface for active marks: a too_hard mark hides its
@@ -2357,7 +2377,7 @@ function peerBandRange(band: { count: number; minPp: number; maxPp: number }): s
   return `${formatCompactPp(band.minPp)}-${formatCompactPp(band.maxPp)}`;
 }
 
-function peerBandRangeLabel(snapshot: LiveFarmHelperSnapshot): string {
+function peerBandRangeLabel(snapshot: LiveFarmHelperSnapshot, i18n: I18nLike): string {
   // Merged Any view: show each keymode's own range (e.g. "4K 12.9k-15.6k · 7K
   // 13.9k-16.9k") so a hybrid sees both cohorts they are compared against.
   const perMode = snapshot.peerBands
@@ -2369,9 +2389,8 @@ function peerBandRangeLabel(snapshot: LiveFarmHelperSnapshot): string {
         })
         .filter((part): part is string => part != null)
     : [];
-  if (perMode.length > 0) return `compared to ${perMode.join(" · ")} pp`;
-  const range = peerBandRange(snapshot.peerBand);
-  return range ? `compared to ${range} pp` : "no pp range";
+  const range = perMode.length > 0 ? perMode.join(" · ") : peerBandRange(snapshot.peerBand);
+  return range ? i18n._(msg`compared to ${range} pp`) : i18n._(msg`no pp range`);
 }
 
 /* The subject resolved to nobody the backend has ever loaded, which is not the
@@ -2538,13 +2557,13 @@ function useOpenFarmMapDetail() {
   };
 }
 
-function farmStatusLabel(rec: LiveFarmHelperRec): string {
-  if (rec.reason === "owned") return "cleared";
-  if (rec.reason === "missing") return rec.peerFraction >= 0.45 ? "common pick" : "missing";
-  if (rec.reason === "stale") return "old pb";
-  if (rec.reason === "push") return "skillboost";
-  if (rec.estimatedPpGain >= 70) return "large gap";
-  return "improve";
+function farmStatusLabel(rec: LiveFarmHelperRec, i18n: I18nLike): string {
+  if (rec.reason === "owned") return i18n._(msg`cleared`);
+  if (rec.reason === "missing") return rec.peerFraction >= 0.45 ? i18n._(msg`common pick`) : i18n._(msg`missing`);
+  if (rec.reason === "stale") return i18n._(msg`old pb`);
+  if (rec.reason === "push") return i18n._(msg`skillboost`);
+  if (rec.estimatedPpGain >= 70) return i18n._(msg`large gap`);
+  return i18n._(msg`improve`);
 }
 
 // The player's pb on the map when it was set under different mods than the row
@@ -2560,8 +2579,10 @@ function otherLaneBest(rec: LiveFarmHelperRec): { pp: number; label: string; spe
 // Mods in words for a sentence. "NM" is the internal bucket name, not something
 // a player reads mid-sentence, so the no-mod case spells it out; the compact
 // stat cells keep the short badge form.
-function modsPhrase(speed: string): string {
-  return speed === "normal" ? "with no mods" : `with ${speedBucketLabel(speed)}`;
+function modsPhrase(speed: string, i18n: I18nLike): string {
+  if (speed === "normal") return i18n._(msg`with no mods`);
+  const mods = speedBucketLabel(speed);
+  return i18n._(msg`with ${mods}`);
 }
 
 // What the "your best" stat can honestly show for a lane the board has no
@@ -2569,42 +2590,59 @@ function modsPhrase(speed: string): string {
 // absent map means "not in your top plays", never "never played": a HT pb
 // worth more pp than a nomod one hides the nomod score from that window
 // entirely.
-function subjectBestLabel(rec: LiveFarmHelperRec): string {
+function subjectBestLabel(rec: LiveFarmHelperRec, i18n: I18nLike): string {
   if (rec.subjectPp != null) return `${formatPp(rec.subjectPp)}pp`;
   const other = otherLaneBest(rec);
   if (other) return `${formatPp(other.pp)}pp ${other.label}`;
-  return "not in top plays";
+  return i18n._(msg`not in top plays`);
 }
 
 // One plain-language line explaining why this map is on the board. The
 // improve/stale/push/owned templates all quote the player's own score, so they
 // only run with a real one; a null subjectPp falls back to a sentence that
 // neither invents a 0pp best nor claims they never played the map.
-function whySentence(rec: LiveFarmHelperRec): string {
+function whySentence(rec: LiveFarmHelperRec, i18n: I18nLike): string {
   const pct = Math.round(rec.peerFraction * 100);
-  const nearYou = `${pct}% of the players around your pp`;
+  const median = formatPp(rec.peerPpMedian);
   const subjectPp = rec.subjectPp;
   if (subjectPp == null) {
     const other = otherLaneBest(rec);
     if (other) {
+      const otherPp = formatPp(other.pp);
+      const otherMods = modsPhrase(other.speed, i18n);
       // The row's own mods are already on the badge next to the title, so they
       // are only worth naming here when they are what makes this row different
       // from the score the player has.
-      const rowMods = rec.speedBucket === "normal" ? "" : ` ${modsPhrase(rec.speedBucket)}`;
-      return `${nearYou} farm this${rowMods} and average ${formatPp(rec.peerPpMedian)}pp. Your best on the map is ${formatPp(other.pp)}pp ${modsPhrase(other.speed)}.`;
+      if (rec.speedBucket === "normal") {
+        return i18n._(
+          msg`${pct}% of the players around your pp farm this and average ${median}pp. Your best on the map is ${otherPp}pp ${otherMods}.`,
+        );
+      }
+      const rowMods = modsPhrase(rec.speedBucket, i18n);
+      return i18n._(
+        msg`${pct}% of the players around your pp farm this ${rowMods} and average ${median}pp. Your best on the map is ${otherPp}pp ${otherMods}.`,
+      );
     }
-    return `${nearYou} farm this and it is not in your top plays. They average ${formatPp(rec.peerPpMedian)}pp on it.`;
+    return i18n._(
+      msg`${pct}% of the players around your pp farm this and it is not in your top plays. They average ${median}pp on it.`,
+    );
   }
+  const yourPp = formatPp(subjectPp);
   if (rec.reason === "stale") {
-    return `Your ${formatPp(subjectPp)}pp score is ${formatAge(rec.subjectPlayedAt)} old. The top quarter of players near you sits at ${formatPp(rec.peerPpP75)}pp.`;
+    const age = formatAge(rec.subjectPlayedAt, i18n);
+    const p75 = formatPp(rec.peerPpP75);
+    return i18n._(msg`Your ${yourPp}pp score is ${age} old. The top quarter of players near you sits at ${p75}pp.`);
   }
   if (rec.reason === "push") {
-    return `You already beat the typical score here with ${formatPp(subjectPp)}pp. A cleaner acc run is worth about ${formatPp(rec.benchmarkPp)}pp.`;
+    const target = formatPp(rec.benchmarkPp);
+    return i18n._(msg`You already beat the typical score here with ${yourPp}pp. A cleaner acc run is worth about ${target}pp.`);
   }
   if (rec.reason === "owned") {
-    return `${nearYou} farm this. You already have ${formatPp(subjectPp)}pp here against their ${formatPp(rec.peerPpMedian)}pp median.`;
+    return i18n._(
+      msg`${pct}% of the players around your pp farm this. You already have ${yourPp}pp here against their ${median}pp median.`,
+    );
   }
-  return `You sit at ${formatPp(subjectPp)}pp while players near you average ${formatPp(rec.peerPpMedian)}pp, so there is headroom on a rerun.`;
+  return i18n._(msg`You sit at ${yourPp}pp while players near you average ${median}pp, so there is headroom on a rerun.`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -2742,41 +2780,46 @@ function ModList({ mods, size = 0.58, className = "" }: { mods: string[]; size?:
   );
 }
 
-function comparisonBar(rec: LiveFarmHelperRec): { left: string; right: string; pct: number } {
+function comparisonBar(rec: LiveFarmHelperRec, i18n: I18nLike): { left: string; right: string; pct: number } {
   // Missing rows, and any row without a recorded score, compare peers only:
   // there is no real subject score to anchor the other templates on, and a
   // fake "your 0pp" would be worse than the popularity framing.
   if (rec.reason === "missing" || rec.subjectPp == null) {
     const pct = Math.round(rec.peerFraction * 100);
+    const median = formatPp(rec.peerPpMedian);
     return {
-      left: `${pct}% of players near you farm this`,
-      right: `median ${formatPp(rec.peerPpMedian)}pp`,
+      left: i18n._(msg`${pct}% of players near you farm this`),
+      right: i18n._(msg`median ${median}pp`),
       pct: clampPct(pct),
     };
   }
   const subjectPp = rec.subjectPp;
+  const yourPp = formatPp(subjectPp);
   if (rec.reason === "push") {
     // Self-improvement target: the peer median sits at or below the player's
     // own score, so compare against the accuracy-rescaled benchmark instead.
     const pushTarget = rec.benchmarkPp;
+    const target = formatPp(pushTarget);
     return {
-      left: `your ${formatPp(subjectPp)}pp`,
-      right: `skillboost ${formatPp(pushTarget)}pp`,
+      left: i18n._(msg`your ${yourPp}pp`),
+      right: i18n._(msg`skillboost ${target}pp`),
       pct: pushTarget > 0 ? clampPct(Math.round((subjectPp / pushTarget) * 100)) : 4,
     };
   }
-  const target = rec.reason === "stale" ? rec.peerPpP75 : rec.peerPpMedian;
-  const pct = target > 0 ? clampPct(Math.round((subjectPp / target) * 100)) : 4;
+  const targetPp = rec.reason === "stale" ? rec.peerPpP75 : rec.peerPpMedian;
+  const target = formatPp(targetPp);
+  const pct = targetPp > 0 ? clampPct(Math.round((subjectPp / targetPp) * 100)) : 4;
   if (rec.reason === "stale") {
+    const age = formatAge(rec.subjectPlayedAt, i18n);
     return {
-      left: `your ${formatPp(subjectPp)}pp · ${formatAge(rec.subjectPlayedAt)} old`,
-      right: `top 25% ${formatPp(target)}pp`,
+      left: i18n._(msg`your ${yourPp}pp · ${age} old`),
+      right: i18n._(msg`top 25% ${target}pp`),
       pct,
     };
   }
   return {
-    left: `your ${formatPp(subjectPp)}pp`,
-    right: `median ${formatPp(target)}pp`,
+    left: i18n._(msg`your ${yourPp}pp`),
+    right: i18n._(msg`median ${target}pp`),
     pct,
   };
 }
@@ -2810,13 +2853,16 @@ function formatLength(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function formatAge(iso: string | null): string {
-  if (!iso) return "a while";
+function formatAge(iso: string | null, i18n: I18nLike): string {
+  if (!iso) return i18n._(msg`a while`);
   const ms = Date.now() - Date.parse(iso);
-  if (!Number.isFinite(ms) || ms <= 0) return "a while";
+  if (!Number.isFinite(ms) || ms <= 0) return i18n._(msg`a while`);
   const months = Math.floor(ms / (30 * 86_400_000));
-  if (months >= 12) return `${Math.floor(months / 12)}y`;
-  if (months >= 1) return `${months}mo`;
+  if (months >= 12) {
+    const years = Math.floor(months / 12);
+    return i18n._(msg`${years}y`);
+  }
+  if (months >= 1) return i18n._(msg`${months}mo`);
   const days = Math.max(1, Math.floor(ms / 86_400_000));
-  return `${days}d`;
+  return i18n._(msg`${days}d`);
 }

@@ -1,4 +1,6 @@
+import { msg } from "@lingui/core/macro";
 import type { LiveGlobalRankingEntry } from "./live-backend";
+import type { AppLocale } from "./locale";
 
 // Higher or lower, played with maniacards. Everything here is pure so the
 // draw, the question and the scoring can be tested without a backend; the page
@@ -112,100 +114,168 @@ export const STREAK_METRICS = [
   "replayViews",
 ] as const;
 
+/* Every line of the game's copy is a whole sentence with named placeholders,
+   never a prefix/middle/suffix the page glues back together: which end of the
+   question a name belongs at is a fact about the language, not about the
+   game, and a fragment table can only ever encode English's answer. The
+   page resolves these through i18n._() and, for the question, fills {hidden}
+   and {shown} with the two card-coloured name spans. */
+type StreakMessage = ReturnType<typeof msg>;
+
 export interface StreakMetricCopy {
-  /* The question line, assembled around the two card-coloured names:
-     {prefix}<hidden card's name>{middle}<face-up card's name>{suffix}. */
-  q: { prefix: string; middle: string; suffix: string };
-  more: string;
-  less: string;
+  /* The question line. {hidden} is the card still hiding its number, {shown}
+     the face-up one it is being compared against. */
+  q: StreakMessage;
+  /* What the two guess buttons say. */
+  more: StreakMessage;
+  less: StreakMessage;
   /* The text under a face-up card. */
-  value: (value: number) => string;
+  value: (value: number, locale?: AppLocale) => StreakMessage;
   /* The text under the card still hiding its number. */
-  unknown: string;
+  unknown: StreakMessage;
   /* The end-of-run reveal: what the card you lost to (or walked away from
      knowing) actually had. */
-  reveal: (username: string, value: number) => string;
+  reveal: (username: string, value: number, locale?: AppLocale) => StreakMessage;
 }
 
 /* Date metrics ride the same numeric machinery as counts: the value is epoch
-   ms, so "more" means later. Fixed to English because the surrounding copy
-   is. */
-export function formatStreakMonth(ms: number): string {
-  return new Date(ms).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+   ms, so "more" means later. The UI locale is a catalog choice, so map it onto
+   the Intl tag the month name should follow; the "en" default keeps every
+   existing call site printing exactly what it printed before. */
+export function formatStreakMonth(ms: number, locale: AppLocale = "en"): string {
+  return new Date(ms).toLocaleDateString(locale === "zh-CN" ? "zh-CN" : "en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 export const STREAK_METRIC_COPY: Record<StreakMetric, StreakMetricCopy> = {
   plays: {
-    q: { prefix: "Does ", middle: " have more or fewer plays than ", suffix: "?" },
-    more: "More plays",
-    less: "Fewer plays",
-    value: (v) => `${formatStreakValue(v, "plays")} plays`,
-    unknown: "? plays",
-    reveal: (name, v) => `${name} had ${formatStreakValue(v, "plays")} plays.`,
+    q: msg`Does {hidden} have more or fewer plays than {shown}?`,
+    more: msg`More plays`,
+    less: msg`Fewer plays`,
+    value: (v) => {
+      const plays = formatStreakValue(v, "plays");
+      return msg`${plays} plays`;
+    },
+    unknown: msg`? plays`,
+    reveal: (name, v) => {
+      const plays = formatStreakValue(v, "plays");
+      return msg`${name} had ${plays} plays.`;
+    },
   },
   score: {
-    q: { prefix: "Does ", middle: " have more or fewer ranked score than ", suffix: "?" },
-    more: "More score",
-    less: "Less score",
-    value: (v) => `${formatStreakValue(v, "score")} ranked score`,
-    unknown: "? ranked score",
-    reveal: (name, v) => `${name} had ${formatStreakValue(v, "score")} ranked score.`,
+    q: msg`Does {hidden} have more or fewer ranked score than {shown}?`,
+    more: msg`More score`,
+    less: msg`Less score`,
+    value: (v) => {
+      const score = formatStreakValue(v, "score");
+      return msg`${score} ranked score`;
+    },
+    unknown: msg`? ranked score`,
+    reveal: (name, v) => {
+      const score = formatStreakValue(v, "score");
+      return msg`${name} had ${score} ranked score.`;
+    },
   },
   oldestTop: {
-    q: { prefix: "Is ", middle: "'s oldest top play older or newer than ", suffix: "'s?" },
-    more: "Newer",
-    less: "Older",
-    value: (v) => `oldest top ${formatStreakMonth(v)}`,
-    unknown: "oldest top ?",
-    reveal: (name, v) => `${name}'s oldest top play is from ${formatStreakMonth(v)}.`,
+    q: msg`Is {hidden}'s oldest top play older or newer than {shown}'s?`,
+    more: msg`Newer`,
+    less: msg`Older`,
+    value: (v, locale) => {
+      const month = formatStreakMonth(v, locale);
+      return msg`oldest top ${month}`;
+    },
+    unknown: msg`oldest top ?`,
+    reveal: (name, v, locale) => {
+      const month = formatStreakMonth(v, locale);
+      return msg`${name}'s oldest top play is from ${month}.`;
+    },
   },
   dtTop: {
-    q: { prefix: "Does ", middle: " have more or fewer DT top plays than ", suffix: "?" },
-    more: "More DT",
-    less: "Fewer DT",
-    value: (v) => `${Math.round(v).toLocaleString("en-US")} DT top plays`,
-    unknown: "? DT top plays",
-    reveal: (name, v) => `${name} had ${Math.round(v).toLocaleString("en-US")} DT top plays.`,
+    q: msg`Does {hidden} have more or fewer DT top plays than {shown}?`,
+    more: msg`More DT`,
+    less: msg`Fewer DT`,
+    value: (v) => {
+      const count = Math.round(v).toLocaleString("en-US");
+      return msg`${count} DT top plays`;
+    },
+    unknown: msg`? DT top plays`,
+    reveal: (name, v) => {
+      const count = Math.round(v).toLocaleString("en-US");
+      return msg`${name} had ${count} DT top plays.`;
+    },
   },
   k7Top: {
-    q: { prefix: "Does ", middle: " have more or fewer 7K top plays than ", suffix: "?" },
-    more: "More 7K",
-    less: "Fewer 7K",
-    value: (v) => `${Math.round(v).toLocaleString("en-US")} 7K top plays`,
-    unknown: "? 7K top plays",
-    reveal: (name, v) => `${name} had ${Math.round(v).toLocaleString("en-US")} 7K top plays.`,
+    q: msg`Does {hidden} have more or fewer 7K top plays than {shown}?`,
+    more: msg`More 7K`,
+    less: msg`Fewer 7K`,
+    value: (v) => {
+      const count = Math.round(v).toLocaleString("en-US");
+      return msg`${count} 7K top plays`;
+    },
+    unknown: msg`? 7K top plays`,
+    reveal: (name, v) => {
+      const count = Math.round(v).toLocaleString("en-US");
+      return msg`${name} had ${count} 7K top plays.`;
+    },
   },
   playTime: {
-    q: { prefix: "Does ", middle: " have more or less playtime than ", suffix: "?" },
-    more: "More playtime",
-    less: "Less playtime",
-    value: (v) => `${Math.round(v).toLocaleString("en-US")} hours`,
-    unknown: "? hours",
-    reveal: (name, v) => `${name} has ${Math.round(v).toLocaleString("en-US")} hours of playtime.`,
+    q: msg`Does {hidden} have more or less playtime than {shown}?`,
+    more: msg`More playtime`,
+    less: msg`Less playtime`,
+    value: (v) => {
+      const hours = Math.round(v).toLocaleString("en-US");
+      return msg`${hours} hours`;
+    },
+    unknown: msg`? hours`,
+    reveal: (name, v) => {
+      const hours = Math.round(v).toLocaleString("en-US");
+      return msg`${name} has ${hours} hours of playtime.`;
+    },
   },
   joined: {
-    q: { prefix: "Did ", middle: " join osu! earlier or later than ", suffix: "?" },
-    more: "Later",
-    less: "Earlier",
-    value: (v) => `joined ${formatStreakMonth(v)}`,
-    unknown: "joined ?",
-    reveal: (name, v) => `${name} joined in ${formatStreakMonth(v)}.`,
+    q: msg`Did {hidden} join osu! earlier or later than {shown}?`,
+    more: msg`Later`,
+    less: msg`Earlier`,
+    value: (v, locale) => {
+      const month = formatStreakMonth(v, locale);
+      return msg`joined ${month}`;
+    },
+    unknown: msg`joined ?`,
+    reveal: (name, v, locale) => {
+      const month = formatStreakMonth(v, locale);
+      return msg`${name} joined in ${month}.`;
+    },
   },
   followers: {
-    q: { prefix: "Does ", middle: " have more or fewer followers than ", suffix: "?" },
-    more: "More followers",
-    less: "Fewer followers",
-    value: (v) => `${Math.round(v).toLocaleString("en-US")} followers`,
-    unknown: "? followers",
-    reveal: (name, v) => `${name} has ${Math.round(v).toLocaleString("en-US")} followers.`,
+    q: msg`Does {hidden} have more or fewer followers than {shown}?`,
+    more: msg`More followers`,
+    less: msg`Fewer followers`,
+    value: (v) => {
+      const count = Math.round(v).toLocaleString("en-US");
+      return msg`${count} followers`;
+    },
+    unknown: msg`? followers`,
+    reveal: (name, v) => {
+      const count = Math.round(v).toLocaleString("en-US");
+      return msg`${name} has ${count} followers.`;
+    },
   },
   replayViews: {
-    q: { prefix: "Have ", middle: "'s replays been watched more or less than ", suffix: "'s?" },
-    more: "More watched",
-    less: "Less watched",
-    value: (v) => `${Math.round(v).toLocaleString("en-US")} replay views`,
-    unknown: "? replay views",
-    reveal: (name, v) => `${name}'s replays have ${Math.round(v).toLocaleString("en-US")} views.`,
+    q: msg`Have {hidden}'s replays been watched more or less than {shown}'s?`,
+    more: msg`More watched`,
+    less: msg`Less watched`,
+    value: (v) => {
+      const count = Math.round(v).toLocaleString("en-US");
+      return msg`${count} replay views`;
+    },
+    unknown: msg`? replay views`,
+    reveal: (name, v) => {
+      const count = Math.round(v).toLocaleString("en-US");
+      return msg`${name}'s replays have ${count} views.`;
+    },
   },
 };
 

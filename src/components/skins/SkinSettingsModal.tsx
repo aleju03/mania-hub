@@ -2,6 +2,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ImageIcon, RefreshCw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
 import { useAuth } from "../../lib/auth-context";
 import {
   deleteMySkin,
@@ -22,6 +24,11 @@ import {
   type SkinVisibility,
 } from "../../lib/skins";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
+
+const VISIBILITY_LABELS: Record<SkinVisibility, ReturnType<typeof msg>> = {
+  public: msg`public`,
+  private: msg`private`,
+};
 
 // Every owner-side control on one surface: name and description, keymode labels, visibility,
 // the file/preview edit entry points, and delete. The skin page used to line
@@ -48,6 +55,7 @@ export function SkinSettingsModal({
   onEditPreviews: () => void;
 }) {
   const auth = useAuth();
+  const { t, i18n } = useLingui();
   const isOwner = auth.viewer?.id === skin.ownerUserId;
   // A keymode moderator (neither owner nor admin) reaches this modal to fix
   // mislabelled keymodes and to drop screenshots that have nothing to do with
@@ -126,7 +134,7 @@ export function SkinSettingsModal({
     if (!name || !detailsDirty) return;
     void run(
       () => updateSkinDetails({ data: { id: skin.id, name, description: descriptionDraft, resolution: resolutionDraft } }),
-      "Saving the name and description failed. Try again.",
+      t`Saving the name and description failed. Try again.`,
     );
   };
 
@@ -137,7 +145,7 @@ export function SkinSettingsModal({
       : [...current, keys].sort((a, b) => a - b);
     void run(
       () => setSkinSpecialKeymodes({ data: { id: skin.id, specialKeymodes: next } }),
-      "Changing the keymode label failed. Try again.",
+      t`Changing the keymode label failed. Try again.`,
     );
   };
 
@@ -145,7 +153,7 @@ export function SkinSettingsModal({
     if (visibility === skin.visibility) return;
     void run(
       () => setMySkinVisibility({ data: { id: skin.id, visibility } }),
-      "Changing who can see this skin failed. Try again.",
+      t`Changing who can see this skin failed. Try again.`,
     );
   };
 
@@ -161,7 +169,7 @@ export function SkinSettingsModal({
       markSkinsListStale();
       onDeleted();
     } else {
-      setError("The delete failed. Try again.");
+      setError(t`The delete failed. Try again.`);
       setConfirmingDelete(false);
     }
   };
@@ -170,7 +178,7 @@ export function SkinSettingsModal({
     setConfirmingShotRemove(null);
     void run(
       () => removeSkinScreenshot({ data: { id: skin.id, screenshot: index } }),
-      "Removing the screenshot failed. Try again.",
+      t`Removing the screenshot failed. Try again.`,
     );
   };
 
@@ -197,7 +205,7 @@ export function SkinSettingsModal({
           <motion.div
             role="dialog"
             aria-modal="true"
-            aria-label={`Settings for ${skin.name}`}
+            aria-label={t`Settings for ${skin.name}`}
             className="modal-card-mobile-safe relative isolate z-10 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[440px] flex-col overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -207,12 +215,12 @@ export function SkinSettingsModal({
           >
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-osu-b3/30 px-4 py-3 sm:px-5">
               <span className="min-w-0 truncate text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">
-                {keymodesOnly || (auth.isAdmin && !isOwner) ? "moderation" : "skin settings"}
+                {keymodesOnly || (auth.isAdmin && !isOwner) ? <Trans>moderation</Trans> : <Trans>skin settings</Trans>}
               </span>
               <button
                 type="button"
                 onClick={handleDismiss}
-                aria-label="Close"
+                aria-label={t`Close`}
                 className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-osu-f1 transition-colors cursor-pointer hover:bg-osu-b3/50 hover:text-white"
               >
                 <X className="h-4 w-4" strokeWidth={2.4} />
@@ -221,7 +229,7 @@ export function SkinSettingsModal({
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-5">
               {!keymodesOnly && (
-                <SettingsRow label="Name and description">
+                <SettingsRow label={t`Name and description`}>
                   <form
                     className="flex flex-col gap-2"
                     onSubmit={(event) => {
@@ -235,7 +243,7 @@ export function SkinSettingsModal({
                       maxLength={SKIN_NAME_MAX_LENGTH}
                       disabled={busy}
                       onChange={(event) => setNameDraft(event.target.value)}
-                      aria-label="Skin name"
+                      aria-label={t`Skin name`}
                       className="min-w-0 rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] text-osu-l1 transition-colors focus:border-osu-pink/50 focus:outline-none"
                     />
                     <textarea
@@ -244,8 +252,8 @@ export function SkinSettingsModal({
                       rows={3}
                       disabled={busy}
                       onChange={(event) => setDescriptionDraft(event.target.value)}
-                      aria-label="Skin description"
-                      placeholder="A line about the skin"
+                      aria-label={t`Skin description`}
+                      placeholder={t`A line about the skin`}
                       className="min-w-0 resize-y rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] leading-relaxed text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
                     />
                     <input
@@ -255,8 +263,8 @@ export function SkinSettingsModal({
                       disabled={busy}
                       list="skin-settings-resolution-presets"
                       onChange={(event) => setResolutionDraft(event.target.value)}
-                      aria-label="Made for resolution"
-                      placeholder="Made for, e.g. 1920x1080"
+                      aria-label={t`Made for resolution`}
+                      placeholder={t`Made for, e.g. 1920x1080`}
                       className={`min-w-0 rounded-lg border bg-osu-b4 px-3 py-2 text-[13px] text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:outline-none ${
                         resolutionDraft.trim() && !normalizeSkinResolution(resolutionDraft)
                           ? "border-osu-red-light/60 focus:border-osu-red-light/60"
@@ -274,16 +282,16 @@ export function SkinSettingsModal({
                         disabled={busy}
                         className="self-start rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:opacity-50"
                       >
-                        Save
+                        <Trans>Save</Trans>
                       </button>
                     )}
                   </form>
-                  <p className="mt-1.5 text-[11px] text-osu-f1/70">The link and the .osk filename stay as published.</p>
+                  <p className="mt-1.5 text-[11px] text-osu-f1/70"><Trans>The link and the .osk filename stay as published.</Trans></p>
                 </SettingsRow>
               )}
 
               {relabelable.length > 0 && (
-                <SettingsRow label="Keymodes">
+                <SettingsRow label={t`Keymodes`}>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {relabelable.map((keys) => {
                       const special = skin.specialKeymodes?.includes(keys) ?? false;
@@ -294,7 +302,7 @@ export function SkinSettingsModal({
                           onClick={() => toggleSpecialKeymode(keys)}
                           disabled={busy}
                           aria-pressed={special}
-                          title={special ? `Label as a plain ${keys}K layout` : `Label as ${keys - 1}K+1`}
+                          title={special ? t`Label as a plain ${keys}K layout` : t`Label as ${keys - 1}K+1`}
                           className={`rounded-full px-3 py-1.5 text-[12px] font-bold tabular-nums transition-colors cursor-pointer disabled:opacity-50 ${
                             special
                               ? "bg-osu-pink/25 text-osu-pink-light hover:bg-osu-pink/35"
@@ -307,7 +315,7 @@ export function SkinSettingsModal({
                     })}
                   </div>
                   <p className="mt-1.5 text-[11px] text-osu-f1/70">
-                    Tap a keymode to toggle its label.
+                    <Trans>Tap a keymode to toggle its label.</Trans>
                   </p>
                 </SettingsRow>
               )}
@@ -318,13 +326,13 @@ export function SkinSettingsModal({
                   the moderator-scoped modal. Removal is immediate after the
                   inline confirm, and the stored image is deleted for good. */}
               {keymodesOnly && skin.screenshots.length > 0 && (
-                <SettingsRow label="Screenshots">
+                <SettingsRow label={t`Screenshots`}>
                   <div className="flex flex-col gap-1.5">
                     {skin.screenshots.map((shot, index) => (
                       <div key={shot.url} className="flex items-center gap-2">
                         <img
                           src={shot.url}
-                          alt={`Screenshot ${index + 1}`}
+                          alt={t`Screenshot ${index + 1}`}
                           loading="lazy"
                           className="h-11 w-[74px] shrink-0 rounded-md border border-osu-b3/40 object-cover"
                         />
@@ -339,7 +347,7 @@ export function SkinSettingsModal({
                               disabled={busy}
                               className="rounded-full bg-osu-red/25 px-3 py-1 font-bold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/40 disabled:opacity-50"
                             >
-                              Remove
+                              <Trans>Remove</Trans>
                             </button>
                             <button
                               type="button"
@@ -347,7 +355,7 @@ export function SkinSettingsModal({
                               disabled={busy}
                               className="font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
                             >
-                              Keep
+                              <Trans>Keep</Trans>
                             </button>
                           </span>
                         ) : (
@@ -355,8 +363,8 @@ export function SkinSettingsModal({
                             type="button"
                             disabled={busy}
                             onClick={() => setConfirmingShotRemove(index)}
-                            aria-label={`Remove screenshot ${index + 1}`}
-                            title="Remove this screenshot"
+                            aria-label={t`Remove screenshot ${index + 1}`}
+                            title={t`Remove this screenshot`}
                             className="shrink-0 rounded p-1 text-osu-f1 transition-colors cursor-pointer hover:text-white disabled:cursor-default disabled:opacity-50"
                           >
                             <X className="h-3.5 w-3.5" />
@@ -366,14 +374,14 @@ export function SkinSettingsModal({
                     ))}
                   </div>
                   <p className="mt-1.5 text-[11px] text-osu-f1/70">
-                    For screenshots that have nothing to do with the skin.
+                    <Trans>For screenshots that have nothing to do with the skin.</Trans>
                   </p>
                 </SettingsRow>
               )}
 
               {!keymodesOnly && (
                 <>
-                  <SettingsRow label="Visibility">
+                  <SettingsRow label={t`Visibility`}>
                     <div className="inline-flex items-center gap-1 rounded-lg bg-osu-b4/70 p-1">
                       {(["public", "private"] as const).map((option) => (
                         <button
@@ -383,29 +391,29 @@ export function SkinSettingsModal({
                           disabled={busy}
                           aria-pressed={skin.visibility === option}
                           title={option === "public"
-                            ? "On /skins for anyone to download"
-                            : "Off /skins; only you see this page. Your replays keep playing in it"}
+                            ? t`On /skins for anyone to download`
+                            : t`Off /skins; only you see this page. Your replays keep playing in it`}
                           className={`rounded-md px-4 py-1.5 text-[12px] font-bold transition-colors cursor-pointer disabled:opacity-50 ${
                             skin.visibility === option ? "bg-osu-pink/25 text-osu-pink-light" : "text-osu-f1 hover:text-osu-l2"
                           }`}
                         >
-                          {option}
+                          {i18n._(VISIBILITY_LABELS[option])}
                         </button>
                       ))}
                     </div>
                   </SettingsRow>
 
-                  <SettingsRow label="File and previews">
+                  <SettingsRow label={t`File and previews`}>
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={onUpdateFile}
                         disabled={busy}
-                        title="Replace the .osk with a newer build of this skin"
+                        title={t`Replace the .osk with a newer build of this skin`}
                         className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
                       >
                         <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                        Update file
+                        <Trans>Update file</Trans>
                         {skin.oskSizeBytes ? (
                           <span className="font-medium text-osu-f1 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span>
                         ) : null}
@@ -414,19 +422,19 @@ export function SkinSettingsModal({
                         type="button"
                         onClick={onEditPreviews}
                         disabled={busy}
-                        title="Re-render the playfield previews, name the screenshots, or change the card cover"
+                        title={t`Re-render the playfield previews, name the screenshots, or change the card cover`}
                         className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
                       >
                         <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                        Edit previews
+                        <Trans>Edit previews</Trans>
                       </button>
                     </div>
                   </SettingsRow>
 
-                  <SettingsRow label="Danger">
+                  <SettingsRow label={t`Danger`}>
                     {confirmingDelete ? (
                       <span className="flex flex-wrap items-center gap-2 text-[12px]">
-                        <span className="text-osu-f1">Delete for good?</span>
+                        <span className="text-osu-f1"><Trans>Delete for good?</Trans></span>
                         <button
                           type="button"
                           onClick={() => void removeSkin()}
@@ -434,7 +442,7 @@ export function SkinSettingsModal({
                           className="inline-flex items-center gap-1.5 rounded-full bg-osu-red/25 px-3 py-1.5 font-bold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/40 disabled:opacity-50"
                         >
                           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          Delete
+                          <Trans>Delete</Trans>
                         </button>
                         <button
                           type="button"
@@ -442,7 +450,7 @@ export function SkinSettingsModal({
                           disabled={busy}
                           className="font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
                         >
-                          Keep it
+                          <Trans>Keep it</Trans>
                         </button>
                       </span>
                     ) : (
@@ -453,7 +461,7 @@ export function SkinSettingsModal({
                         className="inline-flex items-center gap-1.5 rounded-full border border-osu-red/35 px-3 py-1.5 text-[12px] font-semibold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/20 disabled:opacity-50"
                       >
                         <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        Delete skin
+                        <Trans>Delete skin</Trans>
                       </button>
                     )}
                   </SettingsRow>

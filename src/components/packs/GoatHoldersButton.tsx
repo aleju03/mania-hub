@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { CountryFlag } from "../ui/CountryFlag";
 import { useAuth } from "../../lib/auth-context";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
@@ -37,7 +38,7 @@ export function GoatHoldersButton() {
         onClick={() => setOpen(true)}
         className="rounded-full border border-osu-b3/40 px-3 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:border-amber-300/40 hover:text-amber-200 cursor-pointer"
       >
-        GOAT holders
+        <Trans>GOAT holders</Trans>
       </button>
       <AnimatePresence>{open && <GoatHoldersModal onClose={() => setOpen(false)} />}</AnimatePresence>
     </>
@@ -53,6 +54,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function GoatHoldersModal({ onClose }: { onClose: () => void }) {
+  const { t } = useLingui();
   const [report, setReport] = useState<LiveBackendHonoraryPulls | null>(null);
   const [unsupported, setUnsupported] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +130,7 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t`Close`}
           className="absolute top-3 right-3 z-20 flex h-8 w-8 items-center justify-center rounded-full text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white cursor-pointer"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -136,13 +138,13 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
           </svg>
         </button>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 [scrollbar-gutter:stable]">
-          <SectionLabel>GOATs discovered</SectionLabel>
+          <SectionLabel><Trans>GOATs discovered</Trans></SectionLabel>
           {error ? (
             <div className="mt-3 text-[12px] text-osu-red-light">{error}</div>
           ) : unsupported ? (
-            <div className="mt-3 text-[12px] text-osu-f1">This is not available yet. Check back soon.</div>
+            <div className="mt-3 text-[12px] text-osu-f1"><Trans>This is not available yet. Check back soon.</Trans></div>
           ) : report === null ? (
-            <div className="py-10 text-center text-[12px] text-osu-f1">Loading...</div>
+            <div className="py-10 text-center text-[12px] text-osu-f1"><Trans>Loading...</Trans></div>
           ) : (
             <>
               <div className="mt-1 flex items-baseline gap-2">
@@ -151,15 +153,15 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
                   <span className="text-osu-f1">/{formatNumber(HONORARY_PLAYERS.length)}</span>
                 </span>
                 <span className="text-[11px] text-osu-f1">
-                  {formatNumber(report.distinctOwners)} collector{report.distinctOwners === 1 ? "" : "s"}
+                  <Plural value={report.distinctOwners} one="# collector" other="# collectors" />
                   {" · "}
-                  {formatNumber(report.totalCopies)} cop{report.totalCopies === 1 ? "y" : "ies"}
+                  <Plural value={report.totalCopies} one="# copy" other="# copies" />
                 </span>
               </div>
 
               {latest ? (
                 <div className="mt-4">
-                  <SectionLabel>Latest</SectionLabel>
+                  <SectionLabel><Trans>Latest</Trans></SectionLabel>
                   <div className="mt-1 flex flex-wrap items-baseline gap-x-1.5 text-[15px] leading-snug">
                     <Link
                       to="/pull/$ownerId/$cardId"
@@ -171,7 +173,7 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
                     >
                       {latest.ownerUsername}
                     </Link>
-                    <span className="text-[13px] text-osu-f1">pulled</span>
+                    <span className="text-[13px] text-osu-f1"><Trans>pulled</Trans></span>
                     <span translate="no" className="font-bold text-amber-200">
                       {honoraryLabel(latest.cardUserId) ?? latest.cardUsername ?? `#${latest.cardUserId}`}
                     </span>
@@ -182,7 +184,7 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
 
               {collectors.length > 0 ? (
                 <div className="mt-4">
-                  <SectionLabel>Collectors</SectionLabel>
+                  <SectionLabel><Trans>Collectors</Trans></SectionLabel>
                   <div className="mt-1">
                     {collectors.map((collector) => (
                       <div
@@ -201,7 +203,7 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
                         </Link>
                         {collector.copies > collector.cards ? (
                           <span className="flex-shrink-0 text-[11px] text-osu-f1">
-                            {formatNumber(collector.copies)} copies
+                            <Plural value={collector.copies} one="# copy" other="# copies" />
                           </span>
                         ) : null}
                         <span className="flex-shrink-0 text-[13px] font-bold tabular-nums text-amber-200">
@@ -212,8 +214,11 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
                     ))}
                     {report.distinctOwners > collectors.length ? (
                       <div className="pt-1.5 text-[11px] text-osu-f1">
-                        +{formatNumber(report.distinctOwners - collectors.length)} more collector
-                        {report.distinctOwners - collectors.length === 1 ? "" : "s"}
+                        <Plural
+                          value={report.distinctOwners - collectors.length}
+                          one="+# more collector"
+                          other="+# more collectors"
+                        />
                       </div>
                     ) : null}
                   </div>
@@ -222,7 +227,7 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
 
               {found.length > 0 ? (
                 <div className="mt-4">
-                  <SectionLabel>Cards found</SectionLabel>
+                  <SectionLabel><Trans>Cards found</Trans></SectionLabel>
                   <div className="mt-1">
                     {found.map(({ player, pulls }) => (
                       <GoatHolderRow
@@ -246,7 +251,9 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
                     className="flex w-full items-center gap-1.5 text-left cursor-pointer"
                     aria-expanded={showUndiscovered}
                   >
-                    <SectionLabel>Still out there ({formatNumber(undiscovered.length)})</SectionLabel>
+                    <SectionLabel>
+                      <Trans>Still out there ({formatNumber(undiscovered.length)})</Trans>
+                    </SectionLabel>
                     <ChevronRight
                       className={`h-3 w-3 text-osu-f1 transition-transform ${showUndiscovered ? "rotate-90" : ""}`}
                       aria-hidden="true"
@@ -293,6 +300,7 @@ function GoatHolderRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useLingui();
   const owners = pulls.owners;
   const hidden = pulls.ownerCount - owners.length;
   const label = player.cardName ?? player.username;
@@ -316,8 +324,13 @@ function GoatHolderRow({
         <span className="hidden flex-shrink-0 text-[11px] text-osu-f1 sm:inline">{timeAgo(pulls.lastPulledAt)}</span>
         <span className="flex-shrink-0 text-[11px] text-osu-f1">
           <span className="text-[14px] font-bold tabular-nums text-amber-200">{formatNumber(pulls.ownerCount)}</span>{" "}
-          holder{pulls.ownerCount === 1 ? "" : "s"}
-          {pulls.copies > pulls.ownerCount ? ` · ${formatNumber(pulls.copies)} copies` : ""}
+          <Plural value={pulls.ownerCount} one="holder" other="holders" />
+          {pulls.copies > pulls.ownerCount ? (
+            <>
+              {" · "}
+              <Plural value={pulls.copies} one="# copy" other="# copies" />
+            </>
+          ) : null}
         </span>
       </button>
       {expanded ? (
@@ -332,7 +345,7 @@ function GoatHolderRow({
                 params={{ ownerId: String(owner.userId), cardId: String(player.id) }}
                 target="_blank"
                 rel="noopener noreferrer"
-                title={`Open ${owner.username}'s pull of ${label}`}
+                title={t`Open ${owner.username}'s pull of ${label}`}
                 translate="no"
                 className="min-w-0 flex-1 truncate text-osu-l2/80 underline-offset-2 transition-colors hover:text-white hover:underline"
               >
@@ -344,7 +357,9 @@ function GoatHolderRow({
           ))}
           {hidden > 0 ? (
             <div className="pt-1 text-[11px] text-osu-f1">
-              +{formatNumber(hidden)} more (list capped at {formatNumber(ownersPerCard)})
+              <Trans>
+                +{formatNumber(hidden)} more (list capped at {formatNumber(ownersPerCard)})
+              </Trans>
             </div>
           ) : null}
         </div>

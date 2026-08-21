@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useLingui } from "@lingui/react/macro";
 import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import { fetchPackPlayerScores } from "#/lib/packs";
@@ -221,6 +222,7 @@ export function CollectionCardTile({
      though several tiles had been stacked into one. */
   showCopies?: boolean;
 }) {
+  const { t } = useLingui();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const previousThumbnailRef = useRef<string | null>(thumbnail);
   const animateThumbnail = Boolean(thumbnail && !previousThumbnailRef.current);
@@ -269,7 +271,7 @@ export function CollectionCardTile({
         <motion.img
           key={thumbnail}
           src={thumbnail}
-          alt={`${card.username} maniacard`}
+          alt={t`${card.username} maniacard`}
           className="absolute inset-0 h-full w-full rounded-[10px] object-cover"
           initial={animateThumbnail ? { opacity: 0 } : false}
           animate={{ opacity: 1 }}

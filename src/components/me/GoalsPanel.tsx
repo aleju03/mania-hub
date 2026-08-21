@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Pencil } from "lucide-react";
+import { useLingui } from "@lingui/react/macro";
 import { useLocation } from "@tanstack/react-router";
 
 import { PageHeader } from "../layout/PageHeader";
@@ -277,6 +278,7 @@ function sortGoals(goals: UserGoal[]): UserGoal[] {
 }
 
 export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_METRICS }: { initialSuggestionMetrics?: GoalSuggestionMetrics }) {
+  const { i18n } = useLingui();
   const auth = useAuth();
   const location = useLocation();
   const viewer = auth.viewer;
@@ -554,8 +556,8 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
   const remove = useCallback((goal: UserGoal) => {
     setGoals((prev) => prev.filter((g) => g.id !== goal.id));
     playGoalDeletedSound();
-    queueGoalDelete(goal, describeGoal(goal));
-  }, []);
+    queueGoalDelete(goal, describeGoal(goal, i18n));
+  }, [i18n]);
 
   const update = useCallback(
     async (input: UpdateGoalInput): Promise<boolean> => {
@@ -882,6 +884,7 @@ function RankScopeToggle({ value, onChange, accent }: { value: RankScope; onChan
 }
 
 function SpeedToken({ value, onChange, accent }: { value: GoalSpeedBucket; onChange: (speed: GoalSpeedBucket) => void; accent: string }) {
+  const { i18n } = useLingui();
   return (
     <span className="inline-flex items-center gap-1 rounded-lg border border-osu-b3/45 bg-osu-b5/55 p-1 align-middle">
       {GOAL_SPEED_OPTIONS.map((option) => {
@@ -892,8 +895,8 @@ function SpeedToken({ value, onChange, accent }: { value: GoalSpeedBucket; onCha
             type="button"
             onClick={() => onChange(option)}
             aria-pressed={selected}
-            aria-label={`${GOAL_SPEED_LABELS[option]} speed`}
-            title={GOAL_SPEED_LABELS[option]}
+            aria-label={`${i18n._(GOAL_SPEED_LABELS[option])} speed`}
+            title={i18n._(GOAL_SPEED_LABELS[option])}
             className={`flex h-8 min-w-10 items-center justify-center rounded-md px-1.5 transition ${
               selected ? "opacity-100" : "opacity-45 hover:opacity-85"
             }`}
@@ -1369,6 +1372,7 @@ function GoalMedia({ goal, accent, href }: { goal: UserGoal; accent: string; hre
 }
 
 function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () => void; onUpdate: (input: UpdateGoalInput) => Promise<boolean> }) {
+  const { i18n } = useLingui();
   const meta = goalMeta(goal.kind);
   const accent = meta.accent;
   const href = beatmapHref(goal.beatmapId);
@@ -1395,7 +1399,7 @@ function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () =
               {meta.label}
             </span>
             <span className="truncate text-[10px] font-semibold text-osu-f1" title={setOnTitle(goal.createdAt)}>
-              {goalAgeLabel(goal.createdAt, Date.now())}
+              {goalAgeLabel(goal.createdAt, Date.now(), i18n)}
             </span>
           </div>
           {href ? (
@@ -1404,13 +1408,13 @@ function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () =
               target="_blank"
               rel="noreferrer"
               className="mt-1 block truncate text-[14px] font-bold text-white transition-colors hover:text-osu-pink-light hover:underline"
-              title={`Open ${goal.beatmapLabel ?? describeGoal(goal)} on osu!`}
+              title={`Open ${goal.beatmapLabel ?? describeGoal(goal, i18n)} on osu!`}
             >
-              {describeGoal(goal)}
+              {describeGoal(goal, i18n)}
             </a>
           ) : (
-            <div className="mt-1 truncate text-[14px] font-bold text-white" title={describeGoal(goal)}>
-              {describeGoal(goal)}
+            <div className="mt-1 truncate text-[14px] font-bold text-white" title={describeGoal(goal, i18n)}>
+              {describeGoal(goal, i18n)}
             </div>
           )}
           <div className="mt-1.5">
@@ -1599,9 +1603,10 @@ function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input
 }
 
 function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: () => void; onAgain: () => void }) {
+  const { i18n } = useLingui();
   const meta = goalMeta(goal.kind);
   const cover = coverUrl(goal.beatmapsetId);
-  const took = goalDurationLabel(goal);
+  const took = goalDurationLabel(goal, i18n);
   // reach_pp / play_pp_count can't be repeated (they only go up); "again" prefills the next milestone.
   const movesToNextMilestone = goal.kind === "reach_pp" || goal.kind === "play_pp_count";
   return (
@@ -1625,13 +1630,13 @@ function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: ()
             target="_blank"
             rel="noreferrer"
             className="block truncate text-[12.5px] font-bold text-osu-l2 transition-colors hover:text-osu-pink-light hover:underline"
-            title={`Open ${goal.beatmapLabel ?? describeGoal(goal)} on osu!`}
+            title={`Open ${goal.beatmapLabel ?? describeGoal(goal, i18n)} on osu!`}
           >
-            {describeGoal(goal)}
+            {describeGoal(goal, i18n)}
           </a>
         ) : (
-          <div className="truncate text-[12.5px] font-bold text-osu-l2" title={describeGoal(goal)}>
-            {describeGoal(goal)}
+          <div className="truncate text-[12.5px] font-bold text-osu-l2" title={describeGoal(goal, i18n)}>
+            {describeGoal(goal, i18n)}
           </div>
         )}
         <div className="mt-0.5 truncate text-[10.5px] font-semibold text-osu-green-light" title={setOnTitle(goal.createdAt)}>
