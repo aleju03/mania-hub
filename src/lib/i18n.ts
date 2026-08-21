@@ -1,5 +1,5 @@
 import { setupI18n, type I18n, type Messages } from "@lingui/core";
-import { type AppLocale, DEFAULT_LOCALE } from "./locale";
+import type { AppLocale } from "./locale";
 
 // One immutable I18n instance per locale, shared by every render that wants
 // that locale. This is what makes SSR safe without per-request instances: the
@@ -34,21 +34,31 @@ export async function loadLocaleCatalog(locale: AppLocale): Promise<void> {
   if (registry.has(locale)) return;
   const { messages } = await loaders[locale]();
   registry.set(locale, messages);
+  // Drop any instance getI18n built from the empty-catalog fallback before the
+  // catalog arrived, so the next getI18n(locale) rebuilds from real messages.
+  // Without this the empty instance is cached forever: the whole UI renders
+  // bare message ids (compiled catalogs strip the source-text fallback) even
+  // after the catalog loads.
+  instances.delete(locale);
 }
 
 // Returns the shared instance for a locale whose catalog has been registered
 // (always true on the server; on the client, client.tsx loads the visitor's
-// catalog before hydration and the settings picker loads before switching).
-// A miss is a programming error, but falling back to an empty catalog keeps
-// the page up in English source strings rather than crashing.
+// catalog plus the en fallback before hydration - the default-locale helpers
+// like format.ts's tr() resolve through getI18n("en"), so en is needed even
+// when the visitor reads another language - and the settings picker loads
+// before switching). A miss is a programming error, and in a production build
+// it renders bare message ids: compiled catalogs strip the macro's source-text
+// fallback. loadLocaleCatalog evicts the empty instance once the catalog
+// arrives.
 export function getI18n(locale: AppLocale): I18n {
   let instance = instances.get(locale);
   if (!instance) {
     const messages = registry.get(locale) ?? {};
     instance = setupI18n({ locale, messages: { [locale]: messages } });
     instances.set(locale, instance);
-    if (!registry.has(locale) && locale !== DEFAULT_LOCALE) {
-      console.warn(`[i18n] catalog for ${locale} not loaded; falling back to source strings`);
+    if (!registry.has(locale)) {
+      console.warn(`[i18n] catalog for ${locale} not loaded; messages render as ids`);
     }
   }
   return instance;

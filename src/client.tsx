@@ -26,10 +26,18 @@ const initialLocale =
 // attributes, stripping the theme vars the pre-hydration script painted (see
 // reapplyThemeToDom in store.ts). The mismatch only reproduces in production,
 // so the component stack reported here is the signal for which node caused it.
-// finally, not then: a failed catalog fetch (flaky network, stale chunk) must
-// still hydrate the page - it just hydrates with source-English strings, which
-// for a zh visitor mismatches and recovers via the client render below.
-void loadLocaleCatalog(initialLocale).finally(() => {
+// The en catalog loads alongside it (in parallel, skipped when en is the
+// visitor's locale): the default-locale helpers (format.ts's tr(),
+// formatReleaseAge, goal-format) resolve through getI18n("en") regardless of
+// the visitor's language, and a compiled build renders bare message ids when
+// that catalog is missing.
+// allSettled, not then: a failed catalog fetch (flaky network, stale chunk)
+// must still hydrate the page - it just hydrates with missing strings, which
+// mismatches and recovers via the client render below.
+void Promise.allSettled([
+  loadLocaleCatalog(initialLocale),
+  loadLocaleCatalog(DEFAULT_LOCALE),
+]).then(() => {
   startTransition(() => {
     hydrateRoot(
       document,
