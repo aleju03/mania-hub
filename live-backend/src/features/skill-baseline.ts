@@ -415,11 +415,15 @@ function scoreToApproxPlay(score: OscScore, charts: Map<number, BaselineChartEnt
   if (!entry) return null;
   const rate = getPlayRate(score.mods);
   if (rate == null) return null;
+  // Same sub-floor exclusion as the exact pipeline: a play the calc would
+  // rate at its 0.8 goal floor does not count toward the baseline either.
+  const goal = ssrGoalForScore(score, entry.lnRatio, entry.od);
+  if (goal == null) return null;
   const endedAtMs = Date.parse(String(score.ended_at ?? score.created_at ?? ""));
   return {
     beatmapId,
     rate,
-    goal: ssrGoalForScore(score, entry.lnRatio, entry.od),
+    goal,
     patterns: entry.patterns,
     endedAtMs: Number.isFinite(endedAtMs) ? endedAtMs : null,
   };

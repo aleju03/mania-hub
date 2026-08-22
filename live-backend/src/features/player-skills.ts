@@ -93,6 +93,13 @@ const PATTERN_TAG_MIN_SCORE = 0.5;
 // so the veto costs genuine tech charts almost nothing, while unambiguous CJ
 // diffs (chordjack >= 0.8) carried a false tech tag 75-88% of the time.
 const TECH_TAG_CHORDJACK_VETO = 0.8;
+// The calc's goal floor. A play whose goal input (wife estimate / accuracy)
+// sits at or below it cannot be rated honestly: clamping the goal up to 0.8
+// rates the play as if it were an 80% play, which on a hard enough chart
+// awards near-full MSD for a scraped pass (a 61% DT pass once headlined a
+// profile at SSR 35). Such plays are excluded outright (ssrGoalForScore
+// returns null) and stored floor-rated plays from before the rule drop in
+// the retention pass.
 const SSR_GOAL_MIN = 0.8;
 // The calc clamps goals above 0.965 internally (Etterna's SSR cap); goals
 // above it are served by extrapolating from the calc's slope between the MSD
@@ -468,8 +475,17 @@ function stableWindowScale(score: SsrGoalScore): number {
  * by the chart's LN share. `lnRatio` comes from chart analysis; when it is
  * unknown (null) a lazer play falls back to the plain-accuracy goal entirely,
  * since there is no way to tell how much of its ratio sag is LN artifact.
+ *
+ * Returns null when the goal lands on the calc's 0.8 floor: the play's real
+ * accuracy sits at or below what the calc can rate, so any SSR would be the
+ * floor's, not the play's, and the play must not count.
  */
-export function ssrGoalForScore(score: SsrGoalScore, lnRatio?: number | null, od?: number | null): number {
+export function ssrGoalForScore(score: SsrGoalScore, lnRatio?: number | null, od?: number | null): number | null {
+  const goal = ssrGoalForScoreUnchecked(score, lnRatio, od);
+  return goal > SSR_GOAL_MIN ? goal : null;
+}
+
+function ssrGoalForScoreUnchecked(score: SsrGoalScore, lnRatio?: number | null, od?: number | null): number {
   const wife = estimateWifeAccuracy(score.statistics, { od, windowScale: stableWindowScale(score) });
   if (wife == null) return ssrGoalForAccuracy(score.accuracy);
   const wifeGoal = Math.max(SSR_GOAL_MIN, Math.min(SSR_GOAL_CAP, wife));
@@ -868,6 +884,10 @@ export async function computePlayerSkillRatings(
       return;
     }
     const goal = ssrGoalForScore(score, info?.lnRatio ?? null, odByBeatmap.get(beatmapId) ?? null);
+    if (goal == null) {
+      if (source === "top") unsupportedPlays += 1;
+      return;
+    }
     const key = `${beatmapId}:${rate}`;
     const existing = candidates.get(key);
     if (!existing || goal > existing.goal || (goal === existing.goal && source === "top" && existing.source === "tracked")) {
@@ -947,6 +967,11 @@ export async function computePlayerSkillRatings(
   // dropping off the top-200).
   for (const previous of previousPlays) {
     if (!previous || !(previous.beatmapId > 0) || !(previous.rate > 0) || !previous.values) continue;
+    // A stored goal at the calc floor means the play's real accuracy sat at
+    // or below it (the clamp erased how far below), so its SSR is the
+    // floor's, not the play's. Rated before the sub-floor exclusion existed;
+    // evict instead of retaining.
+    if (!(previous.goal > SSR_GOAL_MIN)) continue;
     if (
       infoByBeatmap.get(previous.beatmapId)?.vibro &&
       previous.source !== "top" &&
@@ -1686,6 +1711,101 @@ async function enqueuePlayerSkillPoisonRecovery(queue: JobQueue, cursor: number)
   await queue.enqueue(
     PLAYER_SKILL_POISON_JOB,
     `${PLAYER_SKILL_POISON_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// One-shot sweep behind the sub-floor exclusion: stored plays rated at the
+// calc's 0.8 goal floor only evict when their row recomputes, which normally
+// waits on a profile view past the 12h TTL. This sweep finds every
+// current-version row still holding a floor-rated play and queues the
+// ordinary recompute for it, so inflated headline ratings heal right after
+// the deploy instead of lingering until someone looks. Local DB work plus
+// cache-reusing recomputes; the recompute enqueues sit below the
+// session-debounced priority so viewers and fresh sessions still preempt.
+export const PLAYER_SKILL_FLOOR_SWEEP_JOB = "recompute_player_skill_floor_sweep";
+const PLAYER_SKILL_FLOOR_SWEEP_META_KEY = "player_skill_floor_sweep_done:v1";
+const PLAYER_SKILL_FLOOR_SWEEP_CHUNK = 200;
+const PLAYER_SKILL_FLOOR_SWEEP_RECOMPUTE_PRIORITY = 5;
+
+const PLAYER_SKILL_FLOOR_SIGNATURE_SQL = `exists (
+  select 1 from json_each(json_extract(plays_json, '$.plays')) as play
+  where json_extract(play.value, '$.goal') <= ${SSR_GOAL_MIN}
+)`;
+
+export interface PlayerSkillFloorSweepChunkResult {
+  nextCursor: number;
+  scanned: number;
+  enqueued: number[];
+  done: boolean;
+}
+
+export async function runPlayerSkillFloorSweepChunk(
+  db: Db,
+  queue: JobQueue,
+  cursor: number,
+  limit = PLAYER_SKILL_FLOOR_SWEEP_CHUNK,
+): Promise<PlayerSkillFloorSweepChunkResult> {
+  const rows = (await exec(
+    db,
+    `select user_id from player_skill_ratings
+     where user_id > ? and analysis_version = ? and ${PLAYER_SKILL_FLOOR_SIGNATURE_SQL}
+     order by user_id
+     limit ?`,
+    [Math.max(0, Math.floor(cursor)), PLAYER_SKILLS_VERSION, Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const enqueued: number[] = [];
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    nextCursor = Math.max(nextCursor, userId);
+    if (!Number.isInteger(userId) || userId <= 0) continue;
+    await enqueuePlayerSkills(queue, userId, { priority: PLAYER_SKILL_FLOOR_SWEEP_RECOMPUTE_PRIORITY });
+    enqueued.push(userId);
+  }
+  return { nextCursor, scanned: rows.length, enqueued, done: rows.length < limit };
+}
+
+export async function ensurePlayerSkillFloorSweepSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [PLAYER_SKILL_FLOOR_SWEEP_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [PLAYER_SKILL_FLOOR_SWEEP_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueuePlayerSkillFloorSweep(queue, 0);
+}
+
+export async function runPlayerSkillFloorSweepJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await runPlayerSkillFloorSweepChunk(db, queue, cursor);
+  if (result.enqueued.length > 0) {
+    logInfo("player_skill_floor_sweep_enqueued", { users: result.enqueued.length, cursor });
+  }
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [PLAYER_SKILL_FLOOR_SWEEP_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueuePlayerSkillFloorSweep(queue, result.nextCursor);
+}
+
+async function enqueuePlayerSkillFloorSweep(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    PLAYER_SKILL_FLOOR_SWEEP_JOB,
+    `${PLAYER_SKILL_FLOOR_SWEEP_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );

@@ -253,6 +253,23 @@ describe("ssrGoalForScore", () => {
     expect(ssrGoalForScore({ accuracy: 0.94, statistics: {} }, 0)).toBe(0.94);
   });
 
+  it("refuses plays whose goal lands on the calc's 0.8 floor", () => {
+    // The 61.56% DT scrape: clamped to goal 0.8 it rated near the chart's
+    // full MSD; it must not rate at all.
+    expect(ssrGoalForScore({ accuracy: 0.6156, statistics: {} }, 0)).toBeNull();
+    expect(ssrGoalForScore({ accuracy: 0.8, statistics: {} }, 0)).toBeNull();
+    expect(ssrGoalForScore({ accuracy: 0.81, statistics: {} }, 0)).toBe(0.81);
+    // Judgement-backed: decent osu accuracy but a wife estimate the misses
+    // drag below the floor is refused on the wife path too.
+    const sloppy = {
+      accuracy: 0.85,
+      legacy_score_id: 12345,
+      statistics: { count_geki: 200, count_300: 400, count_katu: 100, count_100: 100, count_miss: 200 },
+    };
+    expect(estimateWifeAccuracy(sloppy.statistics)).toBeLessThan(0.8);
+    expect(ssrGoalForScore(sloppy, 0)).toBeNull();
+  });
+
   it("fades the wife estimate toward plain accuracy by LN share for lazer plays", () => {
     // Same judgement counts: a rice chart keeps the full MAX:300 spread, an
     // LN-heavy chart mostly ignores it (lazer judges LN head+tail separately,
@@ -264,8 +281,8 @@ describe("ssrGoalForScore", () => {
     const unknown = ssrGoalForScore(score, null);
     const accGoal = ssrGoalForAccuracy(score.accuracy);
     expect(rice).toBeLessThan(accGoal);
-    expect(half).toBeGreaterThan(rice);
-    expect(half).toBeLessThan(lnHeavy);
+    expect(half).toBeGreaterThan(rice!);
+    expect(half).toBeLessThan(lnHeavy!);
     expect(lnHeavy).toBe(accGoal);
     expect(unknown).toBe(accGoal);
   });
@@ -296,7 +313,7 @@ describe("ssrGoalForScore", () => {
     const statistics = { count_geki: 300, count_300: 700 };
     const stableEz = { accuracy: 0.997, legacy_score_id: 12345, statistics, mods: ["EZ"] };
     const stablePlain = { accuracy: 0.997, legacy_score_id: 12345, statistics, mods: [] };
-    expect(ssrGoalForScore(stableEz, 0, 8)).toBeLessThan(ssrGoalForScore(stablePlain, 0, 8));
+    expect(ssrGoalForScore(stableEz, 0, 8)).toBeLessThan(ssrGoalForScore(stablePlain, 0, 8)!);
     const lazerStats = { perfect: 300, great: 700 };
     const lazerEz = { accuracy: 0.997, statistics: lazerStats, mods: ["EZ"] };
     const lazerPlain = { accuracy: 0.997, statistics: lazerStats, mods: [] };
@@ -365,6 +382,34 @@ describe("computePlayerSkillRatings", () => {
       expect(result.summary.modes[0].keyCount).toBe(4);
       expect(result.summary.modes[0].ratings.Overall).toBeGreaterThan(0);
       expect(result.summary.modes[0].ratings.Stream).toBeGreaterThan(0);
+    });
+  });
+
+  it("never counts a sub-floor play and evicts stored floor-rated ones", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
+
+      // A low-accuracy scrape stays out whether it arrives tracked or top;
+      // only the top-sourced one shows up in the unsupported count.
+      const scrape = play({ id: 9, beatmap_id: 101, accuracy: 0.6156, mods: [{ acronym: "DT" }] });
+      const tracked = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores: [{ ...scrape, pp: null }] });
+      expect(tracked.summary.analyzedPlays).toBe(0);
+      expect(tracked.summary.totalPlays).toBe(0);
+      const top = await computePlayerSkillRatings(db, failingOsu, [scrape], []);
+      expect(top.summary.analyzedPlays).toBe(0);
+      expect(top.summary.unsupportedPlays).toBe(1);
+
+      // A floor-rated play stored before the exclusion existed drops on the
+      // next compute instead of retaining forever.
+      const healthy = await computePlayerSkillRatings(db, failingOsu, [play({ id: 11, beatmap_id: 101 })], []);
+      expect(healthy.summary.analyzedPlays).toBe(1);
+      const floorRated = { ...healthy.plays[0], identity: "legacy-scrape", goal: 0.8, accuracy: 0.6156 };
+      const purged = await computePlayerSkillRatings(db, failingOsu, [], [floorRated], {});
+      expect(purged.summary.analyzedPlays).toBe(0);
+      // The same stored play above the floor retains as before.
+      const aboveFloor = { ...healthy.plays[0] };
+      const retained = await computePlayerSkillRatings(db, failingOsu, [], [aboveFloor], {});
+      expect(retained.summary.analyzedPlays).toBe(1);
     });
   });
 
@@ -563,8 +608,9 @@ describe("computePlayerSkillRatings", () => {
         // it lands on the verdict's primary side (rc here).
         play({ id: 3, beatmap_id: 101, mods: [{ acronym: "DT" }], accuracy: 0.96, statistics: { perfect: 350, great: 330 } }),
         // Below the accuracy bar: analyzed, but never a qualifying clear (if
-        // this 9.9 counted, the rc dan would land higher).
-        play({ id: 4, beatmap_id: 107, accuracy: 0.9, statistics: { perfect: 300, great: 300, ok: 60, miss: 10 } }),
+        // this 9.9 counted, the rc dan would land higher). Miss-free so its
+        // wife estimate stays above the 0.8 goal floor and it rates at all.
+        play({ id: 4, beatmap_id: 107, accuracy: 0.9, statistics: { perfect: 300, great: 300, ok: 60 } }),
         play({ id: 5, beatmap_id: 108, accuracy: 0.96, statistics: { perfect: 400, great: 260 } }),
         // Hybrid below the LN cutoff (lnRatio 0.4): counts as a rice clear
         // only - its ln half (7.0) must never reach the LN ladder.

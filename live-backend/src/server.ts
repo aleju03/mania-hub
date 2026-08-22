@@ -20,7 +20,7 @@ import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-
 import { registerPackCommunitySnapshots, startPackCommunitySnapshotRefresh } from "./features/pack-community.js";
 import { ensurePackCommunityRollupTriggers } from "./features/pack-community-rollups.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
-import { enqueuePlayerSkills, ensurePlayerSkillPoisonRecoverySeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
+import { enqueuePlayerSkills, ensurePlayerSkillFloorSweepSeeded, ensurePlayerSkillPoisonRecoverySeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
@@ -476,6 +476,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // the charts, but per-play SSRs stored against them are copies and do
       // not follow. Local DB work only, no osu! API budget.
       void ensurePlayerSkillPoisonRecoverySeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-poison] seed failed", error));
+      // Sub-floor exclusion rollout: queue a recompute for every row still
+      // holding a floor-rated play so inflated ratings heal at deploy time
+      // instead of waiting on a profile view. Local DB work only.
+      void ensurePlayerSkillFloorSweepSeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-floor-sweep] seed failed", error));
       // Unlike the sweeps above this one consumes osu! API budget (one best-
       // scores call per user), so it also requires osu! API jobs to be enabled.
       // Guarded by its done key: post-completion boots schedule nothing.
