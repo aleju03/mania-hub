@@ -7767,7 +7767,7 @@ msgstr "Plays"
 
 #: src/routes/player/$username.tsx
 msgid "Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them."
-msgstr "Los plays solo se registran para el top 100 de cada país con seguimiento, y este jugador no está entre ellos por ahora."
+msgstr "Los plays solo se registran para el top 100 de cada país trackeado, y este jugador no está entre ellos por ahora."
 
 #: src/components/me/RosterOptInCard.tsx
 msgid "Plays are recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
