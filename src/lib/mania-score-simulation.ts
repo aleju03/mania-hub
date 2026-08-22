@@ -58,10 +58,12 @@ export function getStableManiaScoreModFactors(mods: string[]): StableScoreModFac
   return { multiplier, divider };
 }
 
-// lazer's ManiaScoreMultiplierCalculator: EZ/NF/DA halve, rate mods use the
-// truncated-rate formula, NR/Constant Speed/Hold Off shave 10%. Difficulty
-// increases stay 1.0x. Key mods are left at 1.0x (the 0.9x change only
-// applies to 2025.718.0+ clients; the real-score normalization absorbs it).
+// lazer's ManiaScoreMultiplierCalculator: EZ/NF/DA halve, HT/DC use the
+// truncated-rate formula, NR/Constant Speed/Hold Off shave 10%. DT/NC and
+// every other difficulty increase stay 1.0x (they register no multiplier in
+// the calculator), so a mania lazer score never exceeds 1M. Key mods are
+// left at 1.0x (the 0.9x change only applies to 2025.718.0+ clients; the
+// real-score normalization absorbs it).
 export function getLazerManiaScoreMultiplier(mods: string[], rate: number): number {
   const set = new Set(mods);
   let multiplier = 1;
@@ -72,9 +74,9 @@ export function getLazerManiaScoreMultiplier(mods: string[], rate: number): numb
   if (set.has("NR")) multiplier *= 0.9;
   if (set.has("CS")) multiplier *= 0.9;
   if (set.has("HO")) multiplier *= 0.9;
-  if (Number.isFinite(rate) && rate > 0 && rate !== 1) {
+  if (Number.isFinite(rate) && rate > 0 && rate < 1) {
     const truncated = Math.trunc(rate * 10) / 10 - 1;
-    multiplier *= rate >= 1 ? 1 + truncated / 5 : 0.6 + truncated;
+    multiplier *= 0.6 + truncated;
   }
   return Math.max(0, multiplier);
 }

@@ -95,7 +95,9 @@ describe("lazer mania simulator", () => {
   });
 
   it("uses lazer's truncated rate multiplier formula", () => {
-    expect(getLazerManiaScoreMultiplier([], 1.5)).toBeCloseTo(1.1);
+    // DT/NC register no multiplier in ManiaScoreMultiplierCalculator; only
+    // rate reductions (HT/DC) scale the score.
+    expect(getLazerManiaScoreMultiplier([], 1.5)).toBe(1);
     expect(getLazerManiaScoreMultiplier([], 0.75)).toBeCloseTo(0.3);
     expect(getLazerManiaScoreMultiplier(["EZ"], 1)).toBe(0.5);
     expect(getLazerManiaScoreMultiplier(["NF", "EZ"], 1)).toBe(0.25);
