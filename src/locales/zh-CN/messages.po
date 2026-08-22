@@ -2550,12 +2550,12 @@ msgstr "选出新的 GOAT"
 #: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Chordjack"
-msgstr "和弦叠键"
+msgstr "多押叠"
 
 #: src/components/maps/SearchCard.tsx
 #: src/lib/skill-axes.ts
 msgid "Chordstream"
-msgstr "和弦切"
+msgstr "多押切"
 
 #: src/routes/skins.tsx
 msgid "circles"
@@ -9943,7 +9943,7 @@ msgstr "被双押打断的切换。"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Streams thickened with three-note hand chords."
-msgstr "加入三押和弦的切换。"
+msgstr "加入三押的切换。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx

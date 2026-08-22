@@ -11,7 +11,7 @@ Voice: a native osu!mania player writing UI copy in Simplified Chinese. Must rea
 - favourites -> 收藏 | play count -> 游玩次数 | accuracy -> 准确率 | leaderboard / rankings -> 排行榜
 - score -> 成绩 (a play) / 分数 (the number) | mods -> Mod (DT/HT/MR stay as-is) | grades (SS/S/A) stay as-is
 - dan -> 段位 | stamina -> 耐力 | technical -> 技术
-- Patterns follow the official zh osu!mania RC: stream -> 切换 | trill -> 交互 (never for streams) | jack -> 叠键 | minijack -> 小叠 | handjack -> 三押叠 | chordjack -> 和弦叠键 | jumpstream -> 双押切 | handstream -> 三押切 | quadstream -> 四押切 | chordstream -> 和弦切 | dumpstream -> 乱切 | bracket -> 衩 | roll -> 楼梯 | jumptrill -> 对拍 | vibro stays Vibro
+- Patterns follow the official zh osu!mania RC: stream -> 切换 | trill -> 交互 (never for streams) | jack -> 叠键 | minijack -> 小叠 | handjack -> 三押叠 | chordjack -> 多押叠 (players say 多押, never 和弦; that means musical chords) | jumpstream -> 双押切 | handstream -> 三押切 | quadstream -> 四押切 | chordstream -> 多押切 | dumpstream -> 乱切 | bracket -> 衩 | roll -> 楼梯 | jumptrill -> 对拍 | vibro stays Vibro
 - LN / long note -> 长条 (LN may stay LN) | rice -> 单点
 - country/region -> always 国家/地区 (never 国家 alone)
 - goal -> 目标 | streak (higher/lower game) -> 连胜 | card -> 卡片 | shard -> 碎片
