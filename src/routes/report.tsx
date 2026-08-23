@@ -54,6 +54,11 @@ const BODY_MIN = 10;
 /** The counter is noise until the ceiling is actually in reach. */
 const COUNTER_FROM = BUG_REPORT_BODY_MAX - 250;
 
+const REPLY_AUTHOR = {
+  userId: 7095193,
+  username: "Aleju03",
+} as const;
+
 type UploadStatus = "waiting" | "uploading" | "done" | "failed";
 type Phase = "idle" | "sending" | "sent";
 
@@ -586,7 +591,7 @@ function ReporterScreenshots({
 /*
  * The reporter's own thread. Laid out as messages rather than a table because
  * that is what it is: what they wrote, and what came back. The reply sits in
- * the same column as the report it answers, under the site's own name, so
+ * the same column as the report it answers, under the owner's name, so
  * there is never a question of who wrote which half.
  */
 function MyReports({
@@ -629,14 +634,12 @@ function MyReports({
 
             {report.reply ? (
               <div className="mt-3 flex gap-3 pl-[44px]">
-                <img
-                  src="/images/favicon-256.png"
-                  alt=""
-                  className="h-8 w-8 flex-shrink-0 rounded-full border border-osu-pink/25 object-cover"
-                />
+                <Avatar userId={REPLY_AUTHOR.userId} size={32} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2">
-                    <span className="text-[13px] font-semibold text-osu-pink-light">Mania Hub</span>
+                    <span className="text-[13px] font-semibold text-osu-pink-light">
+                      {REPLY_AUTHOR.username}
+                    </span>
                     {report.repliedAt ? (
                       <span className="text-[11px] text-osu-f1">
                         {formatTimeAgo(new Date(report.repliedAt).toISOString(), locale)}

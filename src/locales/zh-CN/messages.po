@@ -4469,7 +4469,7 @@ msgstr "被找到 {0} 次"
 
 #: src/routes/report.tsx
 msgid "Found something broken? Describe what happened."
-msgstr "发现哪里出问题了？请描述发生了什么。"
+msgstr "发现了什么问题？请描述一下发生了什么。"
 
 #: src/routes/report.tsx
 #~ msgid "Found something broken? Let me know what happened."
@@ -8727,12 +8727,12 @@ msgstr "举报 {0}"
 
 #: src/routes/__root.tsx
 msgid "report a bug"
-msgstr "反馈问题"
+msgstr "问题反馈"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/report.tsx
 msgid "Report a bug"
-msgstr "反馈问题"
+msgstr "问题反馈"
 
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Report a translation"
@@ -9309,7 +9309,7 @@ msgstr "提交反馈"
 
 #: src/routes/report.tsx
 msgid "Sent along with it:"
-msgstr "同时发送："
+msgstr "将一并发送："
 
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Sent, thanks."
@@ -12039,7 +12039,7 @@ msgstr "你上传的回放"
 
 #: src/routes/report.tsx
 msgid "Your reports"
-msgstr "你的反馈"
+msgstr "我的反馈"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "your score"
