@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LegalDocument, LegalParagraph, LegalSection } from "#/components/legal/LegalDocument";
 
-const UPDATED_AT = "August 8, 2026";
+const UPDATED_AT = "August 23, 2026";
 
 export const Route = createFileRoute("/privacy")({
   head: () => ({
@@ -106,7 +106,14 @@ function PrivacyPage() {
           uses those features.
         </LegalParagraph>
         <LegalParagraph>
-          For privacy, deletion, attribution, takedown, bug reports, or any other concern,
+          To report a bug, use the{' '}
+          <a
+            href="/report"
+            className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
+          >
+            Report a bug
+          </a>{' '}
+          form on the site. For privacy, deletion, attribution, takedown, or any other concern,
           email{' '}
           <a
             href="mailto:contact@mania-tracker.com"

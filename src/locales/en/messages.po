@@ -5809,7 +5809,6 @@ msgstr "Log in to upload"
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
-#: src/routes/report.tsx
 msgid "Log in with osu!"
 msgstr "Log in with osu!"
 
@@ -8743,8 +8742,8 @@ msgid "report this server"
 msgstr "report this server"
 
 #: src/routes/report.tsx
-msgid "Reports work signed out. Sign in with osu! if you want to read the reply."
-msgstr "Reports work signed out. Sign in with osu! if you want to read the reply."
+#~ msgid "Reports work signed out. Sign in with osu! if you want to read the reply."
+#~ msgstr "Reports work signed out. Sign in with osu! if you want to read the reply."
 
 #: src/routes/maps.tsx
 msgid "Reroll"

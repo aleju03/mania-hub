@@ -5818,7 +5818,6 @@ msgstr "登录后上传"
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
-#: src/routes/report.tsx
 msgid "Log in with osu!"
 msgstr "使用 osu! 登录"
 
@@ -8752,8 +8751,8 @@ msgid "report this server"
 msgstr "举报这个服务器"
 
 #: src/routes/report.tsx
-msgid "Reports work signed out. Sign in with osu! if you want to read the reply."
-msgstr "未登录也能反馈。想看到回复，请用 osu! 登录。"
+#~ msgid "Reports work signed out. Sign in with osu! if you want to read the reply."
+#~ msgstr "未登录也能反馈。想看到回复，请用 osu! 登录。"
 
 #: src/routes/maps.tsx
 msgid "Reroll"

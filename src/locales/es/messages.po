@@ -5809,7 +5809,6 @@ msgstr "Inicia sesión para subir"
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
-#: src/routes/report.tsx
 msgid "Log in with osu!"
 msgstr "Inicia sesión con osu!"
 
@@ -8743,8 +8742,8 @@ msgid "report this server"
 msgstr "reportar este servidor"
 
 #: src/routes/report.tsx
-msgid "Reports work signed out. Sign in with osu! if you want to read the reply."
-msgstr "Puedes reportar sin iniciar sesión. Inicia sesión con osu! si quieres leer la respuesta."
+#~ msgid "Reports work signed out. Sign in with osu! if you want to read the reply."
+#~ msgstr "Puedes reportar sin iniciar sesión. Inicia sesión con osu! si quieres leer la respuesta."
 
 #: src/routes/maps.tsx
 msgid "Reroll"

@@ -406,7 +406,6 @@ function ReportPage() {
                 : null}
             </p>
 
-            {!signedIn ? <SignInNudge /> : null}
           </>
         )}
 
@@ -473,17 +472,6 @@ function SentPanel({
         </button>
         {!signedIn ? <LoginLink label={<Trans>Sign in to read replies</Trans>} /> : null}
       </div>
-    </div>
-  );
-}
-
-function SignInNudge() {
-  return (
-    <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-osu-b3/25 pt-4">
-      <p className="text-[12px] text-osu-f1">
-        <Trans>Reports work signed out. Sign in with osu! if you want to read the reply.</Trans>
-      </p>
-      <LoginLink label={<Trans>Log in with osu!</Trans>} />
     </div>
   );
 }
