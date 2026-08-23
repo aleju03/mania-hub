@@ -25,6 +25,7 @@ import { Route as PacksRouteImport } from './routes/packs'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RankingsRouteImport } from './routes/rankings'
 import { Route as ReplayRouteImport } from './routes/replay'
+import { Route as ReportRouteImport } from './routes/report'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SkinsRouteImport } from './routes/skins'
@@ -35,6 +36,7 @@ import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as ValleyRouteImport } from './routes/valley'
 import { Route as AdminBbcodeImagesRouteImport } from './routes/admin/bbcode-images'
+import { Route as AdminBugReportsRouteImport } from './routes/admin/bug-reports'
 import { Route as AdminCollectionsRouteImport } from './routes/admin/collections'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
@@ -48,6 +50,7 @@ import { Route as AdminTranslationReportsRouteImport } from './routes/admin/tran
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
 import { Route as ApiAvatarRouteImport } from './routes/api/avatar'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
+import { Route as ApiBugReportUploadRouteImport } from './routes/api/bug-report-upload'
 import { Route as ApiCardMotifRouteImport } from './routes/api/card-motif'
 import { Route as ApiCatboxUploadRouteImport } from './routes/api/catbox-upload'
 import { Route as ApiCommunityImageRouteImport } from './routes/api/community-image'
@@ -159,6 +162,11 @@ const ReplayRoute = ReplayRouteImport.update({
   path: '/replay',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReportRoute = ReportRouteImport.update({
+  id: '/report',
+  path: '/report',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -207,6 +215,11 @@ const ValleyRoute = ValleyRouteImport.update({
 const AdminBbcodeImagesRoute = AdminBbcodeImagesRouteImport.update({
   id: '/admin/bbcode-images',
   path: '/admin/bbcode-images',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBugReportsRoute = AdminBugReportsRouteImport.update({
+  id: '/admin/bug-reports',
+  path: '/admin/bug-reports',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminCollectionsRoute = AdminCollectionsRouteImport.update({
@@ -272,6 +285,11 @@ const ApiAvatarRoute = ApiAvatarRouteImport.update({
 const ApiBackgroundRoute = ApiBackgroundRouteImport.update({
   id: '/api/background',
   path: '/api/background',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBugReportUploadRoute = ApiBugReportUploadRouteImport.update({
+  id: '/api/bug-report-upload',
+  path: '/api/bug-report-upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCardMotifRoute = ApiCardMotifRouteImport.update({
@@ -443,6 +461,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
+  '/report': typeof ReportRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skins': typeof SkinsRoute
@@ -453,6 +472,7 @@ export interface FileRoutesByFullPath {
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
+  '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
@@ -466,6 +486,7 @@ export interface FileRoutesByFullPath {
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/bug-report-upload': typeof ApiBugReportUploadRoute
   '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/community-image': typeof ApiCommunityImageRoute
@@ -514,6 +535,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
+  '/report': typeof ReportRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skins': typeof SkinsRoute
@@ -524,6 +546,7 @@ export interface FileRoutesByTo {
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
+  '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
@@ -537,6 +560,7 @@ export interface FileRoutesByTo {
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/bug-report-upload': typeof ApiBugReportUploadRoute
   '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/community-image': typeof ApiCommunityImageRoute
@@ -586,6 +610,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
+  '/report': typeof ReportRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skins': typeof SkinsRoute
@@ -596,6 +621,7 @@ export interface FileRoutesById {
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
+  '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
@@ -609,6 +635,7 @@ export interface FileRoutesById {
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/bug-report-upload': typeof ApiBugReportUploadRoute
   '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/community-image': typeof ApiCommunityImageRoute
@@ -659,6 +686,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/rankings'
     | '/replay'
+    | '/report'
     | '/settings'
     | '/sitemap.xml'
     | '/skins'
@@ -669,6 +697,7 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/valley'
     | '/admin/bbcode-images'
+    | '/admin/bug-reports'
     | '/admin/collections'
     | '/admin/dan-classifier'
     | '/admin/discord'
@@ -682,6 +711,7 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
+    | '/api/bug-report-upload'
     | '/api/card-motif'
     | '/api/catbox-upload'
     | '/api/community-image'
@@ -730,6 +760,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/rankings'
     | '/replay'
+    | '/report'
     | '/settings'
     | '/sitemap.xml'
     | '/skins'
@@ -740,6 +771,7 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/valley'
     | '/admin/bbcode-images'
+    | '/admin/bug-reports'
     | '/admin/collections'
     | '/admin/dan-classifier'
     | '/admin/discord'
@@ -753,6 +785,7 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
+    | '/api/bug-report-upload'
     | '/api/card-motif'
     | '/api/catbox-upload'
     | '/api/community-image'
@@ -801,6 +834,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/rankings'
     | '/replay'
+    | '/report'
     | '/settings'
     | '/sitemap.xml'
     | '/skins'
@@ -811,6 +845,7 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/valley'
     | '/admin/bbcode-images'
+    | '/admin/bug-reports'
     | '/admin/collections'
     | '/admin/dan-classifier'
     | '/admin/discord'
@@ -824,6 +859,7 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
+    | '/api/bug-report-upload'
     | '/api/card-motif'
     | '/api/catbox-upload'
     | '/api/community-image'
@@ -873,6 +909,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   RankingsRoute: typeof RankingsRoute
   ReplayRoute: typeof ReplayRoute
+  ReportRoute: typeof ReportRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SkinsRoute: typeof SkinsRoute
@@ -883,6 +920,7 @@ export interface RootRouteChildren {
   TrackerRoute: typeof TrackerRoute
   ValleyRoute: typeof ValleyRoute
   AdminBbcodeImagesRoute: typeof AdminBbcodeImagesRoute
+  AdminBugReportsRoute: typeof AdminBugReportsRoute
   AdminCollectionsRoute: typeof AdminCollectionsRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
@@ -896,6 +934,7 @@ export interface RootRouteChildren {
   ApiAudioRoute: typeof ApiAudioRoute
   ApiAvatarRoute: typeof ApiAvatarRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
+  ApiBugReportUploadRoute: typeof ApiBugReportUploadRoute
   ApiCardMotifRoute: typeof ApiCardMotifRoute
   ApiCatboxUploadRoute: typeof ApiCatboxUploadRoute
   ApiCommunityImageRoute: typeof ApiCommunityImageRoute
@@ -1034,6 +1073,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReplayRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/report': {
+      id: '/report'
+      path: '/report'
+      fullPath: '/report'
+      preLoaderRoute: typeof ReportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -1102,6 +1148,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/bbcode-images'
       fullPath: '/admin/bbcode-images'
       preLoaderRoute: typeof AdminBbcodeImagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/bug-reports': {
+      id: '/admin/bug-reports'
+      path: '/admin/bug-reports'
+      fullPath: '/admin/bug-reports'
+      preLoaderRoute: typeof AdminBugReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/collections': {
@@ -1193,6 +1246,13 @@ declare module '@tanstack/react-router' {
       path: '/api/background'
       fullPath: '/api/background'
       preLoaderRoute: typeof ApiBackgroundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/bug-report-upload': {
+      id: '/api/bug-report-upload'
+      path: '/api/bug-report-upload'
+      fullPath: '/api/bug-report-upload'
+      preLoaderRoute: typeof ApiBugReportUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/card-motif': {
@@ -1481,6 +1541,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   RankingsRoute: RankingsRoute,
   ReplayRoute: ReplayRoute,
+  ReportRoute: ReportRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   SkinsRoute: SkinsRoute,
@@ -1491,6 +1552,7 @@ const rootRouteChildren: RootRouteChildren = {
   TrackerRoute: TrackerRoute,
   ValleyRoute: ValleyRoute,
   AdminBbcodeImagesRoute: AdminBbcodeImagesRoute,
+  AdminBugReportsRoute: AdminBugReportsRoute,
   AdminCollectionsRoute: AdminCollectionsRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminDiscordRoute: AdminDiscordRoute,
@@ -1504,6 +1566,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAudioRoute: ApiAudioRoute,
   ApiAvatarRoute: ApiAvatarRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,
+  ApiBugReportUploadRoute: ApiBugReportUploadRoute,
   ApiCardMotifRoute: ApiCardMotifRoute,
   ApiCatboxUploadRoute: ApiCatboxUploadRoute,
   ApiCommunityImageRoute: ApiCommunityImageRoute,

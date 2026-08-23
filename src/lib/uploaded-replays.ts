@@ -85,27 +85,30 @@ export const fetchMyUploadedReplays = createServerFn({ method: "GET" })
     return { uploads, total: index.total, page: index.page, hasMore: index.hasMore, allOwners };
   });
 
-// Whether the viewer may delete the upload they are watching. Its own call
-// because a share link is public: the page cannot tell who uploaded an .osr
-// from the file, and only the index knows.
+// Public uploader context plus whether the current viewer may delete the
+// upload they are watching. The uploader attribution is already public on the
+// community upload cards and also tells the replay viewer whose replay skin to
+// use; delete permission remains derived from the signed-in viewer here.
 export const fetchUploadedReplayPermissions = createServerFn({ method: "GET" })
   .validator((data: { id?: unknown }) => {
     const id = normalizeUploadedReplayId(typeof data.id === "string" ? data.id : "");
     if (!id) throw new Error("Invalid upload id.");
     return { id };
   })
-  .handler(async ({ data }): Promise<{ canDelete: boolean; isOwner: boolean }> => {
+  .handler(async ({ data }): Promise<{ canDelete: boolean; isOwner: boolean; ownerUserId: number | null }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     const { readCurrentAuth } = await import("./auth-server");
     setResponseHeader("Cache-Control", "private, no-store");
 
     const auth = await readCurrentAuth();
-    if (!auth.viewer && !auth.canUseAdminFeatures) return { canDelete: false, isOwner: false };
-
     const { fetchUploadedReplayIndexRow } = await import("./uploaded-replay-index");
     const row = await fetchUploadedReplayIndexRow(data.id);
     const isOwner = row != null && auth.viewer != null && row.ownerUserId === auth.viewer.id;
-    return { canDelete: isOwner || auth.canUseAdminFeatures, isOwner };
+    return {
+      canDelete: isOwner || auth.canUseAdminFeatures,
+      isOwner,
+      ownerUserId: row?.ownerUserId ?? null,
+    };
   });
 
 export type DeleteUploadedReplayResult =

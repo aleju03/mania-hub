@@ -333,6 +333,9 @@ export async function handleReplayUploadPost(request: Request): Promise<Response
       id: saved.id,
       url: getShareUrl(request, saved.id),
       storage: saved.storage,
+      // Lets the just-uploaded replay select its uploader's skin immediately,
+      // without waiting for a round trip through the owner index it just wrote.
+      ownerUserId: uploaderId,
     });
   } catch (error) {
     if (error instanceof ReplayStorageUnavailableError) {

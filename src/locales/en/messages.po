@@ -559,6 +559,11 @@ msgstr "{0} re-rendered"
 msgid "{0} scores"
 msgstr "{0} scores"
 
+#. placeholder {0}: report.screenshotCount
+#: src/routes/report.tsx
+msgid "{0} screenshots"
+msgstr "{0} screenshots"
+
 #. placeholder {0}: skinSoundsInfo.keys.length
 #. placeholder {1}: skinSoundsInfo.name ?? t`an imported skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -1361,6 +1366,10 @@ msgstr "0h"
 msgid "1 person has your card"
 msgstr "1 person has your card"
 
+#: src/routes/report.tsx
+msgid "1 screenshot"
+msgstr "1 screenshot"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "100"
@@ -1617,6 +1626,10 @@ msgstr "Add a card to your showcase"
 msgid "Add a screenshot"
 msgstr "Add a screenshot"
 
+#: src/routes/report.tsx
+msgid "Add an image"
+msgstr "Add an image"
+
 #: src/components/communities/TagInput.tsx
 msgid "add another"
 msgstr "add another"
@@ -1762,6 +1775,10 @@ msgstr "Already on the board."
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Already picked"
 msgstr "Already picked"
+
+#: src/routes/report.tsx
+msgid "already reported"
+msgstr "already reported"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Already set"
@@ -2053,6 +2070,10 @@ msgstr "Background dim:"
 #: src/lib/signature-shared.ts
 msgid "Badge"
 msgstr "Badge"
+
+#: src/lib/replay-overlays.ts
+msgid "Balance bar"
+msgstr "Balance bar"
 
 #: src/routes/player/$username.tsx
 msgid "Bands"
@@ -2731,6 +2752,7 @@ msgstr "Client"
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/ui/ImageLightbox.tsx
 #: src/routes/__root.tsx
 #: src/routes/player/$username.tsx
 msgid "Close"
@@ -3079,6 +3101,7 @@ msgstr "Could not save that. Try again."
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
+#: src/routes/report.tsx
 msgid "Could not send that. Try again."
 msgstr "Could not send that. Try again."
 
@@ -3345,6 +3368,10 @@ msgid "Current"
 msgstr "Current"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Current accuracy percentage for each hand."
+msgstr "Current accuracy percentage for each hand."
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Current accuracy percentage."
 msgstr "Current accuracy percentage."
 
@@ -3562,6 +3589,10 @@ msgstr "descending"
 #: src/components/maps/FilterChips.tsx
 msgid "Descending"
 msgstr "Descending"
+
+#: src/routes/report.tsx
+#~ msgid "Describe the problem and how to reproduce it."
+#~ msgstr "Describe the problem and how to reproduce it."
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Description <0>(optional)</0>"
@@ -4369,6 +4400,10 @@ msgstr "first to find a card"
 msgid "Fit"
 msgstr "Fit"
 
+#: src/routes/report.tsx
+msgid "fixed"
+msgstr "fixed"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "flat"
 msgstr "flat"
@@ -4422,6 +4457,14 @@ msgstr "formatting copied - right-click text to paste"
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "found {0}x"
 msgstr "found {0}x"
+
+#: src/routes/report.tsx
+msgid "Found something broken? Describe what happened."
+msgstr "Found something broken? Describe what happened."
+
+#: src/routes/report.tsx
+#~ msgid "Found something broken? Let me know what happened."
+#~ msgstr "Found something broken? Let me know what happened."
 
 #: src/routes/packs.tsx
 msgid "free"
@@ -4942,6 +4985,10 @@ msgstr "Imagemap area {0}/{1}"
 msgid "Images from {sourceName}"
 msgstr "Images from {sourceName}"
 
+#: src/routes/report.tsx
+msgid "Images have to be under 5MB."
+msgstr "Images have to be under 5MB."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Import"
 msgstr "Import"
@@ -5081,6 +5128,10 @@ msgstr "Invite link"
 msgid "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 msgstr "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 
+#: src/routes/report.tsx
+#~ msgid "It is on the list below, and a reply shows up there too."
+#~ msgstr "It is on the list below, and a reply shows up there too."
+
 #: src/routes/skins_.$id.tsx
 msgid "It may have been removed by its uploader."
 msgstr "It may have been removed by its uploader."
@@ -5088,6 +5139,10 @@ msgstr "It may have been removed by its uploader."
 #: src/routes/communities_.$id.tsx
 msgid "It may have been taken down, or it is still waiting for approval."
 msgstr "It may have been taken down, or it is still waiting for approval."
+
+#: src/routes/report.tsx
+#~ msgid "It went straight to the owner. Nothing else to do."
+#~ msgstr "It went straight to the owner. Nothing else to do."
 
 #: src/components/communities/field-options.tsx
 msgid "Italian"
@@ -5754,6 +5809,7 @@ msgstr "Log in to upload"
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/report.tsx
 msgid "Log in with osu!"
 msgstr "Log in with osu!"
 
@@ -5808,6 +5864,10 @@ msgstr "Longest blitz streaks"
 #: src/components/me/MyDataPanel.tsx
 msgid "Longest streak"
 msgstr "Longest streak"
+
+#: src/routes/report.tsx
+msgid "looking into it"
+msgstr "looking into it"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Looking up score #{scoreId}"
@@ -6087,6 +6147,10 @@ msgstr "Median by Keymode"
 #: src/routes/communities.tsx
 msgid "members"
 msgstr "members"
+
+#: src/lib/replay-overlays.ts
+msgid "Meters"
+msgstr "Meters"
 
 #: src/routes/replay.tsx
 msgid "Middle lane thumb"
@@ -6397,6 +6461,7 @@ msgstr "Newest Top Play"
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/ui/ImageLightbox.tsx
 msgid "Next"
 msgstr "Next"
 
@@ -6894,6 +6959,10 @@ msgstr "Normal"
 msgid "Norwegian"
 msgstr "Norwegian"
 
+#: src/routes/report.tsx
+msgid "not a bug"
+msgstr "not a bug"
+
 #: src/routes/farm-helper.tsx
 msgid "Not enough data near your pp yet"
 msgstr "Not enough data near your pp yet"
@@ -7025,6 +7094,10 @@ msgstr "now #{nowRank}"
 #: src/routes/bbcode.tsx
 msgid "Numbered list"
 msgstr "Numbered list"
+
+#: src/lib/replay-overlays.ts
+msgid "Numbers only"
+msgstr "Numbers only"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "objects"
@@ -7168,6 +7241,10 @@ msgstr "only you can open these"
 msgid "Opacity"
 msgstr "Opacity"
 
+#: src/routes/report.tsx
+msgid "open"
+msgstr "open"
+
 #. placeholder {0}: goal.beatmapLabel ?? describeGoal(goal, i18n)
 #. placeholder {0}: goal.beatmapLabel ?? t`map`
 #: src/components/me/GoalsPanel.tsx
@@ -7210,6 +7287,10 @@ msgstr "Open beatmap on osu!"
 #: src/routes/maps.tsx
 msgid "Open beatmap page on osu!"
 msgstr "Open beatmap page on osu!"
+
+#: src/routes/report.tsx
+msgid "Open image"
+msgstr "Open image"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open image in new tab"
@@ -7492,6 +7573,10 @@ msgstr "Paste it once. It redraws when your stats change."
 msgid "Paste share code"
 msgstr "Paste share code"
 
+#: src/routes/report.tsx
+msgid "Paste, drop or pick a screenshot."
+msgstr "Paste, drop or pick a screenshot."
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "pattern"
 msgstr "pattern"
@@ -7561,6 +7646,10 @@ msgstr "Per-column colors"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Per-column press count."
 msgstr "Per-column press count."
+
+#: src/lib/replay-overlays.ts
+msgid "Per-hand accuracy"
+msgstr "Per-hand accuracy"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "percentiles are among tracked players"
@@ -7940,6 +8029,7 @@ msgstr "Previews uploaded."
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/ui/ImageLightbox.tsx
 msgid "Previous"
 msgstr "Previous"
 
@@ -8490,6 +8580,7 @@ msgid "Remove color"
 msgstr "Remove color"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/report.tsx
 msgid "Remove image"
 msgstr "Remove image"
 
@@ -8625,17 +8716,35 @@ msgstr "Replays play with their player's published skin. Turn off to always use 
 msgid "Report {0}"
 msgstr "Report {0}"
 
+#: src/routes/__root.tsx
+msgid "report a bug"
+msgstr "report a bug"
+
+#: src/components/layout/Nav.tsx
+#: src/routes/report.tsx
+msgid "Report a bug"
+msgstr "Report a bug"
+
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Report a translation"
 msgstr "Report a translation"
 
 #: src/routes/communities_.$id.tsx
+#: src/routes/report.tsx
 msgid "Report sent"
 msgstr "Report sent"
+
+#: src/routes/report.tsx
+msgid "Report something else"
+msgstr "Report something else"
 
 #: src/routes/communities_.$id.tsx
 msgid "report this server"
 msgstr "report this server"
+
+#: src/routes/report.tsx
+msgid "Reports work signed out. Sign in with osu! if you want to read the reply."
+msgstr "Reports work signed out. Sign in with osu! if you want to read the reply."
 
 #: src/routes/maps.tsx
 msgid "Reroll"
@@ -8734,6 +8843,10 @@ msgstr "Right"
 #: src/routes/replay.tsx
 msgid "Right thumb"
 msgstr "Right thumb"
+
+#: src/lib/replay-overlays.ts
+msgid "Rings"
+msgstr "Rings"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another."
@@ -8866,6 +8979,10 @@ msgstr "Saving."
 msgid "Saving…"
 msgstr "Saving…"
 
+#: src/routes/report.tsx
+msgid "Say a little more about what went wrong."
+msgstr "Say a little more about what went wrong."
+
 #: src/components/ghost/GhostSprite.tsx
 msgid "say something back"
 msgstr "say something back"
@@ -8916,6 +9033,10 @@ msgstr "ScorePosition"
 msgid "Scores"
 msgstr "Scores"
 
+#: src/components/ui/ImageLightbox.tsx
+msgid "Screenshot"
+msgstr "Screenshot"
+
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
 #: src/components/skins/SkinSettingsModal.tsx
@@ -8930,6 +9051,10 @@ msgstr "screenshots"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Screenshots"
 msgstr "Screenshots"
+
+#: src/routes/report.tsx
+#~ msgid "Screenshots (optional)"
+#~ msgstr "Screenshots (optional)"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll"
@@ -9169,8 +9294,13 @@ msgstr "select text or type it here"
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
+#: src/routes/report.tsx
 msgid "Send report"
 msgstr "Send report"
+
+#: src/routes/report.tsx
+msgid "Sent along with it:"
+msgstr "Sent along with it:"
 
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Sent, thanks."
@@ -9473,6 +9603,10 @@ msgstr "Side by Side"
 msgid "Sign in and runs like that pay shards."
 msgstr "Sign in and runs like that pay shards."
 
+#: src/routes/report.tsx
+msgid "Sign in to read replies"
+msgstr "Sign in to read replies"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Sign in to set a replay skin for your plays."
@@ -9701,6 +9835,10 @@ msgstr "Something broke"
 #: src/components/communities/field-options.tsx
 msgid "Something else"
 msgstr "Something else"
+
+#: src/routes/report.tsx
+#~ msgid "Something on the site not working? Say what happened and it lands on the owner's desk."
+#~ msgstr "Something on the site not working? Say what happened and it lands on the owner's desk."
 
 #: src/routes/farm-helper.tsx
 msgid "Something went wrong loading these maps. Try the toggle again in a moment."
@@ -9955,6 +10093,7 @@ msgid "Strongest in <0>{0}</0>"
 msgstr "Strongest in <0>{0}</0>"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/replay.tsx
 msgid "Style"
 msgstr "Style"
 
@@ -10177,6 +10316,10 @@ msgstr "That beatmap ID is not a mania difficulty."
 msgid "That does not look like a Discord invite link."
 msgstr "That does not look like a Discord invite link."
 
+#: src/routes/report.tsx
+msgid "That file is not an image."
+msgstr "That file is not an image."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "That file isn't a supported image."
 msgstr "That file isn't a supported image."
@@ -10190,6 +10333,7 @@ msgid "That invite is for a different server than the one you picked."
 msgstr "That invite is for a different server than the one you picked."
 
 #: src/components/settings/TranslationReportForm.tsx
+#: src/routes/report.tsx
 msgid "That is a lot of reports for one day. Try again tomorrow."
 msgstr "That is a lot of reports for one day. Try again tomorrow."
 
@@ -10421,6 +10565,10 @@ msgstr "The replay loaded, but the chart file for {mapLabel} can't be downloaded
 #: src/routes/replay_.uploads.tsx
 msgid "The replays you have uploaded to Mania Hub, with their share links and deletes."
 msgstr "The replays you have uploaded to Mania Hub, with their share links and deletes."
+
+#: src/routes/report.tsx
+msgid "The report was sent, but at least one image did not upload."
+msgstr "The report was sent, but at least one image did not upload."
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."
@@ -10680,6 +10828,10 @@ msgstr "This skin's settings are too large to store."
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 msgstr "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 
+#: src/routes/report.tsx
+msgid "Those images are no longer available."
+msgstr "Those images are no longer available."
+
 #: src/routes/player/$username.tsx
 msgid "Thu"
 msgstr "Thu"
@@ -10747,6 +10899,7 @@ msgid "too hard hides the lane from your gain views; setting a real score also c
 msgstr "too hard hides the lane from your gain views; setting a real score also clears a mark"
 
 #: src/components/settings/TranslationReportForm.tsx
+#: src/routes/report.tsx
 msgid "Too many reports just now. Try again in a bit."
 msgstr "Too many reports just now. Try again in a bit."
 
@@ -11081,6 +11234,10 @@ msgstr "Unrated"
 msgid "unreadable"
 msgstr "unreadable"
 
+#: src/routes/report.tsx
+msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
+msgstr "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
+
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Up to 50 MB."
@@ -11137,6 +11294,10 @@ msgstr "Upload a skin and it lands here."
 msgid "Upload another"
 msgstr "Upload another"
 
+#: src/routes/report.tsx
+#~ msgid "Upload failed"
+#~ msgstr "Upload failed"
+
 #: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins.tsx
 msgid "Upload skin"
@@ -11158,6 +11319,10 @@ msgstr "uploaded by <0>{0}</0>"
 #: src/routes/skins.tsx
 msgid "uploader"
 msgstr "uploader"
+
+#: src/routes/report.tsx
+#~ msgid "Uploading"
+#~ msgstr "Uploading"
 
 #: src/lib/skins.ts
 msgid "Uploading {list} previews."
@@ -11431,6 +11596,10 @@ msgstr "Voting's closed. Thanks for the picks."
 msgid "vs"
 msgstr "vs"
 
+#: src/routes/report.tsx
+#~ msgid "Waiting"
+#~ msgstr "Waiting"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "waiting for another {want}pp+ play"
 msgstr "waiting for another {want}pp+ play"
@@ -11516,6 +11685,14 @@ msgstr "Wed"
 msgid "Wednesdays"
 msgstr "Wednesdays"
 
+#: src/routes/report.tsx
+#~ msgid "What gets sent with this"
+#~ msgstr "What gets sent with this"
+
+#: src/routes/report.tsx
+#~ msgid "What happened"
+#~ msgstr "What happened"
+
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "What is it for"
@@ -11532,6 +11709,14 @@ msgstr "what nearby players actually farm"
 #: src/routes/farm-helper.tsx
 msgid "what players near you played last"
 msgstr "what players near you played last"
+
+#: src/routes/report.tsx
+msgid "What seems wrong?"
+msgstr "What seems wrong?"
+
+#: src/routes/report.tsx
+#~ msgid "What you did, what you expected, and what happened instead."
+#~ msgstr "What you did, what you expected, and what happened instead."
 
 #: src/routes/farm-helper.tsx
 msgid "what you're browsing"
@@ -11676,6 +11861,10 @@ msgstr "You already beat the typical score here with {yourPp}pp. A cleaner acc r
 #: src/components/packs/PackStage.tsx
 msgid "You are cutting through the cards"
 msgstr "You are cutting through the cards"
+
+#: src/routes/report.tsx
+#~ msgid "You can also drop images here."
+#~ msgstr "You can also drop images here."
 
 #: src/components/communities/field-options.tsx
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
@@ -11838,6 +12027,10 @@ msgstr "Your replay skin could not be loaded"
 #: src/routes/replay_.uploads.tsx
 msgid "Your Replay Uploads"
 msgstr "Your Replay Uploads"
+
+#: src/routes/report.tsx
+msgid "Your reports"
+msgstr "Your reports"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "your score"

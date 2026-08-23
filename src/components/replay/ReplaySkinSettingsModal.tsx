@@ -12,9 +12,10 @@ import {
   DEFAULT_REPLAY_OVERLAY_SETTINGS,
   REPLAY_OVERLAY_IDS,
   REPLAY_OVERLAY_LABELS,
+  normalizeReplayHandAccuracyStyle,
   normalizeReplayOverlaySettings,
 } from "#/lib/replay-overlays";
-import type { ReplayOverlayId, ReplayOverlaySettings } from "#/lib/replay-overlays";
+import type { ReplayHandAccuracyStyle, ReplayOverlayId, ReplayOverlaySettings } from "#/lib/replay-overlays";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
   OSU_MANIA_DEFAULT_COMBO_POSITION,
@@ -4077,6 +4078,7 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, MessageDescriptor> = 
   kps: msg`Keys pressed per second.`,
   misses: msg`Left vs right hand miss totals.`,
   accuracy: msg`Current accuracy percentage.`,
+  handAccuracy: msg`Current accuracy percentage for each hand.`,
   pp: msg`Live performance points.`,
   judgements: msg`Hit counts and unstable rate.`,
   progress: msg`Map completion percentage.`,
@@ -4092,6 +4094,104 @@ const REPLAY_OVERLAY_PREVIEWS: Partial<Record<ReplayOverlayId, string>> = {
   judgements: "/images/replay-overlays/judgements.webp",
   progress: "/images/replay-overlays/progress.webp",
 };
+
+// The same four shapes the canvas draws, so the card matches what enabling
+// the overlay puts on screen. Fill lengths use the canvas' own curve.
+function HandAccuracyOverlayPreview({ style }: { style: ReplayHandAccuracyStyle }) {
+  const hands = [
+    { label: "L", value: "99.42", color: "#5a8fff", fill: (99.42 / 100) ** 12 },
+    { label: "R", value: "98.76", color: "#de31ae", fill: (98.76 / 100) ** 12 },
+  ];
+
+  if (style === "rings") {
+    const radius = 15;
+    const circumference = 2 * Math.PI * radius;
+    return (
+      <div className="relative flex h-full w-full items-center justify-center gap-6" aria-hidden="true">
+        {hands.map((hand) => (
+          <div key={hand.label} className="flex flex-col items-center gap-1">
+            <div className="relative h-9 w-9">
+              <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
+                <circle cx="18" cy="18" r={radius} fill="none" stroke="#ffffff" strokeOpacity={0.14} strokeWidth={3} />
+                <circle
+                  cx="18"
+                  cy="18"
+                  r={radius}
+                  fill="none"
+                  stroke={hand.color}
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeDasharray={`${circumference * hand.fill} ${circumference}`}
+                />
+              </svg>
+              <span
+                className="absolute inset-0 grid place-items-center text-[10px] font-bold"
+                style={{ color: hand.color }}
+              >
+                {hand.label}
+              </span>
+            </div>
+            <div className="text-xs font-bold leading-none text-white/95 tabular-nums">
+              {hand.value}
+              <span className="text-[8px] text-white/50">%</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (style === "balance") {
+    return (
+      <div className="relative flex h-full w-full flex-col justify-center px-[16%]" aria-hidden="true">
+        <div className="flex items-baseline justify-between text-[9px] font-bold leading-none">
+          <span style={{ color: hands[0].color }}>L</span>
+          <span style={{ color: hands[1].color }}>R</span>
+        </div>
+        <div className="mt-1.5 flex items-baseline justify-between text-lg font-bold leading-none text-white/95 tabular-nums">
+          {hands.map((hand) => (
+            <span key={hand.label}>
+              {hand.value}<span className="ml-px text-[11px] text-white/50">%</span>
+            </span>
+          ))}
+        </div>
+        {/* Each hand fills outward from the centre, so the weaker one is the
+            shorter arm. */}
+        <div className="relative mt-2 h-1 w-full rounded-full bg-white/10">
+          <div className="absolute inset-y-0 right-1/2 mr-px w-[46.6%] rounded-full bg-[#5a8fff]" />
+          <div className="absolute inset-y-0 left-1/2 ml-px w-[43.1%] rounded-full bg-[#de31ae]" />
+          <div className="absolute -bottom-0.5 -top-0.5 left-1/2 w-px -translate-x-1/2 bg-white/30" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex h-full w-full flex-col justify-center px-[26%]" aria-hidden="true">
+      {hands.map((hand, index) => (
+        <div key={hand.label} className={index === 0 ? "" : style === "meters" ? "mt-2.5" : "mt-1.5"}>
+          <div className="flex items-baseline gap-1.5 leading-none">
+            <span className="text-[9px] font-bold" style={{ color: hand.color }}>{hand.label}</span>
+            <span className="text-base font-bold text-white/95 tabular-nums">
+              {hand.value}<span className="ml-px text-[9px] text-white/50">%</span>
+            </span>
+            {style === "plain" && index === 1 && (
+              <span className="text-[9px] font-bold tabular-nums" style={{ color: hand.color }}>-0.66</span>
+            )}
+          </div>
+          {style === "meters" && (
+            <div className="mt-1 h-[3px] w-full rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${hand.fill * 100}%`, backgroundColor: hand.color }}
+              />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function ReplayOverlaySettingsRow({
   id,
@@ -4134,6 +4234,8 @@ function ReplayOverlaySettingsRow({
             className="relative h-full w-full object-contain"
             style={{ backgroundColor: "#000" }}
           />
+        ) : id === "handAccuracy" ? (
+          <HandAccuracyOverlayPreview style={normalizeReplayHandAccuracyStyle(placement.style)} />
         ) : id === "leaderboard" ? (
           <div className="relative flex h-full w-full items-center px-6" aria-hidden="true">
             <div className="w-3/5 space-y-1">

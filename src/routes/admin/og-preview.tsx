@@ -1,10 +1,16 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { COUNTRY_OPTIONS } from "../../lib/country";
 import { canUseDevFeatures } from "../../lib/auth-shared";
 import { fetchLivePackRecentPulls, type LivePackPullFeedEntry } from "../../lib/live-backend";
 import { MANIA_CARD_TIER_THRESHOLDS, MANIA_TIER_STYLES, type ManiaCardTier } from "../../lib/maniacard";
 import { getScore } from "../../lib/osu";
+import {
+  cacheBustOgPreviewImage,
+  parseOgPagePreview,
+  sitePreviewRequestUrl,
+  type OgPagePreviewMetadata,
+} from "../../lib/og-page-preview";
 import { buildReplaySeoTitle } from "../../lib/replay-seo";
 
 type PresetKind =
@@ -21,6 +27,7 @@ type PresetKind =
   | "bbcode"
   | "discord"
   | "replay"
+  | "page-url"
   | "pull";
 
 /* Kinds that render one fixed card with no inputs. The preview just
@@ -192,6 +199,15 @@ const PRESETS: Preset[] = [
     noindex: true,
   },
   {
+    key: "page-url",
+    label: "Page URL",
+    kind: "page-url",
+    title: "Page URL preview",
+    subtitle: "Paste any Mania Hub page URL to read the social metadata rendered by that route.",
+    path: "/",
+    noindex: true,
+  },
+  {
     key: "pull",
     label: "Pull permalink",
     kind: "pull",
@@ -247,6 +263,11 @@ function OgPreviewPage() {
   const [subtitle, setSubtitle] = useState(PRESETS[0].subtitle);
   const [username, setUsername] = useState("peppy");
   const [scoreId, setScoreId] = useState("7202465428");
+  const [pageUrl, setPageUrl] = useState("");
+  const [pagePreview, setPagePreview] = useState<OgPagePreviewMetadata | null>(null);
+  const [pagePreviewLoading, setPagePreviewLoading] = useState(false);
+  const [pagePreviewError, setPagePreviewError] = useState("");
+  const pagePreviewRequestId = useRef(0);
   const [country, setCountry] = useState("CR");
   const [cacheBuster, setCacheBuster] = useState(() => Date.now());
   const [origin, setOrigin] = useState("");
@@ -339,6 +360,11 @@ function OgPreviewPage() {
       });
       return `/api/og?${params.toString()}`;
     }
+    if (kind === "page-url") {
+      return pagePreview
+        ? cacheBustOgPreviewImage(pagePreview.imageUrl, origin || "http://localhost:3000", cacheBuster)
+        : `/api/og?t=${cacheBuster}`;
+    }
     if (kind === "pull") {
       const params = new URLSearchParams({
         kind: "pull",
@@ -381,9 +407,11 @@ function OgPreviewPage() {
     if (subtitle) params.set("subtitle", subtitle);
     if (countryAware) params.set("country", country);
     return `/api/og?${params.toString()}`;
-  }, [kind, username, scoreId, pullOwnerId, pullCardId, pullTier, title, subtitle, countryAware, country, cacheBuster]);
+  }, [kind, username, scoreId, pagePreview, origin, pullOwnerId, pullCardId, pullTier, title, subtitle, countryAware, country, cacheBuster]);
 
-  const absoluteImage = origin ? `${origin}${ogPath}` : ogPath;
+  const absoluteImage = /^https?:\/\//i.test(ogPath)
+    ? ogPath
+    : origin ? `${origin}${ogPath}` : ogPath;
   const numericMockScoreId = Number(scoreId);
   const fallbackReplayTitle = Number.isSafeInteger(numericMockScoreId) && numericMockScoreId > 0
     ? buildReplaySeoTitle(numericMockScoreId)
@@ -392,16 +420,24 @@ function OgPreviewPage() {
     ? `${username} - ${SITE_NAME}`
     : kind === "replay"
       ? replayMockTitle || fallbackReplayTitle
-      : title === SITE_NAME || currentPreset.rawTitle
-        ? title
-        : `${title} - ${SITE_NAME}`;
+      : kind === "page-url"
+        ? pagePreview?.title || "Page URL preview"
+        : title === SITE_NAME || currentPreset.rawTitle
+          ? title
+          : `${title} - ${SITE_NAME}`;
   const mockSubtitle = kind === "player"
     ? `${username}'s osu!mania stats.`
     : kind === "replay"
       ? ""
-      : subtitle;
-  const domain = origin ? new URL(origin).host : "localhost:3000";
-  const ogSize = OG_SIZES[kind] ?? DEFAULT_OG_SIZE;
+      : kind === "page-url"
+        ? pagePreview?.description || "Load a Mania Hub URL to preview its social card."
+        : subtitle;
+  const domain = kind === "page-url" && pagePreview
+    ? new URL(pagePreview.pageUrl).host
+    : origin ? new URL(origin).host : "localhost:3000";
+  const ogSize = kind === "page-url" && pagePreview?.imageWidth && pagePreview.imageHeight
+    ? { width: pagePreview.imageWidth, height: pagePreview.imageHeight }
+    : OG_SIZES[kind] ?? DEFAULT_OG_SIZE;
   const ogAspect = ogSize.width / ogSize.height;
   const pullIdsValid = [pullOwnerId, pullCardId].every((raw) => {
     const value = Number(raw);
@@ -418,6 +454,39 @@ function OgPreviewPage() {
   };
 
   const refresh = () => setCacheBuster(Date.now());
+
+  const loadPagePreview = async () => {
+    const requestId = ++pagePreviewRequestId.current;
+    const requestUrl = sitePreviewRequestUrl(pageUrl, origin || "http://localhost:3000");
+    if (!requestUrl) {
+      setPagePreview(null);
+      setPagePreviewLoading(false);
+      setPagePreviewError("Paste a local, production, or relative Mania Hub URL.");
+      return;
+    }
+
+    setPagePreviewLoading(true);
+    setPagePreviewError("");
+    try {
+      const response = await fetch(requestUrl, {
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { Accept: "text/html" },
+      });
+      if (!response.ok) throw new Error(`Page returned ${response.status}.`);
+      const metadata = parseOgPagePreview(await response.text(), requestUrl.toString());
+      if (!metadata) throw new Error("That page did not render an OG image.");
+      if (requestId !== pagePreviewRequestId.current) return;
+      setPagePreview(metadata);
+      setCacheBuster(Date.now());
+    } catch (error) {
+      if (requestId !== pagePreviewRequestId.current) return;
+      setPagePreview(null);
+      setPagePreviewError(error instanceof Error ? error.message : "Could not load that page.");
+    } finally {
+      if (requestId === pagePreviewRequestId.current) setPagePreviewLoading(false);
+    }
+  };
 
   const copyUrl = async () => {
     try {
@@ -461,6 +530,43 @@ function OgPreviewPage() {
               Replay layout ignores title/subtitle/country. Cover, grade, pp, acc and mods come from the score itself.
             </div>
           </div>
+        ) : kind === "page-url" ? (
+          <form
+            className="grid gap-3 md:grid-cols-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void loadPagePreview();
+            }}
+          >
+            <TextField
+              label="Page URL"
+              hint="local or production Mania Hub URL, or a relative /path?query"
+              value={pageUrl}
+              max={2048}
+              placeholder="http://localhost:3000/replay?uploadId=..."
+              onChange={(next) => {
+                pagePreviewRequestId.current += 1;
+                setPageUrl(next);
+                setPagePreview(null);
+                setPagePreviewLoading(false);
+                setPagePreviewError("");
+              }}
+            />
+            <div className="flex items-end gap-3">
+              <button
+                type="submit"
+                disabled={pagePreviewLoading || !pageUrl.trim()}
+                className="shrink-0 px-3 py-2 rounded-md bg-osu-pink/20 border border-osu-pink/40 text-[11px] font-medium text-white hover:bg-osu-pink/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-[120ms] cursor-pointer"
+              >
+                {pagePreviewLoading ? "Loading..." : "Load URL"}
+              </button>
+              <div className={`pb-2 text-[11px] leading-relaxed ${pagePreviewError ? "text-osu-red-light" : "text-osu-f1/80"}`}>
+                {pagePreviewError || (pagePreview
+                  ? <>Loaded <code className="text-osu-c2">{pagePreview.imageUrl}</code></>
+                  : "Reads the route's server-rendered OG tags. Production URLs are mapped to the same path on this dev server.")}
+              </div>
+            </div>
+          </form>
         ) : kind === "pull" ? (
           <div className="space-y-3">
             <div className="grid gap-3 md:grid-cols-2">
@@ -807,6 +913,7 @@ function TextField({
   value,
   max,
   multiline,
+  placeholder,
   onChange,
 }: {
   label: string;
@@ -814,6 +921,7 @@ function TextField({
   value: string;
   max: number;
   multiline?: boolean;
+  placeholder?: string;
   onChange: (next: string) => void;
 }) {
   const over = value.length > max;
@@ -839,6 +947,7 @@ function TextField({
       ) : (
         <input
           value={value}
+          placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
           className="w-full bg-osu-b4/40 border border-osu-b3/30 rounded-md px-3 py-2 text-[13px] text-white focus:outline-none focus:border-osu-pink/50"
         />

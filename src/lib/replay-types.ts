@@ -86,7 +86,7 @@ export interface ReplayRendererLike {
   setShowInputOverlay: (value: boolean) => void;
   setInputOverlayOptions: (options: { only?: boolean; color?: string; keyHistory?: boolean }) => void;
   setOverlaySettings: (settings: ReplayOverlaySettings) => void;
-  /** Which hand owns the middle lane of an odd keymode in the L/R miss split. */
+  /** Which hand owns the middle lane of an odd keymode in per-hand stats. */
   setMissThumbHand?: (hand: ReplayThumbHand) => void;
   setSkinSettings: (settings: ReplaySkinSettings) => void;
   setSpeed: (value: number) => void;

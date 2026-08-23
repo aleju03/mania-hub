@@ -6,7 +6,7 @@ import type { OsuApiClient } from "../osu/client.js";
 import type { EventSink } from "../live/event-log.js";
 import type { CountryTopPlay, LiveEvent, SnipeEvent } from "../shared/types.js";
 import { logInfo, logWarn } from "../logger.js";
-import { DiscordRest, DiscordRestError } from "./rest.js";
+import { DiscordRest, DiscordRestError, type DiscordMessageBody } from "./rest.js";
 import { verifyDiscordSignature } from "./verify.js";
 import {
   DISCORD_COMMANDS,
@@ -93,6 +93,10 @@ export interface DiscordRuntime {
   // opted into a feed.
   listGuilds(): Promise<DiscordGuildSummary[]>;
   feedSink: EventSink;
+  // Posts one message to the owner's own channel (config.discordBugReportChannelId),
+  // outside the subscription system entirely. Resolves false when no channel is
+  // configured or the post failed; callers treat it as best effort.
+  postOwnerNotice(body: DiscordMessageBody): Promise<boolean>;
   status(): DiscordStatus;
   // Lets out-of-band subscription mutations (admin removal) refresh the cached
   // "any subscriptions?" flag so the feed fast-path stays accurate.
@@ -415,6 +419,24 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
     if (healed) notifySubscriptionsChanged();
   }
 
+  // --- Owner notices ------------------------------------------------------
+
+  // A bug report is not community content: it can quote whoever filed it, so it
+  // goes to one channel the owner picked rather than through the subscription
+  // feeds. Failures are logged and swallowed; nothing user-facing may depend on
+  // Discord being up.
+  async function postOwnerNotice(body: DiscordMessageBody): Promise<boolean> {
+    const channelId = config.discordBugReportChannelId;
+    if (!channelId) return false;
+    try {
+      await rest.createChannelMessage(channelId, body);
+      return true;
+    } catch (error) {
+      logWarn("discord_owner_notice_failed", { channelId, error: errorMessage(error) });
+      return false;
+    }
+  }
+
   // --- New farm map alerts ------------------------------------------------
 
   interface MapBearingScore {
@@ -574,7 +596,7 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
   // this resolves (or if none are registered) embeds use their text fallbacks.
   void loadEmojiRegistry(opts.db);
 
-  return { handleInteraction, registerCommands, registerEmojis: doRegisterEmojis, listGuilds, feedSink, status, notifySubscriptionsChanged };
+  return { handleInteraction, registerCommands, registerEmojis: doRegisterEmojis, listGuilds, feedSink, postOwnerNotice, status, notifySubscriptionsChanged };
 }
 
 // Discord error codes that unambiguously mean the channel/guild no longer

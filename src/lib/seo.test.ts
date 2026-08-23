@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pageSeo } from "./seo";
+import { OG_IMAGE_VERSION, pageSeo, uploadedReplayOgImagePath } from "./seo";
 
 function ogImageOf(seo: ReturnType<typeof pageSeo>): string {
   const entry = seo.meta.find((m) => "property" in m && m.property === "og:image");
@@ -38,5 +38,13 @@ describe("pageSeo imageTitle", () => {
       origin: "https://x.test",
     });
     expect(ogImageOf(seo)).toContain("Top+mania+plays+in+Germany");
+  });
+});
+
+describe("uploadedReplayOgImagePath", () => {
+  it("keys a replay image by the public upload id", () => {
+    expect(uploadedReplayOgImagePath("abc_DEF-1234567890")).toBe(
+      `/api/og?kind=uploaded-replay&v=${OG_IMAGE_VERSION}&uploadId=abc_DEF-1234567890`,
+    );
   });
 });

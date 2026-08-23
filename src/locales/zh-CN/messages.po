@@ -568,6 +568,11 @@ msgstr "重新渲染 {0} 个"
 msgid "{0} scores"
 msgstr "{0} 个成绩"
 
+#. placeholder {0}: report.screenshotCount
+#: src/routes/report.tsx
+msgid "{0} screenshots"
+msgstr "{0} 张截图"
+
 #. placeholder {0}: skinSoundsInfo.keys.length
 #. placeholder {1}: skinSoundsInfo.name ?? t`an imported skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -1370,6 +1375,10 @@ msgstr "0 小时"
 msgid "1 person has your card"
 msgstr "有 1 人持有你的卡片"
 
+#: src/routes/report.tsx
+msgid "1 screenshot"
+msgstr "1 张截图"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "100"
@@ -1626,6 +1635,10 @@ msgstr "把一张卡片加入展示柜"
 msgid "Add a screenshot"
 msgstr "添加截图"
 
+#: src/routes/report.tsx
+msgid "Add an image"
+msgstr "添加图片"
+
 #: src/components/communities/TagInput.tsx
 msgid "add another"
 msgstr "继续添加"
@@ -1771,6 +1784,10 @@ msgstr "已经在名单上了。"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Already picked"
 msgstr "已经选过了"
+
+#: src/routes/report.tsx
+msgid "already reported"
+msgstr "已有人反馈"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Already set"
@@ -2062,6 +2079,10 @@ msgstr "背景变暗："
 #: src/lib/signature-shared.ts
 msgid "Badge"
 msgstr "徽章"
+
+#: src/lib/replay-overlays.ts
+msgid "Balance bar"
+msgstr "平衡条"
 
 #: src/routes/player/$username.tsx
 msgid "Bands"
@@ -2740,6 +2761,7 @@ msgstr "客户端"
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/ui/ImageLightbox.tsx
 #: src/routes/__root.tsx
 #: src/routes/player/$username.tsx
 msgid "Close"
@@ -3088,6 +3110,7 @@ msgstr "保存失败，请再试一次。"
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
+#: src/routes/report.tsx
 msgid "Could not send that. Try again."
 msgstr "提交失败，请重试。"
 
@@ -3354,6 +3377,10 @@ msgid "Current"
 msgstr "当前"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Current accuracy percentage for each hand."
+msgstr "当前左右手各自的准确率。"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Current accuracy percentage."
 msgstr "当前准确率百分比。"
 
@@ -3571,6 +3598,10 @@ msgstr "降序"
 #: src/components/maps/FilterChips.tsx
 msgid "Descending"
 msgstr "降序"
+
+#: src/routes/report.tsx
+#~ msgid "Describe the problem and how to reproduce it."
+#~ msgstr "请描述问题以及如何复现。"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Description <0>(optional)</0>"
@@ -4378,6 +4409,10 @@ msgstr "最先找到卡片"
 msgid "Fit"
 msgstr "适应宽度"
 
+#: src/routes/report.tsx
+msgid "fixed"
+msgstr "已修复"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "flat"
 msgstr "纯色"
@@ -4431,6 +4466,14 @@ msgstr "已复制格式，右键文本即可粘贴"
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "found {0}x"
 msgstr "被找到 {0} 次"
+
+#: src/routes/report.tsx
+msgid "Found something broken? Describe what happened."
+msgstr "发现哪里出问题了？请描述发生了什么。"
+
+#: src/routes/report.tsx
+#~ msgid "Found something broken? Let me know what happened."
+#~ msgstr "发现哪里出问题了？告诉我发生了什么。"
 
 #: src/routes/packs.tsx
 msgid "free"
@@ -4951,6 +4994,10 @@ msgstr "Imagemap 区域 {0}/{1}"
 msgid "Images from {sourceName}"
 msgstr "来自 {sourceName} 的图片"
 
+#: src/routes/report.tsx
+msgid "Images have to be under 5MB."
+msgstr "图片需小于 5MB。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Import"
 msgstr "导入"
@@ -5090,6 +5137,10 @@ msgstr "邀请链接"
 msgid "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 msgstr "{hidden} 最早的最佳成绩比 {shown} 更早还是更晚？"
 
+#: src/routes/report.tsx
+#~ msgid "It is on the list below, and a reply shows up there too."
+#~ msgstr "已经在下面的列表里了，回复也会显示在那里。"
+
 #: src/routes/skins_.$id.tsx
 msgid "It may have been removed by its uploader."
 msgstr "可能已被上传者删除。"
@@ -5097,6 +5148,10 @@ msgstr "可能已被上传者删除。"
 #: src/routes/communities_.$id.tsx
 msgid "It may have been taken down, or it is still waiting for approval."
 msgstr "它可能已被下架，或者还在等待审核。"
+
+#: src/routes/report.tsx
+#~ msgid "It went straight to the owner. Nothing else to do."
+#~ msgstr "已经直接送到站长那里了，你不用再做别的。"
 
 #: src/components/communities/field-options.tsx
 msgid "Italian"
@@ -5763,6 +5818,7 @@ msgstr "登录后上传"
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/report.tsx
 msgid "Log in with osu!"
 msgstr "使用 osu! 登录"
 
@@ -5817,6 +5873,10 @@ msgstr "闪电战最长连胜"
 #: src/components/me/MyDataPanel.tsx
 msgid "Longest streak"
 msgstr "最长连续天数"
+
+#: src/routes/report.tsx
+msgid "looking into it"
+msgstr "正在排查"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Looking up score #{scoreId}"
@@ -6096,6 +6156,10 @@ msgstr "各键数中位数"
 #: src/routes/communities.tsx
 msgid "members"
 msgstr "成员数"
+
+#: src/lib/replay-overlays.ts
+msgid "Meters"
+msgstr "进度条"
 
 #: src/routes/replay.tsx
 msgid "Middle lane thumb"
@@ -6406,6 +6470,7 @@ msgstr "最新的最佳成绩"
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/ui/ImageLightbox.tsx
 msgid "Next"
 msgstr "下一页"
 
@@ -6903,6 +6968,10 @@ msgstr "普通"
 msgid "Norwegian"
 msgstr "挪威语"
 
+#: src/routes/report.tsx
+msgid "not a bug"
+msgstr "并非问题"
+
 #: src/routes/farm-helper.tsx
 msgid "Not enough data near your pp yet"
 msgstr "你 pp 附近的数据还不够"
@@ -7034,6 +7103,10 @@ msgstr "当前第 {nowRank} 名"
 #: src/routes/bbcode.tsx
 msgid "Numbered list"
 msgstr "有序列表"
+
+#: src/lib/replay-overlays.ts
+msgid "Numbers only"
+msgstr "仅数字"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "objects"
@@ -7177,6 +7250,10 @@ msgstr "只有你能打开这些"
 msgid "Opacity"
 msgstr "不透明度"
 
+#: src/routes/report.tsx
+msgid "open"
+msgstr "待处理"
+
 #. placeholder {0}: goal.beatmapLabel ?? describeGoal(goal, i18n)
 #. placeholder {0}: goal.beatmapLabel ?? t`map`
 #: src/components/me/GoalsPanel.tsx
@@ -7219,6 +7296,10 @@ msgstr "在 osu! 上打开谱面"
 #: src/routes/maps.tsx
 msgid "Open beatmap page on osu!"
 msgstr "在 osu! 上打开谱面页面"
+
+#: src/routes/report.tsx
+msgid "Open image"
+msgstr "查看图片"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open image in new tab"
@@ -7501,6 +7582,10 @@ msgstr "贴一次就好，数据一变它自己重画。"
 msgid "Paste share code"
 msgstr "粘贴分享码"
 
+#: src/routes/report.tsx
+msgid "Paste, drop or pick a screenshot."
+msgstr "可以粘贴、拖入或选择截图。"
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "pattern"
 msgstr "谱型"
@@ -7570,6 +7655,10 @@ msgstr "各列颜色"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Per-column press count."
 msgstr "每列的按键次数。"
+
+#: src/lib/replay-overlays.ts
+msgid "Per-hand accuracy"
+msgstr "左右手准确率"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "percentiles are among tracked players"
@@ -7949,6 +8038,7 @@ msgstr "预览图已上传。"
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/ui/ImageLightbox.tsx
 msgid "Previous"
 msgstr "上一页"
 
@@ -8499,6 +8589,7 @@ msgid "Remove color"
 msgstr "移除颜色"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/report.tsx
 msgid "Remove image"
 msgstr "移除图片"
 
@@ -8634,17 +8725,35 @@ msgstr "回放默认使用玩家发布的皮肤。关闭后始终使用你自己
 msgid "Report {0}"
 msgstr "举报 {0}"
 
+#: src/routes/__root.tsx
+msgid "report a bug"
+msgstr "反馈问题"
+
+#: src/components/layout/Nav.tsx
+#: src/routes/report.tsx
+msgid "Report a bug"
+msgstr "反馈问题"
+
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Report a translation"
 msgstr "反馈翻译问题"
 
 #: src/routes/communities_.$id.tsx
+#: src/routes/report.tsx
 msgid "Report sent"
 msgstr "举报已发送"
+
+#: src/routes/report.tsx
+msgid "Report something else"
+msgstr "再反馈一个问题"
 
 #: src/routes/communities_.$id.tsx
 msgid "report this server"
 msgstr "举报这个服务器"
+
+#: src/routes/report.tsx
+msgid "Reports work signed out. Sign in with osu! if you want to read the reply."
+msgstr "未登录也能反馈。想看到回复，请用 osu! 登录。"
 
 #: src/routes/maps.tsx
 msgid "Reroll"
@@ -8743,6 +8852,10 @@ msgstr "右"
 #: src/routes/replay.tsx
 msgid "Right thumb"
 msgstr "右手拇指"
+
+#: src/lib/replay-overlays.ts
+msgid "Rings"
+msgstr "圆环"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another."
@@ -8875,6 +8988,10 @@ msgstr "正在保存。"
 msgid "Saving…"
 msgstr "保存中…"
 
+#: src/routes/report.tsx
+msgid "Say a little more about what went wrong."
+msgstr "请再多写一点出了什么问题。"
+
 #: src/components/ghost/GhostSprite.tsx
 msgid "say something back"
 msgstr "回一句吧"
@@ -8925,6 +9042,10 @@ msgstr "ScorePosition"
 msgid "Scores"
 msgstr "成绩"
 
+#: src/components/ui/ImageLightbox.tsx
+msgid "Screenshot"
+msgstr "截图"
+
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
 #: src/components/skins/SkinSettingsModal.tsx
@@ -8939,6 +9060,10 @@ msgstr "截图"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Screenshots"
 msgstr "截图"
+
+#: src/routes/report.tsx
+#~ msgid "Screenshots (optional)"
+#~ msgstr "截图（可选）"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll"
@@ -9178,8 +9303,13 @@ msgstr "选中文字，或直接在这里输入"
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
+#: src/routes/report.tsx
 msgid "Send report"
 msgstr "提交反馈"
+
+#: src/routes/report.tsx
+msgid "Sent along with it:"
+msgstr "同时发送："
 
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Sent, thanks."
@@ -9482,6 +9612,10 @@ msgstr "并排对比"
 msgid "Sign in and runs like that pay shards."
 msgstr "登录后，这样的连胜就能赚碎片。"
 
+#: src/routes/report.tsx
+msgid "Sign in to read replies"
+msgstr "登录后可查看回复"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Sign in to set a replay skin for your plays."
@@ -9710,6 +9844,10 @@ msgstr "出错了"
 #: src/components/communities/field-options.tsx
 msgid "Something else"
 msgstr "其他问题"
+
+#: src/routes/report.tsx
+#~ msgid "Something on the site not working? Say what happened and it lands on the owner's desk."
+#~ msgstr "站点哪里出问题了？写下经过，会直接送到站长手里。"
 
 #: src/routes/farm-helper.tsx
 msgid "Something went wrong loading these maps. Try the toggle again in a moment."
@@ -9964,6 +10102,7 @@ msgid "Strongest in <0>{0}</0>"
 msgstr "最强项是 <0>{0}</0>"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/replay.tsx
 msgid "Style"
 msgstr "样式"
 
@@ -10186,6 +10325,10 @@ msgstr "这个谱面 ID 不是 mania 难度。"
 msgid "That does not look like a Discord invite link."
 msgstr "这看起来不像是 Discord 邀请链接。"
 
+#: src/routes/report.tsx
+msgid "That file is not an image."
+msgstr "该文件不是图片。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "That file isn't a supported image."
 msgstr "这个文件不是支持的图片格式。"
@@ -10199,6 +10342,7 @@ msgid "That invite is for a different server than the one you picked."
 msgstr "这个邀请链接指向的服务器和你选择的不是同一个。"
 
 #: src/components/settings/TranslationReportForm.tsx
+#: src/routes/report.tsx
 msgid "That is a lot of reports for one day. Try again tomorrow."
 msgstr "今天提交的反馈已经够多了，明天再来吧。"
 
@@ -10430,6 +10574,10 @@ msgstr "回放已加载，但现在无法下载 {mapLabel} 的谱面文件。"
 #: src/routes/replay_.uploads.tsx
 msgid "The replays you have uploaded to Mania Hub, with their share links and deletes."
 msgstr "你上传到 Mania Hub 的回放，附带分享链接和删除操作。"
+
+#: src/routes/report.tsx
+msgid "The report was sent, but at least one image did not upload."
+msgstr "反馈已提交，但至少有一张图片没能上传。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."
@@ -10689,6 +10837,10 @@ msgstr "这个皮肤的设置太大，无法保存。"
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 msgstr "这个工具需要从服务器读取跨国家/地区的刷图数据，而当前环境没有配置服务器。"
 
+#: src/routes/report.tsx
+msgid "Those images are no longer available."
+msgstr "这些图片已无法查看。"
+
 #: src/routes/player/$username.tsx
 msgid "Thu"
 msgstr "四"
@@ -10756,6 +10908,7 @@ msgid "too hard hides the lane from your gain views; setting a real score also c
 msgstr "「太难」会把该谱面从你的收益视图中隐藏；打出真实成绩也会清除标记"
 
 #: src/components/settings/TranslationReportForm.tsx
+#: src/routes/report.tsx
 msgid "Too many reports just now. Try again in a bit."
 msgstr "提交太频繁了，请稍后再试。"
 
@@ -11090,6 +11243,10 @@ msgstr "未评分"
 msgid "unreadable"
 msgstr "无法读取"
 
+#: src/routes/report.tsx
+msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
+msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 张图片。"
+
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Up to 50 MB."
@@ -11146,6 +11303,10 @@ msgstr "上传一个皮肤，它就会出现在这里。"
 msgid "Upload another"
 msgstr "再上传一个"
 
+#: src/routes/report.tsx
+#~ msgid "Upload failed"
+#~ msgstr "上传失败"
+
 #: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins.tsx
 msgid "Upload skin"
@@ -11167,6 +11328,10 @@ msgstr "由 <0>{0}</0> 上传"
 #: src/routes/skins.tsx
 msgid "uploader"
 msgstr "上传者"
+
+#: src/routes/report.tsx
+#~ msgid "Uploading"
+#~ msgstr "上传中"
 
 #: src/lib/skins.ts
 msgid "Uploading {list} previews."
@@ -11440,6 +11605,10 @@ msgstr "投票已结束。感谢你的选择。"
 msgid "vs"
 msgstr "vs"
 
+#: src/routes/report.tsx
+#~ msgid "Waiting"
+#~ msgstr "等待中"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "waiting for another {want}pp+ play"
 msgstr "等待下一个 {want}pp+ 的成绩"
@@ -11525,6 +11694,14 @@ msgstr "三"
 msgid "Wednesdays"
 msgstr "周三"
 
+#: src/routes/report.tsx
+#~ msgid "What gets sent with this"
+#~ msgstr "一并提交的信息"
+
+#: src/routes/report.tsx
+#~ msgid "What happened"
+#~ msgstr "发生了什么"
+
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "What is it for"
@@ -11541,6 +11718,14 @@ msgstr "附近玩家实际在刷的谱面"
 #: src/routes/farm-helper.tsx
 msgid "what players near you played last"
 msgstr "与你水平相近的玩家最近在打什么"
+
+#: src/routes/report.tsx
+msgid "What seems wrong?"
+msgstr "哪里看起来不对？"
+
+#: src/routes/report.tsx
+#~ msgid "What you did, what you expected, and what happened instead."
+#~ msgstr "你做了什么、预期是什么、实际又发生了什么。"
 
 #: src/routes/farm-helper.tsx
 msgid "what you're browsing"
@@ -11685,6 +11870,10 @@ msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。打一次�
 #: src/components/packs/PackStage.tsx
 msgid "You are cutting through the cards"
 msgstr "你正在划开卡片"
+
+#: src/routes/report.tsx
+#~ msgid "You can also drop images here."
+#~ msgstr "也可以将图片拖到这里。"
 
 #: src/components/communities/field-options.tsx
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
@@ -11847,6 +12036,10 @@ msgstr "无法加载你的回放皮肤"
 #: src/routes/replay_.uploads.tsx
 msgid "Your Replay Uploads"
 msgstr "你上传的回放"
+
+#: src/routes/report.tsx
+msgid "Your reports"
+msgstr "你的反馈"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "your score"

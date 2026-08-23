@@ -56,12 +56,13 @@ describe("ManiaReplayRenderer initialization", () => {
 
   it("counts the odd-key middle column toward the hand playing it with a thumb", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const handStatsSource = fs.readFileSync(path.resolve(__dirname, "../../lib/replay-hand-stats.ts"), "utf8");
 
-    expect(source).toContain("const leftCount = this.keyCount % 2 === 1 && this.missThumbHand === \"left\"");
-    expect(source).toContain("? Math.ceil(this.keyCount / 2)");
-    expect(source).toContain(": Math.floor(this.keyCount / 2);");
+    expect(handStatsSource).toContain("const leftCount = keyCount % 2 === 1 && middleLaneThumb === \"left\"");
+    expect(handStatsSource).toContain("? Math.ceil(keyCount / 2)");
+    expect(handStatsSource).toContain(": Math.floor(keyCount / 2);");
     // Switching hands mid-run re-tallies what has already been scanned.
-    expect(source).toContain("this.recomputeHandMisses();");
+    expect(source).toContain("this.recomputeHandStats();");
   });
 
   it("renders replay input notes through the active note skin while overlay-only input is enabled", () => {
@@ -139,6 +140,17 @@ describe("ManiaReplayRenderer initialization", () => {
     // canvas is reading the numbers (side by side).
     expect(source).toContain("this.starRatingTimeline = (this.hideHud || this.barePlayfield) && !this.liveStats");
     expect(source).not.toContain("mapAwardsPp");
+  });
+
+  it("calculates each hand's accuracy from that hand's live judgement counts", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("getReplayHandForColumn(event.column, this.keyCount, this.missThumbHand)");
+    expect(source).toContain("this.leftHandJudgmentCounts[event.judgment]++;");
+    expect(source).toContain("this.rightHandJudgmentCounts[event.judgment]++;");
+    expect(source).toContain("calculateReplayAccuracy(\n      this.leftHandJudgmentCounts,\n      this.ruleset.accuracyMode,");
+    expect(source).toContain("calculateReplayAccuracy(\n      this.rightHandJudgmentCounts,\n      this.ruleset.accuracyMode,");
+    expect(source).toContain("this.renderHandAccuracyOverlay(layout);");
   });
 
   it("keeps released hold remainders dimmed and scrolling past instead of despawning at the tail judgement", () => {
@@ -786,5 +798,51 @@ describe("ManiaReplayRenderer skin customization", () => {
     // lazer's MainHUDComponents.json.
     expect(source).toContain("return (480 / 768) * layout.layoutScale * this.skinProfile.comboScale;");
     expect(source).toContain("const overlap = combo.overlap * this.getComboUnitScale(layout);");
+  });
+});
+
+describe("ManiaReplayRenderer per-hand accuracy overlay", () => {
+  it("offers four shapes off one stored style", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("switch (normalizeReplayHandAccuracyStyle(this.overlaySettings.handAccuracy.style)) {");
+    for (const method of [
+      "renderHandAccuracyMeters",
+      "renderHandAccuracyPlain",
+      "renderHandAccuracyRings",
+      "renderHandAccuracyBalance",
+    ]) {
+      expect(source).toContain(`private ${method}(layout: Layout, scale: number) {`);
+    }
+    // Both hand overlays name the same colours, so a glance ties L to L.
+    expect(source).toContain('const HAND_COLORS = { left: "#5a8fff", right: "#de31ae" } as const;');
+    expect(source).toContain('{ label: "L MISS", value: this.hudCachedLeftMisses, color: HAND_COLORS.left },');
+    // Digits and unit are separate glyphs, so the number keeps the size.
+    expect(source).toContain("this.hudCachedLeftHandAccuracy = this.hudCachedLeftHandAccuracyValue.toFixed(2);");
+  });
+
+  it("sizes every shape off the widest reading so the box does not twitch", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source.match(/this\.measureTextWidth\("100\.00", valueFontSize, "700"\)/g)).toHaveLength(3);
+    // Balance fills outward from a centre tick; the meters style underlines
+    // each row instead.
+    expect(source).toContain("this.roundRect(centerX - centerGap - leftWidth, trackY, leftWidth, trackHeight, trackHeight / 2, left.color, 0.95);");
+    expect(source).toContain("if (fillWidth > 0.5) this.fillRect(frame.x, trackY, fillWidth, trackHeight, row.color, 0.95);");
+    expect(source).toContain("this.strokeArc(cx, cy, radius, handAccuracyMeterFill(row.value), row.color, 0.95, strokeWidth);");
+  });
+
+  it("curves the meter so the top few accuracy percent use most of the track", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("function handAccuracyMeterFill(accuracy: number): number {");
+    expect(source).toContain("return normalized ** 12;");
+
+    const fill = (accuracy: number) => Math.max(0, Math.min(1, accuracy / 100)) ** 12;
+    expect(fill(100)).toBe(1);
+    expect(fill(0)).toBe(0);
+    // A one-percent drop has to be visible: linear would move it by 1/100th.
+    expect(fill(100) - fill(99)).toBeGreaterThan(0.1);
+    expect(fill(95)).toBeLessThan(fill(99));
   });
 });

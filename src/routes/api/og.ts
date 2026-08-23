@@ -36,6 +36,8 @@ import {
 import { readCurrentAuth } from "../../lib/auth-server";
 import { getCachedOgImage, putOgImage } from "../../lib/r2-cache";
 import { countryTopPlaysTitle, OG_IMAGE_VERSION } from "../../lib/seo";
+import { describeUploadedReplayById, type UploadedReplayDescription } from "../../lib/uploaded-replay-describe";
+import { normalizeUploadedReplayId } from "../../lib/uploaded-replay-store";
 import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../lib/maniacard";
 import { honoraryAvatarUrl } from "../../lib/honorary-players";
 import type { ManiaCardTier } from "../../lib/maniacard";
@@ -656,6 +658,91 @@ function formatOgScoreDate(score: OsuScore): string {
     .toUpperCase();
 }
 
+interface ReplayOgCardData {
+  cover: string | null;
+  title: string;
+  artist: string;
+  version: string;
+  keyCount: number | null;
+  stars: number | null;
+  mapper: string;
+  playerName: string;
+  avatarUrl: string;
+  avatarUserId?: number;
+  countryCode: string;
+  modsLabel: string;
+  rank: string;
+  accuracy: number;
+  totalScore: number | null;
+  maxCombo: number | null;
+  pp: number | null;
+  playDate: string;
+  judgements: Array<{ label: string; value: number }>;
+}
+
+function scoreReplayOgData(score: OsuScore): ReplayOgCardData {
+  return {
+    cover: pickBeatmapsetCover(score),
+    title: score.beatmapset?.title ?? "Unknown beatmap",
+    artist: score.beatmapset?.artist ?? "",
+    version: score.beatmap?.version ?? "",
+    keyCount: score.beatmap?.cs ? Math.round(score.beatmap.cs) : null,
+    stars: Number.isFinite(score.beatmap?.difficulty_rating) ? score.beatmap.difficulty_rating : null,
+    mapper: score.beatmapset?.creator ?? "",
+    playerName: score.user?.username ?? "Unknown player",
+    avatarUrl: score.user?.avatar_url ?? "",
+    avatarUserId: score.user?.id,
+    countryCode: score.user?.country_code ?? "",
+    modsLabel: getModAcronyms(score.mods).join(""),
+    rank: getDisplayedRank(score),
+    // Stable plays are judged on the 300-weighted scale, but osu! reports the
+    // 305-weighted (rainbow-MAX) accuracy for them too, so read the same
+    // normalized value the replay page shows instead of the raw field.
+    accuracy: getDisplayedAccuracy(score),
+    totalScore: getDisplayedTotalScore(score),
+    maxCombo: score.max_combo ?? score.beatmap?.max_combo ?? null,
+    pp: scoreAwardsRankedPp(score) ? score.pp : null,
+    playDate: formatOgScoreDate(score),
+    judgements: getManiaJudgementCounts(score.statistics),
+  };
+}
+
+function uploadedReplayOgData(description: UploadedReplayDescription): ReplayOgCardData {
+  const beatmap = description.beatmap;
+  return {
+    cover: beatmap?.beatmapsetId
+      ? `https://assets.ppy.sh/beatmaps/${beatmap.beatmapsetId}/covers/cover@2x.jpg`
+      : null,
+    title: beatmap?.title || "Unknown beatmap",
+    artist: beatmap?.artist ?? "",
+    version: beatmap?.version ?? "",
+    keyCount: description.keyCount > 0 ? description.keyCount : null,
+    stars: beatmap?.starRating ?? null,
+    mapper: beatmap?.creator ?? "",
+    playerName: description.playerName || "Unknown player",
+    // An .osr names the player but carries no user id or avatar. The guest
+    // portrait keeps the result-card layout intact without turning an OG view
+    // into a second username lookup against osu!.
+    avatarUrl: "https://osu.ppy.sh/images/layout/avatar-guest@2x.png",
+    countryCode: "",
+    modsLabel: description.mods.join(""),
+    rank: description.grade,
+    accuracy: description.accuracy,
+    totalScore: description.totalScore,
+    maxCombo: description.maxCombo,
+    pp: null,
+    playDate: "",
+    judgements: [
+      { label: "MAX", value: description.judgements.max },
+      { label: "300", value: description.judgements.count300 },
+      { label: "200", value: description.judgements.count200 },
+      { label: "100", value: description.judgements.count100 },
+      { label: "50", value: description.judgements.count50 },
+      { label: "Miss", value: description.judgements.miss },
+    ],
+  };
+}
+
 /* Replay: an osu! result screen rebuilt for a 1200x630 embed. Reading
    order top to bottom is the same as the game's: which map, who played
    it, how it went. Bands are plain flex rows inside one absolutely
@@ -667,38 +754,33 @@ function formatOgScoreDate(score: OsuScore): string {
    difficulty, keys, stars, mapper). Band 3: player and grade, the two
    things a passer-by reads first. Band 4: score / accuracy / combo / pp.
    Band 5: judgement breakdown. */
-async function renderReplayOg(request: Request, scoreId: number): Promise<Response> {
-  const [regularFont, heavyFont, score] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
-    getScore({ data: { scoreId } }),
-  ]);
-
-  const cover = pickBeatmapsetCover(score);
-  const modsLabel = getModAcronyms(score.mods).join("");
-  const displayedRank = getDisplayedRank(score);
-  // Stable plays are judged on the 300-weighted scale, but osu! reports the
-  // 305-weighted (rainbow-MAX) accuracy for them too, so read the same
-  // normalized value the replay page shows instead of the raw field.
-  const accuracy = getDisplayedAccuracy(score);
-  const judgements = getManiaJudgementCounts(score.statistics);
-  const totalScore = getDisplayedTotalScore(score);
-  const maxCombo = score.max_combo ?? score.beatmap?.max_combo ?? null;
-  const showPp = scoreAwardsRankedPp(score);
-  const playDate = formatOgScoreDate(score);
+async function renderReplayOgCard(
+  request: Request,
+  data: ReplayOgCardData,
+  regularFont: ArrayBuffer,
+  heavyFont: ArrayBuffer,
+): Promise<Response> {
+  const {
+    cover,
+    modsLabel,
+    rank: displayedRank,
+    accuracy,
+    judgements,
+    totalScore,
+    maxCombo,
+    playDate,
+  } = data;
 
   // Difficulty names routinely already carry the key count ("[7K] Dum
   // spiro,"), so only add the keymode chip when it isn't in there.
-  const keys = score.beatmap?.cs ? `${Math.round(score.beatmap.cs)}K` : "";
-  const version = (score.beatmap?.version ?? "").trim();
+  const keys = data.keyCount ? `${data.keyCount}K` : "";
+  const version = data.version.trim();
   const showKeys = !!keys && !new RegExp(`\\b${keys}\\b`, "i").test(version);
-  const stars = score.beatmap?.difficulty_rating;
-  const mapper = score.beatmapset?.creator;
   const metaParts: ReactNode[] = [
-    metaPart("artist", clamp(score.beatmapset?.artist, 34)),
+    metaPart("artist", clamp(data.artist, 34)),
     metaPart("version", version ? clamp(version, 32) : ""),
     metaPart("keys", showKeys ? keys : ""),
-    stars != null && Number.isFinite(stars)
+    data.stars != null && Number.isFinite(data.stars)
       ? h(
           "div",
           {
@@ -713,11 +795,11 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
               src: starDataUrl("#ffcc22"),
               style: { width: "19px", height: "19px" },
             }),
-            h("div", { key: "sr" }, stars.toFixed(2)),
+            h("div", { key: "sr" }, data.stars.toFixed(2)),
           ],
         )
       : null,
-    metaPart("mapper", mapper ? `mapped by ${clamp(mapper, 20)}` : ""),
+    metaPart("mapper", data.mapper ? `mapped by ${clamp(data.mapper, 20)}` : ""),
   ].filter(Boolean);
 
   const response = new ImageResponse(
@@ -868,7 +950,7 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                       overflow: "hidden",
                     },
                   },
-                  clamp(score.beatmapset?.title ?? "Unknown beatmap", 42),
+                  clamp(data.title, 42),
                 ),
                 h(
                   "div",
@@ -932,7 +1014,7 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                   [
                     h("img", {
                       key: "avatar",
-                      src: ogAvatarUrl(request, score.user?.avatar_url, score.user?.id),
+                      src: ogAvatarUrl(request, data.avatarUrl, data.avatarUserId),
                       style: {
                         width: "120px",
                         height: "120px",
@@ -961,9 +1043,9 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                               overflow: "hidden",
                             },
                           },
-                          clamp(score.user?.username, 20),
+                          clamp(data.playerName, 20),
                         ),
-                        score.user?.country_code
+                        data.countryCode
                           ? h(
                               "div",
                               {
@@ -979,7 +1061,7 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                               [
                                 h("img", {
                                   key: "flag",
-                                  src: `https://osu.ppy.sh/images/flags/${score.user.country_code}.png`,
+                                  src: `https://osu.ppy.sh/images/flags/${data.countryCode}.png`,
                                   style: {
                                     width: "32px",
                                     height: "22px",
@@ -993,7 +1075,7 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                                     key: "cname",
                                     style: { fontSize: "20px", color: "#c7b8c1" },
                                   },
-                                  getCountryName(score.user.country_code) || score.user.country_code,
+                                  getCountryName(data.countryCode) || data.countryCode,
                                 ),
                               ],
                             )
@@ -1064,8 +1146,8 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                   "MAX COMBO",
                   maxCombo != null ? `${formatOgInt(maxCombo)}x` : "--",
                 ),
-                showPp
-                  ? ogStatCell("pp", "PERFORMANCE", `${formatOgInt(score.pp)}pp`, {
+                data.pp != null
+                  ? ogStatCell("pp", "PERFORMANCE", `${formatOgInt(data.pp)}pp`, {
                       color: "#ff66aa",
                     })
                   : null,
@@ -1081,6 +1163,23 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
   );
   response.headers.set("Cache-Control", OG_CACHE_HEADER);
   return response;
+}
+
+async function renderReplayOg(request: Request, scoreId: number): Promise<Response> {
+  const [[regularFont, heavyFont], score] = await Promise.all([
+    loadOgFonts(request),
+    getScore({ data: { scoreId } }),
+  ]);
+  return renderReplayOgCard(request, scoreReplayOgData(score), regularFont, heavyFont);
+}
+
+async function renderUploadedReplayOg(request: Request, uploadId: string): Promise<Response> {
+  const [[regularFont, heavyFont], description] = await Promise.all([
+    loadOgFonts(request),
+    describeUploadedReplayById(uploadId),
+  ]);
+  if (!description) throw new OgFallbackError(`no uploaded replay for ${uploadId}`);
+  return renderReplayOgCard(request, uploadedReplayOgData(description), regularFont, heavyFont);
 }
 
 /* Archived players (deleted osu! accounts, seeded into profile_snapshots)
@@ -5069,6 +5168,24 @@ export const Route = createFileRoute("/api/og")({
               );
             } catch (err) {
               console.warn("[og] replay render failed, falling back", err);
+            }
+          }
+        }
+
+        // A manually uploaded .osr has no guaranteed public score id. Its
+        // persisted description still has everything needed for the replay
+        // result card, and the random upload id gives that card a stable key.
+        if (kind === "uploaded-replay") {
+          const uploadId = normalizeUploadedReplayId(url.searchParams.get("uploadId"));
+          if (uploadId) {
+            try {
+              return await serveOg(
+                request,
+                `uploaded-replay:${uploadId}:v${version}`,
+                () => renderUploadedReplayOg(request, uploadId),
+              );
+            } catch (err) {
+              if (!isOgFallbackError(err)) console.warn("[og] uploaded replay render failed, falling back", err);
             }
           }
         }

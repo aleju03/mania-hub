@@ -241,9 +241,10 @@ describe("replay upload POST", () => {
       filenameHeader: encodeURIComponent("my replay.osr"),
     }));
     expect(response.status).toBe(200);
-    const body = await response.json() as { id: string; url: string; storage: string };
+    const body = await response.json() as { id: string; url: string; storage: string; ownerUserId: number };
     expect(body.storage).toBe("local");
     expect(body.url).toContain(`uploadId=${body.id}`);
+    expect(body.ownerUserId).toBe(viewerId);
 
     const files = await readdir(uploadDir);
     expect(files).toContain(`${body.id}.osr`);

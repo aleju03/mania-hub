@@ -5,6 +5,7 @@ import { countUserLinks } from "../../discord/identity.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../../discord/subscriptions.js";
 import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, updateAdminTodo, type CreateTodoInput, type UpdateTodoInput } from "../../features/admin-todos.js";
 import { clearReviewedTranslationReports, deleteTranslationReport, listTranslationReports, updateTranslationReport, type UpdateTranslationReportInput } from "../../features/translation-reports.js";
+import { clearClosedBugReports, deleteBugReport, getBugReport, listBugReports, promoteBugReportToTodo, updateBugReport, type UpdateBugReportInput } from "../../features/bug-reports.js";
 import { cancelBeatmapOsuFileBackfill, startBeatmapOsuFileBackfill } from "../../features/beatmap-osu-file-backfill.js";
 import { cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, startChartAnalysisBackfill } from "../../features/chart-analysis.js";
 import { importDanBenchmark, isDanBenchmarkFamily, listDanBenchmarkHiddenDiffs, listDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "../../features/dan-benchmark.js";
@@ -880,6 +881,110 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       return true;
     }
     sendJson(req, res, ctx, 200, { ok: true, cleared: await clearReviewedTranslationReports(ctx.serveWriteDb ?? ctx.db) });
+    return true;
+  }
+  if (url.pathname === "/api/admin/bug-reports") {
+    // The read side of /report (routes/bug-reports.ts owns the write).
+    // Admin-only: a report quotes whoever filed it, sometimes by name, and
+    // carries the browser context they did not choose to publish.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const page = await listBugReports(ctx.db, {
+      status: url.searchParams.get("status") ?? undefined,
+      search: url.searchParams.get("search") ?? undefined,
+      limit: url.searchParams.get("limit") ?? undefined,
+      offset: url.searchParams.get("offset") ?? undefined,
+    });
+    sendJson(req, res, ctx, 200, page);
+    return true;
+  }
+  if (url.pathname === "/api/admin/bug-reports/get") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const report = await getBugReport(ctx.db, url.searchParams.get("id") ?? "");
+    if (!report) {
+      sendJson(req, res, ctx, 404, { error: "report_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { report });
+    return true;
+  }
+  if (url.pathname === "/api/admin/bug-reports/update") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<UpdateBugReportInput>((await readBody(req)) || "{}", {});
+    const report = await updateBugReport(ctx.serveWriteDb ?? ctx.db, body);
+    if (!report) {
+      sendJson(req, res, ctx, 404, { error: "report_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, report });
+    return true;
+  }
+  if (url.pathname === "/api/admin/bug-reports/delete" || url.pathname === "/api/admin/bug-reports/clear-closed") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    // Screenshots live in the frontend's R2 bucket, so the row goes here and
+    // the objects come back for the caller to remove, the same split the
+    // uploaded-replay index uses.
+    if (url.pathname === "/api/admin/bug-reports/clear-closed") {
+      const cleared = await clearClosedBugReports(ctx.serveWriteDb ?? ctx.db);
+      sendJson(req, res, ctx, 200, { ok: true, ...cleared });
+      return true;
+    }
+    const body = parseJson<{ id?: unknown }>((await readBody(req)) || "{}", {});
+    const removed = await deleteBugReport(ctx.serveWriteDb ?? ctx.db, typeof body.id === "string" ? body.id : "");
+    if (!removed.deleted) {
+      sendJson(req, res, ctx, 404, { error: "report_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, screenshotKeys: removed.screenshotKeys });
+    return true;
+  }
+  if (url.pathname === "/api/admin/bug-reports/promote-to-todo") {
+    // One work queue: a report worth acting on becomes an ordinary todo rather
+    // than a second list to remember. The link is kept on the report so the
+    // board shows the todo instead of offering to promote it twice.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ id?: unknown }>((await readBody(req)) || "{}", {});
+    const id = typeof body.id === "string" ? body.id : "";
+    const promoted = await promoteBugReportToTodo(ctx.serveWriteDb ?? ctx.db, id);
+    if (!promoted) {
+      sendJson(req, res, ctx, 404, { error: "report_not_found" });
+      return true;
+    }
+    if (!promoted.created) {
+      sendJson(req, res, ctx, 409, {
+        error: "already_promoted",
+        todoId: promoted.report.todoId,
+        todoSeq: promoted.todo?.seq ?? promoted.report.todoSeq,
+      });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, todo: promoted.todo, report: promoted.report });
     return true;
   }
   if (url.pathname === "/api/admin/dan-benchmark/labels" || url.pathname === "/api/admin/dan-benchmark/hidden") {

@@ -8,6 +8,7 @@ describe("replay upload mode", () => {
     const browseSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayBrowseView.tsx"), "utf8");
     const uploadSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-upload.ts"), "utf8");
     const apiSource = fs.readFileSync(path.resolve(__dirname, "api/replay-upload.ts"), "utf8");
+    const ogSource = fs.readFileSync(path.resolve(__dirname, "api/og.ts"), "utf8");
 
     expect(browseSource).toContain('export type ReplayBrowseMode = "player" | "beatmap" | "side-by-side" | "upload"');
     expect(browseSource).toContain('{ mode: "upload", label: msg`Upload` }');
@@ -22,6 +23,10 @@ describe("replay upload mode", () => {
     expect(routeSource).toContain("extractReplayScoreIdFromFilename(options.filename)");
     expect(routeSource).toContain('"X-Replay-Filename": encodeURIComponent(filename)');
     expect(routeSource).toContain("uploaded.scoreId");
+    expect(routeSource).toContain("uploadedReplayOgImagePath(uploadId)");
+    expect(ogSource).toContain('if (kind === "uploaded-replay")');
+    expect(ogSource).toContain("describeUploadedReplayById(uploadId)");
+    expect(ogSource).toContain("uploadedReplayOgData(description)");
     expect(routeSource).toContain('getScore({ data: { scoreId, mode: "mania" } })');
     // The embedded score id's namespace overlaps the unified /scores/{id} one,
     // so the fetched score only counts when it is verifiably this replay's map
@@ -122,7 +127,23 @@ describe("replay upload mode", () => {
     // The admin's every-uploader view names who uploaded each row.
     expect(uploadsPageSource).toContain("showUploader={allOwners}");
     // The delete button on the viewer itself waits for the ownership answer.
-    expect(routeSource).toContain("fetchUploadedReplayPermissions({ data: { id: loadedUploadId } })");
+    expect(routeSource).toContain("fetchUploadedReplayPermissions({ data: { id: requestedUploadId } })");
     expect(routeSource).toContain("onDeleteUpload={canDeleteLoadedUpload ? handleDeleteLoadedUpload : undefined}");
+  });
+
+  it("plays uploads with the uploader's replay skin", () => {
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const uploadsSource = fs.readFileSync(path.resolve(__dirname, "../lib/uploaded-replays.ts"), "utf8");
+
+    // Public share-link viewers need the uploader id too; delete permission is
+    // still calculated separately against the signed-in viewer.
+    expect(uploadsSource).toContain("ownerUserId: row?.ownerUserId ?? null");
+    expect(uploadsSource).not.toContain("if (!auth.viewer && !auth.canUseAdminFeatures) return");
+    // An upload's owner takes precedence over a coincidentally resolved score
+    // player, matching the product's usual uploader-is-player assumption.
+    expect(routeSource).toContain("const replaySkinOwnerUserId = loadedUploadId != null");
+    expect(routeSource).toContain("uploadedReplayOwner?.uploadId === loadedUploadId");
+    expect(routeSource).toContain("setUploadedReplayOwner({ uploadId: saved.id, userId: saved.ownerUserId })");
+    expect(routeSource).toContain("ownerUserId={replaySkinOwnerUserId}");
   });
 });

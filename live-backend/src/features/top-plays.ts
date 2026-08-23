@@ -488,6 +488,15 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
 
 async function getTopPlaysPpGains(db: Db, country: string, cutoff: string, options: TopPlaysSnapshotOptions): Promise<TopPlaysPpGainSummary[]> {
   const scopeSql = countryScopeSql(resolveCountryScope(country), "e.country");
+  // With no country predicate SQLite prefers idx_top_play_events_user_pp for
+  // the GROUP BY and walks the entire all-time feed, even for a 24h snapshot.
+  // GLOBAL must start at the cutoff instead: this covering index reduces the
+  // input to the requested window before grouping and keeps pp_gain/user_id off
+  // the table's payload pages. Concrete/region scopes already choose the
+  // country+time index from their country predicate.
+  const eventsSource = scopeSql
+    ? "top_play_events e"
+    : "top_play_events e indexed by idx_top_play_events_score_time";
   const where = scopeSql
     ? [scopeSql.clause, "e.score_time >= ?", "e.pp_gain >= 0.05"]
     : ["e.score_time >= ?", "e.pp_gain >= 0.05"];
@@ -503,7 +512,7 @@ async function getTopPlaysPpGains(db: Db, country: string, cutoff: string, optio
     db,
     `select e.user_id, sum(e.pp_gain) as total_gain,
             u.username, u.avatar_url, u.country_code
-     from top_play_events e
+     from ${eventsSource}
      left join users u on u.user_id = e.user_id
      where ${where.join(" and ")}
      group by e.user_id

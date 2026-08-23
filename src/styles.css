@@ -79,6 +79,27 @@ html {
   --color-osu-orange: #ff8e5d;
 }
 body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family: var(--font-sans); }
+
+/* Admin destinations stay scannable as this menu grows. Each link supplies a
+   stable semantic accent; the tinted surfaces preserve that identity on hover
+   and in the mobile drawer without sacrificing contrast on the dark nav. */
+.admin-tool-link {
+  color: var(--admin-tool-accent);
+}
+.admin-tool-link:hover {
+  background-color: color-mix(in srgb, var(--admin-tool-accent) 12%, transparent);
+  color: color-mix(in srgb, var(--admin-tool-accent) 78%, white);
+}
+.admin-tool-card {
+  border-color: color-mix(in srgb, var(--admin-tool-accent) 32%, transparent);
+  background-color: color-mix(in srgb, var(--admin-tool-accent) 12%, transparent);
+  color: var(--admin-tool-accent);
+}
+.admin-tool-card:hover {
+  background-color: color-mix(in srgb, var(--admin-tool-accent) 22%, transparent);
+  color: color-mix(in srgb, var(--admin-tool-accent) 78%, white);
+}
+
 .modal-card-mobile-safe {
   transform: translateZ(0);
   backface-visibility: hidden;

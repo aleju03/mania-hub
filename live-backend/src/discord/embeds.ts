@@ -8,7 +8,7 @@ import {
   isFullCombo,
 } from "../shared/score.js";
 import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
-import type { DiscordComponent, DiscordEmbed, DiscordMessageBody } from "./rest.js";
+import type { DiscordComponent, DiscordEmbed, DiscordEmbedField, DiscordMessageBody } from "./rest.js";
 import { helpNavRow, linkAccountRow } from "./components.js";
 import { gradeEmoji, hasHitEmojis, hitEmoji, modsEmoji } from "./emojis.js";
 
@@ -1469,6 +1469,75 @@ export function newMapAlertEmbed(map: NewMapAlert, siteOrigin: string): DiscordM
     components: linkButtonRow([
       { label: "Beatmap", url: mapUrl },
       { label: "Maps", url: `${siteOrigin}/maps?tab=farmed` },
+    ]),
+    allowed_mentions: { parse: [] },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Bug reports
+// ---------------------------------------------------------------------------
+
+export interface BugReportAlert {
+  id: string;
+  body: string;
+  pagePath: string | null;
+  username: string | null;
+  userId: number | null;
+  screenshotCount: number;
+  context: Record<string, string | number | boolean | null> | null;
+}
+
+/**
+ * A player filed a bug. This goes to one owner-picked channel rather than the
+ * subscribable feeds: a report quotes whoever wrote it, and that is not
+ * community content.
+ *
+ * The reporter's own words are the whole point, so they lead and everything
+ * else is a field. Screenshots are not attached: they live behind signed URLs
+ * in the private bucket, and a Discord embed URL is neither private nor
+ * short-lived.
+ */
+export function bugReportEmbed(report: BugReportAlert, siteOrigin: string): DiscordMessageBody {
+  const reporter = report.username
+    ? `[${truncate(report.username, 60)}](${report.userId ? osuProfileUrl(report.userId) : `${OSU_BASE}/`})`
+    : "anonymous";
+  const context = report.context ?? {};
+  const detail = [
+    typeof context.viewport === "string" ? context.viewport : "",
+    typeof context.locale === "string" ? context.locale : "",
+    typeof context.country === "string" ? context.country : "",
+    typeof context.siteVersion === "string" ? `build ${context.siteVersion}` : "",
+  ].filter(Boolean).join(" • ");
+
+  const fields: DiscordEmbedField[] = [
+    { name: "Reporter", value: reporter, inline: true },
+    { name: "Page", value: report.pagePath ? `\`${truncate(report.pagePath, 80)}\`` : "unknown", inline: true },
+  ];
+  if (report.screenshotCount > 0) {
+    fields.push({
+      name: "Screenshots",
+      value: `${report.screenshotCount} on the admin board`,
+      inline: true,
+    });
+  }
+  if (typeof context.userAgent === "string" && context.userAgent) {
+    fields.push({ name: "Browser", value: truncate(context.userAgent, 200), inline: false });
+  }
+
+  const embed: DiscordEmbed = {
+    title: "New bug report",
+    color: OSU_PINK,
+    description: truncate(report.body, 1500),
+    fields,
+    footer: { text: detail ? `${BOT_NAME} • ${detail}` : BOT_NAME },
+  };
+
+  return {
+    embeds: [embed],
+    components: linkButtonRow([
+      { label: "Open bug reports", url: `${siteOrigin}/admin/bug-reports` },
+      { label: "Where it happened", url: report.pagePath ? `${siteOrigin}${report.pagePath}` : "" },
     ]),
     allowed_mentions: { parse: [] },
   };

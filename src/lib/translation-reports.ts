@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { getAppRateLimitClientIp } from "./app-client-ip";
 import { adminAuthHeaders, bridgeAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
+import { reporterKeyFor } from "./reporter-key";
 
 /* Reports about the site's own UI translations, filed from the language tab of
    the settings panel and read on /admin/translation-reports. The rows live in
@@ -54,22 +54,6 @@ export type SubmitTranslationReportResult =
 export const TRANSLATION_REPORT_SOURCE_MAX = 600;
 export const TRANSLATION_REPORT_SUGGESTION_MAX = 600;
 export const TRANSLATION_REPORT_NOTE_MAX = 2000;
-
-/* A stable per-reporter bucket that is not an address. The signed-in case names
-   the account (the backend already stores that id anyway); otherwise the
-   visitor's address is HMACed with a server secret and truncated, so the table
-   can count one reporter's rows without holding anything that identifies them.
-   Deployments that do not trust proxy headers hand out "unknown" for every
-   visitor, which collapses to the backend's shared anonymous bucket - a much
-   larger ceiling exists there for exactly that reason. */
-async function reporterKeyFor(request: Request, userId: number | null): Promise<string> {
-  if (userId) return `user:${userId}`;
-  const ip = getAppRateLimitClientIp(request);
-  if (ip === "unknown") return "anon";
-  const { createHmac } = await import("node:crypto");
-  const secret = process.env.LIVE_BRIDGE_TOKEN?.trim() || process.env.LIVE_ADMIN_TOKEN?.trim() || "translation-reports";
-  return `ip:${createHmac("sha256", secret).update(ip).digest("hex").slice(0, 32)}`;
-}
 
 export const submitTranslationReport = createServerFn({ method: "POST" })
   .validator((data: { locale: string; sourceText: string; suggestion?: string; note?: string; pagePath?: string }) => data)

@@ -348,6 +348,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateActivityMapsBestPayload(target);
   await migrateGoatPoll(target);
   await migrateTranslationReports(target);
+  await migrateBugReports(target);
   await setMigrationSentinel(target, SCHEMA_MIGRATION_META_KEY, {
     startedAt: startedAtIso,
     completedAt: new Date().toISOString(),
@@ -2414,6 +2415,57 @@ async function migrateTranslationReports(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_translation_reports_reporter
       on translation_reports(reporter_key, created_at desc)
+  `);
+}
+
+async function migrateBugReports(db: Db): Promise<void> {
+  // Player-filed bug reports (see features/bug-reports.ts). Same open-write
+  // shape as translation_reports above: signed-out visitors may file, so
+  // user_id is nullable and `reporter_key` carries the opaque per-reporter
+  // bucket the caps key on. status is new|investigating|fixed|wontfix|
+  // duplicate, timestamps are epoch ms. Durable: retention never prunes this
+  // table.
+  //
+  // Two text columns that look alike are not: `admin_note` is private triage
+  // scratch, `reply` is written for the reporter and shown back to them on
+  // /report. Nothing joins them, so a note can never leak by being rendered on
+  // the wrong side.
+  await db.execute(`
+    create table if not exists bug_reports (
+      id text primary key,
+      status text not null default 'new',
+      body text not null,
+      page_path text,
+      context_json text,
+      user_id integer,
+      username text,
+      reporter_key text not null default 'anon',
+      screenshot_keys text,
+      upload_token text,
+      token_expires_at integer,
+      admin_note text,
+      reply text,
+      replied_at integer,
+      todo_id text,
+      created_at integer not null,
+      updated_at integer not null,
+      resolved_at integer
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_bug_reports_status
+      on bug_reports(status, created_at desc)
+  `);
+  // The per-reporter cap and the duplicate guard both scan one reporter's
+  // recent rows on every submit.
+  await db.execute(`
+    create index if not exists idx_bug_reports_reporter
+      on bug_reports(reporter_key, created_at desc)
+  `);
+  // "Your reports" on /report reads one signed-in reporter's own rows.
+  await db.execute(`
+    create index if not exists idx_bug_reports_user
+      on bug_reports(user_id, created_at desc)
   `);
 }
 

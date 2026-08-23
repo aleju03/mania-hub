@@ -3006,6 +3006,36 @@ describe("live backend", () => {
     expect(keyFilteredSnapshot.popoffs.map((play) => play.score.id)).toEqual([9001]);
   });
 
+  it("anchors the global PP-gain rail to the score-time index", async () => {
+    const { db } = await setup();
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at, score_time, key_count)
+       values ('CR', 9001, 101, 280, 266, 12, '{}', ?, ?, 4)`,
+      [now, now],
+    );
+
+    const statements: string[] = [];
+    const tracedDb = new Proxy(db, {
+      get(inner, property, receiver) {
+        if (property === "execute") {
+          return (statement: { sql: string } | string) => {
+            statements.push(typeof statement === "string" ? statement : statement.sql);
+            return (inner.execute as (value: unknown) => unknown)(statement);
+          };
+        }
+        const value = Reflect.get(inner, property, receiver);
+        return typeof value === "function" ? value.bind(inner) : value;
+      },
+    }) as typeof db;
+
+    await getTopPlaysSnapshot(tracedDb, "GLOBAL", "24h", { includePpGains: true });
+
+    const gainsSql = statements.find((sql) => sql.includes("sum(e.pp_gain)"));
+    expect(gainsSql).toContain("top_play_events e indexed by idx_top_play_events_score_time");
+  });
+
   it("emits top play only after best-score confirmation", async () => {
     const { db, events, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");

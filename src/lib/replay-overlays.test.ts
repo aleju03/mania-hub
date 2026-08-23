@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "./replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, normalizeReplayHandAccuracyStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "./replay-overlays";
 
 describe("replay overlay settings", () => {
   it("uses the larger miss counter in the default layout", () => {
@@ -12,6 +12,11 @@ describe("replay overlay settings", () => {
 
   it("ships accuracy as a draggable readout on the left", () => {
     expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.accuracy).toEqual({ enabled: true, x: 0.03, y: 0.03, scale: 1 });
+  });
+
+  it("ships per-hand accuracy as an opt-in draggable overlay", () => {
+    expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.handAccuracy).toEqual({ enabled: false, x: 0.03, y: 0.16, scale: 1, style: "meters" });
+    expect(normalizeReplayOverlaySettings({}).handAccuracy).toEqual(DEFAULT_REPLAY_OVERLAY_SETTINGS.handAccuracy);
   });
 
   it("keeps the detached progress pie clear of the accuracy cluster", () => {
@@ -77,5 +82,25 @@ describe("miss counter thumb hand", () => {
 
   it("keeps a stored left-thumb choice", () => {
     expect(normalizeReplayMissThumbHand("left")).toBe("left");
+  });
+});
+
+describe("replay per-hand accuracy style", () => {
+  it("falls back to the meters shape for anything unknown", () => {
+    expect(normalizeReplayHandAccuracyStyle(undefined)).toBe("meters");
+    expect(normalizeReplayHandAccuracyStyle("nonsense")).toBe("meters");
+    expect(normalizeReplayHandAccuracyStyle("rings")).toBe("rings");
+  });
+
+  it("keeps a picked style through a stored-settings round trip", () => {
+    const stored = { handAccuracy: { enabled: true, x: 0.2, y: 0.3, scale: 1, style: "balance" } };
+
+    expect(normalizeReplayOverlaySettings(stored).handAccuracy.style).toBe("balance");
+  });
+
+  it("keeps the style when a legacy layout resets the placement", () => {
+    const legacy = { ...DEFAULT_REPLAY_OVERLAY_SETTINGS.handAccuracy, style: "plain" };
+
+    expect(normalizeReplayOverlaySettings({ handAccuracy: legacy }).handAccuracy.style).toBe("plain");
   });
 });

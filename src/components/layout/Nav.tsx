@@ -1,7 +1,7 @@
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { BarChart3, ChevronDown, Globe, Image as ImageIcon, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
+import { BarChart3, Bug, ChevronDown, Globe, Image as ImageIcon, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -128,18 +128,19 @@ function preserveSearchWithCountryOnFirstPage(country: string) {
    items need real admin; the last two also show in plain dev mode. Kept
    `as const` for the same reason NAV_LEAVES is. */
 const ADMIN_TOOLS = [
-  { to: "/admin/live-backend", label: "Monitoring", adminOnly: true },
-  { to: "/valley", label: "Valley", adminOnly: true },
-  { to: "/admin/todos", label: "Todos", adminOnly: true },
-  { to: "/admin/ghost", label: "Ghost", adminOnly: true },
-  { to: "/admin/r2", label: "R2", adminOnly: true, search: { prefix: "replay-cache/" } },
-  { to: "/admin/collections", label: "Collections", adminOnly: true },
-  { to: "/admin/bbcode-images", label: "BBCode images", adminOnly: true },
-  { to: "/admin/discord", label: "Discord", adminOnly: true },
-  { to: "/admin/translation-reports", label: "Translations", adminOnly: true },
-  { to: "/admin/dan-classifier", label: "Chart Patterns", adminOnly: false },
-  { to: "/admin/og-preview", label: "OG preview", adminOnly: false },
-  { to: "/admin/dynamic-renders", label: "Dynamic renders", adminOnly: true },
+  { to: "/admin/live-backend", label: "Monitoring", accent: "#7dd3fc", adminOnly: true },
+  { to: "/valley", label: "Valley", accent: "#86efac", adminOnly: true },
+  { to: "/admin/todos", label: "Todos", accent: "#fde047", adminOnly: true },
+  { to: "/admin/bug-reports", label: "Bug reports", accent: "#fca5a5", adminOnly: true },
+  { to: "/admin/ghost", label: "Ghost", accent: "#c4b5fd", adminOnly: true },
+  { to: "/admin/r2", label: "R2", accent: "#67e8f9", adminOnly: true, search: { prefix: "replay-cache/" } },
+  { to: "/admin/collections", label: "Collections", accent: "#f9a8d4", adminOnly: true },
+  { to: "/admin/bbcode-images", label: "BBCode images", accent: "#fdba74", adminOnly: true },
+  { to: "/admin/discord", label: "Discord", accent: "#a5b4fc", adminOnly: true },
+  { to: "/admin/translation-reports", label: "Translations", accent: "#5eead4", adminOnly: true },
+  { to: "/admin/dan-classifier", label: "Chart Patterns", accent: "#bef264", adminOnly: false },
+  { to: "/admin/og-preview", label: "OG preview", accent: "#fda4af", adminOnly: false },
+  { to: "/admin/dynamic-renders", label: "Dynamic renders", accent: "#e879f9", adminOnly: true },
 ] as const;
 
 type AdminTool = (typeof ADMIN_TOOLS)[number];
@@ -227,6 +228,7 @@ export function Nav() {
   const linksContainerRef = useRef<HTMLDivElement>(null);
   const adminMenuRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const mobileAccountMenuRef = useRef<HTMLDivElement>(null);
   const restoreMenuAfterSettingsCloseRef = useRef(false);
   // Keyed by top-level item id (home link + group triggers); used to measure
   // the active-link indicator bar.
@@ -315,6 +317,17 @@ export function Nav() {
       setMobileCountryOpen(false);
     }
   }, [menuOpen]);
+
+  // The account links expand inside the drawer's scroll flow. Bring their
+  // lower edge into view on short phones, where the browser's bottom toolbar
+  // can otherwise leave the newly opened links below the visible viewport.
+  useEffect(() => {
+    if (!mobileAccountOpen) return;
+    const frame = requestAnimationFrame(() => {
+      mobileAccountMenuRef.current?.scrollIntoView({ block: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [mobileAccountOpen]);
 
   // When the drawer opens, expand whichever group owns the current page so the
   // active item is visible without a tap.
@@ -788,7 +801,8 @@ export function Nav() {
                           to={tool.to}
                           search={adminToolSearch(tool)}
                           onClick={() => setAdminMenuOpen(false)}
-                          className={`px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors ${
+                          style={{ "--admin-tool-accent": tool.accent } as CSSProperties}
+                          className={`admin-tool-link px-3 py-2 text-[11px] font-semibold transition-colors ${
                             index > 1 ? "border-t border-osu-b3/30" : ""
                           } ${index % 2 === 1 ? "border-l border-osu-b3/30" : ""} ${
                             full ? "col-span-2 text-center" : ""
@@ -913,6 +927,19 @@ export function Nav() {
                       </a>
                     </>
                   )}
+                  {/* Outside the signed-in branch on purpose: most people hit
+                      a bug before they ever log in, and the form takes a report
+                      either way. */}
+                  <Link
+                    to="/report"
+                    search={{ from: location.pathname === "/report" ? undefined : location.pathname }}
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 border-t border-osu-b3/30 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                    role="menuitem"
+                  >
+                    <Bug className="h-3.5 w-3.5" />
+                    <Trans>Report a bug</Trans>
+                  </Link>
                 </div>
               )}
             </div>
@@ -986,7 +1013,7 @@ export function Nav() {
       />
       {/* Drawer panel */}
       <div
-        className={`fixed top-[60px] right-0 w-64 bottom-0 bg-osu-b5 z-[60] md:hidden border-l border-osu-b3/30 overflow-y-auto transform-gpu will-change-transform transition-transform duration-250 ease-out ${
+        className={`fixed top-[60px] right-0 h-[calc(100dvh-60px)] w-64 bg-osu-b5 z-[60] md:hidden border-l border-osu-b3/30 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] transform-gpu will-change-transform transition-transform duration-250 ease-out ${
           menuOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
         }`}
         aria-hidden={!menuOpen}
@@ -1105,7 +1132,10 @@ export function Nav() {
                     </div>
 
                     {mobileAccountOpen ? (
-                      <div className="absolute left-0 right-0 top-full z-[65] mt-1 overflow-hidden rounded-lg border border-osu-b3/50 bg-osu-b5 shadow-[0_10px_25px_rgba(0,0,0,0.5)]">
+                      <div
+                        ref={mobileAccountMenuRef}
+                        className="mt-1 overflow-hidden rounded-lg border border-osu-b3/50 bg-osu-b5 shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
+                      >
                         <Link
                           to="/player/$username"
                           params={{ username: auth.viewer.username }}
@@ -1188,6 +1218,15 @@ export function Nav() {
                   <Settings className="h-5 w-5" strokeWidth={2.1} />
                   {t`Settings`}
                 </button>
+                <Link
+                  to="/report"
+                  search={{ from: location.pathname === "/report" ? undefined : location.pathname }}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex w-full items-center gap-3 rounded-lg bg-osu-b4/60 px-3 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-b4 hover:text-white"
+                >
+                  <Bug className="h-5 w-5" strokeWidth={2.1} />
+                  {t`Report a bug`}
+                </Link>
               </div>
 
               {devMode && (
@@ -1204,7 +1243,8 @@ export function Nav() {
                         to={tool.to}
                         search={adminToolSearch(tool)}
                         onClick={() => setMenuOpen(false)}
-                        className="text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                        style={{ "--admin-tool-accent": tool.accent } as CSSProperties}
+                        className="admin-tool-card text-center px-3 py-2 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer border"
                       >
                         {tool.label}
                       </Link>

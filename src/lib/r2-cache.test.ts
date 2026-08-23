@@ -62,14 +62,14 @@ describe("R2 admin bucket registry", () => {
     expect(buckets.map((entry) => entry.id)).toEqual(["replay-cache", "public"]);
     expect(buckets[0]!.bucket).toBe("mania-hub-replay-cache");
     expect(buckets[1]!.bucket).toBe("mania-hub-public");
-    expect(buckets[0]!.roots.map((root) => root.prefix)).toEqual(["replay-cache/", "skins/"]);
+    expect(buckets[0]!.roots.map((root) => root.prefix)).toEqual(["replay-cache/", "skins/", "bug-reports/"]);
     expect(buckets[1]!.roots.map((root) => root.prefix)).toEqual(["bbcode/", "maniacards/"]);
   });
 
   it("warns before deleting anything without a second copy", () => {
     const roots = listR2AdminBuckets().flatMap((entry) => entry.roots);
     const warned = roots.filter((root) => root.deleteWarning).map((root) => root.prefix);
-    expect(warned).toEqual(["skins/", "bbcode/"]);
+    expect(warned).toEqual(["skins/", "bug-reports/", "bbcode/"]);
   });
 });
 

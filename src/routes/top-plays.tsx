@@ -29,7 +29,7 @@ import type { CountryTopPlay } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { countryTopPlaysTitle, pageSeo } from "../lib/seo";
-import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
+import { hasTopPlaysCache, selectCachedTopPlaysPage, shouldRefreshTopPlays } from "../lib/top-plays-cache";
 import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { fetchLiveTopPlaysSnapshot, isLiveBackendConfigured, openLiveEventSource, type LiveTopPlaysPpGain } from "../lib/live-backend";
@@ -340,16 +340,33 @@ function PopOffsPage() {
     setPage(0);
   }, []);
 
-  // The backend snapshot already applies range/sort/key/player filters; only
-  // hidden users are stripped client-side.
+  const selectedPlayersKey = selectedPlayerIds.join(",");
+  const liveSnapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${page}:${selectedPlayersKey}`;
+  const hasCurrentLiveSnapshot = currentLiveSnapshotKeyRef.current === liveSnapshotKey;
+  const cachedPagePopoffs = useMemo(
+    () => selectCachedTopPlaysPage(popoffs, {
+      cachedWindow: popoffsWindow,
+      range,
+      sort,
+      dir,
+      keys,
+      page,
+      pageSize: PAGE_SIZE,
+      userIds: selectedPlayerIds,
+    }),
+    [dir, keys, page, popoffs, popoffsWindow, range, selectedPlayerIds, sort],
+  );
+
+  // A server result is authoritative, including an empty page. Before it
+  // arrives, keep a matching page from the persisted feed visible instead of
+  // replacing the whole list with skeletons during Global's revalidation.
+  const displayedPagePopoffs = hasCurrentLiveSnapshot ? livePagePopoffs : cachedPagePopoffs;
   const rangedPopoffs = useMemo(
-    () => livePagePopoffs.filter((popoff) => !hiddenUserIds.has(popoff.user.id)),
-    [hiddenUserIds, livePagePopoffs],
+    () => displayedPagePopoffs.filter((popoff) => !hiddenUserIds.has(popoff.user.id)),
+    [displayedPagePopoffs, hiddenUserIds],
   );
   const filtered = rangedPopoffs;
 
-  const selectedPlayersKey = selectedPlayerIds.join(",");
-  const liveSnapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${page}:${selectedPlayersKey}`;
   const liveSnapshotNeeded =
     shouldRefreshTopPlays({
       fetchedAt: popoffsFetchedAt,
@@ -365,8 +382,10 @@ function PopOffsPage() {
     liveBackendEnabled &&
     settledLiveSnapshotKey !== liveSnapshotKey &&
     currentLiveSnapshotKeyRef.current !== liveSnapshotKey;
-  const showingInitialLiveSnapshot = waitingForLiveSnapshot && filtered.length === 0;
-  const showingLivePageTransition = waitingForLivePageSnapshot && filtered.length > 0;
+  const showingInitialLiveSnapshot =
+    waitingForLiveSnapshot && currentLiveSnapshotKeyRef.current === null && filtered.length === 0;
+  const showingLivePageTransition =
+    waitingForLivePageSnapshot && currentLiveSnapshotKeyRef.current !== null && filtered.length === 0;
 
   const playerPpGains = useMemo(() => {
     if (livePpGains.length > 0) {
@@ -464,7 +483,7 @@ function PopOffsPage() {
                 </span>
               </div>
             )}
-            {!refreshing && !loading && !showingInitialLiveSnapshot && !showingLivePageTransition && (
+            {hasCurrentLiveSnapshot && !refreshing && !loading && !showingInitialLiveSnapshot && !showingLivePageTransition && (
               <span className="text-[10px] text-osu-f1">
                 <Trans>{totalCount} top plays found</Trans>
               </span>

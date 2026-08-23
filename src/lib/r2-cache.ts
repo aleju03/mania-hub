@@ -426,6 +426,82 @@ export async function putJsonArtifact(storageKey: string, value: unknown): Promi
   }
 }
 
+// ── Bug report screenshots ──
+// Optional images attached to a report filed on /report. They sit in the
+// private bucket and are never given a public URL: a screenshot of a bug can
+// hold whatever else was on that person's screen, and the site is not an image
+// host. Every read is a short-lived signed URL handed out by a server function
+// that has already checked the caller is an admin or the reporter themselves.
+//
+// The key shape is fixed and mirrored by the backend's own check
+// (isBugReportScreenshotKey in live-backend/src/features/bug-reports.ts), which
+// refuses to record anything that does not match. Both sides have to agree, and
+// the backend is the one that fails loudly if they ever drift.
+
+export type BugReportImageExt = "png" | "jpg" | "gif" | "webp" | "bmp" | "avif";
+export type BugReportScreenshotPutResult = "stored" | "exists" | "unavailable";
+
+export function getBugReportScreenshotKey(reportId: string, index: number, ext: BugReportImageExt): string {
+  const id = reportId.replace(/[^A-Za-z0-9-]/g, "");
+  if (!id) throw new Error("Bug report id is required for a screenshot key");
+  return `${BUG_REPORTS_PREFIX}${id}/${Math.max(0, Math.floor(index))}.${ext}`;
+}
+
+export async function putBugReportScreenshot(
+  storageKey: string,
+  body: Buffer,
+  contentType: string,
+): Promise<BugReportScreenshotPutResult> {
+  const r2 = getClient();
+  if (!r2) return "unavailable";
+  assertBucketKey(getAdminBucket("replay-cache"), storageKey);
+  if (!storageKey.startsWith(BUG_REPORTS_PREFIX)) {
+    throw new Error(`Refusing to write a bug report screenshot outside ${BUG_REPORTS_PREFIX}`);
+  }
+  try {
+    await r2.send(new PutObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+      Body: body,
+      ContentType: contentType,
+      // A replayed or concurrent request must never replace evidence already
+      // attached to the report. R2 implements the S3 conditional-write header.
+      IfNoneMatch: "*",
+    }));
+    return "stored";
+  } catch (error) {
+    const status = (error as { $metadata?: { httpStatusCode?: number } } | null)?.$metadata?.httpStatusCode;
+    if (status === 409 || status === 412) return "exists";
+    throw error;
+  }
+}
+
+/** A signed, short-lived read. Callers must have proved admin or reporter first. */
+export async function getBugReportScreenshotUrl(storageKey: string): Promise<string | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+  if (!storageKey.startsWith(BUG_REPORTS_PREFIX)) return null;
+  return signGetUrl(storageKey);
+}
+
+/**
+ * Best effort: the report row is already gone by the time this runs, so a
+ * failed object delete leaves an orphan nobody can reach a link to, not a
+ * broken page.
+ */
+export async function deleteBugReportScreenshots(storageKeys: string[]): Promise<void> {
+  const r2 = getClient();
+  if (!r2) return;
+  for (const storageKey of storageKeys) {
+    if (!storageKey.startsWith(BUG_REPORTS_PREFIX)) continue;
+    try {
+      await r2.send(new DeleteObjectCommand({ Bucket: REPLAY_CACHE_BUCKET, Key: storageKey }));
+    } catch {
+      // Orphaned object; Cloudflare lifecycle rules on this prefix are the backstop.
+    }
+  }
+}
+
 export async function getReplayVideoSignedUrl(id: string, filename: string): Promise<string | null> {
   const r2 = getClient();
   if (!r2) return null;
@@ -637,6 +713,7 @@ function assertReplayCacheKey(storageKey: string): void {
 // to replay-cache/ in the private bucket only. A new top-level prefix is
 // invisible here until it is listed as a root.
 const SKINS_PREFIX = "skins/";
+const BUG_REPORTS_PREFIX = "bug-reports/";
 
 type AdminBucketDef = {
   id: R2AdminBucketId;
@@ -660,6 +737,11 @@ const ADMIN_BUCKETS: AdminBucketDef[] = [
         label: "skins",
         deleteWarning: "Skin files are indexed by the live backend database; deleting them here strands the skin page. Delete the skin from its own page instead, and keep this for orphan cleanup.",
         folderLabelSuffix: ".osk",
+      },
+      {
+        prefix: BUG_REPORTS_PREFIX,
+        label: "bug reports",
+        deleteWarning: "Screenshots attached to a bug report. Deleting one leaves the report pointing at nothing; delete the report from /admin/bug-reports instead, which removes both.",
       },
     ],
     getClient,

@@ -629,6 +629,7 @@ function ChangelogFooterLink() {
 
 function RootLayout() {
   const { auth: rawAuth, initialCountry, backendStatus, countryFeatures, locale } = Route.useRouteContext();
+  const currentPath = useRouterState({ select: (state) => state.location.pathname });
   const auth = normalizeAuth(rawAuth);
   seedClientRootSlowContext({ auth, backendStatus, countryFeatures });
   seedCountryTierCache(countryFeatures?.countries);
@@ -667,6 +668,14 @@ function RootLayout() {
             <span>·</span>
             <Link to="/terms" className="hover:text-osu-pink-light/60 transition-colors">
               <Trans>terms</Trans>
+            </Link>
+            <span>·</span>
+            <Link
+              to="/report"
+              search={{ from: currentPath === "/report" ? undefined : currentPath }}
+              className="hover:text-osu-pink-light/60 transition-colors"
+            >
+              <Trans>report a bug</Trans>
             </Link>
             <span>·</span>
             <ChangelogFooterLink />

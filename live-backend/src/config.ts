@@ -75,6 +75,7 @@ export interface Config {
   replayVideoRatePerMinute: number;
   skinUploadRatePerMinute: number;
   translationReportRatePerHour: number;
+  bugReportRatePerHour: number;
   bridgeRatePerMinute: number;
   osuApiTargetPerMinute: number;
   osuApiHardPerMinute: number;
@@ -176,6 +177,10 @@ export interface Config {
   discordBotToken?: string;
   discordDevGuildId?: string;
   discordSiteOrigin: string;
+  // Channel the bot posts new bug reports into. Not a subscribable feed: a
+  // report can quote whoever filed it, so it goes to one channel the owner
+  // picked, never fanned out to community servers. Unset means no ping.
+  discordBugReportChannelId?: string;
   // How recently a map must have been ranked to qualify for a farm-map alert,
   // and how much confirmed PP-gain activity must appear before it fires.
   discordNewMapWindowDays: number;
@@ -353,6 +358,10 @@ export function readConfig(): Config {
     // multi-keymode upload with headroom; uploads are ticket-gated anyway.
     skinUploadRatePerMinute: readInt("SKIN_UPLOAD_RATE_PER_MINUTE", 40),
     translationReportRatePerHour: readInt("TRANSLATION_REPORT_RATE_PER_HOUR", 10),
+    // A report plus up to three screenshot attachments is four requests, and
+    // the screenshots go through the frontend rather than here, so the hourly
+    // budget only has to cover honest re-tries.
+    bugReportRatePerHour: readInt("BUG_REPORT_RATE_PER_HOUR", 5),
     bridgeRatePerMinute: readInt("BRIDGE_RATE_PER_MINUTE", 6000),
     osuApiTargetPerMinute: readInt("OSU_API_TARGET_PER_MINUTE", 45),
     osuApiHardPerMinute: readInt("OSU_API_HARD_PER_MINUTE", 60),
@@ -431,6 +440,7 @@ export function readConfig(): Config {
     discordBotToken: process.env.DISCORD_BOT_TOKEN || undefined,
     discordDevGuildId: process.env.DISCORD_DEV_GUILD_ID || undefined,
     discordSiteOrigin: (process.env.DISCORD_SITE_ORIGIN || "https://mania-tracker.com").replace(/\/+$/, ""),
+    discordBugReportChannelId: process.env.DISCORD_BUG_REPORT_CHANNEL_ID || undefined,
     discordNewMapWindowDays: readInt("DISCORD_NEW_MAP_WINDOW_DAYS", 14),
     discordNewFarmMapSignalWindowHours: readInt("DISCORD_NEW_FARM_MAP_SIGNAL_WINDOW_HOURS", 48),
     discordNewFarmMapMinUsers: readInt("DISCORD_NEW_FARM_MAP_MIN_USERS", 3),

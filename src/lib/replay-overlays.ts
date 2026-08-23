@@ -7,14 +7,14 @@ export const REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT = "mania-hub:replay-overlay-se
 export const REPLAY_MISS_THUMB_HAND_STORAGE_KEY = "mania-hub-replay-miss-thumb-hand";
 export const REPLAY_MISS_THUMB_HAND_CHANGE_EVENT = "mania-hub:replay-miss-thumb-hand-change";
 
-// Odd keymodes have a middle lane that one thumb covers, so the L/R miss split
-// depends on which thumb the player uses there. Right is the common setup and
-// stays the default; lefties flip it from the overlay's right-click menu.
+// Odd keymodes have a middle lane that one thumb covers, so per-hand stats
+// depend on which thumb the player uses there. Right is the common setup and
+// stays the default; lefties flip it from either hand overlay's right-click menu.
 export type ReplayThumbHand = "left" | "right";
 
 export const DEFAULT_REPLAY_MISS_THUMB_HAND: ReplayThumbHand = "right";
 
-export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "pp", "judgements", "progress", "leaderboard"] as const;
+export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "pp", "judgements", "progress", "leaderboard"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
@@ -24,17 +24,41 @@ export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, MessageDescriptor> =
   kps: msg`KPS counter`,
   misses: msg`L/R miss counter`,
   accuracy: msg`Accuracy`,
+  handAccuracy: msg`Per-hand accuracy`,
   pp: msg`PP counter`,
   judgements: msg`Judgements`,
   progress: msg`Progress pie`,
   leaderboard: msg`Leaderboard`,
 };
 
+// Per-hand accuracy is the one overlay with more than one worthwhile shape,
+// so it carries a style on its placement, picked from its right-click menu.
+export const REPLAY_HAND_ACCURACY_STYLES = ["meters", "plain", "rings", "balance"] as const;
+
+export type ReplayHandAccuracyStyle = typeof REPLAY_HAND_ACCURACY_STYLES[number];
+
+export const DEFAULT_REPLAY_HAND_ACCURACY_STYLE: ReplayHandAccuracyStyle = "meters";
+
+export const REPLAY_HAND_ACCURACY_STYLE_LABELS: Record<ReplayHandAccuracyStyle, MessageDescriptor> = {
+  meters: msg`Meters`,
+  plain: msg`Numbers only`,
+  rings: msg`Rings`,
+  balance: msg`Balance bar`,
+};
+
+export function normalizeReplayHandAccuracyStyle(value: unknown): ReplayHandAccuracyStyle {
+  return REPLAY_HAND_ACCURACY_STYLES.includes(value as ReplayHandAccuracyStyle)
+    ? value as ReplayHandAccuracyStyle
+    : DEFAULT_REPLAY_HAND_ACCURACY_STYLE;
+}
+
 export interface ReplayOverlayPlacement {
   enabled: boolean;
   x: number;
   y: number;
   scale: number;
+  /** Only meaningful on the per-hand accuracy overlay. */
+  style?: ReplayHandAccuracyStyle;
 }
 
 export type ReplayOverlaySettings = Record<ReplayOverlayId, ReplayOverlayPlacement>;
@@ -50,6 +74,7 @@ export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
   accuracy: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
+  handAccuracy: { enabled: false, x: 0.03, y: 0.16, scale: 1, style: DEFAULT_REPLAY_HAND_ACCURACY_STYLE },
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.92, y: 0.2, scale: 1.5 },
   // Below the accuracy readout: the detached pie must not land on top of
@@ -76,6 +101,7 @@ const SCORE_BLOCK_HUD_DEFAULTS: ReplayOverlaySettings = {
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
   accuracy: { enabled: false, x: 0.74, y: 0.02, scale: 1 },
+  handAccuracy: { enabled: false, x: 0.03, y: 0.16, scale: 1 },
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.92, y: 0.2, scale: 1.25 },
   progress: { enabled: false, x: 0.03, y: 0.03, scale: 1 },
@@ -89,6 +115,7 @@ const PRE_INGAME_HUD_DEFAULTS: ReplayOverlaySettings = {
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
   accuracy: { enabled: true, x: 0.74, y: 0.02, scale: 1 },
+  handAccuracy: { enabled: false, x: 0.03, y: 0.16, scale: 1 },
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1.25 },
   progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
@@ -104,6 +131,7 @@ const OVERLAPPING_LEFT_CLUSTER_DEFAULTS: ReplayOverlaySettings = {
   kps: { enabled: true, x: 0.03, y: 0.68, scale: 0.82 },
   misses: { enabled: true, x: 0.05, y: 0.77, scale: 0.82 },
   accuracy: { enabled: true, x: 0.74, y: 0.02, scale: 1 },
+  handAccuracy: { enabled: false, x: 0.03, y: 0.16, scale: 1 },
   // "pp" postdates these legacy layouts; matching the current default makes
   // the migration a no-op for it.
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
@@ -117,6 +145,7 @@ const LEGACY_PLAYFIELD_OVERLAY_DEFAULTS: ReplayOverlaySettings = {
   kps: { enabled: true, x: 0.14, y: 0.74, scale: 1 },
   misses: { enabled: true, x: 0.22, y: 0.84, scale: 1 },
   accuracy: { enabled: true, x: 0.68, y: 0.02, scale: 1 },
+  handAccuracy: { enabled: false, x: 0.03, y: 0.16, scale: 1 },
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.68, y: 0.07, scale: 1 },
   progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
@@ -154,13 +183,17 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
     : {};
   return REPLAY_OVERLAY_IDS.reduce((settings, id) => {
     const placement = normalizePlacement(raw[id], DEFAULT_REPLAY_OVERLAY_SETTINGS[id]);
+    if (id === "handAccuracy") {
+      const rawStyle = raw[id] && typeof raw[id] === "object" ? (raw[id] as { style?: unknown }).style : undefined;
+      placement.style = normalizeReplayHandAccuracyStyle(rawStyle);
+    }
     settings[id] = placementMatches(placement, LEGACY_PLAYFIELD_OVERLAY_DEFAULTS[id])
       || placementMatches(placement, OVERLAPPING_LEFT_CLUSTER_DEFAULTS[id])
       || placementMatches(placement, PRE_INGAME_HUD_DEFAULTS[id])
       || placementMatches(placement, SCORE_BLOCK_HUD_DEFAULTS[id])
       || (id === "misses" && placementMatches(placement, COMPACT_MISS_OVERLAY_DEFAULT))
       || (id === "accuracy" && PREVIOUS_ACCURACY_OVERLAY_DEFAULTS.some((previous) => placementMatches(placement, previous)))
-      ? DEFAULT_REPLAY_OVERLAY_SETTINGS[id]
+      ? { ...DEFAULT_REPLAY_OVERLAY_SETTINGS[id], ...(placement.style ? { style: placement.style } : {}) }
       : placement;
     return settings;
   }, {} as ReplayOverlaySettings);

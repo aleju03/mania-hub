@@ -27,6 +27,7 @@ export const SALVAGEABLE_ROUTES = [
   "privacy",
   "rankings",
   "replay",
+  "report",
   "settings",
   "skins",
   "snipes",

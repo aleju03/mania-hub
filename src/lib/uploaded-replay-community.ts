@@ -10,7 +10,8 @@ import { listRecentUploadedReplays } from "./uploaded-replay-store";
 // at /replay?uploadId=<id> - so the list only surfaces what the share links
 // expose, it grants nothing new. The uploader's name comes from the owner
 // index and is deliberately public here: the card names the player in the
-// replay, and without the uploader beside it the two read as the same person.
+// replay, and without the uploader beside it viewers would have to assume the
+// two are always the same person.
 
 export type CommunityUploadEntry = UploadedReplayDescription & {
   uploadedAt: number;

@@ -8,7 +8,8 @@ import { createManiaScoreSimulator, formatLazerScore, formatStableScore, getScor
 import type { ManiaScoreSimulator } from "../../lib/mania-score-simulation";
 import { calculateManiaStarRatingTimeline } from "../../lib/mania-star-rating";
 import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
+import { getReplayHandForColumn } from "../../lib/replay-hand-stats";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayHandAccuracyStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings, ReplayThumbHand } from "../../lib/replay-overlays";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
 import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, getReplaySkinStagePosition, normalizeReplaySkinSettings } from "../../lib/replay-skin";
@@ -63,6 +64,10 @@ const JUDGMENT_COLORS: Record<number, string> = {
   5: "#cc8800",
   6: "#ff4444",
 };
+
+// Both hand overlays (L/R misses, per-hand accuracy) draw from one colour
+// pair so the same hand reads the same way across them.
+const HAND_COLORS = { left: "#5a8fff", right: "#de31ae" } as const;
 
 const JUDGMENT_LABELS: Record<number, string> = {
   1: "MAX", 2: "300", 3: "200", 4: "100", 5: "50", 6: "MISS",
@@ -128,6 +133,14 @@ function darkenModBadgeColor(hex: string): string {
     darkenedModColorCache.set(hex, darkened);
   }
   return darkened;
+}
+
+// Mania accuracies bunch up in the top few percent, so a linear meter would
+// pin both hands at the far end of the track. This curve spends most of the
+// track between 95% and 100% and still moves once a play falls apart.
+function handAccuracyMeterFill(accuracy: number): number {
+  const normalized = Math.max(0, Math.min(1, accuracy / 100));
+  return normalized ** 12;
 }
 
 const HOLD_VISUAL_GRACE_MS = 60;
@@ -367,7 +380,7 @@ interface RendererOptions {
   showHealthBar?: boolean;
   skinSettings?: ReplaySkinSettings;
   overlaySettings?: ReplayOverlaySettings;
-  // Which hand owns the middle lane of an odd keymode in the L/R miss split.
+  // Which hand owns the middle lane of an odd keymode in per-hand stats.
   missThumbHand?: ReplayThumbHand;
   onOverlaySettingsChange?: (settings: ReplayOverlaySettings) => void;
   onContextLost?: (wasPlaying: boolean) => void;
@@ -467,7 +480,6 @@ function readLnTailArtTop(src: string): void {
   image.src = src;
 }
 
-type Hand = "left" | "right" | "center";
 type ReplayComboEvent = { kind: "break" | "hit"; time: number };
 type ReplayOverlayHitbox = { id: ReplayOverlayId; x: number; y: number; width: number; height: number };
 type ReplayOverlayResizeDirection = "n" | "e" | "s" | "w" | "ne" | "nw" | "se" | "sw";
@@ -742,6 +754,8 @@ export class ManiaReplayRenderer {
   private ppModMultiplier = 1;
   private leftHandMisses = 0;
   private rightHandMisses = 0;
+  private leftHandJudgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
+  private rightHandJudgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
   private missThumbHand: ReplayThumbHand = DEFAULT_REPLAY_MISS_THUMB_HAND;
   private recentHitOffsets: number[] = [];
   private recentHitTimes: number[] = [];
@@ -779,6 +793,12 @@ export class ManiaReplayRenderer {
   private hudCachedJudgmentCounts: string[] = ["0", "0", "0", "0", "0", "0", "0"];
   private hudCachedLeftMisses = "0";
   private hudCachedRightMisses = "0";
+  // Digits only: the per-hand overlay draws the "%" as its own smaller glyph,
+  // and the meter needs the number rather than the formatted string.
+  private hudCachedLeftHandAccuracy = "100.00";
+  private hudCachedRightHandAccuracy = "100.00";
+  private hudCachedLeftHandAccuracyValue = 100;
+  private hudCachedRightHandAccuracyValue = 100;
   private hudCachedKeyKps: string[] = [];
   private hudCachedTotalKps = "0";
   private hudCachedTotalKpsValue = 0;
@@ -1199,6 +1219,8 @@ export class ManiaReplayRenderer {
     this.suppressOvertakeFlash = true;
     this.leftHandMisses = 0;
     this.rightHandMisses = 0;
+    this.leftHandJudgmentCounts = [0, 0, 0, 0, 0, 0, 0];
+    this.rightHandJudgmentCounts = [0, 0, 0, 0, 0, 0, 0];
     this.recentHitOffsets = [];
     this.recentHitTimes = [];
     this.hitErrorAvgDisplayed = null;
@@ -1304,6 +1326,11 @@ export class ManiaReplayRenderer {
       if (event.judgment > 0) {
         this.judgmentCounts[event.judgment]++;
         this.scoreSimulator?.applyJudgment(event.judgment);
+        const hand = getReplayHandForColumn(event.column, this.keyCount, this.missThumbHand);
+        if (hand === "left") this.leftHandJudgmentCounts[event.judgment]++;
+        if (hand === "right") this.rightHandJudgmentCounts[event.judgment]++;
+        if (event.judgment === 6 && hand === "left") this.leftHandMisses++;
+        if (event.judgment === 6 && hand === "right") this.rightHandMisses++;
       }
 
       if (event.judgment <= 5) {
@@ -1323,10 +1350,6 @@ export class ManiaReplayRenderer {
           this.urSum -= removed;
           this.urSumSq -= removed * removed;
         }
-      } else {
-        const hand = this.getHandForColumn(event.column);
-        if (hand === "left") this.leftHandMisses++;
-        if (hand === "right") this.rightHandMisses++;
       }
 
       this.lastJudgment = event.judgment;
@@ -1461,6 +1484,16 @@ export class ManiaReplayRenderer {
     }
     this.hudCachedLeftMisses = String(this.leftHandMisses);
     this.hudCachedRightMisses = String(this.rightHandMisses);
+    this.hudCachedLeftHandAccuracyValue = calculateReplayAccuracy(
+      this.leftHandJudgmentCounts,
+      this.ruleset.accuracyMode,
+    );
+    this.hudCachedRightHandAccuracyValue = calculateReplayAccuracy(
+      this.rightHandJudgmentCounts,
+      this.ruleset.accuracyMode,
+    );
+    this.hudCachedLeftHandAccuracy = this.hudCachedLeftHandAccuracyValue.toFixed(2);
+    this.hudCachedRightHandAccuracy = this.hudCachedRightHandAccuracyValue.toFixed(2);
     let totalKps = 0;
     for (let col = 0; col < this.keyCount; col++) {
       const keyKps = this.getKeyKps(col, this.currentTime);
@@ -1496,39 +1529,31 @@ export class ManiaReplayRenderer {
     }
   }
 
-  private getHandForColumn(column: number): Hand {
-    if (column < 0 || column >= this.keyCount) return "center";
-    // Odd keymodes leave a middle lane that a thumb covers; it belongs to
-    // whichever hand that thumb is on. Even keymodes split down the middle and
-    // have no such lane.
-    const leftCount = this.keyCount % 2 === 1 && this.missThumbHand === "left"
-      ? Math.ceil(this.keyCount / 2)
-      : Math.floor(this.keyCount / 2);
-    if (column < leftCount) return "left";
-    return "right";
-  }
-
-  // Which thumb plays the middle lane of an odd keymode. Only the L/R miss
-  // split reads it, so switching re-tallies the misses seen so far instead of
-  // replaying the whole run's stats.
+  // Which thumb plays the middle lane of an odd keymode. The L/R miss and
+  // per-hand accuracy overlays read it, so switching only re-tallies the
+  // hand-local stats seen so far instead of replaying the whole run's stats.
   setMissThumbHand(hand: ReplayThumbHand) {
     const normalized = normalizeReplayMissThumbHand(hand);
     if (this.missThumbHand === normalized) return;
     this.missThumbHand = normalized;
-    this.recomputeHandMisses();
+    this.recomputeHandStats();
     this.updateHudSnapshotIfNeeded(true);
     if (!this._isPlaying) this.render();
   }
 
-  private recomputeHandMisses() {
+  private recomputeHandStats() {
     this.leftHandMisses = 0;
     this.rightHandMisses = 0;
+    this.leftHandJudgmentCounts = [0, 0, 0, 0, 0, 0, 0];
+    this.rightHandJudgmentCounts = [0, 0, 0, 0, 0, 0, 0];
     for (let i = 0; i < this.statsScanIndex; i++) {
       const event = this.judgmentEvents[i];
-      if (event.judgment == null || event.judgment <= 5) continue;
-      const hand = this.getHandForColumn(event.column);
-      if (hand === "left") this.leftHandMisses++;
-      if (hand === "right") this.rightHandMisses++;
+      if (event.judgment == null || event.judgment <= 0) continue;
+      const hand = getReplayHandForColumn(event.column, this.keyCount, this.missThumbHand);
+      if (hand === "left") this.leftHandJudgmentCounts[event.judgment]++;
+      if (hand === "right") this.rightHandJudgmentCounts[event.judgment]++;
+      if (event.judgment === 6 && hand === "left") this.leftHandMisses++;
+      if (event.judgment === 6 && hand === "right") this.rightHandMisses++;
     }
   }
 
@@ -4182,8 +4207,8 @@ export class ManiaReplayRenderer {
     if (!frame) return;
 
     [
-      { label: "L MISS", value: this.hudCachedLeftMisses, color: "#5a8fff" },
-      { label: "R MISS", value: this.hudCachedRightMisses, color: "#de31ae" },
+      { label: "L MISS", value: this.hudCachedLeftMisses, color: HAND_COLORS.left },
+      { label: "R MISS", value: this.hudCachedRightMisses, color: HAND_COLORS.right },
     ].forEach((item, index) => {
       const x = frame.x + index * 68 * scale;
       this.fillRect(x, frame.y, 60 * scale, height, "#0a0a12", 0.78);
@@ -4191,6 +4216,273 @@ export class ManiaReplayRenderer {
       this.addText(item.label, x + 9 * scale, frame.y + 5 * scale, { fontSize: 9 * scale, fill: "#ffffff", alpha: 0.58, fontWeight: "700" });
       this.addText(item.value, x + 9 * scale, frame.y + 28 * scale, { fontSize: 16 * scale, fill: "#ffffff", alpha: 0.95, fontWeight: "700", anchorY: 1 });
     });
+  }
+
+  private getHandAccuracyRows() {
+    return [
+      {
+        label: "L",
+        color: HAND_COLORS.left,
+        text: this.hudCachedLeftHandAccuracy,
+        value: this.hudCachedLeftHandAccuracyValue,
+      },
+      {
+        label: "R",
+        color: HAND_COLORS.right,
+        text: this.hudCachedRightHandAccuracy,
+        value: this.hudCachedRightHandAccuracyValue,
+      },
+    ];
+  }
+
+  private renderHandAccuracyOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "handAccuracy");
+    switch (normalizeReplayHandAccuracyStyle(this.overlaySettings.handAccuracy.style)) {
+      case "plain":
+        this.renderHandAccuracyPlain(layout, scale);
+        return;
+      case "rings":
+        this.renderHandAccuracyRings(layout, scale);
+        return;
+      case "balance":
+        this.renderHandAccuracyBalance(layout, scale);
+        return;
+      default:
+        this.renderHandAccuracyMeters(layout, scale);
+    }
+  }
+
+  // One row per hand, each number underlined by its own meter. Reads like a
+  // scoreboard and stacks under the accuracy readout without fighting it.
+  private renderHandAccuracyMeters(layout: Layout, scale: number) {
+    const valueFontSize = 16 * scale;
+    const unitFontSize = 9.5 * scale;
+    const labelFontSize = 9 * scale;
+    const unitGap = 1.5 * scale;
+    const labelSpan = 12 * scale;
+    const rowPitch = 24 * scale;
+    const trackHeight = Math.max(2, 3 * scale);
+    // Sized off the widest reading rather than the current one, so the box
+    // (and the drag hitbox with it) holds still while the numbers move.
+    const width = Math.ceil(
+      labelSpan
+        + this.measureTextWidth("100.00", valueFontSize, "700")
+        + unitGap
+        + this.measureTextWidth("%", unitFontSize, "700"),
+    );
+    const height = rowPitch + 20 * scale + trackHeight;
+    const frame = this.getOverlayFrame(layout, "handAccuracy", width, height);
+    if (!frame) return;
+
+    this.getHandAccuracyRows().forEach((row, index) => {
+      const top = frame.y + index * rowPitch;
+      const baseline = top + 17 * scale;
+      const trackY = top + 20 * scale;
+      this.addText(row.label, frame.x, baseline, {
+        fontSize: labelFontSize,
+        fill: row.color,
+        alpha: 0.95,
+        fontWeight: "700",
+        anchorY: 1,
+      });
+      this.addText(row.text, frame.x + labelSpan, baseline, {
+        fontSize: valueFontSize,
+        fill: "#ffffff",
+        alpha: 0.95,
+        fontWeight: "700",
+        tabularNums: true,
+        anchorY: 1,
+      });
+      this.addText(
+        "%",
+        frame.x + labelSpan + this.measureTextWidth(row.text, valueFontSize, "700") + unitGap,
+        baseline,
+        { fontSize: unitFontSize, fill: "#ffffff", alpha: 0.5, fontWeight: "700", anchorY: 1 },
+      );
+      this.fillRect(frame.x, trackY, width, trackHeight, "#ffffff", 0.12);
+      const fillWidth = width * handAccuracyMeterFill(row.value);
+      if (fillWidth > 0.5) this.fillRect(frame.x, trackY, fillWidth, trackHeight, row.color, 0.95);
+    });
+  }
+
+  // No meter at all: the two numbers, and the gap spelled out once on the
+  // hand that is behind. The most restrained of the four.
+  private renderHandAccuracyPlain(layout: Layout, scale: number) {
+    const valueFontSize = 17 * scale;
+    const unitFontSize = 10 * scale;
+    const labelFontSize = 9 * scale;
+    const unitGap = 1.5 * scale;
+    const labelSpan = 13 * scale;
+    const rowPitch = 21 * scale;
+    const deltaFontSize = 10 * scale;
+    const valueSpan = this.measureTextWidth("100.00", valueFontSize, "700")
+      + unitGap
+      + this.measureTextWidth("%", unitFontSize, "700");
+    const deltaX = labelSpan + valueSpan + 8 * scale;
+    const width = Math.ceil(deltaX + this.measureTextWidth("-00.00", deltaFontSize, "700"));
+    const height = rowPitch + 17 * scale;
+    const frame = this.getOverlayFrame(layout, "handAccuracy", width, height);
+    if (!frame) return;
+
+    const rows = this.getHandAccuracyRows();
+    const gap = rows[0].value - rows[1].value;
+    rows.forEach((row, index) => {
+      const baseline = frame.y + index * rowPitch + 17 * scale;
+      this.addText(row.label, frame.x, baseline, {
+        fontSize: labelFontSize,
+        fill: row.color,
+        alpha: 0.95,
+        fontWeight: "700",
+        anchorY: 1,
+      });
+      this.addText(row.text, frame.x + labelSpan, baseline, {
+        fontSize: valueFontSize,
+        fill: "#ffffff",
+        alpha: 0.95,
+        fontWeight: "700",
+        tabularNums: true,
+        anchorY: 1,
+      });
+      this.addText(
+        "%",
+        frame.x + labelSpan + this.measureTextWidth(row.text, valueFontSize, "700") + unitGap,
+        baseline,
+        { fontSize: unitFontSize, fill: "#ffffff", alpha: 0.5, fontWeight: "700", anchorY: 1 },
+      );
+      const behind = index === 0 ? gap < 0 : gap > 0;
+      if (!behind || Math.abs(gap) < 0.005) return;
+      this.addText(`-${Math.abs(gap).toFixed(2)}`, frame.x + deltaX, baseline, {
+        fontSize: deltaFontSize,
+        fill: row.color,
+        alpha: 0.85,
+        fontWeight: "700",
+        tabularNums: true,
+        anchorY: 1,
+      });
+    });
+  }
+
+  // Two sweeps, like the progress pie the HUD already uses, with the hand's
+  // letter in the middle and its number underneath.
+  private renderHandAccuracyRings(layout: Layout, scale: number) {
+    const radius = 15 * scale;
+    const strokeWidth = Math.max(1.6, 3 * scale);
+    const cellWidth = radius * 2 + 14 * scale;
+    const valueFontSize = 12 * scale;
+    const unitFontSize = 8 * scale;
+    const width = Math.ceil(cellWidth * 2);
+    const height = Math.ceil(radius * 2 + 18 * scale);
+    const frame = this.getOverlayFrame(layout, "handAccuracy", width, height);
+    if (!frame) return;
+
+    this.getHandAccuracyRows().forEach((row, index) => {
+      const cx = frame.x + cellWidth * index + cellWidth / 2;
+      const cy = frame.y + radius + 1 * scale;
+      this.strokeCircle(cx, cy, radius, "#ffffff", 0.14, strokeWidth);
+      this.strokeArc(cx, cy, radius, handAccuracyMeterFill(row.value), row.color, 0.95, strokeWidth);
+      this.addText(row.label, cx, cy, {
+        fontSize: 11 * scale,
+        fill: row.color,
+        alpha: 0.95,
+        fontWeight: "700",
+        anchorX: 0.5,
+        anchorY: 0.5,
+      });
+      const valueWidth = this.measureTextWidth(row.text, valueFontSize, "700");
+      const unitWidth = this.measureTextWidth("%", unitFontSize, "700");
+      const textX = cx - (valueWidth + unitWidth) / 2;
+      const baseline = frame.y + height;
+      this.addText(row.text, textX, baseline, {
+        fontSize: valueFontSize,
+        fill: "#ffffff",
+        alpha: 0.95,
+        fontWeight: "700",
+        tabularNums: true,
+        anchorY: 1,
+      });
+      this.addText("%", textX + valueWidth, baseline, {
+        fontSize: unitFontSize,
+        fill: "#ffffff",
+        alpha: 0.5,
+        fontWeight: "700",
+        anchorY: 1,
+      });
+    });
+  }
+
+  // One meter filling outward from a centre tick: the hand that is dropping
+  // acc is the short side, so the gap reads without any subtraction.
+  private renderHandAccuracyBalance(layout: Layout, scale: number) {
+    const valueFontSize = 17 * scale;
+    const unitFontSize = 10 * scale;
+    const labelFontSize = 9 * scale;
+    const unitGap = 1.5 * scale;
+    const unitWidth = this.measureTextWidth("%", unitFontSize, "700");
+    const blockWidth = this.measureTextWidth("100.00", valueFontSize, "700") + unitGap + unitWidth;
+    const width = Math.ceil(blockWidth * 2 + 22 * scale);
+    const height = 38 * scale;
+    const frame = this.getOverlayFrame(layout, "handAccuracy", width, height);
+    if (!frame) return;
+
+    const right = frame.x + width;
+    const baseline = frame.y + 27 * scale;
+    const trackY = frame.y + 32 * scale;
+    const trackHeight = Math.max(2, 3.5 * scale);
+    const centerX = frame.x + width / 2;
+    const centerGap = 2 * scale;
+    const armWidth = width / 2 - centerGap;
+    const [left, rightHand] = this.getHandAccuracyRows();
+
+    this.addText(left.label, frame.x, frame.y, {
+      fontSize: labelFontSize,
+      fill: left.color,
+      alpha: 0.95,
+      fontWeight: "700",
+    });
+    this.addText(rightHand.label, right, frame.y, {
+      fontSize: labelFontSize,
+      fill: rightHand.color,
+      alpha: 0.95,
+      fontWeight: "700",
+      anchorX: 1,
+    });
+
+    const valueStyle = {
+      fontSize: valueFontSize,
+      fill: "#ffffff",
+      alpha: 0.95,
+      fontWeight: "700" as const,
+      tabularNums: true,
+      anchorY: 1,
+    };
+    const unitStyle = {
+      fontSize: unitFontSize,
+      fill: "#ffffff",
+      alpha: 0.5,
+      fontWeight: "700" as const,
+      anchorY: 1,
+    };
+
+    this.addText(left.text, frame.x, baseline, valueStyle);
+    this.addText(
+      "%",
+      frame.x + this.measureTextWidth(left.text, valueFontSize, "700") + unitGap,
+      baseline,
+      unitStyle,
+    );
+    this.addText("%", right, baseline, { ...unitStyle, anchorX: 1 });
+    this.addText(rightHand.text, right - unitWidth - unitGap, baseline, { ...valueStyle, anchorX: 1 });
+
+    this.roundRect(frame.x, trackY, width, trackHeight, trackHeight / 2, "#ffffff", 0.12);
+    const leftWidth = armWidth * handAccuracyMeterFill(left.value);
+    if (leftWidth > 0.5) {
+      this.roundRect(centerX - centerGap - leftWidth, trackY, leftWidth, trackHeight, trackHeight / 2, left.color, 0.95);
+    }
+    const rightWidth = armWidth * handAccuracyMeterFill(rightHand.value);
+    if (rightWidth > 0.5) {
+      this.roundRect(centerX + centerGap, trackY, rightWidth, trackHeight, trackHeight / 2, rightHand.color, 0.95);
+    }
+    this.fillRect(centerX - Math.max(0.5, scale / 2), trackY - 2 * scale, Math.max(1, scale), trackHeight + 4 * scale, "#ffffff", 0.3);
   }
 
   private renderJudgementOverlay(layout: Layout) {
@@ -4335,6 +4627,7 @@ export class ManiaReplayRenderer {
       this.renderKpsOverlay(layout);
       this.renderMissOverlay(layout);
       this.renderAccuracyOverlay(layout);
+      this.renderHandAccuracyOverlay(layout);
       this.renderPpOverlay(layout);
       this.renderJudgementOverlay(layout);
       this.renderProgressOverlay(layout);
@@ -6306,6 +6599,26 @@ export class ManiaReplayRenderer {
   private strokeCircle(x: number, y: number, radius: number, color: string, alpha: number, width: number) {
     if (radius <= 0 || alpha <= 0) return;
     this.graphics.circle(x, y, radius).stroke({ color: hexToNumber(color), alpha, width });
+  }
+
+  private strokeArc(x: number, y: number, radius: number, progress: number, color: string, alpha: number, width: number) {
+    if (radius <= 0 || alpha <= 0 || progress <= 0) return;
+    if (progress >= 0.999) {
+      this.strokeCircle(x, y, radius, color, alpha, width);
+      return;
+    }
+    const startAngle = -Math.PI / 2;
+    const endAngle = startAngle + progress * Math.PI * 2;
+    const steps = Math.max(4, Math.ceil(progress * 48));
+    const path = new GraphicsPath();
+    for (let i = 0; i <= steps; i += 1) {
+      const angle = startAngle + (endAngle - startAngle) * (i / steps);
+      const px = x + Math.cos(angle) * radius;
+      const py = y + Math.sin(angle) * radius;
+      if (i === 0) path.moveTo(px, py);
+      else path.lineTo(px, py);
+    }
+    this.graphics.path(path).stroke({ color: hexToNumber(color), alpha, width, cap: "round" });
   }
 
   private strokeCircleWithTopFade(x: number, y: number, radius: number, color: string, alpha: number, width: number, fadeHeight: number, minAlpha = 0) {

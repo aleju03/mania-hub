@@ -27,6 +27,10 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-23", text: "New bug report page", to: "/report" },
+  { date: "2026-08-23", text: "New per-hand accuracy HUD for replays. Drag it anywhere and right-click it to choose meters, numbers, rings or a balance bar", to: "/replay" },
+  { date: "2026-08-23", text: "Uploaded replays now use the uploader's replay skin instead of sometimes picking the wrong player's skin", to: "/replay" },
+  { date: "2026-08-23", text: "Links to manually uploaded replays now show a full result-card preview in Discord and social apps", to: "/replay" },
   { date: "2026-08-21", text: "Skillset play lists on the skills tab now label each play's strongest skillset, so you can tell when an LN map is on your Chordjack list just for its overall" },
   { date: "2026-08-21", text: "Fixed long notes in replays and skin previews stacking repeated note ends. NoteBodyStyle support was missing", to: "/replay" },
   { date: "2026-08-21", text: "Dynamic renders now show the map's star rating next to your newest top play", to: "/dynamic-renders" },

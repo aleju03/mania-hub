@@ -9,6 +9,7 @@ import { checkRate, isDisallowedOrigin, sendCors, sendJson } from "./respond.js"
 import { handleAdminRoutes } from "./routes/admin.js";
 import { handleAnalysisRoutes } from "./routes/analysis.js";
 import { handleAnalyticsRoutes } from "./routes/analytics.js";
+import { handleBugReportRoutes } from "./routes/bug-reports.js";
 import { handleGoatPollRoutes } from "./routes/goat-poll.js";
 import { handleOsuProxyRoutes } from "./routes/osu-proxy.js";
 import { handlePacksRoutes } from "./routes/packs.js";
@@ -164,6 +165,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (await handleAnalyticsRoutes(req, res, ctx, url)) return true;
   if (await handleAdminRoutes(req, res, ctx, url, country)) return true;
   if (await handleUserDataRoutes(req, res, ctx, url)) return true;
+  if (await handleBugReportRoutes(req, res, ctx, url)) return true;
   if (await handleSignatureRoutes(req, res, ctx, url)) return true;
   if (await handleSnapshotRoutes(req, res, ctx, url, country)) return true;
   if (await handleAnalysisRoutes(req, res, ctx, url)) return true;

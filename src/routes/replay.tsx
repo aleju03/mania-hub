@@ -51,12 +51,15 @@ import {
   REPLAY_OVERLAY_LABELS,
   REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT,
   normalizeReplayOverlaySettings,
+  REPLAY_HAND_ACCURACY_STYLES,
+  REPLAY_HAND_ACCURACY_STYLE_LABELS,
+  normalizeReplayHandAccuracyStyle,
   readReplayMissThumbHand,
   readReplayOverlaySettings,
   writeReplayMissThumbHand,
   writeReplayOverlaySettings,
 } from "../lib/replay-overlays";
-import type { ReplayThumbHand } from "../lib/replay-overlays";
+import type { ReplayHandAccuracyStyle, ReplayThumbHand } from "../lib/replay-overlays";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { extractReplayScoreIdFromFilename, parseUploadedReplayBuffer, scoreMatchesUploadedReplay, type UploadedReplayParseResult } from "../lib/replay-upload";
 import { matchLocalBeatmapFile } from "../lib/replay-local-beatmap";
@@ -136,7 +139,7 @@ import type { ReplayOverlayId, ReplayOverlaySettings } from "../lib/replay-overl
 import type { BeatmapScoreLookupStatus, OsuMod, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
 import { getScoreExpectedCounts } from "../lib/replay-types";
-import { pageSeo, replayOgImagePath } from "../lib/seo";
+import { pageSeo, replayOgImagePath, uploadedReplayOgImagePath } from "../lib/seo";
 import { withSearchParams } from "../lib/country-search";
 
 interface ReplaySearch {
@@ -262,6 +265,7 @@ type ReplayUploadResponse = {
   id: string;
   url: string;
   storage?: "r2" | "local";
+  ownerUserId?: number | null;
   error?: string;
 };
 
@@ -621,7 +625,11 @@ export const Route = createFileRoute("/replay")({
         player: playerName || undefined,
       }),
       origin: match.context.origin,
-      image: hasSharedScore ? replayOgImagePath(scoreId) : undefined,
+      image: hasSharedScore
+        ? replayOgImagePath(scoreId)
+        : hasSharedUpload
+          ? uploadedReplayOgImagePath(uploadId)
+          : undefined,
       // Localized title, so the OG image key rides the English original.
       imageTitle: hasSharedUpload ? "Shared replay" : REPLAY_LANDING_OG_TITLE,
       social: true,
@@ -718,7 +726,6 @@ function ReplayPage() {
   const navigate = useNavigate();
   const router = useRouter();
   const canGoBack = useCanGoBack();
-  const pageAuth = useAuth();
   const rawSelectedCountry = useSelectedCountry();
   // Replay browse scopes osu! scoreboards by country; regions have no osu!
   // scoreboard scope, so they browse as Global here.
@@ -741,6 +748,10 @@ function ReplayPage() {
   const [uploadedBeatmapsetId, setUploadedBeatmapsetId] = useState<number | undefined>(undefined);
   const [uploadedReplayShareUrl, setUploadedReplayShareUrl] = useState<string | null>(null);
   const [loadedUploadId, setLoadedUploadId] = useState<string | null>(null);
+  // Uploads intentionally use the uploader's replay skin. The .osr can name a
+  // different player (and occasionally resolve to that player's API score),
+  // but uploading your own play is overwhelmingly the normal case.
+  const [uploadedReplayOwner, setUploadedReplayOwner] = useState<{ uploadId: string; userId: number } | null>(null);
   // Whether the viewer may take the loaded upload down. Only the owner index
   // knows whose upload it is, so this is asked once per loaded upload.
   const [canDeleteLoadedUpload, setCanDeleteLoadedUpload] = useState(false);
@@ -1507,6 +1518,9 @@ function ReplayPage() {
       const buffer = await file.arrayBuffer();
       await parseUploadedReplayBuffer(buffer.slice(0));
       const saved = await postUploadedReplay(buffer, file.name);
+      if (saved.ownerUserId != null) {
+        setUploadedReplayOwner({ uploadId: saved.id, userId: saved.ownerUserId });
+      }
       await openUploadedReplayBuffer(buffer.slice(0), { uploadId: saved.id, shareUrl: saved.url, source: "owner", filename: file.name });
       navigate({ to: "/replay", search: { uploadId: saved.id }, replace: true });
     } catch (e) {
@@ -1537,26 +1551,37 @@ function ReplayPage() {
     void loadSharedUploadedReplay(uploadId);
   }, [loadedUploadId, loadSharedUploadedReplay, pendingBeatmapUpload, replay, scoreId, uploadId]);
 
-  // Asked once per loaded upload, and never for a visitor who could not delete
-  // anything anyway.
-  const viewerCanOwnUploads = Boolean(pageAuth.viewer) || pageAuth.canUseAdminFeatures;
+  // Start this from the URL while the replay bytes and beatmap are still
+  // loading. Uploader attribution is public on upload cards, and resolving it
+  // early usually lets ReplayViewer hold its first paint for the uploader's
+  // skin just like it does for an ordinary osu! score.
+  const requestedUploadId = uploadId ?? loadedUploadId;
   useEffect(() => {
-    if (!loadedUploadId || !viewerCanOwnUploads) {
+    if (!requestedUploadId) {
       setCanDeleteLoadedUpload(false);
+      setUploadedReplayOwner(null);
       return;
     }
     let cancelled = false;
-    fetchUploadedReplayPermissions({ data: { id: loadedUploadId } })
+    fetchUploadedReplayPermissions({ data: { id: requestedUploadId } })
       .then((permissions) => {
-        if (!cancelled) setCanDeleteLoadedUpload(permissions.canDelete);
+        if (cancelled) return;
+        setCanDeleteLoadedUpload(permissions.canDelete);
+        setUploadedReplayOwner((current) => permissions.ownerUserId != null
+          ? { uploadId: requestedUploadId, userId: permissions.ownerUserId }
+          // A just-finished POST already gave us this trusted identity. Keep it
+          // if the best-effort owner-index write is briefly unavailable.
+          : current?.uploadId === requestedUploadId ? current : null);
       })
       .catch(() => {
-        if (!cancelled) setCanDeleteLoadedUpload(false);
+        if (cancelled) return;
+        setCanDeleteLoadedUpload(false);
+        setUploadedReplayOwner((current) => current?.uploadId === requestedUploadId ? current : null);
       });
     return () => {
       cancelled = true;
     };
-  }, [loadedUploadId, viewerCanOwnUploads]);
+  }, [requestedUploadId]);
 
   const handleDeleteLoadedUpload = useCallback(async () => {
     if (!loadedUploadId || deletingUpload) return;
@@ -1893,6 +1918,15 @@ function ReplayPage() {
     });
   }, [replay, loadedUploadId, uploadId, uploadedReplayShareUrl, scoreId]);
 
+  // For uploaded files, uploader identity wins even when the embedded score id
+  // happens to resolve to a different osu! player. Ordinary score replays keep
+  // using the player returned by the score API.
+  const replaySkinOwnerUserId = loadedUploadId != null
+    ? uploadedReplayOwner?.uploadId === loadedUploadId
+      ? uploadedReplayOwner.userId
+      : null
+    : playerProfile?.id ?? null;
+
   // Rendered twice: above the viewer for desktop, and inside the viewer's
   // scrolling area (below the sticky stage) for mobile. ReplayInfo's own
   // responsive variants make sure only one copy is ever visible.
@@ -1955,7 +1989,7 @@ function ReplayPage() {
               </motion.div>
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <ReplayViewer replay={replay} beatmap={beatmap} beatmapFileContent={beatmapFileContent} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} presenceKey={scoreId != null ? `score:${scoreId}` : uploadId ? `upload:${uploadId}` : null} ownerUserId={playerProfile?.id ?? null} shareUrl={replayShareUrl} onClear={handleClearReplay}>
+                <ReplayViewer replay={replay} beatmap={beatmap} beatmapFileContent={beatmapFileContent} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} presenceKey={scoreId != null ? `score:${scoreId}` : uploadId ? `upload:${uploadId}` : null} ownerUserId={replaySkinOwnerUserId} shareUrl={replayShareUrl} onClear={handleClearReplay}>
                   {/* Phones scroll the card inside a padded list; on desktop
                       the strip runs edge to edge, flush against the stage. */}
                   <div className="mx-auto w-full max-w-[1200px] px-3 sm:max-w-none sm:px-0">{replayInfoCard}</div>
@@ -2555,6 +2589,11 @@ function ReplayViewer({
     applyOverlaySettings({ ...current, [id]: { ...current[id], enabled } });
     setOverlayMenu(null);
   }, [applyOverlaySettings]);
+  const setHandAccuracyStyleFromMenu = useCallback((style: ReplayHandAccuracyStyle) => {
+    const current = overlaySettingsRef.current;
+    applyOverlaySettings({ ...current, handAccuracy: { ...current.handAccuracy, style } });
+    setOverlayMenu(null);
+  }, [applyOverlaySettings]);
   const hiddenOverlayIds = overlayMenu && !overlayMenu.targetId
     ? REPLAY_OVERLAY_IDS.filter((id) => !overlaySettings[id]?.enabled)
     : [];
@@ -2563,8 +2602,9 @@ function ReplayViewer({
   const overlayMenuTargetLabel = overlayMenu?.targetId
     ? i18n._(REPLAY_OVERLAY_LABELS[overlayMenu.targetId]).toLowerCase()
     : "";
+  const handAccuracyStyle = normalizeReplayHandAccuracyStyle(overlaySettings.handAccuracy?.style);
   // Only odd keymodes have a lane a thumb covers, so only they can move it
-  // between the two miss counters.
+  // between the two hand-stat columns.
   const thumbLaneAvailable = replay.keyCount % 2 === 1;
 
   useEffect(() => {
@@ -4814,7 +4854,27 @@ function ReplayViewer({
           >
             {overlayMenu.targetId ? (
               <>
-                {overlayMenu.targetId === "misses" && thumbLaneAvailable && (
+                {overlayMenu.targetId === "handAccuracy" && (
+                  <>
+                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Style</Trans></div>
+                    {REPLAY_HAND_ACCURACY_STYLES.map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => setHandAccuracyStyleFromMenu(style)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <Check
+                          className={`h-3.5 w-3.5 text-osu-pink ${handAccuracyStyle === style ? "" : "invisible"}`}
+                          aria-hidden="true"
+                        />
+                        {i18n._(REPLAY_HAND_ACCURACY_STYLE_LABELS[style])}
+                      </button>
+                    ))}
+                    <div className="my-1 h-px bg-white/10" />
+                  </>
+                )}
+                {(overlayMenu.targetId === "misses" || overlayMenu.targetId === "handAccuracy") && thumbLaneAvailable && (
                   <>
                     <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Middle lane thumb</Trans></div>
                     {(["left", "right"] as const).map((hand) => (
