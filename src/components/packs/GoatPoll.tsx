@@ -46,6 +46,13 @@ import { GoatPollVotersModal } from "./GoatPollVoters";
    remember to flip. */
 
 const REFRESH_MS = 20_000;
+/* Latched across mounts: the widget is conditionally rendered on /packs (it
+   leaves the tree for every pack reveal and streak run), and with the poll
+   retired each remount was re-asking the backend and collecting a fresh 404 —
+   hundreds an hour across open tabs. Once any mount hears "there is no poll",
+   no later mount asks again for the life of the page. A rerun ships with a
+   deploy, so the reload that clears this is one every viewer takes anyway. */
+let knownOff = false;
 // Nominating a banned or deleted account needs proof it existed, because osu!'s
 // search cannot return a restricted user and we would otherwise be taking the
 // nominator's word for a name nobody can look up.
@@ -378,8 +385,9 @@ export function GoatPoll() {
   const wide = useRailWidth();
   const [board, setBoard] = useState<GoatPollBoard | null>(null);
   /* Set once the backend answers "there is no poll" (retired, or unreleased and
-     this viewer is not an admin). Stops the refresh for the life of the mount. */
-  const [off, setOff] = useState(false);
+     this viewer is not an admin). Seeded from the module latch so a remount
+     does not re-ask a question this page already had answered. */
+  const [off, setOff] = useState(() => knownOff);
   const [votes, setVotes] = useState<Record<string, number>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -422,6 +430,7 @@ export function GoatPoll() {
         if (next === GOAT_POLL_OFF || (admin && next === null)) {
           // The admin path returns null for the same 404 (it cannot see one
           // either), and an admin refreshing the page is a cheap retry.
+          knownOff = true;
           setOff(true);
           return;
         }
@@ -491,10 +500,14 @@ export function GoatPoll() {
     };
   }, [visible, admin, off]);
 
+  /* The ballot waits for the board: until an answer proves a poll exists, this
+     call could only 404, and it used to do exactly that once per signed-in
+     mount for as long as the poll stayed retired. */
+  const hasBoard = board != null;
   useEffect(() => {
-    if (!auth.viewer) return;
+    if (!auth.viewer || !hasBoard) return;
     void fetchMyGoatPollVotes().then(setVotes).catch(() => {});
-  }, [auth.viewer?.id]);
+  }, [auth.viewer?.id, hasBoard]);
 
   /* How far this browser's clock is from the backend's, rounded to a second so
      the number is stable across refreshes and does not restart the pie's timer
