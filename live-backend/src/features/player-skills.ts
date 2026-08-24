@@ -93,6 +93,14 @@ const PATTERN_TAG_MIN_SCORE = 0.5;
 // so the veto costs genuine tech charts almost nothing, while unambiguous CJ
 // diffs (chordjack >= 0.8) carried a false tech tag 75-88% of the time.
 const TECH_TAG_CHORDJACK_VETO = 0.8;
+// The ln tag's score is driven by holdRatio pressure, so a rice or jack chart
+// with a token hold section clears PATTERN_TAG_MIN_SCORE while the analyzer
+// itself would never call the chart LN: of the 4K charts tagged ln at 0.5 in
+// the 2026-08 snapshot, 76% sit below the analyzer's own LN verdict. That
+// verdict is classification lnRatio >= 0.5 (chart-classifier routes to the LN
+// dan side at exactly that floor), so the "top LN plays" surface demands it:
+// a gamma stamina chart with a ln score of 0.56 must not headline an LN list.
+const LN_PATTERN_LN_RATIO_MIN = 0.5;
 // The calc's goal floor. A play whose goal input (wife estimate / accuracy)
 // sits at or below it cannot be rated honestly: clamping the goal up to 0.8
 // rates the play as if it were an 80% play, which on a hard enough chart
@@ -1445,7 +1453,7 @@ export async function getPlayerSkillPlays(
 
   const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row?.plays_json ?? ""), null);
   const patternId = axis.startsWith("pattern:") ? axis.slice("pattern:".length) : null;
-  const matches = (Array.isArray(stored?.plays) ? stored.plays : [])
+  const candidates = (Array.isArray(stored?.plays) ? stored.plays : [])
     .flatMap((play) => {
       if (!play || play.keyCount !== keyCount || !Number.isInteger(play.beatmapId) || play.beatmapId <= 0) return [];
       if (patternId && !Array.isArray(play.patterns)) return [];
@@ -1453,8 +1461,25 @@ export async function getPlayerSkillPlays(
       const rating = Number(play.values?.[patternId ? "Overall" : axis] ?? 0);
       if (!Number.isFinite(rating) || rating <= 0) return [];
       return [{ play, rating }];
+    });
+  // The ln tag alone over-admits (see LN_PATTERN_LN_RATIO_MIN), so the LN
+  // surface re-checks the chart's stored lnRatio before listing a play. A play
+  // whose chart analysis has gone missing cannot be verified as LN and is
+  // dropped rather than trusted.
+  let lnRatioByBeatmap: Map<number, number> | null = null;
+  if (patternId === "ln" && candidates.length > 0) {
+    lnRatioByBeatmap = await readChartLnRatios(
+      db,
+      [...new Set(candidates.map(({ play }) => play.beatmapId))],
+    );
+  }
+  const matches = (lnRatioByBeatmap
+    ? candidates.filter(({ play }) => {
+      const lnRatio = lnRatioByBeatmap.get(play.beatmapId);
+      return lnRatio != null && Number.isFinite(lnRatio) && lnRatio >= LN_PATTERN_LN_RATIO_MIN;
     })
-    .sort((left, right) =>
+    : candidates
+  ).sort((left, right) =>
       right.rating - left.rating
       || Number(right.play.pp ?? 0) - Number(left.play.pp ?? 0)
       || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
@@ -1544,6 +1569,26 @@ async function readPlayerSkillPlayMetadata(db: Db, beatmapIds: number[]): Promis
     });
   }
   return metadata;
+}
+
+/** Stored chart-analysis lnRatio per beatmap, for the LN plays surface's gate. */
+async function readChartLnRatios(db: Db, beatmapIds: number[]): Promise<Map<number, number>> {
+  const rows = await selectRowsByIntegerSet(
+    db,
+    `select beatmap_id, json_extract(classification_json, '$.lnRatio') as ln_ratio
+     from beatmap_chart_analysis
+     where status = 'ready' and classification_json is not null and beatmap_id in`,
+    beatmapIds,
+  );
+  const ratios = new Map<number, number>();
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    const lnRatio = Number(row.ln_ratio);
+    if (Number.isSafeInteger(beatmapId) && beatmapId > 0 && Number.isFinite(lnRatio)) {
+      ratios.set(beatmapId, lnRatio);
+    }
+  }
+  return ratios;
 }
 
 function isValidMode(mode: unknown): mode is PlayerSkillModeBreakdown {
@@ -1711,6 +1756,130 @@ async function enqueuePlayerSkillPoisonRecovery(queue: JobQueue, cursor: number)
   await queue.enqueue(
     PLAYER_SKILL_POISON_JOB,
     `${PLAYER_SKILL_POISON_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// One-shot sweep behind the MinaCalc skill-cap lift (40 -> 100, the
+// 2026-08-24 leoblack re-pin): the old engine clamped every per-skillset SSR
+// at exactly 40, so a stored play holding any skillset at 40 is the clamp
+// showing, not a rating. Below the clamp the patched engine is bit-identical,
+// which is why this is a targeted purge rather than a PLAYER_SKILLS_VERSION
+// bump: only pinned plays are stale. Same shape as the poison sweep above -
+// drop exactly the pinned plays, backdate computed_at past the ready TTL, and
+// the next profile view re-rates just those plays on the lifted engine (the
+// per-play reuse key carries no engine term, so they would otherwise be
+// copied forward on every recompute and never expire).
+export const PLAYER_SKILL_MSD_CAP_JOB = "recompute_player_skill_msd_cap_sweep";
+const PLAYER_SKILL_MSD_CAP_META_KEY = "player_skill_msd_cap_sweep_done:v1";
+const PLAYER_SKILL_MSD_CAP_CHUNK = 200;
+
+const SSR_CAP_PIN = 40;
+
+// Any of the eight stored skillset values sitting at exactly the old clamp.
+const PLAYER_SKILL_MSD_CAP_SIGNATURE_SQL = `exists (
+  select 1
+  from json_each(json_extract(plays_json, '$.plays')) as play,
+       json_each(json_extract(play.value, '$.values')) as skill
+  where skill.value = ${SSR_CAP_PIN}
+)`;
+
+export function isCapPinnedPlayValues(values: Record<string, number> | undefined | null): boolean {
+  if (!values || typeof values !== "object") return false;
+  return Object.values(values).some((value) => Number(value) === SSR_CAP_PIN);
+}
+
+export interface PlayerSkillMsdCapChunkResult {
+  nextCursor: number;
+  scanned: number;
+  cleaned: number[];
+  droppedPlays: number;
+  done: boolean;
+}
+
+export async function recomputePlayerSkillMsdCapChunk(
+  db: Db,
+  cursor: number,
+  limit = PLAYER_SKILL_MSD_CAP_CHUNK,
+): Promise<PlayerSkillMsdCapChunkResult> {
+  const rows = (await exec(
+    db,
+    `select user_id, analysis_version, plays_json from player_skill_ratings
+     where user_id > ? and ${PLAYER_SKILL_MSD_CAP_SIGNATURE_SQL}
+     order by user_id
+     limit ?`,
+    [Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const cleaned: number[] = [];
+  let droppedPlays = 0;
+  const staleComputedAt = new Date(Date.now() - READY_RECOMPUTE_TTL_MS - 60_000).toISOString();
+
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    nextCursor = Math.max(nextCursor, userId);
+    const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row.plays_json ?? ""), null);
+    const plays = Array.isArray(stored?.plays) ? stored.plays : [];
+    const kept = plays.filter((play) => !isCapPinnedPlayValues(play?.values));
+    const dropped = plays.length - kept.length;
+    // The SQL signature already selected this row, so a zero here means the
+    // JSON shape drifted from what the predicate matched; leave it alone
+    // rather than rewriting a row we did not understand.
+    if (dropped <= 0) continue;
+    droppedPlays += dropped;
+    cleaned.push(userId);
+    await exec(
+      db,
+      `update player_skill_ratings
+       set plays_json = json(?), computed_at = ?, updated_at = ?
+       where user_id = ? and analysis_version = ?`,
+      [json({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, Number(row.analysis_version)],
+    );
+  }
+
+  return { nextCursor, scanned: rows.length, cleaned, droppedPlays, done: rows.length < limit };
+}
+
+export async function ensurePlayerSkillMsdCapSweepSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [PLAYER_SKILL_MSD_CAP_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [PLAYER_SKILL_MSD_CAP_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueuePlayerSkillMsdCapSweep(queue, 0);
+}
+
+export async function runPlayerSkillMsdCapSweepJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputePlayerSkillMsdCapChunk(db, cursor);
+  if (result.droppedPlays > 0) {
+    logInfo("player_skill_msd_cap_stripped", { users: result.cleaned.length, plays: result.droppedPlays });
+  }
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [PLAYER_SKILL_MSD_CAP_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueuePlayerSkillMsdCapSweep(queue, result.nextCursor);
+}
+
+async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    PLAYER_SKILL_MSD_CAP_JOB,
+    `${PLAYER_SKILL_MSD_CAP_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );

@@ -384,6 +384,20 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     jobType: "recompute_sunny_repin_dt_sweep",
   }),
   chartAnalysisSweep({
+    id: "leoblack-repin-recompute",
+    label: "LeoBlack re-pin recompute sweep",
+    description: "Re-analyzes every ready chart after the 214aedd leoblack re-pin (Roxy high-difficulty scope + Azusa fusion, MinaCalc 40->100 skill-cap lift).",
+    doneKey: "leoblack_repin_recompute_done:v1",
+    jobType: "recompute_leoblack_repin_sweep",
+  }),
+  chartAnalysisSweep({
+    id: "leoblack-repin-dt-recompute",
+    label: "LeoBlack re-pin DT sweep",
+    description: "Redoes the 1.5x MinaCalc pass on DT rows with a skillset pinned at the old 40 cap and re-derives every stored 1.5x dan verdict, since the main re-pin sweep preserves the DT columns.",
+    doneKey: "leoblack_repin_dt_recompute_done:v1",
+    jobType: "recompute_leoblack_repin_dt_sweep",
+  }),
+  chartAnalysisSweep({
     id: "msd-poison-recovery",
     label: "MSD poisoning recovery sweep",
     description: "Re-analyzes rows whose stored MSD carries the all-skillsets-equal floor left by the 2026-08-14 corrupted wasm instance.",

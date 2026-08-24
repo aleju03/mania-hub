@@ -18,6 +18,8 @@ export interface LeoBlackReworkResult {
   numericDifficulty: number | null;
   numericDifficultyHint: string | null;
   mixedCompanellaPlan: { lnRatio: number; lnDifficulty: string } | null;
+  /** The sub-algorithm the Mixed routing actually selected (Sunny/Roxy/Azusa/Daniel/Companella). */
+  actualEstimatorAlgorithm?: string;
   /** Roxy/Azusa pre-calibration raw signal; absent when Sunny produced the result. */
   rawNumericDifficulty?: number | null;
   debug?: unknown;

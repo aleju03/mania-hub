@@ -405,7 +405,7 @@ export function detectLnVibro(map: ManiaBeatmap, rate = 1): boolean {
 // populations are far apart.
 const ROXY_RAW_FLOOR_PIN = -2.45;
 // "Reform 1 low" starts at 3.037 Sunny-star in the 4K RC table
-// (vendor/leoblack/estimator/intervals/4k-rc-reform.js): below 3.0 Sunny is
+// (vendor/leoblack/estimator/intervals/4k-rc.js): below 3.0 Sunny is
 // asserting sub-Reform-1 (Intro or off-scale) while the pinned meta claims
 // Reform 3+, a multi-dan disagreement only broken structural input produces.
 const SUNNY_LOW_END_MAX_STAR = 3.0;
@@ -414,6 +414,32 @@ function isRoxyFloorPinned(mixed: LeoBlackReworkResult): boolean {
   if (mixed.numericDifficultyHint !== "roxy-meta-ridge-v3") return false;
   const raw = Number(mixed.rawNumericDifficulty);
   return Number.isFinite(raw) && raw <= ROXY_RAW_FLOOR_PIN;
+}
+
+// Since the 214aedd re-pin Roxy is high-difficulty-only (final numeric under
+// 11 routes to Azusa), so the trivial-chart population the floor-pin guard
+// was built for now reaches the verdict through Azusa instead - and repeats
+// the same overestimation (measured on the guard's own synthetic ranked-Easy
+// shape: 2 nps singles came back "Reform 3 low", numeric 2.6, while Azusa's
+// own Sunny reference read 3.17, i.e. 0.24 star). The candidate signature is
+// that internal disagreement: an Azusa verdict claiming Reform 2+ while the
+// Sunny reference it blended sits below Reform 1 on Sunny's own scale. The
+// reference rides the result's debug block (estimateSunnyNumeric output), so
+// screening costs no extra engine pass; the reroute's independent Sunny run
+// stays the final authority.
+const AZUSA_SUSPECT_MIN_NUMERIC = 2;
+// SUNNY_LOW_END_MAX_STAR mapped through estimateSunnyNumeric's linear scale
+// (2.85 + 1.33 * star at star 3.0). The scale saturates the low end (a 0-star
+// chart still reads 2.85), which is exactly why Azusa's blend cannot pull a
+// trivial chart's verdict down far enough on its own.
+const AZUSA_SUNNY_REFERENCE_MAX_NUMERIC = 6.84;
+
+function isAzusaLowEndSuspect(mixed: LeoBlackReworkResult): boolean {
+  if (mixed.numericDifficultyHint !== "azusa-rc-v1") return false;
+  const numeric = Number(mixed.numericDifficulty);
+  if (!Number.isFinite(numeric) || numeric < AZUSA_SUSPECT_MIN_NUMERIC) return false;
+  const sunnyReference = Number((mixed.debug as { sunnyNumeric?: unknown } | undefined)?.sunnyNumeric);
+  return Number.isFinite(sunnyReference) && sunnyReference < AZUSA_SUNNY_REFERENCE_MAX_NUMERIC;
 }
 
 // The Sunny result to re-verdict `mixed` with, or null when the guard should
@@ -425,7 +451,7 @@ export function sunnyLowEndReroute(
   osuText: string,
   rate: number,
 ): Omit<LeoBlackReworkResult, "mixedCompanellaPlan"> | null {
-  if (!isRoxyFloorPinned(mixed)) return null;
+  if (!isRoxyFloorPinned(mixed) && !isAzusaLowEndSuspect(mixed)) return null;
   const sunny = runLeoBlackSunny(osuText, { speedRate: rate });
   return Number(sunny.star) < SUNNY_LOW_END_MAX_STAR ? sunny : null;
 }
@@ -480,7 +506,9 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
         numericDifficulty: null,
         numericDifficultyHint: null,
       };
-      warnings.push("Roxy raw difficulty pinned at its scale floor; using the Sunny low-end verdict.");
+      warnings.push(isRoxyFloorPinned(candidate)
+        ? "Roxy raw difficulty pinned at its scale floor; using the Sunny low-end verdict."
+        : "Azusa low-end verdict contradicts its own Sunny reference; using the Sunny low-end verdict.");
     } else {
       mixed = candidate;
     }

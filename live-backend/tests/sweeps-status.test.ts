@@ -69,6 +69,8 @@ describe("sweeps status registry", () => {
       "ln-source-recompute",
       "sunny-repin-recompute",
       "sunny-repin-dt-recompute",
+      "leoblack-repin-recompute",
+      "leoblack-repin-dt-recompute",
       "msd-poison-recovery",
       "inverse-cluster-bpm",
       "skill-baseline",

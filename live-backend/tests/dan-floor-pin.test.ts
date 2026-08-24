@@ -3,15 +3,18 @@ import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
 import { classifyChart, sunnyLowEndReroute } from "../src/dan/chart-classifier.js";
 import { runLeoBlackMixed } from "../src/dan/leoblack-estimator.js";
 
-// The Roxy floor-pin guard (chart-classifier.ts): Roxy's calibration corpus
-// bottoms out at the dan courses, so trivial charts with enough taps to clear
-// its note gate came back "Reform 4" (sub-1* ranked Easies were landing in the
-// 4-6 dan map collections). Charts whose raw signal is pinned at the -2.5
-// clamp re-route to the Sunny baseline - but only when Sunny independently
-// agrees the chart is sub-Reform-1, because Roxy's structural curve also
-// collapses on some genuinely hard charts that the meta model rescues.
+// The low-end verdict guard (chart-classifier.ts): the estimators' calibration
+// corpus bottoms out at the dan courses, so trivial charts with enough taps to
+// clear the note gates came back multi-dan (sub-1* ranked Easies were landing
+// in the dan map collections). Originally the leak came through Roxy ("Reform
+// 4" with the raw signal pinned at the -2.5 clamp); since the 214aedd re-pin
+// Roxy is high-difficulty-only and the same population routes through Azusa,
+// which repeats the miss ("Reform 3 low" on the trivial shape below). Both
+// candidate signatures re-route to the Sunny baseline - but only when an
+// independent Sunny run agrees the chart is sub-Reform-1, because the
+// structural signals also collapse on some genuinely hard charts.
 
-const PINNED_WARNING = /pinned at its scale floor/;
+const REROUTE_WARNING = /using the Sunny low-end verdict/;
 
 function columnX(column: number): number {
   return Math.floor(((column + 0.5) * 512) / 4);
@@ -60,36 +63,42 @@ const TINY_CHART = buildTaps(40, 500);
 // sub-Reform-1 agreement gate.
 const DENSE_CHART = buildTaps(2000, 75, 4);
 
-describe("roxy floor-pin guard", () => {
-  it("documents the pinned Roxy verdict it guards against", () => {
-    // The unguarded mixed estimator calls this 2 nps chart Reform 4 while its
-    // own raw signal sits at the clamp. If a vendor update changes this shape
-    // (hint string, clamp value), revisit isRoxyFloorPinned.
+describe("low-end verdict guard", () => {
+  it("documents the low-end Azusa verdict it guards against", () => {
+    // The unguarded mixed estimator routes this 2 nps chart to Azusa (Roxy is
+    // high-difficulty-only since 214aedd) and calls it Reform 2+, while
+    // Azusa's own Sunny reference reads sub-Reform-1. If a vendor update
+    // changes this shape (hint string, debug.sunnyNumeric, routing), revisit
+    // isAzusaLowEndSuspect / isRoxyFloorPinned.
     const mixed = runLeoBlackMixed(TRIVIAL_CHART);
-    expect(mixed.numericDifficultyHint).toBe("roxy-meta-ridge-v3");
-    expect(Number(mixed.rawNumericDifficulty)).toBeLessThanOrEqual(-2.45);
-    expect(mixed.estDiff).toMatch(/^Reform 4/);
+    expect(mixed.numericDifficultyHint).toBe("azusa-rc-v1");
+    expect(Number(mixed.numericDifficulty)).toBeGreaterThanOrEqual(2);
+    expect(mixed.estDiff).toMatch(/^Reform /);
+    // estimateSunnyNumeric's 2.85 + 1.33 * star scale: 6.84 is the 3.0-star
+    // sub-Reform-1 agreement gate (this chart reads ~3.17, i.e. ~0.24 star).
+    const sunnyReference = Number((mixed.debug as { sunnyNumeric?: unknown })?.sunnyNumeric);
+    expect(sunnyReference).toBeLessThan(6.84);
   });
 
-  it("re-routes pinned charts to the Sunny low-end verdict", () => {
+  it("re-routes trivial charts to the Sunny low-end verdict", () => {
     const classification = classifyChart(parseManiaBeatmap(TRIVIAL_CHART), TRIVIAL_CHART);
-    expect(classification.warnings.some((warning) => PINNED_WARNING.test(warning))).toBe(true);
+    expect(classification.warnings.some((warning) => REROUTE_WARNING.test(warning))).toBe(true);
     expect(classification.verdictText).toBe("< Intro 1 low");
     expect(classification.rc?.rawDan).toBeLessThan(0);
     expect(classification.sunnySr).not.toBeNull();
     expect(classification.sunnySr as number).toBeLessThan(1);
   });
 
-  it("leaves on-scale charts on the Roxy verdict", () => {
+  it("leaves on-scale charts on the mixed verdict", () => {
     const classification = classifyChart(parseManiaBeatmap(MID_CHART), MID_CHART);
-    expect(classification.warnings.some((warning) => PINNED_WARNING.test(warning))).toBe(false);
+    expect(classification.warnings.some((warning) => REROUTE_WARNING.test(warning))).toBe(false);
     expect(classification.verdictText).toMatch(/^Reform /);
     expect(classification.rc?.rawDan ?? 0).toBeGreaterThan(0);
   });
 
   it("keeps the existing Sunny fallback for charts under Roxy's note gate", () => {
     const classification = classifyChart(parseManiaBeatmap(TINY_CHART), TINY_CHART);
-    expect(classification.warnings.some((warning) => PINNED_WARNING.test(warning))).toBe(false);
+    expect(classification.warnings.some((warning) => REROUTE_WARNING.test(warning))).toBe(false);
     expect(classification.verdictText).toBe("< Intro 1 low");
     expect(classification.rc?.rawDan).toBeLessThan(0);
   });

@@ -16,6 +16,7 @@ import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file
 import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
+import { logInfo } from "../logger.js";
 import { MSD_SKILLSETS } from "./farm-helper-shape.js";
 
 // Per-beatmap chart analysis at 1.0x: the unified classifier verdict (dan
@@ -2197,6 +2198,315 @@ async function enqueueSunnyRepinDtRecompute(queue: JobQueue, cursor: number): Pr
   await queue.enqueue(
     SUNNY_REPIN_DT_RECOMPUTE_JOB,
     `${SUNNY_REPIN_DT_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// One-shot full-corpus re-analysis after the leoblack re-pin at upstream
+// 214aedd (2026-08-24), which lands two calculation changes at once. Roxy is
+// now high-difficulty-only (a final numeric outside 11..17 returns a scope
+// label with a null numeric, which Mixed routes to Azusa), its surviving
+// output is blended 0.4 toward the Azusa reference, and its meta model was
+// retrained on an ordinal target - so any stored 4K RC verdict that Mixed
+// sent through Roxy or Azusa can move. The MinaCalc skill-cap lift (40 ->
+// 100, upstream's byte-patched wasm) moves stored 1.0x MSD only where a
+// skillset sat pinned at 40 (459 of ~129k rows on the 2026-08 local
+// snapshot); the verdict change is what makes the sweep full-corpus, and the
+// MSD refresh rides the same re-analysis.
+//
+// Unlike the older sunny sweep, this one does the analyses inside small chain
+// jobs instead of enqueueing one analyze_beatmap_chart job per map. The old
+// shape paid the chart lane's 500ms interval 129k times, wrote 129k job/event
+// lifecycles, and marked the sweep done once those jobs were merely parked in
+// the pressure reserve. A ten-map link amortizes that interval while remaining
+// comfortably inside the queue's 60s lease. It pauses between maps when the
+// worker also serves HTTP, on top of the setImmediate yields inside the
+// analyzer, so live requests get both scheduling points and real CPU headroom.
+// Priority 4 interactive chart jobs are considered between links because the
+// continuation stays at -10. The done key and collection rebuild now happen
+// only after the final link has actually recomputed its rows.
+export const LEOBLACK_REPIN_RECOMPUTE_JOB = "recompute_leoblack_repin_sweep";
+const LEOBLACK_REPIN_META_KEY = "leoblack_repin_recompute_done:v1";
+const LEOBLACK_REPIN_CHUNK = 10;
+const LEOBLACK_REPIN_SERVING_PAUSE_MS = 100;
+const LEOBLACK_REPIN_WORKER_PAUSE_MS = 25;
+
+export interface LeoblackRepinRecomputeChunkResult {
+  nextCursor: number;
+  scanned: number;
+  recomputed: number[];
+  done: boolean;
+}
+
+export async function recomputeLeoblackRepinChunk(
+  db: Db,
+  osu: Pick<OsuApiClient, "getBeatmapFile">,
+  cursor: number,
+  options: { limit?: number; interMapPauseMs?: number } = {},
+): Promise<LeoblackRepinRecomputeChunkResult> {
+  const limit = Math.max(1, Math.floor(options.limit ?? LEOBLACK_REPIN_CHUNK));
+  const rows = (await exec(
+    db,
+    `select beatmap_id
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), limit],
+  )).rows;
+
+  let nextCursor = cursor;
+  const recomputed: number[] = [];
+  const interMapPauseMs = Math.max(0, Math.floor(options.interMapPauseMs ?? 0));
+  for (let index = 0; index < rows.length; index += 1) {
+    const beatmapId = Number(rows[index].beatmap_id);
+    try {
+      await computeBeatmapChartAnalysis(db, osu, { beatmapId });
+    } catch (error) {
+      // The row carried a usable old analysis before this repair started. Keep
+      // serving it and leave it eligible when the chain job retries instead of
+      // advancing the cursor past a transient failure as a newly-failed row.
+      await exec(
+        db,
+        `update beatmap_chart_analysis
+         set status = 'ready'
+         where beatmap_id = ? and analysis_version = ? and status = 'failed'`,
+        [beatmapId, CHART_ANALYSIS_VERSION],
+      );
+      throw error;
+    }
+    nextCursor = Math.max(nextCursor, beatmapId);
+    recomputed.push(beatmapId);
+
+    if (index + 1 < rows.length) {
+      if (interMapPauseMs > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, interMapPauseMs));
+      } else {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    }
+  }
+
+  return { nextCursor, scanned: rows.length, recomputed, done: rows.length < limit };
+}
+
+export async function ensureLeoblackRepinRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [LEOBLACK_REPIN_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [LEOBLACK_REPIN_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueLeoblackRepinRecompute(queue, 0);
+}
+
+export async function runLeoblackRepinRecomputeJob(
+  db: Db,
+  queue: JobQueue,
+  osu: Pick<OsuApiClient, "getBeatmapFile">,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  // A pure worker process gets the shorter pause because it cannot block the
+  // HTTP event loop directly, but it still leaves CPU/SQLite headroom for the
+  // serving process on the same VPS. The default all-in-one process leaves a
+  // 100ms window; the lane adds its normal interval between ten-map links too.
+  const interMapPauseMs = readConfig().role === "worker"
+    ? LEOBLACK_REPIN_WORKER_PAUSE_MS
+    : LEOBLACK_REPIN_SERVING_PAUSE_MS;
+  const result = await recomputeLeoblackRepinChunk(db, osu, cursor, { interMapPauseMs });
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [LEOBLACK_REPIN_META_KEY, json({ finishedAt: now }), now],
+    );
+    await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+    return;
+  }
+  await enqueueLeoblackRepinRecompute(queue, result.nextCursor);
+}
+
+async function enqueueLeoblackRepinRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    LEOBLACK_REPIN_RECOMPUTE_JOB,
+    `${LEOBLACK_REPIN_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// DT-verdict companion, the same split as the sunny re-pin pair: the main
+// sweep's re-analysis preserves the DT columns. Unlike that pair, msd_dt_json
+// is NOT guaranteed current this time - the cap lift moves any stored DT MSD
+// with a skillset pinned at 40 (21 of ~11k DT rows on the local snapshot) -
+// so a pinned row first redoes its 1.5x MinaCalc pass, and every row then
+// re-derives dan_dt_json from the stored-or-refreshed MSD. Unpinned rows keep
+// the cheap path: stored MSD in, one classifier pass out.
+export const LEOBLACK_REPIN_DT_RECOMPUTE_JOB = "recompute_leoblack_repin_dt_sweep";
+const LEOBLACK_REPIN_DT_META_KEY = "leoblack_repin_dt_recompute_done:v1";
+const LEOBLACK_REPIN_DT_CHUNK = 40;
+const LEOBLACK_REPIN_DT_SERVING_PAUSE_MS = 25;
+
+// The old engine clamped each per-skillset SSR at exactly 40, so equality is
+// the pin signature; below the clamp the patched engine is bit-identical.
+const MSD_CAP_PIN = 40;
+
+export function hasCapPinnedSkillset(values: Record<string, number> | undefined | null): boolean {
+  if (!values || typeof values !== "object") return false;
+  return Object.values(values).some((value) => Number(value) === MSD_CAP_PIN);
+}
+
+export interface LeoblackRepinDtChunkResult {
+  nextCursor: number;
+  scanned: number;
+  computed: number[];
+  msdRefreshed: number[];
+  done: boolean;
+}
+
+export async function recomputeLeoblackRepinDtChunk(
+  db: Db,
+  cursor: number,
+  limit = LEOBLACK_REPIN_DT_CHUNK,
+  interMapPauseMs = 0,
+): Promise<LeoblackRepinDtChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id, msd_dt_json
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and dan_dt_json is not null
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const computed: number[] = [];
+  const msdRefreshed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    // A row with a verdict but unusable stored MSD keeps its stored verdict,
+    // same as the sunny DT sweep; such a row is already invisible to
+    // readDtRateMsd's null filter.
+    const storedMsd = parseJson<{ values?: Record<string, number> } | null>(String(row.msd_dt_json ?? ""), null);
+    let msdValues = storedMsd?.values;
+    if (!msdValues || typeof msdValues !== "object") continue;
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText) continue;
+    try {
+      const map = parseManiaBeatmap(osuText);
+      if (map.keyCount !== 4 && map.keyCount !== 7) continue;
+      if (hasCapPinnedSkillset(msdValues)) {
+        const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(() => null);
+        // A pin the calc can no longer reproduce keeps the stored vector; the
+        // verdict re-mint below still runs on it.
+        if (msd) {
+          await exec(
+            db,
+            `update beatmap_chart_analysis
+             set msd_dt_json = json(?)
+             where beatmap_id = ? and analysis_version = ?`,
+            [json(msd), beatmapId, CHART_ANALYSIS_VERSION],
+          );
+          msdValues = msd.values;
+          msdRefreshed.push(beatmapId);
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      }
+      const starRating = Number((await exec(
+        db,
+        "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
+        [beatmapId],
+      )).rows[0]?.difficulty_rating ?? 0);
+      // Same inputs as the DT-rate sweep's mint, so the verdict differs only
+      // through the re-pinned estimator code (and a refreshed MSD above).
+      const classification = await classifyChartWithCompanella(map, osuText, {
+        rate: DT_RATE,
+        starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
+        totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+        version: map.version,
+      }, { msdValues });
+
+      const lean = leanClassification(classification);
+      const danDt = {
+        primaryLabel: lean.primary?.displayName ?? null,
+        primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
+        rawDan: lean.primary?.rawDan ?? null,
+      };
+      await exec(
+        db,
+        `update beatmap_chart_analysis
+         set dan_dt_json = json(?)
+         where beatmap_id = ? and analysis_version = ?`,
+        [json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
+      );
+      computed.push(beatmapId);
+    } catch {
+      // A chart the parser/estimator rejects keeps its stored verdict; the
+      // DT-rate sweep would have failed the same way.
+    }
+    // The classifier run is the CPU burst; yield between charts like the
+    // sweeps above so ingest/SSE keep moving. The all-in-one process also gets
+    // a short real pause; this companion is classifier-only for almost every
+    // row, so 25ms is enough headroom without materially extending the run.
+    if (interMapPauseMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, interMapPauseMs));
+    } else {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  }
+
+  return { nextCursor, scanned: rows.length, computed, msdRefreshed, done: rows.length < limit };
+}
+
+export async function ensureLeoblackRepinDtRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [LEOBLACK_REPIN_DT_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [LEOBLACK_REPIN_DT_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueLeoblackRepinDtRecompute(queue, 0);
+}
+
+export async function runLeoblackRepinDtRecomputeJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const interMapPauseMs = readConfig().role === "worker" ? 0 : LEOBLACK_REPIN_DT_SERVING_PAUSE_MS;
+  const result = await recomputeLeoblackRepinDtChunk(db, cursor, LEOBLACK_REPIN_DT_CHUNK, interMapPauseMs);
+  if (result.msdRefreshed.length > 0) {
+    logInfo("leoblack_repin_dt_msd_refreshed", { beatmapIds: result.msdRefreshed });
+  }
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [LEOBLACK_REPIN_DT_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueLeoblackRepinDtRecompute(queue, result.nextCursor);
+}
+
+async function enqueueLeoblackRepinDtRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    LEOBLACK_REPIN_DT_RECOMPUTE_JOB,
+    `${LEOBLACK_REPIN_DT_RECOMPUTE_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );

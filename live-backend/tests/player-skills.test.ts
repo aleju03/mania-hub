@@ -1016,7 +1016,7 @@ describe("getPlayerSkillPlays", () => {
          values (10, 'Skill Song', 'Skill Artist', 'Skill Mapper', 'ranked', ?, '{}', ?)`,
         [JSON.stringify({ list: "https://example.com/list.jpg" }), now],
       );
-      for (const [beatmapId, version] of [[101, "Stream A"], [102, "Stream B"], [103, "Seven Keys"]] as const) {
+      for (const [beatmapId, version] of [[101, "Stream A"], [102, "Stream B"], [103, "Seven Keys"], [104, "Fake LN"]] as const) {
         await exec(
           db,
           `insert into beatmaps
@@ -1025,10 +1025,27 @@ describe("getPlayerSkillPlays", () => {
           [beatmapId, beatmapId === 103 ? 7 : 4, version, now],
         );
       }
+      // Chart analysis backs the ln tag: 102 is genuinely LN-dominant, 104
+      // merely cleared the tag's hold-pressure leg (a gamma-style rice chart)
+      // and must not reach the top LN plays surface.
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      await exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+         values (102, ?, 'ready', ?, ?)`,
+        [CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0.8 }), now],
+      );
+      await exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+         values (104, ?, 'ready', ?, ?)`,
+        [CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0.02 }), now],
+      );
       const plays = [
         { identity: "official:1", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.95, pp: 200, values: { Overall: 22, Stream: 24 }, patterns: ["stream"], source: "top", accuracy: 0.97, endedAt: "2026-08-01T00:00:00Z" },
         { identity: "official:2", beatmapId: 102, keyCount: 4, rate: 1.5, goal: 0.96, pp: 180, values: { Overall: 25, Stream: 29 }, patterns: ["stream", "ln"], source: "tracked", accuracy: 0.98, endedAt: "2026-08-02T00:00:00Z" },
         { identity: "official:3", beatmapId: 103, keyCount: 7, rate: 1, goal: 0.94, pp: 250, values: { Overall: 30, Stream: 31 }, patterns: ["stream"], source: "top", accuracy: 0.96, endedAt: "2026-08-03T00:00:00Z" },
+        { identity: "official:4", beatmapId: 104, keyCount: 4, rate: 1, goal: 0.97, pp: 210, values: { Overall: 27, Stream: 20 }, patterns: ["ln"], source: "top", accuracy: 0.99, endedAt: "2026-08-04T00:00:00Z" },
       ];
       await exec(
         db,
@@ -1039,7 +1056,8 @@ describe("getPlayerSkillPlays", () => {
       );
 
       const first = await getPlayerSkillPlays(db, 99, 4, "Stream", { limit: 1 });
-      expect(first.total).toBe(2);
+      // Three 4K plays carry a Stream SSR; the ln-only play ranks last there.
+      expect(first.total).toBe(3);
       expect(first.items).toHaveLength(1);
       expect(first.items[0]).toMatchObject({
         beatmapId: 102,
@@ -1055,6 +1073,8 @@ describe("getPlayerSkillPlays", () => {
       expect(second.items[0]).toMatchObject({ beatmapId: 101, rating: 24 });
 
       const ln = await getPlayerSkillPlays(db, 99, 4, "pattern:ln");
+      // Only the chart the analyzer actually calls LN (lnRatio >= 0.5) lists;
+      // the tagged-but-rice 104 and its higher Overall SSR are excluded.
       expect(ln.total).toBe(1);
       expect(ln.items[0]).toMatchObject({ beatmapId: 102, rating: 25 });
     });

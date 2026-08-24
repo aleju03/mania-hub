@@ -16,4 +16,10 @@
 // authoritative C# osu-author-port (stepInterp exact-match, LN tails in the
 // percentile weights, first note dropped), shifting cached estimates near
 // interval boundaries; LN-weighted charts move the most.
-export const DAN_ESTIMATE_CACHE_VERSION = 13;
+// v14: leoblack re-pinned at upstream 214aedd. Roxy is now high-difficulty-only
+// (final numeric outside 11..17 routes to Azusa), its output is blended 0.4
+// toward Azusa, and its meta model was retrained (ordinal target), so every
+// cached 4K RC estimate that Mixed sends through Roxy/Azusa can move. The
+// MinaCalc 40->100 skill-cap patch also lands here; it only moves charts that
+// had a skillset pinned at 40.
+export const DAN_ESTIMATE_CACHE_VERSION = 14;

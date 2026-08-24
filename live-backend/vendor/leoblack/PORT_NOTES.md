@@ -1,15 +1,17 @@
 # LeoBlack analyzer port
 
 Vendored calculation layer from LeoBlackMT/osumania_map_analyser (the tosu overlay
-"ManiaMapAnalyser by Leo_Black"), upstream commit `261e76feb16479e412b166d6a74cd4ffbda8a24f`
-(2026-08-10, the PR #48 merge, which also contains PR #47). MIT, see LICENSE in this
-directory.
+"ManiaMapAnalyser by Leo_Black"), upstream commit `214aedd` (2026-08-23 HEAD at
+re-copy time; see "Re-pin at 214aedd" below for what moved). MIT, see LICENSE in
+this directory.
 
-Upstream reviewed through `1865b3bf` (2026-08-13). The post-pin commits are the
-ReworkPP feature (a live-PP overlay: `rework/reworkPerformance.js` plus
-`classicMod`/`withPpMetrics` options threaded into `sunnyAlgorithm.calculate`, both
-gated on `=== true` so the default star path we call is untouched) and `app/` UI.
-Nothing post-pin changes the vendored files' default behavior.
+Post-pin-adjacent files that ride along without changing default behavior: the
+ReworkPP feature (`classicMod`/`withPpMetrics` options threaded into
+`sunnyAlgorithm.calculate` and `runAnalysisPipeline`, all gated on `=== true` so
+the default star path we call is untouched; its `rework/reworkPerformance.js` is
+NOT vendored because only `app/` imports it) and `ett/constants.js`'s
+`WASM_ASSET_VERSION` (upstream's browser cache-bust; our browser path gets the
+same effect from Vite's content-hashed asset names, and Node reads bytes).
 
 Only the UI-free calc layer is vendored (upstream `js/` minus `app/`, `debug/`,
 `parser/settingsParser.js`); files are copied verbatim so upstream diffs stay easy.
@@ -45,7 +47,7 @@ and must NOT be overwritten on a re-copy:
   `findPatterns.js`); only timed windows vote, and an all-sentinel pool stays
   BPM 0. Upstream averages the zeros in, which read as four-digit BPMs
   ("~4497BPM Mixed Inverse") with matching inflated importance on inverse-heavy
-  charts; still unfixed upstream as of 2026-08-16 (their `js/patterns` last
+  charts; still unfixed upstream as of 2026-08-24 (their `js/patterns` last
   changed 2026-08-09). Covered by `live-backend/tests/leoblack-clustering.test.ts`;
   the one-shot `recompute_inverse_cluster_bpm_sweep` re-analyzed stored rows.
   Extended 2026-08-21: "timed" now means MsPerBeat at or above
@@ -91,7 +93,11 @@ and must NOT be overwritten on a re-copy:
   browser-targeted, but `calc.js` is isomorphic: in Node it reads the wasm bytes
   itself (`wasmBinary` override) and defines the CommonJS globals the glue's
   environment sniffing dereferences at factory time. `constants.js` is upstream's
-  version registry (their `index.js` imports it).
+  version registry (their `index.js` imports it). The 70.0/72.0/72.3/74.0 wasm
+  binaries are upstream's cap-patched blobs (`8e42f49d`: the f32 40.0 per-skillset
+  SSR clamp byte-patched to 100.0, reproducible via their
+  `tools/patch-minaclac-msd-cap.mjs`); 68.0-Unofficial is deliberately unpatched
+  upstream and unchanged here.
 - `vibro.js` - vibro detection (MSD JackSpeed ratio, or Longjacks pattern clusters).
 
 ## Known quirks
@@ -208,6 +214,58 @@ Player skill ratings are untouched by design: the skills pipeline rates plays
 with MinaCalc, whose engines, harness, and parser inputs are unchanged here (the
 `ett/index.js` `lnTailTaps` note above is what keeps that true). Only the dan
 positioning readout can move, via the re-minted chart verdicts.
+
+## Re-pin at 214aedd (2026-08-24)
+
+Two upstream calculation changes motivated it; everything else in the re-copy is
+default-gated or UI.
+
+1. **MinaCalc skill cap 40 -> 100** (`8e42f49d`): the shipped wasm binaries are
+   byte-patched (see the `ett/` bullet above). Below the old clamp the engines
+   are bit-identical; only charts/plays that had a skillset pinned at exactly 40
+   move (local snapshot: 459 of 128,913 analyzed charts at 1.0x, 21 of 11,375 DT
+   rows). Top-end MSD now tracks the patch, not official Etterna.
+2. **Roxy re-scope + Azusa fusion** (`4b4342b`, `405d482`, `95e5e87`,
+   `b199705`, `82ecb0a`): Roxy is high-difficulty-only (final numeric < 11
+   returns "< Alpha Low", >= 17 returns "> Emik Zeta high", both with
+   `numericDifficulty: null`, which Mixed treats as unusable and routes to
+   Azusa); surviving Roxy output is blended 0.4 toward `pred_Azusa`; the meta
+   model was fully retrained (ordinal target); Mixed's Azusa-preference rules
+   read the unquantized `debug.finalNumeric` and gained a crossing rule; Mixed
+   and the pipeline now report `actualEstimatorAlgorithm`.
+
+Guard fallout: the trivial-chart population the Roxy floor-pin guard was built
+for now reaches its verdict through Azusa, which repeats the overestimation
+(the guard's own synthetic 2 nps ranked-Easy shape came back "Reform 3 low").
+`chart-classifier.ts` grew `isAzusaLowEndSuspect` beside `isRoxyFloorPinned`:
+an Azusa verdict claiming Reform 2+ whose own `debug.sunnyNumeric` reference
+sits below the 3.0-star equivalent (6.84 on its 2.85 + 1.33 * star scale) is a
+reroute candidate, with the independent Sunny run still the final authority.
+Covered by `tests/dan-floor-pin.test.ts`.
+
+Benchmark gate (`npm run dan:benchmark`, rate 1.0, run 2026-08-24):
+
+- normal/unified and normal/leoblack: exact 70 -> 91 of 382 (18.3% -> 23.8%),
+  base-or-better 64.92% -> 64.7% (flat). The exact jump is upstream's claimed
+  fusion gain showing up on our labels too.
+- ln/unified: untouched (in-house kNN owns 4K LN).
+- ln/leoblack (non-production baseline): bit-identical (21 exact, 52.9%).
+
+Ops wiring that shipped with the re-pin: `DAN_ESTIMATE_CACHE_VERSION` bumped to
+14 (shared `cache-version.ts`), and three boot-seeded one-shot sweeps:
+
+- `recompute_leoblack_repin_sweep` (chart-analysis.ts): full-corpus in-place
+  re-analysis, the sunny re-pin pattern - refreshes 1.0x MSD and every verdict,
+  rebuilds dan collections at the end.
+- `recompute_leoblack_repin_dt_sweep`: DT companion. Unlike the sunny pair the
+  cap lift can move `msd_dt_json` itself, so rows whose stored DT vector
+  carries a skillset at exactly 40 redo the 1.5x MinaCalc pass; every DT row
+  then re-derives `dan_dt_json` from stored-or-refreshed MSD.
+- `recompute_player_skill_msd_cap_sweep` (player-skills.ts): the poison-sweep
+  shape - stored plays with any SSR skillset at exactly 40 are dropped and the
+  row backdated stale, so the next profile view re-rates just those plays on
+  the lifted engine. A targeted purge, not a PLAYER_SKILLS_VERSION bump,
+  because sub-cap SSRs are bit-identical.
 
 ## Benchmark vs our labels (2026-07-03, `dan_benchmark_labels` in Turso)
 
