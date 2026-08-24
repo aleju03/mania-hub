@@ -1,5 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLingui } from "@lingui/react/macro";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import { Skeleton } from "../../components/ui/LoadingSkeleton";
@@ -7,10 +8,19 @@ import { canUseAdminFeatures } from "../../lib/auth-shared";
 import {
   clearSignatureImages,
   fetchSignatureAdminList,
+  fetchSignatureAdminPreviewPlayer,
   fetchSignatureImagePreviews,
   setSignatureBlocked,
+  type SignatureAdminPreviewPlayer,
   type SignatureAdminRow,
 } from "../../lib/signature";
+import {
+  signatureDesigns,
+  SIGNATURE_TYPES,
+  SIGNATURE_TYPE_LABELS,
+  type SignatureDesign,
+  type SignatureType,
+} from "../../lib/signature-shared";
 
 /* Moderation for dynamic renders. An admin action of its own rather than a
    section bolted onto /dynamic-renders: that page is where a player builds
@@ -107,6 +117,189 @@ function RowThumbnails({ userId, count }: { userId: number; count: number }) {
   );
 }
 
+function AdminRenderImage({
+  player,
+  type,
+  spec,
+}: {
+  player: SignatureAdminPreviewPlayer;
+  type: SignatureType;
+  spec: SignatureDesign;
+}) {
+  const { i18n } = useLingui();
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [src, setSrc] = useState<string | null>(null);
+  const objectUrl = useRef<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setState("loading");
+    setSrc(null);
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/signature-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type,
+            design: spec.design,
+            targetUserId: player.userId,
+            targetUsername: player.username,
+          }),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(String(response.status));
+        const next = URL.createObjectURL(await response.blob());
+        const image = new Image();
+        image.src = next;
+        await image.decode().catch(() => undefined);
+        if (controller.signal.aborted) {
+          URL.revokeObjectURL(next);
+          return;
+        }
+        objectUrl.current = next;
+        setSrc(next);
+        setState("ready");
+      } catch {
+        if (!controller.signal.aborted) setState("error");
+      }
+    })();
+
+    return () => {
+      controller.abort();
+      if (objectUrl.current) {
+        URL.revokeObjectURL(objectUrl.current);
+        objectUrl.current = null;
+      }
+    };
+  }, [player.userId, player.username, spec.design, type]);
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-osu-b3/25 bg-osu-b5/70">
+      <div className="flex items-center justify-between gap-3 border-b border-osu-b3/20 px-3 py-2">
+        <span className="text-[12px] font-medium text-white">{i18n._(spec.label)}</span>
+        <span className="text-[10px] text-osu-f1">{spec.width} x {spec.height}</span>
+      </div>
+      <div className="flex min-h-[100px] items-center justify-center overflow-auto bg-osu-d5/60 p-3">
+        {state === "loading" ? (
+          <div
+            className="skeleton-pulse max-w-full rounded-md"
+            style={{ width: spec.width, aspectRatio: `${spec.width} / ${spec.height}` }}
+          />
+        ) : state === "error" ? (
+          <span className="py-8 text-[12px] text-osu-red-light">Render failed</span>
+        ) : (
+          <img
+            src={src ?? undefined}
+            alt={`${player.username} - ${i18n._(spec.label)}`}
+            width={spec.width}
+            height={spec.height}
+            className="block h-auto max-w-full"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PlayerRenderPreview() {
+  const { i18n } = useLingui();
+  const [draft, setDraft] = useState("");
+  const [player, setPlayer] = useState<SignatureAdminPreviewPlayer | null>(null);
+  const [type, setType] = useState<SignatureType>("maniacard");
+  const [status, setStatus] = useState<"idle" | "loading" | "not-found" | "unavailable">("idle");
+
+  const submit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const key = draft.trim();
+    if (!key) return;
+    setStatus("loading");
+    try {
+      const result = await fetchSignatureAdminPreviewPlayer({ data: { key } });
+      if (!result.player) {
+        setPlayer(null);
+        setStatus(result.error === "not-found" ? "not-found" : "unavailable");
+        return;
+      }
+      setPlayer(result.player);
+      setStatus("idle");
+    } catch {
+      setPlayer(null);
+      setStatus("unavailable");
+    }
+  }, [draft]);
+
+  return (
+    <section className="rounded-lg border border-osu-b3/25 bg-osu-b4/30 p-3 sm:p-4">
+      <div className="flex flex-col gap-1">
+        <h3 className="text-[14px] font-medium text-white">Preview any player</h3>
+        <p className="text-[11px] text-osu-f1">
+          Uses the real dynamic renderer with its default look. This does not create or change the player&apos;s settings.
+        </p>
+      </div>
+
+      <form onSubmit={submit} className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="osu! username or user ID"
+          aria-label="osu! username or user ID"
+          className="h-9 min-w-0 flex-1 rounded-md border border-osu-b3/35 bg-osu-b5/80 px-3 text-[12px] text-white outline-none placeholder:text-osu-f1 focus:border-osu-pink/60"
+        />
+        <button
+          type="submit"
+          disabled={status === "loading" || !draft.trim()}
+          className="h-9 rounded-md border border-osu-pink/45 bg-osu-pink/15 px-4 text-[12px] font-medium text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+        >
+          {status === "loading" ? "Finding player..." : "Preview"}
+        </button>
+      </form>
+
+      {status === "not-found" ? (
+        <p className="mt-2 text-[11px] text-osu-red-light">That osu! player was not found.</p>
+      ) : status === "unavailable" ? (
+        <p className="mt-2 text-[11px] text-osu-red-light">The player or renderer could not be reached.</p>
+      ) : null}
+
+      {player ? (
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-osu-b3/25">
+            <a
+              href={`https://osu.ppy.sh/users/${player.userId}`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="pb-2 text-[13px] font-medium text-white hover:text-osu-pink-light"
+            >
+              {player.username}
+            </a>
+            <div className="flex min-w-max overflow-x-auto">
+              {SIGNATURE_TYPES.map((entry) => (
+                <button
+                  key={entry}
+                  type="button"
+                  onClick={() => setType(entry)}
+                  className={`relative cursor-pointer whitespace-nowrap px-3 pb-2 text-[11px] transition-colors ${
+                    type === entry ? "text-white" : "text-osu-f1 hover:text-osu-l2"
+                  }`}
+                >
+                  {i18n._(SIGNATURE_TYPE_LABELS[entry])}
+                  {type === entry ? <span className="absolute inset-x-2 bottom-0 h-0.5 bg-osu-pink" /> : null}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3">
+            {signatureDesigns(type).map((spec) => (
+              <AdminRenderImage key={`${player.userId}:${type}:${spec.design}`} player={player} type={type} spec={spec} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function DynamicRendersAdminPage() {
   const [rows, setRows] = useState<SignatureAdminRow[] | null>(null);
   const [customOnly, setCustomOnly] = useState(true);
@@ -172,6 +365,8 @@ function DynamicRendersAdminPage() {
 
       <div className="bg-osu-b5 min-h-[calc(100vh-60px)]">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5 space-y-4">
+          <PlayerRenderPreview />
+
           <div className="flex flex-wrap items-center gap-2">
             {([["With an image URL", true], ["All signatures", false]] as const).map(([label, value]) => (
               <button

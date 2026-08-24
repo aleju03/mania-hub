@@ -11,7 +11,12 @@
 import { Readable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { backgroundImageDataUrl, clearSignatureBackgroundMemo, probeSignatureImageUrl } from "./api/signature/-backgrounds";
+import {
+  avatarSquareDataUrl,
+  backgroundImageDataUrl,
+  clearSignatureBackgroundMemo,
+  probeSignatureImageUrl,
+} from "./api/signature/-backgrounds";
 import { normalizeSignatureImageUrl, normalizeSignatureStyle } from "../lib/signature-style";
 import { fetchValidatedImage, ProxyError } from "../lib/safe-image-fetch";
 
@@ -163,6 +168,30 @@ describe("rendering", () => {
     const url = await backgroundImageDataUrl(style({}), 600, 140, { coverUrl: OSU_COVER }, SURFACE);
     const meta = await sharp(Buffer.from(url!.split(",")[1]!, "base64")).metadata();
     expect(meta).toMatchObject({ width: 600, height: 140 });
+  });
+
+  it("flattens an animated avatar to its first frame for the PNG renderer", async () => {
+    const { default: sharp } = await import("sharp");
+    const pixels = Buffer.from([
+      // Two 2x2 RGBA frames: red first, blue second.
+      ...Array(4).fill([255, 0, 0, 255]).flat(),
+      ...Array(4).fill([0, 0, 255, 255]).flat(),
+    ]);
+    const animated = await sharp(pixels, {
+      raw: { width: 2, height: 4, channels: 4, pageHeight: 2 },
+    }).gif({ delay: [100, 100], loop: 0 }).toBuffer();
+    pinnedFetch.mockResolvedValue(imageResponse(animated, "image/gif"));
+
+    const url = await avatarSquareDataUrl("https://a.ppy.sh/1?avatar.gif", 8);
+    const flattened = Buffer.from(url!.split(",")[1]!, "base64");
+    const metadata = await sharp(flattened).metadata();
+    const { channels } = await sharp(flattened).stats();
+
+    expect(url).toMatch(/^data:image\/png;base64,/);
+    expect(metadata).toMatchObject({ format: "png", width: 8, height: 8 });
+    expect(metadata.pages).toBeUndefined();
+    expect(channels[0]!.mean).toBeGreaterThan(250);
+    expect(channels[2]!.mean).toBeLessThan(5);
   });
 
   /* The legibility floor: a near-white picture has to come back dark enough to

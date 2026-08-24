@@ -366,6 +366,7 @@ async function renderManiacardFront(
   user: { id?: number; username?: string; avatar_url?: string },
   skills: ManiaSkills,
   tier: ReturnType<typeof getManiaCardTier>,
+  avatarUrl: string,
 ): Promise<Buffer> {
   const spec = signatureDesign(ctx.type, ctx.design)!;
   const [[regularFont, heavyFont], laurelUrl] = await Promise.all([
@@ -375,7 +376,7 @@ async function renderManiacardFront(
   const response = new ImageResponse(
     maniaTierCardElement({
       username: clamp(user.username || ctx.resolved.username, 20),
-      avatarUrl: ogAvatarUrl(ctx.request, user.avatar_url, user.id),
+      avatarUrl,
       tier,
       skills,
       laurelUrl,
@@ -403,7 +404,16 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
   if (!user || !skills) return renderPlate(ctx, "No ranked mania plays tracked yet.");
 
   const tier = getManiaCardTier(skills.cardPower);
-  if (ctx.design === 4) return renderManiacardFront(ctx, user, skills, tier);
+  const avatarSize = ctx.design === 4 ? 454 : ctx.design === 3 ? 150 : ctx.design === 2 ? 96 : 140;
+  const sourceAvatarUrl = ogAvatarUrl(ctx.request, user.avatar_url, user.id);
+  /* resvg does not decode GIFs, so handing an animated osu! avatar straight
+     to ImageResponse leaves the card's avatar frame blank. Dynamic renders
+     are PNGs and cannot preserve the animation; flattening the first frame is
+     the useful static representation, and also gives the rasterizer a
+     consistently supported input format. Keep the original URL as a fallback
+     for archived players whose avatar is a site-local asset. */
+  const avatarUrl = await avatarSquareDataUrl(sourceAvatarUrl, avatarSize) ?? sourceAvatarUrl;
+  if (ctx.design === 4) return renderManiacardFront(ctx, user, skills, tier, avatarUrl);
 
   const style = MANIA_TIER_STYLES[tier];
   const background = await styleLayers(ctx, spec, backgroundSourcesFrom(snapshot));
@@ -413,7 +423,6 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
   // grey smear over gold, same as it would be over a photograph.
   const dim = background.custom || tierBacked ? TEXT_DIM_ON_ART : TEXT_DIM;
   const username = clamp(user.username || ctx.resolved.username, 20);
-  const avatarUrl = ogAvatarUrl(ctx.request, user.avatar_url, user.id);
   /* No rank and no pp on the image. Both move on osu! faster than a cached
      snapshot can follow, so an embed showing them is wrong more often than it
      is right, and it is wrong right next to the profile that states the real

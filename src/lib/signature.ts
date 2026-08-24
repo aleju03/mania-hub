@@ -57,6 +57,16 @@ export interface SignatureAdminRow {
   updatedAt: number;
 }
 
+export interface SignatureAdminPreviewPlayer {
+  userId: number;
+  username: string;
+}
+
+export type SignatureAdminPreviewPlayerResult = {
+  player: SignatureAdminPreviewPlayer | null;
+  error: "forbidden" | "not-found" | "unavailable" | null;
+};
+
 const UNAVAILABLE: SignatureSettingsResult = { allowed: false, signature: null };
 
 async function requireViewer(): Promise<{ userId: number; base: string } | null> {
@@ -296,6 +306,49 @@ export const fetchSignatureAdminList = createServerFn({ method: "GET" })
     if (!response?.ok) return { signatures: [] };
     const body = await response.json().catch(() => null) as { signatures?: SignatureAdminRow[] } | null;
     return { signatures: body?.signatures ?? [] };
+  });
+
+/* Resolve the player once before the browser asks the image endpoint for each
+   layout. /snapshot, rather than cached-snapshot, is deliberate: this admin
+   tool promises any live osu! player, including one Mania Hub has never seen.
+   A cold lookup mints the normal stored profile snapshot, after which every
+   renderer reads it through its ordinary cached path. Nothing about the
+   player's signature settings is created or changed. */
+export const fetchSignatureAdminPreviewPlayer = createServerFn({ method: "POST" })
+  .validator((input: { key: string }) => ({ key: String(input?.key ?? "").trim().slice(0, 120) }))
+  .handler(async ({ data }): Promise<SignatureAdminPreviewPlayerResult> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const { readCurrentAuth } = await import("./auth-server");
+    const auth = await readCurrentAuth();
+    if (!auth.viewer || !auth.canUseAdminFeatures) {
+      return { player: null, error: "forbidden" };
+    }
+    if (!data.key) return { player: null, error: "not-found" };
+    const base = getServerLiveBackendUrl();
+    if (!base) return { player: null, error: "unavailable" };
+
+    try {
+      const lookup = /^\d+$/.test(data.key) ? "?lookup=id" : "";
+      const response = await fetch(
+        `${base}/api/profiles/${encodeURIComponent(data.key)}/snapshot${lookup}`,
+      );
+      if (response.status === 404) return { player: null, error: "not-found" };
+      if (!response.ok) return { player: null, error: "unavailable" };
+      const snapshot = await response.json().catch(() => null) as {
+        user?: { id?: unknown; username?: unknown } | null;
+      } | null;
+      const userId = Number(snapshot?.user?.id);
+      const username = typeof snapshot?.user?.username === "string"
+        ? snapshot.user.username.trim().slice(0, 64)
+        : "";
+      if (!Number.isInteger(userId) || userId <= 0 || !username) {
+        return { player: null, error: "not-found" };
+      }
+      return { player: { userId, username }, error: null };
+    } catch {
+      return { player: null, error: "unavailable" };
+    }
   });
 
 /* Moderating a picture means looking at the picture. The list carries the

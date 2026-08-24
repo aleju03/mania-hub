@@ -158,8 +158,9 @@ export async function beatmapCoverBandDataUrl(
  *  Fetched here rather than handed to satori as a url, for the same reasons as
  *  the cover band: the address comes off an API payload, so it goes through the
  *  same pinned transport and host allowlist, and a fetch that fails returns
- *  null instead of taking the whole render down with it. The header then draws
- *  without a portrait, which is the layout it had before there was one. */
+ *  null instead of taking the whole render down with it. Converting to PNG is
+ *  also required for animated osu! avatars: dynamic renders are static PNGs,
+ *  and resvg skips GIF images entirely instead of drawing their first frame. */
 export async function avatarSquareDataUrl(
   rawUrl: string | null | undefined,
   size: number,
@@ -171,7 +172,7 @@ export async function avatarSquareDataUrl(
 
   try {
     const { default: sharp } = await import("sharp");
-    const out = await sharp(bytes, { failOn: "none" })
+    const out = await sharp(bytes, { failOn: "none", page: 0 })
       // Resized here rather than by the renderer: satori scales an oversized
       // source with a box filter, and an osu! avatar is 256px going into a
       // 28px square.

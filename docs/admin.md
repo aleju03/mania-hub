@@ -65,6 +65,10 @@ With `DISCORD_BUG_REPORT_CHANNEL_ID` set, each new report also posts an embed to
 - `GET /api/admin/analytics/valley`: the `/valley` villager layer.
 - `GET /api/admin/analytics/live`: realtime SSE, authenticated by short-lived tickets from `POST /api/admin/analytics/live-ticket`.
 
+## Dynamic renders
+
+`/admin/dynamic-renders` combines signature-background moderation with an on-demand player preview. The preview search calls the normal live-backend profile `/snapshot` route so an explicit admin lookup can warm a player Mania Hub has never stored, then draws every layout for the selected type through the same `/api/signature-preview` endpoint the player editor uses. Supplying a target player to that endpoint is accepted only when the signed session has `canUseAdminFeatures`; ordinary users remain locked to their own osu! id. Preview renders use the type's default style, write no signature settings or R2 image, and return `private, no-store` PNGs.
+
 ## BBCode image audit
 
 `/admin/bbcode-images` is the narrower tool for the `bbcode/` prefix, whose objects are permanent, have no second copy, and are tracked by nothing but their own `uploaded-by` metadata. `src/lib/bbcode-image-audit.ts` lists the prefix, reads each uploader's profile BBCode fresh from osu! (`page.raw`, deliberately uncached), and reports each file as on a profile / unused / unchecked. Two rules make it safe to delete from: a file counts as used if *any* read profile embeds it, since content-addressing means one object can be shared and `uploaded-by` names only the last uploader; and a profile that could not be read yields `unchecked`, never `unused`. `deleteUnusedBbcodeImages` re-runs the whole audit server-side and drops only what is still unused, so the client never labels its own deletions.

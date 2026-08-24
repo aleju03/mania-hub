@@ -23,7 +23,10 @@ import { renderSignature } from "./signature/-renderers";
  * signature URL does not apply to a render that leaves nothing behind.
  *
  * The player's own data is still read the normal way - only the look comes
- * from the request, and only for the caller's own signature.
+ * from the request. Ordinary callers can only draw themselves. The admin
+ * moderation page may name another player after resolving them through the
+ * live backend; that path is checked against the admin bit from the signed
+ * session here, not merely hidden in the page.
  */
 
 // A drag with the page's debounce in front of it lands well under this; it is
@@ -35,14 +38,36 @@ const PREVIEWS_PER_MINUTE = 120;
 // A style map is a few hundred bytes. Anything near this is not one.
 const MAX_BODY_BYTES = 8 * 1024;
 
+interface PreviewTargetInput {
+  targetUserId?: unknown;
+  targetUsername?: unknown;
+}
+
+export function resolveSignaturePreviewTarget(
+  viewer: { id: number; username: string },
+  canUseAdminFeatures: boolean,
+  input: PreviewTargetInput,
+): { userId: number; username: string } | { status: 400 | 403 } {
+  const targetsAnotherPlayer = input.targetUserId !== undefined || input.targetUsername !== undefined;
+  if (!targetsAnotherPlayer) return { userId: viewer.id, username: viewer.username };
+  if (!canUseAdminFeatures) return { status: 403 };
+
+  const userId = Number(input.targetUserId);
+  const username = typeof input.targetUsername === "string"
+    ? input.targetUsername.trim().slice(0, 64)
+    : "";
+  if (!Number.isInteger(userId) || userId <= 0 || !username) return { status: 400 };
+  return { userId, username };
+}
+
 export const Route = createFileRoute("/api/signature-preview")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const { readCurrentAuth } = await import("../../lib/auth-server");
         const auth = await readCurrentAuth();
-        // Signed in only: a preview is drawn from the caller's own profile, so
-        // there is nobody else to draw one for.
+        // Signed in only: ordinary previews are tied to the caller, and the
+        // admin override below is still anchored to a verified session.
         if (!auth.viewer) return new Response(null, { status: 401 });
 
         const declared = Number(request.headers.get("content-length"));
@@ -50,7 +75,15 @@ export const Route = createFileRoute("/api/signature-preview")({
           return new Response(null, { status: 413 });
         }
 
-        let body: { type?: unknown; design?: unknown; style?: unknown; skillsKeyCount?: unknown; timeZone?: unknown };
+        let body: {
+          type?: unknown;
+          design?: unknown;
+          style?: unknown;
+          skillsKeyCount?: unknown;
+          timeZone?: unknown;
+          targetUserId?: unknown;
+          targetUsername?: unknown;
+        };
         try {
           body = await request.json();
         } catch {
@@ -68,12 +101,15 @@ export const Route = createFileRoute("/api/signature-preview")({
           return new Response(null, { status: 429 });
         }
 
+        const target = resolveSignaturePreviewTarget(auth.viewer, auth.canUseAdminFeatures, body);
+        if ("status" in target) return new Response(null, { status: target.status });
+
         /* Everything the layouts read about the player, and nothing they do
            not. Versions and enabled types belong to the stored-render path;
            a preview has no key to compose and publishes nothing. */
         const resolved: ResolvedSignature = {
-          userId: auth.viewer.id,
-          username: auth.viewer.username,
+          userId: target.userId,
+          username: target.username,
           enabledTypes: [variant.type],
           // Carried through so the preview and the stored render agree on
           // keymode when the style leaves it unset.
