@@ -95,6 +95,7 @@ const REASON_LABELS: Record<LiveFarmHelperReason, string> = {
   stale: "old pb",
   owned: "cleared",
   push: "skillboost",
+  practice: "next tier",
 };
 
 const SPEED_LABELS: Record<LiveFarmHelperSpeedBucket, string> = {
@@ -1089,6 +1090,7 @@ function readStoredFarmContext(beatmapId: number, search: FarmMapSearch): FarmMa
       speed: storedSpeed,
       reason:
         data.reason === "missing" || data.reason === "improve" || data.reason === "stale" || data.reason === "owned" || data.reason === "push"
+          || data.reason === "practice"
           ? data.reason
           : undefined,
       clearRisk: data.clearRisk === true ? true : undefined,

@@ -1374,7 +1374,8 @@ export async function fetchLiveTrackerSnapshot(
   return fetchLiveJson(`/api/snapshots/tracker?${query.toString()}`);
 }
 
-export type LiveFarmHelperReason = "missing" | "improve" | "stale" | "owned" | "push";
+// "practice" only ever appears on `practiceRecs` rows, never in `recs`.
+export type LiveFarmHelperReason = "missing" | "improve" | "stale" | "owned" | "push" | "practice";
 export type LiveFarmHelperKeyMode = "4k" | "7k" | "any";
 export type LiveFarmHelperView = "gain" | "popular";
 export type LiveFarmHelperSpeedBucket = "ht" | "normal" | "dt";
@@ -1436,7 +1437,15 @@ export interface LiveFarmHelperRec {
   clearRisk?: boolean;
   // Active feedback mark from the snapshot's own player on this lane. Only set
   // on owner requests; optional so older backends still parse.
-  feedback?: "too_hard" | "too_easy";
+  feedback?: "too_hard" | "too_easy" | "maxed";
+  // 320-weighted custom accuracy of the player's PB on this lane (the number
+  // the pp math runs on; displayed osu! acc reads higher), null when the PB
+  // carries no judgement counts, absent on unplayed lanes / older backends.
+  subjectAccuracy?: number | null;
+  // Miss count of that same PB, same presence rules.
+  subjectMissCount?: number | null;
+  // skillboost rows only: the 320 rate the target pp corresponds to.
+  pushTargetAccuracy?: number;
 }
 
 export interface LiveFarmHelperPeerBand {
@@ -1472,6 +1481,9 @@ export interface LiveFarmHelperSnapshot {
   // Gain view only: lanes hidden because the player marked them too_hard.
   // Optional so older backends still parse.
   feedbackHiddenCount?: number;
+  // Gain view only: lanes hidden by the player's "maxed" marks. Optional so
+  // older backends still parse.
+  maxedHiddenCount?: number;
   // Gain view only: lanes that cleared every gate except the minimum visible
   // gain (under 1pp for this player). Lets the empty board explain itself.
   // Optional so older backends still parse.
@@ -1484,6 +1496,10 @@ export interface LiveFarmHelperSnapshot {
   // list hides skillboost rows while false; the skillboost tab still shows
   // them. Absent (older backends, popular view) means never hide.
   pushUnlocked?: boolean;
+  // Gain view only: "next tier" rows - maps players near this one farm that
+  // sit above the player's shown skills. Their benchmarkPp is the raw peer
+  // median, not a personal target. Optional so older backends still parse.
+  practiceRecs?: LiveFarmHelperRec[];
   recs: LiveFarmHelperRec[];
   generatedAt: string;
 }

@@ -5,19 +5,27 @@ import { getModAcronyms, getScoreSpeedBucket, nowIso, type ScoreSpeedBucket } fr
 import type { OscScore } from "../shared/types.js";
 
 // Per-player farm-helper feedback: a player marks one recommendation lane
-// (beatmap + speed bucket) as "too hard" or "too easy", and the rec builder
-// trusts that over its own models (farm-helper.ts threads the active marks
-// through scoring). A mark retires ("resolves") the moment a real score lands
-// on the lane after it was set: the play is better evidence than the label.
+// (beatmap + speed bucket) as "too hard", "too easy", or "maxed" ("I've taken
+// this as far as I care to"), and the rec builder trusts that over its own
+// models (farm-helper.ts threads the active marks through scoring). A mark
+// retires ("resolves") the moment a real score lands on the lane after it was
+// set: the play is better evidence than the label. "maxed" additionally
+// expires on its own after MAXED_MARK_TTL_MS (it is a snooze, not a claim
+// about difficulty, so it must not hide a lane forever).
 // The owner is always the osu!-verified viewer id forwarded from the login
 // cookie (the goals/pack-wallet trust contract); the browser never names a
 // different user. This module owns only the table; the snapshot-cache eviction
 // lives in farm-helper.ts (which owns the cache) and is called by the HTTP
 // handlers and the ingest hook alongside these writes.
 
-export type FarmHelperFeedbackVerdict = "too_hard" | "too_easy";
+export type FarmHelperFeedbackVerdict = "too_hard" | "too_easy" | "maxed";
 
-export const FARM_HELPER_FEEDBACK_VERDICTS: readonly FarmHelperFeedbackVerdict[] = ["too_hard", "too_easy"];
+export const FARM_HELPER_FEEDBACK_VERDICTS: readonly FarmHelperFeedbackVerdict[] = ["too_hard", "too_easy", "maxed"];
+// How long a "maxed" mark keeps its lane off the gain view before it expires
+// on its own (the read-time reconcile in farm-helper.ts writes the
+// resolution). A new score on the lane still retires it earlier, exactly like
+// the other verdicts.
+export const MAXED_MARK_TTL_MS = 60 * 86_400_000;
 // The farm helper's real lane buckets: recs carry ScoreSpeedBucket values
 // (see farmHelperLaneKey / FarmHelperRec.speedBucket in farm-helper.ts).
 export const FARM_HELPER_FEEDBACK_SPEED_BUCKETS: readonly ScoreSpeedBucket[] = ["normal", "ht", "dt"];

@@ -170,7 +170,7 @@ async function seedPeers(): Promise<void> {
 async function insertMark(
   beatmapId: number,
   speedBucket: "normal" | "dt" | "ht",
-  verdict: "too_hard" | "too_easy",
+  verdict: "too_hard" | "too_easy" | "maxed",
   createdAt = Date.now(),
 ): Promise<void> {
   await exec(
@@ -605,5 +605,145 @@ describe("farm helper feedback margin generalization", () => {
     const rows = (await exec(db, "select resolved_at from farm_helper_feedback where user_id = ?", [SUBJECT_ID])).rows;
     expect(rows.length).toBe(2);
     for (const row of rows) expect(row.resolved_at).toBeNull();
+  });
+});
+
+// "maxed" marks: a snooze, not a difficulty claim. The lane hides from the
+// gain view (counted in maxedHiddenCount, apart from the too_hard count), the
+// popular browse keeps it tagged, the mark expires on its own after its TTL,
+// and it never votes on the feasibility margins.
+describe("farm helper maxed marks", () => {
+  it("hides the lane from the gain view under its own count and tags it on popular", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    await insertMark(BM_MISSING, "normal", "maxed");
+
+    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { viewerUserId: SUBJECT_ID });
+    expect(gain.recs.some((rec) => rec.beatmapId === BM_MISSING)).toBe(false);
+    expect(gain.maxedHiddenCount).toBe(1);
+    expect(gain.feedbackHiddenCount).toBe(0);
+
+    const popular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular", viewerUserId: SUBJECT_ID });
+    expect(popular.recs.find((rec) => rec.beatmapId === BM_MISSING)?.feedback).toBe("maxed");
+  });
+
+  it("expires past its TTL: the lane returns and the row resolves", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    // 61 days old, past the 60-day TTL.
+    await insertMark(BM_MISSING, "normal", "maxed", Date.now() - 61 * 86_400_000);
+
+    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { viewerUserId: SUBJECT_ID });
+    expect(gain.recs.some((rec) => rec.beatmapId === BM_MISSING)).toBe(true);
+    expect(gain.maxedHiddenCount).toBe(0);
+    const row = (await exec(
+      db,
+      "select resolved_at, resolved_pp from farm_helper_feedback where user_id = ? and beatmap_id = ?",
+      [SUBJECT_ID, BM_MISSING],
+    )).rows[0];
+    expect(row?.resolved_at).not.toBeNull();
+    expect(row?.resolved_pp).toBeNull();
+  });
+
+  it("casts no feasibility-margin votes", async () => {
+    const bestScores = await seedFeasibilityScenario(17.9);
+    // The same two gate-passing charts that tighten the ceiling as too_hard
+    // marks move nothing as maxed marks.
+    await insertMarkableChart(48_001, 16.5);
+    await insertMarkableChart(48_002, 17);
+    await insertMark(48_001, "normal", "maxed");
+    await insertMark(48_002, "normal", "maxed");
+
+    const snapshot = await getFeasSnapshot(bestScores);
+    expect(snapshot.feedbackMarginAdjust).toBeUndefined();
+    expect(snapshot.recs.some((rec) => rec.beatmapId === BM_BOUNDARY)).toBe(true);
+  });
+});
+
+// "Next tier" practice rows: a feasibility-dropped lane the subject has never
+// played comes back on practiceRecs, quoting the RAW peer median, instead of
+// vanishing - the exhausted-farm-pool surface.
+describe("farm helper practice (next tier) rows", () => {
+  it("returns gate-dropped unplayed lanes as practiceRecs with the raw peer median", async () => {
+    // Technical 25 sits far above the subject's ceiling of 18: hard drop.
+    const bestScores = await seedFeasibilityScenario(25);
+
+    const snapshot = await getFeasSnapshot(bestScores);
+    expect(snapshot.recs.some((rec) => rec.beatmapId === BM_BOUNDARY)).toBe(false);
+    const practice = snapshot.practiceRecs ?? [];
+    const row = practice.find((rec) => rec.beatmapId === BM_BOUNDARY);
+    expect(row).toBeDefined();
+    expect(row?.reason).toBe("practice");
+    // Raw peer median, no accuracy scaling, no personal caps.
+    expect(row?.benchmarkPp).toBe(500);
+    expect(row?.peerPpMedian).toBe(500);
+    expect(row?.subjectPp).toBeNull();
+    // Never mixed into the ranked board or its counts.
+    expect(snapshot.totalQualifying).toBe(snapshot.recs.length);
+  });
+
+  it("keeps a too_hard-marked gate-dropped lane out of the practice list", async () => {
+    const bestScores = await seedFeasibilityScenario(25);
+    await insertMark(BM_BOUNDARY, "normal", "too_hard");
+
+    const snapshot = await getFeasSnapshot(bestScores);
+    expect((snapshot.practiceRecs ?? []).some((rec) => rec.beatmapId === BM_BOUNDARY)).toBe(false);
+  });
+});
+
+// Practice relevance gates: sparse keymodes and sub-floor gains contribute
+// nothing (the 7K-main-shown-4K-DT regression).
+describe("farm helper practice relevance gates", () => {
+  it("a sparse keymode's gate drops never become practice rows", async () => {
+    // Same scenario as the practice test, but the subject's 4K evidence sits
+    // under the analyzed-plays floor: the gate still drops the chart (on
+    // transferred ratings, tighter margins), but that verdict is a guess
+    // about an unplayed keymode, not "next tier".
+    const recent = nowIso();
+    const bestScores = [
+      subjectScore(47_990, 500, recent),
+      ...FEAS_SUPPORT.map((beatmapId, i) => subjectScore(beatmapId, 450 - i * 5, recent)),
+    ];
+    await insertBeatmapMeta(BM_BOUNDARY, 4, 5);
+    await insertSearchIndex(BM_BOUNDARY, TECH_PAT, 4, techMsd(25));
+    for (const beatmapId of FEAS_SUPPORT) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (let i = 0; i < 12; i += 1) {
+      const id = 47_800 + i;
+      await insertUser(id, 10_000, "CR", `FeasPeer${i}`);
+      await insertFarmed("CR", id, BM_BOUNDARY, 500);
+      for (const beatmapId of FEAS_SUPPORT) await insertFarmed("CR", id, beatmapId, 400);
+    }
+    await seedSubjectSkillRatings(4, techMsd(15), 10); // sparse: under the 30-play floor
+
+    const snapshot = await getFeasSnapshot(bestScores);
+    expect(snapshot.recs.some((rec) => rec.beatmapId === BM_BOUNDARY)).toBe(false);
+    expect(snapshot.practiceRecs ?? []).toEqual([]);
+  });
+
+  it("a lane whose peer median would not move the player's total never becomes practice", async () => {
+    // The boundary chart's peers hold 1pp: the gate drops it for the same
+    // subject as the practice test, but 1pp adds nothing even to this short
+    // weighted list, so it is noise, not a tier above them. (Real lists are
+    // 100+ plays deep, where the same floor also swallows a few-hundred-pp
+    // off-mode chart.)
+    const recent = nowIso();
+    const bestScores = [
+      subjectScore(47_990, 500, recent),
+      ...FEAS_SUPPORT.map((beatmapId, i) => subjectScore(beatmapId, 450 - i * 5, recent)),
+    ];
+    await insertBeatmapMeta(BM_BOUNDARY, 4, 5);
+    await insertSearchIndex(BM_BOUNDARY, TECH_PAT, 4, techMsd(25));
+    for (const beatmapId of FEAS_SUPPORT) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (let i = 0; i < 12; i += 1) {
+      const id = 47_800 + i;
+      await insertUser(id, 10_000, "CR", `FeasPeer${i}`);
+      await insertFarmed("CR", id, BM_BOUNDARY, 1);
+      for (const beatmapId of FEAS_SUPPORT) await insertFarmed("CR", id, beatmapId, 400);
+    }
+    await seedSubjectSkillRatings(4, techMsd(15), 50);
+
+    const snapshot = await getFeasSnapshot(bestScores);
+    expect(snapshot.recs.some((rec) => rec.beatmapId === BM_BOUNDARY)).toBe(false);
+    expect(snapshot.practiceRecs ?? []).toEqual([]);
   });
 });

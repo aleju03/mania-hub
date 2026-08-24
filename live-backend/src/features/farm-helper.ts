@@ -1,9 +1,9 @@
 import type { Db } from "../db.js";
 import { exec, execBatch, parseJson, type DbStatement } from "../db.js";
 import { logWarn } from "../logger.js";
-import { loadActiveFarmHelperFeedback, type ActiveFarmHelperFeedbackMark, type FarmHelperFeedbackVerdict } from "./farm-helper-feedback.js";
+import { loadActiveFarmHelperFeedback, MAXED_MARK_TTL_MS, type ActiveFarmHelperFeedbackMark, type FarmHelperFeedbackVerdict } from "./farm-helper-feedback.js";
 import { getPlayerProfileSnapshot, PROFILE_BEST_SCORES_LIMIT } from "./player-profiles.js";
-import { calculateManiaCustomAccuracy, calculateWeightedPpTotal, extractManiaVariantPps, getModAcronyms, getScoreSpeedBucket, normalizeStoredMods, nowIso, type ScoreSpeedBucket } from "../shared/score.js";
+import { calculateManiaCustomAccuracy, calculateWeightedPpTotal, extractManiaVariantPps, getMissCount, getModAcronyms, getScoreSpeedBucket, normalizeStoredMods, nowIso, type ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calibrateProxy, getKeyModePeerPool, type FarmHelperKeyCount } from "./farm-helper-key-stats.js";
@@ -26,7 +26,10 @@ import type { JobQueue } from "../jobs/queue.js";
 
 export type FarmHelperKeyMode = "4k" | "7k" | "any";
 type ConcreteFarmHelperKeyMode = Exclude<FarmHelperKeyMode, "any">;
-export type FarmHelperReason = "missing" | "improve" | "stale" | "owned" | "push";
+// "practice" never appears in `recs`: it is the reason on `practiceRecs`
+// rows, lanes the feasibility gate dropped that peers still farm (see the
+// PRACTICE_* block).
+export type FarmHelperReason = "missing" | "improve" | "stale" | "owned" | "push" | "practice";
 // "gain" is the personalized, pp-gain-ranked recommendation view (the default).
 // "popular" reuses the same peer cohort but skips the value/already-cleared gates
 // and ranks by how many same-pp peers farm a map, so a player can browse every
@@ -105,10 +108,22 @@ export interface FarmHelperRec {
   // UI. A population-only discount still lowers the ranking (a sane prior)
   // but never produces the personal label.
   clearRisk: boolean;
-  // The subject's active feedback mark on this lane ("too hard" only surfaces
-  // on the popular browse; the gain view hides those lanes instead). Absent
-  // when no active mark applies. Additive.
+  // The subject's active feedback mark on this lane ("too hard" and "maxed"
+  // only surface on the popular browse; the gain view hides those lanes
+  // instead). Absent when no active mark applies. Additive.
   feedback?: FarmHelperFeedbackVerdict;
+  // 320-weighted custom accuracy of the subject's PB on this lane, so the UI
+  // can quote the number the pp math actually runs on (displayed osu! acc is
+  // 300-weighted and reads higher). Null when the PB carries no judgement
+  // counts; absent when the lane is unplayed. Additive.
+  subjectAccuracy?: number | null;
+  // Miss count of that same PB (null with no judgement counts), so a "push"
+  // row can honestly say "FC it" vs "raise your 320 rate". Additive.
+  subjectMissCount?: number | null;
+  // Push rows only: the 320-weighted custom accuracy the benchmarkPp
+  // corresponds to (recomputed after caps, so the pair always agrees).
+  // Additive.
+  pushTargetAccuracy?: number;
 }
 
 export interface PeerBandSummary {
@@ -151,6 +166,10 @@ export interface FarmHelperSnapshot {
   // qualified anyway are not counted. Additive; absent on the popular browse
   // and on older cached snapshots.
   feedbackHiddenCount?: number;
+  // Gain view only, owner-only like feedbackHiddenCount: lanes hidden by the
+  // subject's active "maxed" marks. Kept separate because the UI phrases the
+  // two differently (a difficulty claim vs a snooze). Additive.
+  maxedHiddenCount?: number;
   // Gain view only: how many lanes cleared every gate except the minimum
   // visible gain (their scaled benchmark would move the baseline by under
   // MIN_VISIBLE_GAIN_PP). Lets an empty board say "peers are farming, it just
@@ -176,6 +195,14 @@ export interface FarmHelperSnapshot {
   // served suggestions, so it is not owner-scoped. Additive; absent on the
   // popular browse, the backtest path, and older cached snapshots.
   pushUnlocked?: boolean;
+  // Gain view only: "next tier" material - lanes the players around the
+  // subject farm that the feasibility gate dropped for the subject, nearest
+  // miss first (see the PRACTICE_* block). Their benchmarkPp is the RAW peer
+  // median (what peers actually hold, not a personal target) and their reason
+  // is "practice". Bounded, never mixed into `recs`, never counted in
+  // totalQualifying. Additive; absent on the popular browse and older
+  // snapshots.
+  practiceRecs?: FarmHelperRec[];
   recs: FarmHelperRec[];
   generatedAt: string;
 }
@@ -380,7 +407,16 @@ const MIN_FARMED_FOR_SAMPLE = 5;
 // Popular mode is a browse view, so the popularity floor is lower than the
 // personalized view's and the difficulty/value gates are skipped entirely.
 const POPULAR_PEER_MIN_FRACTION = 0.05;
+// Minimum headroom between a peer benchmark and the subject's own score
+// before "improve"/"stale" fire (and before any benchmark is worth showing on
+// a played lane). Relative above the floor: 8pp is a real ask on a 150pp
+// score and pure noise on a 600pp one, where quoting it reads as nagging a
+// play the player already maxed.
 const IMPROVE_MARGIN_PP = 8;
+const IMPROVE_MARGIN_RATIO = 0.02;
+function improveMarginPp(subjectPp: number): number {
+  return Math.max(IMPROVE_MARGIN_PP, subjectPp * IMPROVE_MARGIN_RATIO);
+}
 const STALE_AGE_MS = 120 * 86_400_000;
 const STALE_ACTIVE_MS = 180 * 86_400_000;
 const FIT_SAMPLE_SIZE = 50;
@@ -396,6 +432,21 @@ const MISSING_MAP_BENCHMARK_QUANTILE = 0.4;
 const PLAYED_MAP_BENCHMARK_STEP = 0.06;
 const PLAYED_MAP_MIN_STEP_PP = 30;
 const MIN_VISIBLE_GAIN_PP = 1;
+// "Next tier" practice rows (PRACTICE_*): when the hard feasibility gate
+// drops a lane the cohort farms and the subject has never played, the lane is
+// collected instead of vanishing, and the nearest misses (smallest MSD
+// overshoot beyond the margin) come back on the snapshot as `practiceRecs`.
+// This is what a player who has cleared their whole farm pool sees next:
+// not a target ("worth Xpp for you" would be a lie the gate just told), but
+// what the players around them hold on charts one step above their shown
+// skills. Their benchmarkPp is the raw peer median for exactly that reason,
+// their gain rides the same honest estimate, and they never enter the ranked
+// board or its counts. Gain view only. Two relevance gates: sparse keymodes
+// contribute nothing (their gate verdicts are transferred-rating guesses, not
+// "next tier" evidence), and the peer median must clear the same minimum-gain
+// floor as the board (a lane that would not move this player's total is
+// off-mode noise, not a tier above them).
+const PRACTICE_MAX_RECS = 6;
 // Self-improvement ("push") targets for owned lanes where no peer benchmark
 // sits above the subject (so neither "improve" nor "stale" fired). For a fixed
 // map+mods, mania pp is linear in (5 * acc - 4) with acc the 320-weighted
@@ -407,6 +458,12 @@ const MIN_VISIBLE_GAIN_PP = 1;
 //  - the target accuracy never exceeds the keymode's demonstrated best custom
 //    accuracy plus a small headroom, nor the absolute ceiling (a near-SS score
 //    is not a push target);
+//  - when the personal accuracy model (A8) has a prediction for this exact
+//    chart, its optimistic percentile (accP85) also caps the target: the
+//    keymode-best cap alone let a 99.9 on some easy chart keep pushing a
+//    99.65 near-FC on a chart at the player's limit. A score already at or
+//    above accP85 is the player at their chart-specific ceiling, and the
+//    delta gate below turns that into "no push" without a separate branch;
 //  - the remaining accuracy delta must be meaningful (PUSH_MIN_ACC_DELTA,
 //    deliberately above PUSH_ACC_BEST_HEADROOM so a score already at the
 //    player's demonstrated best accuracy never pushes);
@@ -582,6 +639,10 @@ interface SubjectMapScore {
   // 320-weighted custom accuracy of this score, or null when the score carries
   // no judgement counts. Feeds the "push" target's pp-linearity rescale.
   customAccuracy: number | null;
+  // Miss count of the same score, null exactly when customAccuracy is (no
+  // judgement counts): the UI phrases a push as "FC it" vs "raise your 320
+  // rate" off this.
+  countMiss: number | null;
   // The newest ended_at across ALL of the subject's windowed plays on this
   // lane, not just the best-pp one. The "stale" reason requires BOTH the PB
   // and the latest play to be old: replaying a map yesterday (scoring lower)
@@ -1048,6 +1109,10 @@ interface PreparedSubject {
 
 type ScoredRec = FarmHelperRec & { difficultyFit: number; recencyFit: number };
 
+// A practice ("next tier") row plus its feasibility overshoot, so the merged
+// list across mode runs can keep the nearest misses.
+type PracticeRec = { rec: ScoredRec; overshoot: number };
+
 // One concrete-keymode (or total-pp fallback) run's output before the merged
 // re-rank: its scored recs (rankScore still 0, unsliced), its cohort summary,
 // how many candidate lanes this run's gain view hid on "too hard" marks, and
@@ -1056,7 +1121,9 @@ interface ModeRunResult {
   scored: ScoredRec[];
   band: PeerBandSummary;
   feedbackHidden: number;
+  maxedHidden: number;
   belowGainFloor: number;
+  practice: PracticeRec[];
 }
 
 // Star-fit band for one keymode filter (all scores on the fallback path).
@@ -1157,6 +1224,18 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
   }
 
   const peerBand = mergeBands(runs.map((run) => run.band));
+  // "Next tier" practice rows across the mode runs, nearest feasibility miss
+  // first (see the PRACTICE_* block). Built before the empty-board early
+  // return on purpose: an exhausted farm pool is exactly when they matter.
+  const practiceRecs: FarmHelperRec[] = isPopular ? [] : runs
+    .flatMap((run) => run.practice)
+    .sort((a, b) => a.overshoot - b.overshoot || b.rec.peerFraction - a.rec.peerFraction)
+    .slice(0, PRACTICE_MAX_RECS)
+    .map(({ rec: { difficultyFit, recencyFit, ...rec } }) => {
+      void difficultyFit;
+      void recencyFit;
+      return rec;
+    });
   const base: FarmHelperSnapshot = {
     status: "ready",
     userId: ctx.userId,
@@ -1180,9 +1259,13 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
     // the board and is public.
     ...(isPopular ? {} : {
       ...(ctx.isOwnerView
-        ? { feedbackHiddenCount: runs.reduce((sum, run) => sum + run.feedbackHidden, 0) }
+        ? {
+          feedbackHiddenCount: runs.reduce((sum, run) => sum + run.feedbackHidden, 0),
+          maxedHiddenCount: runs.reduce((sum, run) => sum + run.maxedHidden, 0),
+        }
         : {}),
       belowGainFloorCount: runs.reduce((sum, run) => sum + run.belowGainFloor, 0),
+      ...(practiceRecs.length > 0 ? { practiceRecs } : {}),
     }),
     // Transparency: the margin adjustment the subject's marks applied (absent
     // when none, and owner-only for the same reason as the tags above).
@@ -1196,6 +1279,9 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
     if (!isPopular && ctx.asOf == null) {
       base.pushUnlocked = await timeStage(ctx.timings, "fh_push_targets", () =>
         reconcilePushTargets(db, ctx.writeDb ?? db, ctx.userId, subject, []));
+    }
+    if (practiceRecs.length > 0) {
+      await timeStage(ctx.timings, "fh_top_peers", () => hydrateTopPeers(db, practiceRecs));
     }
     return base;
   }
@@ -1258,7 +1344,7 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
     rankTimings.count("qualifying", ranked.length);
   }
 
-  await timeStage(ctx.timings, "fh_top_peers", () => hydrateTopPeers(db, top));
+  await timeStage(ctx.timings, "fh_top_peers", () => hydrateTopPeers(db, [...top, ...practiceRecs]));
 
   // Skillboost suggestion memory + unlock state (gain view only, never on the
   // backtest path: suggestions are live player state and the sweep writes).
@@ -1331,6 +1417,18 @@ async function loadActiveFeedbackForBuild(
   const now = Date.now();
   for (const mark of marks) {
     const lane = farmHelperLaneKey(mark.beatmapId, mark.speedBucket);
+    // A "maxed" mark is a snooze, so it also expires on age alone: retire it
+    // here (resolved with no pp - no score drove it) and treat it as inactive
+    // for this build.
+    if (mark.verdict === "maxed" && now - mark.createdAt > MAXED_MARK_TTL_MS) {
+      statements.push({
+        sql: `update farm_helper_feedback
+              set resolved_at = ?, resolved_pp = null, updated_at = ?
+              where user_id = ? and beatmap_id = ? and speed_bucket = ? and resolved_at is null`,
+        args: [now, now, userId, mark.beatmapId, mark.speedBucket],
+      });
+      continue;
+    }
     const later = (playsByLane.get(lane) ?? []).filter((play) => play.endedAtMs > mark.createdAt);
     if (later.length === 0) {
       active.set(lane, mark.verdict);
@@ -1393,13 +1491,15 @@ function prepareSubject(
       const subjectKey = farmHelperLaneKey(beatmapId, speedBucket);
       const endedAt = score.ended_at ?? null;
       const existing = subjectByBeatmap.get(subjectKey);
+      const customAccuracy = calculateManiaCustomAccuracy(score.statistics);
       if (!existing) {
         subjectByBeatmap.set(subjectKey, {
           pp,
           endedAt,
           scoreId: score.id,
           speedBucket,
-          customAccuracy: calculateManiaCustomAccuracy(score.statistics),
+          customAccuracy,
+          countMiss: customAccuracy == null ? null : getMissCount(score),
           latestEndedAt: endedAt,
         });
       } else {
@@ -1412,7 +1512,8 @@ function prepareSubject(
           existing.pp = pp;
           existing.endedAt = endedAt;
           existing.scoreId = score.id;
-          existing.customAccuracy = calculateManiaCustomAccuracy(score.statistics);
+          existing.customAccuracy = customAccuracy;
+          existing.countMiss = customAccuracy == null ? null : getMissCount(score);
         }
       }
     }
@@ -1477,18 +1578,18 @@ async function buildModeRun(
   const subjectShape = shapeContext?.shape ?? null;
 
   const band = buildPeerBand(peerMode, peers);
-  if (peers.length === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
+  if (peers.length === 0) return { scored: [], band, feedbackHidden: 0, maxedHidden: 0, belowGainFloor: 0, practice: [] };
 
   const peerFarmed = await timeStage(ctx.timings, "fh_farm_rows", () =>
     aggregatePeerFarmedMaps(db, peers, keyModeToKeys(mode), asOf, ctx.timings));
   band.farmDataCount = peerFarmed.farmDataPeerCount;
-  if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
+  if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0, maxedHidden: 0, belowGainFloor: 0, practice: [] };
 
   const candidates = gateCandidates(peerFarmed, isPopular, subject.subjectByBeatmap);
   ctx.timings?.count("candidates", candidates.length);
-  if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
+  if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0, maxedHidden: 0, belowGainFloor: 0, practice: [] };
 
-  const { scored, feedbackHidden, belowGainFloor } = await timeStage(ctx.timings, "fh_score", () => scoreCandidates(db, subject, ctx, {
+  const { scored, feedbackHidden, maxedHidden, belowGainFloor, practice } = await timeStage(ctx.timings, "fh_score", () => scoreCandidates(db, subject, ctx, {
     candidates,
     peerSampleSize: peerFarmed.eligiblePeerCount,
     mode,
@@ -1499,7 +1600,7 @@ async function buildModeRun(
     familyTopPp: shapeContext?.familyTopPp ?? null,
     accModel,
   }));
-  return { scored, band, feedbackHidden, belowGainFloor };
+  return { scored, band, feedbackHidden, maxedHidden, belowGainFloor, practice };
 }
 
 // Fallback for subjects with no keymode evidence in either mode: the total-pp
@@ -1518,18 +1619,18 @@ async function buildTotalPpRun(db: Db, subject: PreparedSubject, ctx: BuildCtx, 
   if (ctx.queue && asOf == null) enqueueVariantSelfHeal(ctx.queue, peers);
 
   const band = buildPeerBand("total_pp_fallback", peers);
-  if (peers.length === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
+  if (peers.length === 0) return { scored: [], band, feedbackHidden: 0, maxedHidden: 0, belowGainFloor: 0, practice: [] };
 
   const peerFarmed = await timeStage(ctx.timings, "fh_farm_rows", () =>
     aggregatePeerFarmedMaps(db, peers, null, asOf, ctx.timings));
   band.farmDataCount = peerFarmed.farmDataPeerCount;
-  if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
+  if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0, maxedHidden: 0, belowGainFloor: 0, practice: [] };
 
   const candidates = gateCandidates(peerFarmed, isPopular, subject.subjectByBeatmap);
   ctx.timings?.count("candidates", candidates.length);
-  if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0, belowGainFloor: 0 };
+  if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0, maxedHidden: 0, belowGainFloor: 0, practice: [] };
 
-  const { scored, feedbackHidden, belowGainFloor } = await timeStage(ctx.timings, "fh_score", () => scoreCandidates(db, subject, ctx, {
+  const { scored, feedbackHidden, maxedHidden, belowGainFloor, practice } = await timeStage(ctx.timings, "fh_score", () => scoreCandidates(db, subject, ctx, {
     candidates,
     peerSampleSize: peerFarmed.eligiblePeerCount,
     mode: null,
@@ -1540,7 +1641,7 @@ async function buildTotalPpRun(db: Db, subject: PreparedSubject, ctx: BuildCtx, 
     familyTopPp: null,
     accModel,
   }));
-  return { scored, band, feedbackHidden, belowGainFloor };
+  return { scored, band, feedbackHidden, maxedHidden, belowGainFloor, practice };
 }
 
 interface ScoreCandidatesParams {
@@ -1573,7 +1674,7 @@ async function scoreCandidates(
   subject: PreparedSubject,
   ctx: BuildCtx,
   params: ScoreCandidatesParams,
-): Promise<{ scored: ScoredRec[]; feedbackHidden: number; belowGainFloor: number }> {
+): Promise<{ scored: ScoredRec[]; feedbackHidden: number; maxedHidden: number; belowGainFloor: number; practice: PracticeRec[] }> {
   const isPopular = ctx.view === "popular";
   const { candidates, peerSampleSize, mode, fit, subjectBenchmarkCap, subjectBestAccuracy, subjectShape, familyTopPp, accModel } = params;
 
@@ -1604,7 +1705,9 @@ async function scoreCandidates(
   const gainBaseline = ctx.requestedKeyMode !== "any" && mode != null ? subject.modeBaselines[mode] : null;
 
   const scored: ScoredRec[] = [];
+  const practice: PracticeRec[] = [];
   let feedbackHidden = 0;
+  let maxedHidden = 0;
   let belowGainFloor = 0;
   for (const { agg, kernelFraction } of candidates) {
     const meta = beatmapMeta.get(agg.beatmapId);
@@ -1646,12 +1749,40 @@ async function scoreCandidates(
         const chartKeyMode = beatmapKeyMode(meta.keys);
         const feedbackScale = 1 + (chartKeyMode ? ctx.feedbackMarginAdjust?.[chartKeyMode] ?? 0 : 0);
         const marginScale = (feasibilityEntry.sparse ? FEASIBILITY_SPARSE_MARGIN_RATIO : 1) * feedbackScale;
-        if (agg.speedBucket === "normal"
-          && isChartInfeasible(feasibility.chartMsd.get(agg.beatmapId), chartPat, feasibilityEntry, margins.normal * marginScale)) continue;
-        if (agg.speedBucket === "dt"
-          && isChartInfeasible(feasibility.chartMsdDt.get(agg.beatmapId), chartPat, feasibilityEntry, margins.dt * marginScale)) continue;
-        if (agg.speedBucket === "ht"
-          && isChartInfeasible(scaleMsdVector(feasibility.chartMsd.get(agg.beatmapId), FEASIBILITY_HT_RATE_MSD_RATIO), chartPat, feasibilityEntry, margins.normal * marginScale)) continue;
+        const overshoot = agg.speedBucket === "dt"
+          ? chartInfeasibleOvershoot(feasibility.chartMsdDt.get(agg.beatmapId), chartPat, feasibilityEntry, margins.dt * marginScale)
+          : agg.speedBucket === "ht"
+            ? chartInfeasibleOvershoot(scaleMsdVector(feasibility.chartMsd.get(agg.beatmapId), FEASIBILITY_HT_RATE_MSD_RATIO), chartPat, feasibilityEntry, margins.normal * marginScale)
+            : chartInfeasibleOvershoot(feasibility.chartMsd.get(agg.beatmapId), chartPat, feasibilityEntry, margins.normal * marginScale);
+        if (overshoot > 0) {
+          // "Next tier" collection (see the PRACTICE_* block): a lane the
+          // gate drops that the subject has never played comes back as
+          // practice material instead of vanishing. A lane they DID play is
+          // not "next tier" for them, whatever the gate thinks, and a lane
+          // they marked (too_hard here - too_easy bypassed the gate above)
+          // stays hidden as they asked - drop those silently as before.
+          // Sparse keymodes never contribute: their gate runs on transferred
+          // ratings, so a drop there means "no evidence in this keymode",
+          // not "one step above your level" - without this, a 7K main's
+          // barely-played 4K side filled every practice slot with charts
+          // their 4K-variant cohort farms.
+          if (laneFeedback == null && !feasibilityEntry.sparse && !subject.subjectByBeatmap.has(laneKey)) {
+            const practiceRec = buildPracticeRec({
+              agg,
+              meta,
+              setMeta: beatmapsetMeta.get(meta.beatmapsetId),
+              peerFraction: kernelFraction,
+              peerSampleSize,
+              subjectShape,
+              chartShape: candidateShapes.get(agg.beatmapId),
+              gainBaseline,
+              subject,
+              otherLaneScore: subject.subjectBestByBeatmap.get(agg.beatmapId) ?? null,
+            });
+            if (practiceRec) practice.push({ rec: practiceRec, overshoot });
+          }
+          continue;
+        }
       }
     }
 
@@ -1672,8 +1803,12 @@ async function scoreCandidates(
     // the lane leaves the benchmark unscaled. Applies on BOTH views so the
     // popular browse quotes the same numbers as the gain view.
     let accScale = 1;
+    // Hoisted: the push branch below reuses the same prediction as its
+    // chart-specific accuracy ceiling.
+    let accPrediction: PlayerAccPrediction | null = null;
     if (accModel && laneOverall != null) {
       const prediction = predictPlayerAccuracy(accModel, { keyCount: meta.keys, chartOverall: laneOverall, family });
+      accPrediction = prediction ?? null;
       if (prediction) {
         // "Too easy" trusts the player over the model on this lane: scale on
         // the optimistic accP85, so the target and gain rise toward the
@@ -1776,7 +1911,7 @@ async function scoreCandidates(
       // instead. Popular clamps too (no-drop policy).
       if (rawBenchmark > cap && !isPopular && laneFeedback !== "too_easy") continue;
       benchmark = Math.min(rawBenchmark, cap);
-    } else if (scaledMedian - subjectScore.pp > IMPROVE_MARGIN_PP) {
+    } else if (scaledMedian - subjectScore.pp > improveMarginPp(subjectScore.pp)) {
       reason = "improve";
       benchmark = Math.min(scaledMedian, cap, nextPlayedMapBenchmark(subjectScore.pp));
     } else if (
@@ -1787,7 +1922,7 @@ async function scoreCandidates(
       isStale(subjectScore.endedAt)
       && isStale(subjectScore.latestEndedAt)
       && peerRecencyMs > Date.now() - STALE_ACTIVE_MS
-      && Math.min(scaledP75, cap) - subjectScore.pp > IMPROVE_MARGIN_PP
+      && Math.min(scaledP75, cap) - subjectScore.pp > improveMarginPp(subjectScore.pp)
     ) {
       reason = "stale";
       benchmark = Math.min(scaledP75, cap, nextPlayedMapBenchmark(subjectScore.pp));
@@ -1804,7 +1939,7 @@ async function scoreCandidates(
       // NOT multiplied by accScale: the push target is already derived from
       // the subject's own achieved accuracy on this exact chart, so scaling
       // it again would double-apply the accuracy discount.
-      const pushBenchmark = computePushBenchmark(subjectScore, subjectBestAccuracy);
+      const pushBenchmark = computePushBenchmark(subjectScore, subjectBestAccuracy, accPrediction);
       if (pushBenchmark == null) continue;
       reason = "push";
       benchmark = Math.min(pushBenchmark, cap, nextPlayedMapBenchmark(subjectScore.pp));
@@ -1817,7 +1952,7 @@ async function scoreCandidates(
       if (!isPopular) continue;
       benchmark = 0;
     }
-    if (!isPopular && subjectScore && benchmark - subjectScore.pp <= IMPROVE_MARGIN_PP) continue;
+    if (!isPopular && subjectScore && benchmark - subjectScore.pp <= improveMarginPp(subjectScore.pp)) continue;
     const estimatedPpGain = gainBaseline
       ? estimateGain(gainBaseline.entries, gainBaseline.total, agg.beatmapId, benchmark)
       : estimateGain(subject.baselineEntries, subject.baselineTotal, agg.beatmapId, benchmark);
@@ -1834,6 +1969,13 @@ async function scoreCandidates(
     // keeps the row (tagged via `feedback` below).
     if (laneFeedback === "too_hard" && !isPopular) {
       feedbackHidden += 1;
+      continue;
+    }
+    // "maxed" hides the same way (a snooze, not a difficulty claim - it casts
+    // no feasibility-margin vote and expires on its own after
+    // MAXED_MARK_TTL_MS), counted apart so the UI can phrase it honestly.
+    if (laneFeedback === "maxed" && !isPopular) {
+      maxedHidden += 1;
       continue;
     }
 
@@ -1867,6 +2009,9 @@ async function scoreCandidates(
       }
     }
 
+    // From the FINAL (capped) benchmark, so the quoted accuracy target always
+    // matches the quoted target pp.
+    const pushTargetAccuracy = reason === "push" && subjectScore ? pushTargetAccuracyFor(subjectScore, benchmark) : null;
     const setMeta = beatmapsetMeta.get(meta.beatmapsetId);
     const difficultyFit = fit.hasFit ? clamp01(1 - Math.abs(meta.stars - fit.starMid) / fit.starSpread) : 0.5;
     // Real peer play recency (see peerRecencyMs above), not the
@@ -1920,12 +2065,21 @@ async function scoreCandidates(
       clearRisk,
       // Owner-only: what this player marked this lane is theirs to know.
       ...(laneFeedback && ctx.isOwnerView ? { feedback: laneFeedback } : {}),
+      // The 320-weighted accuracy (and its miss count) the pp math runs on,
+      // so the UI can quote real numbers instead of "cleaner acc".
+      ...(subjectScore
+        ? {
+          subjectAccuracy: subjectScore.customAccuracy == null ? null : roundAcc(subjectScore.customAccuracy),
+          subjectMissCount: subjectScore.countMiss,
+        }
+        : {}),
+      ...(pushTargetAccuracy != null ? { pushTargetAccuracy: roundAcc(pushTargetAccuracy) } : {}),
       difficultyFit,
       recencyFit,
     });
   }
 
-  return { scored: capPushRecs(scored), feedbackHidden, belowGainFloor };
+  return { scored: capPushRecs(scored), feedbackHidden, maxedHidden, belowGainFloor, practice };
 }
 
 // Volume gate for "push": self-derived targets exist for potentially every
@@ -1938,21 +2092,115 @@ function capPushRecs(scored: ScoredRec[]): ScoredRec[] {
   return scored.filter((rec) => rec.reason !== "push" || keep.has(rec));
 }
 
+// One "next tier" practice row (see the PRACTICE_* block). Quotes the RAW
+// peer median as its benchmark - the accuracy scaling and the personal caps
+// deliberately do not apply, because this row is "what the players around you
+// hold here", not "what you would score". Returns null when the lane's
+// benchmark would rest on fewer than two kernel-weighted peers (the same
+// reliability guard the gain view applies).
+function buildPracticeRec(params: {
+  agg: CandidateAgg;
+  meta: BeatmapMeta;
+  setMeta: BeatmapsetMeta | undefined;
+  peerFraction: number;
+  peerSampleSize: number;
+  subjectShape: UserShape | null;
+  chartShape: ChartShape | undefined;
+  gainBaseline: { entries: Array<{ pp: number; beatmapId: number }>; total: number } | null;
+  subject: PreparedSubject;
+  otherLaneScore: { pp: number; speedBucket: ScoreSpeedBucket } | null;
+}): ScoredRec | null {
+  const { agg, meta, setMeta, subject, gainBaseline, otherLaneScore } = params;
+  const wbEntryCount = agg.entries.reduce((count, e) => count + (e.wB > 0 ? 1 : 0), 0);
+  if (wbEntryCount < 2) return null;
+  const benchDistribution = prepareWeightedDistribution(agg.entries.map((e) => ({ v: e.pp, w: e.wB })));
+  const median = quantileOfDistribution(benchDistribution, 0.5);
+  if (!Number.isFinite(median) || median <= 0) return null;
+  const estimatedPpGain = gainBaseline
+    ? estimateGain(gainBaseline.entries, gainBaseline.total, agg.beatmapId, median)
+    : estimateGain(subject.baselineEntries, subject.baselineTotal, agg.beatmapId, median);
+  // Same visibility floor as the gain board: a chart whose peer median would
+  // not even move this player's total is not their next tier, it is beneath
+  // their current level in another keymode.
+  if (estimatedPpGain < MIN_VISIBLE_GAIN_PP) return null;
+  const rawPeerRecencyMs = peerRecencyPlayedAtMs(agg.playedAtMs);
+  const patternFit = params.subjectShape && params.chartShape ? computePatternFit(params.subjectShape, params.chartShape) : null;
+  return {
+    beatmapId: agg.beatmapId,
+    speedBucket: agg.speedBucket,
+    recommendedMods: getRecommendedMods(agg),
+    beatmapsetId: meta.beatmapsetId,
+    title: setMeta?.title ?? "",
+    artist: setMeta?.artist ?? "",
+    creator: setMeta?.creator ?? "",
+    version: meta.version,
+    cover: setMeta?.cover ?? "",
+    listCover: setMeta?.listCover ?? setMeta?.cover ?? "",
+    status: setMeta?.status || meta.status,
+    stars: meta.stars,
+    keys: meta.keys,
+    bpm: round2(laneBpm(meta.bpm, agg.speedBucket)),
+    lengthSec: Math.round(laneLengthSec(meta.lengthSec, agg.speedBucket)),
+    reason: "practice",
+    estimatedPpGain: round2(estimatedPpGain),
+    benchmarkPp: round2(median),
+    subjectPp: null,
+    subjectPlayedAt: null,
+    subjectOtherLanePp: otherLaneScore ? round2(otherLaneScore.pp) : null,
+    subjectOtherLaneSpeed: otherLaneScore?.speedBucket ?? null,
+    peerCount: agg.entries.length,
+    peerSampleSize: params.peerSampleSize,
+    peerFraction: round2(params.peerFraction),
+    patternFit: patternFit == null ? null : round2(patternFit),
+    peerPpMedian: round2(median),
+    peerPpP75: round2(quantileOfDistribution(benchDistribution, 0.75)),
+    latestPeerPlayedAt: dateMsToIso(maxOf(agg.playedAtMs)),
+    peerRecencyPlayedAt: dateMsToIso(rawPeerRecencyMs),
+    topPeers: selectTopPeers(agg.entries)
+      .map((p) => ({ userId: p.userId, username: "", avatarUrl: "", pp: round2(p.pp) })),
+    scoreUrl: null,
+    mapUrl: meta.url,
+    rankScore: 0,
+    survival: null,
+    clearRisk: false,
+    difficultyFit: 0,
+    recencyFit: 0,
+  };
+}
+
 // The "push" benchmark: the subject's own pp rescaled from their score's
 // custom accuracy to a fixed step above it, capped by their demonstrated best
-// accuracy plus a small headroom and the absolute ceiling. Null when the score
-// has no judgement counts, sits outside the linear regime, or the remaining
-// accuracy delta is too small to be a meaningful target.
-function computePushBenchmark(score: SubjectMapScore, bestAccuracy: number | null): number | null {
+// accuracy plus a small headroom, by the personal accuracy model's optimistic
+// percentile for this exact chart when a prediction exists (the
+// chart-feasibility cap the keymode-best accuracy cannot provide), and by the
+// absolute ceiling. Null when the score has no judgement counts, sits outside
+// the linear regime, or the remaining accuracy delta is too small to be a
+// meaningful target - which includes a score already at or above the model's
+// chart-specific ceiling.
+function computePushBenchmark(
+  score: SubjectMapScore,
+  bestAccuracy: number | null,
+  prediction: PlayerAccPrediction | null,
+): number | null {
   const accuracy = score.customAccuracy;
   if (accuracy == null || accuracy <= 0.8 || accuracy >= 1) return null;
   const accuracyCap = Math.min(
     PUSH_ACC_CEILING,
     bestAccuracy != null && bestAccuracy > 0 ? bestAccuracy + PUSH_ACC_BEST_HEADROOM : PUSH_ACC_CEILING,
+    prediction ? prediction.accP85 : PUSH_ACC_CEILING,
   );
   const targetAccuracy = Math.min(accuracy + PUSH_ACC_STEP, accuracyCap);
   if (targetAccuracy - accuracy < PUSH_MIN_ACC_DELTA) return null;
   return score.pp * (5 * targetAccuracy - 4) / (5 * accuracy - 4);
+}
+
+// The custom accuracy a (possibly capped) push benchmark corresponds to, from
+// the same pp linearity the benchmark was derived with, so the displayed
+// "raise your 320 rate to X" always agrees with the displayed target pp.
+function pushTargetAccuracyFor(score: SubjectMapScore, benchmarkPp: number): number | null {
+  const accuracy = score.customAccuracy;
+  if (accuracy == null || accuracy <= 0.8 || score.pp <= 0) return null;
+  return ((benchmarkPp / score.pp) * (5 * accuracy - 4) + 4) / 5;
 }
 
 // Skillboost ("push") suggestion memory. Records every push lane the served
@@ -3133,21 +3381,35 @@ function isChartInfeasible(
   entry: FeasibilityModeEntry,
   margin: number,
 ): boolean {
-  if (!msd || msd.length !== MSD_SKILLSETS.length) return false;
+  return chartInfeasibleOvershoot(msd, pat, entry, margin) > 0;
+}
+
+// Same verdict as isChartInfeasible, but as a magnitude: the largest amount
+// (in MSD points) any checked axis exceeds the subject's rating plus the
+// margin, 0 when the chart passes. The practice ("next tier") collection
+// sorts dropped lanes by this, nearest miss first.
+function chartInfeasibleOvershoot(
+  msd: number[] | undefined,
+  pat: number[] | null,
+  entry: FeasibilityModeEntry,
+  margin: number,
+): number {
+  if (!msd || msd.length !== MSD_SKILLSETS.length) return 0;
   let dominantIdx = 0;
   for (let i = 1; i < msd.length; i++) if (msd[i] > msd[dominantIdx]) dominantIdx = i;
   const dominant = msd[dominantIdx];
+  let overshoot = 0;
   for (let i = 0; i < msd.length; i++) {
     if (msd[i] < dominant - FEASIBILITY_SECONDARY_AXIS_WINDOW) continue;
     const rating = entry.ratings[MSD_SKILLSETS[i]];
-    if (Number.isFinite(rating) && msd[i] > rating + margin) return true;
+    if (Number.isFinite(rating)) overshoot = Math.max(overshoot, msd[i] - (rating + margin));
   }
   const family = primaryPatternFamily(pat);
   if (family != null) {
     const familyRating = entry.familyRatings.get(family);
-    if (familyRating != null && familyRating > 0 && dominant > familyRating + margin) return true;
+    if (familyRating != null && familyRating > 0) overshoot = Math.max(overshoot, dominant - (familyRating + margin));
   }
-  return false;
+  return Math.max(0, overshoot);
 }
 
 // The HT lane's rate-scaled MSD approximation (no stored 0.75x sweep).
@@ -3178,6 +3440,9 @@ async function computeFeedbackMarginAdjust(
 
   const votes = new Map<ConcreteFarmHelperKeyMode, number>();
   for (const mark of marks) {
+    // Only the difficulty verdicts vote: "maxed" says "I'm done with this
+    // lane", which claims nothing about where the gate's ceiling should sit.
+    if (mark.verdict !== "too_hard" && mark.verdict !== "too_easy") continue;
     const meta = beatmapMeta.get(mark.beatmapId);
     if (!meta) continue;
     const keyMode = beatmapKeyMode(meta.keys);
@@ -3621,6 +3886,12 @@ function clampLimit(raw: number | undefined): number {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+// Accuracies ride the wire at 4 decimals (99.65% = 0.9965); 2 would erase the
+// very deltas the push copy quotes.
+function roundAcc(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
 }
 
 function numberOr(value: unknown, fallback: number): number {

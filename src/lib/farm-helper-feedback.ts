@@ -8,7 +8,7 @@ import { liveBridgeToken } from "./live-backend-tokens";
 // pattern), so a logged-in user can only ever read or mutate their own marks. The browser never
 // sends a user id and never sees the bridge token.
 
-export type FarmHelperFeedbackVerdict = "too_hard" | "too_easy";
+export type FarmHelperFeedbackVerdict = "too_hard" | "too_easy" | "maxed";
 
 // Why a mutation (or list read) did not go through. "not_logged_in" means the
 // cookie resolved no viewer; "too_many_marks" is the backend's active-marks

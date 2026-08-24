@@ -18,6 +18,7 @@ import {
   Check,
   ChevronDown,
   Flame,
+  Mountain,
 } from "lucide-react";
 import {
   isLiveBackendConfigured,
@@ -266,6 +267,15 @@ const REASON_META: Record<
     soft: "bg-osu-red/15",
     wash: "bg-gradient-to-l from-osu-red/20 to-transparent",
     Icon: Flame,
+  },
+  // Only "next tier" rows carry this; they never appear on the main board.
+  practice: {
+    label: msg`next tier`,
+    accent: "bg-osu-purple",
+    text: "text-osu-purple-light",
+    soft: "bg-osu-purple/15",
+    wash: "bg-gradient-to-l from-osu-purple/20 to-transparent",
+    Icon: Mountain,
   },
 };
 
@@ -542,9 +552,9 @@ function FarmHelperPage() {
   // - a present tag always wins over the local entry;
   // - too_easy: presence/absence is authoritative in both views, so a visible
   //   untagged rec drops a local too_easy entry;
-  // - too_hard: the gain view hides genuinely marked lanes, so a visible
-  //   untagged gain-view rec drops a local too_hard entry. In the popular view
-  //   absence proves nothing for too_hard and the local entry stays.
+  // - too_hard / maxed: the gain view hides genuinely marked lanes, so a
+  //   visible untagged gain-view rec drops a local entry of either. In the
+  //   popular view absence proves nothing for them and the local entry stays.
   useEffect(() => {
     if (!isOwner || !visibleSnapshot) return;
     setFeedbackMarks((current) => {
@@ -561,7 +571,7 @@ function FarmHelperPage() {
           }
           continue;
         }
-        if (local === "too_easy" || (local === "too_hard" && visibleSnapshot.view === "gain")) {
+        if (local === "too_easy" || ((local === "too_hard" || local === "maxed") && visibleSnapshot.view === "gain")) {
           next.delete(key);
           changed = true;
         }
@@ -599,9 +609,10 @@ function FarmHelperPage() {
       else next.set(key, verdict);
       return next;
     });
-    // A too_hard mark on the open preview is about to drop that rec from the
-    // refetched snapshot; retain a copy so the panel stays up as an undo path.
-    if (!clearing && verdict === "too_hard" && rec && selectedKey === key) {
+    // A too_hard or maxed mark on the open preview is about to drop that rec
+    // from the refetched snapshot; retain a copy so the panel stays up as an
+    // undo path.
+    if (!clearing && (verdict === "too_hard" || verdict === "maxed") && rec && selectedKey === key) {
       setRetainedSelection({ requestKey, rec });
     }
     const revertMark = () =>
@@ -714,6 +725,15 @@ function FarmHelperPage() {
   const totalQualifying = visibleSnapshot?.totalQualifying ?? 0;
   const serverTruncated = !isClientFiltered && totalQualifying > (visibleSnapshot?.recs.length ?? 0);
 
+  // "Next tier" rows ride the snapshot separately from recs. They only render
+  // on a thin unfiltered gain board - exactly the exhausted-pool case - so a
+  // full board never grows an extra section.
+  const practiceList = view === "gain" ? visibleSnapshot?.practiceRecs ?? [] : [];
+  const showPractice = practiceList.length > 0
+    && view === "gain"
+    && !isClientFiltered
+    && (visibleSnapshot?.recs.length ?? 0) <= PAGE_SIZE;
+
   const pageCount = Math.ceil(recs.length / PAGE_SIZE);
   const safePage = Math.min(page, Math.max(0, pageCount - 1));
   const pageRecs = recs.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
@@ -728,7 +748,11 @@ function FarmHelperPage() {
     ) || 1;
   }, [recs, view]);
 
-  const selectedFromList = selectedKey ? recs.find((rec) => recKey(rec) === selectedKey) ?? null : null;
+  const selectedFromList = selectedKey
+    ? recs.find((rec) => recKey(rec) === selectedKey)
+      ?? (showPractice ? practiceList.find((rec) => recKey(rec) === selectedKey) : null)
+      ?? null
+    : null;
   // Keep the previewed rec renderable when a too_hard mark drops it from the
   // refetched snapshot: the panel keeps showing the retained copy (with the
   // mark active as an undo path) until the user closes it. Only the feedback
@@ -1011,6 +1035,49 @@ function FarmHelperPage() {
                     <Pagination page={safePage} totalPages={pageCount} onPageChange={goToPage} />
                   ) : null}
 
+                  {/* A thin (but non-empty) board explains what it is not
+                      showing; the empty board already has its own notice. */}
+                  {view === "gain" && recs.length > 0 && recs.length <= PAGE_SIZE
+                    && (visibleSnapshot?.belowGainFloorCount ?? 0) > 0 ? (
+                    <p className="mt-2 px-1 text-[11px] text-osu-f1">
+                      <Plural
+                        value={visibleSnapshot?.belowGainFloorCount ?? 0}
+                        one="# more map is hidden because it would add less than 1pp for you"
+                        other="# more maps are hidden because they would add less than 1pp for you"
+                      />
+                    </p>
+                  ) : null}
+
+                  {showPractice ? (
+                    <div className="mt-4">
+                      <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 px-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-osu-purple-light">
+                          <Trans>next tier</Trans>
+                        </span>
+                        <span className="text-[11px] text-osu-f1">
+                          <Trans>maps players near you farm that sit above your shown skills</Trans>
+                        </span>
+                      </div>
+                      <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4/60">
+                        <div className="divide-y divide-osu-b3/15">
+                          {practiceList.map((rec, index) => (
+                            <RecRow
+                              key={recKey(rec)}
+                              rec={rec}
+                              rank={index + 1}
+                              barPct={0}
+                              gainUnit={gainUnit}
+                              view={view}
+                              selected={selectedKey === recKey(rec)}
+                              onSelect={() => setSelectedKey(recKey(rec))}
+                              markedVerdict={isOwner ? feedbackMarks.get(recKey(rec)) ?? null : null}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
                   {/* Below xl the rail is CSS-hidden, so the marks manager
                       lives under the list instead. */}
                   {marksManager ? <div className="mt-4 xl:hidden">{marksManager}</div> : null}
@@ -1040,7 +1107,11 @@ function FarmHelperPage() {
                           view={view}
                           refreshing={waitingForCurrentSnapshot}
                           counts={boardCounts}
-                          hiddenByMarks={isOwner && view === "gain" ? visibleSnapshot?.feedbackHiddenCount ?? 0 : 0}
+                          hiddenByMarks={
+                            isOwner && view === "gain"
+                              ? (visibleSnapshot?.feedbackHiddenCount ?? 0) + (visibleSnapshot?.maxedHiddenCount ?? 0)
+                              : 0
+                          }
                           pushLocked={pushLocked}
                         />
                         {marksManager ? <div className="mt-4">{marksManager}</div> : null}
@@ -1515,11 +1586,17 @@ function RecRow({
             {markedVerdict ? (
               <span
                 className={`shrink-0 font-bold uppercase tracking-wide ${
-                  markedVerdict === "too_hard" ? "text-osu-orange" : "text-osu-green-light"
+                  markedVerdict === "too_hard" ? "text-osu-orange" : markedVerdict === "maxed" ? "text-osu-purple-light" : "text-osu-green-light"
                 }`}
-                title={markedVerdict === "too_hard" ? t`You marked this too hard` : t`You marked this too easy`}
+                title={
+                  markedVerdict === "too_hard"
+                    ? t`You marked this too hard`
+                    : markedVerdict === "maxed"
+                      ? t`You marked this done with it`
+                      : t`You marked this too easy`
+                }
               >
-                {markedVerdict === "too_hard" ? t`marked hard` : t`marked easy`}
+                {markedVerdict === "too_hard" ? t`marked hard` : markedVerdict === "maxed" ? t`marked done` : t`marked easy`}
               </span>
             ) : null}
             {rec.clearRisk ? (
@@ -1553,7 +1630,14 @@ function RecRow({
         </div>
 
         <div className="w-[74px] shrink-0 text-right sm:w-[88px]">
-          {view === "popular" && rec.estimatedPpGain <= 0 ? (
+          {rec.reason === "practice" ? (
+            <>
+              <div className="text-[15px] font-black leading-none tabular-nums text-osu-c1">
+                {formatPp(rec.peerPpMedian)}
+              </div>
+              <div className="mt-0.5 text-[9px] uppercase tracking-wide text-osu-f1"><Trans>peers hold</Trans></div>
+            </>
+          ) : view === "popular" && rec.estimatedPpGain <= 0 ? (
             <>
               <div className="text-[15px] font-black leading-none tabular-nums text-osu-c1">
                 {Math.round(rec.peerFraction * 100)}%
@@ -1766,6 +1850,7 @@ function RecPreview({
               <button
                 type="button"
                 disabled={feedback.pending}
+                title={t`this map is beyond your level: hides it from your recs until you set a score on it`}
                 onClick={() => feedback.onVerdict("too_hard")}
                 aria-pressed={feedback.activeVerdict === "too_hard"}
                 className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-bold transition-colors ${
@@ -1779,6 +1864,7 @@ function RecPreview({
               <button
                 type="button"
                 disabled={feedback.pending}
+                title={t`this map is below your level: targets on it will aim higher`}
                 onClick={() => feedback.onVerdict("too_easy")}
                 aria-pressed={feedback.activeVerdict === "too_easy"}
                 className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-bold transition-colors ${
@@ -1789,13 +1875,32 @@ function RecPreview({
               >
                 <Trans>too easy</Trans>
               </button>
+              {/* "maxed" is about a score they hold, so it only shows on played lanes. */}
+              {rec.subjectPp != null ? (
+                <button
+                  type="button"
+                  disabled={feedback.pending}
+                  title={t`you're done improving this map: hides it from your recs for 60 days`}
+                  onClick={() => feedback.onVerdict("maxed")}
+                  aria-pressed={feedback.activeVerdict === "maxed"}
+                  className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-bold transition-colors ${
+                    feedback.activeVerdict === "maxed"
+                      ? "border-osu-purple-light/60 bg-osu-purple/15 text-osu-purple-light"
+                      : "border-osu-b3/40 text-osu-f1 hover:border-osu-purple-light/50 hover:text-osu-l2"
+                  } ${feedback.pending ? "cursor-default opacity-60" : ""}`}
+                >
+                  <Trans>done with it</Trans>
+                </button>
+              ) : null}
             </div>
             <p className="mt-1.5 text-[10.5px] leading-snug text-osu-f1">
               {feedback.activeVerdict === "too_hard"
                 ? t`hidden from your recs until you clear it or set a score on it`
                 : feedback.activeVerdict === "too_easy"
                   ? t`targets on this chart will aim higher until you set the score`
-                  : t`feels off for your level? mark it and your recs will adjust`}
+                  : feedback.activeVerdict === "maxed"
+                    ? t`hidden from your recs for 60 days, or until you set a new score on it`
+                    : t`feels off for your level? mark it and your recs will adjust`}
             </p>
             {feedback.error ? <p className="mt-1 text-[10.5px] leading-snug text-osu-red-light">{feedback.error}</p> : null}
           </div>
@@ -2012,10 +2117,10 @@ function MarksManager({
                   <div className="flex items-center gap-2">
                     <span
                       className={`shrink-0 text-[9px] font-bold uppercase tracking-wide ${
-                        mark.verdict === "too_hard" ? "text-osu-orange" : "text-osu-green-light"
+                        mark.verdict === "too_hard" ? "text-osu-orange" : mark.verdict === "maxed" ? "text-osu-purple-light" : "text-osu-green-light"
                       }`}
                     >
-                      {mark.verdict === "too_hard" ? t`hard` : t`easy`}
+                      {mark.verdict === "too_hard" ? t`hard` : mark.verdict === "maxed" ? t`done` : t`easy`}
                     </span>
                     <a
                       href={`https://osu.ppy.sh/beatmaps/${mark.beatmapId}`}
@@ -2047,7 +2152,7 @@ function MarksManager({
             })}
           </div>
           <p className="border-t border-osu-b3/20 px-3.5 py-2 text-[10px] leading-snug text-osu-f1">
-            <Trans>too hard hides the lane from your gain views; setting a real score also clears a mark</Trans>
+            <Trans>too hard hides the lane from your gain views, done with it does the same for 60 days; setting a real score also clears a mark</Trans>
           </p>
         </div>
       ) : null}
@@ -2571,6 +2676,7 @@ function useOpenFarmMapDetail() {
 
 function farmStatusLabel(rec: LiveFarmHelperRec, i18n: I18nLike): string {
   if (rec.reason === "owned") return i18n._(msg`cleared`);
+  if (rec.reason === "practice") return i18n._(msg`next tier`);
   if (rec.reason === "missing") return rec.peerFraction >= 0.45 ? i18n._(msg`common pick`) : i18n._(msg`missing`);
   if (rec.reason === "stale") return i18n._(msg`old pb`);
   if (rec.reason === "push") return i18n._(msg`skillboost`);
@@ -2617,6 +2723,11 @@ function whySentence(rec: LiveFarmHelperRec, i18n: I18nLike): string {
   const pct = Math.round(rec.peerFraction * 100);
   const median = formatPp(rec.peerPpMedian);
   const subjectPp = rec.subjectPp;
+  if (rec.reason === "practice") {
+    return i18n._(
+      msg`${pct}% of the players around your pp farm this and hold ${median}pp on it, but its difficulty sits above what your plays have shown so far. Practice material, not farm yet.`,
+    );
+  }
   if (subjectPp == null) {
     const other = otherLaneBest(rec);
     if (other) {
@@ -2647,6 +2758,29 @@ function whySentence(rec: LiveFarmHelperRec, i18n: I18nLike): string {
   }
   if (rec.reason === "push") {
     const target = formatPp(rec.benchmarkPp);
+    const misses = rec.subjectMissCount;
+    // The real ask, in the numbers the pp math runs on: misses to cut, or the
+    // 320-weighted acc to raise. "Cleaner acc" told a 99.8% FC nothing. The miss
+    // framing only fires for a handful of misses; "cut those 119 misses"
+    // reads as "FC it", which nobody is being asked to do - the target is a
+    // small accuracy step, and past a few misses the rate framing says that.
+    if (misses != null && misses > 0 && misses <= 5) {
+      return i18n._(
+        msg`You already beat the typical score here with ${yourPp}pp, but that run had ${plural(misses, { one: "# miss", other: "# misses" })}. Cutting them out is worth about ${target}pp.`,
+      );
+    }
+    if (rec.subjectAccuracy != null && rec.pushTargetAccuracy != null) {
+      const from = formatAccPct(rec.subjectAccuracy);
+      const to = formatAccPct(rec.pushTargetAccuracy);
+      if (misses === 0) {
+        return i18n._(
+          msg`You already beat the typical score here with a miss-free ${yourPp}pp. Raising your 320-weighted acc from ${from}% to ${to}% is worth about ${target}pp.`,
+        );
+      }
+      return i18n._(
+        msg`You already beat the typical score here with ${yourPp}pp. Raising your 320-weighted acc from ${from}% to ${to}% is worth about ${target}pp.`,
+      );
+    }
     return i18n._(msg`You already beat the typical score here with ${yourPp}pp. A cleaner acc run is worth about ${target}pp.`);
   }
   if (rec.reason === "owned") {
@@ -2843,15 +2977,22 @@ function clampPct(value: number): number {
 
 function countReasons(recs: LiveFarmHelperRec[]): Record<ReasonFilter, number> {
   const counts: Record<ReasonFilter, number> = { all: recs.length, missing: 0, improve: 0, stale: 0, push: 0 };
-  // "owned" only appears in the popular view, where the reason filter is hidden.
+  // "owned" only appears in the popular view, where the reason filter is
+  // hidden; "practice" rows never enter `recs` at all.
   for (const rec of recs) {
-    if (rec.reason !== "owned") counts[rec.reason] += 1;
+    if (rec.reason !== "owned" && rec.reason !== "practice") counts[rec.reason] += 1;
   }
   return counts;
 }
 
 function formatPp(value: number): string {
   return Math.round(value).toLocaleString("en-US");
+}
+
+// 320-weighted accuracy as a percentage with enough precision to show the
+// push delta (99.65 vs 99.9).
+function formatAccPct(value: number): string {
+  return (value * 100).toFixed(2);
 }
 
 function formatCompactPp(value: number): string {

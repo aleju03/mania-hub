@@ -2226,7 +2226,11 @@ describe("farm helper predicted-accuracy benchmark scaling", () => {
     const recent = "2024-06-01T00:00:00Z";
     const bestScores = buildSubjectBestScores();
     bestScores[0] = subjectScore(990, 700, recent, 4, 5, [], statsForCustomAcc(0.99));
-    bestScores.push(subjectScore(BM_PUSH, 400, recent, 4, 5, [], statsForCustomAcc(0.97)));
+    // 0.90 on the lane: well under the model's chart-specific accP85 ceiling,
+    // so the push fires with its full fixed step and the only thing that
+    // could shrink the target below the linearity rescale is a (wrongly)
+    // double-applied peer multiplier.
+    bestScores.push(subjectScore(BM_PUSH, 400, recent, 4, 5, [], statsForCustomAcc(0.90)));
     await seedPeers();
     await insertBeatmapMeta(BM_PUSH);
     // The push chart has an msd_overall and the model discounts it (< 1), so
@@ -2248,10 +2252,37 @@ describe("farm helper predicted-accuracy benchmark scaling", () => {
     expect(push?.reason).toBe("push");
     // The push benchmark is the subject's own accuracy rescale, untouched by
     // the peer multiplier.
-    const accNow = calculateManiaCustomAccuracy(statsForCustomAcc(0.97))!;
+    const accNow = calculateManiaCustomAccuracy(statsForCustomAcc(0.90))!;
     const targetAcc = accNow + 0.0075;
     const expectedBenchmark = 400 * (5 * targetAcc - 4) / (5 * accNow - 4);
     expect(push?.benchmarkPp).toBeCloseTo(expectedBenchmark, 1);
+    expect(push?.pushTargetAccuracy).toBeCloseTo(targetAcc, 3);
+    expect(push?.subjectAccuracy).toBeCloseTo(accNow, 3);
+  });
+
+  it("drops a push whose score already sits at the model's chart ceiling", async () => {
+    const recent = "2024-06-01T00:00:00Z";
+    const bestScores = buildSubjectBestScores();
+    bestScores[0] = subjectScore(990, 700, recent, 4, 5, [], statsForCustomAcc(0.99));
+    // 0.97 on a chart the model says this player accs ~0.94 on at best: the
+    // score IS the ceiling, and nagging "push it higher" here is exactly the
+    // near-FC-at-your-limit complaint. The keymode best (0.99, from an easier
+    // chart) must not resurrect it.
+    bestScores.push(subjectScore(BM_PUSH, 400, recent, 4, 5, [], statsForCustomAcc(0.97)));
+    await seedPeers();
+    await insertBeatmapMeta(BM_PUSH);
+    await insertSearchIndex(BM_PUSH, STREAM_PAT, 4, { Stream: 24 });
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_PUSH, 395, nowIso());
+    }
+    const model = accModelForTest({ a: Math.log(0.10) });
+    await seedSubjectAccModel(model);
+
+    const prediction = predictPlayerAccuracy(model, { keyCount: 4, chartOverall: 24, family: "stream" })!;
+    expect(prediction.accP85).toBeLessThan(calculateManiaCustomAccuracy(statsForCustomAcc(0.97))!);
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    expect(snapshot.recs.find((rec) => rec.beatmapId === BM_PUSH)).toBeUndefined();
   });
 });
 
@@ -2780,5 +2811,36 @@ describe("farm helper modelsReady flag (N)", () => {
     const afterPopular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular" });
     expect(after.modelsReady).toBe(true);
     expect(afterPopular.modelsReady).toBe(true);
+  });
+});
+
+// The improve margin is relative above its floor (max(8pp, 2% of the score)):
+// a high-pp play with peers only nominally above it is done, not "improve".
+describe("farm helper relative improve margin", () => {
+  const BM_MARGIN = 46_500;
+
+  async function seedMarginScenario(peerPp: number): Promise<OscScore[]> {
+    const bestScores = buildSubjectBestScores();
+    bestScores.push(subjectScore(BM_MARGIN, 600, "2024-06-01T00:00:00Z"));
+    await seedPeers();
+    await insertBeatmapMeta(BM_MARGIN);
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_MARGIN, peerPp, nowIso());
+    }
+    return bestScores;
+  }
+
+  it("hides a 600pp lane peers only beat by 10pp (over the 8pp floor, under 2%)", async () => {
+    const bestScores = await seedMarginScenario(610);
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    expect(snapshot.recs.some((rec) => rec.beatmapId === BM_MARGIN)).toBe(false);
+  });
+
+  it("still fires once the gap clears the relative margin", async () => {
+    const bestScores = await seedMarginScenario(622);
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_MARGIN);
+    expect(rec?.reason).toBe("improve");
+    expect(rec?.benchmarkPp).toBe(622);
   });
 });
