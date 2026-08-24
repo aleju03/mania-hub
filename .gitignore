@@ -40,3 +40,7 @@ datasets/dan-classifier/benchmark/*
 src/lib/__fixtures__/dan-classifier/ln-yokaze/
 src/lib/__fixtures__/dan-classifier/ln-references/[0-9]*.osu
 capture-replays/
+# LN axis offline analysis artifacts (cells JSON, report runs)
+scripts/ln-axis/out/
+# Named per-player opinions from the rater; stays out of the repo
+scripts/ln-axis/labels-draft.json

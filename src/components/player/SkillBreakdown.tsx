@@ -6,6 +6,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../lib/my-data";
 import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "../../lib/dan-images";
 import {
+  lnPlayShare,
   radarAnchor,
   radarLabelDy,
   radarPoints,
@@ -55,6 +56,25 @@ function ProvisionalChip({ mode }: { mode: MyDataSkillMode }) {
     >
       <Trans>provisional</Trans>
     </span>
+  );
+}
+
+// The LN row's context line (4K only, see lnPlayShare): the LN number mostly
+// reflects what the player plays, so the share is shown as data next to it.
+// "Have LN content" and the explicit counts, not "are LN charts": the share
+// counts every chart with meaningful hold content (that is what feeds the LN
+// bar), while the top LN plays list is gated to majority-LN charts and is a
+// much smaller set - the two numbers must not read as the same universe.
+function LnShareNote({ mode, className = "" }: { mode: MyDataSkillMode; className?: string }) {
+  const share = lnPlayShare(mode);
+  if (share == null) return null;
+  const percent = Math.round(share * 100);
+  const lnPlays = (mode.patterns ?? []).find((entry) => entry.id === "ln")?.plays ?? 0;
+  const total = mode.analyzedPlays;
+  return (
+    <div className={`text-[11px] text-osu-l2 ${className}`}>
+      <Trans><span className="font-semibold text-white tabular-nums">{percent}%</span> of the rated plays have LN content ({lnPlays} of {total})</Trans>
+    </div>
   );
 }
 
@@ -248,6 +268,7 @@ export function SkillBreakdownBody({ skills, mode, own = false }: { skills: MyDa
           </div>
         ))}
       </div>
+      <LnShareNote mode={mode!} className="mt-2" />
       <div className="mt-3 text-[10px] text-osu-f1">{footnote(skills!, mode!, own, i18n)}</div>
     </div>
   );
@@ -512,6 +533,7 @@ export function SkillModePanel({
               </div>
             );
           })}
+          <LnShareNote mode={mode} className="px-2 pt-1.5" />
         </div>
       </div>
 
