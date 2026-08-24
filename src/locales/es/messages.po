@@ -132,6 +132,11 @@ msgstr "{0, plural, one {# mapa} other {# mapas}}"
 msgid "{0, plural, one {# member} other {# members}}"
 msgstr "{0, plural, one {# miembro} other {# miembros}}"
 
+#. placeholder {0}: visibleSnapshot?.belowGainFloorCount ?? 0
+#: src/routes/farm-helper.tsx
+msgid "{0, plural, one {# more map is hidden because it would add less than 1pp for you} other {# more maps are hidden because they would add less than 1pp for you}}"
+msgstr "{0, plural, one {# mapa más está oculto porque te daría menos de 1pp} other {# mapas más están ocultos porque te darían menos de 1pp}}"
+
 #. placeholder {0}: playerScores.length - replayableScores.length
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{0, plural, one {# other score found, but no replay is available} other {# other scores found, but no replay is available}}"
@@ -340,6 +345,11 @@ msgstr "Detalles de {0}"
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "{0} duplicate"
 msgstr "{0} duplicadas"
+
+#. placeholder {0}: eternalFinale.username
+#: src/components/packs/RevealStage.tsx
+msgid "{0} Eternal maniacard"
+msgstr ""
 
 #. placeholder {0}: randomPick.player.favouriteCount
 #: src/routes/maps.tsx
@@ -941,6 +951,10 @@ msgstr "{mins}m"
 msgid "{mins}m ago"
 msgstr "hace {mins}m"
 
+#: src/routes/farm-helper.tsx
+#~ msgid "{misses, plural, one {# miss} other {# misses}}"
+#~ msgstr "{misses, plural, one {# miss} other {# misses}}"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "{mod}: {pct}% of plays"
 msgstr "{mod}: {pct}% de las plays"
@@ -1055,6 +1069,10 @@ msgstr "El {pct}% de los jugadores cerca de tu pp farmea esto {rowMods} y promed
 #: src/routes/farm-helper.tsx
 msgid "{pct}% of the players around your pp farm this and average {median}pp. Your best on the map is {otherPp}pp {otherMods}."
 msgstr "El {pct}% de los jugadores cerca de tu pp farmea esto y promedian {median}pp. Tu mejor marca en el mapa es {otherPp}pp {otherMods}."
+
+#: src/routes/farm-helper.tsx
+msgid "{pct}% of the players around your pp farm this and hold {median}pp on it, but its difficulty sits above what your plays have shown so far. Practice material, not farm yet."
+msgstr "El {pct}% de los jugadores cerca de tu pp farmean esto y tienen {median}pp ahí, pero su dificultad está por encima de lo que muestran tus plays. Material de práctica, todavía no de farmeo."
 
 #: src/routes/farm-helper.tsx
 msgid "{pct}% of the players around your pp farm this and it is not in your top plays. They average {median}pp on it."
@@ -1307,6 +1325,14 @@ msgstr "<0>{0}K tiene su propia escala de rating.</0> Que el número sea más ba
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "<0>{collector}</0> has not opened a pack."
 msgstr "<0>{collector}</0> no ha abierto ningún pack."
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "<0>{percent}%</0> of the rated plays are on LN charts"
+#~ msgstr "El <0>{percent}%</0> de los plays calificados son de charts LN"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "<0>{percent}%</0> of the rated plays have LN content ({lnPlays} of {total})"
+msgstr El <0>{percent}%</0> de los plays calificados tienen contenido LN ({lnPlays} de {total})"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "<0>{selectedCount}</0> selected"
@@ -3720,10 +3746,18 @@ msgstr "¿{hidden} tiene más o menos ranked score que {shown}?"
 msgid "Does {hidden} have more or less playtime than {shown}?"
 msgstr "¿{hidden} tiene más o menos tiempo de juego que {shown}?"
 
+#: src/routes/farm-helper.tsx
+msgid "done"
+msgstr "suficiente"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
 msgid "Done"
 msgstr "Listo"
+
+#: src/routes/farm-helper.tsx
+msgid "done with it"
+msgstr "suficiente"
 
 #: src/routes/skins_.$id.tsx
 msgid "Download .osk"
@@ -4781,6 +4815,10 @@ msgid "Hidden"
 msgstr "Oculto"
 
 #: src/routes/farm-helper.tsx
+msgid "hidden from your recs for 60 days, or until you set a new score on it"
+msgstr "oculto de tus recs por 60 días, o hasta que pongas un puntaje nuevo en él"
+
+#: src/routes/farm-helper.tsx
 msgid "hidden from your recs until you clear it or set a score on it"
 msgstr "oculto de tus recs hasta que lo pases o pongas un puntaje en él"
 
@@ -5319,7 +5357,7 @@ msgstr "Pulsaciones"
 #: src/routes/farm-helper.tsx
 #: src/routes/skins.tsx
 msgid "keys"
-msgstr "teclas"
+msgstr "modo"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplayInfo.tsx
@@ -6094,6 +6132,10 @@ msgstr "Mapas jugados"
 msgid "maps players near you farm"
 msgstr "mapas que farmean jugadores cerca de ti"
 
+#: src/routes/farm-helper.tsx
+msgid "maps players near you farm that sit above your shown skills"
+msgstr "mapas que farmean los jugadores cerca tuyo pero que están por encima de tu nivel demostrado"
+
 #: src/routes/maps.tsx
 msgid "Maps ready."
 msgstr "Mapas listos."
@@ -6108,12 +6150,20 @@ msgid "Margin <0>+{0}</0>"
 msgstr "Margen <0>+{0}</0>"
 
 #: src/routes/farm-helper.tsx
+msgid "marked done"
+msgstr "marcado suficiente"
+
+#: src/routes/farm-helper.tsx
 msgid "marked easy"
 msgstr "marcado fácil"
 
 #: src/routes/farm-helper.tsx
 msgid "marked hard"
 msgstr "marcado difícil"
+
+#: src/routes/farm-helper.tsx
+#~ msgid "marked maxed"
+#~ msgstr "marcado al máximo"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Matching against the replay's checksum."
@@ -6130,6 +6180,10 @@ msgstr "MAX"
 #: src/routes/maps.tsx
 msgid "Max PP"
 msgstr "PP máx."
+
+#: src/routes/farm-helper.tsx
+#~ msgid "maxed"
+#~ msgstr "al máximo"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
@@ -6538,6 +6592,10 @@ msgstr "Siguientes jugadores"
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Next preview"
 msgstr "Siguiente preview"
+
+#: src/routes/farm-helper.tsx
+msgid "next tier"
+msgstr "siguiente nivel"
 
 #: src/routes/player/$username.tsx
 msgid "NM is excluded from mod usage"
@@ -7656,6 +7714,10 @@ msgstr "Pico"
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "peers farming"
 msgstr "jugadores cercanos farmeando"
+
+#: src/routes/farm-helper.tsx
+msgid "peers hold"
+msgstr "ellos tienen"
 
 #: src/components/maps/SearchCard.tsx
 msgid "pending"
@@ -10796,6 +10858,14 @@ msgstr "Esto aún no está disponible. Vuelve pronto."
 msgid "this map"
 msgstr "este mapa"
 
+#: src/routes/farm-helper.tsx
+msgid "this map is below your level: targets on it will aim higher"
+msgstr "este mapa está por debajo de tu nivel: sus targets van a apuntar más alto"
+
+#: src/routes/farm-helper.tsx
+msgid "this map is beyond your level: hides it from your recs until you set a score on it"
+msgstr "este mapa está por encima de tu nivel: se oculta de tus recs hasta que pongas un puntaje en él"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a new backdrop and pattern; later edits will preserve both."
 msgstr "Esta vista previa {selectedKeymode}K antigua es anterior a las opciones de render guardadas. Su primer re-render necesita un fondo y un patrón nuevos; las ediciones posteriores conservarán ambos."
@@ -10944,8 +11014,16 @@ msgid "too hard"
 msgstr "muy difícil"
 
 #: src/routes/farm-helper.tsx
-msgid "too hard hides the lane from your gain views; setting a real score also clears a mark"
-msgstr "muy difícil oculta el mapa de tus vistas de ganancia; poner un puntaje real también limpia la marca"
+#~ msgid "too hard and maxed hide the lane from your gain views (maxed for 60 days); setting a real score also clears a mark"
+#~ msgstr "\"muy difícil\" y \"al máximo\" ocultan el mapa de tus vistas de ganancia (\"al máximo\" por 60 días); poner un puntaje real también borra la marca"
+
+#: src/routes/farm-helper.tsx
+msgid "too hard hides the lane from your gain views, done with it does the same for 60 days; setting a real score also clears a mark"
+msgstr "muy difícil oculta el mapa de tus vistas de ganancia, suficiente hace lo mismo por 60 días; poner un puntaje real también borra la marca"
+
+#: src/routes/farm-helper.tsx
+#~ msgid "too hard hides the lane from your gain views; setting a real score also clears a mark"
+#~ msgstr "muy difícil oculta el mapa de tus vistas de ganancia; poner un puntaje real también limpia la marca"
 
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
@@ -11916,8 +11994,32 @@ msgid "You already beat the players near you here, but a higher-acc rerun is sti
 msgstr "Ya superaste a los jugadores cerca de ti aquí, pero una repetición con más acc todavía vale pp. Oculto por defecto hasta que logres uno de sus puntajes."
 
 #: src/routes/farm-helper.tsx
+#~ msgid "You already beat the typical score here with {yourPp}pp, but that run had {missCount}. Cutting them out is worth about {target}pp."
+#~ msgstr "Ya superaste el score típico de aquí con {yourPp}pp, pero esa run tuvo {missCount}. Quitarlos vale unos {target}pp."
+
+#: src/routes/farm-helper.tsx
+msgid "You already beat the typical score here with {yourPp}pp, but that run had {misses, plural, one {# miss} other {# misses}}. Cutting them out is worth about {target}pp."
+msgstr "Ya superaste el score típico de aquí con {yourPp}pp, pero esa run tuvo {misses, plural, one {# miss} other {# misses}}. Quitarlos vale unos {target}pp."
+
+#: src/routes/farm-helper.tsx
 msgid "You already beat the typical score here with {yourPp}pp. A cleaner acc run is worth about {target}pp."
 msgstr "Ya superaste el score típico de aquí con {yourPp}pp. Una run con mejor acc vale unos {target}pp."
+
+#: src/routes/farm-helper.tsx
+#~ msgid "You already beat the typical score here with {yourPp}pp. Raising your 320 rate from {from}% to {to}% is worth about {target}pp."
+#~ msgstr "Ya superaste el score típico de aquí con {yourPp}pp. Subir tu tasa de 320 de {from}% a {to}% vale unos {target}pp."
+
+#: src/routes/farm-helper.tsx
+msgid "You already beat the typical score here with {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
+msgstr "Ya superaste el score típico de aquí con {yourPp}pp. Subir tu acc ponderada a 320 de {from}% a {to}% vale unos {target}pp."
+
+#: src/routes/farm-helper.tsx
+#~ msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320 rate from {from}% to {to}% is worth about {target}pp."
+#~ msgstr "Ya superaste el score típico de aquí con {yourPp}pp sin misses. Subir tu tasa de 320 de {from}% a {to}% vale unos {target}pp."
+
+#: src/routes/farm-helper.tsx
+msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
+msgstr "Ya superaste el score típico de aquí con {yourPp}pp sin misses. Subir tu acc ponderada a 320 de {from}% a {to}% vale unos {target}pp."
 
 #: src/components/packs/PackStage.tsx
 msgid "You are cutting through the cards"
@@ -11964,6 +12066,14 @@ msgid "you have too many active marks, clear some first"
 msgstr "tienes demasiadas marcas activas, borra algunas primero"
 
 #: src/routes/farm-helper.tsx
+msgid "You marked this done with it"
+msgstr "Marcaste este mapa como suficiente"
+
+#: src/routes/farm-helper.tsx
+#~ msgid "You marked this maxed"
+#~ msgstr "Marcaste esto como al máximo"
+
+#: src/routes/farm-helper.tsx
 msgid "You marked this too easy"
 msgstr "Marcaste este como muy fácil"
 
@@ -11988,6 +12098,10 @@ msgstr "ya pasaste de {0}"
 #: src/routes/player/$username.tsx
 msgid "You're being tracked now"
 msgstr "Ya estás en el tracker"
+
+#: src/routes/farm-helper.tsx
+msgid "you're done improving this map: hides it from your recs for 60 days"
+msgstr "ya no piensas mejorar este mapa: se oculta de tus recs por 60 días"
 
 #: src/routes/farm-helper.tsx
 msgid "you're logged out, log in again to save marks"

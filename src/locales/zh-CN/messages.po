@@ -141,6 +141,11 @@ msgstr "{0, plural, other {# 个谱面}}"
 msgid "{0, plural, one {# member} other {# members}}"
 msgstr "{0, plural, other {# 名成员}}"
 
+#. placeholder {0}: visibleSnapshot?.belowGainFloorCount ?? 0
+#: src/routes/farm-helper.tsx
+msgid "{0, plural, one {# more map is hidden because it would add less than 1pp for you} other {# more maps are hidden because they would add less than 1pp for you}}"
+msgstr "{0, plural, other {还有 # 张图被隐藏，因为它们对你来说加不到 1pp}}"
+
 #. placeholder {0}: playerScores.length - replayableScores.length
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{0, plural, one {# other score found, but no replay is available} other {# other scores found, but no replay is available}}"
@@ -349,6 +354,11 @@ msgstr "{0} 详情"
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "{0} duplicate"
 msgstr "{0} 张重复"
+
+#. placeholder {0}: eternalFinale.username
+#: src/components/packs/RevealStage.tsx
+msgid "{0} Eternal maniacard"
+msgstr ""
 
 #. placeholder {0}: randomPick.player.favouriteCount
 #: src/routes/maps.tsx
@@ -950,6 +960,10 @@ msgstr "{mins} 分"
 msgid "{mins}m ago"
 msgstr "{mins} 分钟前"
 
+#: src/routes/farm-helper.tsx
+#~ msgid "{misses, plural, one {# miss} other {# misses}}"
+#~ msgstr "{misses, plural, other {# 个 miss}}"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "{mod}: {pct}% of plays"
 msgstr "{mod}：占 {pct}% 的成绩"
@@ -1064,6 +1078,10 @@ msgstr "与你 pp 相近的玩家中有 {pct}% 用 {rowMods} 刷这张，平均 
 #: src/routes/farm-helper.tsx
 msgid "{pct}% of the players around your pp farm this and average {median}pp. Your best on the map is {otherPp}pp {otherMods}."
 msgstr "与你 pp 相近的玩家中有 {pct}% 在刷这张，平均 {median}pp。你在这张谱面上的最好成绩是 {otherPp}pp {otherMods}。"
+
+#: src/routes/farm-helper.tsx
+msgid "{pct}% of the players around your pp farm this and hold {median}pp on it, but its difficulty sits above what your plays have shown so far. Practice material, not farm yet."
+msgstr "你 pp 附近有 {pct}% 的玩家在刷这张图，平均拿到 {median}pp，但它的难度超出了你目前成绩所展示的水平。适合练习，还不适合刷分。"
 
 #: src/routes/farm-helper.tsx
 msgid "{pct}% of the players around your pp farm this and it is not in your top plays. They average {median}pp on it."
@@ -1316,6 +1334,14 @@ msgstr "<0>{0}K 有自己的评分标准。</0>数值比其他键数低，并不
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "<0>{collector}</0> has not opened a pack."
 msgstr "<0>{collector}</0> 还没有开过卡包。"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "<0>{percent}%</0> of the rated plays are on LN charts"
+#~ msgstr "已评分成绩中有 <0>{percent}%</0> 来自 LN 谱面"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "<0>{percent}%</0> of the rated plays have LN content ({lnPlays} of {total})"
+msgstr 已评分成绩中有 <0>{percent}%</0> 包含 LN（{lnPlays}/{total}）"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "<0>{selectedCount}</0> selected"
@@ -3729,10 +3755,18 @@ msgstr "{hidden} 的 Ranked 分数比 {shown} 多还是少？"
 msgid "Does {hidden} have more or less playtime than {shown}?"
 msgstr "{hidden} 的游戏时长比 {shown} 多还是少？"
 
+#: src/routes/farm-helper.tsx
+msgid "done"
+msgstr "刷够"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
 msgid "Done"
 msgstr "完成"
+
+#: src/routes/farm-helper.tsx
+msgid "done with it"
+msgstr "刷够了"
 
 #: src/routes/skins_.$id.tsx
 msgid "Download .osk"
@@ -4788,6 +4822,10 @@ msgstr "已隐藏"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hidden"
 msgstr "已隐藏"
+
+#: src/routes/farm-helper.tsx
+msgid "hidden from your recs for 60 days, or until you set a new score on it"
+msgstr "已从你的推荐中隐藏 60 天，或直到你在上面打出新成绩"
 
 #: src/routes/farm-helper.tsx
 msgid "hidden from your recs until you clear it or set a score on it"
@@ -6103,6 +6141,10 @@ msgstr "打过的谱面"
 msgid "maps players near you farm"
 msgstr "你附近的玩家在刷的谱面"
 
+#: src/routes/farm-helper.tsx
+msgid "maps players near you farm that sit above your shown skills"
+msgstr "你附近的玩家在刷、但难度超出你目前水平的图"
+
 #: src/routes/maps.tsx
 msgid "Maps ready."
 msgstr "谱面数据已就绪。"
@@ -6117,12 +6159,20 @@ msgid "Margin <0>+{0}</0>"
 msgstr "领先 <0>+{0}</0>"
 
 #: src/routes/farm-helper.tsx
+msgid "marked done"
+msgstr "已标记刷够"
+
+#: src/routes/farm-helper.tsx
 msgid "marked easy"
 msgstr "已标记太易"
 
 #: src/routes/farm-helper.tsx
 msgid "marked hard"
 msgstr "已标记太难"
+
+#: src/routes/farm-helper.tsx
+#~ msgid "marked maxed"
+#~ msgstr "已标记打满"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Matching against the replay's checksum."
@@ -6139,6 +6189,10 @@ msgstr "MAX"
 #: src/routes/maps.tsx
 msgid "Max PP"
 msgstr "最高 PP"
+
+#: src/routes/farm-helper.tsx
+#~ msgid "maxed"
+#~ msgstr "已打满"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
@@ -6547,6 +6601,10 @@ msgstr "下一批玩家"
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Next preview"
 msgstr "下一段试听"
+
+#: src/routes/farm-helper.tsx
+msgid "next tier"
+msgstr "下一阶段"
 
 #: src/routes/player/$username.tsx
 msgid "NM is excluded from mod usage"
@@ -7665,6 +7723,10 @@ msgstr "最高"
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "peers farming"
 msgstr "同水平在刷"
+
+#: src/routes/farm-helper.tsx
+msgid "peers hold"
+msgstr "玩家平均"
 
 #: src/components/maps/SearchCard.tsx
 msgid "pending"
@@ -10805,6 +10867,14 @@ msgstr "这个功能还不可用。请稍后再来。"
 msgid "this map"
 msgstr "这张谱面"
 
+#: src/routes/farm-helper.tsx
+msgid "this map is below your level: targets on it will aim higher"
+msgstr "这张图低于你的水平：它的目标分会定得更高"
+
+#: src/routes/farm-helper.tsx
+msgid "this map is beyond your level: hides it from your recs until you set a score on it"
+msgstr "这张图超出你的水平：会从你的推荐中隐藏，直到你在上面打出成绩"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a new backdrop and pattern; later edits will preserve both."
 msgstr "这个较早的 {selectedKeymode}K 预览是在保存渲染选项之前生成的。第一次重新渲染需要重新选择背景和谱型，之后的编辑会保留这两项。"
@@ -10953,8 +11023,16 @@ msgid "too hard"
 msgstr "太难"
 
 #: src/routes/farm-helper.tsx
-msgid "too hard hides the lane from your gain views; setting a real score also clears a mark"
-msgstr "「太难」会把该谱面从你的收益视图中隐藏；打出真实成绩也会清除标记"
+#~ msgid "too hard and maxed hide the lane from your gain views (maxed for 60 days); setting a real score also clears a mark"
+#~ msgstr "「太难」和「已打满」会把该谱面从你的收益视图中隐藏（「已打满」隐藏 60 天）；打出真实成绩也会清除标记"
+
+#: src/routes/farm-helper.tsx
+msgid "too hard hides the lane from your gain views, done with it does the same for 60 days; setting a real score also clears a mark"
+msgstr "「太难」会把该谱面从你的收益视图中隐藏，「刷够了」同样隐藏 60 天；打出真实成绩也会清除标记"
+
+#: src/routes/farm-helper.tsx
+#~ msgid "too hard hides the lane from your gain views; setting a real score also clears a mark"
+#~ msgstr "「太难」会把该谱面从你的收益视图中隐藏；打出真实成绩也会清除标记"
 
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
@@ -11925,8 +12003,32 @@ msgid "You already beat the players near you here, but a higher-acc rerun is sti
 msgstr "你在这张上已经超过了附近玩家，但更高 acc 的重打仍然值 pp。默认隐藏，直到你达成其中一个目标成绩。"
 
 #: src/routes/farm-helper.tsx
+#~ msgid "You already beat the typical score here with {yourPp}pp, but that run had {missCount}. Cutting them out is worth about {target}pp."
+#~ msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平，但那次有 {missCount}。去掉它们能拿到大约 {target}pp。"
+
+#: src/routes/farm-helper.tsx
+msgid "You already beat the typical score here with {yourPp}pp, but that run had {misses, plural, one {# miss} other {# misses}}. Cutting them out is worth about {target}pp."
+msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平，但那次有 {misses, plural, other {# 个 miss}}。去掉它们能拿到大约 {target}pp。"
+
+#: src/routes/farm-helper.tsx
 msgid "You already beat the typical score here with {yourPp}pp. A cleaner acc run is worth about {target}pp."
 msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。打一次准确率更干净的能拿到大约 {target}pp。"
+
+#: src/routes/farm-helper.tsx
+#~ msgid "You already beat the typical score here with {yourPp}pp. Raising your 320 rate from {from}% to {to}% is worth about {target}pp."
+#~ msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。把 320 比率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
+
+#: src/routes/farm-helper.tsx
+msgid "You already beat the typical score here with {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
+msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。把 320 加权准确率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
+
+#: src/routes/farm-helper.tsx
+#~ msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320 rate from {from}% to {to}% is worth about {target}pp."
+#~ msgstr "你在这里已经无 miss 打出 {yourPp}pp，超过了常见水平。把 320 比率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
+
+#: src/routes/farm-helper.tsx
+msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
+msgstr "你在这里已经无 miss 打出 {yourPp}pp，超过了常见水平。把 320 加权准确率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
 
 #: src/components/packs/PackStage.tsx
 msgid "You are cutting through the cards"
@@ -11973,6 +12075,14 @@ msgid "you have too many active marks, clear some first"
 msgstr "你标记的谱面太多了，先清掉一些"
 
 #: src/routes/farm-helper.tsx
+msgid "You marked this done with it"
+msgstr "你已把它标记为刷够了"
+
+#: src/routes/farm-helper.tsx
+#~ msgid "You marked this maxed"
+#~ msgstr "你已将它标记为打满"
+
+#: src/routes/farm-helper.tsx
 msgid "You marked this too easy"
 msgstr "你已把这张标记为太简单"
 
@@ -11997,6 +12107,10 @@ msgstr "你已经超过 {0} 了"
 #: src/routes/player/$username.tsx
 msgid "You're being tracked now"
 msgstr "你已经被追踪了"
+
+#: src/routes/farm-helper.tsx
+msgid "you're done improving this map: hides it from your recs for 60 days"
+msgstr "这张图你已经刷够了：会从你的推荐中隐藏 60 天"
 
 #: src/routes/farm-helper.tsx
 msgid "you're logged out, log in again to save marks"
