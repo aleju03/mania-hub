@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
-  Image as ImageIcon,
   Inbox,
   Layers,
   ListPlus,
@@ -162,57 +161,75 @@ const FIELD_CLASS =
 const SAVE_CLASS =
   "inline-flex h-7 items-center rounded-md bg-osu-pink px-3 text-[11.5px] font-semibold text-white transition-[filter] duration-[120ms] hover:brightness-110 disabled:opacity-40 cursor-pointer";
 
-/* Signed URLs expire, so they are fetched when the row is opened rather than
-   held from the list load. */
+/* Signed URLs expire and each row costs a signing round trip, so a row asks
+   for its own the first time it scrolls near the viewport instead of on the
+   list load. The thumbnails then sit in the row: no click to see them. */
 function Screenshots({ report }: { report: BugReport }) {
   const [urls, setUrls] = useState<string[] | null>(null);
-  const [open, setOpen] = useState(false);
+  const [visible, setVisible] = useState(false);
   const [zoom, setZoom] = useState<number | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const count = report.screenshotKeys.length;
 
   useEffect(() => {
-    if (!open || urls) return;
+    if (!count || visible) return;
+    const host = hostRef.current;
+    if (!host || typeof IntersectionObserver !== "function") {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          observer.disconnect();
+          setVisible(true);
+        }
+      },
+      { rootMargin: "400px" },
+    );
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [count, visible]);
+
+  useEffect(() => {
+    if (!visible || urls) return;
     let cancelled = false;
     void getBugReportScreenshotUrls({ data: { id: report.id } })
       .then((next) => { if (!cancelled) setUrls(next); })
       .catch(() => { if (!cancelled) setUrls([]); });
     return () => { cancelled = true; };
-  }, [open, urls, report.id]);
+  }, [visible, urls, report.id]);
 
-  const count = report.screenshotKeys.length;
   if (!count) return null;
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-2 inline-flex h-16 w-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-osu-b3/45 text-osu-f1 transition-colors duration-[120ms] hover:border-osu-b3 hover:text-osu-l2"
-      >
-        <ImageIcon className="h-4 w-4" />
-        <span className="text-[11px] tabular-nums">{count}</span>
-      </button>
-    );
-  }
-  if (!urls) return <Skeleton className="mt-2 h-24 w-40 rounded-lg" />;
-  if (!urls.length) return <p className="mt-2 text-[11px] text-osu-f1">Those images are gone.</p>;
-
   return (
-    <>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {urls.map((url, index) => (
-          <button key={url} type="button" onClick={() => setZoom(index)} className="cursor-zoom-in">
-            <img
-              src={url}
-              alt=""
-              className="h-24 rounded-lg border border-osu-b3/30 object-cover transition-opacity duration-[120ms] hover:opacity-80"
-            />
-          </button>
-        ))}
-      </div>
-      {zoom != null ? (
+    <div ref={hostRef} className="mt-2">
+      {!urls ? (
+        <div className="flex flex-wrap gap-2">
+          {report.screenshotKeys.map((key) => (
+            <Skeleton key={key} className="h-24 w-40 rounded-lg" />
+          ))}
+        </div>
+      ) : !urls.length ? (
+        <p className="text-[11px] text-osu-f1">Those images are gone.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {urls.map((url, index) => (
+            <button key={url} type="button" onClick={() => setZoom(index)} className="cursor-zoom-in">
+              <img
+                src={url}
+                alt=""
+                loading="lazy"
+                className="h-24 rounded-lg border border-osu-b3/30 object-cover transition-opacity duration-[120ms] hover:opacity-80"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+      {zoom != null && urls?.length ? (
         <ImageLightbox urls={urls} index={zoom} onIndex={setZoom} onClose={() => setZoom(null)} />
       ) : null}
-    </>
+    </div>
   );
 }
 
