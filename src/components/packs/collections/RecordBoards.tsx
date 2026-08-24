@@ -142,16 +142,19 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
 
   return (
     <div className="grid gap-x-10 gap-y-10 md:grid-cols-2">
-      <Board title={t`biggest collections`}>
-        {boards.biggestCollections.map((collector, index) => (
-          <CollectorRow
-            key={collector.userId}
-            collector={collector}
-            index={index}
-            value={formatNumber(collector.cards)}
-          />
-        ))}
-      </Board>
+      {boards.completion.length > 0 && (
+        <Board title={t`most complete collections`}>
+          {boards.completion.map((collector, index) => (
+            <CollectorRow
+              key={collector.userId}
+              collector={collector}
+              index={index}
+              note={completionNote(collector.completion)}
+              value={formatNumber(collector.completion.poolOwnedCount)}
+            />
+          ))}
+        </Board>
+      )}
 
       <Board title={t`most packs opened`}>
         {boards.packsOpened.map((collector, index) => (
@@ -164,19 +167,16 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
         ))}
       </Board>
 
-      {boards.completion.length > 0 && (
-        <Board title={t`closest to every pullable player`}>
-          {boards.completion.map((collector, index) => (
-            <CollectorRow
-              key={collector.userId}
-              collector={collector}
-              index={index}
-              note={completionNote(collector.completion)}
-              value={formatNumber(collector.completion.poolOwnedCount)}
-            />
-          ))}
-        </Board>
-      )}
+      <Board title={t`most unique cards`}>
+        {boards.biggestCollections.map((collector, index) => (
+          <CollectorRow
+            key={collector.userId}
+            collector={collector}
+            index={index}
+            value={formatNumber(collector.cards)}
+          />
+        ))}
+      </Board>
 
       <Board title={t`GOAT roster, ${goatRoster} to find`}>
         {boards.goatHolders.map((collector, index) => (

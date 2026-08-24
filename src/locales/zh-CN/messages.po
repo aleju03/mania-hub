@@ -2229,8 +2229,8 @@ msgid "biggest {0}"
 msgstr "最大 {0}"
 
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "biggest collections"
-msgstr "最大的收藏册"
+#~ msgid "biggest collections"
+#~ msgstr "最大的收藏册"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Biggest day"
@@ -2826,8 +2826,8 @@ msgid "Closed"
 msgstr "不开放"
 
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "closest to every pullable player"
-msgstr "最接近集齐所有可抽玩家"
+#~ msgid "closest to every pullable player"
+#~ msgstr "最接近集齐所有可抽玩家"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -6314,6 +6314,10 @@ msgstr "卡片最多"
 msgid "most collected cards"
 msgstr "被收集最多的卡片"
 
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "most complete collections"
+msgstr "最完整的收藏册"
+
 #: src/routes/maps.tsx
 msgid "Most farmed globally"
 msgstr "全球刷分最多"
@@ -6341,6 +6345,10 @@ msgstr "全球游玩最多"
 #: src/routes/maps.tsx
 msgid "Most played in {countryName}"
 msgstr "{countryName} 游玩最多"
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "most unique cards"
+msgstr "最多不重复卡牌"
 
 #: src/routes/player/$username.tsx
 msgid "Most Used Mod"

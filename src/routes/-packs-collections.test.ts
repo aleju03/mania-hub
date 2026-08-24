@@ -67,6 +67,20 @@ describe("collections tab param", () => {
   });
 });
 
+describe("collection record boards", () => {
+  const boards = readFileSync(join(process.cwd(), "src/components/packs/collections/RecordBoards.tsx"), "utf8");
+
+  it("leads with collection completion and distinguishes unique-card count", () => {
+    const completionAt = boards.indexOf('title={t`most complete collections`}');
+    const uniqueCardsAt = boards.indexOf('title={t`most unique cards`}');
+
+    expect(completionAt).toBeGreaterThan(-1);
+    expect(uniqueCardsAt).toBeGreaterThan(completionAt);
+    expect(boards).not.toContain('title={t`biggest collections`}');
+    expect(boards).not.toContain('title={t`closest to every pullable player`}');
+  });
+});
+
 describe("leaving a collector's shelf", () => {
   /* Opening someone from a board or the list and coming back should land on
      the tab you left, not on the default one. The tab rides in the link both

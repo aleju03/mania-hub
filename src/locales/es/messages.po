@@ -2220,8 +2220,8 @@ msgid "biggest {0}"
 msgstr "mayor {0}"
 
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "biggest collections"
-msgstr "colecciones más grandes"
+#~ msgid "biggest collections"
+#~ msgstr "colecciones más grandes"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Biggest day"
@@ -2817,8 +2817,8 @@ msgid "Closed"
 msgstr "Cerrado"
 
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "closest to every pullable player"
-msgstr "más cerca de tener a cada jugador sacable"
+#~ msgid "closest to every pullable player"
+#~ msgstr "más cerca de tener a cada jugador sacable"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -6305,6 +6305,10 @@ msgstr "Más cartas"
 msgid "most collected cards"
 msgstr "cartas más coleccionadas"
 
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "most complete collections"
+msgstr "colecciones más completas"
+
 #: src/routes/maps.tsx
 msgid "Most farmed globally"
 msgstr "Los más farmeados globalmente"
@@ -6332,6 +6336,10 @@ msgstr "Los más jugados globalmente"
 #: src/routes/maps.tsx
 msgid "Most played in {countryName}"
 msgstr "Los más jugados en {countryName}"
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "most unique cards"
+msgstr "más cartas únicas"
 
 #: src/routes/player/$username.tsx
 msgid "Most Used Mod"
