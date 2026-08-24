@@ -11,9 +11,9 @@ import { getAdminTodo, type AdminTodo } from "./admin-todos.js";
 //
 // What identity a row carries is whatever the frontend could verify: the osu!
 // viewer id when there is a login cookie, nothing otherwise. That is also the
-// line the reply feature draws. An admin's reply is only ever readable by a
-// signed-in reporter, because a report with no account behind it has nobody to
-// show it to; anonymous reports are filed and answered on the board alone.
+// line the conversation feature draws. Only a signed-in reporter can read and
+// append to a thread, because a report with no account behind it has nobody to
+// authenticate; anonymous reports are filed and answered on the board alone.
 //
 // The HTTP layer keys its per-IP rate limit on the forwarded visitor address;
 // the caps here are the second line, bounding how much one reporter can leave
@@ -43,6 +43,7 @@ const REPORTER_KEY_MAX = 120;
 const ADMIN_NOTE_MAX = 5000;
 const REPLY_MAX = 4000;
 const TODO_ID_MAX = 64;
+const MESSAGE_MAX = 4000;
 
 const LIST_LIMIT_MAX = 200;
 const LIST_LIMIT_DEFAULT = 100;
@@ -66,6 +67,7 @@ export const BUG_REPORT_PER_REPORTER_PER_DAY = 30;
 export const BUG_REPORT_SHARED_ANON_PER_DAY = 200;
 const SHARED_REPORTER_KEY = "anon";
 const REPORTER_WINDOW_MS = 24 * 60 * 60_000;
+export const BUG_REPORT_MESSAGES_PER_REPORTER_PER_DAY = 30;
 
 /**
  * Screenshot keys are built by the frontend (it owns the R2 client) and sent
@@ -78,6 +80,15 @@ const SCREENSHOT_KEY_EXTS = ["png", "jpg", "gif", "webp", "bmp", "avif"] as cons
 
 export interface BugReportContext {
   [key: string]: string | number | boolean | null;
+}
+
+export type BugReportMessageAuthor = "reporter" | "admin";
+
+export interface BugReportMessage {
+  id: string;
+  author: BugReportMessageAuthor;
+  body: string;
+  createdAt: number;
 }
 
 export interface BugReport {
@@ -94,9 +105,11 @@ export interface BugReport {
   screenshotKeys: string[];
   /** Private triage scratch. Never leaves the admin board. */
   adminNote: string | null;
-  /** Written for the reporter, shown back to them on /report when signed in. */
+  /** Newest admin message, retained for rolling-deploy compatibility. */
   reply: string | null;
   repliedAt: number | null;
+  /** Append-only conversation after the original report body. */
+  messages: BugReportMessage[];
   /** The admin_todos row this was promoted into, if it was. */
   todoId: string | null;
   /** Human-readable admin todo number, when the linked todo still exists. */
@@ -115,6 +128,7 @@ export interface BugReportForReporter {
   screenshotCount: number;
   reply: string | null;
   repliedAt: number | null;
+  messages: BugReportMessage[];
   createdAt: number;
   updatedAt: number;
 }
@@ -142,6 +156,10 @@ export type AttachBugReportScreenshotResult =
 export type AuthorizeBugReportScreenshotResult =
   | { ok: true; alreadyAttached: boolean }
   | { ok: false; reason: "report_not_found" | "invalid_token" | "invalid_key" | "too_many_screenshots" };
+
+export type AddBugReportMessageResult =
+  | { ok: true; report: BugReport }
+  | { ok: false; reason: "report_not_found" | "not_owner" | "anonymous_report" | "invalid_message" | "too_many_messages" };
 
 export interface BugReportCounts {
   new: number;
@@ -236,6 +254,25 @@ function parseScreenshotKeys(value: unknown): string[] {
   }
 }
 
+function parseMessages(value: unknown): BugReportMessage[] {
+  if (typeof value !== "string" || !value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry): BugReportMessage[] => {
+      if (!entry || typeof entry !== "object") return [];
+      const row = entry as Record<string, unknown>;
+      const author = row.author === "reporter" || row.author === "admin" ? row.author : null;
+      const body = typeof row.body === "string" ? row.body : "";
+      const createdAt = Number(row.createdAt);
+      if (!author || !body || !Number.isFinite(createdAt)) return [];
+      return [{ id: String(row.id ?? ""), author, body, createdAt }];
+    });
+  } catch {
+    return [];
+  }
+}
+
 export function isBugReportScreenshotKey(id: string, key: unknown): key is string {
   if (typeof key !== "string" || !id) return false;
   const exts = SCREENSHOT_KEY_EXTS.join("|");
@@ -247,7 +284,20 @@ const STORED_COLUMNS =
   "id, status, body, page_path, context_json, user_id, username, screenshot_keys, admin_note, reply, replied_at, todo_id, created_at, updated_at, resolved_at";
 const SELECT_COLUMNS = `${STORED_COLUMNS}, (
   select seq from admin_todos where admin_todos.id = bug_reports.todo_id
-) as todo_seq`;
+) as todo_seq, (
+  select coalesce(json_group_array(json_object(
+    'id', message.id,
+    'author', message.author_role,
+    'body', message.body,
+    'createdAt', message.created_at
+  )), '[]')
+  from (
+    select id, author_role, body, created_at, rowid as insertion_order
+      from bug_report_messages
+     where report_id = bug_reports.id
+     order by created_at, insertion_order
+  ) as message
+) as messages_json`;
 
 function rowToReport(row: Record<string, unknown>): BugReport {
   return {
@@ -262,6 +312,7 @@ function rowToReport(row: Record<string, unknown>): BugReport {
     adminNote: row.admin_note == null ? null : String(row.admin_note),
     reply: row.reply == null ? null : String(row.reply),
     repliedAt: row.replied_at == null ? null : Number(row.replied_at),
+    messages: parseMessages(row.messages_json),
     todoId: row.todo_id == null ? null : String(row.todo_id),
     todoSeq: row.todo_seq == null ? null : Number(row.todo_seq),
     createdAt: Number(row.created_at),
@@ -279,6 +330,7 @@ export function toBugReportForReporter(report: BugReport): BugReportForReporter 
     screenshotCount: report.screenshotKeys.length,
     reply: report.reply,
     repliedAt: report.repliedAt,
+    messages: report.messages,
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
   };
@@ -373,6 +425,7 @@ export async function createBugReport(db: Db, input: BugReportInput): Promise<Cr
     adminNote: null,
     reply: null,
     repliedAt: null,
+    messages: [],
     todoId: null,
     todoSeq: null,
     createdAt: now,
@@ -534,7 +587,7 @@ export async function countBugReports(db: Db): Promise<BugReportCounts> {
 
 /**
  * The admin board: newest first, filtered by status and an optional substring
- * match over the reporter's own words. `counts` is always over the whole table
+ * match over the report and thread. `counts` is always over the whole table
  * (the status tabs need their totals even while one is selected), `total` is
  * over the active filters.
  */
@@ -558,16 +611,20 @@ export async function listBugReports(db: Db, options: ListBugReportsOptions = {}
     // escape wildcards so a literal % or _ in the quoted text stays literal
     const pattern = `%${searchRaw.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
     where.push(
-      "(body like ? escape '\\' or ifnull(page_path, '') like ? escape '\\' or ifnull(username, '') like ? escape '\\')",
+      `(body like ? escape '\\' or ifnull(page_path, '') like ? escape '\\' or ifnull(username, '') like ? escape '\\'
+        or exists (
+          select 1 from bug_report_messages
+           where bug_report_messages.report_id = bug_reports.id and bug_report_messages.body like ? escape '\\'
+        ))`,
     );
-    args.push(pattern, pattern, pattern);
+    args.push(pattern, pattern, pattern, pattern);
   }
   const clause = where.length ? `where ${where.join(" and ")}` : "";
 
   const totalRow = (await exec(db, `select count(*) as n from bug_reports ${clause}`, args)).rows[0];
   const rows = (await exec(
     db,
-    `select ${SELECT_COLUMNS} from bug_reports ${clause} order by created_at desc limit ? offset ?`,
+    `select ${SELECT_COLUMNS} from bug_reports ${clause} order by updated_at desc limit ? offset ?`,
     [...args, limit, offset],
   )).rows;
 
@@ -587,10 +644,87 @@ export async function listBugReportsForUser(db: Db, userId: unknown, limit = 20)
   if (!id) return [];
   const rows = (await exec(
     db,
-    `select ${SELECT_COLUMNS} from bug_reports where user_id = ? order by created_at desc limit ?`,
+    `select ${SELECT_COLUMNS} from bug_reports where user_id = ? order by updated_at desc limit ?`,
     [id, Math.min(Math.max(1, Math.floor(limit)), 50)],
   )).rows;
   return rows.map((row) => toBugReportForReporter(rowToReport(row as Record<string, unknown>)));
+}
+
+function normalizeMessageBody(value: unknown): string | null {
+  return text(value, MESSAGE_MAX);
+}
+
+/** Append a verified reporter's follow-up without changing triage state. Only
+ *  an admin can reopen a closed report; the guarded insert keeps the per-report
+ *  daily ceiling atomic when one client submits the same composer more than
+ *  once concurrently. */
+export async function addReporterBugReportMessage(
+  db: Db,
+  input: { id?: unknown; userId?: unknown; body?: unknown },
+): Promise<AddBugReportMessageResult> {
+  const id = typeof input.id === "string" ? input.id : "";
+  const userId = normalizeUserId(input.userId);
+  const body = normalizeMessageBody(input.body);
+  if (!body) return { ok: false, reason: "invalid_message" };
+  const report = await getById(db, id);
+  if (!report) return { ok: false, reason: "report_not_found" };
+  if (!report.userId) return { ok: false, reason: "anonymous_report" };
+  if (!userId || report.userId !== userId) return { ok: false, reason: "not_owner" };
+
+  const messageId = randomUUID();
+  const now = Date.now();
+  const windowStart = now - REPORTER_WINDOW_MS;
+  const [inserted] = await execBatch(db, [
+    {
+      sql: `insert into bug_report_messages (id, report_id, author_role, body, created_at, legacy_reply)
+        select ?, ?, 'reporter', ?, ?, 0
+         where (
+           select count(*) from bug_report_messages
+            where report_id = ? and author_role = 'reporter' and created_at >= ?
+         ) < ?`,
+      args: [messageId, id, body, now, id, windowStart, BUG_REPORT_MESSAGES_PER_REPORTER_PER_DAY],
+    },
+    {
+      sql: `update bug_reports
+               set updated_at = ?
+             where id = ? and exists (select 1 from bug_report_messages where id = ?)`,
+      args: [now, id, messageId],
+    },
+  ]);
+  if ((inserted?.rowsAffected ?? 0) === 0) return { ok: false, reason: "too_many_messages" };
+  const updated = await getById(db, id);
+  return updated ? { ok: true, report: updated } : { ok: false, reason: "report_not_found" };
+}
+
+/** Append an owner response. `reply`/`replied_at` keep the newest answer in the
+ *  old columns for rolling-deploy compatibility; the message row is the
+ *  durable history the new clients render. */
+export async function addAdminBugReportMessage(
+  db: Db,
+  input: { id?: unknown; body?: unknown },
+): Promise<AddBugReportMessageResult> {
+  const id = typeof input.id === "string" ? input.id : "";
+  const body = normalizeMessageBody(input.body);
+  if (!body) return { ok: false, reason: "invalid_message" };
+  const report = await getById(db, id);
+  if (!report) return { ok: false, reason: "report_not_found" };
+  if (!report.userId) return { ok: false, reason: "anonymous_report" };
+
+  const messageId = randomUUID();
+  const now = Date.now();
+  await execBatch(db, [
+    {
+      sql: `insert into bug_report_messages (id, report_id, author_role, body, created_at, legacy_reply)
+            values (?, ?, 'admin', ?, ?, 0)`,
+      args: [messageId, id, body, now],
+    },
+    {
+      sql: "update bug_reports set reply = ?, replied_at = ?, updated_at = ? where id = ?",
+      args: [body, now, now, id],
+    },
+  ]);
+  const updated = await getById(db, id);
+  return updated ? { ok: true, report: updated } : { ok: false, reason: "report_not_found" };
 }
 
 export interface UpdateBugReportInput {
@@ -604,8 +738,8 @@ export interface UpdateBugReportInput {
  * Triage one report. Fields left undefined keep their stored value, so a
  * status flip needs only `{ id, status }`. `resolvedAt` follows the status:
  * stamped only for fixed/wontfix/duplicate, cleared for new/investigating.
- * `repliedAt` is stamped whenever the reply text actually changes, so an
- * edited reply reads as freshly answered rather than answered a week ago.
+ * `reply` is retained as a rolling-deploy compatibility input. A changed,
+ * non-empty value appends an admin message instead of replacing history.
  */
 export async function updateBugReport(db: Db, input: UpdateBugReportInput): Promise<BugReport | null> {
   const id = typeof input.id === "string" ? input.id : "";
@@ -630,15 +764,24 @@ export async function updateBugReport(db: Db, input: UpdateBugReportInput): Prom
     assignments.push("admin_note = ?");
     args.push(text(input.adminNote, ADMIN_NOTE_MAX));
   }
+  if (assignments.length) {
+    assignments.push("updated_at = ?");
+    args.push(now, id);
+    await exec(db, `update bug_reports set ${assignments.join(", ")} where id = ?`, args);
+  }
+
   if (input.reply !== undefined) {
     const reply = text(input.reply, REPLY_MAX);
-    assignments.push("reply = ?", "replied_at = ?");
-    args.push(reply, reply === existing.reply ? existing.repliedAt : (reply ? now : null));
+    if (reply && reply !== existing.reply) {
+      const result = await addAdminBugReportMessage(db, { id, body: reply });
+      return result.ok ? result.report : getById(db, id);
+    }
+    // Old clients could clear the mutable reply. Keep that compatibility field
+    // honest without deleting append-only history already shown to either side.
+    if (!reply && existing.reply) {
+      await exec(db, "update bug_reports set reply = null, replied_at = null, updated_at = ? where id = ?", [now, id]);
+    }
   }
-  if (!assignments.length) return existing;
-  assignments.push("updated_at = ?");
-  args.push(now, id);
-  await exec(db, `update bug_reports set ${assignments.join(", ")} where id = ?`, args);
   return getById(db, id);
 }
 
@@ -716,8 +859,11 @@ export async function promoteBugReportToTodo(db: Db, id: string): Promise<Promot
 export async function deleteBugReport(db: Db, id: string): Promise<{ deleted: boolean; screenshotKeys: string[] }> {
   const existing = await getById(db, id);
   if (!existing) return { deleted: false, screenshotKeys: [] };
-  const result = await exec(db, "delete from bug_reports where id = ?", [id]);
-  return { deleted: (result.rowsAffected ?? 0) > 0, screenshotKeys: existing.screenshotKeys };
+  const [, result] = await execBatch(db, [
+    { sql: "delete from bug_report_messages where report_id = ?", args: [id] },
+    { sql: "delete from bug_reports where id = ?", args: [id] },
+  ]);
+  return { deleted: (result?.rowsAffected ?? 0) > 0, screenshotKeys: existing.screenshotKeys };
 }
 
 /** Drop everything already closed (fixed + wontfix + duplicate). "new" and "investigating" are untouched. */
@@ -729,8 +875,17 @@ export async function clearClosedBugReports(db: Db): Promise<{ cleared: number; 
     [...BUG_REPORT_CLOSED_STATUSES],
   )).rows;
   const screenshotKeys = rows.flatMap((row) => parseScreenshotKeys((row as Record<string, unknown>).screenshot_keys));
-  const result = await exec(db, `delete from bug_reports where status in (${placeholders})`, [
-    ...BUG_REPORT_CLOSED_STATUSES,
+  const [, result] = await execBatch(db, [
+    {
+      sql: `delete from bug_report_messages where report_id in (
+        select id from bug_reports where status in (${placeholders})
+      )`,
+      args: [...BUG_REPORT_CLOSED_STATUSES],
+    },
+    {
+      sql: `delete from bug_reports where status in (${placeholders})`,
+      args: [...BUG_REPORT_CLOSED_STATUSES],
+    },
   ]);
-  return { cleared: result.rowsAffected ?? 0, screenshotKeys };
+  return { cleared: result?.rowsAffected ?? 0, screenshotKeys };
 }

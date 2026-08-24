@@ -2467,6 +2467,49 @@ async function migrateBugReports(db: Db): Promise<void> {
     create index if not exists idx_bug_reports_user
       on bug_reports(user_id, created_at desc)
   `);
+  // Replies are a conversation, not one mutable cell. The report body remains
+  // the first reporter message on bug_reports; everything after it is appended
+  // here so both sides keep the full history. `legacy_reply` makes the backfill
+  // below idempotent across every boot while ordinary messages remain free to
+  // repeat the same text.
+  await db.execute(`
+    create table if not exists bug_report_messages (
+      id text primary key,
+      report_id text not null,
+      author_role text not null,
+      body text not null,
+      created_at integer not null,
+      legacy_reply integer not null default 0
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_bug_report_messages_report
+      on bug_report_messages(report_id, created_at, id)
+  `);
+  await db.execute(`
+    create unique index if not exists idx_bug_report_messages_legacy
+      on bug_report_messages(report_id) where legacy_reply = 1
+  `);
+  await db.execute(`
+    insert into bug_report_messages (id, report_id, author_role, body, created_at, legacy_reply)
+    select lower(hex(randomblob(16))), id, 'admin', reply, coalesce(replied_at, updated_at), 1
+      from bug_reports
+     where reply is not null and trim(reply) <> ''
+       and not exists (
+         select 1 from bug_report_messages
+          where bug_report_messages.report_id = bug_reports.id and legacy_reply = 1
+       )
+  `);
+  // A reporter follow-up reopens a report and moves it to the front of both
+  // queues, so these reads order by updated_at rather than original filing day.
+  await db.execute(`
+    create index if not exists idx_bug_reports_status_updated
+      on bug_reports(status, updated_at desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_bug_reports_user_updated
+      on bug_reports(user_id, updated_at desc)
+  `);
 }
 
 async function migrateAdminTodos(db: Db): Promise<void> {

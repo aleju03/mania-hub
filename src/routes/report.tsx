@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ImagePlus, Loader2, X } from "lucide-react";
+import { Check, ImagePlus, Loader2, MessageSquare, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 
 import { Avatar } from "../components/ui/Avatar";
@@ -10,12 +10,16 @@ import { useAuth } from "../lib/auth-context";
 import {
   BUG_REPORT_BODY_MAX,
   BUG_REPORT_MAX_SCREENSHOTS,
+  BUG_REPORT_MESSAGE_MAX,
+  bugReportThreadMessages,
   getBugReportScreenshotUrls,
   listMyBugReports,
+  replyToMyBugReport,
   submitBugReport,
   type BugReportContext,
   type BugReportFailReason,
   type BugReportStatus,
+  type BugReportMessage,
   type MyBugReport,
 } from "../lib/bug-reports";
 import {
@@ -58,6 +62,7 @@ const REPLY_AUTHOR = {
   userId: 7095193,
   username: "Aleju03",
 } as const;
+const REPORTER_THREAD_PREVIEW_COUNT = 6;
 
 type UploadStatus = "waiting" | "uploading" | "done" | "failed";
 type Phase = "idle" | "sending" | "sent";
@@ -114,6 +119,12 @@ function ReportPage() {
     }
     void listMyBugReports().then(setMine).catch(() => setMine([]));
   }, [signedIn]);
+
+  const updateMine = useCallback((report: MyBugReport) => {
+    setMine((current) => current
+      ? [report, ...current.filter((entry) => entry.id !== report.id)]
+      : [report]);
+  }, []);
 
   useEffect(() => {
     refreshMine();
@@ -415,6 +426,7 @@ function ReportPage() {
             viewer={viewer}
             locale={locale}
             onOpenImage={(urls, index) => setLightbox({ urls, index })}
+            onReportUpdated={updateMine}
           />
         ) : null}
 
@@ -576,22 +588,226 @@ function ReporterScreenshots({
   );
 }
 
+function ReporterUpdateItem({
+  message,
+  locale,
+}: {
+  message: BugReportMessage;
+  locale: ReturnType<typeof useLocale>;
+}) {
+  const admin = message.author === "admin";
+  return (
+    <div className="relative pl-5">
+      <span className={`absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-osu-b6 ${
+        admin ? "bg-osu-pink" : "bg-osu-b3"
+      }`} />
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className={`text-[10.5px] font-semibold ${admin ? "text-osu-pink-light" : "text-osu-l2"}`}>
+          {admin
+            ? <Trans>Response from {REPLY_AUTHOR.username}</Trans>
+            : <Trans>Additional information you sent</Trans>}
+        </span>
+        {message.createdAt ? (
+          <span className="text-[10px] text-osu-f1">
+            {formatTimeAgo(new Date(message.createdAt).toISOString(), locale)}
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-1 whitespace-pre-wrap break-words text-[12.5px] leading-relaxed text-osu-l1">
+        {message.body}
+      </p>
+    </div>
+  );
+}
+
+function ReporterUpdates({
+  report,
+  locale,
+}: {
+  report: MyBugReport;
+  locale: ReturnType<typeof useLocale>;
+}) {
+  const messages = bugReportThreadMessages(report);
+  const [expanded, setExpanded] = useState(false);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const hiddenCount = Math.max(0, messages.length - REPORTER_THREAD_PREVIEW_COUNT);
+  const visibleMessages = expanded ? messages : messages.slice(-REPORTER_THREAD_PREVIEW_COUNT);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    viewport.scrollTop = expanded ? 0 : viewport.scrollHeight;
+  }, [expanded]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (viewport) viewport.scrollTop = viewport.scrollHeight;
+  }, [messages.length]);
+
+  if (!messages.length) return null;
+  return (
+    <section className="ml-[44px] mt-3 overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b6/20" aria-label="Bug report updates">
+      <div className="flex items-center gap-2 border-b border-osu-b3/15 px-3 py-1.5">
+        <MessageSquare className="h-3 w-3 text-osu-f1" />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-osu-f1">
+          <Trans>Updates</Trans>
+        </span>
+        <span className="rounded-full bg-osu-b4/60 px-1.5 py-0.5 text-[9.5px] tabular-nums text-osu-l2">
+          {messages.length}
+        </span>
+        {hiddenCount > 0 || expanded ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            className="ml-auto cursor-pointer text-[10.5px] text-osu-f1 transition-colors hover:text-white"
+          >
+            {expanded
+              ? <Trans>Show newest {REPORTER_THREAD_PREVIEW_COUNT}</Trans>
+              : <Trans>Show {hiddenCount} earlier updates</Trans>}
+          </button>
+        ) : null}
+      </div>
+      <div ref={viewportRef} className="max-h-[320px] overflow-y-auto px-4 py-3">
+        <div className="space-y-4 border-l border-osu-b3/25">
+          {visibleMessages.map((message) => (
+            <ReporterUpdateItem key={message.id} message={message} locale={locale} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ReporterFollowUpComposer({
+  report,
+  onSent,
+  onCancel,
+}: {
+  report: MyBugReport;
+  onSent: (report: MyBugReport) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useLingui();
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async () => {
+    const body = draft.trim();
+    if (!body || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await replyToMyBugReport({ data: { id: report.id, body } });
+      if (!result.ok) {
+        setError(result.reason === "too_many_messages"
+          ? t`Too many updates today. Try again tomorrow.`
+          : result.reason === "invalid_message"
+            ? t`Write something first.`
+            : t`Could not send that update. Try again.`);
+        return;
+      }
+      setDraft("");
+      onSent(result.report);
+    } catch {
+      setError(t`Could not send that update. Try again.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="ml-[44px] mt-2.5 rounded-lg border border-osu-b3/30 bg-osu-b6/35 p-2.5">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-osu-f1">
+          <Trans>Optional follow-up</Trans>
+        </span>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="ml-auto cursor-pointer text-[10.5px] text-osu-f1 transition-colors hover:text-white"
+        >
+          <Trans>Cancel</Trans>
+        </button>
+      </div>
+      <textarea
+        value={draft}
+        disabled={busy}
+        maxLength={BUG_REPORT_MESSAGE_MAX}
+        rows={2}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            void send();
+          }
+        }}
+        placeholder={t`Anything else that might help?`}
+        className="block w-full resize-y bg-transparent text-[13px] leading-relaxed text-osu-l1 outline-none placeholder:text-osu-f1/55 disabled:opacity-60"
+      />
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          type="button"
+          disabled={busy || !draft.trim()}
+          onClick={() => void send()}
+          className="ml-auto inline-flex h-7 cursor-pointer items-center rounded-md bg-osu-pink px-3 text-[11.5px] font-semibold text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {busy ? t`Sending...` : t`Send update`}
+        </button>
+      </div>
+      {error ? <p className="mt-1.5 text-[11px] text-osu-pink-light">{error}</p> : null}
+    </div>
+  );
+}
+
+function ReporterFollowUp({
+  report,
+  onSent,
+}: {
+  report: MyBugReport;
+  onSent: (report: MyBugReport) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="ml-[44px] mt-2 inline-flex cursor-pointer items-center gap-1.5 text-[10.5px] text-osu-f1 transition-colors hover:text-osu-l2"
+      >
+        <MessageSquare className="h-3 w-3" />
+        <Trans>Add more details</Trans>
+      </button>
+    );
+  }
+  return (
+    <ReporterFollowUpComposer
+      report={report}
+      onCancel={() => setOpen(false)}
+      onSent={(updated) => {
+        setOpen(false);
+        onSent(updated);
+      }}
+    />
+  );
+}
+
 /*
- * The reporter's own thread. Laid out as messages rather than a table because
- * that is what it is: what they wrote, and what came back. The reply sits in
- * the same column as the report it answers, under the owner's name, so
- * there is never a question of who wrote which half.
+ * The reporter's receipt. Responses and later details are framed as optional
+ * updates rather than a chat the act of reporting enrolled them in.
  */
 function MyReports({
   reports,
   viewer,
   locale,
   onOpenImage,
+  onReportUpdated,
 }: {
   reports: MyBugReport[] | null;
   viewer: NonNullable<ReturnType<typeof useAuth>["viewer"]>;
   locale: ReturnType<typeof useLocale>;
   onOpenImage: (urls: string[], index: number) => void;
+  onReportUpdated: (report: MyBugReport) => void;
 }) {
   if (!reports?.length) return null;
   return (
@@ -620,26 +836,8 @@ function MyReports({
               </div>
             </div>
 
-            {report.reply ? (
-              <div className="mt-3 flex gap-3 pl-[44px]">
-                <Avatar userId={REPLY_AUTHOR.userId} size={32} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2">
-                    <span className="text-[13px] font-semibold text-osu-pink-light">
-                      {REPLY_AUTHOR.username}
-                    </span>
-                    {report.repliedAt ? (
-                      <span className="text-[11px] text-osu-f1">
-                        {formatTimeAgo(new Date(report.repliedAt).toISOString(), locale)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-0.5 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-osu-l1">
-                    {report.reply}
-                  </p>
-                </div>
-              </div>
-            ) : null}
+            <ReporterUpdates report={report} locale={locale} />
+            <ReporterFollowUp report={report} onSent={onReportUpdated} />
           </li>
         ))}
       </ul>

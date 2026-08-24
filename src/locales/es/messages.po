@@ -1650,6 +1650,10 @@ msgstr "Agrega las jugadas fallidas u otras que falten del historial reciente de
 msgid "Add link…"
 msgstr "Agregar enlace…"
 
+#: src/routes/report.tsx
+msgid "Add more details"
+msgstr "Añadir más detalles"
+
 #: src/routes/replay.tsx
 msgid "Add overlay"
 msgstr "Agregar overlay"
@@ -1670,6 +1674,10 @@ msgstr "Agregar a Discord"
 #: src/routes/player/$username.tsx
 msgid "Adding you…"
 msgstr "Agregándote…"
+
+#: src/routes/report.tsx
+msgid "Additional information you sent"
+msgstr "Información adicional que enviaste"
 
 #: src/components/packs/PackPulse.tsx
 msgid "Admin: flood the rail with fake pulls to preview the animation"
@@ -1873,6 +1881,10 @@ msgstr "Cualquiera con el enlace puede verlo."
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Anything else"
 msgstr "Otra cosa"
+
+#: src/routes/report.tsx
+msgid "Anything else that might help?"
+msgstr "¿Algo más que pueda ayudar?"
 
 #: src/routes/communities.tsx
 msgid "anywhere"
@@ -2374,6 +2386,7 @@ msgstr "Calculando habilidades..."
 #: src/components/settings/TranslationReportForm.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
+#: src/routes/report.tsx
 msgid "Cancel"
 msgstr "Cancelar"
 
@@ -3098,6 +3111,10 @@ msgstr "No se pudo cambiar el tamaño de la imagen."
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
 msgstr "No se pudo guardar. Inténtalo de nuevo."
+
+#: src/routes/report.tsx
+msgid "Could not send that update. Try again."
+msgstr "No se pudo enviar esa actualización. Inténtalo de nuevo."
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
@@ -7381,6 +7398,10 @@ msgstr "Abriendo..."
 msgid "optional"
 msgstr "opcional"
 
+#: src/routes/report.tsx
+msgid "Optional follow-up"
+msgstr "Seguimiento opcional"
+
 #: src/routes/farm-helper.tsx
 msgid "or pick someone else"
 msgstr "o elige a alguien más"
@@ -8794,6 +8815,11 @@ msgstr "Redimensionar a"
 msgid "Resizing image..."
 msgstr "Redimensionando imagen..."
 
+#. placeholder {0}: REPLY_AUTHOR.username
+#: src/routes/report.tsx
+msgid "Response from {0}"
+msgstr "Respuesta de {0}"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Restored an unsaved draft from this browser."
 msgstr "Se restauró un borrador sin guardar de este navegador."
@@ -9298,6 +9324,14 @@ msgid "Send report"
 msgstr "Enviar reporte"
 
 #: src/routes/report.tsx
+msgid "Send update"
+msgstr "Enviar actualización"
+
+#: src/routes/report.tsx
+msgid "Sending..."
+msgstr "Enviando..."
+
+#: src/routes/report.tsx
 msgid "Sent along with it:"
 msgstr "Se envía también:"
 
@@ -9488,6 +9522,10 @@ msgstr "Mostrar {0} más"
 msgid "Show {0} picks"
 msgstr "Mostrar {0} selecciones"
 
+#: src/routes/report.tsx
+msgid "Show {hiddenCount} earlier updates"
+msgstr "Mostrar {hiddenCount} actualizaciones anteriores"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "Show {totalLabel} maps"
 msgstr "Mostrar {totalLabel} mapas"
@@ -9527,6 +9565,10 @@ msgstr "Mostrar más"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Show my name under spectators when watching a replay"
 msgstr "Mostrar mi nombre entre los espectadores al ver una repetición"
+
+#: src/routes/report.tsx
+msgid "Show newest {REPORTER_THREAD_PREVIEW_COUNT}"
+msgstr "Mostrar las {REPORTER_THREAD_PREVIEW_COUNT} más recientes"
 
 #: src/routes/top-plays.tsx
 msgid "Show non-4K plays"
@@ -10906,6 +10948,10 @@ msgstr "Demasiados reportes en este momento. Inténtalo de nuevo en un rato."
 msgid "Too many requests right now, so the skin file did not come down."
 msgstr "Hay demasiadas solicitudes ahora mismo, así que el archivo de la skin no se pudo descargar."
 
+#: src/routes/report.tsx
+msgid "Too many updates today. Try again tomorrow."
+msgstr "Demasiadas actualizaciones hoy. Inténtalo de nuevo mañana."
+
 #: src/lib/goal-format.ts
 msgid "took {span}"
 msgstr "tardó {span}"
@@ -11262,6 +11308,10 @@ msgstr "actualizado {updatedAtLabel}"
 #: src/routes/player/$username.tsx
 msgid "Updated just now"
 msgstr "Actualizado hace un momento"
+
+#: src/routes/report.tsx
+msgid "Updates"
+msgstr "Actualizaciones"
 
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -11819,6 +11869,10 @@ msgstr "Escribe BBCode aquí, o pega el código de tu página me! actual..."
 #: src/routes/player/$username.tsx
 msgid "Write one in the BBCode editor"
 msgstr "Escribe uno en el editor de BBCode"
+
+#: src/routes/report.tsx
+msgid "Write something first."
+msgstr "Escribe algo primero."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."

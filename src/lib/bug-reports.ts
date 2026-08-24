@@ -15,10 +15,10 @@ import { reporterKeyFor } from "./reporter-key";
    on this server, and the reporter key gives the backend a stable per-reporter
    bucket for its daily cap without ever storing an address.
 
-   The reply is where the anonymous case stops. An answer needs somewhere to
-   land, and a report with no account behind it has nowhere; "your reports" on
-   /report is therefore signed-in only, and the form says so before it is
-   submitted rather than after. */
+   The conversation is where the anonymous case stops. A thread needs a
+   verified owner to read and write it; "your reports" on /report is therefore
+   signed-in only, and the form says so before it is submitted rather than
+   after. */
 
 export type BugReportStatus = "new" | "investigating" | "fixed" | "wontfix" | "duplicate";
 
@@ -31,11 +31,21 @@ export const BUG_REPORT_STATUSES: readonly BugReportStatus[] = [
 ];
 
 export const BUG_REPORT_BODY_MAX = 4000;
+export const BUG_REPORT_MESSAGE_MAX = 4000;
 /** Matches the backend cap; the form refuses a fourth image before uploading it. */
 export const BUG_REPORT_MAX_SCREENSHOTS = 3;
 
 export interface BugReportContext {
   [key: string]: string | number | boolean | null;
+}
+
+export type BugReportMessageAuthor = "reporter" | "admin";
+
+export interface BugReportMessage {
+  id: string;
+  author: BugReportMessageAuthor;
+  body: string;
+  createdAt: number;
 }
 
 export interface BugReport {
@@ -50,6 +60,7 @@ export interface BugReport {
   adminNote: string | null;
   reply: string | null;
   repliedAt: number | null;
+  messages: BugReportMessage[];
   todoId: string | null;
   todoSeq: number | null;
   createdAt: number;
@@ -66,6 +77,7 @@ export interface MyBugReport {
   screenshotCount: number;
   reply: string | null;
   repliedAt: number | null;
+  messages: BugReportMessage[];
   createdAt: number;
   updatedAt: number;
 }
@@ -87,6 +99,28 @@ export type BugReportFailReason = "invalid_report" | "too_many_reports" | "rate_
 export type SubmitBugReportResult =
   | { ok: true; id: string; duplicate: boolean; uploadToken: string | null }
   | { ok: false; reason: BugReportFailReason };
+
+export type BugReportReplyFailReason = "invalid_message" | "too_many_messages" | "not_found" | "failed";
+
+export type ReplyToBugReportResult =
+  | { ok: true; report: MyBugReport }
+  | { ok: false; reason: BugReportReplyFailReason };
+
+/** Rolling deployments can briefly pair a new frontend with a backend that
+ *  still exposes only the old single reply. Turn that value into one synthetic
+ *  message until the message-table migration is serving the real history. */
+export function bugReportThreadMessages(
+  report: Pick<BugReport, "messages" | "reply" | "repliedAt"> | Pick<MyBugReport, "messages" | "reply" | "repliedAt">,
+): BugReportMessage[] {
+  if (Array.isArray(report.messages) && report.messages.length) return report.messages;
+  if (!report.reply) return [];
+  return [{
+    id: "legacy-admin-reply",
+    author: "admin",
+    body: report.reply,
+    createdAt: report.repliedAt ?? 0,
+  }];
+}
 
 export const submitBugReport = createServerFn({ method: "POST" })
   .validator((data: {
@@ -172,6 +206,43 @@ export const listMyBugReports = createServerFn({ method: "GET" }).handler(async 
   }
 });
 
+/** Append to one of the signed-in viewer's own report threads. The browser
+ *  names only the report and words; the verified osu! id is injected here and
+ *  checked against the stored owner again by the backend. */
+export const replyToMyBugReport = createServerFn({ method: "POST" })
+  .validator((data: { id: string; body: string }) => ({
+    id: String(data?.id ?? ""),
+    body: String(data?.body ?? "").trim().slice(0, BUG_REPORT_MESSAGE_MAX),
+  }))
+  .handler(async ({ data }): Promise<ReplyToBugReportResult> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const base = getServerLiveBackendUrl();
+    if (!base) return { ok: false, reason: "failed" };
+    const { readCurrentAuth } = await import("./auth-server");
+    const viewer = (await readCurrentAuth()).viewer;
+    if (!viewer) return { ok: false, reason: "not_found" };
+
+    try {
+      const response = await fetch(`${base}/api/bug-reports/reply`, {
+        method: "POST",
+        headers: bridgeAuthHeaders(true),
+        body: JSON.stringify({ id: data.id, body: data.body, userId: viewer.id }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        report?: MyBugReport;
+        error?: string;
+      };
+      if (response.ok && payload.report) return { ok: true, report: payload.report };
+      if (payload.error === "invalid_message") return { ok: false, reason: "invalid_message" };
+      if (payload.error === "too_many_messages") return { ok: false, reason: "too_many_messages" };
+      if (response.status === 404) return { ok: false, reason: "not_found" };
+      return { ok: false, reason: "failed" };
+    } catch {
+      return { ok: false, reason: "failed" };
+    }
+  });
+
 /* ------------------------------------------------------------------ admin */
 
 async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -215,6 +286,22 @@ export const updateBugReport = createServerFn({ method: "POST" })
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error(`Bug report update failed (${response.status}).`);
+    return await response.json() as { report: BugReport };
+  });
+
+export const replyToBugReportAsAdmin = createServerFn({ method: "POST" })
+  .validator((data: { id: string; body: string }) => ({
+    id: String(data?.id ?? ""),
+    body: String(data?.body ?? "").trim().slice(0, BUG_REPORT_MESSAGE_MAX),
+  }))
+  .handler(async ({ data }): Promise<{ report: BugReport }> => {
+    const { requireAdminAccess } = await import("./auth");
+    await requireAdminAccess("Bug report reply");
+    const response = await adminFetch("/api/admin/bug-reports/reply", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Bug report reply failed (${response.status}).`);
     return await response.json() as { report: BugReport };
   });
 

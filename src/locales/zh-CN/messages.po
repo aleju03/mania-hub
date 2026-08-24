@@ -1659,6 +1659,10 @@ msgstr "从 osu! 最近成绩里补上失败或漏掉的记录。"
 msgid "Add link…"
 msgstr "添加链接…"
 
+#: src/routes/report.tsx
+msgid "Add more details"
+msgstr "添加更多详情"
+
 #: src/routes/replay.tsx
 msgid "Add overlay"
 msgstr "添加覆盖层"
@@ -1679,6 +1683,10 @@ msgstr "添加到 Discord"
 #: src/routes/player/$username.tsx
 msgid "Adding you…"
 msgstr "正在加入…"
+
+#: src/routes/report.tsx
+msgid "Additional information you sent"
+msgstr "你发送的补充信息"
 
 #: src/components/packs/PackPulse.tsx
 msgid "Admin: flood the rail with fake pulls to preview the animation"
@@ -1882,6 +1890,10 @@ msgstr "拿到链接的人都能看到。"
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Anything else"
 msgstr "其他补充"
+
+#: src/routes/report.tsx
+msgid "Anything else that might help?"
+msgstr "还有什么可能有帮助的信息吗？"
 
 #: src/routes/communities.tsx
 msgid "anywhere"
@@ -2383,6 +2395,7 @@ msgstr "正在计算技能…"
 #: src/components/settings/TranslationReportForm.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
+#: src/routes/report.tsx
 msgid "Cancel"
 msgstr "取消"
 
@@ -3107,6 +3120,10 @@ msgstr "无法调整图片尺寸。"
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
 msgstr "保存失败，请再试一次。"
+
+#: src/routes/report.tsx
+msgid "Could not send that update. Try again."
+msgstr "无法发送该更新。请重试。"
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
@@ -7390,6 +7407,10 @@ msgstr "正在打开…"
 msgid "optional"
 msgstr "选填"
 
+#: src/routes/report.tsx
+msgid "Optional follow-up"
+msgstr "可选补充说明"
+
 #: src/routes/farm-helper.tsx
 msgid "or pick someone else"
 msgstr "或选择其他玩家"
@@ -8803,6 +8824,11 @@ msgstr "缩放至"
 msgid "Resizing image..."
 msgstr "正在缩放图片…"
 
+#. placeholder {0}: REPLY_AUTHOR.username
+#: src/routes/report.tsx
+msgid "Response from {0}"
+msgstr "来自 {0} 的回复"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Restored an unsaved draft from this browser."
 msgstr "已从此浏览器恢复未保存的草稿。"
@@ -9307,6 +9333,14 @@ msgid "Send report"
 msgstr "提交反馈"
 
 #: src/routes/report.tsx
+msgid "Send update"
+msgstr "发送更新"
+
+#: src/routes/report.tsx
+msgid "Sending..."
+msgstr "正在发送..."
+
+#: src/routes/report.tsx
 msgid "Sent along with it:"
 msgstr "将一并发送："
 
@@ -9497,6 +9531,10 @@ msgstr "再显示 {0} 个"
 msgid "Show {0} picks"
 msgstr "显示 {0} 个选项"
 
+#: src/routes/report.tsx
+msgid "Show {hiddenCount} earlier updates"
+msgstr "显示之前的 {hiddenCount} 条更新"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "Show {totalLabel} maps"
 msgstr "显示 {totalLabel} 个谱面"
@@ -9536,6 +9574,10 @@ msgstr "显示更多"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Show my name under spectators when watching a replay"
 msgstr "观看回放时在观众列表中显示我的名字"
+
+#: src/routes/report.tsx
+msgid "Show newest {REPORTER_THREAD_PREVIEW_COUNT}"
+msgstr "显示最新的 {REPORTER_THREAD_PREVIEW_COUNT} 条"
 
 #: src/routes/top-plays.tsx
 msgid "Show non-4K plays"
@@ -10915,6 +10957,10 @@ msgstr "提交太频繁了，请稍后再试。"
 msgid "Too many requests right now, so the skin file did not come down."
 msgstr "当前请求过多，皮肤文件没能下载下来。"
 
+#: src/routes/report.tsx
+msgid "Too many updates today. Try again tomorrow."
+msgstr "今天发送的更新太多了。请明天再试。"
+
 #: src/lib/goal-format.ts
 msgid "took {span}"
 msgstr "用时 {span}"
@@ -11271,6 +11317,10 @@ msgstr "更新于 {updatedAtLabel}"
 #: src/routes/player/$username.tsx
 msgid "Updated just now"
 msgstr "刚刚更新过"
+
+#: src/routes/report.tsx
+msgid "Updates"
+msgstr "更新"
 
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -11828,6 +11878,10 @@ msgstr "在这里编写 BBCode，或粘贴你当前 me! 页面的源码…"
 #: src/routes/player/$username.tsx
 msgid "Write one in the BBCode editor"
 msgstr "在 BBCode 编辑器里写一段"
+
+#: src/routes/report.tsx
+msgid "Write something first."
+msgstr "请先填写内容。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."

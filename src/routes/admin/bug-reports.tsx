@@ -26,31 +26,37 @@ import { Skeleton } from "../../components/ui/LoadingSkeleton";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { describeBrowser } from "../../lib/bug-report-context";
 import {
+  BUG_REPORT_MESSAGE_MAX,
+  bugReportThreadMessages,
   clearClosedBugReports,
   deleteBugReport,
   getBugReportScreenshotUrls,
   listBugReports,
   promoteBugReportToTodo,
+  replyToBugReportAsAdmin,
   updateBugReport,
   type BugReport,
   type BugReportCounts,
+  type BugReportMessage,
   type BugReportStatus,
 } from "../../lib/bug-reports";
 
 /* What players say is broken, filed from /report.
  *
- * Two text fields on a row look alike and are not: the note is private triage
- * scratch, the reply is written for the reporter and shown back to them on
- * /report. Only a signed-in reporter has anywhere for a reply to land, so the
- * reply editor is missing entirely on an anonymous report rather than
- * accepting words nobody will ever read.
+ * The note is private triage scratch; conversation messages are append-only
+ * and shown back to the signed-in reporter on /report. Anonymous reports have
+ * no verified owner to read or answer a thread, so their Reply control is
+ * absent rather than accepting words nobody will ever read.
  *
- * Neither field is a permanently open input. A row is usually read and closed
+ * Neither composer is permanently open. A row is usually read and closed
  * without writing anything, so both open on demand and save on a button
  * rather than on blur, where the save is silent and a stray click loses it.
+ * The conversation shows its newest six messages first and keeps expanded
+ * history inside a bounded scroller, so one long exchange cannot consume the
+ * whole triage board.
  *
- * Screenshots are fetched on demand behind signed URLs. They are never public,
- * so a row shows a placeholder until it is opened.
+ * Screenshots are fetched as rows approach the viewport, behind signed URLs.
+ * They are never public, so off-screen rows spend no signing round trip.
  *
  * A report worth acting on becomes an ordinary todo (category "bug") rather
  * than a second queue to remember. The link is one-way and permanent: the
@@ -74,6 +80,8 @@ export const Route = createFileRoute("/admin/bug-reports")({
 });
 
 const PAGE_SIZE = 50;
+const ADMIN_THREAD_PREVIEW_COUNT = 6;
+const ADMIN_REPLY_USER_ID = 7095193;
 
 type StatusFilter = BugReportStatus | "all";
 
@@ -254,6 +262,80 @@ function ContextLine({ context }: { context: BugReport["context"] }) {
   );
 }
 
+function AdminThreadMessage({ report, message }: { report: BugReport; message: BugReportMessage }) {
+  const admin = message.author === "admin";
+  return (
+    <div className={`flex ${admin ? "justify-end" : "justify-start"}`}>
+      <div className={`flex max-w-[92%] items-end gap-2 sm:max-w-[78%] ${admin ? "flex-row-reverse" : ""}`}>
+        <Avatar userId={admin ? ADMIN_REPLY_USER_ID : report.userId} size={22} />
+        <div className={`min-w-0 ${admin ? "items-end" : "items-start"} flex flex-col`}>
+          <div className={`mb-1 flex flex-wrap items-center gap-x-1.5 px-1 ${admin ? "flex-row-reverse" : ""}`}>
+            <span className={`text-[10px] font-semibold ${admin ? "text-osu-pink-light" : "text-osu-l2"}`}>
+              {admin ? "You" : report.username || "Reporter"}
+            </span>
+            <span className="text-[9.5px] text-osu-f1">{formatWhen(message.createdAt)}</span>
+          </div>
+          <p className={`w-fit max-w-full whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-[12.5px] leading-relaxed text-osu-l1 ${
+            admin
+              ? "rounded-br-md bg-osu-pink/[0.12] ring-1 ring-inset ring-osu-pink/20"
+              : "rounded-bl-md bg-osu-b4/60 ring-1 ring-inset ring-osu-b3/20"
+          }`}>
+            {message.body}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminThread({ report }: { report: BugReport }) {
+  const messages = bugReportThreadMessages(report);
+  const [expanded, setExpanded] = useState(false);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const hiddenCount = Math.max(0, messages.length - ADMIN_THREAD_PREVIEW_COUNT);
+  const visibleMessages = expanded ? messages : messages.slice(-ADMIN_THREAD_PREVIEW_COUNT);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    viewport.scrollTop = expanded ? 0 : viewport.scrollHeight;
+  }, [expanded]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (viewport) viewport.scrollTop = viewport.scrollHeight;
+  }, [messages.length]);
+
+  if (!messages.length) return null;
+  return (
+    <section className="mt-3 px-3.5 sm:pl-[54px]" aria-label="Bug report conversation">
+      <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b6/20">
+        <div className="flex items-center gap-2 border-b border-osu-b3/15 px-3 py-1.5">
+          <MessageSquare className="h-3 w-3 text-osu-f1" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-osu-f1">Conversation</span>
+          <span className="rounded-full bg-osu-b4/60 px-1.5 py-0.5 text-[9.5px] tabular-nums text-osu-l2">
+            {messages.length}
+          </span>
+          {hiddenCount > 0 || expanded ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="ml-auto cursor-pointer text-[10.5px] text-osu-f1 transition-colors hover:text-white"
+            >
+              {expanded ? `Show newest ${ADMIN_THREAD_PREVIEW_COUNT}` : `Show ${hiddenCount} earlier`}
+            </button>
+          ) : null}
+        </div>
+        <div ref={viewportRef} className="max-h-[320px] space-y-3 overflow-y-auto px-3 py-3">
+          {visibleMessages.map((message) => (
+            <AdminThreadMessage key={message.id} report={report} message={message} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Editor({
   value,
   placeholder,
@@ -286,11 +368,17 @@ function Editor({
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) onSave(draft);
         }}
         rows={tone === "reply" ? 3 : 2}
+        maxLength={tone === "reply" ? BUG_REPORT_MESSAGE_MAX : undefined}
         placeholder={placeholder}
         className={`${FIELD_CLASS} resize-y ${tone === "reply" ? "border-osu-pink/25 bg-osu-pink/[0.05]" : ""}`}
       />
       <div className="flex items-center gap-2">
-        <button type="button" disabled={busy || draft === value} onClick={() => onSave(draft)} className={SAVE_CLASS}>
+        <button
+          type="button"
+          disabled={busy || draft === value || (tone === "reply" && !draft.trim())}
+          onClick={() => onSave(draft)}
+          className={SAVE_CLASS}
+        >
           {saveLabel}
         </button>
         <button type="button" onClick={onCancel} className={ACTION_CLASS}>Cancel</button>
@@ -375,32 +463,18 @@ function ReportCard({
         </div>
       </div>
 
-      {(report.adminNote || report.reply) && editing === null ? (
+      <AdminThread report={report} />
+
+      {report.adminNote && editing === null ? (
         <div className="mt-3 space-y-2 px-3.5 sm:pl-[54px]">
-          {report.adminNote ? (
-            <button
-              type="button"
-              onClick={() => setEditing("note")}
-              className="flex w-full cursor-pointer items-start gap-2 text-left text-[12px] text-osu-f1 transition-colors duration-[120ms] hover:text-osu-l2"
-            >
-              <Pencil className="mt-0.5 h-3 w-3 flex-shrink-0" />
-              <span className="whitespace-pre-wrap break-words">{report.adminNote}</span>
-            </button>
-          ) : null}
-          {report.reply ? (
-            <button
-              type="button"
-              onClick={() => setEditing("reply")}
-              className="block w-full cursor-pointer rounded-lg border border-osu-pink/25 bg-osu-pink/[0.06] px-3 py-2 text-left transition-colors duration-[120ms] hover:border-osu-pink/40"
-            >
-              <span className="block text-[10px] uppercase tracking-wider text-osu-pink-light/70">
-                Sent to {report.username || "the reporter"}
-              </span>
-              <span className="mt-0.5 block whitespace-pre-wrap break-words text-[12.5px] text-osu-l1">
-                {report.reply}
-              </span>
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={() => setEditing("note")}
+            className="flex w-full cursor-pointer items-start gap-2 text-left text-[12px] text-osu-f1 transition-colors duration-[120ms] hover:text-osu-l2"
+          >
+            <Pencil className="mt-0.5 h-3 w-3 flex-shrink-0" />
+            <span className="whitespace-pre-wrap break-words">{report.adminNote}</span>
+          </button>
         </div>
       ) : null}
 
@@ -408,8 +482,8 @@ function ReportCard({
         <div className="mt-3 px-3.5 sm:pl-[54px]">
           <Editor
             key={editing}
-            value={(editing === "reply" ? report.reply : report.adminNote) ?? ""}
-            placeholder={editing === "reply" ? "They read this on /report" : "Private note, only you see this"}
+            value={editing === "reply" ? "" : report.adminNote ?? ""}
+            placeholder={editing === "reply" ? "Write the next message in the thread" : "Private note, only you see this"}
             saveLabel={editing === "reply" ? "Send reply" : "Save note"}
             tone={editing}
             busy={busy}
@@ -438,7 +512,7 @@ function ReportCard({
               className={ACTION_CLASS}
             >
               <MessageSquare className="h-3.5 w-3.5" />
-              {report.reply ? "Edit reply" : "Reply"}
+              Reply
             </button>
           ) : null}
           <button
@@ -645,7 +719,7 @@ function BugReportsAdminPage() {
                 busy={busyId === report.id}
                 onStatus={(next) => void act(report.id, () => updateBugReport({ data: { id: report.id, status: next } }))}
                 onNote={(note) => void act(report.id, () => updateBugReport({ data: { id: report.id, adminNote: note } }))}
-                onReply={(reply) => void act(report.id, () => updateBugReport({ data: { id: report.id, reply } }))}
+                onReply={(body) => void act(report.id, () => replyToBugReportAsAdmin({ data: { id: report.id, body } }))}
                 onPromote={() => void act(report.id, () => promoteBugReportToTodo({ data: { id: report.id } }))}
                 onDelete={() => setDeleteAsk(report)}
               />

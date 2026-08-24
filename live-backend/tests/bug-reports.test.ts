@@ -5,8 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import {
   BUG_REPORT_MAX_SCREENSHOTS,
+  BUG_REPORT_MESSAGES_PER_REPORTER_PER_DAY,
   BUG_REPORT_PER_REPORTER_PER_DAY,
   BUG_REPORT_SHARED_ANON_PER_DAY,
+  addAdminBugReportMessage,
+  addReporterBugReportMessage,
   attachBugReportScreenshot,
   authorizeBugReportScreenshot,
   clearClosedBugReports,
@@ -304,6 +307,120 @@ describe("bug reports", () => {
     expect((await listBugReports(db, { search: "%" })).reports).toHaveLength(0);
   });
 
+  it("keeps a two-way append-only conversation and exposes it to both sides", async () => {
+    const created = await submit();
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created.report;
+
+    expect((await addAdminBugReportMessage(db, { id, body: "Can you try that once more?" })).ok).toBe(true);
+    expect((await addReporterBugReportMessage(db, {
+      id,
+      userId: 7,
+      body: "It still breaks after a hard refresh.",
+    })).ok).toBe(true);
+    expect((await addAdminBugReportMessage(db, { id, body: "Found it. I am shipping the fix." })).ok).toBe(true);
+
+    const stored = await getBugReport(db, id);
+    expect(stored?.messages.map(({ author, body }) => ({ author, body }))).toEqual([
+      { author: "admin", body: "Can you try that once more?" },
+      { author: "reporter", body: "It still breaks after a hard refresh." },
+      { author: "admin", body: "Found it. I am shipping the fix." },
+    ]);
+    expect(stored?.reply).toBe("Found it. I am shipping the fix.");
+    expect((await listBugReportsForUser(db, 7))[0]?.messages).toEqual(stored?.messages);
+    expect((await listBugReports(db, { search: "hard refresh" })).reports[0]?.id).toBe(id);
+  });
+
+  it("authorizes reporter follow-ups by stored owner and leaves anonymous reports one-way", async () => {
+    const created = await submit();
+    const anonymous = await createBugReport(db, { body: "The page is blank for an anonymous visitor." });
+    expect(created.ok && anonymous.ok).toBe(true);
+    if (!created.ok || !anonymous.ok) return;
+
+    expect(await addReporterBugReportMessage(db, {
+      id: created.report.id,
+      userId: 8,
+      body: "I should not be able to write here.",
+    })).toEqual({ ok: false, reason: "not_owner" });
+    expect(await addReporterBugReportMessage(db, {
+      id: anonymous.report.id,
+      userId: 7,
+      body: "Nobody owns this report.",
+    })).toEqual({ ok: false, reason: "anonymous_report" });
+    expect(await addAdminBugReportMessage(db, {
+      id: anonymous.report.id,
+      body: "There is nobody verified to read this.",
+    })).toEqual({ ok: false, reason: "anonymous_report" });
+  });
+
+  it("does not let a reporter reopen a report, even through a crafted input", async () => {
+    const created = await submit();
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const fixed = await updateBugReport(db, { id: created.report.id, status: "fixed" });
+    const crafted = {
+      id: created.report.id,
+      userId: 7,
+      body: "This is happening again.",
+      reopen: true,
+    } as Parameters<typeof addReporterBugReportMessage>[1];
+    const followedUp = await addReporterBugReportMessage(db, crafted);
+    expect(followedUp.ok).toBe(true);
+    if (!followedUp.ok) return;
+    expect(followedUp.report.status).toBe("fixed");
+    expect(followedUp.report.resolvedAt).toBe(fixed?.resolvedAt);
+  });
+
+  it("keeps a closed report closed for an ordinary thank-you", async () => {
+    const created = await submit();
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const fixed = await updateBugReport(db, { id: created.report.id, status: "fixed" });
+
+    const thanked = await addReporterBugReportMessage(db, {
+      id: created.report.id,
+      userId: 7,
+      body: "Thank you, that fixed it!",
+    });
+    expect(thanked.ok).toBe(true);
+    if (!thanked.ok) return;
+    expect(thanked.report.status).toBe("fixed");
+    expect(thanked.report.resolvedAt).toBe(fixed?.resolvedAt);
+  });
+
+  it("caps reporter follow-ups per report and day", async () => {
+    const created = await submit();
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    for (let index = 0; index < BUG_REPORT_MESSAGES_PER_REPORTER_PER_DAY; index++) {
+      expect((await addReporterBugReportMessage(db, {
+        id: created.report.id,
+        userId: 7,
+        body: `Follow-up ${index}`,
+      })).ok).toBe(true);
+    }
+    expect(await addReporterBugReportMessage(db, {
+      id: created.report.id,
+      userId: 7,
+      body: "One too many follow-ups.",
+    })).toEqual({ ok: false, reason: "too_many_messages" });
+  });
+
+  it("backfills the old mutable reply into the thread exactly once", async () => {
+    const created = await submit();
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    await exec(db, "update bug_reports set reply = 'Legacy answer', replied_at = 123 where id = ?", [created.report.id]);
+
+    await migrate(db);
+    await migrate(db);
+    const stored = await getBugReport(db, created.report.id);
+    expect(stored?.messages).toMatchObject([
+      { author: "admin", body: "Legacy answer", createdAt: 123 },
+    ]);
+  });
+
   it("stamps resolvedAt only when closed, clears it on reopen, and dates a reply when it changes", async () => {
     const created = await submit();
     expect(created.ok).toBe(true);
@@ -407,6 +524,8 @@ describe("bug reports", () => {
 
     const key = `bug-reports/${first.report.id}/0.png`;
     await attachBugReportScreenshot(db, { id: first.report.id, token: first.uploadToken, key });
+    await addAdminBugReportMessage(db, { id: first.report.id, body: "Closing the first thread." });
+    await addAdminBugReportMessage(db, { id: second.report.id, body: "Closing the second thread." });
     await updateBugReport(db, { id: first.report.id, status: "duplicate" });
     await updateBugReport(db, { id: second.report.id, status: "investigating" });
 
@@ -419,5 +538,6 @@ describe("bug reports", () => {
     expect((await deleteBugReport(db, second.report.id)).deleted).toBe(true);
     expect(await deleteBugReport(db, second.report.id)).toEqual({ deleted: false, screenshotKeys: [] });
     expect((await listBugReports(db)).reports.map((report) => report.id)).toEqual([third.report.id]);
+    expect(Number((await exec(db, "select count(*) as n from bug_report_messages")).rows[0]?.n)).toBe(0);
   });
 });

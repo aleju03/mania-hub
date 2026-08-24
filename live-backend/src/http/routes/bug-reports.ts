@@ -2,11 +2,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseJson } from "../../db.js";
 import { bugReportEmbed } from "../../discord/embeds.js";
 import {
+  addReporterBugReportMessage,
   attachBugReportScreenshot,
   authorizeBugReportScreenshot,
   createBugReport,
   getBugReport,
   listBugReportsForUser,
+  toBugReportForReporter,
   type BugReport,
 } from "../../features/bug-reports.js";
 import { errorContext, logWarn } from "../../logger.js";
@@ -98,6 +100,26 @@ export async function handleBugReportRoutes(
       return true;
     }
     sendJson(req, res, ctx, 200, { ok: true, alreadyAttached: result.alreadyAttached });
+    return true;
+  }
+
+  if (url.pathname === "/api/bug-reports/reply") {
+    // userId is injected by the frontend bridge from the verified osu! cookie;
+    // the feature still matches it to the report owner before writing.
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    const result = await addReporterBugReportMessage(ctx.serveWriteDb ?? ctx.db, body);
+    if (!result.ok) {
+      const status = result.reason === "report_not_found" || result.reason === "not_owner" || result.reason === "anonymous_report"
+        ? 404
+        : result.reason === "too_many_messages" ? 429 : 400;
+      sendJson(req, res, ctx, status, { error: result.reason });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, report: toBugReportForReporter(result.report) });
     return true;
   }
 
