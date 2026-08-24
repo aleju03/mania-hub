@@ -47,9 +47,9 @@ export type ManiaCardTier =
   | "mythic"
   | "ascendant"
   | "worldClass"
-  // Hand-granted only. Never reachable via cardPower (getManiaCardTier can't
-  // return it) and never dealt by a pack: the only way onto a card is a mint
-  // from /admin/collections, which is also the only place it can be taken off.
+  // Awarded only. Never reachable via cardPower (getManiaCardTier can't
+  // return it): the server grants it once for full collection completion, and
+  // /admin/collections can mint customized variants.
   | "eternal"
   // Honorary tier for the all-time greats. Never reachable via cardPower
   // (getManiaCardTier can't return it); assigned by player list.

@@ -104,6 +104,14 @@ describe("buildManiaCardRenderData", () => {
     });
   });
 
+  test("still mints the awarded Eternal collector card without ranked plays", () => {
+    const data = buildManiaCardRenderData({ user, scores: [], tierOverride: "eternal" });
+    expect(data.status).toBe("ready");
+    if (data.status !== "ready") throw new Error("expected ready data");
+    expect(data.tier).toBe("eternal");
+    expect(data.skills).toMatchObject({ archetype: "Collector", sampleSize: 0, cardPower: 0 });
+  });
+
   test("rebuilds the same card from precomputed full-window skills without raw scores", () => {
     const computed = buildManiaCardRenderData({ user, scores: [score(6.2, 420)] });
     if (computed.status !== "ready") throw new Error("expected ready data");

@@ -21,6 +21,11 @@ import type { OsuScore } from "./types";
 export interface ServerPackDrawSlot {
   userId: number;
   honorary?: boolean;
+  /* The one-time 100%-completion reward: the opener's own card at the Eternal
+     tier, appended by the backend as the hand's final slot. Decided entirely
+     server-side (a unique durable claim + completion-eligible collection
+     rows), so it cannot be provoked or repeated from the client. */
+  eternal?: boolean;
   isNew?: boolean;
   username?: string;
   avatarUrl?: string;
@@ -34,7 +39,13 @@ export interface ServerPackDrawSlot {
    reads; at runtime each row is the full LivePackCardSnapshot and passes
    through untouched. */
 export interface ServerPackDrawCard {
-  user?: { id?: number | null } | null;
+  user?: {
+    id?: number | null;
+    username?: string;
+    avatar_url?: string;
+    country_code?: string;
+    statistics?: { pp?: number | null; global_rank?: number | null } | null;
+  } | null;
   bestScores?: OsuScore[];
 }
 
@@ -96,6 +107,13 @@ export const drawServerPack = createServerFn({ method: "POST" })
       body: JSON.stringify({
         userId: auth.viewer.id,
         packType: data.packType,
+        // This body is produced after verifying the signed osu! cookie, not
+        // from browser input. It is the identity fallback for a completionist
+        // the live backend has never tracked; profile snapshots still win for
+        // PP/rank and fresh identity when available.
+        viewerUsername: auth.viewer.username,
+        viewerAvatarUrl: auth.viewer.avatarUrl,
+        viewerCountryCode: auth.viewer.countryCode,
       }),
     });
     if (response.status === 409) {

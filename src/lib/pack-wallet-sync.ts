@@ -302,12 +302,13 @@ export const saveOwnPackShowcase = createServerFn({ method: "POST" })
 /* Normalizes a wallet card key, rejecting anything that is not a player id
    with an optional ":goat" suffix. */
 function sanitizeCardKey(value: string): string | null {
-  const match = /^(\d+)(:goat|:v\d{1,6})?$/.exec(value.trim());
+  const match = /^(\d+)(:goat|:eternal|:v\d{1,6})?$/.exec(value.trim());
   if (!match) return null;
   const userId = Math.floor(Number(match[1]));
   if (!Number.isInteger(userId) || userId <= 0) return null;
   if (!match[2]) return String(userId);
   if (match[2] === ":goat") return `${userId}:goat`;
+  if (match[2] === ":eternal") return `${userId}:eternal`;
   const variant = Math.floor(Number(match[2].slice(2)));
   return variant > 0 ? `${userId}:v${variant}` : null;
 }
@@ -338,7 +339,7 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
     const packType =
       typeof input?.packType === "string" && /^[a-z0-9_]{1,24}$/.test(input.packType) ? input.packType : null;
     const cards: PackPullRecordCard[] = (Array.isArray(input?.cards) ? input.cards : [])
-      .slice(0, 10)
+      .slice(0, 11) // The largest pack (Wild) plus the completion bonus slot.
       .map((raw: unknown) => {
         const card = raw as Partial<PackPullRecordCard> | null;
         const userId = Math.floor(Number(card?.userId) || 0);
@@ -611,7 +612,7 @@ export interface PackPullMintCard {
 export const mintServerPackCollectionCards = createServerFn({ method: "POST" })
   .validator((input: { cards?: unknown }) => {
     const cards: PackPullMintCard[] = (Array.isArray(input?.cards) ? input.cards : [])
-      .slice(0, 10)
+      .slice(0, 11) // The largest pack (Wild) plus the completion bonus slot.
       .map((raw: unknown): PackPullMintCard | null => {
         const card = raw as Partial<PackPullMintCard> | null;
         const cardKey = typeof card?.cardKey === "string" ? sanitizeCardKey(card.cardKey) : null;

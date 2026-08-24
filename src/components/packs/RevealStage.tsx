@@ -26,7 +26,8 @@ import {
   rememberCardThumbnailDataUrl,
 } from "./cardThumbnailCache";
 import { getCachedCardBackCanvas, getCachedCardBackDataUrl } from "./packArt";
-import { playCardDraw, playCardSlice, playFlipWhoosh, playGoatFanfare, playRevealChime } from "./packSfx";
+import { playCardDraw, playCardSlice, playEternalFanfare, playFlipWhoosh, playGoatFanfare, playRevealChime, prefetchEternalFanfare } from "./packSfx";
+import { EternalBurst, ETERNAL_CEREMONY_MS, ETERNAL_WINDUP_S } from "./EternalBurst";
 import { GoatBurst } from "./GoatBurst";
 import { SlicedFace } from "./SlicedFace";
 import { TierBurst } from "./TierBurst";
@@ -361,6 +362,19 @@ const CASCADE_FLIP_MS = 360;
 const CASCADE_TIER_BURST_MS = 1_000;
 const CASCADE_GOAT_BURST_MS = 2_600;
 
+function burstDurationMs(tier: ManiaCardTier): number {
+  return tier === "goat" ? CASCADE_GOAT_BURST_MS : CASCADE_TIER_BURST_MS;
+}
+
+/* The Eternal card never bursts inside its cascade tile. Most packs are
+   opened with reveal-all, and a once-per-collector card cannot be a half-size
+   burst behind a 90px tile that a phone skips entirely (tiles drop bursts on
+   mobile). The cascade stops on it and hands it the whole stage instead: see
+   the finale overlay in RevealStage. */
+function tileBurstTier(tier: ManiaCardTier | null): ManiaCardTier | null {
+  return tier === "eternal" ? null : tier;
+}
+
 export function CascadeTile({
   entry,
   username,
@@ -404,12 +418,13 @@ export function CascadeTile({
       firedRef.current = true;
       showFace();
       // No tier ceremony over a card in two pieces, whatever it rolled.
-      if (!mobile && !reducedMotion && !damage && entry?.tier && entry.glowColor) {
+      const tileTier = tileBurstTier(entry?.tier ?? null);
+      if (!mobile && !reducedMotion && !damage && tileTier && entry?.glowColor) {
         setShowBurst(true);
         burstTimerRef.current = window.setTimeout(() => {
           burstTimerRef.current = null;
           setShowBurst(false);
-        }, entry.tier === "goat" ? CASCADE_GOAT_BURST_MS : CASCADE_TIER_BURST_MS);
+        }, burstDurationMs(tileTier));
       }
       onLanded();
     };
@@ -548,7 +563,7 @@ export function CascadeTile({
 
       {/* TierBurst animates in stage-sized pixels; the scale wrapper shrinks
           its whole coordinate space down to tile scale. */}
-      {showBurst && entry?.tier && entry.glowColor && (
+      {showBurst && entry?.tier && entry.glowColor && tileBurstTier(entry.tier) && (
         <div className="pointer-events-none absolute inset-0" style={{ transform: "scale(0.5)" }}>
           {entry.tier === "goat"
             ? <GoatBurst glowColor={entry.glowColor} />
@@ -606,6 +621,11 @@ export function RevealStage({
   >(null);
   /* Cascade positions whose face has swung into view (what the counter counts). */
   const [cascadeFacesUp, setCascadeFacesUp] = useState<number[]>([]);
+  /* The reveal-all finale: the Eternal card taken out of the dealt grid and
+     given the whole screen. Non-null only while its ceremony runs. */
+  const [eternalFinale, setEternalFinale] = useState<
+    { thumbnail: string | null; glowColor: RgbaColor; username: string } | null
+  >(null);
   const [flight, setFlight] = useState<CardFlight | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const trayRef = useRef<HTMLDivElement | null>(null);
@@ -636,6 +656,15 @@ export function RevealStage({
       rendererRef.current = null;
     };
   }, []);
+
+  /* The Eternal cue is a file rather than a synth patch, so it has to be
+     fetched and decoded before the card it belongs to turns. The hand is known
+     the moment this stage mounts, which is several seconds of reveal ahead of
+     the flip; this card is dealt once per collector, so a ceremony that starts
+     silent and catches up late is not a recoverable mistake. */
+  useEffect(() => {
+    if (cards.some((card) => card.player.eternal)) prefetchEternalFanfare();
+  }, [cards]);
 
   // Warm the avatar cache while the cards are still face-down: the texture
   // pipeline fetches each avatar on first draw, and a fresh pack is mostly
@@ -752,7 +781,7 @@ export function RevealStage({
     const scores = await resolveCardScores(card);
     if (cancelledRef.current) return;
 
-    if (scores === null) {
+    if (scores === null && !card.player.eternal) {
       recordRevealed(position, { player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
       setActiveData(null);
       setActiveFallback(null);
@@ -761,7 +790,13 @@ export function RevealStage({
       return;
     }
 
-    const data = buildManiaCardRenderData({ user: card.player.user, scores });
+    // The completion reward reveals at its awarded tier; every other card's
+    // tier comes out of its own plays.
+    const data = buildManiaCardRenderData({
+      user: card.player.user,
+      scores: scores ?? [],
+      tierOverride: card.player.eternal ? "eternal" : undefined,
+    });
 
     if (data.status !== "ready") {
       recordRevealed(position, { player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
@@ -812,6 +847,7 @@ export function RevealStage({
       setPhase("shown");
       if (!reducedMotion) setBurst({ key: position, tier: data.tier, glowColor: data.glowColor });
       if (data.tier === "goat") playGoatFanfare();
+      else if (data.tier === "eternal") playEternalFanfare();
       else playRevealChime(tierRank(data.tier) / 8, revealedRef.current[cardIndex]?.isNew ?? false);
     } catch {
       // WebGL unavailable: fall back to the 2D front image.
@@ -829,6 +865,7 @@ export function RevealStage({
       setActiveData(data);
       setPhase("shown");
       if (data.tier === "goat") playGoatFanfare();
+      else if (data.tier === "eternal") playEternalFanfare();
       else playRevealChime(tierRank(data.tier) / 8, revealedRef.current[cardIndex]?.isNew ?? false);
     }
   };
@@ -964,6 +1001,9 @@ export function RevealStage({
     }
     const entry = revealedRef.current[position];
     if (!entry || entry.tier === null) return;
+    // The Eternal's fanfare belongs to the finale below, which starts before
+    // this tile ever turns; sounding it here too would double it.
+    if (entry.tier === "eternal") return;
     if (entry.tier === "goat") playGoatFanfare();
     else playRevealChime(tierRank(entry.tier) / 8, entry.isNew);
   };
@@ -1058,8 +1098,12 @@ export function RevealStage({
         thumbnail: null,
       };
       let skills: ManiaSkills | null = null;
-      if (scores !== null && !cancelledRef.current) {
-        const data = buildManiaCardRenderData({ user: card.player.user, scores });
+      if ((scores !== null || card.player.eternal) && !cancelledRef.current) {
+        const data = buildManiaCardRenderData({
+          user: card.player.user,
+          scores: scores ?? [],
+          tierOverride: card.player.eternal ? "eternal" : undefined,
+        });
         if (data.status === "ready") {
           let thumbnail: string | null = null;
           try {
@@ -1104,7 +1148,36 @@ export function RevealStage({
         await new Promise((resolve) => setTimeout(resolve, holdMs));
         if (cancelledRef.current) return;
       }
+
+      /* The Eternal stops the cascade. Reveal-all is how most packs are
+         opened, so leaving this card to flip as one more tile in the grid
+         would mean the one card a collector waits a whole collection for goes
+         by in 170ms. The grid holds where it is, the card takes the screen
+         with its ceremony, and the cascade resumes (or ends, since the reward
+         is always the hand's last slot) once the fanfare has played out. */
+      const isFinale = entry.tier === "eternal" && !damage;
+      if (isFinale) {
+        playEternalFanfare();
+        if (!reducedMotion) {
+          setEternalFinale({
+            thumbnail: entry.thumbnail,
+            glowColor: entry.glowColor ?? { r: 192, g: 132, b: 252, a: 1 },
+            username: entry.player.user.username,
+          });
+        }
+      }
+
       recordRevealed(position, entry, skills);
+
+      if (isFinale && !reducedMotion) {
+        await new Promise((resolve) => setTimeout(resolve, ETERNAL_CEREMONY_MS));
+        if (cancelledRef.current) return;
+        setEternalFinale(null);
+        // A beat for the overlay's fade before the next tile (or the summary).
+        await new Promise((resolve) => setTimeout(resolve, 260));
+        if (cancelledRef.current) return;
+      }
+
       nextFlipAt = performance.now() + (reducedMotion ? 0 : CASCADE_FLIP_GAP_MS);
     }
     if (cancelledRef.current) return;
@@ -1156,6 +1229,56 @@ export function RevealStage({
 
   return (
     <div ref={rootRef} className="relative flex flex-col items-center">
+      {/* The reveal-all finale. Fixed to the viewport rather than parented to
+          the stage, because the stage is compressed to the dealt grid's height
+          by then and would clip the ceremony to a strip. */}
+      <AnimatePresence>
+        {eternalFinale && (
+          <motion.div
+            key="eternal-finale"
+            className="pointer-events-none fixed inset-0 z-[60] grid place-items-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.26 }}
+          >
+            <div className="relative w-[min(340px,80vw)]" style={{ aspectRatio: "5 / 7" }}>
+              <EternalBurst glowColor={eternalFinale.glowColor} layer="behind" />
+              {/* The card arrives on the impact, not before: it is pulled in
+                  with the starlight the wind-up is gathering. */}
+              <motion.div
+                className="absolute inset-0 overflow-hidden rounded-[18px]"
+                initial={{ opacity: 0, scale: 0.55, rotateZ: -4 }}
+                animate={{ opacity: [0, 0, 1, 1], scale: [0.55, 0.7, 1.06, 1], rotateZ: 0 }}
+                transition={{
+                  duration: ETERNAL_CEREMONY_MS / 1000,
+                  times: [0, ETERNAL_WINDUP_S / 4.4 - 0.02, ETERNAL_WINDUP_S / 4.4 + 0.03, 1],
+                  ease: "easeOut",
+                }}
+                style={{
+                  zIndex: 10,
+                  boxShadow: `0 26px 90px rgba(${eternalFinale.glowColor.r},${eternalFinale.glowColor.g},${eternalFinale.glowColor.b},0.55)`,
+                }}
+              >
+                {eternalFinale.thumbnail ? (
+                  <img
+                    src={eternalFinale.thumbnail}
+                    alt={t`${eternalFinale.username} Eternal maniacard`}
+                    className="h-full w-full object-cover"
+                    draggable={false}
+                  />
+                ) : (
+                  <div className="grid h-full w-full place-items-center bg-osu-b4 px-4 text-center">
+                    <span className="text-sm font-bold text-white">{eternalFinale.username}</span>
+                  </div>
+                )}
+              </motion.div>
+              <EternalBurst glowColor={eternalFinale.glowColor} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex items-baseline gap-1.5 tabular-nums">
         {/* During the cascade the counter runs with the flips as they land. */}
         <span className="text-lg font-black leading-none text-white">
@@ -1388,9 +1511,18 @@ export function RevealStage({
           </div>
         )}
 
+        {/* The Eternal's light show is split around the card: this half is
+            z-[5], under the canvas host at z-15, so the rays and the glow read
+            as coming from behind the card instead of erasing it. */}
+        {burst?.tier === "eternal" && (
+          <EternalBurst key={`behind-${burst.key}`} glowColor={burst.glowColor} layer="behind" />
+        )}
+
         {burst && (burst.tier === "goat"
           ? <GoatBurst key={burst.key} glowColor={burst.glowColor} />
-          : <TierBurst key={burst.key} tier={burst.tier} glowColor={burst.glowColor} />)}
+          : burst.tier === "eternal"
+            ? <EternalBurst key={burst.key} glowColor={burst.glowColor} layer="front" />
+            : <TierBurst key={burst.key} tier={burst.tier} glowColor={burst.glowColor} />)}
       </motion.div>
 
       {/* Caption */}

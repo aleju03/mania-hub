@@ -875,4 +875,31 @@ describe("mapServerPackDraw", () => {
     expect(mapped.isNewByCardKey.get(`${member.id}:goat`)).toBe(true);
     expect(mapped.isNewByCardKey.has(String(member.id))).toBe(false);
   });
+
+  it("hydrates an Eternal self slot from the authoritative card snapshot", () => {
+    const mapped = mapServerPackDraw({
+      poolTotal: 4200,
+      players: [{ userId: 77, eternal: true, isNew: true }],
+      cards: [{
+        user: {
+          id: 77,
+          username: "completionist",
+          avatar_url: "https://a.ppy.sh/77",
+          country_code: "CR",
+          statistics: { pp: 12_345, global_rank: 42 },
+        },
+        bestScores: [score],
+      }],
+      wallet: null,
+    });
+    const eternal = mapped.draw.players[0];
+    expect(eternal).toMatchObject({ eternal: true, pp: 12_345, globalRank: 42 });
+    expect(eternal.user).toMatchObject({
+      username: "completionist",
+      avatar_url: "https://a.ppy.sh/77",
+      country_code: "CR",
+      statistics: { pp: 12_345, global_rank: 42 },
+    });
+    expect(mapped.isNewByCardKey.get("77:eternal")).toBe(true);
+  });
 });

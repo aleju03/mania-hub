@@ -27,6 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-24", text: "If you complete your collection the next pack you open comes with an Eternal card of yourself", to: "/packs" },
   { date: "2026-08-24", text: "Dan estimates, map difficulty values and player skill ratings are being recalculated after a rating-system update. The recalculation should take about a day, and results may be missing or mix old and new values until it finishes" },
   { date: "2026-08-23", text: "New bug report page", to: "/report" },
   { date: "2026-08-23", text: "New per-hand accuracy HUD for replays. Drag it anywhere and right-click it to choose meters, numbers, rings or a balance bar", to: "/replay" },

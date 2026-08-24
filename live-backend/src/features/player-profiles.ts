@@ -339,7 +339,8 @@ interface PackCardSource {
 
 /* One dealt hand's worth of players. The endpoint clamps to this so a public
    caller cannot turn one request into an arbitrarily wide read. */
-export const PACK_CARD_SNAPSHOT_MAX_IDS = 10;
+// Wild's ten ordinary slots plus the one-time Eternal completion bonus.
+export const PACK_CARD_SNAPSHOT_MAX_IDS = 11;
 
 /**
  * Cached pack-card reads, straight off the stored rows.

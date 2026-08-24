@@ -15,6 +15,7 @@ import { getSharedPackCard } from "../src/features/pack-pulls.js";
 import {
   getPackCollectionCard,
   getPackWallet,
+  isPackWalletEternalPending,
   MAX_PACK_CHARGES,
   packWalletEconomy,
 } from "../src/features/pack-wallets.js";
@@ -565,6 +566,29 @@ describe("wallet grants", () => {
 });
 
 describe("removing a granted card", () => {
+  it("reopens the completion reward only after the last Eternal is removed", async () => {
+    const first = await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      tier: "eternal",
+      copies: 1,
+    });
+    const second = await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      tier: "eternal",
+      tierLabel: "Second Eternal",
+      copies: 1,
+    });
+    if (!first.ok || !second.ok) throw new Error("expected Eternal grants");
+    expect(await isPackWalletEternalPending(db, OWNER_ID)).toBe(false);
+
+    await removeAdminPackCard(db, OWNER_ID, first.result.cardKey);
+    expect(await isPackWalletEternalPending(db, OWNER_ID)).toBe(false);
+
+    await removeAdminPackCard(db, OWNER_ID, second.result.cardKey);
+    expect(await isPackWalletEternalPending(db, OWNER_ID)).toBe(true);
+    expect((await exec(db, "select 1 from pack_eternal_rewards where owner_user_id = ?", [OWNER_ID])).rows).toHaveLength(0);
+  });
+
   it("drops the holding, its showcase pin, and optionally its serial", async () => {
     await grantAdminPackCard(db, owner, { cardUserId: CARD_USER_ID, tier: "rare", serialMode: "mint" });
     await exec(

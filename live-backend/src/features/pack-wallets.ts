@@ -1,4 +1,5 @@
 import type { InValue } from "@libsql/client";
+import { randomUUID } from "node:crypto";
 import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch, parseJson } from "../db.js";
 import { parseCardMotif, type CardMotif } from "./card-motif.js";
@@ -82,14 +83,17 @@ export interface PackCollectionPoolProgress {
   offPoolUserIds: number[];
 }
 
-export async function getPackCollectionPoolProgress(
+async function getPackCollectionPoolProgressByTrust(
   db: Db,
   userId: number,
   pool: { userIds: Set<number>; total: number },
+  completionEligibleOnly: boolean,
 ): Promise<PackCollectionPoolProgress> {
   const rows = (await exec(
     db,
-    "select distinct card_user_id from pack_collection_cards where owner_user_id = ? and copies > 0",
+    `select distinct card_user_id from pack_collection_cards
+     where owner_user_id = ? and copies > 0
+       ${completionEligibleOnly ? "and completion_eligible != 0" : ""}`,
     [userId],
   )).rows;
   let poolOwnedCount = 0;
@@ -100,6 +104,26 @@ export async function getPackCollectionPoolProgress(
     else if (!HONORARY_USER_IDS.has(ownedId)) offPoolUserIds.push(ownedId);
   }
   return { poolTotal: pool.total, poolOwnedCount, retiredOwnedCount: offPoolUserIds.length, offPoolUserIds };
+}
+
+export async function getPackCollectionPoolProgress(
+  db: Db,
+  userId: number,
+  pool: { userIds: Set<number>; total: number },
+): Promise<PackCollectionPoolProgress> {
+  return getPackCollectionPoolProgressByTrust(db, userId, pool, false);
+}
+
+/* The same live-pool progress, but only from holdings whose source the server
+   can prove. Browser-local first-login imports stay visible in the collection
+   and its normal progress UI, but cannot unlock a 250-shard one-time reward;
+   repulling one through a server deal upgrades that row into this count. */
+export async function getPackCollectionEternalProgress(
+  db: Db,
+  userId: number,
+  pool: { userIds: Set<number>; total: number },
+): Promise<PackCollectionPoolProgress> {
+  return getPackCollectionPoolProgressByTrust(db, userId, pool, true);
 }
 
 /* One pullable player as the pool board holds them. Structural rather than
@@ -186,16 +210,29 @@ export async function listPackCollectionMissingPlayers(
    row), and the ones still ranked have their pool slot filled by the ordinary
    card. So a missing GOAT shows up in neither the header's owned/pool ratio
    nor the missing list, and the album is where it gets looked at. */
-export async function countMissingGoatCards(db: Db, userId: number): Promise<number> {
+async function countMissingGoatCardsByTrust(
+  db: Db,
+  userId: number,
+  completionEligibleOnly: boolean,
+): Promise<number> {
   const honorary = [...HONORARY_USER_IDS].join(",");
   const row = (await exec(
     db,
     `select count(distinct card_user_id) as owned from pack_collection_cards
      where owner_user_id = ? and copies > 0 and card_key like '%:goat'
+       ${completionEligibleOnly ? "and completion_eligible != 0" : ""}
        and card_user_id in (${honorary})`,
     [userId],
   )).rows[0];
   return Math.max(0, HONORARY_USER_IDS.size - Number(row?.owned ?? 0));
+}
+
+export async function countMissingGoatCards(db: Db, userId: number): Promise<number> {
+  return countMissingGoatCardsByTrust(db, userId, false);
+}
+
+export async function countMissingEternalGoatCards(db: Db, userId: number): Promise<number> {
+  return countMissingGoatCardsByTrust(db, userId, true);
 }
 
 /* Restricts a card query to specific players. The ids are validated integers
@@ -241,6 +278,10 @@ interface WalletPayload {
      (pre-login) wallet history was folded in. Its presence closes the merge
      door for good. */
   importedAt?: unknown;
+  /* Legacy stamp from the first completion-reward implementation. New claims
+     live in pack_eternal_rewards, whose primary key can enforce one winner
+     atomically with the card mint. Kept while old payloads naturally age out. */
+  eternalDealtAt?: unknown;
 }
 
 const TIER_SHARD_VALUES: Record<string, number> = {
@@ -253,7 +294,8 @@ const TIER_SHARD_VALUES: Record<string, number> = {
   mythic: 27,
   ascendant: 36,
   worldClass: 48,
-  // Hand-granted only, so it is not priced against pack odds; half a GOAT.
+  // Awarded once for completion (or admin-granted), so it is not priced
+  // against ordinary pack odds; half a GOAT.
   eternal: 250,
   // Mirrors the frontend's table in src/lib/pack-collection.ts. GOAT came down
   // from 1000, which bought several Legend packs for a card the honorary slot
@@ -307,12 +349,14 @@ export function tierRank(tier: string | null): number {
    talk one down. */
 const AWARDED_TIERS = new Set(["eternal", "goat"]);
 
-/* Of those two, the one no pack can deal: the honorary slot deals GOAT, while
-   "eternal" only ever comes off the grant desk. So a holding at one of these
-   is by construction a card somebody was given rather than pulled, which is
-   what makes it its own collectible. Mirrors VALID_TIERS in pack-pulls.ts (the
-   list a pull may claim); pack-wallets.test.ts holds the two to being exact
-   complements so neither can drift. */
+/* Of those two, the one the grant desk alone can put on a *variant* key:
+   "eternal" comes off /admin/collections, or - since the completion reward -
+   off the draw route as the opener's own ":eternal" card, and never out of a
+   roll. What this set still means is narrower than "no pack can deal it": a
+   variant-keyed holding at one of these tiers is by construction a card
+   somebody was given, which is what lets the variant-key machinery treat it
+   as a customized card. A pull may claim the tier only under pack-pulls'
+   own-held-":eternal" guard; pack-wallets.test.ts pins both sides. */
 export const GRANT_ONLY_TIERS: ReadonlySet<string> = new Set(["eternal"]);
 
 /* The three fields the grant desk can give one holding, and the whole of what
@@ -434,10 +478,14 @@ export const HONORARY_USER_IDS = new Set([
    GOAT is awarded by roster membership rather than card power, and several
    roster members are live ranked players, so one player can be held both as
    the card the ranked pool dealt and as the GOAT the honorary slot dealt.
-   Only the GOAT variant is suffixed, so every key already in a wallet stays
-   exactly as it was. */
+   Eternal is awarded the same way (the grant desk, or the one-time completion
+   deal of the collector's own card), so it stands apart from the ordinary
+   card too. Only the awarded variants are suffixed, so every key already in a
+   wallet stays exactly as it was. */
 export function packCardKey(cardUserId: number, tier: string | null): string {
-  return tier === "goat" ? `${cardUserId}:goat` : String(cardUserId);
+  if (tier === "goat") return `${cardUserId}:goat`;
+  if (tier === "eternal") return `${cardUserId}:eternal`;
+  return String(cardUserId);
 }
 
 /* The third key form, and the only one no tier can be derived from.
@@ -476,17 +524,23 @@ export function packCardVariantNumber(key: string): number {
 }
 
 /* Accepts a client-supplied key, rejecting anything that is not a player id
-   with an optional ":goat" or ":v<n>" suffix. Bounded digits on the variant so
-   a key stays a key: the routes that take one address a row, and an unbounded
-   number is just a long string to store and compare. */
+   with an optional ":goat", ":eternal" or ":v<n>" suffix. Bounded digits on
+   the variant so a key stays a key: the routes that take one address a row,
+   and an unbounded number is just a long string to store and compare.
+
+   Accepting ":eternal" here does not let a client mint one: the wallet import
+   only ever pins a claimed key that is a held variant, claimedTier refuses the
+   tier, and the mint route labels existing rows without adding any. The only
+   writers of an ":eternal" row are the completion deal and nothing else. */
 export function normalizePackCardKey(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const match = /^(\d+)(:goat|:v\d{1,6})?$/.exec(value.trim());
+  const match = /^(\d+)(:goat|:eternal|:v\d{1,6})?$/.exec(value.trim());
   if (!match) return null;
   const userId = Math.floor(Number(match[1]));
   if (!Number.isInteger(userId) || userId <= 0) return null;
   if (!match[2]) return String(userId);
   if (match[2] === ":goat") return `${userId}:goat`;
+  if (match[2] === ":eternal") return `${userId}:eternal`;
   const variant = Math.floor(Number(match[2].slice(2)));
   return variant > 0 ? packCardVariantKey(userId, variant) : null;
 }
@@ -537,12 +591,14 @@ function claimedTier(raw: { tier?: unknown }, userId: number): string | null {
   // or shard-value lookup.
   if (!isKnownTier(raw.tier)) return null;
   if (raw.tier === "goat" && !HONORARY_USER_IDS.has(userId)) return null;
-  // Eternal is hand-granted and nothing else: no pack deals it, so a wallet
-  // claiming one is either stale (it read a card an admin minted, which is
-  // fine - see below) or forged. Refusing every claim covers both, because the
-  // ownership upsert only ever lets a *better* tier overwrite the stored one:
-  // a real Eternal card outranks the unrated claim and survives the sync
-  // untouched, while a forged one never becomes a 250-shard recycle.
+  // Eternal is awarded server-side and nothing else (the grant desk, or the
+  // draw route's one-time completion deal): no client computation can arrive
+  // at it, so a wallet claiming one is either stale (it read a card the
+  // server minted, which is fine - see below) or forged. Refusing every claim
+  // covers both, because the ownership upsert only ever lets a *better* tier
+  // overwrite the stored one: a real Eternal card outranks the unrated claim
+  // and survives the sync untouched, while a forged one never becomes a
+  // 250-shard recycle.
   if (raw.tier === "eternal") return null;
   return raw.tier;
 }
@@ -794,6 +850,25 @@ export async function setPackWalletEconomy(
 const WALLET_MAX_SHARDS = 100_000_000;
 const WALLET_MAX_OPENED_PACKS = 10_000_000;
 
+/* Whether the one-time completion reward is still unclaimed. The durable
+   registry, not a JSON read followed by a later JSON write, is what makes two
+   concurrent opens race for one primary key instead of both minting a copy. A
+   collector with no wallet has opened nothing, so skip the expensive
+   completion counts for them. */
+export async function isPackWalletEternalPending(db: Db, userId: number): Promise<boolean> {
+  const wallet = await getPackWallet(db, userId);
+  if (!wallet) return false;
+  const claimed = (await exec(
+    db,
+    `select 1 from pack_eternal_rewards where owner_user_id = ?
+     union all
+     select 1 from pack_collection_cards where owner_user_id = ? and tier = 'eternal'
+     limit 1`,
+    [userId, userId],
+  )).rows.length > 0;
+  return !claimed;
+}
+
 export type PackOpenSpendResult =
   | { ok: true; wallet: StoredPackWallet }
   | { ok: false; reason: "charges" | "shards"; wallet: StoredPackWallet };
@@ -1040,6 +1115,7 @@ function packOwnershipUpsertStatement(
   now: number,
   mode: PackWalletCardImportMode,
   skillsIds: Map<string, number>,
+  completionEligible: boolean,
 ): DbStatement {
   const copiesSql =
     mode === "delta"
@@ -1058,8 +1134,8 @@ function packOwnershipUpsertStatement(
   return {
     sql: `insert into pack_collection_cards (
        owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank,
-       copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
-     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, completion_eligible
+     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(owner_user_id, card_key) do update set
        tier = case
          when ${tierRankSql("pack_collection_cards.tier")} > ${tierRankSql("excluded.tier")}
@@ -1077,7 +1153,8 @@ function packOwnershipUpsertStatement(
        recycled_copies = ${recycledCopiesSql},
        first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
        last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
-       updated_at = excluded.updated_at`,
+       updated_at = excluded.updated_at,
+       completion_eligible = max(pack_collection_cards.completion_eligible, excluded.completion_eligible)`,
     args: [
       ownerUserId,
       card.userId,
@@ -1091,6 +1168,7 @@ function packOwnershipUpsertStatement(
       card.firstPulledAt,
       card.lastPulledAt,
       now,
+      completionEligible ? 1 : 0,
     ],
   };
 }
@@ -1110,7 +1188,9 @@ async function writeImportedPackCards(
 ): Promise<void> {
   for (const batch of chunked(cards, 150)) {
     const ownershipAndSerials = batch.flatMap((card) => [
-      packOwnershipUpsertStatement(ownerUserId, card, now, mode, skillsIds),
+      // Browser-authored imports are real holdings, but not authoritative
+      // evidence for the one-time completion reward.
+      packOwnershipUpsertStatement(ownerUserId, card, now, mode, skillsIds, false),
       ...(card.copies > 0
         ? [mintPackCardSerialStatement(
             storedCardKey(card),
@@ -1744,6 +1824,134 @@ export interface DealtPackCardSlot {
   globalRank: number;
 }
 
+/* The users-projection identity for one player, as the draw response's
+   completion slot carries it: the opener's own card should reveal under their
+   real name and avatar without the client having to vouch for either. Null
+   for a player the ingest has never seen; the client then falls back to the
+   signed-in identity it already holds. */
+export interface PackUserIdentity {
+  username: string;
+  avatarUrl: string;
+  countryCode: string;
+  pp: number;
+  globalRank: number;
+}
+
+export async function getPackUserIdentity(
+  db: Db,
+  userId: number,
+): Promise<PackUserIdentity | null> {
+  if (!Number.isInteger(userId) || userId <= 0) return null;
+  const row = (await exec(
+    db,
+    "select username, avatar_url, country_code, pp, global_rank from users where user_id = ?",
+    [userId],
+  )).rows[0];
+  if (!row) return null;
+  return {
+    username: String(row.username ?? "").slice(0, PACK_CARD_USERNAME_MAX_CHARS),
+    avatarUrl: normalizeAvatarUrl(row.avatar_url),
+    countryCode: normalizeCountryCode(String(row.country_code ?? "")),
+    pp: Math.min(PACK_CARD_MAX_PP, Math.max(0, toFiniteNumber(row.pp, 0))),
+    globalRank: Math.max(0, Math.floor(toFiniteNumber(row.global_rank, 0))),
+  };
+}
+
+/* Atomically claims and mints the one-time completion reward. The random token
+   belongs only to this attempt: every card/serial statement is conditional on
+   the claim row carrying it, so concurrent losers are true no-ops. execBatch
+   wraps the claim and all dependent writes in one transaction; a crash or SQL
+   failure therefore rolls the claim back with the card instead of either
+   losing the reward or re-dealing a duplicate. */
+export async function mintEternalSelfCardOnce(
+  db: Db,
+  ownerUserId: number,
+  identity: PackUserIdentity,
+  now = Date.now(),
+): Promise<{ dealt: boolean; isNew: boolean }> {
+  if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) return { dealt: false, isNew: false };
+  const cardKey = packCardKey(ownerUserId, "eternal");
+  const owned = (await exec(
+    db,
+    "select 1 from pack_collection_cards where owner_user_id = ? and card_key = ? and copies > 0",
+    [ownerUserId, cardKey],
+  )).rows.length > 0;
+  const claimToken = randomUUID();
+  const claimMatchSql = `exists (
+    select 1 from pack_eternal_rewards
+    where owner_user_id = ? and claim_token = ?
+  )`;
+  const pp = Math.min(PACK_CARD_MAX_PP, Math.max(0, toFiniteNumber(identity.pp, 0)));
+  const globalRank = Math.max(0, Math.floor(toFiniteNumber(identity.globalRank, 0)));
+  const results = await execBatch(db, [
+    {
+      sql: `insert or ignore into pack_eternal_rewards (owner_user_id, claim_token, dealt_at)
+            select ?, ?, ?
+            where not exists (
+              select 1 from pack_collection_cards
+              where owner_user_id = ? and tier = 'eternal'
+            )`,
+      args: [ownerUserId, claimToken, now, ownerUserId],
+    },
+    {
+      sql: `insert or ignore into pack_cards (
+              card_key, tier, card_user_id, username, avatar_url, country_code, tier_label, updated_at
+            )
+            select ?, 'eternal', ?, ?, ?, ?, null, ? where ${claimMatchSql}`,
+      args: [
+        cardKey,
+        ownerUserId,
+        identity.username.slice(0, PACK_CARD_USERNAME_MAX_CHARS),
+        normalizeAvatarUrl(identity.avatarUrl),
+        normalizeCountryCode(identity.countryCode),
+        now,
+        ownerUserId,
+        claimToken,
+      ],
+    },
+    {
+      sql: `insert into pack_collection_cards (
+              owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank,
+              copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, completion_eligible
+            )
+            select ?, ?, ?, 'eternal', null, ?, ?, 1, 0, ?, ?, ?, 1 where ${claimMatchSql}
+            on conflict(owner_user_id, card_key) do update set
+              tier = 'eternal',
+              pp = case when excluded.pp > 0 then excluded.pp else pack_collection_cards.pp end,
+              global_rank = case when excluded.global_rank > 0 then excluded.global_rank else pack_collection_cards.global_rank end,
+              copies = max(1, pack_collection_cards.copies),
+              first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
+              last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
+              updated_at = excluded.updated_at,
+              completion_eligible = 1`,
+      args: [
+        ownerUserId,
+        ownerUserId,
+        cardKey,
+        pp,
+        globalRank,
+        now,
+        now,
+        now,
+        ownerUserId,
+        claimToken,
+      ],
+    },
+    {
+      sql: `insert or ignore into pack_card_serials (
+              card_key, card_user_id, owner_user_id, serial, minted_at, pull_report_pending
+            )
+            select ?, ?, ?,
+              coalesce((select max(serial) from pack_card_serials where card_key = ?), 0) + 1,
+              ?, 1
+            where ${claimMatchSql}`,
+      args: [cardKey, ownerUserId, ownerUserId, cardKey, now, ownerUserId, claimToken],
+    },
+  ]);
+  const dealt = Number(results[0]?.rowsAffected ?? 0) > 0;
+  return { dealt, isNew: dealt && !owned };
+}
+
 /* Writes a dealt hand into the collection at draw time. This is what makes
    copy counts server-owned: the only things that add copies to a signed-in
    collection are this (one per dealt slot) and the one-time first-sync merge,
@@ -1774,7 +1982,10 @@ export async function mintDealtPackCards(
       username: slot.username.slice(0, PACK_CARD_USERNAME_MAX_CHARS),
       avatarUrl: normalizeAvatarUrl(slot.avatarUrl),
       countryCode: normalizeCountryCode(slot.countryCode),
-      tier: slot.tier === "goat" && HONORARY_USER_IDS.has(slot.userId) ? "goat" : null,
+      tier:
+        slot.tier === "goat" && HONORARY_USER_IDS.has(slot.userId)
+          ? "goat"
+          : null,
       // The label belongs to the client's mint pass, like the skills.
       tierLabel: null,
       skills: null,
@@ -1803,12 +2014,12 @@ export async function mintDealtPackCards(
      row or any variant of that player the catalog already holds - the same
      fallback the mint route uses. */
   const ranked = cards.filter((card) => card.tier !== "goat");
-  const honorary = cards.filter((card) => card.tier === "goat");
-  const honoraryIdentityStatement = (card: StoredPackCard): DbStatement => ({
+  const awarded = cards.filter((card) => card.tier === "goat");
+  const awardedIdentityStatement = (card: StoredPackCard): DbStatement => ({
     sql: `insert or ignore into pack_cards (
             card_key, tier, card_user_id, username, avatar_url, country_code, tier_label, updated_at
           )
-          select ?, 'goat', ?,
+          select ?, ?, ?,
             coalesce((select u.username from users u where u.user_id = ?),
               (select pc.username from pack_cards pc where pc.card_user_id = ? and pc.username != '' limit 1), ''),
             coalesce((select u.avatar_url from users u where u.user_id = ?),
@@ -1817,34 +2028,36 @@ export async function mintDealtPackCards(
               (select pc.country_code from pack_cards pc where pc.card_user_id = ? and pc.country_code != '' limit 1), ''),
             null, ?`,
     args: [
-      packCardKey(card.userId, card.tier), card.userId,
+      packCardKey(card.userId, card.tier), packCardTierSlot(card.tier), card.userId,
       card.userId, card.userId,
       card.userId, card.userId,
       card.userId, card.userId,
       now,
     ],
   });
-  /* A goat slot arrives with no real numbers (the roster's peak pp/rank live
-     in the frontend mirror), so its upsert only counts the copy: an existing
-     holding keeps the pp, tier and skills its mint froze, and a new row gets
-     its face numbers from the client's mint pass moments later. */
-  const goatOwnershipStatement = (card: StoredPackCard): DbStatement => ({
+  /* A GOAT slot arrives with no real numbers (its peak pp/rank live in the
+     frontend mirror), so its upsert only counts the
+     copy: an existing holding keeps the pp, tier and skills its mint froze,
+     and a new row gets its face numbers from the client's mint pass moments
+     later. */
+  const awardedOwnershipStatement = (card: StoredPackCard): DbStatement => ({
     sql: `insert into pack_collection_cards (
             owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank,
-            copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
-          ) values (?, ?, ?, 'goat', null, ?, ?, 1, 0, ?, ?, ?)
+            copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, completion_eligible
+          ) values (?, ?, ?, ?, null, ?, ?, 1, 0, ?, ?, ?, 1)
           on conflict(owner_user_id, card_key) do update set
             copies = pack_collection_cards.copies + 1,
             first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
             last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
-            updated_at = excluded.updated_at`,
-    args: [ownerUserId, card.userId, packCardKey(card.userId, "goat"), card.pp, card.globalRank, now, now, now],
+            updated_at = excluded.updated_at,
+            completion_eligible = 1`,
+    args: [ownerUserId, card.userId, packCardKey(card.userId, card.tier), card.tier, card.pp, card.globalRank, now, now, now],
   });
   await execBatch(db, [
     ...(await packCardIdentityStatements(db, ranked, now)),
-    ...honorary.map(honoraryIdentityStatement),
-    ...ranked.map((card) => packOwnershipUpsertStatement(ownerUserId, card, now, "delta", new Map())),
-    ...honorary.map(goatOwnershipStatement),
+    ...awarded.map(awardedIdentityStatement),
+    ...ranked.map((card) => packOwnershipUpsertStatement(ownerUserId, card, now, "delta", new Map(), true)),
+    ...awarded.map(awardedOwnershipStatement),
     // The serial is part of accepting the hand, not of the browser's later
     // community report. The pending bit preserves first-global until that
     // report lands and is settled in pack-pulls.ts.
@@ -2104,6 +2317,7 @@ export async function ensurePackCollectionCardKeys(db: Db): Promise<boolean> {
   const columns = (await exec(db, "pragma table_info(pack_collection_cards)")).rows;
   if (columns.length === 0) return false;
   if (columns.some((column) => String(column.name) === "card_key")) return false;
+  const hasCompletionEligibility = columns.some((column) => String(column.name) === "completion_eligible");
 
   await exec(db, "drop table if exists pack_collection_cards_rekey");
   await exec(
@@ -2125,6 +2339,7 @@ export async function ensurePackCollectionCardKeys(db: Db): Promise<boolean> {
        first_pulled_at integer not null,
        last_pulled_at integer not null,
        updated_at integer not null,
+       completion_eligible integer not null default 1,
        primary key(owner_user_id, card_key)
      )`,
   );
@@ -2132,11 +2347,13 @@ export async function ensurePackCollectionCardKeys(db: Db): Promise<boolean> {
     db,
     `insert into pack_collection_cards_rekey
        (owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label,
-        skills_json, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at)
+        skills_json, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at,
+        completion_eligible)
      select owner_user_id, card_user_id,
        case when tier = 'goat' then card_user_id || ':goat' else cast(card_user_id as text) end,
        username, avatar_url, country_code, tier, tier_label, skills_json, pp, global_rank, copies,
-       recycled_copies, first_pulled_at, last_pulled_at, updated_at
+       recycled_copies, first_pulled_at, last_pulled_at, updated_at,
+       ${hasCompletionEligibility ? "completion_eligible" : "1"}
      from pack_collection_cards`,
   );
   await exec(db, "drop table pack_collection_cards");
@@ -2224,6 +2441,7 @@ export async function ensurePackCardCatalog(db: Db): Promise<boolean> {
        first_pulled_at integer not null,
        last_pulled_at integer not null,
        updated_at integer not null,
+       completion_eligible integer not null default 1,
        primary key(owner_user_id, card_key)
      )`,
   );
@@ -2231,9 +2449,9 @@ export async function ensurePackCardCatalog(db: Db): Promise<boolean> {
     db,
     `insert into pack_collection_cards_slim
        (owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank, copies,
-        recycled_copies, first_pulled_at, last_pulled_at, updated_at)
+        recycled_copies, first_pulled_at, last_pulled_at, updated_at, completion_eligible)
      select c.owner_user_id, c.card_user_id, c.card_key, c.tier, sk.id, c.pp, c.global_rank, c.copies,
-       c.recycled_copies, c.first_pulled_at, c.last_pulled_at, c.updated_at
+       c.recycled_copies, c.first_pulled_at, c.last_pulled_at, c.updated_at, c.completion_eligible
      from pack_collection_cards c
      left join pack_card_skills sk on sk.skills_json = c.skills_json`,
   );

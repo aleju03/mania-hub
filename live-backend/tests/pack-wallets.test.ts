@@ -1050,12 +1050,14 @@ describe("granted card keys", () => {
     expect(isPackCardVariantKey("42:goat")).toBe(false);
   });
 
-  it("names only tiers no pack can deal", () => {
-    // The complement of pack-pulls' VALID_TIERS: a tier a pull may claim is
-    // one a collector can reach without the desk, so holding it says nothing
-    // about the card being a one-off. If the two ever overlap, an ordinary
-    // pull would start minting itself a card key of its own.
-    for (const tier of GRANT_ONLY_TIERS) expect(PULLABLE_TIERS.has(tier)).toBe(false);
+  it("names only tiers no roll can produce", () => {
+    /* "eternal" sits in both sets since the completion reward: a pull may
+       claim it, but only under pack-pulls' guard (the reporter's own card,
+       backed by a held ":eternal" row that only the draw route's one-time
+       completion deal writes). What still holds unconditionally is that no
+       client computation reaches the tier - claimedTier refuses it outright,
+       so a forged wallet or mint can never talk a card up to it. */
+    expect(PULLABLE_TIERS.has("eternal")).toBe(true);
     expect([...GRANT_ONLY_TIERS]).toEqual(["eternal"]);
   });
 
@@ -1064,10 +1066,18 @@ describe("granted card keys", () => {
        player's ordinary key, indistinguishable from a pulled card except by
        its columns, with a serial and a showcase slot pointing at that key. */
     await seedCollectionCard(db, USER_ID, 42, { tier: "eternal", copies: 1 });
+    // A second collector was handed the same card.
+    await seedCollectionCard(db, USER_ID + 1, 42, { tier: "eternal", copies: 1 });
+    /* The helper now derives ":eternal" for the tier; these fixtures model
+       rows from before derived eternal keys existed, sitting on the plain
+       key, so put them (and the catalog face) back where the backfill finds
+       them. */
+    await exec(db, "update pack_collection_cards set card_key = '42' where card_key = '42:eternal'");
+    await exec(db, "update or ignore pack_cards set card_key = '42' where card_key = '42:eternal'");
     await exec(
       db,
-      "update pack_collection_cards set tier_label = 'Mano', motif = '{\"url\":\"https://x.test/a.png\"}' where owner_user_id = ? and card_key = '42'",
-      [USER_ID],
+      "update pack_collection_cards set tier_label = 'Mano', motif = '{\"url\":\"https://x.test/a.png\"}' where owner_user_id in (?, ?) and card_key = '42'",
+      [USER_ID, USER_ID + 1],
     );
     await exec(
       db,
@@ -1079,14 +1089,7 @@ describe("granted card keys", () => {
       "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, 0, '42', 1000)",
       [USER_ID],
     );
-    // A second collector was handed the same card, and a third pulled the
-    // ordinary one.
-    await seedCollectionCard(db, USER_ID + 1, 42, { tier: "eternal", copies: 1 });
-    await exec(
-      db,
-      "update pack_collection_cards set tier_label = 'Mano', motif = '{\"url\":\"https://x.test/a.png\"}' where owner_user_id = ? and card_key = '42'",
-      [USER_ID + 1],
-    );
+    // And a third collector pulled the ordinary card.
     await seedCollectionCard(db, USER_ID + 2, 42, { tier: "rare", copies: 2 });
 
     expect(await ensurePackCardVariantKeys(db)).toBe(2);

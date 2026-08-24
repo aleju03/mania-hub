@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearPendingPack,
   consumePendingPackCard,
+  effectivePackDamage,
   PENDING_PACK_STORAGE_KEY,
   readPendingPack,
   writePendingPack,
@@ -26,6 +27,12 @@ function makePlayer(id: number): PackPlayer {
 describe("pack-pending", () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  it("forgives pack damage when the hand contains the one-time Eternal reward", () => {
+    const damage = { path: [0.4, 0.5, 0.45, 0.6] };
+    expect(effectivePackDamage([makePlayer(1)], damage)).toEqual(damage);
+    expect(effectivePackDamage([{ ...makePlayer(1), eternal: true }], damage)).toBeNull();
   });
 
   it("round-trips the unrevealed remainder", () => {

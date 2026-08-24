@@ -323,6 +323,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migratePlayerActivity(target);
   await migratePackCollectionCards(target);
   await migratePackWalletOwnerUsername(target);
+  await migratePackEternalRewards(target);
   await migratePackPullEvents(target);
   await migrateTrackerIndexes(target);
   await migrateSnipePersonalBests(target);
@@ -1617,6 +1618,7 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
       first_pulled_at integer not null,
       last_pulled_at integer not null,
       updated_at integer not null,
+      completion_eligible integer not null default 1,
       primary key(owner_user_id, card_key)
     )
   `);
@@ -1667,6 +1669,13 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
   if (!columns.includes("granted_at")) {
     await db.execute("alter table pack_collection_cards add column granted_at integer");
   }
+  // Browser-local first-login imports remain real holdings, but cannot count
+  // as proof for the Eternal completion reward. A constant default keeps this
+  // metadata-only for the existing multi-million-row table; only new import
+  // writes opt out, while server deals opt back in on conflict.
+  if (!columns.includes("completion_eligible")) {
+    await db.execute("alter table pack_collection_cards add column completion_eligible integer not null default 1");
+  }
   const serialColumns = (await db.execute("pragma table_info(pack_card_serials)")).rows.map((row) => String(row.name));
   if (!serialColumns.includes("pull_report_pending")) {
     // A constant default makes this a metadata-only ALTER on existing SQLite
@@ -1693,6 +1702,33 @@ async function migratePackWalletOwnerUsername(db: Db): Promise<void> {
   if (!columns.includes("owner_username")) {
     await db.execute("alter table pack_wallets add column owner_username text");
   }
+}
+
+async function migratePackEternalRewards(db: Db): Promise<void> {
+  await db.execute(`
+    create table if not exists pack_eternal_rewards (
+      owner_user_id integer primary key,
+      claim_token text not null,
+      dealt_at integer not null
+    )
+  `);
+  // Seed the stronger claim registry from every existing Eternal holding,
+  // including the manually granted variant-keyed cards that predate the
+  // completion reward. Drive the join from the small card catalog, then seek
+  // exact serial/holding keys, rather than scanning millions of collection
+  // rows during deploy.
+  await db.execute(`
+    insert or ignore into pack_eternal_rewards (owner_user_id, claim_token, dealt_at)
+    select c.owner_user_id, 'legacy:' || c.owner_user_id,
+      max(coalesce(s.minted_at, c.updated_at))
+    from pack_cards pc
+    join pack_collection_cards c
+      on c.card_key = pc.card_key and c.tier = 'eternal'
+    left join pack_card_serials s
+      on s.card_key = c.card_key and s.owner_user_id = c.owner_user_id
+    where pc.tier = 'eternal'
+    group by c.owner_user_id
+  `);
 }
 
 async function migratePackPullEvents(db: Db): Promise<void> {

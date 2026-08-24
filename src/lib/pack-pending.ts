@@ -15,6 +15,13 @@ export interface PendingPack {
   damage: PackDamage | null;
 }
 
+/* The completion reward overrides the cut-pack gag. It is the only card that
+   can never be earned again, so a hand containing it reveals intact and is
+   never routed into the summary's automatic recycler. */
+export function effectivePackDamage(players: readonly PackPlayer[], damage: PackDamage | null): PackDamage | null {
+  return players.some((player) => player.eternal) ? null : damage;
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -41,6 +48,12 @@ function sanitizePlayer(value: unknown): PackPlayer | null {
     },
     globalRank: raw.globalRank,
     pp: raw.pp,
+    /* Kept so a completion-reward card interrupted mid-reveal resumes as the
+       Eternal it was dealt as. Display-only: hand-writing this into
+       localStorage paints a card on your own screen and nothing else - the
+       server minted (or didn't mint) the ":eternal" row at draw time and
+       refuses the tier from every client claim. */
+    ...(raw.eternal === true ? { eternal: true as const } : {}),
   };
 }
 

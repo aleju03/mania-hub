@@ -359,6 +359,9 @@ export async function grantAdminPackCard(
      form values describe the edited source; an empty source face falls back
      to the destination's already-frozen one in the conflict clause below. */
   const movingHolding = moveFromKey !== null;
+  const retiresCompletionReward =
+    (tier === "eternal" && copies > 0) ||
+    (existing?.tier === "eternal" && heldCopies > 0);
   const ownershipConflictSql = movingHolding
     ? `card_user_id = excluded.card_user_id,
        tier = excluded.tier,
@@ -372,6 +375,7 @@ export async function grantAdminPackCard(
        first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
        last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
        updated_at = excluded.updated_at,
+       completion_eligible = 1,
        granted_at = coalesce(pack_collection_cards.granted_at, excluded.granted_at)`
     : `card_user_id = excluded.card_user_id,
        tier = excluded.tier,
@@ -385,6 +389,7 @@ export async function grantAdminPackCard(
        first_pulled_at = excluded.first_pulled_at,
        last_pulled_at = excluded.last_pulled_at,
        updated_at = excluded.updated_at,
+       completion_eligible = 1,
        /* Only ever set, never cleared: editing a card the desk granted leaves
           it granted, and editing one somebody pulled leaves the column null
           rather than claiming it was handed to them. */
@@ -409,8 +414,8 @@ export async function grantAdminPackCard(
          entire job is to say what the row should read. */
       sql: `insert into pack_collection_cards (
          owner_user_id, card_user_id, card_key, tier, tier_label, motif, skills_id, pp, global_rank,
-         copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, granted_at
-       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, granted_at, completion_eligible
+       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
        on conflict(owner_user_id, card_key) do update set
          ${ownershipConflictSql}`,
       args: [
@@ -445,6 +450,14 @@ export async function grantAdminPackCard(
     ...(moveFromKey ? [{
       sql: "delete from pack_collection_cards where owner_user_id = ? and card_key = ?",
       args: [owner.userId, moveFromKey],
+    } satisfies DbStatement] : []),
+    ...(retiresCompletionReward ? [{
+      /* A manually granted Eternal is already this collector's one Eternal.
+         Retire the automatic completion reward in the same transaction so a
+         grant and a concurrent pack open can never produce two cards. */
+      sql: `insert or ignore into pack_eternal_rewards (owner_user_id, claim_token, dealt_at)
+            values (?, ?, ?)`,
+      args: [owner.userId, `admin:${cardKey}`, now],
     } satisfies DbStatement] : []),
     ...serialStatements(cardKey, cardUserId, owner.userId, grant, now, copies > 0),
   ];
@@ -590,25 +603,52 @@ export async function removeAdminPackCard(
 ): Promise<AdminPackCardRemoval> {
   const cardKey = normalizePackCardKey(rawCardKey);
   if (!cardKey || !Number.isInteger(ownerUserId) || ownerUserId <= 0) return { removed: false, serialRemoved: false };
-  const deleted = await exec(
+  const holding = (await exec(
     db,
-    "delete from pack_collection_cards where owner_user_id = ? and card_key = ?",
+    "select tier from pack_collection_cards where owner_user_id = ? and card_key = ?",
     [ownerUserId, cardKey],
-  );
-  let serialRemoved = false;
+  )).rows[0];
+  if (!holding) return { removed: false, serialRemoved: false };
+
+  const statements: DbStatement[] = [{
+    sql: "delete from pack_collection_cards where owner_user_id = ? and card_key = ?",
+    args: [ownerUserId, cardKey],
+  }];
+  let serialIndex = -1;
   if (options.dropSerial) {
-    const dropped = await exec(
-      db,
-      "delete from pack_card_serials where owner_user_id = ? and card_key = ?",
-      [ownerUserId, cardKey],
-    );
-    serialRemoved = Number(dropped.rowsAffected ?? 0) > 0;
+    serialIndex = statements.length;
+    statements.push({
+      sql: "delete from pack_card_serials where owner_user_id = ? and card_key = ?",
+      args: [ownerUserId, cardKey],
+    });
   }
   // A pinned showcase slot pointing at a card nobody holds renders as nothing,
   // but leaving it means the next grant of the same card silently reappears on
   // the shelf, which is not what "removed" should mean.
-  await exec(db, "delete from pack_showcase_cards where owner_user_id = ? and card_key = ?", [ownerUserId, cardKey]);
-  return { removed: Number(deleted.rowsAffected ?? 0) > 0, serialRemoved };
+  statements.push({
+    sql: "delete from pack_showcase_cards where owner_user_id = ? and card_key = ?",
+    args: [ownerUserId, cardKey],
+  });
+  if (holding.tier === "eternal") {
+    statements.push({
+      /* Admin removal is the one intentional reset. Recycling never touches
+         this registry, but removing the collector's last Eternal means the
+         current-completion reward may restore it on a later pack. Keep the
+         claim while any other Eternal variant remains. */
+      sql: `delete from pack_eternal_rewards
+            where owner_user_id = ?
+              and not exists (
+                select 1 from pack_collection_cards
+                where owner_user_id = ? and tier = 'eternal'
+              )`,
+      args: [ownerUserId, ownerUserId],
+    });
+  }
+  const results = await execBatch(db, statements);
+  return {
+    removed: Number(results[0]?.rowsAffected ?? 0) > 0,
+    serialRemoved: serialIndex >= 0 && Number(results[serialIndex]?.rowsAffected ?? 0) > 0,
+  };
 }
 
 /* The durable name fallback for a collector with no users row. Only ever

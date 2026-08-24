@@ -78,6 +78,33 @@ interface ToneOptions {
   duration: number;
   gain: number;
   type?: OscillatorType;
+  /* Seconds to reach full gain. The default is a near-instant 8ms, which is
+     what makes the small chimes read as struck; a slower attack is what turns
+     a saw stack into a horn swell instead of a stab. */
+  attack?: number;
+  /* Runs the oscillator through a saturator before the envelope. A clean saw
+     stack stays polite however loud it is played; drive is what makes one
+     sound like it is being pushed, which is the whole character of the
+     Eternal fanfare's low end. */
+  drive?: boolean;
+  /* Fraction of the duration the pitch slide takes, for percussive drops that
+     should land well before the tail ends (a kick, not a siren). */
+  glideFraction?: number;
+}
+
+/* Soft-clip curve for the drive option above; built once and shared. */
+let driveCurve: Float32Array<ArrayBuffer> | null = null;
+
+function getDriveCurve(): Float32Array<ArrayBuffer> {
+  if (!driveCurve) {
+    const size = 1024;
+    driveCurve = new Float32Array(size);
+    for (let index = 0; index < size; index += 1) {
+      const x = (index / (size - 1)) * 2 - 1;
+      driveCurve[index] = Math.tanh(x * 3.4);
+    }
+  }
+  return driveCurve;
 }
 
 function playTone(ctx: AudioContext, options: ToneOptions) {
@@ -87,13 +114,23 @@ function playTone(ctx: AudioContext, options: ToneOptions) {
   osc.type = options.type ?? "triangle";
   osc.frequency.setValueAtTime(options.freq, t);
   if (options.endFreq) {
-    osc.frequency.exponentialRampToValueAtTime(options.endFreq, t + options.duration);
+    osc.frequency.exponentialRampToValueAtTime(
+      options.endFreq,
+      t + options.duration * (options.glideFraction ?? 1),
+    );
   }
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(0.0001, t);
-  gain.gain.exponentialRampToValueAtTime(options.gain, t + 0.008);
+  gain.gain.exponentialRampToValueAtTime(options.gain, t + Math.max(0.004, options.attack ?? 0.008));
   gain.gain.exponentialRampToValueAtTime(0.0001, t + options.duration);
-  osc.connect(gain).connect(master);
+  if (options.drive) {
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = getDriveCurve();
+    shaper.oversample = "2x";
+    osc.connect(shaper).connect(gain).connect(master);
+  } else {
+    osc.connect(gain).connect(master);
+  }
   osc.start(t);
   osc.stop(t + options.duration + 0.05);
 }
@@ -255,6 +292,174 @@ export function playGoatFanfare() {
   playTone(ctx, { at: landing, freq: 2093, duration: 1.8, gain: 0.085, type: "sine" });
   playTone(ctx, { at: landing, freq: 3136, duration: 1.4, gain: 0.03, type: "sine" });
   playNoise(ctx, { at: landing, duration: 1.2, gain: 0.035, startFreq: 9000, q: 0.8 });
+}
+
+/* A chord voiced the way this file's other sounds are not: detuned sawtooth
+   copies per note, driven into a saturator, which is what gives a synth stack
+   its horn-like bite and body. A sine at the same gain reads as a polite
+   beep; the whole point of the Eternal fanfare is that it does not. */
+function playChordStack(
+  ctx: AudioContext,
+  options: {
+    at: number;
+    freqs: readonly number[];
+    duration: number;
+    gain: number;
+    detune?: number;
+    attack?: number;
+    /* Doubles the stack an octave down, driven hard. This is the "braaam":
+       the sub octave is where the weight lives, and without it a saw chord is
+       just bright. */
+    sub?: boolean;
+  },
+) {
+  const detune = options.detune ?? 0.008;
+  const { at, duration, gain, attack } = options;
+  for (const freq of options.freqs) {
+    playTone(ctx, { at, freq, duration, gain, type: "sawtooth", drive: true, attack });
+    playTone(ctx, { at, freq: freq * (1 + detune), duration, gain: gain * 0.7, type: "sawtooth", drive: true, attack });
+    playTone(ctx, { at, freq: freq * (1 - detune), duration, gain: gain * 0.7, type: "sawtooth", drive: true, attack });
+    // A square an octave down thickens the body without adding brightness.
+    playTone(ctx, { at, freq: freq / 2, duration, gain: gain * 0.5, type: "square", drive: true, attack });
+    if (options.sub) {
+      playTone(ctx, { at, freq: freq / 4, duration: duration * 1.15, gain: gain * 0.62, type: "sine", attack });
+    }
+  }
+}
+
+/* The hit under everything: a kick with a fast pitch drop, its click, and a
+   sub tail that rings on after it. Percussion is what a fanfare is missing
+   when it sounds thin no matter how loud the chords get. */
+function playImpactHit(ctx: AudioContext, at: number, options: { gain: number; tail: number }) {
+  // Body: pitched drop, landing almost immediately so it thumps.
+  playTone(ctx, { at, freq: 200, endFreq: 42, duration: 0.5, gain: options.gain, type: "sine", glideFraction: 0.16, attack: 0.004 });
+  playTone(ctx, { at, freq: 120, endFreq: 38, duration: 0.42, gain: options.gain * 0.75, type: "triangle", drive: true, glideFraction: 0.2, attack: 0.004 });
+  // Click, so it cuts through on small speakers where the sub is inaudible.
+  playNoise(ctx, { at, duration: 0.045, gain: options.gain * 0.5, startFreq: 2600, endFreq: 700, q: 0.7 });
+  // Sub tail.
+  if (options.tail > 0) {
+    playTone(ctx, { at: at + 0.01, freq: 41, duration: options.tail, gain: options.gain * 0.85, type: "sine", attack: 0.02 });
+  }
+}
+
+/* The Eternal card: the one-time 100%-completion reward, the opener's own
+   card, and the last card a collector will ever be dealt for finishing.
+
+   Not the GOAT fanfare transposed. That one is a bright bell triad over a
+   swell, about half a second of lead-in and gone in under two. This is built
+   like a trailer cue and runs about four seconds: a riser winding up, a real
+   impact (sub drop plus crash) on the downbeat, three brass chords climbing
+   out of it, then the resolve chord held with a bell and a long sub tail.
+   It is deliberately the loudest thing in the pack flow. */
+const ETERNAL_IMPACT_AT = 0.95;
+const ETERNAL_CLIMB_AT = ETERNAL_IMPACT_AT + 0.42;
+const ETERNAL_CLIMB_STEP = 0.34;
+/* D minor stabs landing on a D major braaam: the climb is dark and the
+   landing is not, which is the shape of the whole moment in one chord change.
+   Voiced low, because the weight is the point. */
+const ETERNAL_CLIMB_CHORDS = [
+  [73.42, 110, 146.83],
+  [87.31, 130.81, 174.61],
+  [98, 146.83, 196],
+];
+const ETERNAL_RESOLVE_CHORD = [73.42, 110, 146.83, 220, 293.66];
+
+/* The recorded cue, and the one place this file uses an asset at all.
+   Everything else here is synthesized because a synth is the right instrument
+   for a UI click or a reveal chime; for a four second cinematic hit it is not,
+   and the WebAudio version below reads as artificial next to the moment it is
+   marking. See public/audio/packs/README.md for the sources and the license
+   (both CC0).
+
+   null means "asked and cannot have it" (missing, blocked, undecodable), which
+   pins the synth fallback rather than refetching on every play. */
+const ETERNAL_SAMPLE_URL = "/audio/packs/eternal-pull.mp3";
+let eternalBuffer: AudioBuffer | null = null;
+let eternalBufferLoad: Promise<void> | null = null;
+
+function loadEternalSample(ctx: AudioContext): Promise<void> {
+  if (!eternalBufferLoad) {
+    eternalBufferLoad = (async () => {
+      try {
+        const response = await fetch(ETERNAL_SAMPLE_URL);
+        if (!response.ok) return;
+        eternalBuffer = await ctx.decodeAudioData(await response.arrayBuffer());
+      } catch {
+        // Left null: the synthesized cue below covers it.
+      }
+    })();
+  }
+  return eternalBufferLoad;
+}
+
+/* Called as soon as a dealt hand is known to contain the Eternal card, which
+   is a few seconds of reveal before it is needed. Decoding on demand at the
+   flip would risk the ceremony starting silent and the sound arriving late,
+   and this card is dealt once per collector, so there is no second chance to
+   get it right. Safe to call repeatedly and before any user gesture: a
+   suspended context still decodes. */
+export function prefetchEternalFanfare(): void {
+  const ctx = ensureAudio();
+  if (!ctx || eternalBuffer) return;
+  void loadEternalSample(ctx);
+}
+
+export function playEternalFanfare() {
+  const ctx = ensureAudio();
+  if (!ctx || !master) return;
+
+  if (eternalBuffer) {
+    const source = ctx.createBufferSource();
+    source.buffer = eternalBuffer;
+    const gain = ctx.createGain();
+    // The file is already mastered to sit above the rest of the pack flow, so
+    // this only trims it under the shared master rather than shaping it.
+    gain.gain.value = 0.9;
+    source.connect(gain).connect(master);
+    source.start();
+    return;
+  }
+
+  /* Not loaded (yet, or at all): the synthesized cue. Same shape and the same
+     4.4 seconds, so the burst stays in step with whichever one plays. */
+  void loadEternalSample(ctx);
+  playSynthesizedEternalFanfare(ctx);
+}
+
+function playSynthesizedEternalFanfare(ctx: AudioContext) {
+  /* Wind-up. A rising noise sweep, a driven low rumble underneath it, and two
+     warning thumps, so the impact lands on something instead of on silence. */
+  playNoise(ctx, { duration: ETERNAL_IMPACT_AT, gain: 0.085, startFreq: 240, endFreq: 9500, q: 0.6 });
+  playTone(ctx, { freq: 36, endFreq: 66, duration: ETERNAL_IMPACT_AT, gain: 0.16, type: "sawtooth", drive: true, attack: 0.4 });
+  playImpactHit(ctx, 0.36, { gain: 0.13, tail: 0 });
+  playImpactHit(ctx, 0.66, { gain: 0.18, tail: 0 });
+
+  /* The impact. Kick, crash, and a driven low braaam on the same instant:
+     this is the frame the card lands on, and it is the loudest thing in the
+     pack flow on purpose. */
+  playImpactHit(ctx, ETERNAL_IMPACT_AT, { gain: 0.42, tail: 1.7 });
+  playNoise(ctx, { at: ETERNAL_IMPACT_AT, duration: 1.5, gain: 0.15, startFreq: 9000, endFreq: 500, q: 0.4 });
+  playChordStack(ctx, { at: ETERNAL_IMPACT_AT, freqs: [36.71, 55], duration: 1.25, gain: 0.1, attack: 0.03, sub: true });
+
+  /* Three stabs climbing out of it, each with its own kick so the run drives
+     instead of drifting. Short and gated, not held. */
+  ETERNAL_CLIMB_CHORDS.forEach((chord, index) => {
+    const at = ETERNAL_CLIMB_AT + index * ETERNAL_CLIMB_STEP;
+    playChordStack(ctx, { at, freqs: chord, duration: 0.3, gain: 0.085 + index * 0.014, attack: 0.006 });
+    playImpactHit(ctx, at, { gain: 0.26 + index * 0.03, tail: 0 });
+    playNoise(ctx, { at, duration: 0.22, gain: 0.06, startFreq: 4200, endFreq: 800, q: 0.6 });
+  });
+
+  /* The landing: the full chord held with its sub octave, a kick under it,
+     and a bell over the top so the low end has something to resolve to. */
+  const landing = ETERNAL_CLIMB_AT + ETERNAL_CLIMB_CHORDS.length * ETERNAL_CLIMB_STEP;
+  playImpactHit(ctx, landing, { gain: 0.44, tail: 2.6 });
+  playChordStack(ctx, { at: landing, freqs: ETERNAL_RESOLVE_CHORD, duration: 2.2, gain: 0.095, detune: 0.006, attack: 0.02, sub: true });
+  playTone(ctx, { at: landing, freq: 1174.66, duration: 2.3, gain: 0.085, type: "sine" });
+  playTone(ctx, { at: landing, freq: 1760, duration: 1.7, gain: 0.038, type: "sine" });
+  playNoise(ctx, { at: landing, duration: 1.0, gain: 0.1, startFreq: 9500, endFreq: 3500, q: 0.5 });
+  // Shimmer tail, the last thing left in the room.
+  playNoise(ctx, { at: landing + 0.55, duration: 1.9, gain: 0.03, startFreq: 11000, q: 0.9 });
 }
 
 /* A pentatonic ladder for the higher-or-lower game: no two rungs can clash, so

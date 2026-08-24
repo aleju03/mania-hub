@@ -41,6 +41,7 @@ import type { PackDamage } from "../lib/pack-damage";
 import {
   clearPendingPack,
   consumePendingPackCard,
+  effectivePackDamage,
   readPendingPack,
   writePendingPack,
 } from "../lib/pack-pending";
@@ -189,6 +190,26 @@ function buildCardStates(players: PackPlayer[], seededScores?: Map<number, OsuSc
 function devForceGoatPull(): boolean {
   if (!import.meta.env.DEV || typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).has("forceGoat");
+}
+
+/* Dev only, same deal as forceGoat: `/packs?forceEternal=1` marks the dealt
+   hand's final slot as the completion reward so the Eternal ceremony can be
+   reviewed without owning the whole pool. Unlike forceGoat it also applies to
+   a server-dealt (signed-in) hand, since that is the path the real reward
+   arrives on and the local roll never runs while a backend is configured.
+   Display-only even if it survived a build: the server refuses the tier from
+   every client claim and only its own completion deal writes an ":eternal"
+   row, so the forced card mints nothing and syncs nothing. */
+function devForceEternalPull(): boolean {
+  if (!import.meta.env.DEV || typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).has("forceEternal");
+}
+
+/* Applies the dev force above to a dealt hand, whoever dealt it. */
+function devApplyForcedEternal(players: PackPlayer[]): PackPlayer[] {
+  if (!devForceEternalPull() || players.length === 0 || players.some((player) => player.eternal)) return players;
+  const last = players.length - 1;
+  return players.map((player, index) => (index === last ? { ...player, eternal: true } : player));
 }
 
 function canAffordPack(wallet: PackWallet | null, type: PackTypeDef): boolean {
@@ -593,8 +614,9 @@ function PacksPage() {
         }
         preparedPackKeyRef.current = dealKey;
         setCards(buildCardStates(pending.players));
-        // A pack that was cut open comes back cut.
-        setDamage(pending.damage);
+        // The one-time Eternal reward overrides the cut-pack joke: it always
+        // resumes as a normal reveal and can never be auto-recycled unseen.
+        setDamage(effectivePackDamage(pending.players, pending.damage));
         setPhase("reveal");
         return;
       }
@@ -606,6 +628,10 @@ function PacksPage() {
       // draw reports only its filtered slice, so it must not overwrite it.
       if (!type.keys) walletApi.notePoolTotal(poolTotal);
       preparedPackKeyRef.current = dealKey;
+      // A completion reward is once per account and cannot be pulled again.
+      // If this was the unlucky pack somebody sliced through, forgive the cut
+      // entirely so Eternal gets its full ceremony and stays in the album.
+      setDamage((current) => effectivePackDamage(players, current));
       setCards(buildCardStates(players, seededScores));
       /* A pack opened straight from the summary pays here rather than at the
          slash, because there is no slash: charging only once the draw
@@ -644,7 +670,7 @@ function PacksPage() {
             serverPaidRef.current = true;
             if (dealt.wallet) walletApi.applyServerWallet(dealt.wallet.payload, dealt.wallet.rev);
             track("pack_open", { pack_type: type.id, pack_username: viewerRef.current?.username });
-            finishDeal(dealt.draw.players, dealt.draw.poolTotal, dealt.scoresByUserId);
+            finishDeal(devApplyForcedEternal(dealt.draw.players), dealt.draw.poolTotal, dealt.scoresByUserId);
             return;
           }
         }
@@ -659,10 +685,11 @@ function PacksPage() {
           ownedGoatUserIds: owned?.ownedGoatUserIds,
         });
         if (cancelled) return;
+        const players = devApplyForcedEternal(draw.players);
         if (isLiveBackendConfigured()) {
-          void warmLivePackPlayers(draw.players.map((player) => player.user.id)).catch(() => {});
+          void warmLivePackPlayers(players.map((player) => player.user.id)).catch(() => {});
         }
-        finishDeal(draw.players, draw.poolTotal);
+        finishDeal(players, draw.poolTotal);
       } catch {
         autoOpenRef.current = false;
         if (!cancelled) {

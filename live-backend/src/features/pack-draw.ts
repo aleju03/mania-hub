@@ -15,8 +15,16 @@
    dealt hand is written into the collection right there, so the wallet's
    numbers and the copies in a collection are no longer the client's word. */
 import type { Db } from "../db.js";
-import { getPackPoolEntries, type GlobalRankingEntry, type PackPoolKeymode } from "./global-rankings.js";
-import { HONORARY_USER_IDS, listPackCollectionOwnedCardKeys, normalizePackCardKey, type PackOpenCost } from "./pack-wallets.js";
+import { getPackPoolEntries, getPackPoolMembership, type GlobalRankingEntry, type PackPoolKeymode } from "./global-rankings.js";
+import {
+  countMissingEternalGoatCards,
+  getPackCollectionEternalProgress,
+  HONORARY_USER_IDS,
+  isPackWalletEternalPending,
+  listPackCollectionOwnedCardKeys,
+  normalizePackCardKey,
+  type PackOpenCost,
+} from "./pack-wallets.js";
 import { selectReadyPackCardUserIds } from "./player-profiles.js";
 
 /* Draw parameters and price per pack type, mirrored from PACK_TYPES in
@@ -79,9 +87,15 @@ export class PackPoolUnavailableError extends Error {
 }
 
 export type PackDrawSlot =
-  | { honorary: true; userId: number }
+  | { honorary: true; eternal?: false; userId: number }
+  /* The one-time 100%-completion reward: the opener's own card at the Eternal
+     tier, appended once as a bonus slot. Identity rides along when the users
+     projection knows the opener (most completionists are tracked players);
+     the client falls back to the signed-in identity it already holds. */
+  | { honorary?: false; eternal: true; userId: number; username?: string; avatarUrl?: string; countryCode?: string }
   | {
       honorary?: false;
+      eternal?: false;
       userId: number;
       username: string;
       avatarUrl: string;
@@ -309,4 +323,58 @@ export async function drawPackHand(
   }
 
   return { poolTotal, players, notReadyUserIds };
+}
+
+/* Injectable reads for the completion check, so tests can drive it without a
+   real pool board or wallet. */
+export interface EternalSelfDeps {
+  isEternalPending: (db: Db, userId: number) => Promise<boolean>;
+  countMissingGoats: (db: Db, userId: number) => Promise<number>;
+  getPoolMembership: (db: Db) => Promise<{ userIds: Set<number>; total: number }>;
+  getPoolProgress: (
+    db: Db,
+    userId: number,
+    pool: { userIds: Set<number>; total: number },
+  ) => Promise<{ poolTotal: number; poolOwnedCount: number }>;
+}
+
+const defaultEternalSelfDeps: EternalSelfDeps = {
+  isEternalPending: isPackWalletEternalPending,
+  countMissingGoats: countMissingEternalGoatCards,
+  getPoolMembership: getPackPoolMembership,
+  getPoolProgress: getPackCollectionEternalProgress,
+};
+
+/* Whether this open owes the one-time 100%-completion reward: the opener's
+   own card at the Eternal tier, appended to the hand as a bonus slot.
+
+   Server-side on purpose - the durable claim, completion-eligible collection
+   rows and the pool all live here, so no localStorage edit or devtools call
+   can claim it.
+   Completion means the whole game, both halves of it: every player in the
+   FULL current draw pool is owned (a keymode pack still checks the whole
+   pool, not its slice - the same count the /packs header shows), AND every
+   GOAT card on the current honorary roster is held (the header's GOAT chip at
+   zero missing; GOATs are not pool slots, so without this a collector could
+   finish the ratio while the rarest cards in the game were still out). The
+   durable claim is checked first because it is one row and almost always
+   answers no; the counting only runs for collectors still owed the reward. A
+   pool that cannot be read answers false rather than guessing: the reward is
+   one-time, and deferring it to the next open is free. */
+export async function shouldDealEternalSelfCard(
+  db: Db,
+  ownerUserId: number,
+  deps: EternalSelfDeps = defaultEternalSelfDeps,
+): Promise<boolean> {
+  if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) return false;
+  if (!(await deps.isEternalPending(db, ownerUserId))) return false;
+  try {
+    if ((await deps.countMissingGoats(db, ownerUserId)) > 0) return false;
+    const pool = await deps.getPoolMembership(db);
+    if (pool.total < PACK_POOL_MIN_TOTAL) return false;
+    const progress = await deps.getPoolProgress(db, ownerUserId, pool);
+    return progress.poolOwnedCount >= pool.total;
+  } catch {
+    return false;
+  }
 }

@@ -16,7 +16,8 @@ import { mintPackCardSerialStatement, settlePackCardPullReportStatement } from "
 // the name and country on the row are read from the users table rather than
 // from the browser. See resolvePullCardIdentities.
 
-export const PACK_PULL_MAX_CARDS_PER_EVENT = 10;
+// The largest pack (Wild, 10 cards) plus the one-time completion bonus slot.
+export const PACK_PULL_MAX_CARDS_PER_EVENT = 11;
 // A generous ceiling on how fast a single account can append events: five
 // charge packs per regen cycle plus shard packs lands well under this. Past
 // the cap the batch is dropped silently; the wallet sync is unaffected.
@@ -31,13 +32,16 @@ const NOTABLE_TIERS = new Set([
   "mythic",
   "ascendant",
   "worldClass",
+  "eternal",
   "goat",
 ]);
 
-/* Tiers a pull may claim. "eternal" is deliberately absent: it is hand-granted
-   from /admin/collections and no pack can deal one, so a pull claiming it is
-   forged - and this list is what stands between that and "pulled Eternal
-   <anyone>" on the public feed, the live SSE stream and the share page. */
+/* Tiers a pull may claim. "eternal" carries an extra guard below (it is the
+   one-time completion reward, dealt server-side as the opener's own card, so
+   a claim only stands when the reporter's collection actually holds their own
+   ":eternal" row) - that guard and this list are what stand between a forged
+   report and "pulled Eternal <anyone>" on the public feed, the live SSE
+   stream and the share page. */
 export const VALID_TIERS: ReadonlySet<string> = new Set([
   "common",
   "rare",
@@ -48,6 +52,7 @@ export const VALID_TIERS: ReadonlySet<string> = new Set([
   "mythic",
   "ascendant",
   "worldClass",
+  "eternal",
   "goat",
 ]);
 
@@ -256,7 +261,7 @@ export async function recordPackPullEvents(
   // sent. Honoraries keep the client's string, since they are an allowlist and
   // may legitimately have no users row.
   const identities = await resolvePullCardIdentities(db, [...new Set(claimed.map((card) => card.userId))]);
-  const normalized = claimed
+  let normalized = claimed
     .map((card) => {
       const identity = identities.get(card.userId);
       if (identity) return { ...card, username: identity.username || card.username, countryCode: identity.countryCode || card.countryCode };
@@ -264,6 +269,23 @@ export async function recordPackPullEvents(
     })
     .filter((card): card is PackPullCardInput => card !== null);
   if (normalized.length === 0) return { recorded: 0, mints: [], eventIds: [] };
+
+  /* An Eternal claim stands only for the reporter's own card, and only when
+     the collection actually holds their ":eternal" row - which nothing but
+     the draw route's one-time completion deal can write. Anything else
+     demotes to an unrated pull rather than being refused, like every other
+     rejected tier claim, so a tampered report still cannot put "pulled
+     Eternal <anyone>" on the feed or mint a serial under that key. */
+  if (normalized.some((card) => card.tier === "eternal")) {
+    const held = (await exec(
+      db,
+      "select 1 from pack_collection_cards where owner_user_id = ? and card_key = ? and copies > 0",
+      [ownerUserId, `${ownerUserId}:eternal`],
+    )).rows.length > 0;
+    normalized = normalized.map((card) =>
+      card.tier === "eternal" && !(card.userId === ownerUserId && held) ? { ...card, tier: null } : card,
+    );
+  }
 
   const hourAgo = now - 60 * 60 * 1000;
   const recent = (await exec(

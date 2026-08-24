@@ -19,6 +19,21 @@ import type {
 } from "./types";
 
 const EMPTY_CARD_MESSAGE = "Need at least one ranked play with full beatmap data to mint a card.";
+const ETERNAL_COLLECTOR_SKILLS: ManiaSkills = {
+  starAvg: 0,
+  fingerControl: 0,
+  speed: 0,
+  accuracy: 0,
+  stamina: 0,
+  versatility: 0,
+  peak: 0,
+  polish: 0,
+  apex: 0,
+  cardPower: 0,
+  mainKeyMode: 4,
+  archetype: "Collector",
+  sampleSize: 0,
+};
 
 /* The CORS-proxied avatar URL the card textures draw from. Exported so reveal
    flows can warm the browser cache before the texture pipeline needs it. */
@@ -41,6 +56,19 @@ export function buildManiaCardRenderData({ user, scores, tierOverride, motifOver
     { globalPp: user.statistics?.pp },
   );
   if (!skills) {
+    // Completing the collection is independent of having ranked mania plays.
+    // The once-per-account self card must still reveal and persist its Eternal
+    // ceremony for a collector with an empty score window; its awarded tier
+    // does not pretend these neutral trait values were performance-derived.
+    if (tierOverride === "eternal") {
+      return buildManiaCardRenderDataFromSkills({
+        user,
+        skills: ETERNAL_COLLECTOR_SKILLS,
+        scores,
+        tierOverride,
+        motifOverride,
+      });
+    }
     return { status: "empty", message: EMPTY_CARD_MESSAGE };
   }
 

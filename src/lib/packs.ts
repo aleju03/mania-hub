@@ -51,6 +51,11 @@ export interface PackPlayer {
   };
   globalRank: number;
   pp: number;
+  /* The one-time completion reward slot: this card reveals at the Eternal
+     tier. Display-only on this side - the server dealt the ":eternal" row and
+     refuses the tier from any client claim, so forging this flag paints a
+     card only on the forger's own screen. */
+  eternal?: boolean;
 }
 
 // The booster lineup. Standard burns a regenerating pack charge; the rest
@@ -744,13 +749,43 @@ export interface ServerPackDeal {
 export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal {
   const players: PackPlayer[] = [];
   const isNewByCardKey = new Map<string, boolean>();
+  const snapshotsByUserId = new Map(
+    result.cards.flatMap((card) => {
+      const userId = Math.floor(Number(card?.user?.id) || 0);
+      return userId > 0 && card.user ? [[userId, card.user] as const] : [];
+    }),
+  );
   for (const slot of result.players) {
     if (typeof slot.isNew === "boolean") {
-      isNewByCardKey.set(slot.honorary ? `${slot.userId}:goat` : String(slot.userId), slot.isNew);
+      isNewByCardKey.set(
+        slot.honorary ? `${slot.userId}:goat` : slot.eternal ? `${slot.userId}:eternal` : String(slot.userId),
+        slot.isNew,
+      );
     }
     if (slot.honorary) {
       const member = honoraryPlayerById(slot.userId);
       if (member?.cardReady) players.push(honoraryToPackPlayer(member));
+      continue;
+    }
+    if (slot.eternal) {
+      // The opener's own card. The claimed slot normally carries the frozen
+      // identity numbers itself; the inlined card snapshot is an additional
+      // authoritative fallback across deploy skew.
+      const snapshot = snapshotsByUserId.get(slot.userId);
+      const pp = slot.pp ?? snapshot?.statistics?.pp ?? 0;
+      const globalRank = slot.globalRank ?? snapshot?.statistics?.global_rank ?? null;
+      players.push({
+        eternal: true,
+        user: {
+          id: slot.userId,
+          username: slot.username || snapshot?.username || `User ${slot.userId}`,
+          avatar_url: slot.avatarUrl || snapshot?.avatar_url || "",
+          country_code: slot.countryCode || snapshot?.country_code || "",
+          statistics: { global_rank: globalRank, pp },
+        },
+        globalRank: globalRank ?? UNKNOWN_HONORARY_PEAK_RANK,
+        pp,
+      });
       continue;
     }
     players.push({

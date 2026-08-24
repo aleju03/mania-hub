@@ -86,6 +86,7 @@ const NOTABLE_TIERS = new Set<string>([
   "mythic",
   "ascendant",
   "worldClass",
+  "eternal",
   "goat",
 ]);
 
@@ -144,6 +145,7 @@ const SIM_TIERS: Array<string | null> = [
   "mythic",
   "ascendant",
   "worldClass",
+  "eternal",
   "goat",
 ];
 /* Drops every simulated pull still waiting in the drip queue and out of the
@@ -158,6 +160,10 @@ function purgeSimulatedPulls(): void {
 
 function pushSimulatedPull(): void {
   simPullId -= 1;
+  const forceEternal =
+    import.meta.env.DEV &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("forceEternal");
   pullQueue.push({
     id: simPullId,
     ownerUserId: 2,
@@ -166,7 +172,7 @@ function pushSimulatedPull(): void {
     cardUsername: `simmed pull ${-simPullId}`,
     cardCountryCode: "CR",
     cardAvatarUrl: null,
-    tier: SIM_TIERS[Math.floor(Math.random() * SIM_TIERS.length)] ?? null,
+    tier: forceEternal ? "eternal" : SIM_TIERS[Math.floor(Math.random() * SIM_TIERS.length)] ?? null,
     packType: "standard",
     isNew: false,
     isFirstGlobal: Math.random() < 0.12,

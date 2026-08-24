@@ -3,12 +3,12 @@ import { parseJson } from "../../db.js";
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
 import { getPackCardCollectors, getPackCardKeyStats, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
-import { applyPackCollectionCardMint, countMissingGoatCards, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot } from "../../features/pack-wallets.js";
+import { applyPackCollectionCardMint, countMissingGoatCards, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackUserIdentity, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, mintEternalSelfCardOnce, normalizeAvatarUrl, normalizeCountryCode, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot, type PackUserIdentity } from "../../features/pack-wallets.js";
 import { getPackCollectorProfile, getPackCommunityStats, getPackShowcaseCards, listPackCollectors, listPackShowcaseWall, normalizePackCollectorSort, PACK_COLLECTOR_PAGE_MAX_SIZE, resolvePackCollector } from "../../features/pack-community.js";
-import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError } from "../../features/pack-draw.js";
-import { logInfo } from "../../logger.js";
+import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError, shouldDealEternalSelfCard } from "../../features/pack-draw.js";
+import { logInfo, logWarn } from "../../logger.js";
 import { getPackPoolMembership, getPackPoolRoster } from "../../features/global-rankings.js";
-import { getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, selectReadyPackCardUserIds, warmProfileSnapshots } from "../../features/player-profiles.js";
+import { fetchAndStoreProfileSnapshotShared, getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, selectReadyPackCardUserIds, warmProfileSnapshots } from "../../features/player-profiles.js";
 import type { HttpContext } from "../context.js";
 import { DEFAULT_BODY_LIMIT_BYTES, isBridge, readBody, readBodyBuffer } from "../request.js";
 import { checkRate, sendAccentEnrichedJson, sendJson } from "../respond.js";
@@ -44,6 +44,38 @@ function packDrawRateLimited(userId: number): boolean {
   return window.count > PACK_DRAW_MAX_PER_MINUTE;
 }
 
+function finiteNumber(value: unknown): number | null {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function eternalSelfIdentity(
+  userId: number,
+  snapshotUser: Record<string, unknown> | null,
+  stored: PackUserIdentity | null,
+  verified: { username: string; avatarUrl: string; countryCode: string },
+): PackUserIdentity {
+  const statistics = snapshotUser?.statistics && typeof snapshotUser.statistics === "object"
+    ? snapshotUser.statistics as Record<string, unknown>
+    : null;
+  const username = typeof snapshotUser?.username === "string" && snapshotUser.username
+    ? snapshotUser.username
+    : stored?.username || verified.username || `User ${userId}`;
+  const avatarUrl = typeof snapshotUser?.avatar_url === "string" && snapshotUser.avatar_url
+    ? snapshotUser.avatar_url
+    : stored?.avatarUrl || verified.avatarUrl;
+  const countryCode = typeof snapshotUser?.country_code === "string" && snapshotUser.country_code
+    ? snapshotUser.country_code
+    : stored?.countryCode || verified.countryCode;
+  return {
+    username: username.slice(0, 40),
+    avatarUrl: normalizeAvatarUrl(avatarUrl),
+    countryCode: normalizeCountryCode(countryCode),
+    pp: Math.max(0, finiteNumber(statistics?.pp) ?? stored?.pp ?? 0),
+    globalRank: Math.max(0, Math.floor(finiteNumber(statistics?.global_rank) ?? stored?.globalRank ?? 0)),
+  };
+}
+
 export async function handlePacksRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL): Promise<boolean> {
   if (url.pathname === "/api/packs/warm") {
     // Pack deals send the drawn user ids here so cold players' profile
@@ -59,7 +91,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       (Array.isArray(body.userIds) ? body.userIds : [])
         .map(Number)
         .filter((id) => Number.isInteger(id) && id > 0),
-    )].slice(0, 10);
+    )].slice(0, 11); // The largest pack (Wild) plus the completion bonus slot.
     if (userIds.length === 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_ids" });
       return true;
@@ -176,6 +208,10 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       .slice(0, PACK_DRAW_MAX_EXCLUDE_KEYS)
       .map(normalizePackCardKey)
       .filter((key): key is string => key !== null);
+    /* The one-time 100%-completion reward, decided entirely server-side (the
+       durable claim, completion-eligible collection rows and pool all live
+       here, so no client state can claim it). */
+    const eternalSelfCandidate = await shouldDealEternalSelfCard(ctx.db, ownerUserId);
     let hand;
     try {
       hand = await drawPackHand(ctx.db, { packType, ownerUserId, excludeCardKeys });
@@ -213,14 +249,62 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         : {
             userId: slot.userId,
             tier: null,
-            username: slot.username,
-            avatarUrl: slot.avatarUrl,
-            countryCode: slot.countryCode,
-            pp: slot.pp,
-            globalRank: slot.globalRank ?? 0,
+            username: slot.username ?? "",
+            avatarUrl: slot.avatarUrl ?? "",
+            countryCode: slot.countryCode ?? "",
+            pp: slot.eternal ? 0 : slot.pp,
+            globalRank: slot.eternal ? 0 : slot.globalRank ?? 0,
           },
     );
     const isNewByCardKey = await mintDealtPackCards(writeDb, ownerUserId, dealtSlots, Date.now());
+    /* Eligibility is a read, but the award is a database claim: parallel draw
+       requests may both arrive here as candidates, and exactly one random
+       claim token wins the primary key while minting the card in that same
+       transaction. Only that winner appends the bonus to its response. */
+    if (eternalSelfCandidate) {
+      try {
+        let selfSnapshots = await getCachedPackCardSnapshots(ctx.db, [ownerUserId]);
+        if (selfSnapshots.length === 0) {
+          try {
+            await fetchAndStoreProfileSnapshotShared(
+              writeDb,
+              ctx.osu,
+              String(ownerUserId),
+              "userId",
+              "api:pack_eternal_self",
+            );
+            selfSnapshots = await getCachedPackCardSnapshots(writeDb, [ownerUserId]);
+          } catch {
+            // The signed osu! cookie identity below still gives the card its
+            // correct face; the normal reveal cold path can retry the scores.
+          }
+        }
+        const storedIdentity = await getPackUserIdentity(writeDb, ownerUserId);
+        const verifiedIdentity = {
+          username: typeof body.viewerUsername === "string" ? body.viewerUsername.slice(0, 40) : "",
+          avatarUrl: normalizeAvatarUrl(body.viewerAvatarUrl),
+          countryCode: normalizeCountryCode(typeof body.viewerCountryCode === "string" ? body.viewerCountryCode : ""),
+        };
+        const identity = eternalSelfIdentity(
+          ownerUserId,
+          selfSnapshots[0]?.user ?? null,
+          storedIdentity,
+          verifiedIdentity,
+        );
+        const eternal = await mintEternalSelfCardOnce(writeDb, ownerUserId, identity, Date.now());
+        if (eternal.dealt) {
+          // Appended after the honorary machinery, so this remains the hand's
+          // final card even when the same pack also hit a GOAT.
+          hand.players.push({ eternal: true, userId: ownerUserId, ...identity });
+          isNewByCardKey.set(packCardKey(ownerUserId, "eternal"), eternal.isNew);
+        }
+      } catch (error) {
+        // The ordinary hand is already paid and minted. Return it rather than
+        // losing that pack; the atomic claim rolled back, so the reward stays
+        // pending for the next open.
+        logWarn("pack_eternal_deal_failed", { userId: ownerUserId, error: String(error) });
+      }
+    }
     // Dealt because the slice had no ready replacement left: start their
     // fetch now so the reveal's cold path joins an in-flight warm.
     if (hand.notReadyUserIds.length > 0) {
@@ -229,7 +313,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     const cards = await getCachedPackCardSnapshots(ctx.db, hand.players.map((player) => player.userId));
     const players = hand.players.map((slot) => ({
       ...slot,
-      isNew: isNewByCardKey.get(packCardKey(slot.userId, slot.honorary ? "goat" : null)) ?? false,
+      isNew: isNewByCardKey.get(packCardKey(slot.userId, slot.honorary ? "goat" : slot.eternal ? "eternal" : null)) ?? false,
     }));
     await sendAccentEnrichedJson(req, res, ctx, 200, {
       poolTotal: hand.poolTotal,
@@ -768,7 +852,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       // every server-dealt open).
       if (body.mode === "mint") {
         if (Array.isArray(body.cards)) {
-          const mints = body.cards.slice(0, 10);
+          const mints = body.cards.slice(0, 11); // Wild pack plus the completion bonus slot.
           let applied = 0;
           for (const raw of mints) {
             const mint = (raw ?? {}) as Record<string, unknown>;

@@ -655,6 +655,17 @@ create table if not exists pack_wallets (
   owner_username text
 );
 
+-- One durable, database-enforced claim per collector for the completion
+-- reward. The claim row and the Eternal holding are written in the same
+-- transaction, with a random token gating every statement in that batch, so
+-- concurrent pack opens cannot both mint the bonus and a crashed transaction
+-- cannot consume it without creating the card.
+create table if not exists pack_eternal_rewards (
+  owner_user_id integer primary key,
+  claim_token text not null,
+  dealt_at integer not null
+);
+
 -- One row per card held, and a card is (player, GOAT-or-not) rather than just
 -- player: GOAT is awarded by honorary-roster membership instead of card power,
 -- and several roster members are live ranked players, so the same player can be
@@ -702,6 +713,11 @@ create table if not exists pack_collection_cards (
   -- running. Readers expose both null and zero as pulled. This is set once:
   -- editing a pull cannot claim it was given, or clear a real grant's stamp.
   granted_at integer,
+  -- Client-authored first-login imports are valid collection holdings, but
+  -- they are not proof for the one-time completion reward. Existing rows and
+  -- every server/admin mint default eligible; the import writer explicitly
+  -- stores zero and a later server deal upgrades it to one.
+  completion_eligible integer not null default 1,
   primary key(owner_user_id, card_key)
 );
 -- Both this table and pack_card_serials are pure key-value: the primary key is

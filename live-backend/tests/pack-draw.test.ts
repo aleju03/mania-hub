@@ -83,7 +83,7 @@ describe("drawPackHand", () => {
     expect(hand?.players).toHaveLength(5);
     const ids = rankedIds(hand?.players ?? []);
     expect(new Set(ids).size).toBe(5);
-    const ranks = (hand?.players ?? []).map((slot) => (slot.honorary ? 0 : slot.globalRank ?? 0));
+    const ranks = (hand?.players ?? []).map((slot) => (slot.honorary || slot.eternal ? 0 : slot.globalRank ?? 0));
     expect([...ranks].sort((a, b) => b - a)).toEqual(ranks);
   });
 
@@ -113,7 +113,7 @@ describe("drawPackHand", () => {
     );
     expect(hand?.players).toHaveLength(7);
     for (const slot of hand?.players ?? []) {
-      if (slot.honorary) continue;
+      if (slot.honorary || slot.eternal) continue;
       expect(slot.poolRank).toBeLessThanOrEqual(50);
     }
   });

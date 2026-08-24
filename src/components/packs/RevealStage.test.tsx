@@ -9,6 +9,11 @@ vi.mock("./TierBurst", () => ({
 vi.mock("./GoatBurst", () => ({
   GoatBurst: () => <div data-testid="goat-burst" />,
 }));
+vi.mock("./EternalBurst", () => ({
+  EternalBurst: () => <div data-testid="eternal-burst" />,
+  ETERNAL_CEREMONY_MS: 4_400,
+  ETERNAL_WINDUP_S: 0.95,
+}));
 
 const { CascadeTile } = await import("./RevealStage");
 
@@ -135,5 +140,29 @@ describe("CascadeTile", () => {
     expect(screen.getByTestId("goat-burst")).toBeTruthy();
     act(() => vi.advanceTimersByTime(1));
     expect(screen.queryByTestId("goat-burst")).toBeNull();
+  });
+
+  it("never burns the Eternal ceremony inside a tile", () => {
+    /* Most packs are opened with reveal-all, so this is the case that
+       decides whether the once-per-collector card gets a moment at all. The
+       tile must not celebrate it: a half-scale burst behind a ~90px slot (and
+       nothing whatsoever on mobile, where tiles drop bursts) is exactly the
+       "it got skipped" outcome. RevealStage pauses the cascade and gives it
+       the whole screen instead. */
+    render(
+      <CascadeTile
+        entry={revealedCard("eternal")}
+        username="player7"
+        cardBack="data:image/png;base64,back"
+        mobile={false}
+        reducedMotion={false}
+        onLanded={() => {}}
+        onFaceVisible={() => {}}
+      />,
+    );
+
+    act(() => vi.advanceTimersByTime(5_000));
+    expect(screen.queryByTestId("eternal-burst")).toBeNull();
+    expect(screen.queryByTestId("tier-burst")).toBeNull();
   });
 });

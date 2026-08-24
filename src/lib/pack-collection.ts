@@ -116,10 +116,9 @@ const TIER_SHARD_VALUES: Record<ManiaCardTier, number> = {
   mythic: 27,
   ascendant: 36,
   worldClass: 48,
-  // Eternal is never dealt: it only exists on a card an admin minted by hand,
-  // so this is not a rung the ladder has to price against pack odds. It is set
-  // at half a GOAT so recycling one is the same kind of decision - a card
-  // nobody can pull back for you - without matching the honorary roster.
+  // Eternal is awarded once for authoritative full completion (and can also
+  // be admin-granted), so this is not a rung priced against ordinary pack
+  // odds. It is set at half a GOAT so recycling one remains a real decision.
   eternal: 250,
   // A GOAT card is one of a tiny honorary roster; recycling one should be a
   // real decision, not a rounding error next to World Class's 48. It used to
@@ -209,7 +208,9 @@ export function collectedCardTier(card: {
    desk handed out. It is not derivable from anything the browser knows, which
    is the point - it is minted server-side and carried on the card itself. */
 export function packCardKey(userId: number, tier: ManiaCardTier | null): string {
-  return tier === "goat" ? `${userId}:goat` : String(userId);
+  if (tier === "goat") return `${userId}:goat`;
+  if (tier === "eternal") return `${userId}:eternal`;
+  return String(userId);
 }
 
 /* A card's own key wins over the derived one, so a granted card stays the card
@@ -218,15 +219,17 @@ export function packCardKeyOf(card: { userId: number; tier: ManiaCardTier | null
   return card.cardKey ?? packCardKey(card.userId, card.tier);
 }
 
-export function parsePackCardKey(key: string): { userId: number; goat: boolean; variant: number } | null {
-  const match = /^(\d+)(?::(goat|v\d{1,6}))?$/.exec(key);
+export function parsePackCardKey(
+  key: string,
+): { userId: number; goat: boolean; eternal: boolean; variant: number } | null {
+  const match = /^(\d+)(?::(goat|eternal|v\d{1,6}))?$/.exec(key);
   if (!match) return null;
   const userId = Number(match[1]);
   if (!Number.isInteger(userId) || userId <= 0) return null;
   const suffix = match[2] ?? "";
   const variant = suffix.startsWith("v") ? Number(suffix.slice(1)) : 0;
   if (suffix.startsWith("v") && variant <= 0) return null;
-  return { userId, goat: suffix === "goat", variant };
+  return { userId, goat: suffix === "goat", eternal: suffix === "eternal", variant };
 }
 
 /* Whether a key addresses a card the grant desk minted rather than one a pack
