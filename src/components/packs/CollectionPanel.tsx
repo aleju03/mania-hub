@@ -985,13 +985,21 @@ export function CollectionPanel({
 
   if (!wallet) return null;
 
-  // Progress is measured against the current draw pool when the server knows
-  // it: owned players still in the pool over the pool size, so players who
-  // fell off the rankings can no longer push the header past 100%. They show
-  // as a separate retired count instead. A local wallet only knows the pool
-  // size from its last draw, so it keeps the old ratio, clamped.
-  const progressOwned = serverPoolProgress ? serverPoolProgress.poolOwnedCount : collectionTotal;
-  const progressPool = serverPoolProgress ? serverPoolProgress.poolTotal : wallet.poolTotal;
+  // The header and "N missing" answer describe the same complete set: every
+  // ordinary-drawable player plus the honorary GOAT roster. Keeping GOATs out
+  // of this ratio while adding them to the missing count made the visible
+  // equation disagree (owned + missing != total). Retired and special variant
+  // cards remain outside completion.
+  const goatRosterTotal = HONORARY_PLAYERS.length;
+  const goatsOwned = Math.max(0, goatRosterTotal - goatMissingCount);
+  const progressOwned = serverPoolProgress
+    ? serverPoolProgress.poolOwnedCount + goatsOwned
+    : collectionTotal;
+  const progressPool = serverPoolProgress
+    ? serverPoolProgress.poolTotal + goatRosterTotal
+    : wallet.poolTotal !== null
+      ? wallet.poolTotal + goatRosterTotal
+      : null;
   const retiredOwned = serverPoolProgress?.retiredOwnedCount ?? 0;
   const progressPercent =
     progressPool !== null && progressPool > 0 ? Math.min(100, (progressOwned / progressPool) * 100) : null;
