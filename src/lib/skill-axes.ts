@@ -54,6 +54,24 @@ export const PATTERN_RATING_META: SkillAxisMeta[] = [
   { key: "ln", label: "LN", labelMsg: msg`LN`, color: "#f07474" },
 ];
 
+// The dan-evidence skillset buckets (the backend's danSkillsetBuckets): the
+// four skills each keymode's scene actually names, not the analyzer's 18-id
+// pattern vocabulary. Label and color only - which pattern tags fold into
+// which bucket is the backend's call, so the two never disagree by drifting
+// apart here.
+export const DAN_SKILLSET_META: Record<string, { labelMsg: MessageDescriptor; color: string }> = {
+  jack: { labelMsg: msg`Jack`, color: "#ec6a9c" },
+  tech: { labelMsg: msg`Tech`, color: "#83cf6b" },
+  speed: { labelMsg: msg`Speed`, color: "#5ab2f2" },
+  stamina: { labelMsg: msg`Stamina`, color: "#ad6b5d" },
+  stream: { labelMsg: msg`Stream`, color: "#8f6bd8" },
+  ln: { labelMsg: msg`LN`, color: "#f07474" },
+  lngeneral: { labelMsg: msg`General`, color: "#f07474" },
+  lntech: { labelMsg: msg`Tech`, color: "#83cf6b" },
+  lninverse: { labelMsg: msg`Inverse`, color: "#c59a5c" },
+  lnrelease: { labelMsg: msg`Release`, color: "#46c7b8" },
+};
+
 // Drop trickle keymodes (a few stray plays in an off-keymode) so callers only
 // offer modes the player meaningfully plays; always keep at least the
 // dominant one.

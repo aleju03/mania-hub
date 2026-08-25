@@ -194,7 +194,13 @@ const AGGREGATE_RATING_SCALER = 1.04;
 
 // Player dan clear rules, all in one block by design (they are the tunable
 // community-convention part). A clear is accuracy >= 96% (the usual dan bar)
-// with a small miss allowance - but a single ranked chart is far shorter than
+// at 1.0x or DT, and nothing else: dan courses clear on accuracy, so misses
+// are not gated separately. Mania accuracy already prices a miss at zero, so
+// the miss count is not independent evidence - measured over the rated pool,
+// a 1.5% miss cap rejected only 1.3% of 96%+ passes and every one of them sat
+// at 96-98% accuracy with 1.5-3% misses, i.e. ordinary passes rather than
+// anything the accuracy bar had missed. Gating on it also discarded every
+// play whose judgement counts were unknown. But a single ranked chart is far shorter than
 // a four-chart dan course, so a bare scrape is thin evidence: a clear only
 // credits the chart's full rawDan at DAN_CREDIT_FULL_ACCURACY and the credit
 // fades linearly to -DAN_CREDIT_MAX_DISCOUNT at the 96% floor (you own the
@@ -216,7 +222,6 @@ const AGGREGATE_RATING_SCALER = 1.04;
 // 2026-07 against reference players with independently known dan levels on
 // both keymodes and both sides; re-anchor the same way before changing them.
 const DAN_CLEAR_MIN_ACCURACY = 0.96;
-const DAN_CLEAR_MAX_MISS_SHARE = 0.015;
 const DAN_CLEAR_QUORUM = 4;
 function danCreditFor(side: "rc" | "ln", keyCount: number): { fullAccuracy: number; maxDiscount: number } {
   if (keyCount === 7) {
@@ -780,8 +785,6 @@ function collectDanClears(
     const score = scoresByIdentity.get(play.identity);
     const displayed = play.accuracy ?? (score ? getDisplayedAccuracy(score) : null);
     if (typeof displayed !== "number") continue;
-    const missShare = play.missShare !== undefined ? play.missShare : score ? getMissShare(score.statistics) : null;
-    if (missShare == null || missShare > DAN_CLEAR_MAX_MISS_SHARE) continue;
     // Rice evidence speaks stable currency (the formula both clients share);
     // LN keeps each client's displayed accuracy - lazer LN judgement counts
     // are not stable-convertible, and the LN curves are anchored on that.
@@ -1582,8 +1585,9 @@ export interface PlayerSkillDanEvidencePlay {
 }
 
 export interface PlayerSkillDanSkillsetEvidence {
-  // In-house pattern id (jack, tech, stream, ...; the PATTERN_RATING_META
-  // vocabulary minus "ln", which is the side split itself).
+  // Bucket id from danSkillsetBuckets: "jack"/"tech"/"speed" plus "stamina"
+  // (4K) or "stream" (6K/7K) on the rice side, and "ln" or the four
+  // "ln*" subtypes on the LN side. Not a raw analyzer pattern tag.
   id: string;
   clears: number;
   // Same quorum rule as the headline dan, applied to only this skillset's
@@ -1604,12 +1608,84 @@ export interface PlayerSkillDanEvidence {
 }
 
 const DAN_EVIDENCE_MAX_CLEARS = 20;
-const DAN_EVIDENCE_SKILLSET_PLAYS = 5;
+const DAN_EVIDENCE_SKILLSET_PLAYS = 10;
+
+interface DanSkillsetBucket {
+  id: string;
+  /** Analyzer pattern tags that put a clear in this bucket. */
+  tags: string[];
+  /**
+   * MSD skillsets that put a clear in this bucket, by the play's STRONGEST
+   * skillset rather than by a tag. Set only where MinaCalc rates the keymode
+   * meaningfully (4K); a bucket set built this way is mutually exclusive, so
+   * the bucket clear counts partition the side's clears instead of overlapping.
+   */
+  skillsets?: string[];
+  /** Every clear on the side belongs here, tags ignored (the whole-LN row). */
+  all?: boolean;
+}
+
+/**
+ * The skillsets a dan estimate is broken down by, per keymode and side.
+ *
+ * Not the analyzer's raw vocabulary: each keymode gets the four skills its
+ * players name, and the underlying signal folds into them. Which signal that
+ * is differs by keymode, because only one of the two is trustworthy on each.
+ *
+ * 4K goes through MinaCalc's MSD skillsets, taken from the play's own SSR
+ * vector at the rate it was played, bucketed by the play's STRONGEST skillset
+ * - the same "this is a stamina chart" reading the maps pages show. Measured
+ * over the corpus that splits 4K rice about evenly: Technical 27%, Chordjack
+ * +JackSpeed 27%, Stamina+Handstream 26%, Stream+Jumpstream 23%. Because it is
+ * an argmax, the four buckets are disjoint and their clear counts sum to the
+ * side's total.
+ *
+ * 6K/7K cannot use it: that calc engine does not rate Technical at all
+ * (it returns ~0, so Technical never wins an argmax there) and the distribution
+ * collapses onto Handstream. Those keymodes fall back to the in-house chart
+ * pattern tags, where they overlap - a chart tagged chordjack+tech backs both
+ * dans. Their tag lists are narrow on purpose, because the analyzer emits two
+ * nearly disjoint vocabularies: 6K/7K rice fires tech / chordstream / delay /
+ * chordjack / bracket and never fires jack, jumpstream, quadstream, handjack,
+ * speedjack, handstream or stream. Re-measure before moving a tag, and check
+ * it fires on that keymode at all.
+ *
+ * LN is one skill everywhere except 7K, whose scene does name the four
+ * subtypes and whose charts are the only ones the analyzer separates them on
+ * in any volume.
+ */
+function danSkillsetBuckets(keyCount: number, side: "rc" | "ln"): DanSkillsetBucket[] {
+  if (side === "ln") {
+    if (keyCount === 7) {
+      return [
+        { id: "lngeneral", tags: ["lngeneral", "ln"] },
+        { id: "lntech", tags: ["lntech"] },
+        { id: "lninverse", tags: ["lninverse"] },
+        { id: "lnrelease", tags: ["lnrelease"] },
+      ];
+    }
+    return [{ id: "ln", tags: [], all: true }];
+  }
+  if (keyCount === 4) {
+    return [
+      { id: "jack", tags: [], skillsets: ["JackSpeed", "Chordjack"] },
+      { id: "tech", tags: [], skillsets: ["Technical"] },
+      { id: "speed", tags: [], skillsets: ["Stream", "Jumpstream"] },
+      { id: "stamina", tags: [], skillsets: ["Handstream", "Stamina"] },
+    ];
+  }
+  return [
+    { id: "jack", tags: ["chordjack"] },
+    { id: "tech", tags: ["tech"] },
+    { id: "speed", tags: ["delay"] },
+    { id: "stream", tags: ["chordstream", "bracket"] },
+  ];
+}
 
 /**
  * The qualifying clears behind one side of a player's dan estimate, plus the
- * same estimate re-run per chart skillset tag ("your jack dan" = the dan the
- * jack-tagged charts you clear demonstrate, same quorum rule).
+ * same estimate re-run per skillset bucket ("your jack dan" = the dan the
+ * jack charts you clear demonstrate, same quorum rule).
  *
  * Recomputed on read from the same durable per-play cache and clear rules the
  * stored verdict used (collectDanClears), so it explains the number rather
@@ -1645,16 +1721,22 @@ export async function getPlayerSkillDanEvidence(
   // the estimate (matching the stored verdict's clears count).
   const threshold = dan ? clears[DAN_CLEAR_QUORUM - 1].creditedDan : null;
 
-  // Skillset grouping by the chart's pattern tags. "ln" is excluded: the
-  // RC/LN split already is that axis, and on the LN side every chart carries
-  // the tag.
+  // Skillset grouping, by bucket rather than by raw analyzer tag: the tag
+  // vocabulary is 18 ids deep and a player reads their dan through the four
+  // skills their scene actually names (DAN_SKILLSET_BUCKETS).
+  const buckets = danSkillsetBuckets(keyCount, side);
   const bySkillset = new Map<string, DanClearEvidence[]>();
+  for (const bucket of buckets) bySkillset.set(bucket.id, []);
   for (const clear of clears) {
-    for (const tag of infoByBeatmap.get(clear.play.beatmapId)?.patterns ?? []) {
-      if (tag === "ln") continue;
-      const list = bySkillset.get(tag);
-      if (list) list.push(clear);
-      else bySkillset.set(tag, [clear]);
+    const tags = infoByBeatmap.get(clear.play.beatmapId)?.patterns ?? [];
+    const topSkillset = dominantSkillset(clear.play.values);
+    for (const bucket of buckets) {
+      const belongs = bucket.all
+        ? true
+        : bucket.skillsets
+          ? topSkillset != null && bucket.skillsets.includes(topSkillset)
+          : tags.some((tag) => bucket.tags.includes(tag));
+      if (belongs) bySkillset.get(bucket.id)!.push(clear);
     }
   }
 
@@ -1672,22 +1754,21 @@ export async function getPlayerSkillDanEvidence(
     countsTowardDan: threshold != null && clear.creditedDan >= threshold,
   });
 
-  const skillsets = [...bySkillset.entries()]
-    .map(([id, list]): PlayerSkillDanSkillsetEvidence => {
+  // Emitted in bucket-declaration order; the client ranks them for display.
+  const skillsets = buckets
+    .map((bucket): PlayerSkillDanSkillsetEvidence => {
+      const list = bySkillset.get(bucket.id)!;
       const skillsetDan = list.length >= DAN_CLEAR_QUORUM
         ? Math.round(list[DAN_CLEAR_QUORUM - 1].creditedDan * 100) / 100
         : null;
       return {
-        id,
+        id: bucket.id,
         clears: list.length,
         dan: skillsetDan != null ? { rawDan: skillsetDan, label: danLabelFor(skillsetDan, side, keyCount) } : null,
         plays: list.slice(0, DAN_EVIDENCE_SKILLSET_PLAYS).map(toEvidencePlay),
       };
     })
-    .sort((left, right) =>
-      (right.dan?.rawDan ?? 0) - (left.dan?.rawDan ?? 0)
-      || right.clears - left.clears
-      || left.id.localeCompare(right.id));
+    .filter((skillset) => skillset.clears > 0);
 
   return {
     side,

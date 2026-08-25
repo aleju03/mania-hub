@@ -304,7 +304,7 @@ msgstr "{0} cards"
 msgid "{0} characters"
 msgstr "{0} characters"
 
-#. placeholder {0}: skillset.clears
+#. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{0} clears"
 msgstr "{0} clears"
@@ -1531,8 +1531,12 @@ msgid "7K"
 msgstr "7K"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "A clear is a {minAccuracyPercent}%+ accuracy pass with almost no misses, at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
-msgstr "A clear is a {minAccuracyPercent}%+ accuracy pass with almost no misses, at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
+msgid "A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
+msgstr "A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass with almost no misses, at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
+#~ msgstr "A clear is a {minAccuracyPercent}%+ accuracy pass with almost no misses, at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
 
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "a collector"
@@ -1615,7 +1619,6 @@ msgid "Account menu"
 msgstr "Account menu"
 
 #: src/components/packs/album/AlbumView.tsx
-#: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "accuracy"
 msgstr "accuracy"
@@ -1797,6 +1800,10 @@ msgstr "All"
 msgid "all 10"
 msgstr "all 10"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "All clears"
+msgstr "All clears"
+
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "All collections"
@@ -1900,10 +1907,19 @@ msgstr "analyzing…"
 msgid "and {0} more"
 msgstr "and {0} more"
 
+#. placeholder {0}: openedSection.clears - openedSection.plays.length
+#: src/components/player/DanEvidenceModal.tsx
+msgid "and {0} more below these"
+msgstr "and {0} more below these"
+
 #. placeholder {0}: evidence.totalClears - evidence.clears.length
 #: src/components/player/DanEvidenceModal.tsx
-msgid "and {0} more qualifying clears below these"
-msgstr "and {0} more qualifying clears below these"
+#~ msgid "and {0} more qualifying clears below these"
+#~ msgstr "and {0} more qualifying clears below these"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "and {hidden} more below these"
+#~ msgstr "and {hidden} more below these"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -2255,8 +2271,12 @@ msgid "Beatmaps played in {countryName}"
 msgstr "Beatmaps played in {countryName}"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Below the credit that sets the estimate · view map details"
-msgstr "Below the credit that sets the estimate · view map details"
+msgid "Below the credit that sets the estimate"
+msgstr "Below the credit that sets the estimate"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Below the credit that sets the estimate · view map details"
+#~ msgstr "Below the credit that sets the estimate · view map details"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "best"
@@ -2455,8 +2475,8 @@ msgid "By Player"
 msgstr "By Player"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "By skillset"
-msgstr "By skillset"
+#~ msgid "By skillset"
+#~ msgstr "By skillset"
 
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "Calculating skills..."
@@ -3464,8 +3484,8 @@ msgstr "Created {0}"
 
 #. placeholder {0}: clear.creditedDan.toFixed(2)
 #: src/components/player/DanEvidenceModal.tsx
-msgid "credit {0}"
-msgstr "credit {0}"
+#~ msgid "credit {0}"
+#~ msgstr "credit {0}"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "credited dan"
@@ -4673,6 +4693,10 @@ msgstr "Full width"
 msgid "Fullscreen"
 msgstr "Fullscreen"
 
+#: src/lib/skill-axes.ts
+msgid "General"
+msgstr "General"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Generate replay video URL"
 msgstr "Generate replay video URL"
@@ -4925,6 +4949,15 @@ msgstr "Hide it from everyone else, instead of showing it with no way in"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hide players"
 msgstr "Hide players"
+
+#. placeholder {0}: section.label
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Hide the {0} clears"
+msgstr "Hide the {0} clears"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Hide the {label} clears"
+#~ msgstr "Hide the {label} clears"
 
 #: src/routes/player/$username.tsx
 msgid "Hiding {label}"
@@ -5265,6 +5298,10 @@ msgstr "international servers"
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Invalid beatmap id."
 msgstr "Invalid beatmap id."
+
+#: src/lib/skill-axes.ts
+msgid "Inverse"
+msgstr "Inverse"
 
 #: src/routes/communities_.$id.tsx
 msgid "invite"
@@ -6568,8 +6605,16 @@ msgid "nearby players outscore you"
 msgstr "nearby players outscore you"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "needs {quorum} clears for an estimate"
-msgstr "needs {quorum} clears for an estimate"
+msgid "needs {quorum}"
+msgstr "needs {quorum}"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "needs {quorum} clears"
+#~ msgstr "needs {quorum} clears"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "needs {quorum} clears for an estimate"
+#~ msgstr "needs {quorum} clears for an estimate"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "Needs a web.archive.org link to their osu! profile."
@@ -8745,6 +8790,10 @@ msgstr "Regular"
 msgid "Regular and LN"
 msgstr "Regular and LN"
 
+#: src/lib/skill-axes.ts
+msgid "Release"
+msgstr "Release"
+
 #: src/routes/__root.tsx
 msgid "Reload page"
 msgstr "Reload page"
@@ -9780,6 +9829,15 @@ msgstr "Show non-4K scores"
 msgid "show skillboost"
 msgstr "show skillboost"
 
+#. placeholder {0}: section.label
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Show the {0} clears"
+msgstr "Show the {0} clears"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Show the {label} clears"
+#~ msgstr "Show the {label} clears"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Show the image at its real pixel size"
 msgstr "Show the image at its real pixel size"
@@ -10139,6 +10197,10 @@ msgstr "Spanish"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Spectators"
 msgstr "Spectators"
+
+#: src/lib/skill-axes.ts
+msgid "Speed"
+msgstr "Speed"
 
 #: src/components/maps/SearchCard.tsx
 msgid "Speedjack"
@@ -10703,8 +10765,8 @@ msgid "The chart file isn't available, so only the replay will load."
 msgstr "The chart file isn't available, so only the replay will load."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "The clears behind it"
-msgstr "The clears behind it"
+#~ msgid "The clears behind it"
+#~ msgstr "The clears behind it"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The customized settings are too large to store"
@@ -10827,8 +10889,8 @@ msgid "The report was sent, but at least one image did not upload."
 msgstr "The report was sent, but at least one image did not upload."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "The same rule run over only the clears whose charts carry each pattern."
-msgstr "The same rule run over only the clears whose charts carry each pattern."
+#~ msgid "The same rule run over only the clears whose charts carry each pattern."
+#~ msgstr "The same rule run over only the clears whose charts carry each pattern."
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."
@@ -10956,8 +11018,12 @@ msgid "This chart isn't analyzed yet."
 msgstr "This chart isn't analyzed yet."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "This clear backs the estimate · view map details"
-msgstr "This clear backs the estimate · view map details"
+msgid "This clear backs the estimate"
+msgstr "This clear backs the estimate"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "This clear backs the estimate · view map details"
+#~ msgstr "This clear backs the estimate · view map details"
 
 #: src/components/me/RosterOptInCard.tsx
 #: src/routes/player/$username.tsx
@@ -11775,6 +11841,10 @@ msgstr "View details"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "View it"
 msgstr "View it"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "view map details"
+msgstr "view map details"
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "View map details"

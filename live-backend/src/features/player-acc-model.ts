@@ -202,7 +202,8 @@ export interface PlayerAccPrediction {
 export interface PlayerChokePrediction {
   // Expected missShare at this gap.
   missShare: number;
-  // Probability of a choked play (missShare above the dan-clear threshold).
+  // Probability of a choked play (missShare above CHOKE_MISS_SHARE_THRESHOLD;
+  // its own bar - the dan clear rule no longer gates on misses).
   chokeRate: number;
   confidence: number;
 }
