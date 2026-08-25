@@ -11,7 +11,7 @@ import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, per
 import { calculateStableAccuracy, getDisplayedAccuracy, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
-import { danTableLabelFor } from "../dan/chart-classifier.js";
+import { danTableCeilingFor, danTableLabelFor } from "../dan/chart-classifier.js";
 import { parseDan } from "../dan/dan-estimator/labels.js";
 import { parseLnDan } from "../dan/dan-estimator/ln.js";
 import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
@@ -238,6 +238,13 @@ export interface PlayerSkillDanSide {
   rawDan: number;
   label: string;
   clears: number;
+  /**
+   * The estimate sits at or above the top of this keymode's dan table, so the
+   * label is the ladder's last level and the real level is at least that (6K
+   * regular stops at 9th, so a stronger player pins there). Absent means the
+   * label measures the estimate.
+   */
+  beyondTable?: boolean;
 }
 
 export interface PlayerSkillModeDan {
@@ -740,6 +747,30 @@ function computeModeDan(
   infoByBeatmap: Map<number, ChartSkillInfo>,
 ): PlayerSkillModeDan {
   const clears: Record<"rc" | "ln", number[]> = { rc: [], ln: [] };
+  for (const clear of collectDanClears(keyCount, plays, scoresByIdentity, infoByBeatmap)) {
+    clears[clear.side].push(clear.creditedDan);
+  }
+  return { rc: danFromClears(clears.rc, "rc", keyCount), ln: danFromClears(clears.ln, "ln", keyCount) };
+}
+
+// One qualifying clear with the dan credit it earned; the shared currency
+// between the stored verdict (computeModeDan) and the on-demand evidence
+// surface (getPlayerSkillDanEvidence), so the two can never disagree on what
+// counts as a clear.
+interface DanClearEvidence {
+  play: StoredPlaySsr;
+  side: "rc" | "ln";
+  chartDan: number;
+  creditedDan: number;
+}
+
+function collectDanClears(
+  keyCount: number,
+  plays: StoredPlaySsr[],
+  scoresByIdentity: Map<string, OscScore>,
+  infoByBeatmap: Map<number, ChartSkillInfo>,
+): DanClearEvidence[] {
+  const clears: DanClearEvidence[] = [];
   for (const play of plays) {
     const info = infoByBeatmap.get(play.beatmapId);
     if (!info) continue;
@@ -761,9 +792,13 @@ function computeModeDan(
       const accuracy = sideAccuracy(side);
       if (!(accuracy >= DAN_CLEAR_MIN_ACCURACY)) return;
       const { fullAccuracy, maxDiscount } = danCreditFor(side, keyCount);
-      clears[side].push(
-        rawDan - maxDiscount * Math.max(0, Math.min(1, (fullAccuracy - accuracy) / (fullAccuracy - DAN_CLEAR_MIN_ACCURACY))),
-      );
+      clears.push({
+        play,
+        side,
+        chartDan: rawDan,
+        creditedDan:
+          rawDan - maxDiscount * Math.max(0, Math.min(1, (fullAccuracy - accuracy) / (fullAccuracy - DAN_CLEAR_MIN_ACCURACY))),
+      });
     };
     if (play.rate === 1 && info.lnRatio != null) {
       const side = info.lnRatio >= 0.5 ? "ln" : "rc";
@@ -772,7 +807,7 @@ function computeModeDan(
       push(info.dtRawDan, info.dtFamily);
     }
   }
-  return { rc: danFromClears(clears.rc, "rc", keyCount), ln: danFromClears(clears.ln, "ln", keyCount) };
+  return clears;
 }
 
 function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): PlayerSkillDanSide | null {
@@ -785,7 +820,16 @@ function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): 
     rawDan,
     label: danLabelFor(rawDan, side, keyCount),
     clears: sorted.filter((value) => value >= sorted[DAN_CLEAR_QUORUM - 1]).length,
+    ...(isBeyondDanTable(rawDan, side, keyCount) ? { beyondTable: true } : {}),
   };
+}
+
+// A quorum clear that landed on the table's "> last tier" sentinel carries
+// the whole ladder's ceiling with it: the estimate is a floor, and the chip
+// says so rather than showing the top level as if it were measured.
+function isBeyondDanTable(rawDan: number, side: "rc" | "ln", keyCount: number): boolean {
+  const ceiling = danTableCeilingFor(side, keyCount);
+  return ceiling != null && rawDan >= ceiling;
 }
 
 // Each ladder speaks its own community's language. 4K rice runs 1-10 then the
@@ -1487,33 +1531,174 @@ export async function getPlayerSkillPlays(
 
   const page = matches.slice(offset, offset + limit);
   const metadata = await readPlayerSkillPlayMetadata(db, page.map(({ play }) => play.beatmapId));
-  const items = page.map(({ play, rating }): PlayerSkillPlay => {
-    const map = metadata.get(play.beatmapId);
-    const officialId = /^official:(\d+)$/.exec(play.identity ?? "");
-    const scoreId = officialId ? Number(officialId[1]) : null;
-    const accuracy = Number(play.accuracy);
-    const pp = Number(play.pp);
-    return {
-      beatmapId: play.beatmapId,
-      beatmapsetId: map?.beatmapsetId ?? null,
-      title: map?.title ?? "Unknown map",
-      artist: map?.artist ?? "Unknown artist",
-      creator: map?.creator ?? null,
-      version: map?.version ?? `${keyCount}K`,
-      coverUrl: map?.coverUrl ?? null,
-      keyCount,
-      rating: Math.round(rating * 100) / 100,
-      overallRating: Math.round(Number(play.values?.Overall ?? 0) * 100) / 100,
-      pp: Number.isFinite(pp) && pp > 0 ? pp : null,
-      accuracy: Number.isFinite(accuracy) && accuracy > 0 ? accuracy : null,
-      rate: Number.isFinite(play.rate) && play.rate > 0 ? play.rate : 1,
-      playedAt: typeof play.endedAt === "string" && Number.isFinite(Date.parse(play.endedAt)) ? play.endedAt : null,
-      source: play.source === "top" ? "top" : "tracked",
-      scoreId: scoreId != null && Number.isSafeInteger(scoreId) && scoreId > 0 ? scoreId : null,
-      topSkillset: dominantSkillset(play.values),
-    };
-  });
+  const items = page.map(({ play, rating }) => buildPlayerSkillPlay(play, rating, keyCount, metadata));
   return { items, total: matches.length, limit, offset };
+}
+
+function buildPlayerSkillPlay(
+  play: StoredPlaySsr,
+  rating: number,
+  keyCount: number,
+  metadata: Map<number, PlayerSkillPlayMetadata>,
+): PlayerSkillPlay {
+  const map = metadata.get(play.beatmapId);
+  const officialId = /^official:(\d+)$/.exec(play.identity ?? "");
+  const scoreId = officialId ? Number(officialId[1]) : null;
+  const accuracy = Number(play.accuracy);
+  const pp = Number(play.pp);
+  return {
+    beatmapId: play.beatmapId,
+    beatmapsetId: map?.beatmapsetId ?? null,
+    title: map?.title ?? "Unknown map",
+    artist: map?.artist ?? "Unknown artist",
+    creator: map?.creator ?? null,
+    version: map?.version ?? `${keyCount}K`,
+    coverUrl: map?.coverUrl ?? null,
+    keyCount,
+    rating: Math.round(rating * 100) / 100,
+    overallRating: Math.round(Number(play.values?.Overall ?? 0) * 100) / 100,
+    pp: Number.isFinite(pp) && pp > 0 ? pp : null,
+    accuracy: Number.isFinite(accuracy) && accuracy > 0 ? accuracy : null,
+    rate: Number.isFinite(play.rate) && play.rate > 0 ? play.rate : 1,
+    playedAt: typeof play.endedAt === "string" && Number.isFinite(Date.parse(play.endedAt)) ? play.endedAt : null,
+    source: play.source === "top" ? "top" : "tracked",
+    scoreId: scoreId != null && Number.isSafeInteger(scoreId) && scoreId > 0 ? scoreId : null,
+    topSkillset: dominantSkillset(play.values),
+  };
+}
+
+// --- Dan evidence: the clears behind a player's dan estimate ---
+
+// One clear as the dan-detail modal shows it: the play, the chart's own dan
+// on the credited side, and the credit the clear earned after the accuracy
+// discount. `countsTowardDan` marks the clears at or above the quorum-th
+// credit (the ones the stored verdict's `clears` count refers to).
+export interface PlayerSkillDanEvidencePlay {
+  play: PlayerSkillPlay;
+  chartDan: number;
+  chartDanLabel: string;
+  creditedDan: number;
+  countsTowardDan: boolean;
+}
+
+export interface PlayerSkillDanSkillsetEvidence {
+  // In-house pattern id (jack, tech, stream, ...; the PATTERN_RATING_META
+  // vocabulary minus "ln", which is the side split itself).
+  id: string;
+  clears: number;
+  // Same quorum rule as the headline dan, applied to only this skillset's
+  // clears; null while the skillset has fewer than quorum clears.
+  dan: { rawDan: number; label: string } | null;
+  plays: PlayerSkillDanEvidencePlay[];
+}
+
+export interface PlayerSkillDanEvidence {
+  side: "rc" | "ln";
+  keyCount: number;
+  quorum: number;
+  minAccuracy: number;
+  dan: PlayerSkillDanSide | null;
+  totalClears: number;
+  clears: PlayerSkillDanEvidencePlay[];
+  skillsets: PlayerSkillDanSkillsetEvidence[];
+}
+
+const DAN_EVIDENCE_MAX_CLEARS = 20;
+const DAN_EVIDENCE_SKILLSET_PLAYS = 5;
+
+/**
+ * The qualifying clears behind one side of a player's dan estimate, plus the
+ * same estimate re-run per chart skillset tag ("your jack dan" = the dan the
+ * jack-tagged charts you clear demonstrate, same quorum rule).
+ *
+ * Recomputed on read from the same durable per-play cache and clear rules the
+ * stored verdict used (collectDanClears), so it explains the number rather
+ * than shipping a second one; chart-analysis rows refreshed since the last
+ * compute can drift it slightly until the next recompute picks them up.
+ */
+export async function getPlayerSkillDanEvidence(
+  db: Db,
+  userId: number,
+  keyCount: number,
+  side: "rc" | "ln",
+): Promise<PlayerSkillDanEvidence | null> {
+  if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(keyCount) || keyCount <= 0) return null;
+  const row = (await exec(
+    db,
+    `select status, plays_json from player_skill_ratings
+     where user_id = ? and analysis_version = ?`,
+    [userId, PLAYER_SKILLS_VERSION],
+  )).rows[0];
+  if (String(row?.status ?? "") !== "ready") return null;
+  const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row?.plays_json ?? ""), null);
+  const plays = (Array.isArray(stored?.plays) ? stored.plays : [])
+    .filter((play) => play && play.keyCount === keyCount && Number.isInteger(play.beatmapId) && play.beatmapId > 0);
+  const infoByBeatmap = await loadChartSkillInfo(db, plays.map((play) => play.beatmapId));
+  const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap)
+    .filter((clear) => clear.side === side)
+    .sort((left, right) =>
+      right.creditedDan - left.creditedDan
+      || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
+      || left.play.beatmapId - right.play.beatmapId);
+  const dan = danFromClears(clears.map((clear) => clear.creditedDan), side, keyCount);
+  // The quorum-th best credit is the dan; everything at or above it "backs"
+  // the estimate (matching the stored verdict's clears count).
+  const threshold = dan ? clears[DAN_CLEAR_QUORUM - 1].creditedDan : null;
+
+  // Skillset grouping by the chart's pattern tags. "ln" is excluded: the
+  // RC/LN split already is that axis, and on the LN side every chart carries
+  // the tag.
+  const bySkillset = new Map<string, DanClearEvidence[]>();
+  for (const clear of clears) {
+    for (const tag of infoByBeatmap.get(clear.play.beatmapId)?.patterns ?? []) {
+      if (tag === "ln") continue;
+      const list = bySkillset.get(tag);
+      if (list) list.push(clear);
+      else bySkillset.set(tag, [clear]);
+    }
+  }
+
+  const topClears = clears.slice(0, DAN_EVIDENCE_MAX_CLEARS);
+  const evidenceBeatmapIds = [
+    ...topClears.map((clear) => clear.play.beatmapId),
+    ...[...bySkillset.values()].flatMap((list) => list.slice(0, DAN_EVIDENCE_SKILLSET_PLAYS).map((clear) => clear.play.beatmapId)),
+  ];
+  const metadata = await readPlayerSkillPlayMetadata(db, evidenceBeatmapIds);
+  const toEvidencePlay = (clear: DanClearEvidence): PlayerSkillDanEvidencePlay => ({
+    play: buildPlayerSkillPlay(clear.play, Number(clear.play.values?.Overall ?? 0), keyCount, metadata),
+    chartDan: Math.round(clear.chartDan * 100) / 100,
+    chartDanLabel: danLabelFor(clear.chartDan, side, keyCount),
+    creditedDan: Math.round(clear.creditedDan * 100) / 100,
+    countsTowardDan: threshold != null && clear.creditedDan >= threshold,
+  });
+
+  const skillsets = [...bySkillset.entries()]
+    .map(([id, list]): PlayerSkillDanSkillsetEvidence => {
+      const skillsetDan = list.length >= DAN_CLEAR_QUORUM
+        ? Math.round(list[DAN_CLEAR_QUORUM - 1].creditedDan * 100) / 100
+        : null;
+      return {
+        id,
+        clears: list.length,
+        dan: skillsetDan != null ? { rawDan: skillsetDan, label: danLabelFor(skillsetDan, side, keyCount) } : null,
+        plays: list.slice(0, DAN_EVIDENCE_SKILLSET_PLAYS).map(toEvidencePlay),
+      };
+    })
+    .sort((left, right) =>
+      (right.dan?.rawDan ?? 0) - (left.dan?.rawDan ?? 0)
+      || right.clears - left.clears
+      || left.id.localeCompare(right.id));
+
+  return {
+    side,
+    keyCount,
+    quorum: DAN_CLEAR_QUORUM,
+    minAccuracy: DAN_CLEAR_MIN_ACCURACY,
+    dan,
+    totalClears: clears.length,
+    clears: topClears.map(toEvidencePlay),
+    skillsets,
+  };
 }
 
 /** The highest non-Overall MSD skillset of a play's SSR vector, if any. */
@@ -1614,7 +1799,12 @@ function normalizeMode(mode: PlayerSkillModeBreakdown): PlayerSkillModeBreakdown
 
 function relabelDanSide(side: PlayerSkillDanSide | null | undefined, family: "rc" | "ln", keyCount: number): PlayerSkillDanSide | null {
   if (!side || !Number.isFinite(side.rawDan)) return null;
-  return { ...side, label: danLabelFor(side.rawDan, family, keyCount) };
+  const { beyondTable: _stored, ...rest } = side;
+  return {
+    ...rest,
+    label: danLabelFor(side.rawDan, family, keyCount),
+    ...(isBeyondDanTable(side.rawDan, family, keyCount) ? { beyondTable: true } : {}),
+  };
 }
 
 // One-shot sweep for the leftovers of the 2026-08-14 MinaCalc poisoning (the

@@ -1336,7 +1336,7 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
   const riceMode = pickMode(ctx, skills!);
   const lnMode = pickMode(ctx, skills!, ctx.style.lnKeyCount ?? ctx.style.keyCount);
   const sides = [
-    { id: "rc", label: "Rice", side: riceMode?.dan?.rc, keyCount: riceMode?.keyCount },
+    { id: "rc", label: "Regular", side: riceMode?.dan?.rc, keyCount: riceMode?.keyCount },
     { id: "ln", label: "LN", side: lnMode?.dan?.ln, keyCount: lnMode?.keyCount },
   ].filter((entry) => entry.side != null && entry.keyCount != null) as Array<{
     id: string; label: string; keyCount: number; side: { rawDan: number; label: string; clears: number };

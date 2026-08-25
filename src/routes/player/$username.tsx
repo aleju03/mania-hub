@@ -52,6 +52,7 @@ import {
   scoreHasReplay,
 } from "../../lib/score";
 import { useAuth } from "../../lib/auth-context";
+import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { addSelfToRoster } from "../../lib/roster-self-track";
 import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
 import { GradeImg } from "../../components/ui/GradeImg";
@@ -69,6 +70,7 @@ import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../
 import { KeymodeScaleNote, SkillBreakdownBody, SkillModePanel } from "../../components/player/SkillBreakdown";
 import { qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "../../lib/skill-axes";
 import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
+import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpCumulativeDistribution, buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
 import {
@@ -3077,6 +3079,10 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   const [skills, setSkills] = useState<LivePlayerSkills | null>(null);
   const [skillsError, setSkillsError] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<{ entry: SkillAxisEntry; keyCount: number } | null>(null);
+  const [selectedDan, setSelectedDan] = useState<{ side: "rc" | "ln"; keyCount: number } | null>(null);
+  // The dan evidence window is still being built, so the chip only opens for
+  // admins; everyone else gets the plain, unclickable chip.
+  const canOpenDanEvidence = canUseAdminFeatures(useAuth());
   const liveConfigured = isLiveBackendConfigured();
 
   useEffect(() => {
@@ -3160,6 +3166,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
               skills={skills}
               mode={mode}
               onSelectEntry={(entry) => setSelectedSkill({ entry, keyCount: mode.keyCount })}
+              onSelectDan={canOpenDanEvidence ? (side) => setSelectedDan({ side, keyCount: mode.keyCount }) : undefined}
             />
           ))}
         </div>
@@ -3173,6 +3180,15 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           label={selectedSkill.entry.label}
           color={selectedSkill.entry.color}
           onClose={() => setSelectedSkill(null)}
+        />
+      ) : null}
+      {selectedDan && canOpenDanEvidence ? (
+        <DanEvidenceModal
+          userId={user.id}
+          username={user.username}
+          keyCount={selectedDan.keyCount}
+          side={selectedDan.side}
+          onClose={() => setSelectedDan(null)}
         />
       ) : null}
     </>

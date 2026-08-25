@@ -88,7 +88,7 @@ function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode, i18n: I18
   return i18n._(msg`${label}: ${share} of ${population} tracked ${keyCount}K mains`);
 }
 
-function DanChips({ mode }: { mode: MyDataSkillMode }) {
+function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side: "rc" | "ln") => void }) {
   const { t, i18n } = useLingui();
   const dan = mode.dan;
   if (!dan) return null;
@@ -96,9 +96,10 @@ function DanChips({ mode }: { mode: MyDataSkillMode }) {
   // named ladders (greek letters and the like) already read as one.
   const formatDanChip = (label: string): string => (/^\d/.test(label) ? t`${label} dan` : label);
   // Non-4K LN sides label on the numbered/greek ladder backend-side (the 7K
-  // LN dan series is named like rice), so every keymode shows its LN chip.
-  const sides: Array<{ id: string; label: MessageDescriptor; side: { rawDan: number; label: string; clears: number } | null }> = [
-    { id: "rc", label: msg`Rice`, side: dan.rc },
+  // LN dan series is named like the regular one), so every keymode shows its
+  // LN chip.
+  const sides: Array<{ id: "rc" | "ln"; label: MessageDescriptor; side: { rawDan: number; label: string; clears: number; beyondTable?: boolean } | null }> = [
+    { id: "rc", label: msg`Regular`, side: dan.rc },
     { id: "ln", label: msg`LN`, side: dan.ln },
   ];
   const visible = sides.filter((entry) => entry.side != null);
@@ -106,25 +107,26 @@ function DanChips({ mode }: { mode: MyDataSkillMode }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       {visible.map((entry) => {
-        const label = entry.side!.label;
+        // Past the ladder's last level the backend has nothing left to
+        // measure with, so the chip reads "> 9th" instead of dressing the
+        // ceiling up as a tier ("9++") the estimate never actually earned.
+        const beyond = entry.side!.beyondTable === true;
+        const label = beyond ? danBareLabel(entry.side!.label) : entry.side!.label;
         // The course's own logo IS the level, same as the map dan badge; the
         // tier suffix rides top-right like an exponent, colored by where in
         // the level it sits. Keymodes without artwork fall back to the text.
         const image = getDanImageSrc(danBareLabel(label), entry.id === "ln" ? "ln" : undefined, mode.keyCount);
-        const suffix = danTierSuffix(label);
+        const suffix = beyond ? "" : danTierSuffix(label);
+        const approx = beyond ? ">" : "~";
         const sideLabel = i18n._(entry.label);
         const chip = formatDanChip(label);
         const clears = entry.side!.clears;
-        return (
-          <span
-            key={entry.id}
-            className="inline-flex items-center gap-1.5"
-            title={t`${sideLabel} dan estimate: ~${chip}, backed by ${clears} qualifying clears (96%+ accuracy) on charts around this dan level`}
-          >
+        const body = (
+          <>
             <span className="text-[10px] font-semibold uppercase tracking-wide text-osu-f1">{sideLabel}</span>
             {image ? (
               <span className="flex items-center gap-0.5">
-                <span className="text-[12px] leading-none text-osu-f1">~</span>
+                <span className="text-[12px] leading-none text-osu-f1">{approx}</span>
                 <span className="flex items-start gap-[2px] leading-none">
                   <img src={image} alt={formatDanChip(label)} className="h-9 w-9 object-contain" />
                   {suffix ? (
@@ -138,8 +140,31 @@ function DanChips({ mode }: { mode: MyDataSkillMode }) {
                 </span>
               </span>
             ) : (
-              <span className="text-[12px] font-bold text-osu-l1">~{formatDanChip(label)}</span>
+              <span className="text-[12px] font-bold text-osu-l1">{approx}{formatDanChip(label)}</span>
             )}
+          </>
+        );
+        const keys = mode.keyCount;
+        const title = beyond
+          ? onSelect
+            ? t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, backed by ${clears} qualifying clears (96%+ accuracy) · click for the clears behind it`
+            : t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, backed by ${clears} qualifying clears (96%+ accuracy)`
+          : onSelect
+            ? t`${sideLabel} dan estimate: ~${chip}, backed by ${clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it`
+            : t`${sideLabel} dan estimate: ~${chip}, backed by ${clears} qualifying clears (96%+ accuracy) on charts around this dan level`;
+        return onSelect ? (
+          <button
+            type="button"
+            key={entry.id}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md transition-opacity hover:opacity-80"
+            title={title}
+            onClick={() => onSelect(entry.id)}
+          >
+            {body}
+          </button>
+        ) : (
+          <span key={entry.id} className="inline-flex items-center gap-1.5" title={title}>
+            {body}
           </span>
         );
       })}
@@ -445,10 +470,12 @@ export function SkillModePanel({
   skills,
   mode,
   onSelectEntry,
+  onSelectDan,
 }: {
   skills: MyDataSkillBreakdown;
   mode: MyDataSkillMode;
   onSelectEntry?: (entry: SkillAxisEntry, mode: MyDataSkillMode) => void;
+  onSelectDan?: (side: "rc" | "ln", mode: MyDataSkillMode) => void;
 }) {
   const { t, i18n } = useLingui();
   const [hovered, setHovered] = useState<string | null>(null);
@@ -480,7 +507,7 @@ export function SkillModePanel({
             </div>
           ) : null}
         </div>
-        <DanChips mode={mode} />
+        <DanChips mode={mode} onSelect={onSelectDan ? (side) => onSelectDan(side, mode) : undefined} />
       </div>
 
       <div

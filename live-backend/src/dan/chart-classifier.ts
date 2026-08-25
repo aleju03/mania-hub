@@ -169,6 +169,22 @@ export function danTableLabelFor(rawDan: number, side: "rc" | "ln", keyCount: nu
   return `${tableLabelForBase(entry.base)}${variant ?? ""}`;
 }
 
+/**
+ * The rawDan a verdict gets when it lands above the table's last tier: the
+ * "> Regular 9 high" sentinel parseTableHalf produces (last level + 0.5).
+ * A value at or past it means the ladder stopped measuring, not that the
+ * chart or player sits exactly there. Null when no table covers the pair.
+ */
+export function danTableCeilingFor(side: "rc" | "ln", keyCount: number): number | null {
+  if (keyCount === 4) return null;
+  const tables = DAN_INDEX[keyCount];
+  const table = tables ? (side === "ln" ? tables.LN?.default : tables.RC.default) : undefined;
+  if (!table) return null;
+  const levels = tableLevels(table);
+  if (levels.length === 0) return null;
+  return levels[levels.length - 1].level + 0.5;
+}
+
 function parseTableHalf(text: string, table: DanIntervalTable): ParsedDanPart | null {
   let boundary: ParsedDanPart["boundary"] = null;
   let body = text.trim();

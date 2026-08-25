@@ -304,6 +304,11 @@ msgstr "{0} cartas"
 msgid "{0} characters"
 msgstr "{0} caracteres"
 
+#. placeholder {0}: skillset.clears
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{0} clears"
+msgstr "{0} pases"
+
 #. placeholder {0}: formatNumber(card.owners)
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "{0} collections"
@@ -349,7 +354,7 @@ msgstr "{0} duplicadas"
 #. placeholder {0}: eternalFinale.username
 #: src/components/packs/RevealStage.tsx
 msgid "{0} Eternal maniacard"
-msgstr ""
+msgstr "Maniacard Eternal de {0}"
 
 #. placeholder {0}: randomPick.player.favouriteCount
 #: src/routes/maps.tsx
@@ -861,8 +866,8 @@ msgid "{gap}pp to go"
 msgstr "faltan {gap}pp"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
-msgstr "{goatMissing, plural, one {más # carta GOAT sin conseguir} other {más # cartas GOAT sin conseguir}}"
+#~ msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
+#~ msgstr "{goatMissing, plural, one {más # carta GOAT sin conseguir} other {más # cartas GOAT sin conseguir}}"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{have} / {want} plays"
@@ -900,6 +905,10 @@ msgstr "hace {hours}h {remainingMins}m"
 msgid "{hours}h ago"
 msgstr "hace {hours}h"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{keyCount}K {sideLabel} dan"
+msgstr "Dan {sideLabel} de {keyCount}K"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{keyCount}K skillset"
 msgstr "Skillset {keyCount}K"
@@ -914,6 +923,7 @@ msgstr "Solo {keymodeLabel}"
 msgid "{keys}K thumbnail"
 msgstr "Miniatura {keys}K"
 
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 msgid "{label} dan"
 msgstr "{label} dan"
@@ -1158,6 +1168,18 @@ msgstr "{shotCount, plural, one {# captura} other {# capturas}}"
 msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
 msgstr "Estimación de dan {sideLabel}: ~{chip}, respaldada por {clears} pases válidos (96%+ de acc) en charts alrededor de este nivel de dan"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
+msgstr "Estimación de dan {sideLabel}: ~{chip}, respaldada por {clears} pases válidos (96%+ de acc) en charts alrededor de este nivel de dan · clic para ver los pases que la respaldan"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
+msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala de cursos {sideLabel} de {keys}K, respaldada por {clears} pases válidos (96%+ de acc)"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
+msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala de cursos {sideLabel} de {keys}K, respaldada por {clears} pases válidos (96%+ de acc) · haz clic para ver los pases detrás"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
 msgstr "velocidad {speedLabel}"
@@ -1194,9 +1216,23 @@ msgstr "Pack {typeName}"
 msgid "{typeName} pack, {typeBlurb}"
 msgstr "Pack {typeName}, {typeBlurb}"
 
+#. placeholder {0}: formatDan(danLabel)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{username} is around <0>{0}</0>"
+msgstr "{username} está alrededor de <0>{0}</0>"
+
+#. placeholder {0}: formatDan(danLabel)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{username} is beyond <0>{0}</0>"
+msgstr "{username} está por encima de <0>{0}</0>"
+
 #: src/components/packs/StreakGame.tsx
 msgid "{username} maniacard"
 msgstr "maniacard de {username}"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{username}'s {sideLabel} dan estimate"
+msgstr "Estimación de dan {sideLabel} de {username}"
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{username}'s top {label} plays"
@@ -1388,6 +1424,10 @@ msgstr "▶ Ver"
 msgid "0h"
 msgstr "0h"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "1 clear"
+msgstr "1 pase"
+
 #: src/components/packs/PackPulse.tsx
 msgid "1 person has your card"
 msgstr "1 persona tiene tu carta"
@@ -1490,6 +1530,10 @@ msgstr "7 d Global"
 msgid "7K"
 msgstr "7K"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "A clear is a {minAccuracyPercent}%+ accuracy pass with almost no misses, at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
+msgstr "Un pase válido es una pasada con {minAccuracyPercent}%+ de acc y casi sin misses, a 1.0x o DT, en un chart al que el analizador dio un nivel de dan. Las pasadas por debajo de la acc completa reciben crédito con descuento, y la estimación es el {quorum}.º mejor pase acreditado, así que un solo outlier nunca puede definirla."
+
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "a collector"
 msgstr "un coleccionista"
@@ -1571,6 +1615,7 @@ msgid "Account menu"
 msgstr "Menú de cuenta"
 
 #: src/components/packs/album/AlbumView.tsx
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "accuracy"
 msgstr "Acc"
@@ -1854,6 +1899,11 @@ msgstr "analizando…"
 #: src/components/packs/CardCollectors.tsx
 msgid "and {0} more"
 msgstr "y {0} más"
+
+#. placeholder {0}: evidence.totalClears - evidence.clears.length
+#: src/components/player/DanEvidenceModal.tsx
+msgid "and {0} more qualifying clears below these"
+msgstr "y {0} pases válidos más por debajo de estos"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -2204,6 +2254,10 @@ msgstr "Beatmaps jugados por tu país"
 msgid "Beatmaps played in {countryName}"
 msgstr "Beatmaps jugados en {countryName}"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Below the credit that sets the estimate · view map details"
+msgstr "Por debajo del crédito que define la estimación · ver detalles del mapa"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "best"
 msgstr "mejor"
@@ -2399,6 +2453,10 @@ msgstr "por <0>{0}</0>"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "By Player"
 msgstr "Por jugador"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "By skillset"
+msgstr "Por skillset"
 
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "Calculating skills..."
@@ -2801,6 +2859,10 @@ msgstr "Cerrar"
 msgid "Close activity details"
 msgstr "Cerrar detalles de actividad"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Close dan details"
+msgstr "Cerrar detalles del dan"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Close editor"
 msgstr "Cerrar editor"
@@ -3089,6 +3151,14 @@ msgstr "No se pudieron cargar los niveles de habilidad. Inténtalo de nuevo en u
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "Could not load that collection."
 msgstr "No se pudo cargar esa colección."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Could not load the clears"
+msgstr "No se pudieron cargar los pases"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Could not load the clears behind this estimate."
+msgstr "No se pudieron cargar los pases detrás de esta estimación."
 
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Could not load the collector list."
@@ -3392,6 +3462,15 @@ msgstr "Crear"
 msgid "Created {0}"
 msgstr "Creado {0}"
 
+#. placeholder {0}: clear.creditedDan.toFixed(2)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "credit {0}"
+msgstr "crédito {0}"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "credited dan"
+msgstr "dan acreditado"
+
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
 msgstr "Croata"
@@ -3495,6 +3574,10 @@ msgstr "Checo"
 #: src/components/maps/MapSearchSection.tsx
 msgid "Dan (est.)"
 msgstr "Dan (est.)"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Dan credit this clear earned after the accuracy discount"
+msgstr "Crédito de dan que ganó este pase tras el descuento por acc"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -5636,6 +5719,7 @@ msgstr "Actualizaciones en vivo activas"
 #: src/components/maps/PatternRadar.tsx
 #: src/components/maps/SearchCard.tsx
 #: src/components/me/DynamicRendersPanel.tsx
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/skill-axes.ts
@@ -6483,6 +6567,10 @@ msgstr "Guardado como {0}"
 msgid "nearby players outscore you"
 msgstr "jugadores cercanos te superan"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "needs {quorum} clears for an estimate"
+msgstr "necesita {quorum} pases para una estimación"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "Necesita un enlace de web.archive.org a su perfil de osu!."
@@ -6823,6 +6911,10 @@ msgstr "Sin audio de preview"
 msgid "No preview available."
 msgstr "No hay preview disponible."
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "No qualifying clears yet"
+msgstr "Aún no hay pases válidos"
+
 #: src/routes/rankings.tsx
 msgid "No rank data from 7 days ago yet"
 msgstr "Aún no hay datos de ranking de hace 7 días"
@@ -7060,6 +7152,11 @@ msgstr "no es un error"
 #: src/routes/farm-helper.tsx
 msgid "Not enough data near your pp yet"
 msgstr "Aún no hay suficientes datos cerca de tu pp"
+
+#. placeholder {0}: evidence.totalClears
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Not enough qualifying clears for an estimate yet ({0} of {quorum})."
+msgstr "Aún no hay suficientes pases válidos para una estimación ({0} de {quorum})."
 
 #: src/routes/farm-helper.tsx
 msgid "not found"
@@ -8638,6 +8735,16 @@ msgstr "Actualizando..."
 msgid "Regions"
 msgstr "Regiones"
 
+#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillBreakdown.tsx
+msgid "Regular"
+msgstr "Regular"
+
+#: src/lib/signature-shared.ts
+msgid "Regular and LN"
+msgstr "Regular y LN"
+
 #: src/routes/__root.tsx
 msgid "Reload page"
 msgstr "Recargar página"
@@ -8940,12 +9047,12 @@ msgstr "Revelando el resto..."
 
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/SkillBreakdown.tsx
-msgid "Rice"
-msgstr "Rice"
+#~ msgid "Rice"
+#~ msgstr "Rice"
 
 #: src/lib/signature-shared.ts
-msgid "Rice and LN"
-msgstr "Rice y LN"
+#~ msgid "Rice and LN"
+#~ msgstr "Rice y LN"
 
 #: src/components/packs/StreakGame.tsx
 msgid "right"
@@ -10550,6 +10657,11 @@ msgstr "Ese usuario no parece válido."
 msgid "That's the same score on both sides. Pick a different run for the other side."
 msgstr "Es el mismo score en ambos lados. Elige otra run para el otro lado."
 
+#. placeholder {0}: formatDan(danLabel)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The {keyCount}K {sideLabel} course ladder ends at {0}, so the analyzer cannot rate anything above it. The real level may be higher."
+msgstr "La escala de cursos {sideLabel} de {keyCount}K termina en {0}, así que el analizador no puede calificar nada por encima. El nivel real puede ser más alto."
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "The {keys}K block resolves no note images; the preview shows flat colours."
 msgstr "El bloque {keys}K no resuelve imágenes de notas; la vista previa usa colores planos."
@@ -10590,6 +10702,10 @@ msgstr "El analizador de mapas está calificando tus top plays ahora mismo."
 msgid "The chart file isn't available, so only the replay will load."
 msgstr "El archivo del mapa no está disponible, así que solo cargará el replay."
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The clears behind it"
+msgstr "Los pases que lo respaldan"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The customized settings are too large to store"
 msgstr "Los ajustes personalizados son demasiado grandes para guardarlos"
@@ -10606,6 +10722,10 @@ msgstr "No se pudo leer el pool de cartas en este momento. Inténtalo en un mome
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The editor already holds {0}"
 msgstr "El editor ya contiene {0}"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
+msgstr "La estimación aparece cuando {quorum} pases con {minAccuracyPercent}%+ de acc caen en charts calificados."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "The exact .osu file works too."
@@ -10705,6 +10825,10 @@ msgstr "Los replays que has subido a Mania Hub, con sus enlaces para compartir y
 #: src/routes/report.tsx
 msgid "The report was sent, but at least one image did not upload."
 msgstr "El reporte se envió, pero al menos una imagen no se subió."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The same rule run over only the clears whose charts carry each pattern."
+msgstr "La misma regla aplicada solo a los pases cuyos charts llevan cada patrón."
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."
@@ -10830,6 +10954,10 @@ msgstr "Este mapa no está en el catálogo de mapas, así que no hay nada más q
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "This chart isn't analyzed yet."
 msgstr "Este mapa aún no está analizado."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "This clear backs the estimate · view map details"
+msgstr "Este pase respalda la estimación · ver detalles del mapa"
 
 #: src/components/me/RosterOptInCard.tsx
 #: src/routes/player/$username.tsx
@@ -11229,6 +11357,7 @@ msgid "Try a wider range or check back later."
 msgstr "Prueba con un rango más amplio o vuelve más tarde."
 
 #: src/components/BackendOfflineScreen.tsx
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Try again"

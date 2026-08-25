@@ -714,7 +714,7 @@ export function DynamicRendersPanel() {
             {type === "dan" && keyModes.length > 1 ? (
               <>
                 <KeyModePicker
-                  label={t`Rice`}
+                  label={t`Regular`}
                   keyModes={keyModes}
                   value={style.keyCount ?? keyModes[0]!}
                   onChange={(keys) => patchStyle({ keyCount: keys })}

@@ -61,7 +61,7 @@ export const SIGNATURE_DESIGNS: Record<SignatureType, SignatureDesign[]> = {
     { design: 3, slug: "radar", label: msg`Radar`, width: 320, height: 320 },
   ],
   dan: [
-    { design: 1, slug: "rice-and-ln", label: msg`Rice and LN`, width: 880, height: 200 },
+    { design: 1, slug: "rice-and-ln", label: msg`Regular and LN`, width: 880, height: 200 },
     { design: 2, slug: "single", label: msg`Single`, width: 420, height: 160 },
     { design: 3, slug: "badge", label: msg`Badge`, width: 300, height: 300 },
   ],

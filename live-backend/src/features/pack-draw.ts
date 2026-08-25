@@ -143,21 +143,21 @@ const defaultDeps: PackDrawDeps = {
   rng: Math.random,
 };
 
-/* Same two-set reading the client's duplicate protection used: holding any
-   card of a player keeps the ranked pool from dealing them again, but only
-   holding the GOAT itself counts against the honorary slot - those are two
-   different cards. */
+/* Same two-set reading the client's duplicate protection used: only the plain
+   player key blocks an ordinary deal. GOAT, Eternal and granted variants are
+   distinct collectibles and cannot stand in for that card. Only the GOAT key
+   itself counts against the honorary slot. */
 function cardKeySets(keys: Iterable<string>): { ownedUserIds: Set<number>; ownedGoatUserIds: Set<number> } {
   const ownedUserIds = new Set<number>();
   const ownedGoatUserIds = new Set<number>();
   for (const raw of keys) {
     const key = normalizePackCardKey(raw);
     if (!key) continue;
-    const [idPart, goat] = key.split(":");
+    const [idPart, variant] = key.split(":");
     const userId = Number(idPart);
     if (!Number.isInteger(userId) || userId <= 0) continue;
-    ownedUserIds.add(userId);
-    if (goat === "goat") ownedGoatUserIds.add(userId);
+    if (!variant) ownedUserIds.add(userId);
+    if (variant === "goat") ownedGoatUserIds.add(userId);
   }
   return { ownedUserIds, ownedGoatUserIds };
 }
@@ -210,9 +210,10 @@ export async function drawPackHand(
   } catch {
     throw new PackPoolUnavailableError();
   }
-  const poolTotal = entries.length;
-  if (poolTotal < PACK_POOL_MIN_TOTAL) throw new PackPoolUnavailableError();
-  const drawTotal = poolSliceSize(poolTotal, type.topFraction);
+  const rankedPoolTotal = entries.length;
+  if (rankedPoolTotal < PACK_POOL_MIN_TOTAL) throw new PackPoolUnavailableError();
+  const poolTotal = rankedPoolTotal - entries.filter((entry) => HONORARY_USER_IDS.has(entry.user.id)).length;
+  const drawTotal = poolSliceSize(rankedPoolTotal, type.topFraction);
 
   const { ownedUserIds, ownedGoatUserIds } = cardKeySets([
     ...(type.guaranteesNew && options.ownerUserId > 0
@@ -373,7 +374,7 @@ export async function shouldDealEternalSelfCard(
     const pool = await deps.getPoolMembership(db);
     if (pool.total < PACK_POOL_MIN_TOTAL) return false;
     const progress = await deps.getPoolProgress(db, ownerUserId, pool);
-    return progress.poolOwnedCount >= pool.total;
+    return progress.poolOwnedCount >= progress.poolTotal;
   } catch {
     return false;
   }

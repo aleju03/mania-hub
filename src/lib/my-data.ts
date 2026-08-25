@@ -53,6 +53,9 @@ export interface MyDataSkillDanSide {
   rawDan: number;
   label: string;
   clears: number;
+  // The estimate pins at the top of this keymode's dan ladder (6K regular
+  // ends at 9th, 7K at stellium), so the label is a floor, not a reading.
+  beyondTable?: boolean;
 }
 
 // Share of the tracked population rating below the subject (0-100), from the

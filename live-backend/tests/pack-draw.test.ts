@@ -99,6 +99,7 @@ describe("drawPackHand", () => {
       makeDeps(entries, { rng: rngQueue([0, 0, 0, 0, 0]) }),
     );
     const ids = rankedIds(hand?.players ?? []);
+    expect(hand?.poolTotal).toBe(199);
     expect(ids).toHaveLength(5);
     expect(ids).not.toContain(jakads);
   });
@@ -136,6 +137,22 @@ describe("drawPackHand", () => {
     expect(ids).toHaveLength(10);
     expect(new Set(ids).size).toBe(10);
     for (const id of ids) expect(owned.has(id)).toBe(false);
+  });
+
+  it("does not let an Eternal variant block its player's ordinary card", async () => {
+    const entries = pool(200);
+    const eternalPlayerId = entries[0].user.id;
+    const rolls = Array.from({ length: 10 }, (_, index) => index * 0.05);
+    const hand = await drawPackHand(
+      db,
+      { packType: "wild", ownerUserId: 1 },
+      makeDeps(entries, {
+        listOwnedCardKeys: async () => [`${eternalPlayerId}:eternal`],
+        rng: rngQueue(rolls),
+      }),
+    );
+
+    expect(rankedIds(hand?.players ?? [])).toContain(eternalPlayerId);
   });
 
   it("treats excludeCardKeys like owned cards", async () => {

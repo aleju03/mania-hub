@@ -17,7 +17,7 @@ import {
   PackCommunitySnapshotBuildError,
   type PackCommunitySnapshotKind,
 } from "./pack-community-thread.js";
-import { getPackShowcase, HONORARY_USER_IDS, listShowcasedCards, type StoredPackCard } from "./pack-wallets.js";
+import { getOrdinaryPackPoolMembership, getPackShowcase, HONORARY_USER_IDS, listShowcasedCards, type StoredPackCard } from "./pack-wallets.js";
 
 /* The community read of the pack economy, behind /packs/collections.
  *
@@ -269,7 +269,7 @@ export async function buildPackCommunityTotals(db: Db, now: number): Promise<Pac
        which is what makes this the one total that is exact the moment it is
        read. */
     exec(db, "select coalesce(sum(json_extract(payload, '$.openedPacks')), 0) as opened from pack_wallets"),
-    getPackPoolMembership(db).catch(() => null),
+    getPackPoolMembership(db).then(getOrdinaryPackPoolMembership).catch(() => null),
   ]);
   return {
     computedAt: now,
@@ -293,7 +293,7 @@ export async function buildPackCommunityTotals(db: Db, now: number): Promise<Pac
 export async function buildPackCollectorSnapshotWire(db: Db, now: number): Promise<PackCollectorSnapshotWire> {
   /* A pool board that cannot build right now must not take the page down with
      it: the completion numbers go to zero and everything else still answers. */
-  const pool = await getPackPoolMembership(db).catch(() => null);
+  const pool = await getPackPoolMembership(db).then(getOrdinaryPackPoolMembership).catch(() => null);
 
   /* Which carded players are outside the draw pool, read off the card catalog
      (one row per variant, thousands of rows) rather than off the ownership
@@ -303,12 +303,15 @@ export async function buildPackCollectorSnapshotWire(db: Db, now: number): Promi
      does. The counts below subtract it from the collector's distinct players.
      Reading it from the catalog can only over-list, naming a player whose last
      copy was recycled, and an id nobody holds matches nothing. */
-  const offPoolIds: number[] = [];
+  const offPoolIds = new Set<number>();
+  const variantPoolIds = new Set<number>();
   if (pool && pool.total > 0) {
-    const catalog = (await exec(db, "select distinct card_user_id from pack_cards")).rows;
+    const catalog = (await exec(db, "select distinct card_user_id, card_key from pack_cards")).rows;
     for (const row of catalog) {
       const cardUserId = Number(row.card_user_id);
-      if (cardUserId > 0 && !pool.userIds.has(cardUserId)) offPoolIds.push(cardUserId);
+      if (cardUserId <= 0) continue;
+      if (!pool.userIds.has(cardUserId)) offPoolIds.add(cardUserId);
+      else if (String(row.card_key) !== String(cardUserId)) variantPoolIds.add(cardUserId);
     }
   }
 
@@ -316,17 +319,37 @@ export async function buildPackCollectorSnapshotWire(db: Db, now: number): Promi
      from the maintained roll-up (pack-community-rollups.ts) whenever it is
      level with it, and from the scans themselves when it is not. Everything
      else here reads thousands of rows at most. */
-  const [aggregates, firstFindRows, walletRows, offPoolRows] = await Promise.all([
+  const [aggregates, firstFindRows, walletRows, offPoolRows, variantOnlyRows] = await Promise.all([
     readCollectorAggregates(db),
     // Serial 1 is whoever found the card first, anywhere.
     exec(db, "select owner_user_id, count(*) as finds from pack_card_serials where serial = 1 group by owner_user_id"),
     exec(db, "select user_id, owner_username, json_extract(payload, '$.openedPacks') as opened from pack_wallets"),
-    offPoolIds.length > 0
+    offPoolIds.size > 0
       ? exec(db, `
           select owner_user_id, count(distinct card_user_id) as off_pool
           from pack_collection_cards
           where copies > 0 and card_user_id in (${idListSql(offPoolIds)})
           group by owner_user_id`)
+      : Promise.resolve({ rows: [] as Array<Record<string, unknown>> }),
+    /* A variant-only holding of an otherwise drawable player cannot satisfy
+       that player's ordinary slot. Start from the small catalog set of player
+       ids with variants so the card_user_id index avoids scanning millions of
+       ordinary ownership rows; the correlated ordinary lookup then hits the
+       ownership primary key. */
+    variantPoolIds.size > 0
+      ? exec(db, `
+          select distinct variant.owner_user_id, variant.card_user_id
+          from pack_collection_cards variant
+          where variant.copies > 0
+            and variant.card_user_id in (${idListSql(variantPoolIds)})
+            and variant.card_key != cast(variant.card_user_id as text)
+            and not exists (
+              select 1 from pack_collection_cards ordinary
+              where ordinary.owner_user_id = variant.owner_user_id
+                and ordinary.card_user_id = variant.card_user_id
+                and ordinary.card_key = cast(variant.card_user_id as text)
+                and ordinary.copies > 0
+            )`)
       : Promise.resolve({ rows: [] as Array<Record<string, unknown>> }),
   ]);
 
@@ -335,6 +358,12 @@ export async function buildPackCollectorSnapshotWire(db: Db, now: number): Promi
 
   const offPool = new Map<number, number>();
   for (const row of offPoolRows.rows) offPool.set(Number(row.owner_user_id), Number(row.off_pool) || 0);
+
+  const variantOnlyInPool = new Map<number, number>();
+  for (const row of variantOnlyRows.rows) {
+    const ownerUserId = Number(row.owner_user_id);
+    variantOnlyInPool.set(ownerUserId, (variantOnlyInPool.get(ownerUserId) ?? 0) + 1);
+  }
 
   const frozenNames = new Map<number, string>();
   const openedPacks = new Map<number, number | null>();
@@ -374,8 +403,11 @@ export async function buildPackCollectorSnapshotWire(db: Db, now: number): Promi
       lastPulledAt: owner.lastPulledAt,
       completion: {
         poolTotal: pool?.total ?? 0,
-        // Everything owned, less the part of it that fell out of the pool.
-        poolOwnedCount: pool && pool.total > 0 ? Math.max(0, owner.players - (offPool.get(userId) ?? 0)) : 0,
+        // Everything owned, less players outside the pool and players held
+        // only as an Eternal/admin variant rather than their ordinary card.
+        poolOwnedCount: pool && pool.total > 0
+          ? Math.max(0, owner.players - (offPool.get(userId) ?? 0) - (variantOnlyInPool.get(userId) ?? 0))
+          : 0,
         goatsOwned: owner.goats,
         goatsTotal: HONORARY_USER_IDS.size,
       },

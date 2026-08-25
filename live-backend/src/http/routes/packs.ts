@@ -3,7 +3,7 @@ import { parseJson } from "../../db.js";
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
 import { getPackCardCollectors, getPackCardKeyStats, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
-import { applyPackCollectionCardMint, countMissingGoatCards, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackUserIdentity, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, mintEternalSelfCardOnce, normalizeAvatarUrl, normalizeCountryCode, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot, type PackUserIdentity } from "../../features/pack-wallets.js";
+import { applyPackCollectionCardMint, countMissingGoatCards, listMissingGoatCardUserIds, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackUserIdentity, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, mintEternalSelfCardOnce, normalizeAvatarUrl, normalizeCountryCode, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot, type PackUserIdentity } from "../../features/pack-wallets.js";
 import { getPackCollectorProfile, getPackCommunityStats, getPackShowcaseCards, listPackCollectors, listPackShowcaseWall, normalizePackCollectorSort, PACK_COLLECTOR_PAGE_MAX_SIZE, resolvePackCollector } from "../../features/pack-community.js";
 import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError, shouldDealEternalSelfCard } from "../../features/pack-draw.js";
 import { logInfo, logWarn } from "../../logger.js";
@@ -968,18 +968,25 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         sendJson(req, res, ctx, 503, { error: "pool_unavailable" });
         return true;
       }
-      const [missing, goatMissing] = await Promise.all([
+      const [missing, goatMissingUserIds] = await Promise.all([
         listPackCollectionMissingPlayers(ctx.db, walletUserId, roster, { page, pageSize, query }),
-        countMissingGoatCards(ctx.db, walletUserId),
+        listMissingGoatCardUserIds(ctx.db, walletUserId),
       ]);
-      sendJson(req, res, ctx, 200, { ...missing, goatMissing });
+      sendJson(req, res, ctx, 200, {
+        ...missing,
+        goatMissing: goatMissingUserIds.length,
+        goatMissingUserIds,
+      });
       return true;
     }
     // Progress is a garnish on the header; a pool board that cannot build
     // right now must not take the collection page down with it.
-    const progress = await getPackPoolMembership(ctx.db)
-      .then((pool) => getPackCollectionPoolProgress(ctx.db, walletUserId, pool))
-      .catch(() => null);
+    const [progress, goatMissing] = await Promise.all([
+      getPackPoolMembership(ctx.db)
+        .then((pool) => getPackCollectionPoolProgress(ctx.db, walletUserId, pool))
+        .catch(() => null),
+      countMissingGoatCards(ctx.db, walletUserId).catch(() => null),
+    ]);
     // "untracked" is not a tier: it lists the owned players who left the draw
     // pool. With no pool to compare against the filter honestly shows nothing.
     const untracked = tier === "untracked";
@@ -996,6 +1003,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       poolProgress: progress
         ? { poolTotal: progress.poolTotal, poolOwnedCount: progress.poolOwnedCount, retiredOwnedCount: progress.retiredOwnedCount }
         : null,
+      goatMissing,
     });
     return true;
   }

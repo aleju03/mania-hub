@@ -313,6 +313,11 @@ msgstr "{0} 张卡片"
 msgid "{0} characters"
 msgstr "{0} 个字符"
 
+#. placeholder {0}: skillset.clears
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{0} clears"
+msgstr "{0} 次通过"
+
 #. placeholder {0}: formatNumber(card.owners)
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "{0} collections"
@@ -358,7 +363,7 @@ msgstr "{0} 张重复"
 #. placeholder {0}: eternalFinale.username
 #: src/components/packs/RevealStage.tsx
 msgid "{0} Eternal maniacard"
-msgstr ""
+msgstr "{0} 的 Eternal maniacard"
 
 #. placeholder {0}: randomPick.player.favouriteCount
 #: src/routes/maps.tsx
@@ -870,8 +875,8 @@ msgid "{gap}pp to go"
 msgstr "还差 {gap}pp"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
-msgstr "{goatMissing, plural, other {另有 # 张 GOAT 卡片未收集}}"
+#~ msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
+#~ msgstr "{goatMissing, plural, other {另有 # 张 GOAT 卡片未收集}}"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{have} / {want} plays"
@@ -909,6 +914,10 @@ msgstr "{hours} 小时 {remainingMins} 分前"
 msgid "{hours}h ago"
 msgstr "{hours} 小时前"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{keyCount}K {sideLabel} dan"
+msgstr "{keyCount}K {sideLabel}段位"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{keyCount}K skillset"
 msgstr "{keyCount}K 技能组"
@@ -923,6 +932,7 @@ msgstr "仅 {keymodeLabel}"
 msgid "{keys}K thumbnail"
 msgstr "{keys}K 缩略图"
 
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 msgid "{label} dan"
 msgstr "{label} 段位"
@@ -1167,6 +1177,18 @@ msgstr "{shotCount, plural, other {# 张截图}}"
 msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
 msgstr "{sideLabel} 段位估算：约 {chip}，依据是该段位附近谱面上的 {clears} 次达标通过(准确率 96% 以上)"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
+msgstr "{sideLabel} 段位估算：约 {chip}，依据是该段位附近谱面上的 {clears} 次达标通过(准确率 96% 以上)，点击查看背后的通过记录"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
+msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位课程的最高级，依据是 {clears} 次达标通过(准确率 96% 以上)"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
+msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位课程的最高级，依据是 {clears} 次达标通过(准确率 96% 以上) · 点击查看这些通过记录"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
 msgstr "{speedLabel} 速度"
@@ -1203,9 +1225,23 @@ msgstr "{typeName} 卡包"
 msgid "{typeName} pack, {typeBlurb}"
 msgstr "{typeName} 卡包，{typeBlurb}"
 
+#. placeholder {0}: formatDan(danLabel)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{username} is around <0>{0}</0>"
+msgstr "{username} 大约在 <0>{0}</0>"
+
+#. placeholder {0}: formatDan(danLabel)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{username} is beyond <0>{0}</0>"
+msgstr "{username} 高于 <0>{0}</0>"
+
 #: src/components/packs/StreakGame.tsx
 msgid "{username} maniacard"
 msgstr "{username} maniacard"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{username}'s {sideLabel} dan estimate"
+msgstr "{username} 的 {sideLabel}段位估算"
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{username}'s top {label} plays"
@@ -1397,6 +1433,10 @@ msgstr "▶ 观看"
 msgid "0h"
 msgstr "0 小时"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "1 clear"
+msgstr "1 次通过"
+
 #: src/components/packs/PackPulse.tsx
 msgid "1 person has your card"
 msgstr "有 1 人持有你的卡片"
@@ -1499,6 +1539,10 @@ msgstr "7天全球"
 msgid "7K"
 msgstr "7K"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "A clear is a {minAccuracyPercent}%+ accuracy pass with almost no misses, at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
+msgstr "达标通过指以 1.0x 或 DT、准确率 {minAccuracyPercent}% 以上且几乎无 miss 通过一张被分析器评定段位的谱面。准确率未达满额的通过会按折扣计入，估算取第 {quorum} 好的计入成绩，因此单个离群成绩不会左右它。"
+
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "a collector"
 msgstr "一位收藏者"
@@ -1580,6 +1624,7 @@ msgid "Account menu"
 msgstr "账号菜单"
 
 #: src/components/packs/album/AlbumView.tsx
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "accuracy"
 msgstr "准确率"
@@ -1863,6 +1908,11 @@ msgstr "分析中…"
 #: src/components/packs/CardCollectors.tsx
 msgid "and {0} more"
 msgstr "还有 {0} 位"
+
+#. placeholder {0}: evidence.totalClears - evidence.clears.length
+#: src/components/player/DanEvidenceModal.tsx
+msgid "and {0} more qualifying clears below these"
+msgstr "此外还有 {0} 次达标通过排在这些之后"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -2213,6 +2263,10 @@ msgstr "你的国家/地区玩过的谱面"
 msgid "Beatmaps played in {countryName}"
 msgstr "{countryName} 玩过的谱面"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Below the credit that sets the estimate · view map details"
+msgstr "低于决定估算的计入线 · 查看谱面详情"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "best"
 msgstr "最佳"
@@ -2408,6 +2462,10 @@ msgstr "由 <0>{0}</0> 上传"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "By Player"
 msgstr "按玩家"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "By skillset"
+msgstr "按技能组"
 
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "Calculating skills..."
@@ -2810,6 +2868,10 @@ msgstr "关闭"
 msgid "Close activity details"
 msgstr "关闭活跃度详情"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Close dan details"
+msgstr "关闭段位详情"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Close editor"
 msgstr "关闭编辑器"
@@ -3098,6 +3160,14 @@ msgstr "无法加载技能评分，请稍后再试。"
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "Could not load that collection."
 msgstr "无法加载这个收藏册。"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Could not load the clears"
+msgstr "无法加载通过记录"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Could not load the clears behind this estimate."
+msgstr "无法加载这次估算背后的通过记录。"
 
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Could not load the collector list."
@@ -3401,6 +3471,15 @@ msgstr "创建"
 msgid "Created {0}"
 msgstr "已创建 {0}"
 
+#. placeholder {0}: clear.creditedDan.toFixed(2)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "credit {0}"
+msgstr "计入 {0}"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "credited dan"
+msgstr "计入段位"
+
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
 msgstr "克罗地亚语"
@@ -3504,6 +3583,10 @@ msgstr "捷克语"
 #: src/components/maps/MapSearchSection.tsx
 msgid "Dan (est.)"
 msgstr "段位(估算)"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Dan credit this clear earned after the accuracy discount"
+msgstr "这次通过在准确率折扣后计入的段位"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -5645,6 +5728,7 @@ msgstr "实时更新已开启"
 #: src/components/maps/PatternRadar.tsx
 #: src/components/maps/SearchCard.tsx
 #: src/components/me/DynamicRendersPanel.tsx
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/skill-axes.ts
@@ -6492,6 +6576,10 @@ msgstr "已命名为 {0}"
 msgid "nearby players outscore you"
 msgstr "附近玩家的分数比你高"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "needs {quorum} clears for an estimate"
+msgstr "需要 {quorum} 次通过才能估算"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "需要一个指向其 osu! 主页的 web.archive.org 链接。"
@@ -6832,6 +6920,10 @@ msgstr "没有试听音频"
 msgid "No preview available."
 msgstr "暂无预览。"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "No qualifying clears yet"
+msgstr "还没有达标通过"
+
 #: src/routes/rankings.tsx
 msgid "No rank data from 7 days ago yet"
 msgstr "还没有 7 天前的排名数据"
@@ -7069,6 +7161,11 @@ msgstr "并非问题"
 #: src/routes/farm-helper.tsx
 msgid "Not enough data near your pp yet"
 msgstr "你 pp 附近的数据还不够"
+
+#. placeholder {0}: evidence.totalClears
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Not enough qualifying clears for an estimate yet ({0} of {quorum})."
+msgstr "达标通过还不足以估算（{0}/{quorum}）。"
 
 #: src/routes/farm-helper.tsx
 msgid "not found"
@@ -8647,6 +8744,16 @@ msgstr "刷新中..."
 msgid "Regions"
 msgstr "区域"
 
+#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillBreakdown.tsx
+msgid "Regular"
+msgstr "单点"
+
+#: src/lib/signature-shared.ts
+msgid "Regular and LN"
+msgstr "单点与长条"
+
 #: src/routes/__root.tsx
 msgid "Reload page"
 msgstr "重新加载页面"
@@ -8949,12 +9056,12 @@ msgstr "正在揭晓剩下的…"
 
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/SkillBreakdown.tsx
-msgid "Rice"
-msgstr "单点"
+#~ msgid "Rice"
+#~ msgstr "单点"
 
 #: src/lib/signature-shared.ts
-msgid "Rice and LN"
-msgstr "单点与长条"
+#~ msgid "Rice and LN"
+#~ msgstr "单点与长条"
 
 #: src/components/packs/StreakGame.tsx
 msgid "right"
@@ -10559,6 +10666,11 @@ msgstr "这个用户名看起来不对。"
 msgid "That's the same score on both sides. Pick a different run for the other side."
 msgstr "两边是同一个成绩。给另一边选一份别的成绩。"
 
+#. placeholder {0}: formatDan(danLabel)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The {keyCount}K {sideLabel} course ladder ends at {0}, so the analyzer cannot rate anything above it. The real level may be higher."
+msgstr "{keyCount}K {sideLabel} 段位课程止步于 {0}，因此分析器无法评定更高的等级。实际水平可能更高。"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "The {keys}K block resolves no note images; the preview shows flat colours."
 msgstr "{keys}K 配置没有解析出任何音符图像，预览只显示纯色。"
@@ -10599,6 +10711,10 @@ msgstr "谱面分析器正在为你的最佳成绩评分。"
 msgid "The chart file isn't available, so only the replay will load."
 msgstr "谱面文件不可用，所以只会加载回放。"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The clears behind it"
+msgstr "背后的通过记录"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The customized settings are too large to store"
 msgstr "自定义设置太大，无法保存"
@@ -10615,6 +10731,10 @@ msgstr "现在无法读取卡池。请稍后再试。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The editor already holds {0}"
 msgstr "编辑器里已经是 {0} 了"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
+msgstr "在已评定段位的谱面上取得 {quorum} 次准确率 {minAccuracyPercent}% 以上的通过后，就会给出估算。"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "The exact .osu file works too."
@@ -10714,6 +10834,10 @@ msgstr "你上传到 Mania Hub 的回放，附带分享链接和删除操作。"
 #: src/routes/report.tsx
 msgid "The report was sent, but at least one image did not upload."
 msgstr "反馈已提交，但至少有一张图片没能上传。"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The same rule run over only the clears whose charts carry each pattern."
+msgstr "同一条规则，只统计谱面带有对应谱型的通过。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."
@@ -10839,6 +10963,10 @@ msgstr "这张谱面不在谱面库里，所以除了成绩本身没有别的可
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "This chart isn't analyzed yet."
 msgstr "这张谱面还没有被分析。"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "This clear backs the estimate · view map details"
+msgstr "这次通过支撑着该估算 · 查看谱面详情"
 
 #: src/components/me/RosterOptInCard.tsx
 #: src/routes/player/$username.tsx
@@ -11238,6 +11366,7 @@ msgid "Try a wider range or check back later."
 msgstr "试试更大的范围，或稍后再来。"
 
 #: src/components/BackendOfflineScreen.tsx
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Try again"

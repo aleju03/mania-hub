@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { msg, plural } from "@lingui/core/macro";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import {
@@ -16,7 +16,7 @@ import {
   type CollectedCard,
   type PackWallet,
 } from "#/lib/pack-collection";
-import { honoraryAvatarUrl, HONORARY_PLAYERS } from "#/lib/honorary-players";
+import { honoraryAvatarUrl, HONORARY_PLAYERS, type HonoraryPlayer } from "#/lib/honorary-players";
 import {
   fetchServerPackCollectionMissing,
   fetchServerPackCollectionPage,
@@ -25,7 +25,6 @@ import {
   type ServerPackCollectionPage,
 } from "#/lib/pack-wallet-sync";
 import { CountryFlag } from "../ui/CountryFlag";
-import { GOAT_ALBUM_CODE } from "./album/albumModel";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import { CollectionCardPlaceholder, CollectionCardTile, type CardMint } from "./CardTile";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "./cardThumbnailCache";
@@ -333,7 +332,7 @@ function tierChipRgb(tier: ManiaCardTier): string {
 function MissingPlayerTile({ player }: { player: ServerPackCollectionMissingPlayer }) {
   return (
     <Link
-      to="/player/$username"
+      to="/player/$username/maniacard"
       params={{ username: player.username }}
       className="relative flex flex-col items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-white/12 bg-black/20 px-1.5 transition-colors hover:border-white/25 hover:bg-black/30"
       style={{ aspectRatio: "5 / 7" }}
@@ -348,6 +347,30 @@ function MissingPlayerTile({ player }: { player: ServerPackCollectionMissingPlay
         draggable={false}
       />
       <span className="mt-2 w-full truncate text-center text-[11px] text-osu-f1">{player.username}</span>
+    </Link>
+  );
+}
+
+function MissingGoatTile({ player }: { player: HonoraryPlayer }) {
+  return (
+    <Link
+      to="/player/$username/maniacard"
+      params={{ username: player.username }}
+      className="relative flex flex-col items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-amber-300/30 bg-amber-950/15 px-1.5 transition-colors hover:border-amber-200/55 hover:bg-amber-950/25"
+      style={{ aspectRatio: "5 / 7" }}
+    >
+      <span className="absolute left-1.5 top-1.5 text-[9px] font-bold tracking-wide text-amber-200/70">GOAT</span>
+      <CountryFlag code={player.countryCode} size="xs" decorative className="absolute right-1.5 top-2" />
+      <img
+        src={player.avatarUrl}
+        alt=""
+        className="h-1/2 w-auto rounded-full object-cover opacity-35 grayscale"
+        loading="lazy"
+        draggable={false}
+      />
+      <span className="mt-2 w-full truncate text-center text-[11px] text-osu-f1">
+        {player.cardName ?? player.username}
+      </span>
     </Link>
   );
 }
@@ -694,14 +717,17 @@ export function CollectionPanel({
   const serverPoolProgress = useServerCollection
     ? serverMetaPage?.poolProgress ?? serverPage?.page.poolProgress ?? null
     : null;
-  /* The other side of the progress line: pool players this collection has no
-     card of. The count comes from the same pool numbers the header divides,
-     so "12,158 / 12,162 players" and "4 missing" can never disagree. The list
-     itself is a separate read, since it is the pool minus the collection
-     rather than anything the collection page carries. */
-  const missingCount = serverPoolProgress
+  /* The other side of collection completion: ordinary pool players plus GOAT
+     variants this collection has no card of. GOATs remain outside the player
+     ratio, but they are collectible slots, so the nearby "N missing" answer
+     must include them. The detailed list is fetched separately. */
+  const poolMissingCount = serverPoolProgress
     ? Math.max(0, serverPoolProgress.poolTotal - serverPoolProgress.poolOwnedCount)
     : 0;
+  const goatMissingCount = useServerCollection
+    ? serverMetaPage?.goatMissing ?? serverPage?.page.goatMissing ?? 0
+    : 0;
+  const missingCount = poolMissingCount + goatMissingCount;
   const [showMissing, setShowMissing] = useState(false);
   const missingOpen = showMissing && useServerCollection;
   const [missingPageIndex, setMissingPageIndex] = useState(0);
@@ -760,10 +786,31 @@ export function CollectionPanel({
      the same way the collection's counts do. */
   const missingRequestKey = `${missingPageIndex}:${trimmedQuery}`;
   const activeMissingPage = missingPage?.key === missingRequestKey ? missingPage.page : null;
-  /* Falls back to the header's own count before any page has landed, so the
-     pager is already in its final state in the frame the list opens rather
-     than appearing a round trip later and nudging the grid down. */
-  const missingTotal = activeMissingPage?.total ?? missingPage?.page.total ?? missingCount;
+  const poolMissingTotal = activeMissingPage?.total ?? missingPage?.page.total ?? poolMissingCount;
+  const missingGoatIds = new Set(activeMissingPage?.goatMissingUserIds ?? []);
+  const allMissingGoats = activeMissingPage
+    ? HONORARY_PLAYERS.filter((player) => {
+        if (!missingGoatIds.has(player.id)) return false;
+        if (!trimmedQuery) return true;
+        return (
+          player.username.toLowerCase().includes(trimmedQuery) ||
+          !!player.cardName?.toLowerCase().includes(trimmedQuery)
+        );
+      })
+    : [];
+  /* Before the first missing response, the normal collection page already
+     knows the unfiltered GOAT count. A search has to wait for the ids so it
+     can match their checked-in names honestly. */
+  const missingGoatTotal = activeMissingPage
+    ? allMissingGoats.length
+    : trimmedQuery
+      ? 0
+      : Math.min(HONORARY_PLAYERS.length, goatMissingCount);
+  /* Ordinary cards come first, then GOAT variants continue the same paged
+     sequence. The endpoint can serve an ordinary page beyond its own end (an
+     empty array plus the total), while the client slices its complete 24-id
+     GOAT roster into whatever space remains on that combined page. */
+  const missingTotal = poolMissingTotal + missingGoatTotal;
   const missingTotalPages = Math.max(1, Math.ceil(missingTotal / COLLECTION_PAGE_SIZE));
   const missingCurrentPage = Math.min(missingPageIndex, missingTotalPages - 1);
   const missingPageStart = missingCurrentPage * COLLECTION_PAGE_SIZE;
@@ -774,12 +821,16 @@ export function CollectionPanel({
      frame and nothing shifts afterwards. A spinner box here instead collapsed
      the panel and shoved the whole page around, twice, in the time one fetch
      took. */
-  const pendingMissingTileCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, missingTotal - missingPageStart));
-  /* GOAT cards are counted, never listed: most of the honorary roster is not
-     in the draw pool at all, and the ones that are already have their pool
-     slot filled by the ordinary card, so neither the header ratio nor the
-     list above can account for one. Held across page turns like the total. */
-  const goatMissing = activeMissingPage?.goatMissing ?? missingPage?.page.goatMissing ?? 0;
+  const pendingMissingTileCount = Math.max(
+    0,
+    Math.min(COLLECTION_PAGE_SIZE, poolMissingTotal - missingPageStart),
+  );
+  const goatPageStart = Math.max(0, missingPageStart - poolMissingTotal);
+  const goatPageCapacity = COLLECTION_PAGE_SIZE - (activeMissingPage?.players.length ?? pendingMissingTileCount);
+  const missingGoats = allMissingGoats.slice(goatPageStart, goatPageStart + goatPageCapacity);
+  const pendingGoatTileCount = activeMissingPage
+    ? 0
+    : Math.max(0, Math.min(goatPageCapacity, missingGoatTotal - goatPageStart));
   const serverPagePending = useServerCollection && !activeServerPage && serverMissingKey !== serverCacheKey;
   const showPagePlaceholders = serverPagePending || (serverLoading && pageCards.length === 0);
   // On the very first sync nothing has loaded yet, so we don't know the
@@ -1252,7 +1303,7 @@ export function CollectionPanel({
                   pageStart={missingPageStart}
                   pageEnd={missingPageEnd}
                   total={missingTotal}
-                  noun="players"
+                  noun="cards"
                   onPageChange={setMissingPageIndex}
                 />
               )
@@ -1276,45 +1327,37 @@ export function CollectionPanel({
             <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
               <Trans>The draw pool could not be read just now. Try again in a moment.</Trans>
             </div>
-          ) : activeMissingPage && activeMissingPage.total === 0 ? (
+          ) : activeMissingPage && missingTotal === 0 ? (
             <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
               {trimmedQuery
                 ? t`No missing player matches "${activeQuery.trim()}".`
                 : t`Nothing missing. Every player in the pool is in your collection.`}
             </div>
-          ) : (
+          ) : activeMissingPage?.total || missingGoats.length > 0 ||
+            (!activeMissingPage && (pendingMissingTileCount > 0 || pendingGoatTileCount > 0)) ? (
             // translate="no" like the streak board's rows: usernames and pool
-            // ranks, redrawn on every page turn.
+            // ranks, redrawn on every page turn. GOAT variants are part of the
+            // same missing-card run; their gold chrome is enough distinction.
             <div translate="no" className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5">
-              {activeMissingPage
-                ? activeMissingPage.players.map((player) => (
+              {activeMissingPage ? (
+                <>
+                  {activeMissingPage.players.map((player) => (
                     <MissingPlayerTile key={player.userId} player={player} />
-                  ))
-                : Array.from({ length: pendingMissingTileCount }, (_, index) => (
+                  ))}
+                  {missingGoats.map((player) => <MissingGoatTile key={`goat:${player.id}`} player={player} />)}
+                </>
+              ) : (
+                <>
+                  {Array.from({ length: pendingMissingTileCount }, (_, index) => (
                     <MissingPlayerPlaceholder key={`missing-placeholder-${index}`} />
                   ))}
+                  {Array.from({ length: pendingGoatTileCount }, (_, index) => (
+                    <MissingPlayerPlaceholder key={`missing-goat-placeholder-${index}`} />
+                  ))}
+                </>
+              )}
             </div>
-          )}
-          {/* The list above is players, so the cards that are not a pool slot
-              get a line of their own rather than a tile. Hidden while a search
-              is on: a count of everything does not answer a filtered list. */}
-          {goatMissing > 0 && !trimmedQuery && (
-            <Link
-              to="/packs"
-              search={{ album: GOAT_ALBUM_CODE.toLowerCase() }}
-              /* The album is another section of this same page, further down
-                 it. Jumping to the top first would land the reader on the
-                 pack opener; the album view scrolls itself into frame. */
-              resetScroll={false}
-              className="mt-4 block text-center text-[11px] text-osu-f1 transition-colors hover:text-white"
-            >
-              <Plural
-                value={goatMissing}
-                one="plus # GOAT card still missing"
-                other="plus # GOAT cards still missing"
-              />
-            </Link>
-          )}
+          ) : null}
         </>
       ) : collectionTotal === 0 && !serverLoading && !serverPagePending ? (
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">

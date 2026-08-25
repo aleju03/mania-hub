@@ -20,6 +20,7 @@ import {
   listPackCollectionCards,
   listPackCollectionMissingPlayers,
   listPackCollectionOwnedCardKeys,
+  listMissingGoatCardUserIds,
   recyclePackCollectionCards,
   savePackWallet,
   setPackShowcase,
@@ -272,10 +273,9 @@ describe("GOAT cards alongside their player's ordinary card", () => {
   });
 });
 
-/* The header's completion ratio: owned players still in the draw pool over the
-   pool size. Retired players (fell off the rankings after being pulled) report
-   separately instead of inflating the ratio past 100%, and honorary GOATs
-   outside the pool count in neither number. */
+/* The header's completion ratio: owned ordinary players still drawable over
+   that pool's size. Retired players report separately instead of inflating the
+   ratio past 100%, and honorary roster members count only as GOAT variants. */
 describe("pack collection pool progress", () => {
   const BOJII = 10083439; // honorary roster
 
@@ -358,7 +358,7 @@ describe("pack collection pool progress", () => {
     expect(remaining.cards.map((card) => card.userId).sort()).toEqual([BOJII, 42].sort());
   });
 
-  it("counts a ranked honorary player once across their GOAT and ordinary card", async () => {
+  it("keeps a ranked honorary player out of the ordinary completion pool", async () => {
     const payload = progressPayload({
       [String(BOJII)]: progressCard(BOJII, "worldClass"),
       [`${BOJII}:goat`]: progressCard(BOJII, "goat"),
@@ -369,7 +369,7 @@ describe("pack collection pool progress", () => {
       userIds: new Set([BOJII]),
       total: 1,
     });
-    expect(progress).toEqual({ poolTotal: 1, poolOwnedCount: 1, retiredOwnedCount: 0, offPoolUserIds: [] });
+    expect(progress).toEqual({ poolTotal: 0, poolOwnedCount: 0, retiredOwnedCount: 0, offPoolUserIds: [] });
   });
 
   /* The complement of that ratio: the pullable players with no card in this
@@ -403,14 +403,35 @@ describe("pack collection pool progress", () => {
       expect(missing.players[0]).toMatchObject({ username: "player42", poolRank: 1, globalRank: 1 });
     });
 
-    it("fills a player's slot from their GOAT card, like the progress ratio does", async () => {
-      await savePackWallet(db, USER_ID, progressPayload({ [`${BOJII}:goat`]: progressCard(BOJII, "goat") }), 0, 1000);
+    it("does not list a ranked honorary member as an ordinary missing card", async () => {
+      await savePackWallet(db, USER_ID, progressPayload({}), 0, 1000);
 
       const missing = await listPackCollectionMissingPlayers(db, USER_ID, [poolEntry(BOJII, 1), poolEntry(42, 2)], {
         page: 0,
         pageSize: 15,
       });
+      expect(missing.total).toBe(1);
       expect(missing.players.map((player) => player.userId)).toEqual([42]);
+    });
+
+    it("does not let an Eternal variant fill its player's ordinary slot", async () => {
+      await seedCollectionCard(db, USER_ID, 42, { tier: "eternal" });
+      const pool = { userIds: new Set([42]), total: 1 };
+
+      expect(await getPackCollectionPoolProgress(db, USER_ID, pool)).toMatchObject({
+        poolTotal: 1,
+        poolOwnedCount: 0,
+      });
+      expect(
+        (await listPackCollectionMissingPlayers(db, USER_ID, [poolEntry(42, 1)], { page: 0, pageSize: 15 }))
+          .players.map((player) => player.userId),
+      ).toEqual([42]);
+
+      await seedCollectionCard(db, USER_ID, 42, { tier: "rare" });
+      expect(await getPackCollectionPoolProgress(db, USER_ID, pool)).toMatchObject({ poolOwnedCount: 1 });
+      expect(
+        (await listPackCollectionMissingPlayers(db, USER_ID, [poolEntry(42, 1)], { page: 0, pageSize: 15 })).total,
+      ).toBe(0);
     });
 
     it("searches by username and pages the matches", async () => {
@@ -430,12 +451,13 @@ describe("pack collection pool progress", () => {
       expect(secondPage.players.map((player) => player.userId)).toEqual([431]);
     });
 
-    it("counts missing GOAT cards separately, and an ordinary card is not one", async () => {
+    it("lists and counts missing GOAT variants, and an ordinary card is not one", async () => {
       await savePackWallet(db, USER_ID, progressPayload({}), 0, 1000);
       expect(await countMissingGoatCards(db, USER_ID)).toBe(HONORARY_USER_IDS.size);
+      expect(await listMissingGoatCardUserIds(db, USER_ID)).toEqual([...HONORARY_USER_IDS]);
 
-      // BOJII is on the honorary roster and in the ranked pool, so his plain
-      // card fills his pool slot while his GOAT slot stays empty.
+      // BOJII is on the honorary roster and in the ranked board, but his plain
+      // legacy card still is not the GOAT variant completion requires.
       await savePackWallet(db, USER_ID, progressPayload({ [String(BOJII)]: progressCard(BOJII, "worldClass") }), 1, 1000);
       expect(await countMissingGoatCards(db, USER_ID)).toBe(HONORARY_USER_IDS.size);
 
@@ -447,6 +469,9 @@ describe("pack collection pool progress", () => {
         1000,
       );
       expect(await countMissingGoatCards(db, USER_ID)).toBe(HONORARY_USER_IDS.size - 1);
+      const missingGoatIds = await listMissingGoatCardUserIds(db, USER_ID);
+      expect(missingGoatIds).toHaveLength(HONORARY_USER_IDS.size - 1);
+      expect(missingGoatIds).not.toContain(BOJII);
     });
   });
 });

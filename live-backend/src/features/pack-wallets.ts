@@ -67,12 +67,12 @@ export interface PackCollectionPage {
   filteredShardTotal: number;
 }
 
-/* Collection progress measured against the current draw pool. Owned players
-   split three ways: still in the pool (the numerator; this includes honorary
-   members who are also live ranked players), honorary GOATs outside the pool
-   (the GOAT chip tracks those), and retired players who fell off the rankings
-   after being pulled. The header used to divide all owned rows by the live
-   pool size, and retired cards pushed it past 100%. */
+/* Collection progress measured against the ordinary-drawable pool. Owned
+   players split three ways: ordinary players still drawable (the numerator),
+   honorary roster members (the GOAT count tracks all of them separately), and
+   retired players who fell off the rankings after being pulled. The ranked
+   board contains active honorary members, but ordinary deals skip them, so
+   leaving them in this ratio creates impossible "missing" ordinary slots. */
 export interface PackCollectionPoolProgress {
   poolTotal: number;
   poolOwnedCount: number;
@@ -83,27 +83,49 @@ export interface PackCollectionPoolProgress {
   offPoolUserIds: number[];
 }
 
+/* The ranked board still contains active honorary players, but ordinary pack
+   slots deliberately walk past every honorary id: those players only mint as
+   their :goat variant through the separate honorary roll. Completion and its
+   missing list must therefore use this drawable ordinary subset, then count
+   the full GOAT roster once on its own. */
+export function getOrdinaryPackPoolMembership(pool: {
+  userIds: ReadonlySet<number>;
+  total: number;
+}): { userIds: Set<number>; total: number } {
+  const userIds = new Set([...pool.userIds].filter((userId) => !HONORARY_USER_IDS.has(userId)));
+  return { userIds, total: userIds.size };
+}
+
 async function getPackCollectionPoolProgressByTrust(
   db: Db,
   userId: number,
   pool: { userIds: Set<number>; total: number },
   completionEligibleOnly: boolean,
 ): Promise<PackCollectionPoolProgress> {
+  const ordinaryPool = getOrdinaryPackPoolMembership(pool);
   const rows = (await exec(
     db,
-    `select distinct card_user_id from pack_collection_cards
+    `select distinct card_user_id, card_key from pack_collection_cards
      where owner_user_id = ? and copies > 0
        ${completionEligibleOnly ? "and completion_eligible != 0" : ""}`,
     [userId],
   )).rows;
-  let poolOwnedCount = 0;
-  const offPoolUserIds: number[] = [];
+  const ordinaryOwned = new Set<number>();
+  const offPoolUserIds = new Set<number>();
   for (const row of rows) {
     const ownedId = Number(row.card_user_id);
-    if (pool.userIds.has(ownedId)) poolOwnedCount += 1;
-    else if (!HONORARY_USER_IDS.has(ownedId)) offPoolUserIds.push(ownedId);
+    const ordinary = String(row.card_key) === String(ownedId);
+    if (ordinary && ordinaryPool.userIds.has(ownedId)) ordinaryOwned.add(ownedId);
+    else if (ordinary && !ordinaryPool.userIds.has(ownedId) && !HONORARY_USER_IDS.has(ownedId)) {
+      offPoolUserIds.add(ownedId);
+    }
   }
-  return { poolTotal: pool.total, poolOwnedCount, retiredOwnedCount: offPoolUserIds.length, offPoolUserIds };
+  return {
+    poolTotal: ordinaryPool.total,
+    poolOwnedCount: ordinaryOwned.size,
+    retiredOwnedCount: offPoolUserIds.size,
+    offPoolUserIds: [...offPoolUserIds],
+  };
 }
 
 export async function getPackCollectionPoolProgress(
@@ -151,11 +173,10 @@ export interface PackCollectionMissingPage {
   total: number;
 }
 
-/* The other side of the progress header: which pullable players this
-   collection does not hold yet. Owned means the player, not the card key - a
-   GOAT of someone still ranked already fills their pool slot, exactly as
-   getPackCollectionPoolProgress counts it, so the missing count and the
-   header's "owned / pool" always agree.
+/* The other side of the progress header: which ordinary-pullable players this
+   collection does not hold yet. Honorary roster members are skipped even when
+   ranked because ordinary draws skip them too; their :goat variants are the
+   separate missing group returned beside this list.
 
    Paged in JS over the pool board rather than in SQL: the pool is a cached
    in-memory list a few thousand entries long, and it carries the live names
@@ -171,7 +192,8 @@ export async function listPackCollectionMissingPlayers(
   const page = Math.max(0, Math.floor(options.page));
   const ownedRows = (await exec(
     db,
-    "select distinct card_user_id from pack_collection_cards where owner_user_id = ? and copies > 0",
+    `select distinct card_user_id from pack_collection_cards
+     where owner_user_id = ? and copies > 0 and card_key = cast(card_user_id as text)`,
     [userId],
   )).rows;
   const owned = new Set(ownedRows.map((row) => Number(row.card_user_id)));
@@ -186,6 +208,7 @@ export async function listPackCollectionMissingPlayers(
   const players: PackCollectionMissingPlayer[] = [];
   let total = 0;
   for (const entry of poolEntries) {
+    if (HONORARY_USER_IDS.has(entry.user.id)) continue;
     if (owned.has(entry.user.id)) continue;
     if (query && !entry.user.username.toLowerCase().includes(query)) continue;
     const index = total;
@@ -204,35 +227,39 @@ export async function listPackCollectionMissingPlayers(
   return { players, total };
 }
 
-/* How many GOAT cards this collection still lacks. Separate from the list
-   above because a GOAT is not a pool slot: most of the honorary roster sits
-   outside the draw pool entirely (banned or deleted accounts have no roster
-   row), and the ones still ranked have their pool slot filled by the ordinary
-   card. So a missing GOAT shows up in neither the header's owned/pool ratio
-   nor the missing list, and the album is where it gets looked at. */
-async function countMissingGoatCardsByTrust(
+/* Which GOAT variants this collection still lacks. A GOAT is a separate card
+   key even when that player also has an ordinary pool card, so the collection
+   UI needs the ids as well as the count to render an honest missing-card list.
+   Keeping the roster order makes the frontend's checked-in honorary metadata
+   the only source needed for the empty-slot faces. */
+async function listMissingGoatCardUserIdsByTrust(
   db: Db,
   userId: number,
   completionEligibleOnly: boolean,
-): Promise<number> {
+): Promise<number[]> {
   const honorary = [...HONORARY_USER_IDS].join(",");
-  const row = (await exec(
+  const rows = (await exec(
     db,
-    `select count(distinct card_user_id) as owned from pack_collection_cards
+    `select distinct card_user_id from pack_collection_cards
      where owner_user_id = ? and copies > 0 and card_key like '%:goat'
        ${completionEligibleOnly ? "and completion_eligible != 0" : ""}
        and card_user_id in (${honorary})`,
     [userId],
-  )).rows[0];
-  return Math.max(0, HONORARY_USER_IDS.size - Number(row?.owned ?? 0));
+  )).rows;
+  const owned = new Set(rows.map((row) => Number(row.card_user_id)));
+  return [...HONORARY_USER_IDS].filter((honoraryUserId) => !owned.has(honoraryUserId));
+}
+
+export async function listMissingGoatCardUserIds(db: Db, userId: number): Promise<number[]> {
+  return listMissingGoatCardUserIdsByTrust(db, userId, false);
 }
 
 export async function countMissingGoatCards(db: Db, userId: number): Promise<number> {
-  return countMissingGoatCardsByTrust(db, userId, false);
+  return (await listMissingGoatCardUserIdsByTrust(db, userId, false)).length;
 }
 
 export async function countMissingEternalGoatCards(db: Db, userId: number): Promise<number> {
-  return countMissingGoatCardsByTrust(db, userId, true);
+  return (await listMissingGoatCardUserIdsByTrust(db, userId, true)).length;
 }
 
 /* Restricts a card query to specific players. The ids are validated integers

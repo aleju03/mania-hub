@@ -22,7 +22,7 @@ const SKILL_PLAYS_PAGE_SIZE = 50;
 
 /** The badge a non-1.0x rate stands for: osu shows the speed mod with the rate
  *  on its extender, so a 0.75x play reads as an HT badge tailed "0.75×". */
-function rateModFor(rate: number): { acronym: string; rate: number } | null {
+export function rateModFor(rate: number): { acronym: string; rate: number } | null {
   if (Math.abs(rate - 1) < 0.01) return null;
   return { acronym: rate > 1 ? "DT" : "HT", rate };
 }
@@ -31,7 +31,7 @@ function rateModFor(rate: number): { acronym: string; rate: number } | null {
 // can mount on the click instead of after the catalog round trip. Everything
 // the row does not carry (stars, bpm, the set's other diffs, MSD) stays at its
 // empty value and renders as pending until the real entry replaces this.
-function stubEntry(play: LivePlayerSkillPlay): LiveMapSearchEntry {
+export function stubEntry(play: LivePlayerSkillPlay): LiveMapSearchEntry {
   return {
     beatmapId: play.beatmapId,
     beatmapsetId: play.beatmapsetId ?? 0,

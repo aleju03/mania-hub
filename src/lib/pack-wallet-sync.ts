@@ -50,11 +50,11 @@ export interface ServerPackCollectionCard {
   grantedAt?: number | null;
 }
 
-/* Progress against the current draw pool: owned players still pullable over
-   the pool size, plus how many owned players have since fallen off the
-   rankings. Honorary GOATs outside the pool sit in neither bucket (the GOAT
-   chip tracks them). Null when the backend could not read the pool for this
-   response. */
+/* Progress against the ordinary-drawable pool: owned players still pullable
+   over the pool size, plus how many owned players have since fallen off the
+   rankings. Every honorary roster member sits outside both buckets because
+   their GOAT variants are counted separately. Null when the backend could not
+   read the pool for this response. */
 export interface ServerPackCollectionPoolProgress {
   poolTotal: number;
   poolOwnedCount: number;
@@ -68,6 +68,9 @@ export interface ServerPackCollectionPage {
   duplicateShardTotal: number;
   filteredShardTotal: number;
   poolProgress: ServerPackCollectionPoolProgress | null;
+  /** Honorary GOAT variants the collection still lacks. They are separate
+      collectible slots from the ordinary player pool. */
+  goatMissing: number;
 }
 
 /* One pullable player the viewer does not hold yet. Not a card: it has no
@@ -86,9 +89,10 @@ export interface ServerPackCollectionMissingPlayer {
 export interface ServerPackCollectionMissingPage {
   players: ServerPackCollectionMissingPlayer[];
   total: number;
-  /** GOAT cards this collection lacks. Not pool players, so they are counted
-      rather than listed: the album is where the empty slots are. */
+  /** GOAT variants this collection lacks, both as a count and as player ids so
+      the client can hydrate their checked-in honorary faces. */
   goatMissing: number;
+  goatMissingUserIds: number[];
 }
 
 const PAYLOAD_MAX_CHARS = 3_500_000;
@@ -217,6 +221,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
       duplicateShardTotal: Number(body.duplicateShardTotal) || 0,
       filteredShardTotal: Number(body.filteredShardTotal) || 0,
       poolProgress,
+      goatMissing: Math.max(0, Math.floor(Number(body.goatMissing) || 0)),
     };
   });
 
@@ -242,11 +247,21 @@ export const fetchServerPackCollectionMissing = createServerFn({ method: "GET" }
     if (data.query) url.searchParams.set("q", data.query);
     const response = await fetch(url, { headers: target.headers });
     if (!response.ok) throw new Error(`Pack collection missing fetch failed (${response.status}).`);
-    const body = (await response.json()) as { players?: unknown; total?: unknown; goatMissing?: unknown };
+    const body = (await response.json()) as {
+      players?: unknown;
+      total?: unknown;
+      goatMissing?: unknown;
+      goatMissingUserIds?: unknown;
+    };
     return {
       players: Array.isArray(body.players) ? (body.players as ServerPackCollectionMissingPlayer[]) : [],
       total: Number(body.total) || 0,
       goatMissing: Number(body.goatMissing) || 0,
+      goatMissingUserIds: Array.isArray(body.goatMissingUserIds)
+        ? body.goatMissingUserIds
+            .map((value) => Math.floor(Number(value)))
+            .filter((value) => Number.isInteger(value) && value > 0)
+        : [],
     };
   });
 

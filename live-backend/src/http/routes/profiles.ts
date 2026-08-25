@@ -3,7 +3,7 @@ import { exec } from "../../db.js";
 import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../../features/activity.js";
 import { enrichPayloadAvatarAccents } from "../../features/avatar-accents.js";
 import { getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, getPlayerReplayScores } from "../../features/player-profiles.js";
-import { getPlayerSkillBreakdown, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
+import { getPlayerSkillBreakdown, getPlayerSkillDanEvidence, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import { OsuApiError } from "../../osu/client.js";
@@ -155,6 +155,23 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       sendJson(req, res, ctx, 200, page);
       return true;
     }
+    if (profileRoute.kind === "dan-evidence") {
+      if (!checkRate(req, res, ctx, "publicCostly")) return true;
+      const side = url.searchParams.get("side") === "ln" ? "ln" : "rc";
+      const keyCount = clampInteger(url.searchParams.get("keys"), 1, 18, 0);
+      if (keyCount <= 0) {
+        sendJson(req, res, ctx, 400, { error: "invalid_key_count" });
+        return true;
+      }
+      const evidence = await getPlayerSkillDanEvidence(ctx.db, userId, keyCount, side);
+      if (!evidence) {
+        sendJson(req, res, ctx, 404, { error: "dan_evidence_not_ready" });
+        return true;
+      }
+      res.setHeader("cache-control", "public, max-age=60");
+      sendJson(req, res, ctx, 200, evidence);
+      return true;
+    }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
     let about;
     try {
@@ -175,8 +192,8 @@ function isOsuNotFound(error: unknown): boolean {
   return error instanceof OsuApiError && error.status === 404;
 }
 
-function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays"; key: string } | null {
-  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|replay-scores|about|activity|activity-day|activity-availability|skills|skill-plays)$/.exec(pathname);
+function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays" | "dan-evidence"; key: string } | null {
+  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|replay-scores|about|activity|activity-day|activity-availability|skills|skill-plays|dan-evidence)$/.exec(pathname);
   if (!match) return null;
   let key: string;
   try {

@@ -254,7 +254,7 @@ describe("pack community stats", () => {
     });
   });
 
-  it("measures the pool ratio in players, counting a GOAT and an ordinary card once", async () => {
+  it("keeps ranked honorary players in the GOAT roster instead of the ordinary pool ratio", async () => {
     await seedCollector(BIG, "bigcollector");
     await seedPoolPlayer(GOAT_ID, 5000);
     await seedPoolPlayer(11, 4000);
@@ -266,12 +266,24 @@ describe("pack community stats", () => {
 
     const profile = await getPackCollectorProfile(db, BIG);
 
-    expect(profile?.completion.poolTotal).toBe(2);
-    // Three players held, two of them pullable; the GOAT and the ordinary card
-    // of the same player fill one slot between them.
+    expect(profile?.completion.poolTotal).toBe(1);
+    // Three players held, but the honorary player's two variants belong only
+    // to the separately-counted GOAT roster. The ordinary pool is player 11.
     expect(profile?.collector.cards).toBe(4);
     expect(profile?.collector.players).toBe(3);
-    expect(profile?.completion.poolOwnedCount).toBe(2);
+    expect(profile?.completion.poolOwnedCount).toBe(1);
+  });
+
+  it("does not let a collector's Eternal variant fill their ordinary pool slot", async () => {
+    await seedCollector(BIG, "bigcollector");
+    await seedPoolPlayer(BIG, 5000);
+    await seedCollectionCard(db, BIG, BIG, { tier: "eternal" });
+
+    const profile = await getPackCollectorProfile(db, BIG);
+
+    expect(profile?.collector.cards).toBe(1);
+    expect(profile?.completion.poolTotal).toBe(1);
+    expect(profile?.completion.poolOwnedCount).toBe(0);
   });
 
 });

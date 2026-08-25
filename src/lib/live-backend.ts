@@ -42,6 +42,34 @@ export interface LivePlayerSkillPlaysPage {
   offset: number;
 }
 
+// One qualifying clear behind a dan estimate: the play, the chart's dan on
+// the credited side, and the credit it earned after the accuracy discount.
+export interface LivePlayerDanEvidencePlay {
+  play: LivePlayerSkillPlay;
+  chartDan: number;
+  chartDanLabel: string;
+  creditedDan: number;
+  countsTowardDan: boolean;
+}
+
+export interface LivePlayerDanSkillsetEvidence {
+  id: string;
+  clears: number;
+  dan: { rawDan: number; label: string; beyondTable?: boolean } | null;
+  plays: LivePlayerDanEvidencePlay[];
+}
+
+export interface LivePlayerDanEvidence {
+  side: "rc" | "ln";
+  keyCount: number;
+  quorum: number;
+  minAccuracy: number;
+  dan: { rawDan: number; label: string; clears: number; beyondTable?: boolean } | null;
+  totalClears: number;
+  clears: LivePlayerDanEvidencePlay[];
+  skillsets: LivePlayerDanSkillsetEvidence[];
+}
+
 import type {
   CountryTopPlay,
   LeanDanEstimate,
@@ -1319,6 +1347,20 @@ export async function fetchLivePlayerSkillPlaysDirect(
     offset: String(Math.max(0, Math.floor(options.offset ?? 0))),
   });
   return fetchLiveJson(`/api/profiles/${userId}/skill-plays?${query.toString()}`, options.signal ? { signal: options.signal } : undefined);
+}
+
+// The clears behind one side of a player's dan estimate, plus per-skillset
+// dans re-run over the same clears. 404s while the skill compute is pending.
+export async function fetchLivePlayerDanEvidenceDirect(
+  userId: number,
+  keyCount: number,
+  side: "rc" | "ln",
+  options: { signal?: AbortSignal } = {},
+): Promise<LivePlayerDanEvidence> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  if (!Number.isInteger(keyCount) || keyCount <= 0) throw new Error("Invalid key count.");
+  const query = new URLSearchParams({ keys: String(keyCount), side });
+  return fetchLiveJson(`/api/profiles/${userId}/dan-evidence?${query.toString()}`, options.signal ? { signal: options.signal } : undefined);
 }
 
 export async function fetchLivePlayerActivityDirect(
