@@ -100,6 +100,9 @@ interface LoadedServerCollectionPage {
 }
 
 const COLLECTION_PAGE_SIZE = 15;
+/* Long enough that no ordinary click reaches it, short enough that someone who
+   means it is not left waiting on a progress bar. */
+const RECYCLE_ALL_HOLD_MS = 700;
 const serverCollectionPageCache = new Map<string, ServerPackCollectionPage>();
 const COLLECTION_TIER_ORDER: ManiaCardTier[] = [
   "goat",
@@ -401,6 +404,17 @@ export function CollectionPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectionScope, setSelectionScope] = useState<"manual" | "all">("manual");
   const [confirmBulk, setConfirmBulk] = useState(false);
+  /* The header's recycle-all sits next to Select and the shard count, and it
+     empties every duplicate in the collection in one go, so a stray click
+     cannot be what fires it. It takes a press and hold instead: one gesture,
+     no second click and no dialog in the way of someone who meant it, and a
+     fill that has to finish before anything is spent. Letting go early aborts
+     and says what the button wanted, since a press that did nothing otherwise
+     reads as a dead button. */
+  const [holdingRecycleAll, setHoldingRecycleAll] = useState(false);
+  const [recycleAllHint, setRecycleAllHint] = useState(false);
+  const recycleAllTimerRef = useRef<number | null>(null);
+  const recycleAllHintTimerRef = useRef<number | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [collectionPage, setCollectionPage] = useState(0);
   /* Dev-only skeleton sim. "cards" blanks the thumbnails on real tiles (the
@@ -469,6 +483,43 @@ export function CollectionPanel({
       if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
     });
   };
+  const clearRecycleAllHold = () => {
+    if (recycleAllTimerRef.current === null) return false;
+    window.clearTimeout(recycleAllTimerRef.current);
+    recycleAllTimerRef.current = null;
+    setHoldingRecycleAll(false);
+    return true;
+  };
+  /* The anchor is read at press time and handed to the burst on completion:
+     the shards fly from the button the hold started on, not from wherever the
+     pointer ended up. */
+  const startRecycleAllHold = (anchor: Element | null) => {
+    if (recycleAllTimerRef.current !== null) return;
+    if (recycleAllHintTimerRef.current !== null) {
+      window.clearTimeout(recycleAllHintTimerRef.current);
+      recycleAllHintTimerRef.current = null;
+    }
+    setRecycleAllHint(false);
+    setHoldingRecycleAll(true);
+    recycleAllTimerRef.current = window.setTimeout(() => {
+      recycleAllTimerRef.current = null;
+      setHoldingRecycleAll(false);
+      runRecycle(() => onRecycleAll(), anchor);
+    }, RECYCLE_ALL_HOLD_MS);
+  };
+  const cancelRecycleAllHold = () => {
+    if (!clearRecycleAllHold()) return;
+    setRecycleAllHint(true);
+    if (recycleAllHintTimerRef.current !== null) window.clearTimeout(recycleAllHintTimerRef.current);
+    recycleAllHintTimerRef.current = window.setTimeout(() => {
+      recycleAllHintTimerRef.current = null;
+      setRecycleAllHint(false);
+    }, 1600);
+  };
+  useEffect(() => () => {
+    if (recycleAllTimerRef.current !== null) window.clearTimeout(recycleAllTimerRef.current);
+    if (recycleAllHintTimerRef.current !== null) window.clearTimeout(recycleAllHintTimerRef.current);
+  }, []);
   /* A synced collection renders server rows, so a repaired card only shows its
      real face once the page is re-read. Tiles repair one at a time, so the
      re-read is coalesced into a single fetch. */
@@ -969,10 +1020,55 @@ export function CollectionPanel({
           {recyclable > 0 && !selecting && !missingOpen && (
             <button
               type="button"
-              onClick={(event) => runRecycle(() => onRecycleAll(), event.currentTarget)}
-              className="rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-2.5 py-1 text-[11px] font-semibold text-osu-pink-light transition-colors hover:border-osu-pink/50 hover:bg-osu-pink/20 hover:text-white cursor-pointer"
+              onPointerDown={(event) => {
+                // Primary button only; a right-click opens a menu, not a recycle.
+                if (event.button !== 0) return;
+                startRecycleAllHold(event.currentTarget);
+              }}
+              onPointerUp={cancelRecycleAllHold}
+              onPointerLeave={cancelRecycleAllHold}
+              onPointerCancel={cancelRecycleAllHold}
+              /* Enter and Space hold too, so the gesture is not pointer-only.
+                 Both are prevented from firing the button's own click, and the
+                 auto-repeat while a key is held is ignored by the guard in
+                 startRecycleAllHold. */
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                startRecycleAllHold(event.currentTarget);
+              }}
+              onKeyUp={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                cancelRecycleAllHold();
+              }}
+              onBlur={cancelRecycleAllHold}
+              // Holding on a phone is a press, not the start of a scroll.
+              style={{ touchAction: "none" }}
+              aria-label={t`Hold to recycle every duplicate, worth ${recyclable} shards`}
+              className="relative overflow-hidden rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-2.5 py-1 text-[11px] font-semibold text-osu-pink-light transition-colors select-none hover:border-osu-pink/50 hover:bg-osu-pink/20 hover:text-white cursor-pointer"
             >
-              <Trans>Recycle duplicates +{recyclable}</Trans>
+              {/* The hold itself. Sweeps across on press and drains fast on an
+                  early release, so an aborted hold reads as aborted. */}
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-0 left-0 bg-osu-pink/40"
+                style={{
+                  width: holdingRecycleAll ? "100%" : "0%",
+                  transition: `width ${holdingRecycleAll ? RECYCLE_ALL_HOLD_MS : 160}ms linear`,
+                }}
+              />
+              {/* The hint is shorter than the label, so it rides an invisible
+                  copy of the label as a sizer: an aborted hold swaps the text
+                  without the button shrinking and nudging Select sideways. */}
+              <span className="relative grid place-items-center">
+                <span aria-hidden="true" className="col-start-1 row-start-1 invisible">
+                  <Trans>Recycle duplicates +{recyclable}</Trans>
+                </span>
+                <span className="col-start-1 row-start-1">
+                  {recycleAllHint ? t`hold to recycle` : t`Recycle duplicates +${recyclable}`}
+                </span>
+              </span>
             </button>
           )}
           {/* Selecting and recycling act on held cards; the missing list has

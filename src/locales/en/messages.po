@@ -4061,6 +4061,10 @@ msgstr "Every card came out in two pieces"
 msgid "every collector"
 msgstr "every collector"
 
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Every extra copy leaves the collection. You keep one of each card."
+#~ msgstr "Every extra copy leaves the collection. You keep one of each card."
+
 #: src/routes/farm-helper.tsx
 msgid "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
 msgstr "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
@@ -4919,6 +4923,14 @@ msgstr "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play draw
 #: src/components/packs/PackStage.tsx
 msgid "Hold and drag across the dotted line"
 msgstr "Hold and drag across the dotted line"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "hold to recycle"
+msgstr "hold to recycle"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Hold to recycle every duplicate, worth {recyclable} shards"
+msgstr "Hold to recycle every duplicate, worth {recyclable} shards"
 
 #. placeholder {0}: formatNumber(completion.poolOwnedCount)
 #. placeholder {1}: formatNumber(completion.poolTotal)
@@ -8569,6 +8581,15 @@ msgstr "Recycle duplicates +{0}"
 msgid "Recycle duplicates +{recyclable}"
 msgstr "Recycle duplicates +{recyclable}"
 
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Recycle every duplicate?"
+#~ msgstr "Recycle every duplicate?"
+
+#. placeholder {0}: recyclable.toLocaleString("en-US")
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Recycle for {0} shards"
+#~ msgstr "Recycle for {0} shards"
+
 #: src/components/packs/PackSummary.tsx
 msgid "Recycle the rest +{allValue}"
 msgstr "Recycle the rest +{allValue}"
@@ -10243,6 +10264,10 @@ msgstr "Sure? {selectedCount, plural, one {# card leaves the collection} other {
 #: src/components/packs/CollectionPanel.tsx
 msgid "sure? +{lastCopyValue}"
 msgstr "sure? +{lastCopyValue}"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Sure? every duplicate copy goes +{recyclable}"
+#~ msgstr "Sure? every duplicate copy goes +{recyclable}"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx

@@ -1341,7 +1341,7 @@ msgstr "<0>{collector}</0> 还没有开过卡包。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "<0>{percent}%</0> of the rated plays have LN content ({lnPlays} of {total})"
-msgstr 已评分成绩中有 <0>{percent}%</0> 包含 LN（{lnPlays}/{total}）"
+msgstr "已评分成绩中有 <0>{percent}%</0> 包含 LN（{lnPlays}/{total}）"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "<0>{selectedCount}</0> selected"
@@ -4070,6 +4070,10 @@ msgstr "每张卡都碎成了两半"
 msgid "every collector"
 msgstr "全部收藏者"
 
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Every extra copy leaves the collection. You keep one of each card."
+#~ msgstr "多余的副本都会离开收藏册，每张卡片保留一张。"
+
 #: src/routes/farm-helper.tsx
 msgid "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
 msgstr "你 pp 附近的玩家实际在打的所有刷分谱面，按持有人数排序。已通关的谱面也会保留，方便你看到自己已有的位置。"
@@ -4928,6 +4932,14 @@ msgstr "按住 <0>C</0> 并移动光标即可画出烟雾，就像在 osu! 游�
 #: src/components/packs/PackStage.tsx
 msgid "Hold and drag across the dotted line"
 msgstr "按住并沿虚线拖动"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "hold to recycle"
+msgstr "长按回收"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Hold to recycle every duplicate, worth {recyclable} shards"
+msgstr "长按回收所有重复卡，价值 {recyclable} 碎片"
 
 #. placeholder {0}: formatNumber(completion.poolOwnedCount)
 #. placeholder {1}: formatNumber(completion.poolTotal)
@@ -8578,6 +8590,15 @@ msgstr "回收重复 +{0}"
 msgid "Recycle duplicates +{recyclable}"
 msgstr "回收重复 +{recyclable}"
 
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Recycle every duplicate?"
+#~ msgstr "回收所有重复卡？"
+
+#. placeholder {0}: recyclable.toLocaleString("en-US")
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Recycle for {0} shards"
+#~ msgstr "回收换 {0} 碎片"
+
 #: src/components/packs/PackSummary.tsx
 msgid "Recycle the rest +{allValue}"
 msgstr "回收剩下的 +{allValue}"
@@ -10252,6 +10273,10 @@ msgstr "{selectedCount, plural, other {确定？# 张卡片将离开收藏册}}"
 #: src/components/packs/CollectionPanel.tsx
 msgid "sure? +{lastCopyValue}"
 msgstr "确定？+{lastCopyValue}"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Sure? every duplicate copy goes +{recyclable}"
+#~ msgstr "确定？所有重复卡都会被回收 +{recyclable}"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
