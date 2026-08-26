@@ -7,6 +7,7 @@ import {
   COMMUNITY_REPORT_DETAILS_MAX_LENGTH,
   type CommunitiesListResult,
   type CommunityReport,
+  type CommunityReviewLogEntry,
   type CommunityInvitePreview,
   type CommunitySort,
   type CommunitySummary,
@@ -677,12 +678,42 @@ export const reviewCommunity = createServerFn({ method: "POST" })
       const response = await fetch(`${cfg.base}/api/communities/review`, {
         method: "POST",
         headers: cfg.headers,
-        body: JSON.stringify({ userId: cfg.userId, id: data.id, action: data.action, reason: data.reason }),
+        // The username rides along so the decision log can name who decided
+        // without the backend having to look an id up later.
+        body: JSON.stringify({
+          userId: cfg.userId,
+          username: cfg.username,
+          id: data.id,
+          action: data.action,
+          reason: data.reason,
+        }),
       });
       const body = (await response.json().catch(() => null)) as { ok?: boolean } | null;
       return { ok: response.ok && body?.ok === true };
     } catch {
       return { ok: false };
+    }
+  });
+
+/*
+ * What has already been decided, newest first.
+ *
+ * Its own call rather than part of the queue: the queue is fetched for the
+ * badge on the directory too, and this is only ever wanted by someone looking
+ * at the review page.
+ */
+export const fetchCommunityReviewLog = createServerFn({ method: "GET" })
+  .handler(async (): Promise<CommunityReviewLogEntry[]> => {
+    await noStore();
+    const cfg = await resolveModeratorBackend();
+    if (!cfg) return [];
+    try {
+      const response = await fetch(`${cfg.base}/api/communities/history?limit=60`, { headers: cfg.headers });
+      if (!response.ok) return [];
+      const body = (await response.json()) as { entries?: CommunityReviewLogEntry[] };
+      return Array.isArray(body.entries) ? body.entries : [];
+    } catch {
+      return [];
     }
   });
 

@@ -2349,6 +2349,82 @@ async function migrateDiscordCommunities(db: Db): Promise<void> {
     create index if not exists idx_discord_community_reports_open
       on discord_community_reports(status, created_at)
   `);
+
+  /*
+   * Every decision a moderator made, kept apart from the listing it was about.
+   *
+   * The listing row only ever holds its *current* state, so a takedown was
+   * invisible the moment it happened: nothing said a server had been listed and
+   * removed, who decided, or why. This is the log of that, append-only, and it
+   * deliberately snapshots the server's name and the reason rather than joining
+   * back - a decision has to still read as a sentence after the listing it was
+   * about is deleted, which is exactly when someone comes asking.
+   *
+   * Not an audit trail for anyone but moderators: it is read by the review page
+   * and nothing else, and the owner of a listing never sees a row of it.
+   */
+  await db.execute(`
+    create table if not exists discord_community_reviews (
+      id text primary key,
+      community_id text not null,
+      guild_id text not null default '',
+      community_name text not null default '',
+      owner_user_id integer not null default 0,
+      owner_username text not null default '',
+      action text not null,
+      reason text not null default '',
+      moderator_user_id integer not null default 0,
+      moderator_username text not null default '',
+      report_count integer not null default 0,
+      created_at text not null
+    )
+  `);
+  // The page reads it newest first, and a listing's own history when one is
+  // opened.
+  await db.execute(`
+    create index if not exists idx_discord_community_reviews_recent
+      on discord_community_reviews(created_at desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_discord_community_reviews_community
+      on discord_community_reviews(community_id, created_at desc)
+  `);
+  /*
+   * One-time backfill, so the log does not start out empty and pretend nothing
+   * was ever decided. Only the *last* decision on each already-reviewed listing
+   * can be recovered - that is all the row holds - and the moderator is unknown
+   * (nothing recorded one before this table), which is what moderator_user_id 0
+   * means everywhere it is read. Guarded on the table being empty rather than a
+   * meta key: re-running it is the only thing that could duplicate, and an
+   * empty table cannot have been backfilled twice.
+   */
+  const reviewLogCount = Number((await db.execute("select count(*) as n from discord_community_reviews")).rows[0]?.n ?? 0);
+  if (reviewLogCount === 0) {
+    await db.execute(`
+      insert into discord_community_reviews (
+        id, community_id, guild_id, community_name, owner_user_id, owner_username,
+        action, reason, moderator_user_id, moderator_username, report_count, created_at
+      )
+      select
+        'backfill-' || id,
+        id,
+        guild_id,
+        name,
+        owner_user_id,
+        owner_username,
+        case status when 'approved' then 'approve' when 'rejected' then 'reject' else 'hide' end,
+        coalesce(reject_reason, ''),
+        0,
+        '',
+        -- Reports were already resolved by the decision being reconstructed, so
+        -- the count is every report the listing ever carried. Close enough to
+        -- be the thing that separates a takedown from a submission turned down.
+        (select count(*) from discord_community_reports r where r.community_id = c.id),
+        reviewed_at
+      from discord_communities c
+      where reviewed_at is not null and status in ('approved', 'rejected', 'hidden')
+    `);
+  }
 }
 
 async function migrateUserReplaySkins(db: Db): Promise<void> {

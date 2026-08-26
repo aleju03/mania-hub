@@ -193,6 +193,9 @@ export interface CommunitySummary {
   accessHidden?: boolean;
   status?: CommunityStatus;
   rejectReason?: string | null;
+  // Whether it was ever live, so a takedown after a report does not read like a
+  // submission being turned down.
+  wasApproved?: boolean;
   inviteOk?: boolean;
   inviteExpiresAt?: string | null;
   editedSinceReview?: boolean;
@@ -305,6 +308,50 @@ export interface CommunityReport {
   reason: string;
   details: string;
   createdAt: string;
+}
+
+/*
+ * One decision, as the review page's history reads it.
+ *
+ * It snapshots the server rather than pointing at it, so a decision still reads
+ * as a sentence after the listing is deleted - which is exactly when someone
+ * asks what happened to it.
+ */
+export interface CommunityReviewLogEntry {
+  id: string;
+  communityId: string;
+  guildId: string;
+  communityName: string;
+  ownerUserId: number;
+  ownerUsername: string;
+  action: "approve" | "reject" | "hide" | "unhide" | "delete";
+  reason: string;
+  // 0 when nothing recorded who decided: the rows backfilled when this log was
+  // added, and anything a script does.
+  moderatorUserId: number;
+  moderatorUsername: string;
+  reportCount: number;
+  createdAt: string;
+  backfilled?: boolean;
+}
+
+/** What a decision did, for the history row. */
+export function communityReviewActionLabel(entry: CommunityReviewLogEntry): string {
+  switch (entry.action) {
+    case "approve":
+      return "Approved";
+    case "reject":
+      // Turning down a submission and taking down a live listing are the same
+      // action on the row, and reading them as one thing is what made this log
+      // worth having. reportCount is what tells them apart.
+      return entry.reportCount > 0 ? "Taken down" : "Turned down";
+    case "hide":
+      return "Hidden";
+    case "unhide":
+      return "Restored";
+    default:
+      return "Deleted";
+  }
 }
 
 /*

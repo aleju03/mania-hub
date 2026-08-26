@@ -1,8 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ExternalLink, Flag, Loader2, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, ExternalLink, Flag, History, Loader2, RefreshCw, Users } from "lucide-react";
 import { CountryFlag } from "../components/ui/CountryFlag";
-import { formatTimeAgo } from "../lib/format";
+import { formatTimeAgo, formatTimeAgoTooltip } from "../lib/format";
 import { useLocale } from "../lib/locale-context";
 import {
   COMMUNITY_INTERNATIONAL,
@@ -10,14 +10,17 @@ import {
   clearCommunitiesCache,
   communityInviteExpiryLabel,
   communityReportReasonLabel,
+  communityReviewActionLabel,
   countCommunityQueue,
   describeAccessScopes,
   communityLanguageLabel,
   fetchCommunityQueue,
+  fetchCommunityReviewLog,
   refreshCommunityInvites,
   reviewCommunity,
   type CommunityQueue,
   type CommunityReport,
+  type CommunityReviewLogEntry,
   type CommunitySummary,
 } from "../lib/communities";
 import { pageSeo } from "../lib/seo";
@@ -289,17 +292,96 @@ function ReviewCard({
   );
 }
 
+/*
+ * One decision, in the history list.
+ *
+ * Deliberately terser than a ReviewCard: this is a scrollback, not something to
+ * act on. The listing's name links to its page when it still exists, and reads
+ * as plain text once it has been deleted - the row survives the thing it is
+ * about on purpose, which is most of why the log exists.
+ */
+function HistoryRow({ entry }: { entry: CommunityReviewLogEntry }) {
+  const locale = useLocale();
+  const label = communityReviewActionLabel(entry);
+  const tone = entry.action === "approve" || entry.action === "unhide"
+    ? "text-emerald-300"
+    : entry.action === "delete"
+      ? "text-osu-l2"
+      : "text-osu-pink-light";
+  const gone = entry.action === "delete";
+
+  return (
+    <li className="rounded-lg border border-osu-b3/15 bg-osu-b4/60 px-3 py-2">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className={`text-[12px] font-bold ${tone}`}>{label}</span>
+        {gone ? (
+          <span className="text-[12.5px] font-semibold text-osu-l2">{entry.communityName}</span>
+        ) : (
+          <Link
+            to="/communities/$id"
+            params={{ id: entry.communityId }}
+            className="text-[12.5px] font-semibold text-white transition-colors cursor-pointer hover:text-osu-pink-light"
+          >
+            {entry.communityName}
+          </Link>
+        )}
+        <span
+          className="ml-auto shrink-0 text-[11px] text-osu-f1"
+          title={formatTimeAgoTooltip(entry.createdAt, locale)}
+        >
+          {formatTimeAgo(entry.createdAt, locale)}
+        </span>
+      </div>
+      <p className="mt-0.5 text-[11.5px] text-osu-f1">
+        {/* Who decided, and what they were answering. A backfilled row cannot
+            say either: it was reconstructed from the listing itself when this
+            log was added, and saying "by nobody" would read as a bug. */}
+        {entry.backfilled
+          ? "Before decisions were logged"
+          : entry.moderatorUsername || entry.moderatorUserId > 0
+            ? `by ${entry.moderatorUsername || `#${entry.moderatorUserId}`}`
+            : "by the site"}
+        {entry.reportCount > 0 && (
+          <span className="text-osu-pink-light">
+            {" "}· answered {entry.reportCount} {entry.reportCount === 1 ? "report" : "reports"}
+          </span>
+        )}
+        {entry.ownerUsername && <span> · posted by {entry.ownerUsername}</span>}
+      </p>
+      {entry.reason && (
+        <p className="mt-1 whitespace-pre-line text-[11.5px] leading-relaxed text-osu-l2">
+          {/* The reason the owner was shown, shown back here verbatim: a
+              moderator reading this should see exactly what was said. */}
+          &ldquo;{entry.reason}&rdquo;
+        </p>
+      )}
+    </li>
+  );
+}
+
 function CommunityReviewPage() {
   const [queue, setQueue] = useState<CommunityQueue>({ pending: [], edited: [], reported: [], reports: {} });
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // What has already been decided. Fetched beside the queue rather than behind a
+  // click: an empty queue is the normal state of this page, and "nothing waiting"
+  // on its own was the thing that made a takedown look like it never happened.
+  const [history, setHistory] = useState<CommunityReviewLogEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setQueue(await fetchCommunityQueue());
+      // One await, so a slow history cannot hold up the queue being drawn and a
+      // failed one cannot take the page down with it.
+      const [nextQueue, nextHistory] = await Promise.all([
+        fetchCommunityQueue(),
+        fetchCommunityReviewLog().catch(() => [] as CommunityReviewLogEntry[]),
+      ]);
+      setQueue(nextQueue);
+      setHistory(nextHistory);
     } catch {
       setNote("Could not load the queue.");
     } finally {
@@ -323,6 +405,9 @@ function CommunityReviewPage() {
       // An approval or a takedown changes what the directory lists, so the
       // pages it is holding go too rather than repainting the old grid.
       clearCommunitiesCache();
+      // The decision just made belongs in the history under it, and the backend
+      // is the only thing that knows how it was recorded.
+      void fetchCommunityReviewLog().then(setHistory).catch(() => {});
       // Whatever the decision, the listing leaves every queue, and the reports
       // against it go with it: the backend resolved them on the same call.
       setQueue((prev) => {
@@ -465,6 +550,35 @@ function CommunityReviewPage() {
             </section>
           )}
         </div>
+      )}
+
+      {/* Under the queue, always: this page is empty most of the time, and a
+          decision that has already been made is exactly what somebody comes
+          here asking about. Eight rows is a glance; the rest is a click. */}
+      {!loading && history.length > 0 && (
+        <section className={empty ? "" : "mt-8"}>
+          <h2 className="mb-1 flex items-center gap-1.5 text-[13px] font-bold text-white">
+            <History className="h-3.5 w-3.5 text-osu-f1" aria-hidden="true" />
+            Recent decisions
+          </h2>
+          <p className="mb-2 text-[11.5px] text-osu-f1">
+            Approvals and takedowns, newest first. Only moderators see this.
+          </p>
+          <ul className="space-y-1.5">
+            {(showHistory ? history : history.slice(0, 8)).map((entry) => (
+              <HistoryRow key={entry.id} entry={entry} />
+            ))}
+          </ul>
+          {history.length > 8 && (
+            <button
+              type="button"
+              onClick={() => setShowHistory((value) => !value)}
+              className="mt-2 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-white"
+            >
+              {showHistory ? "Show less" : `Show all ${history.length}`}
+            </button>
+          )}
+        </section>
       )}
     </div>
   );

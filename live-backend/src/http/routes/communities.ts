@@ -13,14 +13,17 @@ import {
   invitePreview,
   listCommunities,
   listCommunitiesForOwner,
+  listCommunityReviewLog,
   listReviewQueue,
   normalizeSort,
+  recordCommunityReview,
   reportCommunity,
   resolveCommunityReports,
   reviewCommunity,
   toCommunitySummary,
   updateCommunity,
   type CommunityImageKind,
+  type CommunityModerator,
   type CommunityReviewAction,
   type CommunityRow,
   type CommunitySummary,
@@ -418,6 +421,22 @@ export async function handleCommunitiesRoutes(
     return true;
   }
 
+  /*
+   * What has already been decided. Its own route rather than more of /queue:
+   * the queue is read for the directory's badge on every page load, and a
+   * scrollback of decisions has no business riding along with a number.
+   */
+  if (url.pathname === "/api/communities/history") {
+    if (req.method !== "GET") return methodNotAllowed(req, res, ctx);
+    if (!isBridge(req, ctx)) return unauthorized(req, res, ctx);
+    res.setHeader("cache-control", "private, no-store");
+    const limit = Number(url.searchParams.get("limit") ?? 60);
+    sendJson(req, res, ctx, 200, {
+      entries: await listCommunityReviewLog(ctx.db, Number.isFinite(limit) ? limit : 60),
+    });
+    return true;
+  }
+
   if (url.pathname === "/api/communities/review") {
     if (req.method !== "POST") return methodNotAllowed(req, res, ctx);
     if (!isBridge(req, ctx)) return unauthorized(req, res, ctx);
@@ -431,9 +450,21 @@ export async function handleCommunitiesRoutes(
     // frontend forwards the osu!-verified viewer it already checked against the
     // moderator list, and every decision is attributable in the logs.
     const scope = communityScope(req, ctx, url, body);
+    const moderator: CommunityModerator | undefined = scope.viewerUserId == null
+      ? undefined
+      : {
+        userId: scope.viewerUserId,
+        username: typeof body.username === "string" ? body.username.slice(0, 40) : "",
+      };
     if (action === "delete") {
+      // Read before the delete, because the log keeps the server's name and its
+      // owner: after the row is gone there is nothing left to name.
+      const doomed = await getCommunityById(ctx.db, id);
       const deleted = await deleteCommunity(ctx.serveWriteDb ?? ctx.db, id, null);
-      if (deleted) logInfo("community_reviewed", { id, action, by: scope.viewerUserId });
+      if (deleted) {
+        if (doomed) await recordCommunityReview(ctx.serveWriteDb ?? ctx.db, doomed, "delete", "", moderator);
+        logInfo("community_reviewed", { id, action, by: scope.viewerUserId });
+      }
       sendJson(req, res, ctx, deleted ? 200 : 404, { ok: deleted });
       return true;
     }
@@ -442,6 +473,7 @@ export async function handleCommunitiesRoutes(
       id,
       action as CommunityReviewAction,
       typeof body.reason === "string" ? body.reason : undefined,
+      moderator,
     );
     if (result.ok) {
       // Whatever was decided is the answer to whoever flagged it, including

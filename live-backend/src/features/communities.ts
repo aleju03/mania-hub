@@ -5,6 +5,7 @@ import { exec } from "../db.js";
 import { nowIso } from "../shared/score.js";
 import { REGION_BY_CODE, isRegionCode } from "../regions.js";
 import type { ResolvedInvite } from "../discord/invites.js";
+import { errorContext, logWarn } from "../logger.js";
 
 /*
  * The /communities directory: osu!mania Discord servers, posted by the people
@@ -271,6 +272,10 @@ export interface CommunitySummary {
   // was not hidden from, so saying so would only ever be noise.
   accessHidden?: boolean;
   rejectReason?: string | null;
+  // Owner and admin only. Whether this listing was ever live, which is what
+  // separates "a moderator turned your submission down" from "your server was
+  // taken down after someone flagged it" - the same status either way.
+  wasApproved?: boolean;
   inviteOk?: boolean;
   inviteExpiresAt?: string | null;
   editedSinceReview?: boolean;
@@ -344,6 +349,7 @@ export function toCommunitySummary(
     summary.accessHidden = row.accessHidden;
     summary.status = row.status;
     summary.rejectReason = row.rejectReason;
+    summary.wasApproved = row.approvedAt != null;
     summary.inviteOk = row.inviteOk;
     summary.inviteExpiresAt = row.inviteExpiresAt;
     summary.editedSinceReview = row.editedSinceReview;
@@ -844,10 +850,18 @@ export async function reviewCommunity(
   id: string,
   action: CommunityReviewAction,
   reason?: string,
+  moderator?: CommunityModerator,
 ): Promise<CommunityWriteResult> {
   const row = await getCommunityById(db, id);
   if (!row) return { ok: false, error: "not_found" };
   const now = nowIso();
+  // Counted before the decision resolves them, since that is what the log entry
+  // means: how many flags this call was answering.
+  const openReports = Number((await exec(
+    db,
+    "select count(*) as n from discord_community_reports where community_id = ? and status = 'open'",
+    [id],
+  )).rows[0]?.n ?? 0);
 
   if (action === "reject") {
     await exec(
@@ -875,6 +889,9 @@ export async function reviewCommunity(
 
   const updated = await getCommunityById(db, id);
   if (!updated) return { ok: false, error: "not_found" };
+  // Logged from the row as it was *before* the decision, so a takedown names the
+  // server that was taken down rather than whatever it is edited into later.
+  await recordCommunityReview(db, row, action, reason ?? "", moderator, openReports);
   return { ok: true, community: toCommunitySummary(updated, { asAdmin: true }) };
 }
 
@@ -1199,6 +1216,111 @@ export function invitePreview(invite: ResolvedInvite) {
     onlineCount: invite.onlineCount,
     expiresAt: invite.expiresAt,
   };
+}
+
+// ------------------------------------------------------- decision log
+
+/** Who decided, when the frontend can say. Absent means the sweep or a script. */
+export interface CommunityModerator {
+  userId: number;
+  username: string;
+}
+
+/** A decision, kept after the listing it was about is gone. */
+export interface CommunityReviewLogEntry {
+  id: string;
+  communityId: string;
+  guildId: string;
+  communityName: string;
+  ownerUserId: number;
+  ownerUsername: string;
+  // "delete" only ever comes from a moderator's delete on the review page; an
+  // owner deleting their own listing is not a decision and is not logged.
+  action: CommunityReviewAction | "delete";
+  reason: string;
+  moderatorUserId: number;
+  moderatorUsername: string;
+  // How many open reports the decision answered, which is what separates "a
+  // moderator was reading the queue" from "the directory flagged this".
+  reportCount: number;
+  createdAt: string;
+  // True for the rows written when this log was added, which only know a
+  // listing's last decision and cannot name who made it.
+  backfilled?: boolean;
+}
+
+/*
+ * Append a decision to the log.
+ *
+ * Never throws into the caller: a decision that took effect but failed to log
+ * is a hole in the history, and a decision that did not take effect because the
+ * logging failed is a moderator clicking twice on a listing that is already
+ * down. The first is the better failure, so this swallows and warns.
+ */
+export async function recordCommunityReview(
+  db: Db,
+  row: CommunityRow,
+  action: CommunityReviewAction | "delete",
+  reason: string,
+  moderator?: CommunityModerator,
+  reportCount = 0,
+): Promise<void> {
+  try {
+    await exec(
+      db,
+      `insert into discord_community_reviews (
+         id, community_id, guild_id, community_name, owner_user_id, owner_username,
+         action, reason, moderator_user_id, moderator_username, report_count, created_at
+       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        crypto.randomUUID(),
+        row.id,
+        row.guildId,
+        cleanText(row.name, 120),
+        row.ownerUserId,
+        row.ownerUsername,
+        action,
+        cleanText(reason, COMMUNITY_REJECT_REASON_MAX_LENGTH),
+        moderator?.userId ?? 0,
+        moderator?.username ?? "",
+        reportCount,
+        nowIso(),
+      ],
+    );
+  } catch (error) {
+    logWarn("community_review_log_failed", { id: row.id, action, ...errorContext(error) });
+  }
+}
+
+/**
+ * The log, newest first. Read by the review page and nowhere else.
+ */
+export async function listCommunityReviewLog(db: Db, limit = 60): Promise<CommunityReviewLogEntry[]> {
+  const capped = Math.min(Math.max(Math.trunc(limit) || 0, 1), 200);
+  const rows = (await exec(
+    db,
+    "select * from discord_community_reviews order by created_at desc limit ?",
+    [capped],
+  )).rows;
+  return rows.map((raw) => {
+    const row = raw as Record<string, unknown>;
+    const id = String(row.id);
+    return {
+      id,
+      communityId: String(row.community_id),
+      guildId: String(row.guild_id ?? ""),
+      communityName: String(row.community_name ?? ""),
+      ownerUserId: Number(row.owner_user_id ?? 0),
+      ownerUsername: String(row.owner_username ?? ""),
+      action: String(row.action) as CommunityReviewLogEntry["action"],
+      reason: String(row.reason ?? ""),
+      moderatorUserId: Number(row.moderator_user_id ?? 0),
+      moderatorUsername: String(row.moderator_username ?? ""),
+      reportCount: Number(row.report_count ?? 0),
+      createdAt: String(row.created_at),
+      ...(id.startsWith("backfill-") ? { backfilled: true } : {}),
+    };
+  });
 }
 
 function searchText(name: string, pitch: string, tags: string[] = []): string {

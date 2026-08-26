@@ -31,6 +31,18 @@ export function CommunityStatusNote({ community }: { community: CommunitySummary
     // it the full stop it needs rather than running it into the next line.
     const reason = community.rejectReason?.trim();
     const said = reason ? `: ${/[.!?]$/.test(reason) ? reason : `${reason}.`}` : ".";
+    // A listing that was live and is not anymore was flagged by somebody
+    // reading the directory, not picked out by the site: say so, because the
+    // two are the same status and only one of them is about the owner's
+    // submission. The moderator is never named either way - that is between
+    // them and the queue.
+    if (community.wasApproved) {
+      return (
+        <Note tone="bad">
+          <Trans>Someone reported your server and it got taken down for the following reason{said} Editing it sends it back for approval.</Trans>
+        </Note>
+      );
+    }
     return <Note tone="bad"><Trans>Turned down{said} Editing it sends it back for approval.</Trans></Note>;
   }
   if (community.status === "hidden") {
