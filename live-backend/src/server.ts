@@ -20,7 +20,7 @@ import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-
 import { registerPackCommunitySnapshots, startPackCommunitySnapshotRefresh } from "./features/pack-community.js";
 import { ensurePackCommunityRollupTriggers } from "./features/pack-community-rollups.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
-import { enqueuePlayerSkills, ensurePlayerSkillFloorSweepSeeded, ensurePlayerSkillMsdCapSweepSeeded, ensurePlayerSkillPoisonRecoverySeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
+import { enqueuePlayerSkills, ensurePlayerSkillFloorSweepSeeded, ensurePlayerSkillMsdCapSweepSeeded, ensurePlayerSkillPoisonRecoverySeeded, ensurePlayerSkillVibroSweepSeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
 import { ensureActivityModsBackfillSeeded } from "./features/activity-mods-backfill.js";
@@ -489,6 +489,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // skillset pinned at the old 40 clamp purge and re-rate lazily. Local
       // DB work only.
       void ensurePlayerSkillMsdCapSweepSeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-msd-cap] seed failed", error));
+      void ensurePlayerSkillVibroSweepSeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-vibro] seed failed", error));
       // Unlike the sweeps above this one consumes osu! API budget (one best-
       // scores call per user), so it also requires osu! API jobs to be enabled.
       // Guarded by its done key: post-completion boots schedule nothing.

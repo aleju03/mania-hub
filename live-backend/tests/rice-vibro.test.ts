@@ -43,6 +43,16 @@ ${objects.join("\n")}
 `;
 }
 
+/** An unremarkable chart body: 20 rows/s with 200ms+ column gaps, so every
+ * per-column tier stays quiet and only the burst under test can trip one. */
+function ordinary(keyCount = 4): Note[] {
+  const notes: Note[] = [];
+  for (let row = 0; row < 1200; row++) {
+    notes.push({ column: row % keyCount, time: 1000 + row * 50 });
+  }
+  return notes;
+}
+
 /** Sparse background notes so charts clear the minimum-size floor. */
 function filler(count: number, startTime: number, gapMs: number, column = 3): Note[] {
   return Array.from({ length: count }, (_, index) => ({ column, time: startTime + index * gapMs }));
@@ -115,6 +125,104 @@ describe("detectRiceVibro", () => {
       for (let offset = 0; offset < 4; offset++) notes.push({ column: (row + offset) % 7, time });
     }
     expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes, 7)))).toBe(false);
+  });
+
+  it("flags cross-column spam no per-column tier can see (tier 4)", () => {
+    // The "Hello (BPM) 2023" ending: alternating [01][23] pairs every 14ms,
+    // ~71 rows/s, closing an otherwise ordinary chart. Per-column runs are
+    // short and the fast gaps are a tenth of the file, so tiers 1-3 all read
+    // it as clean.
+    const notes: Note[] = [...ordinary()];
+    for (let row = 0; row < 71; row++) {
+      const time = 200_000 + row * 14;
+      for (const column of row % 2 === 0 ? [0, 1] : [2, 3]) notes.push({ column, time });
+    }
+    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(true);
+  });
+
+  it("leaves the legit row-density ceiling alone", () => {
+    // A one-second 55 rows/s burst, the fastest peak any ranked or loved
+    // chart in the corpus reaches (4K "CLICK"). The tier has to clear it.
+    const notes: Note[] = [...ordinary()];
+    for (let row = 0; row < 55; row++) {
+      notes.push({ column: row % 4, time: 200_000 + Math.round(row * (1000 / 55)) });
+    }
+    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(false);
+  });
+
+  it("counts rows, not notes, so wide chordjams stay clean", () => {
+    // 7K "This Future" peaks at 91 notes/s, but they are 13 full 7-note
+    // chords at 84ms: one action each, and a real chart.
+    const notes: Note[] = [...ordinary(7)];
+    for (let row = 0; row < 13; row++) {
+      const time = 200_000 + row * 84;
+      for (let column = 0; column < 7; column++) notes.push({ column, time });
+    }
+    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes, 7)))).toBe(false);
+  });
+
+  it("reads the row rate in real time, not chart time, under a rate", () => {
+    // 45 rows/s held for two chart-seconds: under the line at 1.0x, and at
+    // 1.5x the same stretch delivers 67 rows inside a real second.
+    const notes: Note[] = [...ordinary()];
+    for (let row = 0; row < 90; row++) {
+      notes.push({ column: row % 4, time: 200_000 + Math.round(row * (1000 / 45)) });
+    }
+    const map = parseManiaBeatmap(buildOsuFile(notes));
+    expect(detectRiceVibro(map)).toBe(false);
+    expect(detectRiceVibro(map, 1.5)).toBe(true);
+  });
+
+  it("flags fast chord jacks that alternate chord sizes (tier 5)", () => {
+    // The "Buddah Attachments [280BPM CJ]" shape: 3-note chords every 54ms,
+    // rotating which column sits out. No column ever holds 24 fast gaps in a
+    // row (tier 1) and there are no quad pairs (tier 2), but every adjacent
+    // row is a chord you would have to jack at 280BPM.
+    const notes: Note[] = [...ordinary()];
+    for (let row = 0; row < 400; row++) {
+      const time = 200_000 + row * 54;
+      for (let column = 0; column < 4; column++) {
+        if (column !== row % 4) notes.push({ column, time });
+      }
+    }
+    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(true);
+  });
+
+  it("leaves chord jacks at human speed alone", () => {
+    // The same shape at 78ms rows, a ~192BPM chord jack, which people play.
+    const notes: Note[] = [...ordinary()];
+    for (let row = 0; row < 400; row++) {
+      const time = 200_000 + row * 78;
+      for (let column = 0; column < 4; column++) {
+        if (column !== row % 4) notes.push({ column, time });
+      }
+    }
+    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(false);
+  });
+
+  it("scales the chord size with the keymode", () => {
+    // 3-note chords at 54ms are a wall in 4K and ordinary density in 7K, so
+    // the 7K bar is a 6-note chord and this stays clean.
+    const notes: Note[] = [...ordinary(7)];
+    for (let row = 0; row < 400; row++) {
+      const time = 200_000 + row * 54;
+      for (let offset = 0; offset < 3; offset++) notes.push({ column: (row * 3 + offset) % 7, time });
+    }
+    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes, 7)))).toBe(false);
+  });
+
+  it("reads the chord-jack gap in real time under a rate", () => {
+    // 100ms chord rows are clean at 1.0x and inside the window at 1.5x.
+    const notes: Note[] = [...ordinary()];
+    for (let row = 0; row < 400; row++) {
+      const time = 200_000 + row * 100;
+      for (let column = 0; column < 4; column++) {
+        if (column !== row % 4) notes.push({ column, time });
+      }
+    }
+    const map = parseManiaBeatmap(buildOsuFile(notes));
+    expect(detectRiceVibro(map)).toBe(false);
+    expect(detectRiceVibro(map, 1.5)).toBe(true);
   });
 
   it("ignores tiny charts", () => {

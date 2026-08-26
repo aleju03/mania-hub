@@ -289,6 +289,36 @@ const RICE_VIBRO_BURST_MIN_RUN = 8;
 const RICE_VIBRO_BURST_MIN_RUNS = 4;
 const RICE_VIBRO_BURST_MIN_FRACTION = 0.2;
 
+// Tier 4 (any keymode): superhuman row density. Tiers 1-3 all measure repeats
+// within a column, so a chart that sprays its spam across columns as jumps or
+// quads slips every one of them - the "Hello (BPM) 2023" shape, where 4
+// seconds of 15ms jumps closing an otherwise ordinary LN chart carry 19% of
+// the notes and drag MinaCalc's chordjack from 22 to 76 (at the 0.93 goal the
+// SSR chisel cannot write off a section holding that many points, so it rates
+// the file for the spam). Rows rather than notes, because a wide chord is one
+// action: 7K "This Future" peaks at 91 notes/s but only 13 rows/s and is
+// entirely legit. Measured across every analyzed ranked and loved 4/6/7K chart
+// (n=27,892), peak rows/s tops out at 55 (4K), 57 (7K) and 49 (6K), so 65
+// clears the corpus by 14%; it fires on 88 of 128,784 analyzed charts, none of
+// them ranked or loved.
+const RICE_VIBRO_ROW_RATE_WINDOW_MS = 1000;
+const RICE_VIBRO_MAX_ROWS_PER_SECOND = 65;
+
+// Tier 5 (any keymode): chord jacks faster than a hand can jack. Tier 2 only
+// counts *quad* pairs, so a 280BPM file alternating triples and quads slips
+// it (the "Buddah Attachments [280BPM CJ]" shape measures 0.027 against that
+// tier's 0.035 floor) while tier 1's run test misses because no single column
+// ever holds 24 consecutive fast gaps - the chart spreads them. Measuring
+// chord rows directly catches the whole jack-pack family: adjacent rows that
+// both carry a near-full chord inside 70ms, which is a 214BPM chord jack, as
+// a share of all row transitions. Chord size scales with the keymode because
+// a 3-note chord is a wall in 4K and everyday density in 7K. Across every
+// analyzed ranked and loved chart this tops out at 0.0040 (4K, n=20,735),
+// 0.0000 (6K) and 0.0006 (7K), so 0.02 clears the corpus five times over; it
+// fires on 0.32% of analyzed 4K charts, none of them ranked or loved.
+const RICE_VIBRO_CHORD_WALL_GAP_MS = 70;
+const RICE_VIBRO_CHORD_WALL_MIN_RATIO = 0.02;
+
 function columnFastGaps(map: ManiaBeatmap, cutoffMs: number): { maxRun: number; ratio: number } {
   const byColumn = new Map<number, number[]>();
   for (const note of map.notes) {
@@ -365,6 +395,38 @@ function quadWallRows(map: ManiaBeatmap, cutoffMs: number): { rows: number; rati
   return { rows, ratio: times.length > 1 ? rows / (times.length - 1) : 0 };
 }
 
+// Share of row transitions where both rows carry a near-full chord and sit
+// inside cutoffMs (the tier-5 chord-jack signal).
+function chordWallRatio(map: ManiaBeatmap, cutoffMs: number): number {
+  const rowSizes = new Map<number, number>();
+  for (const note of map.notes) rowSizes.set(note.time, (rowSizes.get(note.time) ?? 0) + 1);
+  const times = [...rowSizes.keys()].sort((a, b) => a - b);
+  if (times.length < 2) return 0;
+  const minChord = Math.max(2, map.keyCount - 1);
+  let walls = 0;
+  for (let index = 1; index < times.length; index++) {
+    const gap = times[index] - times[index - 1];
+    if (gap <= 0 || gap > cutoffMs) continue;
+    if ((rowSizes.get(times[index]) ?? 0) >= minChord && (rowSizes.get(times[index - 1]) ?? 0) >= minChord) walls++;
+  }
+  return walls / (times.length - 1);
+}
+
+// Peak count of distinct hit instants inside any one real-time second. The
+// window is chart time, so a rate widens it: 1500ms of a 1.5x chart is a
+// second of play.
+function peakRowsPerSecond(map: ManiaBeatmap, windowMs: number): number {
+  const times = [...new Set(map.notes.map((note) => note.time))].sort((a, b) => a - b);
+  let peak = 0;
+  let start = 0;
+  for (let index = 0; index < times.length; index++) {
+    while (times[index] - times[start] > windowMs) start++;
+    const rows = index - start + 1;
+    if (rows > peak) peak = rows;
+  }
+  return peak;
+}
+
 export function detectRiceVibro(map: ManiaBeatmap, rate = 1): boolean {
   if (map.notes.length >= RICE_VIBRO_MIN_NOTES) {
     const sustained = columnFastGaps(map, RICE_VIBRO_COLUMN_GAP_MS * rate);
@@ -381,11 +443,18 @@ export function detectRiceVibro(map: ManiaBeatmap, rate = 1): boolean {
     }
   }
 
-  // Tier 3 has its own lower size floor: TV-size burst packs sit under the
+  // Tiers 3 and 4 share a lower size floor: TV-size burst packs sit under the
   // tier-1 floor but their soak fraction is unambiguous.
   if (map.notes.length >= RICE_VIBRO_BURST_MIN_NOTES) {
     const bursts = columnBurstRuns(map, RICE_VIBRO_BURST_GAP_MS * rate, RICE_VIBRO_BURST_MIN_RUN);
     if (bursts.runs >= RICE_VIBRO_BURST_MIN_RUNS && bursts.fraction >= RICE_VIBRO_BURST_MIN_FRACTION) return true;
+
+    // Tier 4 shares that floor: the shape is a burst, so chart length says
+    // nothing about it, and the smallest chart the sweep flags carries 217
+    // notes.
+    if (peakRowsPerSecond(map, RICE_VIBRO_ROW_RATE_WINDOW_MS * rate) >= RICE_VIBRO_MAX_ROWS_PER_SECOND) return true;
+
+    if (chordWallRatio(map, RICE_VIBRO_CHORD_WALL_GAP_MS * rate) >= RICE_VIBRO_CHORD_WALL_MIN_RATIO) return true;
   }
   return false;
 }

@@ -653,7 +653,7 @@ export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
 // the old holds-heavy candidate filter; the rice sweep needs the full corpus.
 // v4: rice tier 3 (burst-soak vibro) plus the relaxed tier-2 column-ratio
 // floor; the v3 corpus left 8-23-note burst packs unflagged.
-const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v4";
+export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v5";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
 export interface VibroRecomputeChunkResult {
@@ -741,6 +741,16 @@ export async function runVibroRecomputeJob(db: Db, queue: JobQueue, payload: { c
     // Freshly flagged charts must leave the auto-curated packs now, not on the
     // next scheduled rotation.
     await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+    // Players holding a play on a chart this sweep just flagged keep the
+    // inflated rating until their row recomputes, so kick that off now that
+    // the flags exist. Enqueued by name rather than through player-skills.ts,
+    // which imports from this module (see PLAYER_SKILL_VIBRO_SWEEP_JOB).
+    await queue.enqueue(
+      "recompute_player_skill_vibro_sweep",
+      "recompute_player_skill_vibro_sweep:0",
+      { cursor: 0 },
+      { priority: -10, replaceDone: true },
+    );
     return;
   }
   await enqueueVibroRecompute(queue, result.nextCursor);

@@ -5,7 +5,7 @@ import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, compute
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
-import { CHART_ANALYSIS_VERSION, enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, persistSessionProfileSnapshot } from "./player-profiles.js";
@@ -2262,3 +2262,115 @@ async function enqueuePlayerSkillFloorSweep(queue: JobQueue, cursor: number): Pr
     { priority: -10, replaceDone: true },
   );
 }
+
+// One-shot sweep behind a vibro-detector change: the retention loop already
+// drops a stored play whose chart is now vibro-flagged, but only when that
+// row recomputes, which waits on a profile view past the 12h TTL. A player
+// nobody opens keeps an inflated headline rating, and the skill leaderboards
+// read the stored row. So this finds every current-version row still holding
+// a droppable play on a flagged chart and queues the ordinary recompute for
+// it. Same shape as the floor sweep above, and deliberately not a plays_json
+// rewrite: the drop rule needs the live pp-backed set, which only the real
+// recompute can build.
+//
+// Ordering matters: the flags have to exist before this can find them, so it
+// is chained off the end of the vibro recompute sweep (see
+// runVibroRecomputeJob) rather than seeded independently at boot.
+export const PLAYER_SKILL_VIBRO_SWEEP_JOB = "recompute_player_skill_vibro_sweep";
+const PLAYER_SKILL_VIBRO_SWEEP_META_KEY = "player_skill_vibro_sweep_done:v1";
+const PLAYER_SKILL_VIBRO_SWEEP_CHUNK = 200;
+const PLAYER_SKILL_VIBRO_SWEEP_RECOMPUTE_PRIORITY = 5;
+
+// Mirrors the retention rule's droppable half: a flagged chart whose play did
+// not come from the top-200. Top-sourced plays keep their pp-backed trust, so
+// they are not evidence a row needs recomputing.
+const PLAYER_SKILL_VIBRO_SIGNATURE_SQL = `exists (
+  select 1
+  from json_each(json_extract(plays_json, '$.plays')) as play
+  join beatmap_chart_analysis analysis
+    on analysis.beatmap_id = json_extract(play.value, '$.beatmapId')
+   and analysis.analysis_version = ${CHART_ANALYSIS_VERSION}
+  where json_extract(play.value, '$.source') is not 'top'
+    and coalesce(json_extract(analysis.classification_json, '$.vibro'), 0) = 1
+)`;
+
+export interface PlayerSkillVibroSweepChunkResult {
+  nextCursor: number;
+  scanned: number;
+  enqueued: number[];
+  done: boolean;
+}
+
+export async function runPlayerSkillVibroSweepChunk(
+  db: Db,
+  queue: JobQueue,
+  cursor: number,
+  limit = PLAYER_SKILL_VIBRO_SWEEP_CHUNK,
+): Promise<PlayerSkillVibroSweepChunkResult> {
+  const rows = (await exec(
+    db,
+    `select user_id from player_skill_ratings
+     where user_id > ? and analysis_version = ? and ${PLAYER_SKILL_VIBRO_SIGNATURE_SQL}
+     order by user_id
+     limit ?`,
+    [Math.max(0, Math.floor(cursor)), PLAYER_SKILLS_VERSION, Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const enqueued: number[] = [];
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    nextCursor = Math.max(nextCursor, userId);
+    if (!Number.isInteger(userId) || userId <= 0) continue;
+    await enqueuePlayerSkills(queue, userId, { priority: PLAYER_SKILL_VIBRO_SWEEP_RECOMPUTE_PRIORITY });
+    enqueued.push(userId);
+  }
+  return { nextCursor, scanned: rows.length, enqueued, done: rows.length < limit };
+}
+
+export async function ensurePlayerSkillVibroSweepSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [PLAYER_SKILL_VIBRO_SWEEP_META_KEY])).rows[0];
+  if (done) return;
+  // Boot fallback for a chain lost to a restart: only once the flags are in.
+  const flagsReady = (await exec(db, "select 1 from live_meta where key = ? limit 1", [VIBRO_RECOMPUTE_META_KEY])).rows[0];
+  if (!flagsReady) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [PLAYER_SKILL_VIBRO_SWEEP_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueuePlayerSkillVibroSweep(queue, 0);
+}
+
+export async function runPlayerSkillVibroSweepJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await runPlayerSkillVibroSweepChunk(db, queue, cursor);
+  if (result.enqueued.length > 0) {
+    logInfo("player_skill_vibro_sweep_enqueued", { users: result.enqueued.length, cursor });
+  }
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [PLAYER_SKILL_VIBRO_SWEEP_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueuePlayerSkillVibroSweep(queue, result.nextCursor);
+}
+
+async function enqueuePlayerSkillVibroSweep(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    PLAYER_SKILL_VIBRO_SWEEP_JOB,
+    `${PLAYER_SKILL_VIBRO_SWEEP_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+

@@ -117,19 +117,19 @@ describe("vibro recompute sweep", () => {
     expect(job?.type).toBe(VIBRO_RECOMPUTE_JOB);
     // Drive the chain to completion like the worker lane would. Completion also
     // enqueues a collections rebuild (freshly flagged charts must leave the
-    // packs), which this loop only completes, never runs.
-    let sawCollectionsRebuild = false;
+    // packs) and the player-skill vibro sweep (players holding a play on a
+    // freshly flagged chart must re-rate), which this loop only completes.
+    const followUps: string[] = [];
     while (job) {
       if (job.type === VIBRO_RECOMPUTE_JOB) {
         await runVibroRecomputeJob(db, queue, job.payload as { cursor?: number });
       } else {
-        expect(job.type).toBe("rebuild_map_collections");
-        sawCollectionsRebuild = true;
+        followUps.push(job.type);
       }
       await queue.complete(job.id);
       [job] = await queue.claim("test-worker", 1);
     }
-    expect(sawCollectionsRebuild).toBe(true);
+    expect(followUps.sort()).toEqual(["rebuild_map_collections", "recompute_player_skill_vibro_sweep"]);
 
     // A restart re-runs the boot seed; the done marker must make it a no-op.
     await ensureVibroRecomputeSeeded(db, queue);
