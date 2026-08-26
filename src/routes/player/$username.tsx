@@ -1121,6 +1121,7 @@ export function PlayerProfilePage({
   const [hoveredMod, setHoveredMod] = useState<string | null>(null);
   const [bpmModalOpen, setBpmModalOpen] = useState(false);
   const [ppModalOpen, setPpModalOpen] = useState(false);
+  const [keyPpModalOpen, setKeyPpModalOpen] = useState(false);
   const [ppDistributionMode, setPpDistributionModeState] = useState<PpDistributionMode>(() =>
     readPpDistributionModePreference(),
   );
@@ -1180,19 +1181,20 @@ export function PlayerProfilePage({
   }, [username]);
 
   useEffect(() => {
-    if (!avatarOpen && !modModalOpen && !bpmModalOpen && !ppModalOpen && !detailScore) return;
+    if (!avatarOpen && !modModalOpen && !bpmModalOpen && !ppModalOpen && !keyPpModalOpen && !detailScore) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setAvatarOpen(false);
         setModModalOpen(false);
         setBpmModalOpen(false);
         setPpModalOpen(false);
+        setKeyPpModalOpen(false);
         setDetailScore(null);
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [avatarOpen, modModalOpen, bpmModalOpen, ppModalOpen, detailScore]);
+  }, [avatarOpen, modModalOpen, bpmModalOpen, ppModalOpen, keyPpModalOpen, detailScore]);
 
   useEffect(() => {
     const rail = tabsRailRef.current;
@@ -2200,6 +2202,105 @@ export function PlayerProfilePage({
         )}
       </AnimatePresence>
 
+      {/* Keymode PP modal */}
+      <AnimatePresence>
+        {keyPpModalOpen && profileInsights && profileInsights.keyPp.length > 0 && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 sm:backdrop-blur-sm cursor-pointer p-4"
+            onClick={() => setKeyPpModalOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={t`PP by keymode`}
+              className="modal-card-mobile-safe relative isolate bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[420px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
+            >
+              <div className="pointer-events-none absolute inset-0 bg-osu-b4" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={() => setKeyPpModalOpen(false)}
+                aria-label={t`Close`}
+                className="absolute top-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M1 1l12 12M13 1L1 13" />
+                </svg>
+              </button>
+              <div className="relative z-10 max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
+                <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">{t`PP by Keymode`}</div>
+                <div className="mt-0.5 text-[11px] text-osu-f1/60">
+                  <Trans>each keymode weighted against its own plays, the way osu! totals 4K and 7K</Trans>
+                </div>
+
+                {(() => {
+                  const buckets = profileInsights.keyPp;
+                  const topPp = buckets.reduce((top, bucket) => Math.max(top, bucket.weightedPp), 0);
+                  const hasFloor = buckets.some(isKeyPpFloor);
+                  return (
+                    <>
+                      <div className="mt-4 space-y-3">
+                        {buckets.map((bucket) => (
+                          <div key={bucket.keyCount} className="flex items-center gap-3">
+                            <span className={`w-8 shrink-0 text-xs font-bold tabular-nums ${KEYMODE_TEXT_COLORS[bucket.keyCount] ?? "text-white"}`}>
+                              {bucket.keyCount}K
+                            </span>
+                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-osu-b3/40">
+                              <div
+                                className={`h-full rounded-full ${KEYMODE_BAR_COLORS[bucket.keyCount] ?? "bg-osu-b1"}`}
+                                style={{ width: `${topPp > 0 ? (bucket.weightedPp / topPp) * 100 : 0}%` }}
+                              />
+                            </div>
+                            <div className="w-[112px] shrink-0 text-right">
+                              <div className="text-[17px] font-black leading-none tabular-nums text-white">
+                                {formatNumber(Math.round(bucket.weightedPp))}
+                                {isKeyPpFloor(bucket) && <span className="text-osu-f1">+</span>}
+                                <span className="ml-1 text-[11px] font-bold text-osu-f1">pp</span>
+                              </div>
+                              <div className="mt-1 text-[11px] tabular-nums text-osu-f1">
+                                <Plural value={bucket.count} one={`${formatNumber(bucket.count)} play`} other={`${formatNumber(bucket.count)} plays`} />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-4 space-y-1 text-[11px] text-osu-f1">
+                        {hasFloor && (
+                          <div>
+                            <Trans>A + reads as "at least": osu! serves no more than your top 200 plays, so a keymode with plays under {formatNumber(Math.round(profileInsights.keyPpCutoff))}pp is only counted as far as they go.</Trans>
+                          </div>
+                        )}
+                        {profileInsights.keyPpConverts > 0 && (
+                          <div>
+                            <Plural
+                              value={profileInsights.keyPpConverts}
+                              one={`# convert is left out, as osu! leaves converts out of its own keymode totals.`}
+                              other={`# converts are left out, as osu! leaves converts out of its own keymode totals.`}
+                            />
+                          </div>
+                        )}
+                        <div>
+                          <Trans>Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile.</Trans>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Score details modal */}
       <AnimatePresence>
         {detailScore && (
@@ -2380,12 +2481,17 @@ export function PlayerProfilePage({
             ) : displayedProfileInsights && displayedProfileInsights.sampleSize > 0 ? (() => {
               const profileInsights = displayedProfileInsights;
               const hasPpDistribution = profileInsights.ppRange != null && profileInsights.ppDistribution.length > 0;
+              const hasKeyPp = profileInsights.keyPp.length > 0;
               return (
               <div className="space-y-3">
                 {/* One panel, four cells: the 1px gaps show the parent through as
                     hairlines so this reads as a single object, not four boxes. */}
                 <div className={INSIGHT_PANEL_CLASS}>
-                  <KeySplitCard keySplit={profileInsights.keySplit} sampleSize={profileInsights.sampleSize} />
+                  <KeySplitCard
+                    keySplit={profileInsights.keySplit}
+                    sampleSize={profileInsights.sampleSize}
+                    onOpen={hasKeyPp ? () => setKeyPpModalOpen(true) : undefined}
+                  />
                   <div
                     className={`${INSIGHT_CELL_CLASS} group ${profileInsights.mostUsedMod ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
                     onClick={profileInsights.mostUsedMod ? () => setModModalOpen(true) : undefined}
@@ -4949,20 +5055,38 @@ const INSIGHT_CELL_CLASS = "flex min-h-[108px] flex-col bg-osu-b4 p-4";
 const INSIGHT_CELL_INTERACTIVE_CLASS = "cursor-pointer transition-colors duration-150 hover:bg-osu-b3/40";
 const INSIGHT_LABEL_CLASS = "text-[9px] font-semibold uppercase tracking-[0.18em] text-osu-f1";
 
-function KeySplitCard({ keySplit, sampleSize }: { keySplit: UserProfileInsights["keySplit"]; sampleSize: number }) {
-  // Fixed hues only: osu-pink is derived from --theme-hue, so on a blue or
-  // purple theme it collapsed onto 4K's blue or 6K's purple. Keymode identity
-  // has to read the same under every theme, and 4K/7K (the pair that almost
-  // always appears together) get complementary ends of the range.
+// Fixed hues only: osu-pink is derived from --theme-hue, so on a blue or
+// purple theme it collapsed onto 4K's blue or 6K's purple. Keymode identity
+// has to read the same under every theme, and 4K/7K (the pair that almost
+// always appears together) get complementary ends of the range.
+const KEYMODE_BAR_COLORS: Record<number, string> = { 4: "bg-osu-blue", 5: "bg-osu-green-light", 6: "bg-osu-purple-light", 7: "bg-osu-orange", 8: "bg-osu-yellow", 9: "bg-osu-red-light", 10: "bg-osu-green" };
+const KEYMODE_TEXT_COLORS: Record<number, string> = { 4: "text-osu-blue", 5: "text-osu-green-light", 6: "text-osu-purple-light", 7: "text-osu-orange", 8: "text-osu-yellow", 9: "text-osu-red-light", 10: "text-osu-green-light" };
+// A keymode total counts only what the top-200 window still holds, so mark it
+// as a floor once the plays below the cutoff could move it by more than this.
+const KEY_PP_FLOOR_RATIO = 0.02;
+
+function isKeyPpFloor(bucket: UserProfileInsights["keyPp"][number]): boolean {
+  return bucket.missingBound > bucket.weightedPp * KEY_PP_FLOOR_RATIO;
+}
+
+function KeySplitCard({ keySplit, sampleSize, onOpen }: { keySplit: UserProfileInsights["keySplit"]; sampleSize: number; onOpen?: () => void }) {
   const { t } = useLingui();
-  const colors: Record<number, string> = { 4: "bg-osu-blue", 5: "bg-osu-green-light", 6: "bg-osu-purple-light", 7: "bg-osu-orange", 8: "bg-osu-yellow", 9: "bg-osu-red-light", 10: "bg-osu-green" };
-  const textColors: Record<number, string> = { 4: "text-osu-blue", 5: "text-osu-green-light", 6: "text-osu-purple-light", 7: "text-osu-orange", 8: "text-osu-yellow", 9: "text-osu-red-light", 10: "text-osu-green-light" };
+  const colors = KEYMODE_BAR_COLORS;
+  const textColors = KEYMODE_TEXT_COLORS;
   // keySplit stays in keymode order, so the dominant share has to be found.
   const dominantCount = keySplit.reduce((top, entry) => Math.max(top, entry.count), 0);
 
   return (
-    <div className={INSIGHT_CELL_CLASS}>
-      <div className={INSIGHT_LABEL_CLASS}>{t`Key Split`}</div>
+    <button
+      type="button"
+      className={`${INSIGHT_CELL_CLASS} group w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-osu-pink/50 ${onOpen ? INSIGHT_CELL_INTERACTIVE_CLASS : "cursor-default"}`}
+      onClick={onOpen}
+      disabled={!onOpen}
+    >
+      <div className="flex items-center justify-between">
+        <div className={INSIGHT_LABEL_CLASS}>{t`Key Split`}</div>
+        {onOpen && <ExpandHint />}
+      </div>
       {keySplit.length === 0 ? (
         <div className="mt-2 text-sm text-osu-f1">{t`No key data`}</div>
       ) : keySplit.length === 1 ? (
@@ -4988,7 +5112,7 @@ function KeySplitCard({ keySplit, sampleSize }: { keySplit: UserProfileInsights[
               </div>
             ))}
           </div>
-          <div className="mt-auto pt-3">
+          <div className="mt-auto w-full pt-3">
             <div className="flex h-1 overflow-hidden rounded-full bg-osu-b3/50">
               {keySplit.map((b) => (
                 <div
@@ -5001,7 +5125,7 @@ function KeySplitCard({ keySplit, sampleSize }: { keySplit: UserProfileInsights[
           </div>
         </>
       )}
-    </div>
+    </button>
   );
 }
 

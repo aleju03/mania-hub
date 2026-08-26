@@ -12,6 +12,7 @@ interface TestScoreInput {
   mods?: OsuScore["mods"];
   mode?: string;
   title?: string;
+  convert?: boolean;
 }
 
 function createScore(overrides: TestScoreInput): OsuScore {
@@ -24,6 +25,7 @@ function createScore(overrides: TestScoreInput): OsuScore {
       bpm: overrides.bpm,
       note_bpm: overrides.note_bpm,
       cs: overrides.cs,
+      convert: overrides.convert ?? false,
       mode: overrides.mode ?? "mania",
       url: `https://osu.ppy.sh/beatmaps/${10_000 + overrides.id}`,
       version: `${overrides.cs}K Another`,
@@ -206,5 +208,64 @@ describe("calculateUserProfileInsights", () => {
       { min: 50, max: 99, count: 1, total: 4 },
       { min: null, max: 49, count: 1, total: 4 },
     ]);
+  });
+
+  it("totals pp per keymode against that keymode's own list, strongest first", () => {
+    const insights = calculateUserProfileInsights([
+      createScore({ id: 1, cs: 4, bpm: 180, created_at: "2025-01-01T00:00:00Z", pp: 500 }),
+      createScore({ id: 2, cs: 7, bpm: 180, created_at: "2025-01-02T00:00:00Z", pp: 400 }),
+      createScore({ id: 3, cs: 4, bpm: 180, created_at: "2025-01-03T00:00:00Z", pp: 300 }),
+      createScore({ id: 4, cs: 5, bpm: 180, created_at: "2025-01-04T00:00:00Z", pp: 200 }),
+    ]);
+
+    // Each keymode is weighted from its own index, not its place in the
+    // profile-wide list: the second 4K play decays by 0.95, not by 0.95^2.
+    expect(insights.keyPp).toEqual([
+      { keyCount: 4, weightedPp: 500 + 300 * 0.95, count: 2, missingBound: 0 },
+      { keyCount: 7, weightedPp: 400, count: 1, missingBound: 0 },
+      { keyCount: 5, weightedPp: 200, count: 1, missingBound: 0 },
+    ]);
+    // A window this short is the player's whole ranked history, so nothing
+    // hides below it.
+    expect(insights.keyPpCutoff).toBe(0);
+    expect(insights.keyPpConverts).toBe(0);
+  });
+
+  it("leaves converts out of keymode pp, the way osu! leaves them out of 4K and 7K", () => {
+    const insights = calculateUserProfileInsights([
+      createScore({ id: 1, cs: 7, bpm: 180, created_at: "2025-01-01T00:00:00Z", pp: 500, convert: true }),
+      createScore({ id: 2, cs: 7, bpm: 180, created_at: "2025-01-02T00:00:00Z", pp: 300 }),
+    ]);
+
+    expect(insights.keyPp).toEqual([
+      { keyCount: 7, weightedPp: 300, count: 1, missingBound: 0 },
+    ]);
+    expect(insights.keyPpConverts).toBe(1);
+    // The play still happened, so the key split keeps counting it.
+    expect(insights.keySplit).toEqual([{ keyCount: 7, count: 2 }]);
+  });
+
+  it("bounds what a capped window hides, so a side keymode reads as a floor", () => {
+    const scores = [
+      ...Array.from({ length: 190 }, (_, i) =>
+        createScore({ id: i + 1, cs: 4, bpm: 180, created_at: "2025-01-01T00:00:00Z", pp: 600 - i }),
+      ),
+      ...Array.from({ length: 10 }, (_, i) =>
+        createScore({ id: 500 + i, cs: 5, bpm: 180, created_at: "2025-01-01T00:00:00Z", pp: 405 - i }),
+      ),
+    ];
+
+    const insights = calculateUserProfileInsights(scores);
+    const fourKey = insights.keyPp.find((bucket) => bucket.keyCount === 4)!;
+    const fiveKey = insights.keyPp.find((bucket) => bucket.keyCount === 5)!;
+
+    // The 200th play is the cutoff: plays worth less than it exist and no osu!
+    // call returns them.
+    expect(insights.keyPpCutoff).toBe(396);
+    // 190 plays deep, the decayed remainder cannot move the 4K total; 10 plays
+    // in, the invisible 5K tail is worth more than the visible part.
+    expect(fourKey.missingBound).toBeLessThan(fourKey.weightedPp * 0.02);
+    expect(fiveKey.missingBound).toBeGreaterThan(fiveKey.weightedPp * 0.02);
+    expect(fiveKey.missingBound).toBeCloseTo((396 * 0.95 ** 10) / 0.05, 6);
   });
 });

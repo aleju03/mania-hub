@@ -90,8 +90,11 @@ msgstr "(opcional, hasta {SKIN_MAX_SCREENSHOTS})"
 msgid "(uploaded by {0})"
 msgstr "(subido por {0})"
 
+#. placeholder {0}: bucket.count
 #. placeholder {0}: keyMode.analyzedPlays
+#. placeholder {1}: formatNumber(bucket.count)
 #. placeholder {1}: formatNumber(keyMode.analyzedPlays)
+#. placeholder {2}: formatNumber(bucket.count)
 #. placeholder {2}: formatNumber(keyMode.analyzedPlays)
 #: src/routes/player/$username.tsx
 msgid "{0, plural, one {{1} play} other {{2} plays}}"
@@ -101,6 +104,11 @@ msgstr "{0, plural, one {{1} play} other {{2} plays}}"
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "{0, plural, one {# collector} other {# collectors}}"
 msgstr "{0, plural, one {# coleccionista} other {# coleccionistas}}"
+
+#. placeholder {0}: profileInsights.keyPpConverts
+#: src/routes/player/$username.tsx
+msgid "{0, plural, one {# convert is left out, as osu! leaves converts out of its own keymode totals.} other {# converts are left out, as osu! leaves converts out of its own keymode totals.}}"
+msgstr "{0, plural, one {# convertido queda fuera, igual que osu! deja los convertidos fuera de sus propios totales por modo de teclas.} other {# convertidos quedan fuera, igual que osu! deja los convertidos fuera de sus propios totales por modo de teclas.}}"
 
 #. placeholder {0}: collector.copies
 #. placeholder {0}: pulls.copies
@@ -864,6 +872,11 @@ msgstr "{from} a {to}"
 #: src/components/me/GoalsPanel.tsx
 msgid "{gap}pp to go"
 msgstr "faltan {gap}pp"
+
+#. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
+#: src/routes/player/$username.tsx
+msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
+msgstr "Un + significa «al menos»: osu! no entrega más de tus 200 mejores jugadas, así que un modo de teclas con jugadas por debajo de {0}pp solo se cuenta hasta donde alcanzan."
 
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
@@ -2364,6 +2377,10 @@ msgstr "Puesto <0>#{0}</0>"
 #: src/routes/bbcode.tsx
 msgid "Bold"
 msgstr "Negrita"
+
+#: src/routes/player/$username.tsx
+msgid "Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile."
+msgstr "Aquí no se cuentan los pp de bonificación por número de jugadas, así que quedan un poco por debajo de los totales de 4K y 7K de un perfil de osu!."
 
 #: src/routes/communities_.$id.tsx
 msgid "boosts"
@@ -4022,6 +4039,10 @@ msgstr "Renders dinámicos"
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it."
 #~ msgstr "Cada keymode se califica en su propia escala. Un número más bajo en un keymode no significa que seas peor en él."
+
+#: src/routes/player/$username.tsx
+msgid "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
+msgstr "cada modo de teclas ponderado con sus propias jugadas, igual que osu! totaliza 4K y 7K"
 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
@@ -8208,6 +8229,14 @@ msgstr "pp"
 #: src/routes/player/$username.tsx
 msgid "PP"
 msgstr "PP"
+
+#: src/routes/player/$username.tsx
+msgid "PP by keymode"
+msgstr "PP por modo de teclas"
+
+#: src/routes/player/$username.tsx
+msgid "PP by Keymode"
+msgstr "PP por modo de teclas"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "PP count"

@@ -486,6 +486,22 @@ export interface UserProfileKeyBucket {
   count: number;
 }
 
+export interface UserProfileKeyPpBucket {
+  keyCount: number;
+  /* Weighted pp of the keymode's own plays, re-indexed inside the keymode
+     (pp * 0.95^i), which is how osu! totals the 4K and 7K figures it
+     publishes. Play-count bonus pp is not in here: osu! grows it from the
+     ranked-score count of that keymode alone, a number no API hands out. */
+  weightedPp: number;
+  count: number;
+  /* Upper bound on the weighted pp still hiding below the window's cutoff.
+     osu! serves at most 200 best scores, so a keymode someone plays on the
+     side can have most of its plays outside that window, and only the bound
+     says whether the total is the answer or a floor. 0 when the window holds
+     every ranked play. */
+  missingBound: number;
+}
+
 export interface UserProfileCountStat {
   label: string;
   count: number;
@@ -525,6 +541,14 @@ export interface UserProfilePpDistributionBucket {
 export interface UserProfileInsights {
   sampleSize: number;
   keySplit: UserProfileKeyBucket[];
+  keyPp: UserProfileKeyPpBucket[];
+  /* Converts in the window. They carry a key count but osu! keeps them out of
+     its keymode totals, so keyPp does too, and the count explains why a
+     keymode's play tally there can fall short of its keySplit share. */
+  keyPpConverts: number;
+  /* Lowest pp in the window when the window is capped (the 200th play), 0
+     when it holds everything the player has. What "below the cutoff" means. */
+  keyPpCutoff: number;
   mostUsedMod: UserProfileCountStat | null;
   modBreakdown: UserProfileCountStat[];
   medianBpm: number | null;

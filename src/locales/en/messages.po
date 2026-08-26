@@ -90,8 +90,11 @@ msgstr "(optional, up to {SKIN_MAX_SCREENSHOTS})"
 msgid "(uploaded by {0})"
 msgstr "(uploaded by {0})"
 
+#. placeholder {0}: bucket.count
 #. placeholder {0}: keyMode.analyzedPlays
+#. placeholder {1}: formatNumber(bucket.count)
 #. placeholder {1}: formatNumber(keyMode.analyzedPlays)
+#. placeholder {2}: formatNumber(bucket.count)
 #. placeholder {2}: formatNumber(keyMode.analyzedPlays)
 #: src/routes/player/$username.tsx
 msgid "{0, plural, one {{1} play} other {{2} plays}}"
@@ -101,6 +104,11 @@ msgstr "{0, plural, one {{1} play} other {{2} plays}}"
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "{0, plural, one {# collector} other {# collectors}}"
 msgstr "{0, plural, one {# collector} other {# collectors}}"
+
+#. placeholder {0}: profileInsights.keyPpConverts
+#: src/routes/player/$username.tsx
+msgid "{0, plural, one {# convert is left out, as osu! leaves converts out of its own keymode totals.} other {# converts are left out, as osu! leaves converts out of its own keymode totals.}}"
+msgstr "{0, plural, one {# convert is left out, as osu! leaves converts out of its own keymode totals.} other {# converts are left out, as osu! leaves converts out of its own keymode totals.}}"
 
 #. placeholder {0}: collector.copies
 #. placeholder {0}: pulls.copies
@@ -864,6 +872,11 @@ msgstr "{from} to {to}"
 #: src/components/me/GoalsPanel.tsx
 msgid "{gap}pp to go"
 msgstr "{gap}pp to go"
+
+#. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
+#: src/routes/player/$username.tsx
+msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
+msgstr "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
 
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
@@ -2364,6 +2377,10 @@ msgstr "Board spot <0>#{0}</0>"
 #: src/routes/bbcode.tsx
 msgid "Bold"
 msgstr "Bold"
+
+#: src/routes/player/$username.tsx
+msgid "Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile."
+msgstr "Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile."
 
 #: src/routes/communities_.$id.tsx
 msgid "boosts"
@@ -4022,6 +4039,10 @@ msgstr "Dynamic Renders"
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it."
 #~ msgstr "Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it."
+
+#: src/routes/player/$username.tsx
+msgid "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
+msgstr "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
@@ -8208,6 +8229,14 @@ msgstr "pp"
 #: src/routes/player/$username.tsx
 msgid "PP"
 msgstr "PP"
+
+#: src/routes/player/$username.tsx
+msgid "PP by keymode"
+msgstr "PP by keymode"
+
+#: src/routes/player/$username.tsx
+msgid "PP by Keymode"
+msgstr "PP by Keymode"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "PP count"

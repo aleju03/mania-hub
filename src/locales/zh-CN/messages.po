@@ -99,8 +99,11 @@ msgstr "（可选，最多 {SKIN_MAX_SCREENSHOTS} 张）"
 msgid "(uploaded by {0})"
 msgstr "(由 {0} 上传)"
 
+#. placeholder {0}: bucket.count
 #. placeholder {0}: keyMode.analyzedPlays
+#. placeholder {1}: formatNumber(bucket.count)
 #. placeholder {1}: formatNumber(keyMode.analyzedPlays)
+#. placeholder {2}: formatNumber(bucket.count)
 #. placeholder {2}: formatNumber(keyMode.analyzedPlays)
 #: src/routes/player/$username.tsx
 msgid "{0, plural, one {{1} play} other {{2} plays}}"
@@ -110,6 +113,11 @@ msgstr "{0, plural, other {{2} 次游玩}}"
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "{0, plural, one {# collector} other {# collectors}}"
 msgstr "{0, plural, other {# 位收藏者}}"
+
+#. placeholder {0}: profileInsights.keyPpConverts
+#: src/routes/player/$username.tsx
+msgid "{0, plural, one {# convert is left out, as osu! leaves converts out of its own keymode totals.} other {# converts are left out, as osu! leaves converts out of its own keymode totals.}}"
+msgstr "{0, plural, other {有 # 个转谱成绩未计入，osu! 自己的键数统计同样不计入转谱。}}"
 
 #. placeholder {0}: collector.copies
 #. placeholder {0}: pulls.copies
@@ -873,6 +881,11 @@ msgstr "{from} 至 {to}"
 #: src/components/me/GoalsPanel.tsx
 msgid "{gap}pp to go"
 msgstr "还差 {gap}pp"
+
+#. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
+#: src/routes/player/$username.tsx
+msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
+msgstr "+ 表示「至少」：osu! 最多只给出前 200 个最佳成绩，低于 {0}pp 的成绩拿不到，该键数只统计到能看到的部分。"
 
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
@@ -2373,6 +2386,10 @@ msgstr "榜单位置 <0>#{0}</0>"
 #: src/routes/bbcode.tsx
 msgid "Bold"
 msgstr "加粗"
+
+#: src/routes/player/$username.tsx
+msgid "Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile."
+msgstr "这里不计入游玩次数带来的奖励 pp，所以数值会比 osu! 个人主页上的 4K 和 7K 总量略低。"
 
 #: src/routes/communities_.$id.tsx
 msgid "boosts"
@@ -4031,6 +4048,10 @@ msgstr "动态渲染"
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it."
 #~ msgstr "每个键数都有自己的评分标准。某个键数的数值更低，并不代表你在这个键数上更差。"
+
+#: src/routes/player/$username.tsx
+msgid "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
+msgstr "每个键数按自己的成绩加权，与 osu! 统计 4K 和 7K 的方式一致"
 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
@@ -8217,6 +8238,14 @@ msgstr "pp"
 #: src/routes/player/$username.tsx
 msgid "PP"
 msgstr "pp"
+
+#: src/routes/player/$username.tsx
+msgid "PP by keymode"
+msgstr "各键数 pp"
+
+#: src/routes/player/$username.tsx
+msgid "PP by Keymode"
+msgstr "各键数 pp"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "PP count"
