@@ -36,10 +36,15 @@ export function CommunityStatusNote({ community }: { community: CommunitySummary
     // two are the same status and only one of them is about the owner's
     // submission. The moderator is never named either way - that is between
     // them and the queue.
+    //
+    // No offer to edit on this one. Editing still sends a rejected listing back
+    // to pending, whatever put it there - but a server taken down over what
+    // happens inside it is not something a rewritten pitch answers, and saying
+    // so here reads as an invitation to try again with better wording.
     if (community.wasApproved) {
       return (
         <Note tone="bad">
-          <Trans>Someone reported your server and it got taken down for the following reason{said} Editing it sends it back for approval.</Trans>
+          <Trans>Someone reported your server and it got taken down for the following reason{said}</Trans>
         </Note>
       );
     }
