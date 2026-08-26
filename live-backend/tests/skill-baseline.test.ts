@@ -14,6 +14,7 @@ import {
   computeApproxRatings,
   decoratePlayerSkillBreakdown,
   enqueueSkillBaselineIfDue,
+  readExactSkillCurves,
   runSkillBaselineJob,
   type BaselineChartEntry,
   type BaselineCurves,
@@ -364,6 +365,99 @@ describe("exact skill curves", () => {
       // Fresh approximate curves alone are no longer enough: the missing
       // exact blob makes the chain due (the deploy-transition case).
       expect(await enqueueSkillBaselineIfDue(db, queue)).toBe(true);
+    });
+  });
+
+  it("becomes due again when the stored blob predates the current curve shape", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      await seedRatedRoster(db);
+      await runSkillBaselineJob(db, queue, { runId: "shape-run", cursor: 0 });
+      await exec(db, "delete from jobs");
+      // Everything fresh: nothing to do.
+      expect(await enqueueSkillBaselineIfDue(db, queue)).toBe(false);
+
+      // Rewrite the exact blob in the pre-median shape, as a deploy that
+      // changes the shape would find it.
+      const row = (await exec(db, "select value_json from live_meta where key = ?", [EXACT_SKILL_CURVES_META_KEY])).rows[0];
+      const stored = parseJson<ExactSkillCurves>(String(row?.value_json ?? ""), {} as ExactSkillCurves);
+      delete stored.format;
+      await exec(
+        db,
+        "update live_meta set value_json = ? where key = ?",
+        [JSON.stringify(stored), EXACT_SKILL_CURVES_META_KEY],
+      );
+      expect(await enqueueSkillBaselineIfDue(db, queue)).toBe(true);
+      // And the old blob keeps serving in the meantime: no percentile gap
+      // while the fold runs.
+      expect((await readExactSkillCurves(db))?.curves["4"].Overall.count).toBe(25);
+    });
+  });
+
+  it("caches the served curves per database, not per process", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      await seedRatedRoster(db);
+      await runSkillBaselineJob(db, queue, { runId: "cache-run", cursor: 0 });
+      expect(await readExactSkillCurves(db)).not.toBeNull();
+    });
+    // A second database with no baseline at all must read as having none: a
+    // module-level cache would hand it the first one's curves and every
+    // downstream surface would claim a population baseline it does not have.
+    await withDb(async (db) => {
+      expect(await readExactSkillCurves(db)).toBeNull();
+    });
+  });
+
+  it("publishes a median for a sparse axis but no curve to quantile it", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      await seedRatedRoster(db);
+      const now = new Date().toISOString();
+      // Six more members carrying one extra pattern axis: over the median
+      // floor, under the curve floor.
+      for (let user = 0; user < 6; user += 1) {
+        const userId = 3000 + user;
+        await exec(
+          db,
+          "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', ?, ?, 'test', 1, ?)",
+          [userId, 100 + user, now],
+        );
+        const summary = {
+          totalPlays: 120,
+          analyzedPlays: 120,
+          pendingPlays: 0,
+          unsupportedPlays: 0,
+          modes: [
+            {
+              keyCount: 4,
+              analyzedPlays: 100,
+              ratings: { Overall: 20 + user * 0.2 },
+              patterns: [{ id: "bracket", label: "Bracket", rating: 19 + user * 0.2, plays: 12 }],
+            },
+          ],
+        };
+        await exec(
+          db,
+          `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+           values (?, ?, 'ready', ?, ?, ?, ?)`,
+          [userId, PLAYER_SKILLS_VERSION, JSON.stringify(summary), JSON.stringify({ plays: [] }), now, now],
+        );
+      }
+      await runSkillBaselineJob(db, queue, { runId: "sparse-run", cursor: 0 });
+
+      const exact = await readExactSkillCurves(db);
+      const bracket = exact!.curves["4"]["pattern:bracket"];
+      // Without a median this axis would be the one axis served raw while
+      // every neighbour is served shrunk, and the profile page would disagree.
+      expect(bracket.count).toBe(6);
+      expect(bracket.median).toBeGreaterThan(0);
+      expect(bracket.curve).toEqual([]);
+      // The wide axis keeps its quantiles.
+      expect(exact!.curves["4"]["pattern:stream"].curve.length).toBeGreaterThan(0);
+
+      // A one-player axis stays absent: its "median" is just that player.
+      expect(exact!.curves["4"]["pattern:delay"]).toBeUndefined();
     });
   });
 });

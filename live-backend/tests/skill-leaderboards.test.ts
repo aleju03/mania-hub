@@ -7,10 +7,12 @@ import { JobQueue } from "../src/jobs/queue.js";
 import { PLAYER_SKILLS_VERSION } from "../src/features/player-skills.js";
 import { decoratePlayerSkillBreakdown, runSkillBaselineJob } from "../src/features/skill-baseline.js";
 import {
+  expireSkillLeaderboardBoard,
   getDanLeaderboard,
   getSkillLeaderboard,
   leaderboardAxesFor,
   resetSkillLeaderboardCache,
+  skillLeaderboardBuildCount,
 } from "../src/features/skill-leaderboards.js";
 
 type TestDb = Awaited<ReturnType<typeof createDb>>;
@@ -250,6 +252,88 @@ describe("skill leaderboard", () => {
       }
     });
   });
+
+  it("shrinks a sparse axis too, and says so per axis rather than per board", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      /* Two 7K axes with very different populations: chordstream is wide
+         enough to quantile, bracket sits under that floor but well over the
+         median floor. The old board-wide flag reported `shrunk: true` for
+         bracket off chordstream's curve while ranking bracket raw. */
+      const players: SeedPlayer[] = [];
+      for (let index = 0; index < 24; index += 1) {
+        players.push({
+          userId: 5000 + index,
+          username: `wide${index}`,
+          country: "CR",
+          keyCount: 7,
+          analyzedPlays: 100,
+          patterns: [
+            { id: "chordstream", rating: 20 + index * 0.1, plays: 60 },
+            ...(index < 8 ? [{ id: "bracket", rating: 20 + index * 0.1, plays: 60 }] : []),
+          ],
+        });
+      }
+      players.push({ userId: 6001, username: "deepstack", country: "CR", keyCount: 7, analyzedPlays: 400, patterns: [{ id: "bracket", rating: 28, plays: 200 }] });
+      players.push({ userId: 6002, username: "thinstack", country: "CR", keyCount: 7, analyzedPlays: 400, patterns: [{ id: "bracket", rating: 31, plays: 4 }] });
+      await seed(db, players);
+      await runSkillBaselineJob(db, queue, { runId: "sparse-run", cursor: 0 });
+      resetSkillLeaderboardCache(db);
+
+      const sparse = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:bracket" });
+      expect(sparse.shrunk).toBe(true);
+      const byName = new Map(sparse.ranking.map((entry) => [entry.user.username, entry]));
+      // 200 plays at 28 beats 4 plays at 31 once the sparse axis shrinks too.
+      expect(byName.get("deepstack")!.rank).toBeLessThan(byName.get("thinstack")!.rank);
+      expect(byName.get("thinstack")!.value).toBeLessThan(31);
+      // No curve behind it, so no percentile is claimed off a dozen players.
+      expect(byName.get("thinstack")!.percentile).toBeUndefined();
+
+      // The wide axis still quantiles, so it keeps its percentiles.
+      const wide = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordstream" });
+      expect(wide.shrunk).toBe(true);
+      expect(wide.ranking[0].percentile).toBeGreaterThan(0);
+
+      // An axis nobody rates has no median either, and admits it.
+      const empty = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:delay" });
+      expect(empty.shrunk).toBe(false);
+    });
+  });
+
+  it("holds a failed rebuild for a retry window instead of rescanning per request", async () => {
+    await withDb(async (db) => {
+      await seed(db, sevenKPlayers);
+      const first = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" });
+      expect(first.total).toBe(3);
+
+      // Break the scan, then age the board out: the read answers stale.
+      await exec(db, "drop table country_rosters");
+      expireSkillLeaderboardBoard(db);
+      const builds = skillLeaderboardBuildCount();
+      const stale = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" });
+      expect(stale.total).toBe(3);
+      // Let the background rebuild fail and set its cooldown.
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(skillLeaderboardBuildCount()).toBe(builds + 1);
+
+      // Every read inside the cooldown is served from the stale board without
+      // starting another doomed scan.
+      for (let i = 0; i < 5; i += 1) {
+        expect((await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" })).total).toBe(3);
+      }
+      expect(skillLeaderboardBuildCount()).toBe(builds + 1);
+    });
+  });
+
+  it("holds a cold-start failure too, where there is no stale board to serve", async () => {
+    await withDb(async (db) => {
+      await exec(db, "drop table country_rosters");
+      await expect(getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" })).rejects.toThrow();
+      const builds = skillLeaderboardBuildCount();
+      await expect(getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" })).rejects.toThrow();
+      expect(skillLeaderboardBuildCount()).toBe(builds);
+    });
+  });
 });
 
 describe("dan leaderboard", () => {
@@ -273,6 +357,8 @@ describe("dan leaderboard", () => {
       // level, so it reads 4 for nearly everyone. Play depth is the row's
       // secondary number instead.
       expect(board.ranking[1]).not.toHaveProperty("clears");
+      // Nor a shrink flag: a dan is the level of a real clear, never shrunk.
+      expect(board).not.toHaveProperty("shrunk");
       expect(board.ranking[1].analyzedPlays).toBe(200);
       // A player with no dan side is simply absent, not a zero row.
       expect(board.ranking.some((entry) => entry.user.username === "nodan")).toBe(false);

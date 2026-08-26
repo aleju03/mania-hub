@@ -128,9 +128,6 @@ interface LeaderboardSnapshotBase {
   pageSize: number;
   keyCount: number;
   fetchedAt: number;
-  // False when the exact curves are missing or unusable and the board is
-  // serving raw ratings, which would then disagree with the profile page.
-  shrunk: boolean;
   // Rows at the current analysis version out of all ready rows. A version bump
   // recomputes players one at a time, so a half-migrated board is visible here
   // instead of quietly wrong.
@@ -141,6 +138,12 @@ export interface SkillLeaderboardSnapshot extends LeaderboardSnapshotBase {
   axis: string;
   ranking: SkillLeaderboardEntry[];
   axes: SkillLeaderboardAxisInfo[];
+  /* False when THIS axis has no population median and the board is therefore
+     ranking raw ratings, which would disagree with the profile page. Per axis
+     and not per board on purpose: a board-wide flag answers off whichever
+     curves happen to exist, so a sparse axis served raw would still claim to
+     be shrunk. Dan boards carry no such flag - a dan is not shrunk at all. */
+  shrunk: boolean;
 }
 
 export interface DanLeaderboardSnapshot extends LeaderboardSnapshotBase {
@@ -176,7 +179,6 @@ interface KeymodeBoard {
 
 interface SkillBoardCache {
   keymodes: Map<number, KeymodeBoard>;
-  shrunk: boolean;
   curves: ExactSkillCurves | null;
   coverage: { current: number; total: number };
   builtAt: number;
@@ -188,14 +190,29 @@ interface SkillBoardCache {
 const SKILL_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 const SCOPE_VIEW_CACHE_TTL_MS = 5 * 60 * 1000;
 const BOARD_BUILD_CHUNK = 500;
+/* A rebuild that threw must not leave the board due again on the very next
+   request: without a cooldown every read arriving after the TTL would start
+   its own full scan, so a database incident turns into a scan storm on top of
+   it. Shorter than the TTL because a failure is worth retrying sooner than a
+   healthy board is worth refreshing. */
+const SKILL_BOARD_RETRY_MS = 60 * 1000;
 
 interface SkillBoardMemory {
   board: SkillBoardCache;
-  checkedAt: number;
+  // When this board stops answering without a rebuild attempt: builtAt + TTL
+  // normally, builtAt + the shorter retry window after a failed rebuild.
+  freshUntil: number;
 }
 
 const boardCacheByDb = new WeakMap<Db, SkillBoardMemory>();
 const boardBuildByDb = new WeakMap<Db, Promise<SkillBoardCache>>();
+// A cold-start failure has no stale board to fall back on, so the error itself
+// is held for the retry window and re-thrown: otherwise every request during
+// an outage kicks off another doomed scan.
+const boardFailureByDb = new WeakMap<Db, { error: unknown; until: number }>();
+// Builds since process start. Ops signal, and the seam the cooldown test reads
+// to prove a second scan did not happen.
+let boardBuilds = 0;
 
 function yieldEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
@@ -260,6 +277,7 @@ function sortedOrder(values: number[]): Int32Array {
 
 async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
   const startedAt = Date.now();
+  boardBuilds += 1;
   const curvesRaw = await readExactSkillCurves(db);
   const curves = exactCurvesUsable(curvesRaw) ? curvesRaw : null;
 
@@ -412,7 +430,6 @@ async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
 
   const board: SkillBoardCache = {
     keymodes,
-    shrunk: curves != null,
     curves,
     coverage: {
       current: Number(counts?.current ?? 0),
@@ -424,7 +441,7 @@ async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
     ms: Date.now() - startedAt,
     players: scanned,
     keymodes: keymodes.size,
-    shrunk: board.shrunk,
+    shrunk: curves != null,
   });
   return board;
 }
@@ -432,22 +449,32 @@ async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
 async function refreshSkillBoard(db: Db): Promise<SkillBoardCache> {
   try {
     const built = await buildSkillBoard(db);
-    boardCacheByDb.set(db, { board: built, checkedAt: Date.now() });
+    boardCacheByDb.set(db, { board: built, freshUntil: Date.now() + SKILL_BOARD_CACHE_TTL_MS });
+    boardFailureByDb.delete(db);
     scopeViewCacheByDb.delete(db);
     return built;
   } catch (error) {
     // Keep serving the previous board through a failed rebuild; only the very
-    // first load has nothing to fall back to.
+    // first load has nothing to fall back to. Either way the next attempt is
+    // pushed out by the retry window instead of firing on the next request.
     logWarn("skill_leaderboard_rebuild_failed", errorContext(error));
     const stale = boardCacheByDb.get(db);
-    if (stale) return stale.board;
+    if (stale) {
+      stale.freshUntil = Date.now() + SKILL_BOARD_RETRY_MS;
+      return stale.board;
+    }
+    boardFailureByDb.set(db, { error, until: Date.now() + SKILL_BOARD_RETRY_MS });
     throw error;
   }
 }
 
 async function getSkillBoard(db: Db): Promise<SkillBoardCache> {
   const memory = boardCacheByDb.get(db);
-  if (memory && Date.now() - memory.checkedAt < SKILL_BOARD_CACHE_TTL_MS) return memory.board;
+  if (memory && Date.now() < memory.freshUntil) return memory.board;
+  if (!memory) {
+    const failure = boardFailureByDb.get(db);
+    if (failure && Date.now() < failure.until) throw failure.error;
+  }
 
   let refresh = boardBuildByDb.get(db);
   if (!refresh) {
@@ -469,7 +496,19 @@ async function getSkillBoard(db: Db): Promise<SkillBoardCache> {
 export function resetSkillLeaderboardCache(db: Db): void {
   boardCacheByDb.delete(db);
   boardBuildByDb.delete(db);
+  boardFailureByDb.delete(db);
   scopeViewCacheByDb.delete(db);
+}
+
+/** Test seam: age the cached board out without discarding it. */
+export function expireSkillLeaderboardBoard(db: Db): void {
+  const memory = boardCacheByDb.get(db);
+  if (memory) memory.freshUntil = 0;
+}
+
+/** Builds since process start; a test reads it to assert a scan did not run. */
+export function skillLeaderboardBuildCount(): number {
+  return boardBuilds;
 }
 
 // --- Scope views ---
@@ -565,6 +604,7 @@ export async function getSkillLeaderboard(db: Db, query: SkillLeaderboardQuery):
   const page = clampPage(query.page);
   const pageSize = clampPageSize(query.pageSize);
   const axes = axisPopulations(db, board, keymode, scope.code, codes);
+  const axisCurves: AxisCurveMap | undefined = board.curves?.curves[String(query.keyCount)];
 
   const base: SkillLeaderboardSnapshot = {
     axis: query.axis,
@@ -575,14 +615,15 @@ export async function getSkillLeaderboard(db: Db, query: SkillLeaderboardQuery):
     pageSize,
     keyCount: query.keyCount,
     fetchedAt: board.builtAt,
-    shrunk: board.shrunk,
+    // The same curveMedian call the build made, so the flag and the values it
+    // describes cannot part ways.
+    shrunk: board.curves != null && curveMedian(axisCurves, query.axis) != null,
     coverage: board.coverage,
   };
   const column = keymode?.axes.get(query.axis);
   if (!keymode || !column) return base;
 
   const order = scopedOrder(db, board, keymode, `${scope.code}:${keymode.keyCount}:${query.axis}`, column.order, codes);
-  const axisCurves: AxisCurveMap | undefined = board.curves?.curves[String(keymode.keyCount)];
   const curve = axisCurves?.[query.axis]?.curve;
   const start = (page - 1) * pageSize;
   const ranking: SkillLeaderboardEntry[] = [];
@@ -635,7 +676,6 @@ export async function getDanLeaderboard(db: Db, query: DanLeaderboardQuery): Pro
     pageSize,
     keyCount: query.keyCount,
     fetchedAt: board.builtAt,
-    shrunk: board.shrunk,
     coverage: board.coverage,
   };
   const column = keymode?.dan.get(query.side);

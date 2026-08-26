@@ -264,8 +264,11 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
   /* Skill and dan leaderboards. Bridge-gated while the feature is in
      development: an unauthorized read 404s rather than 401s, so a hidden
      surface is indistinguishable from one that does not exist (same shape the
-     admin-only GOAT poll uses). Un-gating is deleting the two guards and
-     letting the frontend fetch these directly. */
+     admin-only GOAT poll uses). Un-gating is deleting the two guards, letting
+     the frontend fetch these directly, and swapping the `private, no-store`
+     header below for `public, max-age=300, stale-while-revalidate=600` to match
+     the board's own 5-minute TTL - left as-is while every read arrives through
+     a bridge-authenticated server fn that must not be cached anywhere. */
   if (url.pathname === "/api/snapshots/skill-leaderboard") {
     if (!isBridge(req, ctx)) {
       sendJson(req, res, ctx, 404, { error: "not_found" });

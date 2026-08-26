@@ -55,6 +55,14 @@ export const BASELINE_MIN_PLAYS = 20;
 // Quantile curves with too few users behind them read as precision they do
 // not have; below this the axis publishes no percentile.
 const BASELINE_MIN_USERS_PER_CURVE = 20;
+// The display shrink asks a different question than the percentile does: it
+// only needs a typical value to pull thin play pools toward. Withholding it is
+// not the neutral choice - it leaves a sparse axis ranked on raw ratings while
+// every other axis is ranked shrunk, and disagreeing with the profile page. So
+// a median publishes at a far smaller population than a curve does, and this
+// floor exists only to keep a one- or two-player "median" (which is really
+// just that player's own rating) from becoming everybody else's prior.
+const BASELINE_MIN_USERS_PER_MEDIAN = 5;
 const BASELINE_QUANTILE_POINTS = 200;
 // Accuracy derate anchored on the calc's measured 0.93→0.965 window: the
 // per-chart slope over that window sits at ~1.07-1.11 on real charts
@@ -122,11 +130,20 @@ export interface BaselineCurves {
 // approximate baseline stays for the farm helper's cohort vectors and as the
 // serving fallback until the first finalize writes this blob.
 export const EXACT_SKILL_CURVES_META_KEY = "skill_exact_curves:v1";
+/* Shape of the stored blob, separate from the meta key on purpose: bumping the
+   KEY would make the old curves unreadable and leave every profile percentile
+   blank until the fold finishes, while bumping this makes the chain due once
+   on deploy and keeps serving the previous blob under the same key the whole
+   time. 2: sparse axes carry a median (and an empty curve) instead of being
+   dropped, so the display shrink reaches them. */
+export const EXACT_SKILL_CURVES_FORMAT = 2;
 
 // Per-(keymode, axis) curve entry. `median` is the raw population median the
 // display shrink uses; curve values are already shrunk with it, so subject
 // and population meet on exactly the displayed scale. The approximate curves
-// predate the field and fall back to their curve midpoint.
+// predate the field and fall back to their curve midpoint. `curve` is empty on
+// an axis populated enough to have a median but too thin to quantile, so any
+// percentile consumer has to check its length rather than its presence.
 interface AxisCurveEntry {
   count: number;
   curve: number[];
@@ -143,6 +160,9 @@ interface ExactAxisCurveEntry extends AxisCurveEntry {
 export interface ExactSkillCurves {
   computedAt: string;
   playerSkillsVersion: number;
+  // Absent on blobs written before the field existed, which is exactly how a
+  // stale shape is detected.
+  format?: number;
   minPlays: number;
   // keyCount -> axis -> entry; axis is a skillset name or `pattern:{id}`.
   curves: Record<string, Record<string, ExactAxisCurveEntry>>;
@@ -569,17 +589,22 @@ export async function buildExactSkillCurves(db: Db): Promise<ExactSkillCurves> {
     users[String(keyCount)] = members.get(keyCount) ?? 0;
     const axisCurves: Record<string, ExactAxisCurveEntry> = {};
     for (const [axis, list] of axes) {
-      if (list.length < BASELINE_MIN_USERS_PER_CURVE) continue;
+      if (list.length < BASELINE_MIN_USERS_PER_MEDIAN) continue;
       const raw = list.map((sample) => sample.value).sort((a, b) => a - b);
       const median = raw[Math.floor((raw.length - 1) / 2)];
       const shrunk = list.map((sample) => shrinkRating(sample.value, sample.plays, median)).sort((a, b) => a - b);
-      axisCurves[axis] = { count: list.length, curve: quantileCurve(shrunk), median };
+      // A sparse axis publishes its median so the shrink still applies, but no
+      // curve: 200 quantile points off a dozen players would be precision the
+      // sample cannot carry.
+      const curve = list.length >= BASELINE_MIN_USERS_PER_CURVE ? quantileCurve(shrunk) : [];
+      axisCurves[axis] = { count: list.length, curve, median };
     }
     curves[String(keyCount)] = axisCurves;
   }
   return {
     computedAt: nowIso(),
     playerSkillsVersion: PLAYER_SKILLS_VERSION,
+    format: EXACT_SKILL_CURVES_FORMAT,
     minPlays: BASELINE_MIN_PLAYS,
     curves,
     users,
@@ -658,8 +683,8 @@ async function finalizeSkillBaseline(db: Db, runId: string): Promise<void> {
   // Superseded-version rows are dead weight once the new curves are live.
   await exec(db, "delete from player_skill_baseline where baseline_version != ?", [SKILL_BASELINE_VERSION]);
   chartMapCache = null;
-  curvesCache = null;
-  exactCurvesCache = null;
+  curvesCacheByDb.delete(db);
+  exactCurvesCacheByDb.delete(db);
   logInfo("skill_baseline_done", {
     run_id: runId,
     users: users,
@@ -700,12 +725,17 @@ export async function enqueueSkillBaselineIfDue(db: Db, queue: JobQueue, interva
   const computedAtMs = Date.parse(stored?.computedAt ?? "");
   const approxFresh =
     stored?.playerSkillsVersion === PLAYER_SKILLS_VERSION && Number.isFinite(computedAtMs) && Date.now() - computedAtMs < intervalMs;
-  // The exact curves ride the same chain: a missing or version-stale exact
-  // blob makes an otherwise-fresh run due again (one-time on the deploy that
-  // introduces them; afterwards both blobs refresh in the same finalize).
+  // The exact curves ride the same chain: a missing, version-stale or
+  // shape-stale exact blob makes an otherwise-fresh run due again (one-time on
+  // the deploy that changes either; afterwards both blobs refresh in the same
+  // finalize). The old blob keeps serving until that finalize overwrites it.
   const exactRow = (await exec(db, "select value_json from live_meta where key = ? limit 1", [EXACT_SKILL_CURVES_META_KEY])).rows[0];
   const exactStored = parseJson<ExactSkillCurves | null>(String(exactRow?.value_json ?? ""), null);
-  if (approxFresh && exactStored?.playerSkillsVersion === PLAYER_SKILLS_VERSION) {
+  if (
+    approxFresh
+    && exactStored?.playerSkillsVersion === PLAYER_SKILLS_VERSION
+    && exactStored?.format === EXACT_SKILL_CURVES_FORMAT
+  ) {
     return false;
   }
   // After a PLAYER_SKILLS_VERSION bump this check fires immediately, but the
@@ -782,25 +812,31 @@ export async function getBaselineUserVectors(db: Db, keyCount: number): Promise<
 }
 
 // Serving-side curve cache: one small live_meta read, refreshed lazily. The
-// serving process never builds the chart map or scans user_top_scores.
-let curvesCache: { readAt: number; curves: BaselineCurves | null } | null = null;
+// serving process never builds the chart map or scans user_top_scores. Keyed
+// per Db rather than per module: a process serves one main DB, but tests build
+// a fresh one per case, and a module singleton hands the first DB's curves to
+// every later one - which reads as "the population baseline exists" on a
+// database that has none.
+const curvesCacheByDb = new WeakMap<Db, { readAt: number; curves: BaselineCurves | null }>();
 const CURVES_CACHE_TTL_MS = 5 * 60_000;
 
 export async function readBaselineCurves(db: Db): Promise<BaselineCurves | null> {
-  if (curvesCache && Date.now() - curvesCache.readAt < CURVES_CACHE_TTL_MS) return curvesCache.curves;
+  const cached = curvesCacheByDb.get(db);
+  if (cached && Date.now() - cached.readAt < CURVES_CACHE_TTL_MS) return cached.curves;
   const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [SKILL_BASELINE_CURVES_META_KEY])).rows[0];
   const curves = parseJson<BaselineCurves | null>(String(row?.value_json ?? ""), null);
-  curvesCache = { readAt: Date.now(), curves };
+  curvesCacheByDb.set(db, { readAt: Date.now(), curves });
   return curves;
 }
 
-let exactCurvesCache: { readAt: number; curves: ExactSkillCurves | null } | null = null;
+const exactCurvesCacheByDb = new WeakMap<Db, { readAt: number; curves: ExactSkillCurves | null }>();
 
 export async function readExactSkillCurves(db: Db): Promise<ExactSkillCurves | null> {
-  if (exactCurvesCache && Date.now() - exactCurvesCache.readAt < CURVES_CACHE_TTL_MS) return exactCurvesCache.curves;
+  const cached = exactCurvesCacheByDb.get(db);
+  if (cached && Date.now() - cached.readAt < CURVES_CACHE_TTL_MS) return cached.curves;
   const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [EXACT_SKILL_CURVES_META_KEY])).rows[0];
   const curves = parseJson<ExactSkillCurves | null>(String(row?.value_json ?? ""), null);
-  exactCurvesCache = { readAt: Date.now(), curves };
+  exactCurvesCacheByDb.set(db, { readAt: Date.now(), curves });
   return curves;
 }
 
@@ -905,13 +941,15 @@ export async function decoratePlayerSkillBreakdown(
       for (const axis of percentileAxes(mode.keyCount, shrunk.ratings)) {
         const axisCurve = axisCurves[axis];
         const value = Number(shrunk.ratings[axis]);
-        if (!axisCurve || !(value > 0)) continue;
+        // An entry with an empty curve carries a shrink median only: too few
+        // members to quantile, so the axis gets no percentile.
+        if (!axisCurve || axisCurve.curve.length === 0 || !(value > 0)) continue;
         percentiles[axis] = { value: percentileFromCurve(axisCurve.curve, value), population: axisCurve.count };
       }
       for (const entry of shrunk.patterns ?? []) {
         if (!(Number(entry.plays) >= BASELINE_PATTERN_MIN_PLAYS) || !(entry.rating > 0)) continue;
         const axisCurve = axisCurves[`pattern:${entry.id}`];
-        if (!axisCurve) continue;
+        if (!axisCurve || axisCurve.curve.length === 0) continue;
         percentiles[`pattern:${entry.id}`] = { value: percentileFromCurve(axisCurve.curve, entry.rating), population: axisCurve.count };
       }
       return Object.keys(percentiles).length > 0 ? { ...shrunk, percentiles } : shrunk;

@@ -92,7 +92,6 @@ interface LeaderboardSnapshotBase {
   pageSize: number;
   keyCount: number;
   fetchedAt: number;
-  shrunk: boolean;
   coverage: { current: number; total: number };
 }
 
@@ -100,6 +99,10 @@ export interface SkillLeaderboardSnapshot extends LeaderboardSnapshotBase {
   axis: string;
   ranking: SkillLeaderboardEntry[];
   axes: LeaderboardAxisInfo[];
+  // Per axis, not per board: false means this axis has no population median,
+  // so its ratings are raw and will not match the profile page. Dan snapshots
+  // carry no such flag, a dan is not shrunk at all.
+  shrunk: boolean;
 }
 
 export interface DanLeaderboardSnapshot extends LeaderboardSnapshotBase {
