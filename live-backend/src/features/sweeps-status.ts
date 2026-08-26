@@ -1,6 +1,14 @@
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import {
+  ACTIVITY_MODS_BACKFILL_DONE_META_KEY,
+  ACTIVITY_MODS_BACKFILL_JOB_TYPE,
+  ACTIVITY_MODS_BACKFILL_MIN_ACCURACY,
+  ACTIVITY_MODS_BACKFILL_PROGRESS_META_KEY,
+  countActivityModsBackfillRemaining,
+  readActivityModsBackfillProgress,
+} from "./activity-mods-backfill.js";
+import {
   TOP_SCORES_BACKFILL_DONE_META_KEY,
   TOP_SCORES_BACKFILL_JOB,
   TOP_SCORES_BACKFILL_PROGRESS_META_KEY,
@@ -256,6 +264,25 @@ function chartAnalysisSweep(options: { id: string; label: string; description: s
 
 const SWEEP_DEFINITIONS: SweepDefinition[] = [
   {
+    id: "activity-mods-backfill",
+    label: "Archived mods backfill",
+    description: "Refills mods and judgement counts on archived day-bests written before those columns shipped, so pre-2026-07-20 clears count as dan evidence again. Boot-seeded chain, strongest chart first; npm run backfill:activity-mods runs it flat out locally.",
+    kind: "one-time",
+    read: (db) => readChainSweep(db, {
+      doneKey: ACTIVITY_MODS_BACKFILL_DONE_META_KEY,
+      jobType: ACTIVITY_MODS_BACKFILL_JOB_TYPE,
+      progressKey: ACTIVITY_MODS_BACKFILL_PROGRESS_META_KEY,
+      progressFields: ["processed", "filled", "missing", "mismatched"],
+      // Links chain every 2 minutes; 3x that before "running" stops being credible.
+      recentProgressMs: 6 * 60_000,
+      total: async (dbInner, progress) => {
+        const stored = await readActivityModsBackfillProgress(dbInner);
+        const remaining = await countActivityModsBackfillRemaining(dbInner, stored.cursor, ACTIVITY_MODS_BACKFILL_MIN_ACCURACY);
+        return (progress.processed ?? 0) + remaining;
+      },
+    }),
+  },
+  {
     id: "top-scores-backfill",
     label: "Top-scores backfill",
     description: "Fetches the best-scores window once for every tracked roster member with no stored top-plays projection, so the skill baseline sees the whole roster.",
@@ -368,6 +395,13 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     description: "Re-derives the LN estimate source fields on stored chart analyses.",
     doneKey: "ln_estimate_recompute_done:v1",
     jobType: "recompute_ln_estimate_sweep",
+  }),
+  chartAnalysisSweep({
+    id: "ln-leoblack-recompute",
+    label: "LN LeoBlack routing sweep",
+    description: "Re-verdicts the stored 4K LN charts whose LN half came from the in-house kNN, now that LeoBlack's LN table owns every reading above its LN 5 floor. Rows that land on the same verdict never queue a job.",
+    doneKey: "ln_leoblack_recompute_done:v1",
+    jobType: "recompute_ln_leoblack_sweep",
   }),
   chartAnalysisSweep({
     id: "sunny-repin-recompute",

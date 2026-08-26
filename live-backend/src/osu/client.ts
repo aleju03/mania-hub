@@ -461,6 +461,18 @@ export class OsuApiClient {
     }
   }
 
+  /**
+   * A single score by id. The two id spaces OVERLAP - the same integer is a
+   * valid legacy id AND a valid solo id, resolving to entirely different
+   * scores (661735936 is a 2026 mania play on /scores/mania/, and an unrelated
+   * 2018 osu! play on /scores/). Neither route 404s on the wrong space, so
+   * callers MUST verify the returned score's user_id/beatmap_id/ruleset_id
+   * against what they expected before trusting it.
+   */
+  async getScoreById(scoreId: number, space: "solo" | "legacy", caller = "unknown"): Promise<Record<string, unknown>> {
+    return this.getJson(space === "legacy" ? `/scores/mania/${scoreId}` : `/scores/${scoreId}`, caller);
+  }
+
   async getScores(ruleset = "mania", cursorString?: string | null, caller = "unknown"): Promise<OsuScoresResponse> {
     const params = new URLSearchParams({ ruleset });
     if (cursorString) params.set("cursor_string", cursorString);

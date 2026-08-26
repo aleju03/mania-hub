@@ -113,8 +113,9 @@ export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
 
 // 4K only: the LN validation run (scripts/ln-axis/results-2026-08-24.md) found
 // the 4K LN percentile tracks how much LN a player plays, not a separable
-// skill, so the bar gets its honest companion number: the LN share of the
-// rated pool. The 7K axis passed the same test and stays unannotated.
+// skill, so the bar gets its honest companion number: the share of the rated
+// pool that is LN charts (the backend tags ln only where the analyzer's
+// verdict does). The 7K axis passed the same test and stays unannotated.
 export function lnPlayShare(mode: MyDataSkillMode): number | null {
   if (mode.keyCount !== 4) return null;
   const ln = (mode.patterns ?? []).find((entry) => entry.id === "ln");

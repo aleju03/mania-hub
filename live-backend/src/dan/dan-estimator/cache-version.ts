@@ -22,4 +22,10 @@
 // cached 4K RC estimate that Mixed sends through Roxy/Azusa can move. The
 // MinaCalc 40->100 skill-cap patch also lands here; it only moves charts that
 // had a skillset pinned at 40.
-export const DAN_ESTIMATE_CACHE_VERSION = 14;
+// v15: 4K LN routing handed to leoblack's LN interval table (chart-classifier),
+// with the in-house kNN kept only below that table's LN 5 floor, and the LN
+// ladder opened up to its real top of 17 (16 Yokaze, 17 Yeehee) instead of
+// clamping labels at 15. Every cached 4K LN estimate that came from the kNN can
+// move, in both directions, and the ones that were pinned at 15 gain their real
+// level.
+export const DAN_ESTIMATE_CACHE_VERSION = 15;

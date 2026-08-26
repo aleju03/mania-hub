@@ -1363,12 +1363,16 @@ msgid "<0>{collector}</0> has not opened a pack."
 msgstr "<0>{collector}</0> no ha abierto ningún pack."
 
 #: src/components/player/SkillBreakdown.tsx
+msgid "<0>{percent}%</0> of the rated plays are LN charts ({lnPlays} of {total})"
+msgstr "El <0>{percent}%</0> de los plays calificados son charts LN ({lnPlays} de {total})"
+
+#: src/components/player/SkillBreakdown.tsx
 #~ msgid "<0>{percent}%</0> of the rated plays are on LN charts"
 #~ msgstr "El <0>{percent}%</0> de los plays calificados son de charts LN"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "<0>{percent}%</0> of the rated plays have LN content ({lnPlays} of {total})"
-msgstr "El <0>{percent}%</0> de los plays calificados tienen contenido LN ({lnPlays} de {total})"
+#~ msgid "<0>{percent}%</0> of the rated plays have LN content ({lnPlays} of {total})"
+#~ msgstr "El <0>{percent}%</0> de los plays calificados tienen contenido LN ({lnPlays} de {total})"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "<0>{selectedCount}</0> selected"
@@ -1531,8 +1535,8 @@ msgid "7K"
 msgstr "7K"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
-msgstr "Un pase cuenta con {minAccuracyPercent}%+ de precisión a 1.0x o DT, en un mapa al que el analizador le dio un nivel de dan. Los pases por debajo de la precisión completa reciben un nivel con descuento, y la estimación es el {quorum}º mejor pase acreditado, así que un solo resultado atípico nunca puede fijarla."
+#~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
+#~ msgstr "Un pase cuenta con {minAccuracyPercent}%+ de precisión a 1.0x o DT, en un mapa al que el analizador le dio un nivel de dan. Los pases por debajo de la precisión completa reciben un nivel con descuento, y la estimación es el {quorum}º mejor pase acreditado, así que un solo resultado atípico nunca puede fijarla."
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass with almost no misses, at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
@@ -3472,6 +3476,10 @@ msgstr "Leaderboard por país (o global), jugadores top por pp."
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
 msgstr "Rankings de mania por país"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Counts passes with {minAccuracyPercent}%+ accuracy on rated charts, at 1.0x or DT. Low accuracy counts for a bit less than the chart's dan. The estimate is your {quorum}th best pass, so one lucky score won't change it."
+#~ msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Create"
@@ -7455,6 +7463,26 @@ msgstr "En línea"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
 msgstr "Solo yo"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Only passes at {minAccuracyPercent}%+ accuracy count, played at 1.0x or DT on a chart the analyzer rated. Each clear is credited a dan at or below the chart's own, depending on how clean the pass was, and the estimate needs {quorum} clears at a level to read it, so one clear never sets it."
+#~ msgstr "Solo cuentan las pasadas con {minAccuracyPercent}%+ de acc, jugadas a 1.0x o DT en un chart al que el analizador dio un nivel de dan. Cada pase recibe un dan igual o menor al del chart según lo limpio que fuera, y la estimación necesita {quorum} pases en un nivel para leerlo, así que un solo pase nunca la fija."
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Only passes with {minAccuracyPercent}% accuracy or better count, at 1.0x speed or DT, on a chart the analyzer has rated. Each pass is worth the chart's dan, or a bit less if the accuracy is low. You need {quorum} of them at a level before the estimate shows that level, so one score never decides it."
+#~ msgstr "Solo cuentan las pasadas con {minAccuracyPercent}% de precisión o más, a 1.0x o con DT, en un chart que el analizador haya evaluado. Cada pasada vale el dan del chart, o un poco menos si la precisión es baja. Necesitas {quorum} de ellas en un nivel para que la estimación muestre ese nivel, así que un solo score nunca lo decide."
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. Lower accuracy gives less credit. Your dan is the {quorum}th highest of those passes."
+#~ msgstr "Solo cuentan las pasadas con {minAccuracyPercent}%+ de precisión, a 1.0x o DT, en charts que tengan nivel de dan. Menos precisión da menos crédito. Tu dan es la {quorum}.ª pasada más alta de esas."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. Lower accuracy gives less credit. Your dan is the level of your {quorum}th best pass, so you need {quorum} passes at a level to reach it."
+msgstr "Solo cuentan las pasadas con {minAccuracyPercent}%+ de precisión, a 1.0x o DT, en charts que tengan nivel de dan. Menos precisión da menos crédito. Tu dan es el nivel de tu {quorum}.ª mejor pasada, así que necesitas {quorum} pasadas en un nivel para llegar a él."
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. The lower the accuracy, the less a pass counts. Your dan is your {quorum}th best pass, not your best one."
+#~ msgstr "Solo cuentan las pasadas con {minAccuracyPercent}%+ de precisión, a 1.0x o DT, en charts que tengan nivel de dan. Cuanta menos precisión, menos cuenta la pasada. Tu dan es tu {quorum}.ª mejor pasada, no la mejor."
 
 #: src/components/communities/CommunityCard.tsx
 msgid "Only people from here can join"

@@ -250,7 +250,9 @@ function danSliderContext(ui: MapSearchUiState): DanScaleContext {
 function danLadderRows(context: DanScaleContext): number[][] {
   const seq = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
   if (context === "7k" || context === "7k-ln") return [seq(0, 10), seq(11, 14)];
-  if (context === "ln") return [seq(1, 8), seq(9, 16)];
+  // LN runs 1-17 (16 Yokaze, 17 Yeehee are the extra-level courses), split into
+  // a row of nine and a row of eight.
+  if (context === "ln") return [seq(1, 9), seq(10, 17)];
   return [seq(1, 10), seq(11, 20)];
 }
 

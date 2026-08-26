@@ -178,9 +178,12 @@ describe("analyzeManiaPatterns", () => {
     const inverseRows = Array.from({ length: 7 * 36 }, (_, index) => [
       { column: index % 7, holdMs: 610 },
     ]);
+    // Tails long enough that the release is its own action, landing three rows
+    // later so each one lands on another column's head while two more holds are
+    // still down. The same column is not re-pressed until 600ms after the
+    // release, so none of it reads as inverse.
     const releaseRows = Array.from({ length: 7 * 36 }, (_, index) => [
-      { column: index % 7, holdMs: 45 },
-      { column: (index + 3) % 7, holdMs: 45 },
+      { column: index % 7, holdMs: 450 },
     ]);
     const generalRows = repeatRows([
       [0, 2],
@@ -200,7 +203,7 @@ describe("analyzeManiaPatterns", () => {
     ], 34);
 
     expect(analyzeManiaPatterns(makeMixedMap(7, inverseRows, 100)).primary?.id).toBe("lninverse");
-    expect(analyzeManiaPatterns(makeMixedMap(7, releaseRows, 60)).primary?.id).toBe("lnrelease");
+    expect(analyzeManiaPatterns(makeMixedMap(7, releaseRows, 150)).primary?.id).toBe("lnrelease");
     expect(analyzeManiaPatterns(makeMixedMap(7, generalRows, 100)).primary?.id).toBe("lngeneral");
     expect(analyzeManiaPatterns(makeMixedMap(7, techRows, 55)).primary?.id).toBe("lntech");
   });
@@ -241,15 +244,14 @@ describe("analyzeManiaPatterns", () => {
     expect(general.patterns.map((pattern) => pattern.id)).toContain("lngeneral");
     expect(tech.patterns.map((pattern) => pattern.id)).toContain("lntech");
 
-    // 4K never mints lnrelease: on four columns the release-only signal is
-    // manufactured by short-hold vibro spam, so the tag is 7K-only. The same
-    // shape at 7K still resolves to lnrelease.
-    const releaseRows = (keyCount: number, stride: number) => Array.from({ length: keyCount * 36 }, (_, index) => [
-      { column: index % keyCount, holdMs: 45 },
-      { column: (index + stride) % keyCount, holdMs: 45 },
+    // 4K never mints lnrelease: the release ramps are measured on 7K, where the
+    // scene names the skillset, and no 4K surface offers a release axis to
+    // fill. The same shape at 7K still resolves to lnrelease.
+    const releaseRows = (keyCount: number) => Array.from({ length: keyCount * 36 }, (_, index) => [
+      { column: index % keyCount, holdMs: 450 },
     ]);
-    const release4k = analyzeManiaPatterns(makeMixedMap(4, releaseRows(4, 2), 60));
-    const release7k = analyzeManiaPatterns(makeMixedMap(7, releaseRows(7, 3), 60));
+    const release4k = analyzeManiaPatterns(makeMixedMap(4, releaseRows(4), 150));
+    const release7k = analyzeManiaPatterns(makeMixedMap(7, releaseRows(7), 150));
     expect(release4k.allPatterns.find((pattern) => pattern.id === "lnrelease")).toBeUndefined();
     expect(release7k.patterns.map((pattern) => pattern.id)).toContain("lnrelease");
   });

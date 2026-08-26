@@ -54,6 +54,7 @@ describe("sweeps status registry", () => {
     const reports = await getSweepReports(db);
     const ids = reports.map((entry) => entry.id);
     expect(ids).toEqual([
+      "activity-mods-backfill",
       "top-scores-backfill",
       "skill-vector-backfill-v5",
       "dt-rate-analysis",
@@ -67,6 +68,7 @@ describe("sweeps status registry", () => {
       "bracket-content-recompute",
       "ln-msd-backfill",
       "ln-source-recompute",
+      "ln-leoblack-recompute",
       "sunny-repin-recompute",
       "sunny-repin-dt-recompute",
       "leoblack-repin-recompute",

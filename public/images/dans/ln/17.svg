@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="LN 17 dan">
+  <defs>
+    <linearGradient id="lnfill" x1="14%" x2="88%" y1="6%" y2="94%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.42" stop-color="#dfe6f2"/>
+      <stop offset="0.72" stop-color="#aeb8cc"/>
+      <stop offset="1" stop-color="#f2f5fb"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="22" stdDeviation="17" flood-color="#000" flood-opacity="0.68"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <text x="512" y="528" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="610" font-weight="900" fill="none" stroke="#050509" stroke-width="104" stroke-linejoin="round">17</text>
+    <text x="512" y="528" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="610" font-weight="900" fill="none" stroke="#121722" stroke-width="68" stroke-linejoin="round">17</text>
+    <!-- Chromatic aberration, the Yeehee cover's own look: the glyph split into
+         offset red and cyan copies screen-blended behind a silver core. The
+         parent filter isolates the group, so each fringe screens over the dark
+         strokes and keeps its colour where it clears the core. -->
+    <g style="mix-blend-mode:screen">
+      <text x="486" y="514" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="610" font-weight="900" fill="#ff2f3d">17</text>
+      <text x="538" y="542" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="610" font-weight="900" fill="#16e8e0">17</text>
+    </g>
+    <text x="512" y="528" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="610" font-weight="900" fill="url(#lnfill)" stroke="#0d0a12" stroke-width="24" stroke-linejoin="round">17</text>
+  </g>
+</svg>

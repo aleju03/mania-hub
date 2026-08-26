@@ -70,6 +70,13 @@ interface LnPatternStats {
   headTailSwitchRatio: number;
   mixedRowRatio: number;
   tapWhileHoldingRatio: number;
+  // Release-shape stats, all over every hold in the chart. A release is
+  // "active" when letting go is its own action rather than the off-half of an
+  // inverse re-press; the other two say what the hand is doing at that moment.
+  activeReleaseRatio: number;
+  coordinatedReleaseRatio: number;
+  heldWhileReleaseRatio: number;
+  holdDurationP50: number;
 }
 
 function rowColumns(rowNotes: ManiaNote[]): number[] {
@@ -182,11 +189,13 @@ function getLnPatternStats(
   const releaseRows = new Map<number, ManiaNote[]>();
   const headTimes = new Set<number>();
   const holdEvents: Array<{ time: number; delta: number }> = [];
+  const holdSpans: ManiaNote[] = [];
   const notesByColumn = Array.from({ length: Math.max(1, keyCount) }, () => [] as ManiaNote[]);
 
   for (const note of notes) {
     if (note.column >= 0 && note.column < notesByColumn.length) notesByColumn[note.column].push(note);
     if (!note.isHold || note.endTime <= note.time) continue;
+    holdSpans.push(note);
 
     const releaseRow = releaseRows.get(note.endTime);
     if (releaseRow) releaseRow.push(note);
@@ -227,26 +236,64 @@ function getLnPatternStats(
   let inverseLikeHolds = 0;
   let sameColumnNextHolds = 0;
 
+  // Prefix maximum of hold end times, ordered by hold start, so "is another
+  // hold still down at time t" is a binary search instead of a scan.
+  const holdsByStart = [...holdSpans].sort((left, right) => left.time - right.time);
+  const holdStarts = holdsByStart.map((hold) => hold.time);
+  const latestEndByStart: number[] = [];
+  let latestEnd = -Infinity;
+  for (const hold of holdsByStart) {
+    latestEnd = Math.max(latestEnd, hold.endTime);
+    latestEndByStart.push(latestEnd);
+  }
+  const heldThrough = (time: number): boolean => {
+    let low = 0;
+    let high = holdStarts.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (holdStarts[mid] < time) low = mid + 1;
+      else high = mid;
+    }
+    return low > 0 && latestEndByStart[low - 1] > time;
+  };
+
+  let activeReleaseHolds = 0;
+  let coordinatedReleaseHolds = 0;
+  let heldWhileReleaseHolds = 0;
+  const holdDurations: number[] = [];
+
   for (const columnNotes of notesByColumn) {
     columnNotes.sort((left, right) => left.time - right.time || left.endTime - right.endTime);
-    for (let index = 0; index < columnNotes.length - 1; index++) {
+    for (let index = 0; index < columnNotes.length; index++) {
       const note = columnNotes[index];
       if (!note.isHold || note.endTime <= note.time) continue;
 
-      const nextNote = columnNotes[index + 1];
-      const gap = nextNote.time - note.endTime;
-      if (gap < 0) continue;
-
       const holdDuration = Math.max(1, note.endTime - note.time);
-      const gapRatio = gap / holdDuration;
-      sameColumnNextHolds++;
-      sameColumnGaps.push(gap);
-      if (gap <= gapCap && gapRatio <= 0.7) inverseLikeHolds++;
+      holdDurations.push(holdDuration);
+
+      const nextNote = index + 1 < columnNotes.length ? columnNotes[index + 1] : null;
+      const gap = nextNote ? nextNote.time - note.endTime : Infinity;
+      if (nextNote && gap >= 0) {
+        sameColumnNextHolds++;
+        sameColumnGaps.push(gap);
+      }
+
+      // The release doubles as the cue to press the same column again, so the
+      // press carries the timing and the release rides along. Everything else
+      // is a release the hand has to place on its own.
+      if (gap >= 0 && gap <= gapCap && gap / holdDuration <= 0.7) {
+        if (nextNote) inverseLikeHolds++;
+        continue;
+      }
+      activeReleaseHolds++;
+      if (headTimes.has(note.endTime)) coordinatedReleaseHolds++;
+      if (heldThrough(note.endTime)) heldWhileReleaseHolds++;
     }
   }
 
   const rowCount = Math.max(1, orderedRows.length);
   const releaseRowCount = releaseRows.size;
+  const holdCount = Math.max(1, holdDurations.length);
 
   return {
     inverseReleaseRatio: sameColumnNextHolds ? inverseLikeHolds / sameColumnNextHolds : 0,
@@ -255,6 +302,10 @@ function getLnPatternStats(
     headTailSwitchRatio: headTailSwitchRows / rowCount,
     mixedRowRatio: mixedRows / rowCount,
     tapWhileHoldingRatio: tapWhileHoldingRows / rowCount,
+    activeReleaseRatio: activeReleaseHolds / holdCount,
+    coordinatedReleaseRatio: coordinatedReleaseHolds / holdCount,
+    heldWhileReleaseRatio: heldWhileReleaseHolds / holdCount,
+    holdDurationP50: quantile(holdDurations, 0.5),
   };
 }
 
@@ -353,17 +404,54 @@ export function analyzeManiaPatterns(
     ),
     clamp01((0.16 - lnStats.mixedRowRatio) / 0.16),
   );
-  // Release stays 7K-only. On 4 columns, short-hold vibro spam manufactures
-  // release-only rows, so the highest-scoring 4K charts in the corpus were
-  // vibro packs, vibro dan courses and jumptrill memes rather than anything
-  // release-focused. The vibro flag catches under 5% of them, so there is no
-  // cheap filter that rescues it.
+  // Release is about where the release lands, not how many of them there are.
+  // The old gate asked for isolated release rows (no note head at the same
+  // instant), 12+ releases/sec and hold tails under 520ms, and all three run
+  // the wrong way: measured 2026-08-25 over 324 7K charts whose mapper tags,
+  // diff name or pack name say release/coordination against 1977 random 7K LN
+  // charts, isolated release rows score AUC 0.36, releases/sec 0.19 and short
+  // tails 0.23 - release charts have FEWER isolated releases (you let go while
+  // hitting something else), longer tails (p50 281ms against 130ms) and no
+  // more density than any other LN chart. What it built was a difficulty tag:
+  // it fired on 5% of the labelled charts, its median hit sat at 8.32*, and
+  // only 15 charts in the whole index cleared it under 5*.
+  //
+  // What separates instead, on the same corpus: releases that are not the
+  // off-half of an inverse re-press (AUC 0.76 against random LN, 0.85 against
+  // inverse-labelled charts), tails long enough that letting go is its own
+  // motor action rather than the tail of a flick (0.79), and the release
+  // landing against something - a press in another column (0.74) or other
+  // holds still down (0.72). Two shapes clear the last leg, because release
+  // charts come in both: the slow one, where long tails release onto other
+  // presses, and the dense all-LN one, where tails are short but every release
+  // happens under other holds.
+  //
+  // Still 7K-only, but no longer for the old reason (4K release-only rows were
+  // manufactured by short-hold vibro): these ramps are measured on 7K, where
+  // the scene names the skillset and the corpus exists, and neither the maps
+  // picker nor the player skill buckets offer a 4K release axis to fill.
   const lnReleaseScore = metrics.keyCount === 7
     ? lnSubtypeGate * minGate(
-      pressure(lnStats.releaseOnlyRatio, 0.48, 0.68),
-      pressure(metrics.lnReleasePressure, 12, 30),
-      clamp01((0.45 - lnStats.inverseReleaseRatio) / 0.32),
-      clamp01((520 - metrics.lnHoldDurationP90) / 260),
+      pressure(metrics.holdRatio, 0.2, 0.46),
+      pressure(lnStats.activeReleaseRatio, 0.55, 0.88),
+      // Low floor on purpose: enough releases that the chart puts them in front
+      // of you, ramped under the labelled charts' p02 rather than over their
+      // p90 the way the old 12/sec term was.
+      pressure(metrics.lnReleasePressure, 2.5, 6),
+      Math.max(
+        minGate(
+          pressure(lnStats.holdDurationP50, 150, 330),
+          Math.max(
+            pressure(lnStats.coordinatedReleaseRatio, 0.34, 0.68),
+            pressure(lnStats.heldWhileReleaseRatio, 0.32, 0.62),
+          ),
+        ),
+        minGate(
+          pressure(lnStats.heldWhileReleaseRatio, 0.6, 0.85),
+          pressure(metrics.holdRatio, 0.6, 0.85),
+          pressure(lnStats.activeReleaseRatio, 0.7, 0.9),
+        ),
+      ),
     )
     : 0;
   const lnTechBurst = Math.max(
@@ -431,7 +519,7 @@ export function analyzeManiaPatterns(
     );
     if (metrics.keyCount === 7) {
       candidates.push(
-        hit("lnrelease", lnReleaseScore, dataConfidence, `${compactPercent(lnStats.releaseOnlyRatio)} release-only rows, release pressure ${metrics.lnReleasePressure.toFixed(1)}`),
+        hit("lnrelease", lnReleaseScore, dataConfidence, `${compactPercent(lnStats.activeReleaseRatio)} releases timed on their own, p50 tail ${Math.round(lnStats.holdDurationP50)}ms, ${compactPercent(lnStats.heldWhileReleaseRatio)} released under other holds`),
       );
     }
   }

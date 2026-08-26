@@ -1372,12 +1372,16 @@ msgid "<0>{collector}</0> has not opened a pack."
 msgstr "<0>{collector}</0> 还没有开过卡包。"
 
 #: src/components/player/SkillBreakdown.tsx
+msgid "<0>{percent}%</0> of the rated plays are LN charts ({lnPlays} of {total})"
+msgstr "已评分成绩中有 <0>{percent}%</0> 是 LN 谱面（{lnPlays}/{total}）"
+
+#: src/components/player/SkillBreakdown.tsx
 #~ msgid "<0>{percent}%</0> of the rated plays are on LN charts"
 #~ msgstr "已评分成绩中有 <0>{percent}%</0> 来自 LN 谱面"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "<0>{percent}%</0> of the rated plays have LN content ({lnPlays} of {total})"
-msgstr "已评分成绩中有 <0>{percent}%</0> 包含 LN（{lnPlays}/{total}）"
+#~ msgid "<0>{percent}%</0> of the rated plays have LN content ({lnPlays} of {total})"
+#~ msgstr "已评分成绩中有 <0>{percent}%</0> 包含 LN（{lnPlays}/{total}）"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "<0>{selectedCount}</0> selected"
@@ -1540,8 +1544,8 @@ msgid "7K"
 msgstr "7K"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
-msgstr "通过是指在 1.0x 或 DT 下、准确率 {minAccuracyPercent}%+ 的成绩，且谱面已被分析器评定段位。低于满准确率的通过会获得打折后的等级，估算取第 {quorum} 高的计入通过，因此单个异常成绩永远无法决定它。"
+#~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
+#~ msgstr "通过是指在 1.0x 或 DT 下、准确率 {minAccuracyPercent}%+ 的成绩，且谱面已被分析器评定段位。低于满准确率的通过会获得打折后的等级，估算取第 {quorum} 高的计入通过，因此单个异常成绩永远无法决定它。"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass with almost no misses, at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
@@ -3481,6 +3485,10 @@ msgstr "国家/地区(或全球)排行榜，按 pp 排列的顶尖玩家。"
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
 msgstr "国家/地区 mania 排行榜"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Counts passes with {minAccuracyPercent}%+ accuracy on rated charts, at 1.0x or DT. Low accuracy counts for a bit less than the chart's dan. The estimate is your {quorum}th best pass, so one lucky score won't change it."
+#~ msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Create"
@@ -7464,6 +7472,26 @@ msgstr "在线"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
 msgstr "仅自己"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Only passes at {minAccuracyPercent}%+ accuracy count, played at 1.0x or DT on a chart the analyzer rated. Each clear is credited a dan at or below the chart's own, depending on how clean the pass was, and the estimate needs {quorum} clears at a level to read it, so one clear never sets it."
+#~ msgstr "只有在 1.0x 或 DT 下、准确率 {minAccuracyPercent}%+ 且谱面已被分析器评定段位的成绩才计入。每个通过按打得多干净，计入不高于谱面本身的段位；估算需要在某个段位上有 {quorum} 个通过才会读到它，所以单个通过永远无法决定它。"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Only passes with {minAccuracyPercent}% accuracy or better count, at 1.0x speed or DT, on a chart the analyzer has rated. Each pass is worth the chart's dan, or a bit less if the accuracy is low. You need {quorum} of them at a level before the estimate shows that level, so one score never decides it."
+#~ msgstr "只有准确率达到 {minAccuracyPercent}% 或以上、在 1.0x 或 DT 下、且谱面已被分析器评定过的成绩才计入。每次通过算作该谱面的段位，准确率偏低则略低一些。某个段位需要 {quorum} 次这样的通过，估算才会显示该段位，所以单个成绩永远不会决定它。"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. Lower accuracy gives less credit. Your dan is the {quorum}th highest of those passes."
+#~ msgstr "只有在 1.0x 或 DT 下、准确率 {minAccuracyPercent}%+、且谱面有段位评级的成绩才计入。准确率越低，给的段位越少。你的段位是这些成绩里第 {quorum} 高的那个。"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. Lower accuracy gives less credit. Your dan is the level of your {quorum}th best pass, so you need {quorum} passes at a level to reach it."
+msgstr "只有在 1.0x 或 DT 下、准确率 {minAccuracyPercent}%+、且谱面有段位评级的成绩才计入。准确率越低，给的段位越少。你的段位是第 {quorum} 好的那次通过的等级，所以要达到某个段位需要 {quorum} 次该等级的通过。"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. The lower the accuracy, the less a pass counts. Your dan is your {quorum}th best pass, not your best one."
+#~ msgstr "只有在 1.0x 或 DT 下、准确率 {minAccuracyPercent}%+、且谱面有段位评级的成绩才计入。准确率越低，这次通过算得越少。你的段位取第 {quorum} 好的通过，而不是最好的那次。"
 
 #: src/components/communities/CommunityCard.tsx
 msgid "Only people from here can join"

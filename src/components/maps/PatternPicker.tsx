@@ -26,8 +26,8 @@ const SUBFAMILIES: Record<string, string[]> = {
 // dumpstream and jack subfamilies, 7K charts with chordstream/delay/bracket,
 // everything else with the wide-key stream set. Jack and stream stay in every
 // list: the analyzer detects both for all keymodes. The LN subfamilies are 4K
-// and 7K only, and 4K omits LN Release: on 4 columns the analyzer can't tell
-// release-focused LN from vibro spam, so it doesn't emit the tag at all.
+// and 7K only, and 4K omits LN Release: the release ramps are measured on 7K
+// charts, so the analyzer doesn't emit the tag on 4 columns at all.
 // The full generic list only shows when the Keys facet is empty or mixed.
 const KEYMODE_PATTERN_OPTIONS: Record<string, string[]> = {
   "4k": ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln"],

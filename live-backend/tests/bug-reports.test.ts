@@ -421,6 +421,54 @@ describe("bug reports", () => {
     ]);
   });
 
+  it("does not backfill a modern reply mirror after a restart", async () => {
+    const created = await submit();
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created.report;
+
+    expect((await addAdminBugReportMessage(db, { id, body: "One real response." })).ok).toBe(true);
+    await migrate(db);
+    await migrate(db);
+
+    expect((await getBugReport(db, id))?.messages.map(({ author, body }) => ({ author, body }))).toEqual([
+      { author: "admin", body: "One real response." },
+    ]);
+    expect((await exec(
+      db,
+      "select legacy_reply from bug_report_messages where report_id = ?",
+      [id],
+    )).rows).toMatchObject([{ legacy_reply: 0 }]);
+  });
+
+  it("removes only an exact legacy duplicate created by the old backfill", async () => {
+    const created = await submit();
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created.report;
+
+    expect((await addAdminBugReportMessage(db, { id, body: "One real response." })).ok).toBe(true);
+    const message = (await exec(
+      db,
+      "select body, created_at from bug_report_messages where report_id = ? limit 1",
+      [id],
+    )).rows[0];
+    await exec(
+      db,
+      `insert into bug_report_messages (id, report_id, author_role, body, created_at, legacy_reply)
+       values ('old-backfill-copy', ?, 'admin', ?, ?, 1)`,
+      [id, String(message?.body), Number(message?.created_at)],
+    );
+
+    await migrate(db);
+    const rows = (await exec(
+      db,
+      "select body, legacy_reply from bug_report_messages where report_id = ? order by rowid",
+      [id],
+    )).rows;
+    expect(rows).toMatchObject([{ body: "One real response.", legacy_reply: 0 }]);
+  });
+
   it("stamps resolvedAt only when closed, clears it on reopen, and dates a reply when it changes", async () => {
     const created = await submit();
     expect(created.ok).toBe(true);

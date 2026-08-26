@@ -5,7 +5,7 @@ import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { estimateLnDan } from "../dan/dan-estimator/ln.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
-import { detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
+import { classifyChart, detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { classifyChartWithCompanella } from "../dan/companella.js";
 import { runLeoBlackMixed } from "../dan/leoblack-estimator.js";
 import { LN_TAIL_MIN_RATIO, computeMsd } from "../dan/msd.js";
@@ -1021,9 +1021,16 @@ async function enqueueDanFloorPinRecompute(queue: JobQueue, cursor: number): Pro
 // v2 scans 4K and 7K. 4K subtype scores are all new, and 7K picks up the
 // subtypes that used to be dropped by the top-5 visible slice (~1% of stored
 // 7K LN verdicts), so both keymodes can differ from what is stored.
+//
+// v3 is 7K only: lnrelease was rebuilt around release shape instead of release
+// density (see the ramp notes in dan-estimator/patterns.ts), and 4K never mints
+// the tag, so scanning 4K would re-parse 63k charts to change nothing. Every
+// stored 7K lnrelease tag predates the new definition in both directions - the
+// old gate tagged ~530 charts with a median of 8.32*, the new one tags roughly
+// 1,600 with a median of 4.6*.
 export const LN_SUBTYPE_RECOMPUTE_JOB = "recompute_ln_subtype_sweep";
-const LN_SUBTYPE_META_KEY = "ln_subtype_recompute_done:v2";
-const LN_SUBTYPE_SWEEP_KEY_COUNTS = [4, 7];
+const LN_SUBTYPE_META_KEY = "ln_subtype_recompute_done:v3";
+const LN_SUBTYPE_SWEEP_KEY_COUNTS = [7];
 const LN_SUBTYPE_CHUNK = 50;
 // Subtype scores are gated on the composite LN score, which needs some hold
 // presence; charts with near-zero LN share can't change tags.
@@ -1966,6 +1973,149 @@ async function enqueueLnSourceRecompute(queue: JobQueue, cursor: number): Promis
   await queue.enqueue(
     LN_SOURCE_RECOMPUTE_JOB,
     `${LN_SOURCE_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// One-shot sweep for the 2026-08-25 LN routing change: LeoBlack's LN interval
+// table now owns the 4K LN verdict wherever it reads a real tier, and the
+// in-house kNN only covers what sits below that table's LN 5 floor. Every row
+// whose LN half came from the kNN is stale - most flip to the table verdict,
+// and the ones under the floor stay put.
+//
+// Inline diff rather than a blanket re-analysis: the LN half is the only thing
+// that moved, and recomputing it is a classifier pass with no MinaCalc in it,
+// so the ~a third of rows that land on the same verdict never queue a job. The
+// LN half is companella-independent (applyCompanellaToMixedResult swaps the RC
+// half and carries plan.lnDifficulty through untouched), so the cheap
+// classifyChart is the same LN answer the analysis job would store.
+export const LN_LEOBLACK_RECOMPUTE_JOB = "recompute_ln_leoblack_sweep";
+const LN_LEOBLACK_META_KEY = "ln_leoblack_recompute_done:v1";
+const LN_LEOBLACK_CHUNK = 40;
+
+export interface LnLeoblackChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number[];
+  done: boolean;
+}
+
+export async function recomputeLnLeoblackChunk(
+  db: Db,
+  cursor: number,
+  limit = LN_LEOBLACK_CHUNK,
+): Promise<LnLeoblackChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id, classification_json, msd_dt_json, dan_dt_json is not null as has_dt
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and key_count = 4
+       and json_extract(classification_json, '$.ln.source') = 'inhouse-ln-knn'
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const changed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const stored = parseJson<Pick<LeanChartClassification, "ln"> | null>(row.classification_json, null);
+    const storedLn = stored?.ln ?? null;
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText || !storedLn) continue;
+    try {
+      const map = parseManiaBeatmap(osuText);
+      if (map.keyCount !== 4) continue;
+      const starRating = Number((await exec(
+        db,
+        "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
+        [beatmapId],
+      )).rows[0]?.difficulty_rating ?? 0);
+      const input = {
+        starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
+        totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+        version: map.version,
+      };
+      const fresh = classifyChart(map, osuText, input).ln;
+      if (fresh && fresh.displayName === storedLn.displayName && fresh.source === storedLn.source) continue;
+
+      // Refresh the DT verdict before the analysis job runs, so its
+      // search-index upsert reads current DT columns. The stored DT MSD feeds
+      // Companella so the RC half keeps the model it already had instead of
+      // dropping to the Sunny fallback, and no MinaCalc runs here.
+      if (Number(row.has_dt)) {
+        const storedMsd = parseJson<{ values?: Record<string, number> } | null>(row.msd_dt_json, null);
+        const classification = await classifyChartWithCompanella(map, osuText, {
+          ...input,
+          rate: DT_RATE,
+        }, storedMsd?.values ? { msdValues: storedMsd.values } : undefined);
+        const lean = leanClassification(classification);
+        const danDt = {
+          primaryLabel: lean.primary?.displayName ?? null,
+          primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
+          rawDan: lean.primary?.rawDan ?? null,
+        };
+        await exec(
+          db,
+          `update beatmap_chart_analysis
+           set dan_dt_json = json(?)
+           where beatmap_id = ? and analysis_version = ?`,
+          [json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
+        );
+      }
+      changed.push(beatmapId);
+    } catch {
+      // A chart the parser/estimator rejects keeps its stored verdict; the full
+      // analysis job would fail the same way.
+    }
+    // The classifier pass is the CPU burst; yield between charts like the
+    // sweeps above so ingest/SSE keep moving.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureLnLeoblackRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [LN_LEOBLACK_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [LN_LEOBLACK_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueLnLeoblackRecompute(queue, 0);
+}
+
+export async function runLnLeoblackRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeLnLeoblackChunk(db, cursor);
+  for (const beatmapId of result.changed) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [LN_LEOBLACK_META_KEY, json({ finishedAt: now }), now],
+    );
+    // Re-verdicted charts must move between LN dan collections now, not on the
+    // next scheduled rotation.
+    await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+    return;
+  }
+  await enqueueLnLeoblackRecompute(queue, result.nextCursor);
+}
+
+async function enqueueLnLeoblackRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    LN_LEOBLACK_RECOMPUTE_JOB,
+    `${LN_LEOBLACK_RECOMPUTE_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );

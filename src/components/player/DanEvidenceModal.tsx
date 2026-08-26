@@ -151,6 +151,10 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
     ]
     : [];
   const openedSection = sections.find((section) => section.id === openSection) ?? null;
+  // The loading state stands in for the same column strip the loaded window
+  // opens on, so nothing jumps when the estimate lands. Only 7K LN has skill
+  // buckets on the LN side; every other LN keymode is the one "all" column.
+  const skeletonColumns = side === "ln" && keyCount !== 7 ? 1 : 5;
 
   return (
     <>
@@ -200,9 +204,9 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
                   ) : null}
                   <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-osu-f1 sm:text-xs">
                     <Trans>
-                      A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the
-                      analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the
-                      {" "}{quorum}th best credited clear, so a single outlier can never set it.
+                      Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan
+                      rating. Lower accuracy gives less credit. Your dan is the level of your {quorum}th best pass, so
+                      you need {quorum} passes at a level to reach it.
                     </Trans>
                   </p>
                 </div>
@@ -215,6 +219,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
                       </span>
                     ) : null}
                   </span>
+                ) : loading ? (
+                  <Skeleton className="ml-auto h-14 w-14 shrink-0 rounded-full" />
                 ) : null}
               </div>
               <button
@@ -229,13 +235,16 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
 
             <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3 [scrollbar-gutter:stable] sm:px-4">
               {loading ? (
-                <div className="divide-y divide-osu-b3/15">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <div key={index} className="flex items-center gap-3 px-2 py-3">
-                      <Skeleton className="h-3 w-3" />
-                      <Skeleton className="h-3 w-16" />
-                      <Skeleton className="h-5 w-20" />
-                      <Skeleton className="ml-auto h-2.5 w-12" />
+                <div className="flex flex-wrap border-b border-osu-b3/20">
+                  {Array.from({ length: skeletonColumns }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="flex min-w-0 basis-1/2 flex-col items-center gap-1.5 border-l border-osu-b3/15 px-2 py-3 first:border-l-0 sm:basis-0 sm:flex-1"
+                    >
+                      <Skeleton className="h-3 w-14" />
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <Skeleton className="h-3.5 w-16" />
+                      <Skeleton className="h-2.5 w-12" />
                     </div>
                   ))}
                 </div>

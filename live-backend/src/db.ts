@@ -2505,9 +2505,9 @@ async function migrateBugReports(db: Db): Promise<void> {
   `);
   // Replies are a conversation, not one mutable cell. The report body remains
   // the first reporter message on bug_reports; everything after it is appended
-  // here so both sides keep the full history. `legacy_reply` makes the backfill
-  // below idempotent across every boot while ordinary messages remain free to
-  // repeat the same text.
+  // here so both sides keep the full history. `legacy_reply` identifies rows
+  // copied from the old mutable column; ordinary messages remain free to repeat
+  // the same text.
   await db.execute(`
     create table if not exists bug_report_messages (
       id text primary key,
@@ -2526,14 +2526,40 @@ async function migrateBugReports(db: Db): Promise<void> {
     create unique index if not exists idx_bug_report_messages_legacy
       on bug_report_messages(report_id) where legacy_reply = 1
   `);
+  // New conversation writes mirror the newest admin message into `reply` for
+  // rolling-deploy compatibility. The original backfill only looked for a
+  // legacy-marked row, so the next boot mistook that mirror for old data and
+  // copied the modern message a second time. Remove only those exact generated
+  // pairs before applying the corrected backfill below.
+  await db.execute(`
+    delete from bug_report_messages
+     where legacy_reply = 1
+       and exists (
+         select 1 from bug_report_messages as current_message
+          where current_message.report_id = bug_report_messages.report_id
+            and current_message.author_role = 'admin'
+            and current_message.legacy_reply = 0
+            and current_message.body = bug_report_messages.body
+            and current_message.created_at = bug_report_messages.created_at
+       )
+  `);
   await db.execute(`
     insert into bug_report_messages (id, report_id, author_role, body, created_at, legacy_reply)
-    select lower(hex(randomblob(16))), id, 'admin', reply, coalesce(replied_at, updated_at), 1
-      from bug_reports
-     where reply is not null and trim(reply) <> ''
+    select lower(hex(randomblob(16))), report.id, 'admin', report.reply,
+           coalesce(report.replied_at, report.updated_at), 1
+      from bug_reports as report
+     where report.reply is not null and trim(report.reply) <> ''
        and not exists (
-         select 1 from bug_report_messages
-          where bug_report_messages.report_id = bug_reports.id and legacy_reply = 1
+         select 1 from bug_report_messages as message
+          where message.report_id = report.id
+            and (
+              message.legacy_reply = 1
+              or (
+                message.author_role = 'admin'
+                and message.body = report.reply
+                and message.created_at = coalesce(report.replied_at, report.updated_at)
+              )
+            )
        )
   `);
   // A reporter follow-up reopens a report and moves it to the front of both
@@ -3062,5 +3088,20 @@ async function migrateMapCollections(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_map_collection_members_pos
       on map_collection_members(collection_id, position)
+  `);
+  // The archived-mods backfill's work list (features/activity-mods-backfill.ts).
+  // Materialized once at seed time because picking it needs a per-player
+  // ranking, which does not chunk against a cursor; the chain then walks this
+  // by `position`. Small and bounded by ACTIVITY_MODS_BACKFILL_MAX_ROWS.
+  await db.execute(`
+    create table if not exists activity_mods_backfill_queue (
+      position integer primary key,
+      country text not null,
+      user_id integer not null,
+      day text not null,
+      beatmap_id integer not null,
+      score_id integer not null,
+      dan real not null
+    )
   `);
 }

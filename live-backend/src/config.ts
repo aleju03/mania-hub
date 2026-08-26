@@ -104,6 +104,8 @@ export interface Config {
   // each tick runs one classify+MSD job (~0.1-0.3s of local CPU). The default
   // keeps prod gentle; lower it for a fast local backfill.
   chartAnalysisLaneIntervalMs: number;
+  activityModsBackfillChainDelayMs: number;
+  activityModsBackfillPinUsers: number[];
   oscBackfillMaxAgeMs: number;
   oscBackfillPageLimit: number;
   oscBackfillMaxPages: number;
@@ -383,6 +385,18 @@ export function readConfig(): Config {
     qualifiedMapsWatchIntervalMs: readInt("QUALIFIED_MAPS_WATCH_INTERVAL_MS", 60 * 60 * 1000),
     settledSetsReconcileIntervalMs: readInt("SETTLED_SETS_RECONCILE_INTERVAL_MS", 60 * 60 * 1000),
     chartAnalysisLaneIntervalMs: readBoundedInt("CHART_ANALYSIS_LANE_INTERVAL_MS", 500, 25, 60_000),
+    // 30 rows per link at this spacing is ~15 osu! calls/min. Lower it to
+    // spend the sweep faster, raise it to give the budget back.
+    activityModsBackfillChainDelayMs: readBoundedInt("ACTIVITY_MODS_BACKFILL_CHAIN_DELAY_MS", 120_000, 1_000, 3_600_000),
+    // osu! user ids whose eligible archived rows join the backfill work list
+    // regardless of where the headroom ranking puts them. For players who ask
+    // to be recovered, so nobody has to run the maintenance script by hand.
+    // Defaults to the owner, matching DEFAULT_ADMIN_OSU_USER_IDS in the
+    // frontend's src/lib/auth-server.ts, so the sweep covers him with no VPS
+    // env change. Set the var to override; set it to a single space to clear.
+    activityModsBackfillPinUsers: csv(process.env.ACTIVITY_MODS_BACKFILL_PIN_USERS, "7095193")
+      .map((part) => Number(part))
+      .filter((userId) => Number.isSafeInteger(userId) && userId > 0),
     oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 24 * 60 * 60 * 1000),
     oscBackfillPageLimit: Math.min(readInt("OSC_BACKFILL_PAGE_LIMIT", 1000), 1000),
     oscBackfillMaxPages: readInt("OSC_BACKFILL_MAX_PAGES", 200),

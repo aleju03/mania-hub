@@ -6,7 +6,7 @@ import { analyzeManiaPatterns } from "./dan-estimator/patterns.js";
 import type { ManiaPatternAnalysis } from "./dan-estimator/types.js";
 import { extractDanFeatures } from "./dan-estimator/features.js";
 import { getInputRate } from "./dan-estimator/labels.js";
-import { estimateLnDan } from "./dan-estimator/ln.js";
+import { LN_LADDER_TOP, estimateLnDan } from "./dan-estimator/ln.js";
 import {
   parseLeoBlackLnHalf,
   parseLeoBlackRcHalf,
@@ -28,7 +28,7 @@ import type { CompanellaEstimate } from "../../vendor/leoblack/estimator/compane
 // The single chart classifier. Routes each chart to the best-performing engine
 // per the benchmark in live-backend/vendor/leoblack/PORT_NOTES.md:
 //   4K RC        -> LeoBlack Mixed (Roxy/Azusa/Daniel/Sunny blend)
-//   4K LN        -> in-house LN kNN (falls back to LeoBlack's LN table)
+//   4K LN        -> LeoBlack's LN table (in-house LN kNN below its LN 5 floor)
 //   6K / 7K      -> LeoBlack Sunny star rating mapped through the 6K/7K dan tables
 //   other keys   -> patterns only, no dan verdict
 // Callers should treat this as THE classifier; estimateDan/estimateDanielDan/
@@ -176,7 +176,11 @@ export function danTableLabelFor(rawDan: number, side: "rc" | "ln", keyCount: nu
  * chart or player sits exactly there. Null when no table covers the pair.
  */
 export function danTableCeilingFor(side: "rc" | "ln", keyCount: number): number | null {
-  if (keyCount === 4) return null;
+  // 4K LN speaks its own numeric ladder rather than a leoblack table, but it
+  // does end: 17 (Yeehee) is the last course, so the table's "> Lnlism LN 17
+  // high" sentinel lands on the same last-level + 0.5 the other keymodes use.
+  // 4K RC keeps going into the greek levels, so it still has no ceiling.
+  if (keyCount === 4) return side === "ln" ? LN_LADDER_TOP + 0.5 : null;
   const tables = DAN_INDEX[keyCount];
   const table = tables ? (side === "ln" ? tables.LN?.default : tables.RC.default) : undefined;
   if (!table) return null;
@@ -577,9 +581,18 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     }
   }
 
-  // In-house LN kNN: the stronger LN engine on 4K (it self-gates on LN signals).
-  let ln: DanVerdictHalf | null = null;
-  if (map.keyCount === 4) {
+  // LeoBlack's LN table is the 4K LN verdict wherever it reads a real tier. Its
+  // in-house predecessor drifted well above both LeoBlack and Dan-Overlay on
+  // rated charts, because it falls through to an SR-linear regression whenever
+  // no reference chart is within its distance gate - and that regression is fed
+  // starRating * rate^0.7, so the drift widened with rate (chart 5327751 at
+  // 1.5x: in-house LN 14+, LeoBlack LN 13, Dan-Overlay Yuugure/12).
+  //
+  // The table bottoms out at "< LN 5" (4.832 Sunny stars), where every easy LN
+  // chart would otherwise collapse onto one reading, so the kNN still covers
+  // that low end - the range its corpus does carry references for.
+  let ln: DanVerdictHalf | null = lnFromTables && lnFromTables.boundary !== "below" ? lnFromTables : null;
+  if (!ln && map.keyCount === 4) {
     const baseStarRating = Number.isFinite(input.starRating) ? Math.max(0, input.starRating ?? 0) : 0;
     const starRating = baseStarRating > 0 ? baseStarRating * Math.pow(rate, 0.7) : 0;
     const lnEstimate = estimateLnDan(map, input, features.metrics, starRating, features.durationMs, rate);
@@ -598,6 +611,8 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
       };
     }
   }
+  // Below the table floor with no kNN verdict either, the "< LN 5" boundary is
+  // still the honest reading.
   if (!ln) ln = lnFromTables;
   // Mirror the RC vibro damping: an LN dan computed off hold density means
   // little when the holds are vibro spam.

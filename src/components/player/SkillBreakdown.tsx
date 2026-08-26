@@ -61,10 +61,9 @@ function ProvisionalChip({ mode }: { mode: MyDataSkillMode }) {
 
 // The LN row's context line (4K only, see lnPlayShare): the LN number mostly
 // reflects what the player plays, so the share is shown as data next to it.
-// "Have LN content" and the explicit counts, not "are LN charts": the share
-// counts every chart with meaningful hold content (that is what feeds the LN
-// bar), while the top LN plays list is gated to majority-LN charts and is a
-// much smaller set - the two numbers must not read as the same universe.
+// "Are LN charts", because the ln tag itself is gated to the analyzer's LN
+// verdict (the backend's LN_PATTERN_LN_RATIO_MIN on the chart's hold share):
+// this count, the LN bar and the top LN plays list are all the same plays.
 function LnShareNote({ mode, className = "" }: { mode: MyDataSkillMode; className?: string }) {
   const share = lnPlayShare(mode);
   if (share == null) return null;
@@ -73,7 +72,7 @@ function LnShareNote({ mode, className = "" }: { mode: MyDataSkillMode; classNam
   const total = mode.analyzedPlays;
   return (
     <div className={`text-[11px] text-osu-l2 ${className}`}>
-      <Trans><span className="font-semibold text-white tabular-nums">{percent}%</span> of the rated plays have LN content ({lnPlays} of {total})</Trans>
+      <Trans><span className="font-semibold text-white tabular-nums">{percent}%</span> of the rated plays are LN charts ({lnPlays} of {total})</Trans>
     </div>
   );
 }

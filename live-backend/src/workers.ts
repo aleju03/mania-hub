@@ -5,7 +5,7 @@ import { exec, json, parseJson, writeVariantPps } from "./db.js";
 import { AVATAR_ACCENT_JOB, computeAvatarAccentJob } from "./features/avatar-accents.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
-import { BRACKET_CONTENT_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, INVERSE_CLUSTER_BPM_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LN_MSD_SWEEP_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, NOTE_BPM_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runBracketContentRecomputeJob, runBracketTagRecomputeJob, runChartAnalysisBackfillJob, runChordjackTagRecomputeJob, runCompanellaRecomputeJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runInverseClusterBpmRecoveryJob, runLeoblackRepinDtRecomputeJob, runLeoblackRepinRecomputeJob, runLnMsdSweepJob, runLnSourceRecomputeJob, runLnSubtypeRecomputeJob, runMsdPoisonRecoveryJob, runNoteBpmRecomputeJob, runSunnyRepinDtRecomputeJob, runSunnyRepinRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
+import { BRACKET_CONTENT_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, INVERSE_CLUSTER_BPM_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LN_MSD_SWEEP_JOB, LN_LEOBLACK_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, NOTE_BPM_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runBracketContentRecomputeJob, runBracketTagRecomputeJob, runChartAnalysisBackfillJob, runChordjackTagRecomputeJob, runCompanellaRecomputeJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runInverseClusterBpmRecoveryJob, runLeoblackRepinDtRecomputeJob, runLeoblackRepinRecomputeJob, runLnLeoblackRecomputeJob, runLnMsdSweepJob, runLnSourceRecomputeJob, runLnSubtypeRecomputeJob, runMsdPoisonRecoveryJob, runNoteBpmRecomputeJob, runSunnyRepinDtRecomputeJob, runSunnyRepinRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
@@ -21,6 +21,7 @@ import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile
 import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB, runProfileSnapshotRefreshJob, runProfileUserRefreshJob } from "./features/player-profiles.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { TOP_SCORES_BACKFILL_JOB, runTopScoresBackfillJob } from "./features/top-scores-backfill.js";
+import { ACTIVITY_MODS_BACKFILL_JOB_TYPE, runActivityModsBackfillJob } from "./features/activity-mods-backfill.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
 import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs } from "./jobs/recent-reconcile.js";
@@ -163,7 +164,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // the work is local (cached .osu text), no osu! API pressure. Tunable via
     // CHART_ANALYSIS_LANE_INTERVAL_MS so a local backfill can run flat out.
     name: "chart-analysis",
-    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, NOTE_BPM_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB],
+    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_LEOBLACK_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, NOTE_BPM_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB],
     claimLimit: 1,
     intervalMs: readConfig().chartAnalysisLaneIntervalMs,
   },
@@ -191,6 +192,15 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // the osu! token bucket still governs the actual request rate.
     name: "top-scores-backfill",
     jobTypes: [TOP_SCORES_BACKFILL_JOB],
+    claimLimit: 1,
+    intervalMs: 5_000,
+  },
+  {
+    // Own lane for the same reason the top-scores chain has one: a busy shared
+    // lane would never claim its first link. The 2-minute chain runAfter sets
+    // the pace and the osu! token bucket still governs the request rate.
+    name: "activity-mods-backfill",
+    jobTypes: [ACTIVITY_MODS_BACKFILL_JOB_TYPE],
     claimLimit: 1,
     intervalMs: 5_000,
   },
@@ -264,6 +274,7 @@ const OSU_API_JOB_TYPES = new Set([
   PROFILE_USER_REFRESH_JOB,
   PROFILE_SNAPSHOT_REFRESH_JOB,
   TOP_SCORES_BACKFILL_JOB,
+  ACTIVITY_MODS_BACKFILL_JOB_TYPE,
   // Mostly local CPU over the cached .osu corpus, but a cache miss falls
   // through to an osu! download inside the shared compute path, so it pauses
   // with the rest of the API jobs like analyze_activity_beatmap does.
@@ -509,6 +520,10 @@ export class WorkerRunner {
       await runProfileSnapshotRefreshJob(this.db, this.osu, (job.payload as { userId: number }).userId);
       return;
     }
+    if (job.type === ACTIVITY_MODS_BACKFILL_JOB_TYPE) {
+      await runActivityModsBackfillJob(this.db, this.queue, this.osu, job.payload as { cursor?: { position: number } });
+      return;
+    }
     if (job.type === TOP_SCORES_BACKFILL_JOB) {
       // Per-user 404s are handled inside the chunk (markUserMissing + skip);
       // only transient API errors reach the job's fail/backoff path.
@@ -666,6 +681,10 @@ export class WorkerRunner {
     }
     if (job.type === LN_SOURCE_RECOMPUTE_JOB) {
       await runLnSourceRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
+      return;
+    }
+    if (job.type === LN_LEOBLACK_RECOMPUTE_JOB) {
+      await runLnLeoblackRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
       return;
     }
     if (job.type === SUNNY_REPIN_RECOMPUTE_JOB) {

@@ -31,10 +31,9 @@ async function makeDb(): Promise<Db> {
 
 // Inverse chart at 80 BPM: one hold per row cycling the columns, each hold
 // filling most of its column period and releasing a short 1/4-beat-ish gap
-// before the next press. The 4K build is the shape the v2 sweep exists to fix
-// (every stored 4K LN chart predates the 4K subtypes); the 7K build is the
-// out-of-band control.
-function buildInverseOsuFile(keyCount = 4): string {
+// before the next press. 7K is the sweep's scope as of v3 (the lnrelease
+// rebuild is 7K-only); the 4K build is the out-of-band control.
+function buildInverseOsuFile(keyCount = 7): string {
   const holdMs = keyCount === 7 ? 760 : 420;
   const rows = Array.from({ length: keyCount * 36 }, (_, index) => {
     const column = index % keyCount;
@@ -91,7 +90,7 @@ async function seedAnalyzedChart(db: Db, beatmapId: number, osuText: string, opt
     `insert into beatmap_chart_analysis
        (beatmap_id, analysis_version, status, key_count, primary_label, primary_family, raw_dan, classification_json, computed_at, updated_at)
      values (?, ?, 'ready', ?, '4-', 'ln', 4, ?, ?, ?)`,
-    [beatmapId, CHART_ANALYSIS_VERSION, options.keyCount ?? 4, JSON.stringify(classification), now, now],
+    [beatmapId, CHART_ANALYSIS_VERSION, options.keyCount ?? 7, JSON.stringify(classification), now, now],
   );
 }
 
@@ -100,7 +99,7 @@ describe("LN subtype recompute sweep", () => {
     const db = await makeDb();
     const osuText = buildInverseOsuFile();
 
-    // Stale verdict from before 4K had LN subtypes at all: stored as plain ln.
+    // Stale verdict from before the subtypes fired here at all: stored as plain ln.
     await seedAnalyzedChart(db, 1, osuText, { patternIds: ["ln"], category: "LN" });
 
     // In-sync control: stored tags match what the analyzer says today.
@@ -114,8 +113,8 @@ describe("LN subtype recompute sweep", () => {
       category: fresh.primary?.label ?? null,
     });
 
-    // Outside the candidate band: the sweep only looks at 4K and 7K.
-    await seedAnalyzedChart(db, 3, osuText, { keyCount: 6 });
+    // Outside the candidate band: the sweep only looks at 7K.
+    await seedAnalyzedChart(db, 3, osuText, { keyCount: 4 });
 
     const result = await recomputeLnSubtypeChunk(db, 0, 50);
     expect(result.done).toBe(true);

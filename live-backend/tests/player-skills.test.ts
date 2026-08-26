@@ -12,6 +12,7 @@ import {
   getPlayRate,
   getPlayerSkillPlays,
   loadArchivedTrackedEvidence,
+  loadChartSkillInfo,
   loadBeatmapOds,
   ssrGoalForAccuracy,
   ssrGoalForScore,
@@ -999,9 +1000,9 @@ describe("getPlayerSkillBreakdown", () => {
       expect(byKeyCount.get(6)?.dan?.rc?.label).toBe("9++");
       expect(byKeyCount.get(6)?.dan?.ln?.label).toBe("finish");
       expect(byKeyCount.get(4)?.dan?.rc?.label).toBe("alpha++");
-      // The 4K LN ladder ends at 15 (Yume); above-ceiling ratings become 15+
-      // rather than inventing an LN 16 dan.
-      expect(byKeyCount.get(4)?.dan?.ln?.label).toBe("15+");
+      // The 4K LN ladder runs to 17 (Yeehee), so a 16.2 is a real LN 16 rather
+      // than something folded onto the old 15 ceiling.
+      expect(byKeyCount.get(4)?.dan?.ln?.label).toBe("16");
     });
   });
 });
@@ -1025,27 +1026,15 @@ describe("getPlayerSkillPlays", () => {
           [beatmapId, beatmapId === 103 ? 7 : 4, version, now],
         );
       }
-      // Chart analysis backs the ln tag: 102 is genuinely LN-dominant, 104
-      // merely cleared the tag's hold-pressure leg (a gamma-style rice chart)
-      // and must not reach the top LN plays surface.
-      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
-      await exec(
-        db,
-        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
-         values (102, ?, 'ready', ?, ?)`,
-        [CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0.8 }), now],
-      );
-      await exec(
-        db,
-        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
-         values (104, ?, 'ready', ?, ?)`,
-        [CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0.02 }), now],
-      );
+      // Stored tags arrive pre-gated (loadChartSkillInfo strips the ln tag off
+      // charts the analyzer does not call LN), so 104 - a gamma-style rice
+      // chart that merely cleared the tag's hold-pressure leg - carries no ln
+      // tag here and cannot reach the top LN plays surface.
       const plays = [
         { identity: "official:1", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.95, pp: 200, values: { Overall: 22, Stream: 24 }, patterns: ["stream"], source: "top", accuracy: 0.97, endedAt: "2026-08-01T00:00:00Z" },
         { identity: "official:2", beatmapId: 102, keyCount: 4, rate: 1.5, goal: 0.96, pp: 180, values: { Overall: 25, Stream: 29 }, patterns: ["stream", "ln"], source: "tracked", accuracy: 0.98, endedAt: "2026-08-02T00:00:00Z" },
         { identity: "official:3", beatmapId: 103, keyCount: 7, rate: 1, goal: 0.94, pp: 250, values: { Overall: 30, Stream: 31 }, patterns: ["stream"], source: "top", accuracy: 0.96, endedAt: "2026-08-03T00:00:00Z" },
-        { identity: "official:4", beatmapId: 104, keyCount: 4, rate: 1, goal: 0.97, pp: 210, values: { Overall: 27, Stream: 20 }, patterns: ["ln"], source: "top", accuracy: 0.99, endedAt: "2026-08-04T00:00:00Z" },
+        { identity: "official:4", beatmapId: 104, keyCount: 4, rate: 1, goal: 0.97, pp: 210, values: { Overall: 27, Stream: 20 }, patterns: ["stamina"], source: "top", accuracy: 0.99, endedAt: "2026-08-04T00:00:00Z" },
       ];
       await exec(
         db,
@@ -1073,10 +1062,46 @@ describe("getPlayerSkillPlays", () => {
       expect(second.items[0]).toMatchObject({ beatmapId: 101, rating: 24 });
 
       const ln = await getPlayerSkillPlays(db, 99, 4, "pattern:ln");
-      // Only the chart the analyzer actually calls LN (lnRatio >= 0.5) lists;
-      // the tagged-but-rice 104 and its higher Overall SSR are excluded.
+      // The LN list is exactly the ln-tagged plays, ranked by Overall, so it
+      // matches the set the LN pattern rating aggregates.
       expect(ln.total).toBe(1);
       expect(ln.items[0]).toMatchObject({ beatmapId: 102, rating: 25 });
+    });
+  });
+});
+
+describe("loadChartSkillInfo", () => {
+  it("keeps LN tags only on charts the analyzer calls LN", async () => {
+    await withDb(async (db) => {
+      const now = new Date().toISOString();
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const charts: Array<[number, unknown]> = [
+        // Genuinely LN-dominant: every tag survives.
+        [201, { lnRatio: 0.8, patterns: [{ id: "ln", score: 0.9 }, { id: "lntech", score: 0.7 }, { id: "chordstream", score: 0.8 }] }],
+        // Rice chart with a token hold section: the ln tags clear the score
+        // bar but the analyzer never calls the chart LN, so they are stripped.
+        [202, { lnRatio: 0.02, patterns: [{ id: "ln", score: 0.6 }, { id: "lninverse", score: 0.8 }, { id: "chordstream", score: 0.8 }] }],
+        // No lnRatio at all cannot be verified as LN and is not trusted.
+        [203, { patterns: [{ id: "ln", score: 0.9 }, { id: "chordstream", score: 0.8 }] }],
+        // Just under half holds is still an LN chart (the floor sits below the
+        // classifier's dan-side routing line for exactly this case).
+        [204, { lnRatio: 0.476, patterns: [{ id: "ln", score: 1 }, { id: "chordstream", score: 0.8 }] }],
+      ];
+      for (const [beatmapId, classification] of charts) {
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify(classification), now],
+        );
+      }
+
+      const info = await loadChartSkillInfo(db, [201, 202, 203, 204]);
+      expect(info.get(201)?.patterns.sort()).toEqual(["chordstream", "ln", "lntech"]);
+      expect(info.get(202)?.patterns).toEqual(["chordstream"]);
+      expect(info.get(203)?.patterns).toEqual(["chordstream"]);
+      expect(info.get(203)?.lnRatio).toBeNull();
+      expect(info.get(204)?.patterns.sort()).toEqual(["chordstream", "ln"]);
     });
   });
 });

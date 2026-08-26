@@ -13,7 +13,7 @@ import { enqueueGlobalFarmedBoardRepack, enqueueGlobalMapsRefreshIfDue, enqueueM
 import { cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
-import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureLnMsdSweepSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
+import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureLnMsdSweepSeeded, ensureLnLeoblackRecomputeSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-feedback.js";
@@ -23,6 +23,7 @@ import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
 import { enqueuePlayerSkills, ensurePlayerSkillFloorSweepSeeded, ensurePlayerSkillMsdCapSweepSeeded, ensurePlayerSkillPoisonRecoverySeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
+import { ensureActivityModsBackfillSeeded } from "./features/activity-mods-backfill.js";
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
 import { backfillPackCardSerials } from "./features/pack-pulls.js";
 import { ensurePackCardCatalog, ensurePackCardVariantKeys, ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
@@ -464,6 +465,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       void ensureBracketContentRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[bracket-content] seed failed", error));
       void ensureCompanellaRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[companella-recompute] seed failed", error));
       void ensureLnSourceRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-source] seed failed", error));
+      void ensureLnLeoblackRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-leoblack] seed failed", error));
       void ensureSunnyRepinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[sunny-repin] seed failed", error));
       void ensureSunnyRepinDtRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[sunny-repin-dt] seed failed", error));
       void ensureLeoblackRepinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[leoblack-repin] seed failed", error));
@@ -491,6 +493,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // Guarded by its done key: post-completion boots schedule nothing.
       if (app.config.enableOsuApiJobs) {
         void ensureTopScoresBackfillSeeded(app.db, app.queue).catch((error) => console.warn("[top-scores-backfill] seed failed", error));
+        void ensureActivityModsBackfillSeeded(app.db, app.queue).catch((error) => console.warn("[activity-mods-backfill] seed failed", error));
         // Skill-vector version backfill: almost entirely local CPU over the
         // cached .osu corpus, but the shared compute path can fall through to
         // an osu! download on a cache miss, so it takes the same gate.

@@ -1,6 +1,6 @@
 // Dan badge artwork lookup, shared by the admin classifier page and the maps
 // search surfaces. Assets: /images/dans/reform (4K RC, svg 1-10 + webp greeks
-// through eta), /images/dans/ln (4K LN 1-16), /images/dans/7k (JinJin 7K, RC
+// through eta), /images/dans/ln (4K LN 1-17), /images/dans/7k (JinJin 7K, RC
 // circles + ln- diamonds, 0-10 + gamma/azimuth/zenith/stellium),
 // /images/dans/6k (Arkman regular + sunnyxxy LN, RC hexagons 0-9 + ln- upright
 // hexagons 0-9 plus terra/celestial/mystery/nihility/finish). The 6K glyphs are
@@ -57,7 +57,7 @@ export function getDanImageSrc(label: string, family?: string, keyCount?: number
     // other keymodes have their own dan courses; the 4K logos would be wrong
     return null;
   }
-  if (family === "ln" && /^(1[0-6]|[1-9])$/.test(label)) {
+  if (family === "ln" && /^(1[0-7]|[1-9])$/.test(label)) {
     return `/images/dans/ln/${label}.svg`;
   }
   const extension = DAN_IMAGE_EXTENSIONS[label];
@@ -92,7 +92,7 @@ export function danTierColor(suffix: string): string | null {
 // ── Dan picker scale ─────────────────────────────────────────────────────────
 // The picker filters the classifier's numeric rawDan, which every family maps
 // onto its own course ladder: 4K reform 1..10 then alpha(11)..kappa(20), 4K LN
-// 1..16, 7K 0..10 then gamma(11)/azimuth(12)/zenith(13)/stellium(14) with the
+// 1..17, 7K 0..10 then gamma(11)/azimuth(12)/zenith(13)/stellium(14) with the
 // same levels for the 7K LN courses (diamond badges), 6K regular 0..9 and 6K LN
 // 0..9 then terra(10)/celestial(11)/mystery(12)/nihility(13)/finish(14). The
 // scale context picks which ladder names/logos annotate a level.
@@ -120,8 +120,8 @@ export function danScaleLabel(value: number, context: DanScaleContext): string {
     return capitalize(SIXK_LN_BANDS[Math.min(level, 14) - 10]);
   }
   if (context === "ln") {
-    // The LN estimator caps its ladder at 16 (see dan-estimator/ln.ts).
-    return String(Math.min(Math.max(1, level), 16));
+    // The LN ladder ends at 17, Yeehee (see LN_LADDER_TOP in dan-estimator/ln.ts).
+    return String(Math.min(Math.max(1, level), 17));
   }
   if (level <= 10) return String(Math.max(1, level));
   return capitalize(REFORM_GREEK[Math.min(level, 20) - 11]);

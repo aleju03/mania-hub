@@ -60,7 +60,7 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // (plus stable EZ/HR window scaling) instead of assumed OD8, so low-OD
 // charts stop reading easy 300s as near-MAX precision; stored plays rated
 // under the OD8 assumption purge.
-export const PLAYER_SKILLS_VERSION = 16;
+export const PLAYER_SKILLS_VERSION = 17;
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -97,10 +97,24 @@ const TECH_TAG_CHORDJACK_VETO = 0.8;
 // with a token hold section clears PATTERN_TAG_MIN_SCORE while the analyzer
 // itself would never call the chart LN: of the 4K charts tagged ln at 0.5 in
 // the 2026-08 snapshot, 76% sit below the analyzer's own LN verdict. That
-// verdict is classification lnRatio >= 0.5 (chart-classifier routes to the LN
-// dan side at exactly that floor), so the "top LN plays" surface demands it:
-// a gamma stamina chart with a ln score of 0.56 must not headline an LN list.
-const LN_PATTERN_LN_RATIO_MIN = 0.5;
+// verdict is classification lnRatio, the hold-note share of the chart, so
+// every LN axis demands it: a gamma stamina chart with a ln score of 0.56 must
+// neither headline an LN list nor feed an LN rating. Applied once, where the
+// tags are read, so the LN rating and the plays behind it are computed over
+// the same set of charts.
+//
+// The floor sits just under the 0.5 the chart-classifier routes the dan side
+// on. Routing has to pick one half and a coin-flip chart has to land somewhere,
+// but an LN rating is not either/or: farewell: to my memories [4K] is 47.6%
+// holds at a maxed-out ln score, and no player would call it rice. 0.45 keeps
+// that chart while staying well clear of the token-hold rice the tag
+// over-admits, which sits under 0.3. Costs 2076 charts of leniency against the
+// 13411 already inside 0.5 on the 2026-08 snapshot, and the ln pattern score
+// cannot do this job instead: it averages 0.78-0.88 in every lnRatio band.
+const LN_PATTERN_LN_RATIO_MIN = 0.45;
+// The LN axes the gate covers: the whole-LN tag plus the analyzer's four LN
+// subtypes (patterns.ts LN_SUBTYPE_IDS).
+const LN_PATTERN_IDS = new Set(["ln", "lngeneral", "lnrelease", "lninverse", "lntech"]);
 // The calc's goal floor. A play whose goal input (wife estimate / accuracy)
 // sits at or below it cannot be rated honestly: clamping the goal up to 0.8
 // rates the play as if it were an 80% play, which on a hard enough chart
@@ -679,17 +693,22 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       if (id) patternScores.set(id, Math.max(patternScores.get(id) ?? 0, Number(hit?.score ?? 0)));
     }
     const chordjackScore = patternScores.get("chordjack") ?? 0;
+    const rawLnRatio = Number(parsed?.lnRatio);
+    const lnRatio = Number.isFinite(rawLnRatio) ? Math.max(0, Math.min(1, rawLnRatio)) : null;
+    // A chart whose analysis carries no lnRatio cannot be verified as LN, so
+    // it keeps no LN tag rather than being trusted.
+    const chartIsLn = lnRatio != null && lnRatio >= LN_PATTERN_LN_RATIO_MIN;
     const patternIds = [...patternScores.entries()]
       .filter(([id, score]) =>
         score >= PATTERN_TAG_MIN_SCORE
-        && !(id === "tech" && chordjackScore >= TECH_TAG_CHORDJACK_VETO))
+        && !(id === "tech" && chordjackScore >= TECH_TAG_CHORDJACK_VETO)
+        && !(LN_PATTERN_IDS.has(id) && !chartIsLn))
       .map(([id]) => id);
-    const lnRatio = Number(parsed?.lnRatio);
     const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
     const dtRawDan = readRawDan(danDt ?? undefined);
     info.set(Number(row.beatmap_id), {
       patterns: patternIds,
-      lnRatio: Number.isFinite(lnRatio) ? Math.max(0, Math.min(1, lnRatio)) : null,
+      lnRatio,
       vibro: parsed?.vibro === true,
       rcRawDan: readRawDan(parsed?.rc),
       lnRawDan: readRawDan(parsed?.ln),
@@ -1509,24 +1528,12 @@ export async function getPlayerSkillPlays(
       if (!Number.isFinite(rating) || rating <= 0) return [];
       return [{ play, rating }];
     });
-  // The ln tag alone over-admits (see LN_PATTERN_LN_RATIO_MIN), so the LN
-  // surface re-checks the chart's stored lnRatio before listing a play. A play
-  // whose chart analysis has gone missing cannot be verified as LN and is
-  // dropped rather than trusted.
-  let lnRatioByBeatmap: Map<number, number> | null = null;
-  if (patternId === "ln" && candidates.length > 0) {
-    lnRatioByBeatmap = await readChartLnRatios(
-      db,
-      [...new Set(candidates.map(({ play }) => play.beatmapId))],
-    );
-  }
-  const matches = (lnRatioByBeatmap
-    ? candidates.filter(({ play }) => {
-      const lnRatio = lnRatioByBeatmap.get(play.beatmapId);
-      return lnRatio != null && Number.isFinite(lnRatio) && lnRatio >= LN_PATTERN_LN_RATIO_MIN;
-    })
-    : candidates
-  ).sort((left, right) =>
+  // No LN re-check here: the lnRatio gate rides on the stored ln tag itself
+  // (loadChartSkillInfo), so this list and the LN rating above it are the same
+  // set of plays. Plays stored before the gate keep their old tags until the
+  // profile's next recompute.
+  const matches = candidates
+    .sort((left, right) =>
       right.rating - left.rating
       || Number(right.play.pp ?? 0) - Number(left.play.pp ?? 0)
       || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
@@ -1621,8 +1628,6 @@ interface DanSkillsetBucket {
    * the bucket clear counts partition the side's clears instead of overlapping.
    */
   skillsets?: string[];
-  /** Every clear on the side belongs here, tags ignored (the whole-LN row). */
-  all?: boolean;
 }
 
 /**
@@ -1652,7 +1657,8 @@ interface DanSkillsetBucket {
  *
  * LN is one skill everywhere except 7K, whose scene does name the four
  * subtypes and whose charts are the only ones the analyzer separates them on
- * in any volume.
+ * in any volume. Those keymodes get no buckets at all: a single whole-LN row
+ * would only restate the estimate the window already leads with.
  */
 function danSkillsetBuckets(keyCount: number, side: "rc" | "ln"): DanSkillsetBucket[] {
   if (side === "ln") {
@@ -1664,7 +1670,7 @@ function danSkillsetBuckets(keyCount: number, side: "rc" | "ln"): DanSkillsetBuc
         { id: "lnrelease", tags: ["lnrelease"] },
       ];
     }
-    return [{ id: "ln", tags: [], all: true }];
+    return [];
   }
   if (keyCount === 4) {
     return [
@@ -1731,11 +1737,9 @@ export async function getPlayerSkillDanEvidence(
     const tags = infoByBeatmap.get(clear.play.beatmapId)?.patterns ?? [];
     const topSkillset = dominantSkillset(clear.play.values);
     for (const bucket of buckets) {
-      const belongs = bucket.all
-        ? true
-        : bucket.skillsets
-          ? topSkillset != null && bucket.skillsets.includes(topSkillset)
-          : tags.some((tag) => bucket.tags.includes(tag));
+      const belongs = bucket.skillsets
+        ? topSkillset != null && bucket.skillsets.includes(topSkillset)
+        : tags.some((tag) => bucket.tags.includes(tag));
       if (belongs) bySkillset.get(bucket.id)!.push(clear);
     }
   }
@@ -1835,26 +1839,6 @@ async function readPlayerSkillPlayMetadata(db: Db, beatmapIds: number[]): Promis
     });
   }
   return metadata;
-}
-
-/** Stored chart-analysis lnRatio per beatmap, for the LN plays surface's gate. */
-async function readChartLnRatios(db: Db, beatmapIds: number[]): Promise<Map<number, number>> {
-  const rows = await selectRowsByIntegerSet(
-    db,
-    `select beatmap_id, json_extract(classification_json, '$.lnRatio') as ln_ratio
-     from beatmap_chart_analysis
-     where status = 'ready' and classification_json is not null and beatmap_id in`,
-    beatmapIds,
-  );
-  const ratios = new Map<number, number>();
-  for (const row of rows) {
-    const beatmapId = Number(row.beatmap_id);
-    const lnRatio = Number(row.ln_ratio);
-    if (Number.isSafeInteger(beatmapId) && beatmapId > 0 && Number.isFinite(lnRatio)) {
-      ratios.set(beatmapId, lnRatio);
-    }
-  }
-  return ratios;
 }
 
 function isValidMode(mode: unknown): mode is PlayerSkillModeBreakdown {

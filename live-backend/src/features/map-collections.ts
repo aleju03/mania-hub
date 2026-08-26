@@ -121,7 +121,7 @@ const MSD_BUCKETS: DifficultyBucket[] = [
 const COLLECTION_KEYS = [4, 7] as const;
 
 // Ladder names for dan bucket titles, mirroring the frontend's dan scale:
-// 4K reform is 1..10 then greek, 4K LN is numeric 1..16, 7K is 0..10 then the
+// 4K reform is 1..10 then greek, 4K LN is numeric 1..17, 7K is 0..10 then the
 // JinJin boss courses (same ladder for 7K LN).
 const REFORM_GREEK = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"];
 const SEVENK_BOSSES = ["Gamma", "Azimuth", "Zenith", "Stellium"];
@@ -131,7 +131,7 @@ function danLevelName(level: number, keyCount: number, ln: boolean): string {
     if (level <= 10) return String(Math.max(0, level));
     return SEVENK_BOSSES[Math.min(level, 14) - 11];
   }
-  if (ln) return String(Math.min(Math.max(1, level), 16));
+  if (ln) return String(Math.min(Math.max(1, level), 17));
   if (level <= 10) return String(Math.max(1, level));
   return REFORM_GREEK[Math.min(level, 20) - 11];
 }

@@ -36,7 +36,7 @@ Per-day player skill vectors (stream, jack, bracket, LN variants and friends) in
 
 ## Dan estimates
 
-`dan_estimates` caches ratings keyed by a cache version from `live-backend/src/dan/`. Small batches are computed inline at request time; larger requests queue `compute_dan_estimate`. Since cache version 7 the estimates come from the unified chart classifier (`live-backend/src/dan/chart-classifier.ts`, routing 4K RC to LeoBlack Mixed, 4K LN to the in-house kNN, 6K/7K through Sunny interval tables), so 6K and 7K charts are supported.
+`dan_estimates` caches ratings keyed by a cache version from `live-backend/src/dan/`. Small batches are computed inline at request time; larger requests queue `compute_dan_estimate`. Since cache version 7 the estimates come from the unified chart classifier (`live-backend/src/dan/chart-classifier.ts`, routing 4K RC to LeoBlack Mixed, 4K LN to LeoBlack's LN interval table with the in-house kNN covering only what sits below that table's LN 5 floor, 6K/7K through Sunny interval tables), so 6K and 7K charts are supported.
 
 ## Chart analysis
 

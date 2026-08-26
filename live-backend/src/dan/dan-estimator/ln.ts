@@ -247,18 +247,24 @@ function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: numbe
   };
 }
 
-// The LN dan ladder is numeric 1-15 with +/- variants (14 = Yami, 15 = Yume
-// is the course ceiling; raw ratings sufficiently beyond it display as 15+
-// rather than inventing a 16th dan). The "LN 16/17" table rows are
-// difficulty-table charts, not dan courses, and the ladder never extends into
+/**
+ * Last level on the LN dan ladder. The courses run 1-10 then the named stages
+ * (11 Yoake, 12 Yuugure, 13 Yoru, 14 Yami, 15 Yume, 16 Yokaze, 17 Yeehee); 16
+ * and 17 are the extra-level courses that hypersovae and Lnlism ship on top of
+ * the main pack, which is why leoblack's table names them after their authors.
+ * Anything past 17 is off the ladder, not an 18th dan.
+ */
+export const LN_LADDER_TOP = 17;
+
+// The LN dan ladder is numeric 1-17 with +/- variants; it never extends into
 // the rice ladder's greek levels.
 // Exported so player-dan positioning labels its LN side on the same scale as
 // chart LN verdicts.
 export function parseLnDan(rawDan: number): { label: string; variant: string | null; displayName: string } {
-  const level = Math.max(1, Math.min(15, Math.round(rawDan)));
+  const level = Math.max(1, Math.min(LN_LADDER_TOP, Math.round(rawDan)));
   const offset = rawDan - level;
-  const variant = level >= 15
-    ? (offset <= -0.7 ? "-" : rawDan >= 15.45 ? "+" : null)
+  const variant = level >= LN_LADDER_TOP
+    ? (offset <= -0.7 ? "-" : rawDan >= LN_LADDER_TOP + 0.45 ? "+" : null)
     : offset <= -0.7 ? "-" : offset >= 0.45 ? "+" : null;
   return {
     label: String(level),
