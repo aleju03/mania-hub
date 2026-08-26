@@ -4020,8 +4020,8 @@ msgid "Dynamic Renders"
 msgstr "Renders dinámicos"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it."
-msgstr "Cada keymode se califica en su propia escala. Un número más bajo en un keymode no significa que seas peor en él."
+#~ msgid "Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it."
+#~ msgstr "Cada keymode se califica en su propia escala. Un número más bajo en un keymode no significa que seas peor en él."
 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."

@@ -187,17 +187,6 @@ function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, own: bool
   return parts.join(" · ");
 }
 
-// Cross-keymode scale warning. 4K is rated by MinaCalc, other keymodes by a
-// different engine, so the numbers live on unrelated scales; without this,
-// players read a lower 7K overall as "the site thinks I'm worse at 7K".
-export function KeymodeScaleNote({ className = "" }: { className?: string }) {
-  return (
-    <div className={`text-[11px] text-osu-l2 ${className}`}>
-      <Trans>Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it.</Trans>
-    </div>
-  );
-}
-
 const SCALE_HINT_SEEN_KEY = "mania-hub-keymode-scale-hint-seen";
 
 // --- Compact card body (My Data) ---

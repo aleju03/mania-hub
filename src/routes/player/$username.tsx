@@ -67,7 +67,7 @@ import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton"
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
 import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../lib/maniacard";
-import { KeymodeScaleNote, SkillBreakdownBody, SkillModePanel } from "../../components/player/SkillBreakdown";
+import { SkillBreakdownBody, SkillModePanel } from "../../components/player/SkillBreakdown";
 import { qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "../../lib/skill-axes";
 import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
@@ -3151,25 +3151,22 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   }
   return (
     <>
-      <div>
-        {modes.length > 1 ? <KeymodeScaleNote className="mb-2" /> : null}
-        <div
-          className={`grid grid-cols-1 gap-3 ${
-            modes.length > 1
-              ? "xl:grid-cols-2 xl:[&>*:last-child:nth-child(odd)]:col-span-2"
-              : "md:max-w-[640px]"
-          }`}
-        >
-          {modes.map((mode) => (
-            <SkillModePanel
-              key={mode.keyCount}
-              skills={skills}
-              mode={mode}
-              onSelectEntry={(entry) => setSelectedSkill({ entry, keyCount: mode.keyCount })}
-              onSelectDan={canOpenDanEvidence ? (side) => setSelectedDan({ side, keyCount: mode.keyCount }) : undefined}
-            />
-          ))}
-        </div>
+      <div
+        className={`grid grid-cols-1 gap-3 ${
+          modes.length > 1
+            ? "xl:grid-cols-2 xl:[&>*:last-child:nth-child(odd)]:col-span-2"
+            : "md:max-w-[640px]"
+        }`}
+      >
+        {modes.map((mode) => (
+          <SkillModePanel
+            key={mode.keyCount}
+            skills={skills}
+            mode={mode}
+            onSelectEntry={(entry) => setSelectedSkill({ entry, keyCount: mode.keyCount })}
+            onSelectDan={canOpenDanEvidence ? (side) => setSelectedDan({ side, keyCount: mode.keyCount }) : undefined}
+          />
+        ))}
       </div>
       {selectedSkill ? (
         <SkillPlaysModal

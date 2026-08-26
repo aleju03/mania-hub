@@ -4029,8 +4029,8 @@ msgid "Dynamic Renders"
 msgstr "动态渲染"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it."
-msgstr "每个键数都有自己的评分标准。某个键数的数值更低，并不代表你在这个键数上更差。"
+#~ msgid "Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it."
+#~ msgstr "每个键数都有自己的评分标准。某个键数的数值更低，并不代表你在这个键数上更差。"
 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
