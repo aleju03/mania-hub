@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ChevronDown, ExternalLink, Flag, History, Loader2, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, ExternalLink, Flag, History, Loader2, RefreshCw, Users } from "lucide-react";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { formatTimeAgo, formatTimeAgoTooltip } from "../lib/format";
 import { useLocale } from "../lib/locale-context";
@@ -481,11 +481,28 @@ function CommunityReviewPage() {
         <h1 className="order-last w-full text-[16px] font-bold text-white sm:order-none sm:w-auto sm:flex-1">
           Community review
         </h1>
+        {/* Beside the invite check rather than under the queue: both are things
+            you may want while looking at this page, neither is what the page is
+            for, and one that opened itself put old decisions above the ones
+            still waiting to be made. */}
+        <button
+          type="button"
+          onClick={() => void toggleHistory()}
+          aria-expanded={historyOpen}
+          className={`ml-auto inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition-colors cursor-pointer ${
+            historyOpen ? "bg-osu-b3 text-white" : "bg-osu-b4 text-osu-l2 hover:bg-osu-b3"
+          }`}
+        >
+          {historyLoading
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            : <History className="h-3.5 w-3.5" aria-hidden="true" />}
+          Recent decisions
+        </button>
         <button
           type="button"
           onClick={handleRefresh}
           disabled={refreshing}
-          className="ml-auto inline-flex items-center gap-2 rounded-full bg-osu-b4 px-3.5 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3 disabled:opacity-40"
+          className="inline-flex items-center gap-2 rounded-full bg-osu-b4 px-3.5 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3 disabled:opacity-40"
         >
           {refreshing
             ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -495,6 +512,36 @@ function CommunityReviewPage() {
       </div>
 
       {note && <p className="mb-4 text-[12px] text-osu-l2">{note}</p>}
+
+      {/* Under the header, above the queue, and only while it is open: what was
+          already decided is a lookup, so it gets out of the way again. */}
+      {historyOpen && !historyLoading && (
+        <div className="mb-5 rounded-xl border border-osu-b3/20 bg-osu-b4/40 p-3">
+          {history && history.length > 0 ? (
+            <>
+              <p className="mb-2 text-[11.5px] text-osu-f1">
+                Approvals and takedowns, newest first. Only moderators see this.
+              </p>
+              <ul className="space-y-1.5">
+                {(showAllHistory ? history : history.slice(0, 8)).map((entry) => (
+                  <HistoryRow key={entry.id} entry={entry} />
+                ))}
+              </ul>
+              {history.length > 8 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllHistory((value) => !value)}
+                  className="mt-2 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-white"
+                >
+                  {showAllHistory ? "Show less" : `Show all ${history.length}`}
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="text-[12px] text-osu-f1">Nothing decided yet.</p>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <p className="py-10 text-center text-[12.5px] text-osu-f1">Loading.</p>
@@ -569,57 +616,6 @@ function CommunityReviewPage() {
         </div>
       )}
 
-      {/* A closed row under the queue, not a section that opens itself. What is
-          waiting is this page's job; what was already decided is a question
-          somebody comes here with, so it costs a click and nothing until then -
-          including the fetch. */}
-      {!loading && (
-        <div className={empty ? "" : "mt-8"}>
-          <button
-            type="button"
-            onClick={() => void toggleHistory()}
-            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-white"
-            aria-expanded={historyOpen}
-          >
-            <History className="h-3.5 w-3.5" aria-hidden="true" />
-            Recent decisions
-            <ChevronDown
-              className={`h-3.5 w-3.5 transition-transform ${historyOpen ? "rotate-180" : ""}`}
-              aria-hidden="true"
-            />
-          </button>
-
-          {historyOpen && (
-            <div className="mt-2">
-              {historyLoading ? (
-                <p className="py-3 text-[12px] text-osu-f1">Loading.</p>
-              ) : history && history.length > 0 ? (
-                <>
-                  <p className="mb-2 text-[11.5px] text-osu-f1">
-                    Approvals and takedowns, newest first. Only moderators see this.
-                  </p>
-                  <ul className="space-y-1.5">
-                    {(showAllHistory ? history : history.slice(0, 8)).map((entry) => (
-                      <HistoryRow key={entry.id} entry={entry} />
-                    ))}
-                  </ul>
-                  {history.length > 8 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllHistory((value) => !value)}
-                      className="mt-2 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-white"
-                    >
-                      {showAllHistory ? "Show less" : `Show all ${history.length}`}
-                    </button>
-                  )}
-                </>
-              ) : (
-                <p className="py-3 text-[12px] text-osu-f1">Nothing decided yet.</p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
