@@ -3,6 +3,8 @@ import type { CountryTopPlay, OscScore, SnipeEvent } from "../src/shared/types.j
 import {
   activityEmbed,
   beatmapEmbed,
+  bugReportEmbed,
+  communityReviewAlertEmbed,
   compareEmbed,
   danEmbed,
   errorBody,
@@ -26,6 +28,7 @@ import {
   topPlayEmbed,
   topPlaysListEmbed,
   trackerListEmbed,
+  translationReportEmbed,
   whoamiEmbed,
 } from "../src/discord/embeds.js";
 import type { LeanTrackerScore } from "../src/shared/types.js";
@@ -396,6 +399,32 @@ describe("newer surface embeds", () => {
   const farmed = [{ beatmapId: 501, version: "4K Another", difficultyRating: 6.2, title: "Blue Zenith", artist: "xi", playerCount: 12, avgPp: 700, maxPp: 850 }];
   const popular = [{ beatmapId: 502, version: "4K Master", title: "Aleph-0", artist: "DJ Noriken", totalPlays: 4200, playerCount: 80 }];
 
+  const TRANSLATION_REPORT = {
+    id: "t1",
+    locale: "es",
+    sourceText: "Mapas granjeados",
+    suggestion: "Mapas farmeados",
+    note: "Nobody says granjeado for this.",
+    pagePath: "/maps",
+    username: "Kalkai",
+    userId: 42,
+  };
+
+  const COMMUNITY_LISTING = {
+    id: "c1",
+    name: "osu!mania LATAM",
+    pitch: "A Spanish-speaking mania server for LATAM players.",
+    iconUrl: "https://cdn.discordapp.com/icons/1/2.png?size=128",
+    memberCount: 4200,
+    countryCode: "CR",
+    language: "Spanish",
+    tags: ["latam", "4k"],
+    ownerUserId: 42,
+    ownerUsername: "Kalkai",
+    discordUsername: "kalkai",
+    resubmitted: false,
+  };
+
   const beatmap = { id: 501, version: "4K Another", difficulty_rating: 6.2, cs: 4, bpm: 200, total_length: 245, status: "ranked", url: "https://osu.ppy.sh/b/501", beatmapset: { title: "Blue Zenith", artist: "xi", creator: "Mapper", covers: { cover: "https://img/cover.jpg" } } };
 
   const bodies = [
@@ -422,6 +451,11 @@ describe("newer surface embeds", () => {
     newMapAlertEmbed({ beatmapId: 501, beatmapsetId: 9001, title: "Blue Zenith", artist: "xi", version: "4K Another", difficultyRating: 6.2, cs: 4, coverUrl: "https://img/c.jpg", rankedAtMs: Date.parse("2026-06-20T00:00:00Z") }, SITE),
     whoamiEmbed({ osuUsername: "Kalkai", osuUserId: 42, countryCode: "KR" }, SITE),
     pbEmbed({ username: "Kalkai", userId: 42, beatmap: { id: 501, title: "xi - Blue Zenith", version: "4K Another" }, score: leanScore as unknown as OscScore, siteOrigin: SITE }),
+    // The three owner notices, which share one channel and all of these rules.
+    bugReportEmbed({ id: "b1", body: "The tracker stops after a while.", pagePath: "/tracker", username: "Kalkai", userId: 42, screenshotCount: 2, context: { viewport: "1920x1080", locale: "es", country: "CR", siteVersion: "abc123", userAgent: "Firefox" } }, SITE),
+    translationReportEmbed(TRANSLATION_REPORT, SITE),
+    communityReviewAlertEmbed(COMMUNITY_LISTING, SITE),
+    communityReviewAlertEmbed({ ...COMMUNITY_LISTING, iconUrl: null, countryCode: null, language: null, tags: [], discordUsername: null, resubmitted: true }, SITE),
   ];
 
   it("each produces at least one embed", () => {
@@ -509,5 +543,41 @@ describe("newer surface embeds", () => {
       const v2 = toComponentsV2Body(body, { clearLegacy: true });
       expect(JSON.stringify(v2.components)).not.toMatch(forbidden);
     }
+  });
+
+  // The owner notices are the only embeds that quote a person, so what they
+  // carry is worth pinning down: the reporter's own words and where to triage
+  // them, and for a listing, nothing that would let the channel be a way into a
+  // server the review page has not approved yet.
+  it("puts the reported string and the triage link on a translation report", () => {
+    const body = translationReportEmbed(TRANSLATION_REPORT, SITE);
+    const embed = body.embeds?.[0];
+    expect(embed?.description).toContain("Mapas granjeados");
+    expect(embed?.description).toContain("Mapas farmeados");
+    expect(embed?.fields?.some((field) => field.value.includes("es"))).toBe(true);
+    const urls = JSON.stringify(body.components);
+    expect(urls).toContain(`${SITE}/admin/translation-reports`);
+    expect(urls).toContain(`${SITE}/maps`);
+  });
+
+  it("names an anonymous translation reporter as anonymous", () => {
+    const body = translationReportEmbed({ ...TRANSLATION_REPORT, username: null, userId: null, suggestion: null, note: null, pagePath: null }, SITE);
+    expect(JSON.stringify(body.embeds?.[0]?.fields)).toContain("anonymous");
+    expect(JSON.stringify(body.components)).not.toContain(`${SITE}/maps`);
+  });
+
+  it("points a queued listing at the review page without carrying its invite", () => {
+    const body = communityReviewAlertEmbed(COMMUNITY_LISTING, SITE);
+    expect(body.embeds?.[0]?.title).toBe("New Discord server in review");
+    expect(body.embeds?.[0]?.author?.name).toBe("osu!mania LATAM");
+    const wire = JSON.stringify(body);
+    expect(wire).toContain(`${SITE}/communities/review`);
+    expect(wire).toContain(`${SITE}/communities/c1`);
+    expect(wire).not.toContain("discord.gg");
+  });
+
+  it("says so when a rejected listing comes back", () => {
+    const body = communityReviewAlertEmbed({ ...COMMUNITY_LISTING, resubmitted: true }, SITE);
+    expect(body.embeds?.[0]?.title).toBe("Discord server back in review");
   });
 });

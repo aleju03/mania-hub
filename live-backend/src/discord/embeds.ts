@@ -1544,6 +1544,127 @@ export function bugReportEmbed(report: BugReportAlert, siteOrigin: string): Disc
 }
 
 // ---------------------------------------------------------------------------
+// Translation reports
+// ---------------------------------------------------------------------------
+
+export interface TranslationReportAlert {
+  id: string;
+  locale: string;
+  sourceText: string;
+  suggestion: string | null;
+  note: string | null;
+  pagePath: string | null;
+  username: string | null;
+  userId: number | null;
+}
+
+/**
+ * Someone reading the site in another language says a string reads wrong. Same
+ * owner-picked channel as a bug report and for the same reason: it quotes the
+ * reporter, so it is not community content.
+ *
+ * The string they saw leads, since that is what has to be found in the catalog;
+ * their suggestion and note follow it as their own words.
+ */
+export function translationReportEmbed(report: TranslationReportAlert, siteOrigin: string): DiscordMessageBody {
+  const reporter = report.username
+    ? `[${truncate(report.username, 60)}](${report.userId ? osuProfileUrl(report.userId) : `${OSU_BASE}/`})`
+    : "anonymous";
+
+  const description = [
+    `**As it reads now**\n${truncate(report.sourceText, 600)}`,
+    report.suggestion ? `**Suggested**\n${truncate(report.suggestion, 600)}` : "",
+    report.note ? `**Note**\n${truncate(report.note, 600)}` : "",
+  ].filter(Boolean).join("\n\n");
+
+  const embed: DiscordEmbed = {
+    title: "New translation report",
+    color: OSU_PINK,
+    description: truncate(description, 3500),
+    fields: [
+      { name: "Locale", value: `\`${truncate(report.locale, 20)}\``, inline: true },
+      { name: "Reporter", value: reporter, inline: true },
+      { name: "Page", value: report.pagePath ? `\`${truncate(report.pagePath, 80)}\`` : "unknown", inline: true },
+    ],
+    footer: { text: BOT_NAME },
+  };
+
+  return {
+    embeds: [embed],
+    components: linkButtonRow([
+      { label: "Open translation reports", url: `${siteOrigin}/admin/translation-reports` },
+      { label: "Where it happened", url: report.pagePath ? `${siteOrigin}${report.pagePath}` : "" },
+    ]),
+    allowed_mentions: { parse: [] },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Community listings awaiting review
+// ---------------------------------------------------------------------------
+
+export interface CommunityReviewAlert {
+  id: string;
+  name: string;
+  pitch: string;
+  iconUrl: string | null;
+  memberCount: number;
+  countryCode: string | null;
+  language: string | null;
+  tags: string[];
+  ownerUserId: number;
+  ownerUsername: string;
+  discordUsername: string | null;
+  /** A listing that was turned down and edited back into the queue, not a first submit. */
+  resubmitted: boolean;
+}
+
+/**
+ * A Discord server was submitted to /communities and is sitting in the review
+ * queue. Owner channel rather than a feed for the same reason as the reports:
+ * nothing here is public until a moderator says so, and the card names the
+ * person who submitted it.
+ */
+export function communityReviewAlertEmbed(listing: CommunityReviewAlert, siteOrigin: string): DiscordMessageBody {
+  const fields: DiscordEmbedField[] = [
+    {
+      name: "Submitted by",
+      value: `[${truncate(listing.ownerUsername, 60)}](${osuProfileUrl(listing.ownerUserId)})${
+        listing.discordUsername ? ` • ${truncate(listing.discordUsername, 60)}` : ""
+      }`,
+      inline: true,
+    },
+    { name: "Members", value: formatInt(listing.memberCount), inline: true },
+  ];
+  const where = [listing.countryCode ? countryLabel(listing.countryCode) : "", listing.language ?? ""]
+    .filter(Boolean)
+    .join(" • ");
+  if (where) fields.push({ name: "Scope", value: where, inline: true });
+  if (listing.tags.length > 0) {
+    fields.push({ name: "Tags", value: truncate(listing.tags.join(", "), 200), inline: false });
+  }
+
+  const embed: DiscordEmbed = {
+    title: listing.resubmitted ? "Discord server back in review" : "New Discord server in review",
+    color: OSU_PINK,
+    author: { name: truncate(listing.name, 100), ...(listing.iconUrl ? { icon_url: listing.iconUrl } : {}) },
+    description: truncate(listing.pitch, 1500),
+    fields,
+    ...(listing.iconUrl ? { thumbnail: { url: listing.iconUrl } } : {}),
+    footer: { text: BOT_NAME },
+  };
+
+  return {
+    embeds: [embed],
+    components: linkButtonRow([
+      { label: "Review queue", url: `${siteOrigin}/communities/review` },
+      { label: "Listing", url: `${siteOrigin}/communities/${encodeURIComponent(listing.id)}` },
+    ]),
+    allowed_mentions: { parse: [] },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Identity (small confirmation embeds)
 // ---------------------------------------------------------------------------
 

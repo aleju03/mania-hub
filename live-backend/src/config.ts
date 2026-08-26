@@ -179,9 +179,12 @@ export interface Config {
   discordBotToken?: string;
   discordDevGuildId?: string;
   discordSiteOrigin: string;
-  // Channel the bot posts new bug reports into. Not a subscribable feed: a
-  // report can quote whoever filed it, so it goes to one channel the owner
-  // picked, never fanned out to community servers. Unset means no ping.
+  // Channel the bot posts owner notices into: new bug reports, new translation
+  // reports, and a Discord server landing in the /communities review queue. Not
+  // a subscribable feed - every one of those names whoever filed it, so they go
+  // to one channel the owner picked, never fanned out to community servers.
+  // Unset means no ping. Named for bug reports because that is what it carried
+  // first; the env var stays as it is so a deployment does not have to move.
   discordBugReportChannelId?: string;
   // How recently a map must have been ranked to qualify for a farm-map alert,
   // and how much confirmed PP-gain activity must appear before it fires.

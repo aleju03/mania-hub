@@ -23,9 +23,11 @@ import {
   type CommunityImageKind,
   type CommunityReviewAction,
   type CommunityRow,
+  type CommunitySummary,
 } from "../../features/communities.js";
+import { communityReviewAlertEmbed } from "../../discord/embeds.js";
 import { fetchWidgetInviteCode, resolveDiscordInvite } from "../../discord/invites.js";
-import { logInfo } from "../../logger.js";
+import { errorContext, logInfo, logWarn } from "../../logger.js";
 import type { HttpContext } from "../context.js";
 import { isBridge, readBody } from "../request.js";
 import { sendJson } from "../respond.js";
@@ -338,6 +340,9 @@ export async function handleCommunitiesRoutes(
         guildId: resolved.invite.guildId,
         ownerUserId: scope.viewerUserId,
       });
+      // Answered first, pinged second: a Discord outage must not turn into a
+      // failed submit.
+      void pingOwnerReviewQueue(ctx, result.community, false);
     }
     sendJson(req, res, ctx, result.ok ? 200 : statusForWriteError(result.error), result);
     return true;
@@ -383,6 +388,11 @@ export async function handleCommunitiesRoutes(
       accessScopes: body.accessScopes,
       accessHidden: body.accessHidden,
     });
+    // Editing a rejected listing is how its owner answers the reason they were
+    // turned down, so it lands back in the pending queue and is worth the same
+    // ping a first submit gets. An edit to an approved listing only raises the
+    // edited flag, which the review page shows without anyone being paged.
+    if (result.ok && row.status === "rejected") void pingOwnerReviewQueue(ctx, result.community, true);
     sendJson(req, res, ctx, result.ok ? 200 : statusForWriteError(result.error), result);
     return true;
   }
@@ -481,4 +491,39 @@ function unauthorized(req: IncomingMessage, res: ServerResponse, ctx: HttpContex
 function badRequest(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): true {
   sendJson(req, res, ctx, 400, { error: "invalid_request" });
   return true;
+}
+
+/**
+ * Tells the owner a listing is waiting in the review queue, in the same channel
+ * bug and translation reports go to (config.discordBugReportChannelId). Best
+ * effort: swallowed and logged, since the submitter already has their answer.
+ *
+ * The summary passed in is the owner-scoped one, so the icon is the real CDN
+ * link (Discord cannot fetch our bridge-gated image proxy) and the invite is
+ * present - but the invite stays out of the embed on purpose: the review page
+ * is where a restricted server's link belongs.
+ */
+async function pingOwnerReviewQueue(ctx: HttpContext, listing: CommunitySummary, resubmitted: boolean): Promise<void> {
+  if (!ctx.discord) return;
+  try {
+    await ctx.discord.postOwnerNotice(communityReviewAlertEmbed(
+      {
+        id: listing.id,
+        name: listing.name,
+        pitch: listing.pitch,
+        iconUrl: listing.iconUrl,
+        memberCount: listing.memberCount,
+        countryCode: listing.countryCode,
+        language: listing.language,
+        tags: listing.tags,
+        ownerUserId: listing.ownerUserId,
+        ownerUsername: listing.ownerUsername,
+        discordUsername: listing.discordUsername ?? null,
+        resubmitted,
+      },
+      ctx.config.discordSiteOrigin,
+    ));
+  } catch (error) {
+    logWarn("community_review_discord_ping_failed", { id: listing.id, ...errorContext(error) });
+  }
 }

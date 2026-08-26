@@ -421,10 +421,11 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
 
   // --- Owner notices ------------------------------------------------------
 
-  // A bug report is not community content: it can quote whoever filed it, so it
-  // goes to one channel the owner picked rather than through the subscription
-  // feeds. Failures are logged and swallowed; nothing user-facing may depend on
-  // Discord being up.
+  // Owner notices: bug reports, translation reports, and a Discord server
+  // waiting in the /communities review queue. None of it is community content -
+  // each one names whoever filed it - so it goes to one channel the owner picked
+  // rather than through the subscription feeds. Failures are logged and
+  // swallowed; nothing user-facing may depend on Discord being up.
   async function postOwnerNotice(body: DiscordMessageBody): Promise<boolean> {
     const channelId = config.discordBugReportChannelId;
     if (!channelId) return false;

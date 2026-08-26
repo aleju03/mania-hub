@@ -1,13 +1,15 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { isGlobalCountry } from "../../countries.js";
 import { parseJson } from "../../db.js";
+import { translationReportEmbed } from "../../discord/embeds.js";
 import { clearFarmHelperFeedback, listFarmHelperFeedback, normalizeFarmHelperFeedbackSpeedBucket, normalizeFarmHelperFeedbackVerdict, setFarmHelperFeedback } from "../../features/farm-helper-feedback.js";
 import { invalidateFarmHelperCacheForUser } from "../../features/farm-helper.js";
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, updateUserGoal, type GoalKind, type GoalSpeedBucket, type UserGoalInput, type UserGoalTargetPatch } from "../../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed } from "../../features/my-data.js";
 import { getPlayerSkillBreakdown } from "../../features/player-skills.js";
-import { createTranslationReport } from "../../features/translation-reports.js";
+import { createTranslationReport, type TranslationReport } from "../../features/translation-reports.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
+import { errorContext, logWarn } from "../../logger.js";
 import { addManualRosterMember, removeManualRosterMember } from "../../rosters/country-rosters.js";
 import type { HttpContext } from "../context.js";
 import { clampInteger, clampLimit, isAdmin, isBridge, readBody } from "../request.js";
@@ -353,6 +355,10 @@ export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResp
       sendJson(req, res, ctx, 400, { error: result.reason });
       return true;
     }
+    // Answer first, ping second, and never for a duplicate: same shape the bug
+    // report route uses, for the same reason - a Discord outage must not turn
+    // into a failed report.
+    if (!result.duplicate) void pingOwnerTranslationReport(ctx, result.report);
     sendJson(req, res, ctx, 200, { ok: true, report: result.report, duplicate: result.duplicate });
     return true;
   }
@@ -398,4 +404,30 @@ function parseGoalTargets(
     fields.targetGrade = String(body.targetGrade ?? "global").toLowerCase() === "country" ? "country" : "global";
   }
   return { fields };
+}
+
+/**
+ * Tells the owner a translation report landed, in the same channel bug reports
+ * go to (config.discordBugReportChannelId). Best effort: swallowed and logged,
+ * since the reporter already has their answer.
+ */
+async function pingOwnerTranslationReport(ctx: HttpContext, report: TranslationReport): Promise<void> {
+  if (!ctx.discord) return;
+  try {
+    await ctx.discord.postOwnerNotice(translationReportEmbed(
+      {
+        id: report.id,
+        locale: report.locale,
+        sourceText: report.sourceText,
+        suggestion: report.suggestion,
+        note: report.note,
+        pagePath: report.pagePath,
+        username: report.username,
+        userId: report.userId,
+      },
+      ctx.config.discordSiteOrigin,
+    ));
+  } catch (error) {
+    logWarn("translation_report_discord_ping_failed", { id: report.id, ...errorContext(error) });
+  }
 }
