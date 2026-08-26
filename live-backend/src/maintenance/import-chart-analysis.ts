@@ -5,10 +5,11 @@ import { forceMapSearchIndexRebuild } from "../features/map-search.js";
 import { JobQueue } from "../jobs/queue.js";
 
 // Imports beatmap_chart_analysis rows from an export file produced by
-// export-chart-analysis.ts. Existing rows win (on conflict do nothing): a row
-// the target computed itself is just as valid, and this must never downgrade
-// a newer analysis_version. Safe to run while the backend is serving; chunked
-// inserts keep write-lock holds short.
+// export-chart-analysis.ts. Missing rows are inserted. For settled maps whose
+// .osu content is immutable, a newer exported full computation replaces an
+// older row at the same analysis version; in-flux target rows always win so an
+// older dev snapshot cannot roll their chart content backwards. Safe to run
+// while the backend is serving; chunked inserts keep write-lock holds short.
 //
 // After importing it schedules a full map search index rebuild, because the
 // per-beatmap index upserts only fire from analysis jobs, which never ran for
@@ -28,6 +29,9 @@ const COLUMNS = [
   "msd_overall",
   "classification_json",
   "msd_json",
+  "msd_dt_json",
+  "dan_dt_json",
+  "msd_ln_json",
   "error",
   "computed_at",
   "updated_at",
@@ -52,7 +56,8 @@ const source = await createDb({ ...config, databaseUrl: `file:${inPath}` });
 
 let cursor = -1;
 let processed = 0;
-let inserted = 0;
+let applied = 0;
+const updateColumns = COLUMNS.filter((column) => column !== "beatmap_id" && column !== "analysis_version");
 for (;;) {
   const rows = (await exec(
     source,
@@ -69,17 +74,25 @@ for (;;) {
   const result = await exec(
     db,
     `insert into beatmap_chart_analysis (${COLUMNS.join(", ")}) values ${placeholders}
-     on conflict(beatmap_id, analysis_version) do nothing`,
+     on conflict(beatmap_id, analysis_version) do update set
+       ${updateColumns.map((column) => `${column} = excluded.${column}`).join(",\n       ")}
+     where coalesce(excluded.computed_at, excluded.updated_at) >
+           coalesce(beatmap_chart_analysis.computed_at, beatmap_chart_analysis.updated_at)
+       and exists (
+         select 1 from beatmaps b
+         where b.beatmap_id = excluded.beatmap_id
+           and lower(coalesce(b.status, '')) in ('ranked', 'approved', 'loved')
+       )`,
     args,
   );
-  inserted += Number(result.rowsAffected ?? 0);
+  applied += Number(result.rowsAffected ?? 0);
 
   processed += rows.length;
   cursor = Number(rows[rows.length - 1].beatmap_id);
-  if (processed % 10_000 < CHUNK) console.log(`processed ${processed} rows (${inserted} inserted)...`);
+  if (processed % 10_000 < CHUNK) console.log(`processed ${processed} rows (${applied} inserted/updated)...`);
 }
 
-console.log(`Import complete: ${inserted} inserted, ${processed - inserted} already present.`);
+console.log(`Import complete: ${applied} inserted/updated, ${processed - applied} target rows kept.`);
 
 const queue = new JobQueue(db);
 await forceMapSearchIndexRebuild(db, queue);
