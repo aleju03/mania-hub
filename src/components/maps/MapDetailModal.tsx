@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { fetchLiveChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry } from "../../lib/live-backend";
+import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis } from "../../lib/live-backend";
 import type { MapsFavouriteBeatmapset } from "../../lib/types";
 import { formatAccuracy, formatDuration, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
@@ -68,7 +68,10 @@ export interface MapDetailPlayContext {
   username: string;
   accuracy: number | null;
   pp: number | null;
-  rateMod: { acronym: string; rate: number } | null;
+  // `pitched` is whether the mod resampled the audio (NC/DC) rather than
+  // stretching it (DT/HT); true as well when the play's mods are no longer
+  // known, where the rate is all there is to go on.
+  rateMod: { acronym: string; rate: number; pitched: boolean } | null;
   playedAt: string | null;
   source: "top" | "tracked";
   rating: number;
@@ -133,11 +136,11 @@ function PendingStat({ label }: { label: string }) {
 // The MSD strip's frame while the entry is in flight. Every play in a skill
 // list is rated, so this block is coming for all of them; holding its shape
 // keeps the modal from resizing under the cursor when the numbers arrive.
-function PendingMsdBlock() {
+function PendingMsdBlock({ label }: { label?: string }) {
   const { t } = useLingui();
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`MSD`}</span>
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{label ?? t`MSD`}</span>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-osu-b4/40 px-3.5 py-2.5">
         <div className="flex min-h-10 items-center gap-4 sm:border-r sm:border-white/10 sm:pr-5">
           <Skeleton className="h-10 w-10 rounded-full" />
@@ -178,6 +181,11 @@ const BEATMAP_STATUS_LABELS: Record<string, MessageDescriptor> = {
   wip: msg`Pending`,
 };
 
+/** Matches osu-web's rate rendering on mod badges: 2 decimals + "x" (U+00D7). */
+function formatRate(rate: number): string {
+  return `${rate.toFixed(2)}\u00d7`;
+}
+
 /** The +/- tier suffix of a dan verdict ("2--" -> "--"), which badge art can't show. */
 function danSuffix(label: string): string {
   return label.match(/[+-]+$/)?.[0] ?? "";
@@ -188,14 +196,33 @@ function danSuffix(label: string): string {
 // Sorted by value with the top skillset tinted; no bars, the numbers carry it.
 // The skillset names are MinaCalc's 4K taxonomy for every keymode; the
 // ClustersBlock below is where charts speak their own keymode's language.
-function MsdBlock({ entry, msdLn }: { entry: LiveMapSearchEntry; msdLn?: Record<string, number> | null }) {
+function MsdBlock({
+  entry,
+  msdLn,
+  rate = 1,
+  rateMsd = null,
+  rateDan = null,
+}: {
+  entry: LiveMapSearchEntry;
+  msdLn?: Record<string, number> | null;
+  // The rate a play on this chart was set at; 1 whenever the modal is not
+  // standing in for a rate-modded play.
+  rate?: number;
+  rateMsd?: Record<string, number> | null;
+  rateDan?: { label: string; family: string; rawDan: number } | null;
+}) {
   const { t, i18n } = useLingui();
+  // Under a rate mod the chart the play met is not the stored one, so its own
+  // MSD and dan replace the 1.0x pair wholesale: a rate-adjusted MSD next to a
+  // 1.0x dan badge would describe two different charts. When the rate values
+  // never landed the whole block falls back to 1.0x and says so.
+  const rateAdjusted = rate !== 1 && rateMsd != null;
   // The LN-adjusted (tail-aware) values simply ARE the msd shown when the
   // chart has holds: they match what the skill-rating engine credits a play
   // here. Bulk search rows carry them, so the final number shows from first
   // paint; the lazily fetched analysis only overrides when it is fresher than
   // the index (base msd remains for pre-msdLn cached payloads).
-  const msd = msdLn ?? entry.msdLn ?? entry.msd ?? null;
+  const msd = rateAdjusted ? rateMsd : msdLn ?? entry.msdLn ?? entry.msd ?? null;
   if (!msd) return null;
   const skillsets = MSD_SKILLSETS
     .map((name) => ({ name, value: Number(msd[name] ?? 0) }))
@@ -206,7 +233,10 @@ function MsdBlock({ entry, msdLn }: { entry: LiveMapSearchEntry; msdLn?: Record<
   const overall = Number(msd.Overall ?? 0);
   const topName = skillsets[0]?.name;
 
-  const dan = entry.dan ?? null;
+  const dan = rateAdjusted ? rateDan : entry.dan ?? null;
+  // "MSD" alone at 1.0x; a rate-modded play names the speed the numbers are
+  // for, including when only the 1.0x pair could be shown.
+  const heading = rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
   const danImage = dan
     ? getDanImageSrc(danBareLabel(dan.label), dan.family === "ln" ? "ln" : undefined, entry.keyCount)
     : null;
@@ -214,7 +244,7 @@ function MsdBlock({ entry, msdLn }: { entry: LiveMapSearchEntry; msdLn?: Record<
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`MSD`}</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{heading}</span>
         {entry.vibro && (
           <span className="text-[9.5px] font-semibold text-[#ffcf70]">{t`vibro chart, estimates unreliable`}</span>
         )}
@@ -446,6 +476,39 @@ export function MapDetailModal({
   // the async result landing can't grow the card and re-center the modal.
   const analysisPending = activeBeatmapId != null && analysisByBeatmap[activeBeatmapId] === undefined;
 
+  // The rate the opening play was set at, and only while that play's own diff
+  // is the active one: the set's other diffs were not the ones played.
+  const playRate = play && active && play.beatmapId === active.beatmapId ? play.rateMod?.rate ?? 1 : 1;
+  const ratePercent = Math.round(playRate * 100);
+  // 1.5x is the one rate the catalog already carries (the DT sweep), and it
+  // rides on the detail entry, so the common DT/NC play needs no request at all.
+  const entryDt = ratePercent === 150 && entry && active && active.beatmapId === entry.beatmapId && entry.msdDt
+    ? { msd: entry.msdDt, dan: entry.danDt ?? null }
+    : null;
+  // Every other rate (and a chart the DT sweep never reached) is computed on
+  // demand by the backend and cached there; keyed by rate as well as beatmap so
+  // switching diffs mid-modal cannot show one diff's numbers under another's.
+  const [rateAnalysisByKey, setRateAnalysisByKey] = useState<Record<string, LiveRateChartAnalysis | null>>({});
+  const rateKey = playRate !== 1 && active ? `${active.beatmapId}:${ratePercent}` : null;
+  const needsRateFetch = rateKey != null && entryDt == null;
+  useEffect(() => {
+    if (!needsRateFetch || rateKey == null) return;
+    if (rateAnalysisByKey[rateKey] !== undefined) return;
+    const [beatmapId, percent] = rateKey.split(":");
+    let cancelled = false;
+    void fetchLiveRateChartAnalysis(Number(beatmapId), Number(percent) / 100).then((result) => {
+      if (cancelled) return;
+      setRateAnalysisByKey((prev) => ({ ...prev, [rateKey]: result }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsRateFetch, rateAnalysisByKey, rateKey]);
+  const rateAnalysis = rateKey != null ? rateAnalysisByKey[rateKey] : undefined;
+  const rateMsd = entryDt ? entryDt.msd : rateAnalysis?.msd ?? null;
+  const rateDan = entryDt ? entryDt.dan : rateAnalysis?.dan ?? null;
+  const ratePending = needsRateFetch && rateAnalysis === undefined;
+
   if (typeof document === "undefined") return null;
 
   // Same enter/exit recipe as the maps tabs' details modal: quick opacity
@@ -581,7 +644,19 @@ export function MapDetailModal({
 
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
-                {active.msd ? <MsdBlock entry={active} msdLn={activeAnalysis?.msdLn ?? null} /> : pending ? <PendingMsdBlock /> : null}
+                {active.msd ? (
+                  ratePending ? (
+                    <PendingMsdBlock label={t`MSD at ${formatRate(playRate)}`} />
+                  ) : (
+                    <MsdBlock
+                      entry={active}
+                      msdLn={activeAnalysis?.msdLn ?? null}
+                      rate={playRate}
+                      rateMsd={rateMsd}
+                      rateDan={rateDan}
+                    />
+                  )
+                ) : pending ? <PendingMsdBlock /> : null}
                 <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
 
                 {/* Detected subfamily tags from the in-house analyzer: chart
@@ -633,6 +708,12 @@ export function MapDetailModal({
                   <ChartPreviewPanel
                     beatmapset={previewSet}
                     selectedBeatmapId={active.beatmapId}
+                    // A play's own speed and its own pitch: NC and DC resample
+                    // the audio, DT and HT stretch it. A play whose mods are no
+                    // longer known keeps the panel's default (pitch follows
+                    // rate), which is what NC sounds like.
+                    playbackRate={playRate}
+                    preservePitch={playRate !== 1 && play?.rateMod ? !play.rateMod.pitched : undefined}
                     className="h-[300px] rounded-lg"
                     flatBackdrop
                   />

@@ -6,7 +6,7 @@ import { analyzeManiaPatterns } from "./dan-estimator/patterns.js";
 import type { ManiaPatternAnalysis } from "./dan-estimator/types.js";
 import { extractDanFeatures } from "./dan-estimator/features.js";
 import { getInputRate } from "./dan-estimator/labels.js";
-import { LN_LADDER_TOP, estimateLnDan } from "./dan-estimator/ln.js";
+import { LN_LADDER_TOP, LN_PRIMARY_MIN_RATIO, estimateLnDan } from "./dan-estimator/ln.js";
 import {
   parseLeoBlackLnHalf,
   parseLeoBlackRcHalf,
@@ -76,7 +76,7 @@ export interface ChartClassification {
 }
 
 export interface ClassifyChartInput extends DanEstimateInput {
-  /** Which half becomes the primary verdict; "auto" picks LN when lnRatio >= 0.5. */
+  /** Which half becomes the primary verdict; "auto" picks LN at LN_PRIMARY_MIN_RATIO holds. */
   preferFamily?: "rc" | "ln" | "auto";
   /**
    * Companella verdict for the RC half, when the caller has already run the
@@ -623,7 +623,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     ? ln ?? rc
     : prefer === "rc"
       ? rc ?? ln
-      : (lnRatio >= 0.5 && ln ? ln : rc ?? ln);
+      : (lnRatio >= LN_PRIMARY_MIN_RATIO && ln ? ln : rc ?? ln);
 
   const estimate: DanEstimate | null = primary
     ? {

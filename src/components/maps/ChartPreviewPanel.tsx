@@ -72,6 +72,7 @@ export function ChartPreviewPanel({
   beatmapset,
   selectedBeatmapId,
   playbackRate = 1,
+  preservePitch,
   className = "",
   flatBackdrop = false,
   skinSettingsOverride = null,
@@ -79,6 +80,10 @@ export function ChartPreviewPanel({
   beatmapset: MapsFavouriteBeatmapset;
   selectedBeatmapId: number | null;
   playbackRate?: number;
+  // Off 1.0x the audio pitches with the rate (nightcore/daycore), which is
+  // right for a rate picker and for NC/DC plays. A caller that knows the mod
+  // was DT or HT sets this to keep the pitch where the map put it.
+  preservePitch?: boolean;
   className?: string;
   flatBackdrop?: boolean;
   // Render with these skin settings instead of the viewer's own replay skin
@@ -146,7 +151,7 @@ export function ChartPreviewPanel({
   const audioUrl = audioMode === "set-preview" ? previewUrl : fullAudioUrl;
   const audioPlaybackRate = (audioMode === "set-preview" ? selectedDifficultyRate : selectedFileAudioRate) * previewPlaybackRate;
   const clockRateDivisor = audioPlaybackRate;
-  const preserveAudioPitch = Math.abs(audioPlaybackRate - 1) < 0.001;
+  const preserveAudioPitch = preservePitch ?? Math.abs(audioPlaybackRate - 1) < 0.001;
   const applyAudioPlaybackSettings = useCallback((audio: HTMLAudioElement) => {
     audio.volume = volume;
     audio.playbackRate = audioPlaybackRate;

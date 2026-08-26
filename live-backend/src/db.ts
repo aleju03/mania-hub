@@ -343,6 +343,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateOsuProxyCache(target);
   await migrateCountryMapsSnapshotStampsIndex(target);
   await migrateChartAnalysisDtRate(target);
+  await migrateDanEstimateMsd(target);
   await migrateTopPlayEventsHotColumns(target);
   await migratePlayerSkillBaseline(target);
   await migratePlayerSkillAccModel(target);
@@ -1179,6 +1180,16 @@ async function migrateChartAnalysisDtRate(db: Db): Promise<void> {
   // readers blend it toward msd_json by the keymode weight in dan/msd.ts.
   if (!columns.includes("msd_ln_json")) {
     await db.execute("alter table beatmap_chart_analysis add column msd_ln_json text");
+  }
+}
+
+// Rate-adjusted MSD beside the cached dan verdict, same { values } shape as
+// msd_json elsewhere. Written only by the on-demand rate analysis path, so rows
+// the plain dan-estimate job wrote keep it null and fill it on first read.
+async function migrateDanEstimateMsd(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(dan_estimates)")).rows.map((row) => String(row.name));
+  if (!columns.includes("msd_json")) {
+    await db.execute("alter table dan_estimates add column msd_json text");
   }
 }
 

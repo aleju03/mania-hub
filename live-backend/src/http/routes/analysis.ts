@@ -3,7 +3,8 @@ import { lnAdjustedMsd } from "../../dan/msd.js";
 import { exec, parseJson } from "../../db.js";
 import { lookupAvatarAccents } from "../../features/avatar-accents.js";
 import { CHART_ANALYSIS_VERSION } from "../../features/chart-analysis.js";
-import { getDanEstimateBatch } from "../../features/dan-estimates.js";
+import { getDanEstimateBatch, getRateAdjustedChartAnalysis } from "../../features/dan-estimates.js";
+import { parseDtRateVerdict } from "../../features/map-search.js";
 import type { HttpContext } from "../context.js";
 import { readBody } from "../request.js";
 import { checkRate, sendJson } from "../respond.js";
@@ -33,6 +34,57 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
     sendJson(req, res, ctx, 200, await getDanEstimateBatch(ctx.serveWriteDb ?? ctx.db, ctx.queue, ctx.osu, items, {
       computeMissing: body.computeMissing !== false,
     }));
+    return true;
+  }
+  if (url.pathname === "/api/chart-analysis/rate") {
+    // The same chart at the rate a play was set on (DT/NC, HT/DC): MSD and the
+    // dan verdict recomputed at that speed. The 1.5x answer is already stored
+    // by the DT sweep, so it costs a single indexed read; every other rate runs
+    // MinaCalc plus the estimator inline, which is why it charges the costly
+    // buckets the dan-estimate batch does.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const beatmapId = Number(url.searchParams.get("beatmapId"));
+    const rate = Number(url.searchParams.get("rate"));
+    if (!Number.isInteger(beatmapId) || beatmapId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_beatmap_id" });
+      return true;
+    }
+    if (!Number.isFinite(rate) || rate < 0.5 || rate > 2) {
+      sendJson(req, res, ctx, 400, { error: "invalid_rate" });
+      return true;
+    }
+    const ratePercent = Math.round(rate * 100);
+    if (ratePercent === 150) {
+      const row = (await exec(
+        ctx.db,
+        `select msd_dt_json, dan_dt_json from beatmap_chart_analysis
+         where beatmap_id = ? and analysis_version = ? limit 1`,
+        [beatmapId, CHART_ANALYSIS_VERSION],
+      )).rows[0];
+      const { danDt, msdDt } = parseDtRateVerdict(row);
+      if (msdDt || danDt) {
+        sendJson(req, res, ctx, 200, {
+          beatmapId,
+          rate: 1.5,
+          ratePercent,
+          status: "ready",
+          dan: danDt,
+          msd: msdDt,
+        });
+        return true;
+      }
+    }
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    if (!checkRate(req, res, ctx, "danEstimate")) return true;
+    const analysis = await getRateAdjustedChartAnalysis(ctx.serveWriteDb ?? ctx.db, ctx.osu, beatmapId, rate);
+    if (!analysis) {
+      sendJson(req, res, ctx, 400, { error: "invalid_rate" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, analysis);
     return true;
   }
   if (url.pathname === "/api/chart-analysis") {

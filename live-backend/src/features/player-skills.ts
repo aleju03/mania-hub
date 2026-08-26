@@ -1,5 +1,6 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
+import { LN_PRIMARY_MIN_RATIO } from "../dan/dan-estimator/ln.js";
 import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, isMsdSupportedKeyCount } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
@@ -103,15 +104,14 @@ const TECH_TAG_CHORDJACK_VETO = 0.8;
 // tags are read, so the LN rating and the plays behind it are computed over
 // the same set of charts.
 //
-// The floor sits just under the 0.5 the chart-classifier routes the dan side
-// on. Routing has to pick one half and a coin-flip chart has to land somewhere,
-// but an LN rating is not either/or: farewell: to my memories [4K] is 47.6%
-// holds at a maxed-out ln score, and no player would call it rice. 0.45 keeps
-// that chart while staying well clear of the token-hold rice the tag
-// over-admits, which sits under 0.3. Costs 2076 charts of leniency against the
-// 13411 already inside 0.5 on the 2026-08 snapshot, and the ln pattern score
-// cannot do this job instead: it averages 0.78-0.88 in every lnRatio band.
-const LN_PATTERN_LN_RATIO_MIN = 0.45;
+// The same line the chart-classifier routes the dan side on, deliberately: a
+// chart LN enough to feed an LN rating is LN enough to wear an LN dan badge.
+// farewell: to my memories [4K] is 47.6% holds at a maxed-out ln score, and no
+// player would call it rice; 0.45 keeps charts like it while staying well clear
+// of the token-hold rice the tag over-admits, which sits under 0.3. The ln
+// pattern score cannot do this job instead: it averages 0.78-0.88 in every
+// lnRatio band.
+const LN_PATTERN_LN_RATIO_MIN = LN_PRIMARY_MIN_RATIO;
 // The LN axes the gate covers: the whole-LN tag plus the analyzer's four LN
 // subtypes (patterns.ts LN_SUBTYPE_IDS).
 const LN_PATTERN_IDS = new Set(["ln", "lngeneral", "lnrelease", "lninverse", "lntech"]);
@@ -334,6 +334,10 @@ export interface PlayerSkillPlay {
   playedAt: string | null;
   source: "top" | "tracked";
   scoreId: number | null;
+  // "DT" | "NC" | "HT" | "DC" when the play's own mods are still known; null on
+  // plays cached before the field existed (and on unmodded plays), where the
+  // rate alone has to stand in.
+  rateMod: string | null;
   // The play's highest non-Overall MSD skillset. A skillset list ranks by one
   // component of every play, so a dense LN file can lead "top Chordjack plays"
   // purely by riding a big overall (MinaCalc reads stacked hold heads as
@@ -388,6 +392,11 @@ interface StoredPlaySsr {
   stableAccuracy?: number | null;
   missShare?: number | null;
   endedAt?: string | null;
+  // The rate mod's acronym, so NC/DC are distinguishable from DT/HT (the rate
+  // is identical). Refreshed from the live score on every compute like the rest
+  // of the clear evidence; retained plays cached before the field existed stay
+  // undefined and their consumers fall back to the rate's sign.
+  rateMod?: string | null;
 }
 
 interface StoredModesSummary {
@@ -421,6 +430,20 @@ export function getPlayRate(mods: OsuMod[] | string[] | undefined): number | nul
     }
   }
   return Math.round(rate * 100) / 100;
+}
+
+/**
+ * The rate mod a play carries, by acronym. NC and DC are the pitch-shifting
+ * variants of DT and HT, which the numeric rate alone cannot tell apart, so
+ * anything showing a play at its own speed (the mod badge, the chart preview's
+ * audio) needs this rather than the sign of `rate - 1`.
+ */
+export function getRateModAcronym(mods: OsuMod[] | string[] | undefined): string | null {
+  for (const mod of mods ?? []) {
+    const acronym = typeof mod === "string" ? mod : String(mod?.acronym ?? "");
+    if (acronym === "DT" || acronym === "NC" || acronym === "HT" || acronym === "DC") return acronym;
+  }
+  return null;
 }
 
 function modSpeed(mod: OsuMod | string, defaultSpeed: number): number | null {
@@ -759,7 +782,8 @@ function getMissShare(statistics: OsuScoreStatistics | undefined): number | null
 // "You are ~8th dan on 4K rice": per keymode and per verdict side (RC vs LN,
 // matching the classifier's halves), the highest continuous dan level backed
 // by a quorum of qualifying clears. A clear testifies only for the chart's
-// PRIMARY family (LN iff lnRatio >= 0.5, the same rule as /maps): accuracy
+// PRIMARY family (LN iff the hold share clears LN_PRIMARY_MIN_RATIO, the same
+// rule as /maps): accuracy
 // on an LN chart is earned on the holds, so it proves nothing about the rice
 // half's rating, and vice versa. DT plays likewise count only where the DT
 // sweep stored a verdict (its primary side); HT and other rates contribute
@@ -823,7 +847,7 @@ function collectDanClears(
       });
     };
     if (play.rate === 1 && info.lnRatio != null) {
-      const side = info.lnRatio >= 0.5 ? "ln" : "rc";
+      const side = info.lnRatio >= LN_PRIMARY_MIN_RATIO ? "ln" : "rc";
       push(side === "ln" ? info.lnRawDan : info.rcRawDan, side);
     } else if (play.rate === 1.5 && info.dtFamily != null) {
       push(info.dtRawDan, info.dtFamily);
@@ -989,6 +1013,7 @@ export async function computePlayerSkillRatings(
       customAccuracy: getStoredScoreAccuracy(score),
       missShare: getMissShare(score.statistics),
       endedAt: score.ended_at ?? score.created_at ?? null,
+      rateMod: getRateModAcronym(score.mods),
     };
     const previous = previousByIdentity.get(identity);
     if (previous && previous.beatmapId === beatmapId && previous.rate === rate && previous.goal === goal) {
@@ -1545,6 +1570,8 @@ export async function getPlayerSkillPlays(
   return { items, total: matches.length, limit, offset };
 }
 
+const RATE_MOD_ACRONYMS = new Set(["DT", "NC", "HT", "DC"]);
+
 function buildPlayerSkillPlay(
   play: StoredPlaySsr,
   rating: number,
@@ -1573,6 +1600,7 @@ function buildPlayerSkillPlay(
     playedAt: typeof play.endedAt === "string" && Number.isFinite(Date.parse(play.endedAt)) ? play.endedAt : null,
     source: play.source === "top" ? "top" : "tracked",
     scoreId: scoreId != null && Number.isSafeInteger(scoreId) && scoreId > 0 ? scoreId : null,
+    rateMod: RATE_MOD_ACRONYMS.has(String(play.rateMod ?? "")) ? String(play.rateMod) : null,
     topSkillset: dominantSkillset(play.values),
   };
 }

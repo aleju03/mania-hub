@@ -254,6 +254,20 @@ function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: numbe
  * the main pack, which is why leoblack's table names them after their authors.
  * Anything past 17 is off the ladder, not an 18th dan.
  */
+/**
+ * The hold share at which a chart's PRIMARY identity is the LN one: the dan
+ * verdict the classifier reports, which side a clear credits toward a player's
+ * dan, and the LN pattern facet in map search all route on this number.
+ *
+ * It matches the floor the LN rating uses (LN_PATTERN_LN_RATIO_MIN in
+ * features/player-skills.ts) on purpose. The two used to differ - routing sat
+ * at 0.5 - which left a band of charts (Legend of Millennium [7K] at 47.9%
+ * holds, farewell: to my memories [4K] at 47.6%) that fed an LN rating, carried
+ * LN pattern tags, and still showed a rice dan badge. One line for "this chart
+ * is LN" is the reading players expect.
+ */
+export const LN_PRIMARY_MIN_RATIO = 0.45;
+
 export const LN_LADDER_TOP = 17;
 
 // The LN dan ladder is numeric 1-17 with +/- variants; it never extends into

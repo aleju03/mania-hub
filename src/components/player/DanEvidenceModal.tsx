@@ -378,7 +378,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
             username,
             accuracy: detail.clear.play.accuracy,
             pp: detail.clear.play.pp,
-            rateMod: rateModFor(detail.clear.play.rate),
+            rateMod: rateModFor(detail.clear.play.rate, detail.clear.play.rateMod),
             playedAt: detail.clear.play.playedAt,
             source: detail.clear.play.source,
             rating: detail.clear.creditedDan,
@@ -410,7 +410,7 @@ function ClearRow({
   const { t } = useLingui();
   const locale = useLocale();
   const play = clear.play;
-  const rateMod = rateModFor(play.rate);
+  const rateMod = rateModFor(play.rate, play.rateMod);
   // One line per clear, deliberately unlike the top-plays rows this modal used
   // to borrow: a breakdown row is read as a column of dan credits, so artist,
   // cover art and the played-at line move into the tooltip and only the three

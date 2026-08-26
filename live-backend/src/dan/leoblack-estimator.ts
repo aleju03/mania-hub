@@ -4,6 +4,7 @@ import type { ManiaBeatmap } from "./beatmap-parser.js";
 import type { DanEstimate, DanEstimateInput, DanSkillFamily } from "./dan-estimator/types.js";
 import { extractDanFeatures } from "./dan-estimator/features.js";
 import { getInputRate } from "./dan-estimator/labels.js";
+import { LN_PRIMARY_MIN_RATIO } from "./dan-estimator/ln.js";
 import {
   runMixedEstimatorFromText,
   type LeoBlackEstimatorOptions,
@@ -24,7 +25,7 @@ import { detectVibroFromLongjackPattern } from "../../vendor/leoblack/vibro.js";
 
 export interface LeoBlackDanInput extends DanEstimateInput {
   // Which half of a hybrid "RC || LN" verdict to report. "auto" picks LN when the
-  // chart is LN-dominant (lnRatio >= 0.5).
+  // chart is LN-dominant (LN_PRIMARY_MIN_RATIO holds or more).
   preferFamily?: "rc" | "ln" | "auto";
 }
 
@@ -193,7 +194,7 @@ export function estimateLeoBlackDan(map: ManiaBeatmap, osuText: string, input: L
 
   const prefer = input.preferFamily ?? "auto";
   const lnRatio = Number(mixed.lnRatio);
-  const useLn = lnText != null && (prefer === "ln" || (prefer === "auto" && lnRatio >= 0.5));
+  const useLn = lnText != null && (prefer === "ln" || (prefer === "auto" && lnRatio >= LN_PRIMARY_MIN_RATIO));
 
   const parsed = useLn ? parseLeoBlackLnHalf(lnText as string) : parseLeoBlackRcHalf(rcText, mixed.numericDifficulty);
   if (!parsed) {

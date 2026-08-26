@@ -1,7 +1,8 @@
 import type { Db } from "../db.js";
-import { exec } from "../db.js";
+import { exec, parseJson } from "../db.js";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../dan/dan-estimator/cache-version.js";
 import { classifyChartWithCompanella } from "../dan/companella.js";
+import { computeMsd } from "../dan/msd.js";
 import { parseManiaBeatmap, type ManiaBeatmap } from "../dan/beatmap-parser.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logWarn } from "../logger.js";
@@ -55,7 +56,17 @@ export interface DanEstimateBatchResponse {
   estimatorVersion: number;
 }
 
-type CachedDanEstimate = { found: true; value: LeanDanEstimate | null } | { found: false };
+type DanEstimateStatus = "ready" | "unsupported" | "unavailable";
+
+interface ComputedDanEstimate {
+  status: DanEstimateStatus;
+  value: LeanDanEstimate | null;
+  msd: Record<string, number> | null;
+}
+
+type CachedDanEstimate =
+  | { found: true; status: DanEstimateStatus; value: LeanDanEstimate | null; msd: Record<string, number> | null }
+  | { found: false };
 
 export function normalizeDanEstimateItems(items: unknown[]): NormalizedDanEstimateRequest[] {
   const normalized: NormalizedDanEstimateRequest[] = [];
@@ -111,8 +122,8 @@ export async function getDanEstimateBatch(
     const inline = missing.slice(0, INLINE_DAN_ESTIMATE_LIMIT);
     await mapWithConcurrency(inline, INLINE_DAN_ESTIMATE_CONCURRENCY, async (request) => {
       try {
-        const value = await computeAndStoreDanEstimate(db, osu, request, "api:dan_estimates");
-        results[request.key] = value;
+        const computed = await computeAndStoreDanEstimate(db, osu, request, "api:dan_estimates");
+        results[request.key] = computed.value;
         computedKeys.add(request.key);
       } catch (error) {
         logWarn("dan_estimate_inline_failed", {
@@ -136,6 +147,89 @@ export async function getDanEstimateBatch(
     pending,
     estimatorVersion: DAN_ESTIMATE_CACHE_VERSION,
   };
+}
+
+/* ── Rate-adjusted chart analysis (one chart, one rate) ───────────────────────
+   The stored analysis is 1.0x, so a play set under DT/NC or HT/DC is described
+   by numbers it was not played at. This returns the MSD and dan verdict at the
+   play's own rate, computed once and cached in the same dan_estimates row the
+   1.0x-or-any-rate dan estimate already uses (its key is (beatmap, rate)).
+   MinaCalc is the CPU burst here, so callers must charge a costly rate bucket;
+   the 1.5x fast path off the DT sweep's stored columns lives in the route. */
+
+export interface RateAdjustedChartAnalysis {
+  beatmapId: number;
+  rate: number;
+  ratePercent: number;
+  status: DanEstimateStatus;
+  // Same shape as the entry's 1.0x dan, so the frontend renders one badge either
+  // way. Null when the estimator has no table for this keymode.
+  dan: { label: string; family: string; rawDan: number } | null;
+  msd: Record<string, number> | null;
+}
+
+export async function getRateAdjustedChartAnalysis(
+  db: Db,
+  osu: OsuApiClient,
+  beatmapId: number,
+  rate: number,
+): Promise<RateAdjustedChartAnalysis | null> {
+  const [request] = normalizeDanEstimateItems([{ beatmapId, rate }]);
+  if (!request) return null;
+
+  const cached = await readCachedDanEstimate(db, request);
+  if (cached.found && (cached.msd != null || cached.status === "unavailable")) {
+    return toRateAdjustedAnalysis(request, cached.status, cached.value, cached.msd);
+  }
+  if (cached.found) {
+    // The verdict was cached before MSD was stored beside it (the batch
+    // endpoint and its job still store the dan alone). Fill in the MSD rather
+    // than re-running the estimator for a verdict already in hand.
+    const msd = await fillCachedRateMsd(db, osu, request);
+    return toRateAdjustedAnalysis(request, cached.status, cached.value, msd);
+  }
+
+  const computed = await computeAndStoreDanEstimate(db, osu, request, "api:chart_analysis_rate", { withMsd: true });
+  return toRateAdjustedAnalysis(request, computed.status, computed.value, computed.msd);
+}
+
+function toRateAdjustedAnalysis(
+  request: NormalizedDanEstimateRequest,
+  status: DanEstimateStatus,
+  estimate: LeanDanEstimate | null,
+  msd: Record<string, number> | null,
+): RateAdjustedChartAnalysis {
+  return {
+    beatmapId: request.beatmapId,
+    rate: request.rate,
+    ratePercent: request.ratePercent,
+    status,
+    dan: estimate ? { label: estimate.displayName, family: estimate.family, rawDan: estimate.rawDan } : null,
+    msd,
+  };
+}
+
+/** MSD alone for an already-cached verdict; null for keymodes MinaCalc skips. */
+async function fillCachedRateMsd(
+  db: Db,
+  osu: OsuApiClient,
+  request: NormalizedDanEstimateRequest,
+): Promise<Record<string, number> | null> {
+  let parsed: ParsedDanBeatmap;
+  try {
+    parsed = await getParsedDanBeatmap(db, osu, request.beatmapId, "api:chart_analysis_rate");
+  } catch {
+    return null;
+  }
+  const msd = await computeMsd(parsed.osuText, { keyCount: parsed.map.keyCount, rate: request.rate }).catch(() => null);
+  if (!msd) return null;
+  await exec(
+    db,
+    `update dan_estimates set msd_json = ?, updated_at = ?
+     where estimator_version = ? and beatmap_id = ? and rate_percent = ?`,
+    [JSON.stringify(msd), nowIso(), DAN_ESTIMATE_CACHE_VERSION, request.beatmapId, request.ratePercent],
+  );
+  return msd.values;
 }
 
 export async function enqueueDanEstimate(queue: JobQueue, request: NormalizedDanEstimateRequest): Promise<void> {
@@ -162,9 +256,10 @@ async function computeAndStoreDanEstimate(
   osu: OsuApiClient,
   request: NormalizedDanEstimateRequest,
   caller: string,
-): Promise<LeanDanEstimate | null> {
+  options: { withMsd?: boolean } = {},
+): Promise<ComputedDanEstimate> {
   const cached = await readCachedDanEstimate(db, request);
-  if (cached.found) return cached.value;
+  if (cached.found) return { status: cached.status, value: cached.value, msd: cached.msd };
 
   const starRating = request.starRating ?? await readBeatmapStarRating(db, request.beatmapId);
   let parsed: ParsedDanBeatmap;
@@ -176,21 +271,28 @@ async function computeAndStoreDanEstimate(
     // failing on backoff forever. Transient errors still throw and retry.
     if (isTerminalBeatmapFileError(error instanceof Error ? error.message : String(error))) {
       await storeUnavailableDanEstimate(db, request);
-      return null;
+      return { status: "unavailable", value: null, msd: null };
     }
     throw error;
   }
   const { map, osuText } = parsed;
+  // Only the rate-analysis path asks for MSD; the batch endpoint and its job
+  // want the dan verdict alone and must not pay a MinaCalc run for it. When it
+  // is asked for it leads, so the Companella pass reuses it instead of running
+  // the calc a second time.
+  const msd = options.withMsd
+    ? await computeMsd(osuText, { keyCount: map.keyCount, rate: request.rate }).catch(() => null)
+    : null;
   const classification = await classifyChartWithCompanella(map, osuText, {
     starRating,
     totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
     version: map.version,
     rate: request.rate !== 1 ? request.rate : undefined,
-  });
+  }, { msdValues: msd?.values ?? null });
   const estimate = classification.estimate;
   if (!classification.supported || !estimate) {
-    await storeUnsupportedDanEstimate(db, request);
-    return null;
+    await storeUnsupportedDanEstimate(db, request, msd?.values ?? null);
+    return { status: "unsupported", value: null, msd: msd?.values ?? null };
   }
   const lean: LeanDanEstimate = {
     label: estimate.label,
@@ -206,9 +308,9 @@ async function computeAndStoreDanEstimate(
     db,
     `insert into dan_estimates (
        estimator_version, beatmap_id, rate_percent, status, label, variant, display_name,
-       raw_dan, family, confidence, star_rating, error, computed_at, updated_at
+       raw_dan, family, confidence, star_rating, error, msd_json, computed_at, updated_at
      )
-     values (?, ?, ?, 'ready', ?, ?, ?, ?, ?, ?, ?, null, ?, ?)
+     values (?, ?, ?, 'ready', ?, ?, ?, ?, ?, ?, ?, null, ?, ?, ?)
      on conflict(estimator_version, beatmap_id, rate_percent) do update set
        status = excluded.status,
        label = excluded.label,
@@ -219,6 +321,7 @@ async function computeAndStoreDanEstimate(
        confidence = excluded.confidence,
        star_rating = excluded.star_rating,
        error = excluded.error,
+       msd_json = coalesce(excluded.msd_json, dan_estimates.msd_json),
        computed_at = excluded.computed_at,
        updated_at = excluded.updated_at`,
     [
@@ -232,12 +335,13 @@ async function computeAndStoreDanEstimate(
       lean.family,
       lean.confidence,
       starRating ?? null,
+      msd ? JSON.stringify(msd) : null,
       nowIso(),
       nowIso(),
     ],
   );
 
-  return lean;
+  return { status: "ready", value: lean, msd: msd?.values ?? null };
 }
 
 async function getParsedDanBeatmap(db: Db, osu: OsuApiClient, beatmapId: number, caller: string): Promise<ParsedDanBeatmap> {
@@ -284,7 +388,10 @@ async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateReque
   )).rows[0];
   if (!row) return { found: false };
   const status = String(row.status ?? "");
-  if (status === "unsupported" || status === "unavailable") return { found: true, value: null };
+  const msd = readStoredMsd(row.msd_json);
+  if (status === "unsupported" || status === "unavailable") {
+    return { found: true, status, value: null, msd };
+  }
   if (status !== "ready") return { found: false };
   if (row.star_rating == null && request.starRating != null) return { found: false };
 
@@ -299,6 +406,8 @@ async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateReque
 
   return {
     found: true,
+    status: "ready",
+    msd,
     value: {
       label,
       variant: row.variant == null ? null : String(row.variant),
@@ -311,8 +420,20 @@ async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateReque
   };
 }
 
-async function storeUnsupportedDanEstimate(db: Db, request: NormalizedDanEstimateRequest): Promise<void> {
-  await storeTerminalDanEstimate(db, request, "unsupported", "unsupported_keymode");
+function readStoredMsd(raw: unknown): Record<string, number> | null {
+  if (raw == null) return null;
+  const parsed = parseJson<{ values?: Record<string, number> } | null>(String(raw), null);
+  return parsed && parsed.values && typeof parsed.values === "object" ? parsed.values : null;
+}
+
+async function storeUnsupportedDanEstimate(
+  db: Db,
+  request: NormalizedDanEstimateRequest,
+  msd: Record<string, number> | null = null,
+): Promise<void> {
+  // A keymode the dan estimator has no table for can still be one MinaCalc
+  // rates (6K), so the MSD it did produce is stored beside the null verdict.
+  await storeTerminalDanEstimate(db, request, "unsupported", "unsupported_keymode", msd);
 }
 
 // Caches a terminal null result so `readCachedDanEstimate` reports it as found
@@ -326,15 +447,16 @@ async function storeTerminalDanEstimate(
   request: NormalizedDanEstimateRequest,
   status: "unsupported" | "unavailable",
   error: string,
+  msd: Record<string, number> | null = null,
 ): Promise<void> {
   const now = nowIso();
   await exec(
     db,
     `insert into dan_estimates (
        estimator_version, beatmap_id, rate_percent, status, label, variant, display_name,
-       raw_dan, family, confidence, star_rating, error, computed_at, updated_at
+       raw_dan, family, confidence, star_rating, error, msd_json, computed_at, updated_at
      )
-     values (?, ?, ?, ?, null, null, null, null, null, null, ?, ?, ?, ?)
+     values (?, ?, ?, ?, null, null, null, null, null, null, ?, ?, ?, ?, ?)
      on conflict(estimator_version, beatmap_id, rate_percent) do update set
        status = excluded.status,
        label = excluded.label,
@@ -345,9 +467,20 @@ async function storeTerminalDanEstimate(
        confidence = excluded.confidence,
        star_rating = excluded.star_rating,
        error = excluded.error,
+       msd_json = coalesce(excluded.msd_json, dan_estimates.msd_json),
        computed_at = excluded.computed_at,
        updated_at = excluded.updated_at`,
-    [DAN_ESTIMATE_CACHE_VERSION, request.beatmapId, request.ratePercent, status, request.starRating ?? null, error, now, now],
+    [
+      DAN_ESTIMATE_CACHE_VERSION,
+      request.beatmapId,
+      request.ratePercent,
+      status,
+      request.starRating ?? null,
+      error,
+      msd ? JSON.stringify({ values: msd }) : null,
+      now,
+      now,
+    ],
   );
 }
 

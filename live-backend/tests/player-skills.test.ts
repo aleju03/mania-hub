@@ -10,6 +10,7 @@ import {
   estimateWifeAccuracy,
   getPlayerSkillBreakdown,
   getPlayRate,
+  getRateModAcronym,
   getPlayerSkillPlays,
   loadArchivedTrackedEvidence,
   loadChartSkillInfo,
@@ -146,6 +147,18 @@ function play(overrides: Partial<OscScore>): OscScore {
     ...overrides,
   };
 }
+
+describe("getRateModAcronym", () => {
+  it("names the rate mod so NC/DC stay apart from DT/HT", () => {
+    expect(getRateModAcronym([{ acronym: "NC" }])).toBe("NC");
+    expect(getRateModAcronym([{ acronym: "DT", settings: { speed_change: 1.2 } }])).toBe("DT");
+    expect(getRateModAcronym(["HD", "DC"])).toBe("DC");
+    expect(getRateModAcronym([{ acronym: "HT" }])).toBe("HT");
+    expect(getRateModAcronym([{ acronym: "MR" }, { acronym: "HD" }])).toBeNull();
+    expect(getRateModAcronym([])).toBeNull();
+    expect(getRateModAcronym(undefined)).toBeNull();
+  });
+});
 
 describe("getPlayRate", () => {
   it("maps rate mods and leaves everything else at 1x", () => {
@@ -1032,7 +1045,7 @@ describe("getPlayerSkillPlays", () => {
       // tag here and cannot reach the top LN plays surface.
       const plays = [
         { identity: "official:1", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.95, pp: 200, values: { Overall: 22, Stream: 24 }, patterns: ["stream"], source: "top", accuracy: 0.97, endedAt: "2026-08-01T00:00:00Z" },
-        { identity: "official:2", beatmapId: 102, keyCount: 4, rate: 1.5, goal: 0.96, pp: 180, values: { Overall: 25, Stream: 29 }, patterns: ["stream", "ln"], source: "tracked", accuracy: 0.98, endedAt: "2026-08-02T00:00:00Z" },
+        { identity: "official:2", beatmapId: 102, keyCount: 4, rate: 1.5, goal: 0.96, pp: 180, values: { Overall: 25, Stream: 29 }, patterns: ["stream", "ln"], source: "tracked", accuracy: 0.98, endedAt: "2026-08-02T00:00:00Z", rateMod: "NC" },
         { identity: "official:3", beatmapId: 103, keyCount: 7, rate: 1, goal: 0.94, pp: 250, values: { Overall: 30, Stream: 31 }, patterns: ["stream"], source: "top", accuracy: 0.96, endedAt: "2026-08-03T00:00:00Z" },
         { identity: "official:4", beatmapId: 104, keyCount: 4, rate: 1, goal: 0.97, pp: 210, values: { Overall: 27, Stream: 20 }, patterns: ["stamina"], source: "top", accuracy: 0.99, endedAt: "2026-08-04T00:00:00Z" },
       ];
@@ -1056,10 +1069,15 @@ describe("getPlayerSkillPlays", () => {
         rate: 1.5,
         source: "tracked",
         scoreId: 2,
+        // The play's own mod, not one inferred from the rate: 1.5x alone
+        // cannot say whether the audio was pitched.
+        rateMod: "NC",
       });
 
       const second = await getPlayerSkillPlays(db, 99, 4, "Stream", { limit: 1, offset: 1 });
-      expect(second.items[0]).toMatchObject({ beatmapId: 101, rating: 24 });
+      // Cached before the mod was stored beside the rate: null, and consumers
+      // fall back to the rate's sign rather than a made-up acronym.
+      expect(second.items[0]).toMatchObject({ beatmapId: 101, rating: 24, rateMod: null });
 
       const ln = await getPlayerSkillPlays(db, 99, 4, "pattern:ln");
       // The LN list is exactly the ln-tagged plays, ranked by Overall, so it

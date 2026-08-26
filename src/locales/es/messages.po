@@ -6549,6 +6549,12 @@ msgstr "msd"
 msgid "MSD"
 msgstr "MSD"
 
+#. placeholder {0}: formatRate(playRate)
+#. placeholder {0}: formatRate(rateAdjusted ? rate : 1)
+#: src/components/maps/MapDetailModal.tsx
+msgid "MSD at {0}"
+msgstr "MSD a {0}"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
 msgstr "Música"

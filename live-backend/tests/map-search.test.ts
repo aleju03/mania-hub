@@ -906,15 +906,20 @@ describe("map search primary derivation", () => {
 
   it("routes LN primaries by the classifier lnRatio", async () => {
     const db = await makeDb();
-    // Holds-heavy hybrid the activity path promoted to LN, but the classifier
-    // routed RC (lnRatio < 0.5): demote to the best non-LN family.
+    // Token-hold hybrid the activity path promoted to LN, but the classifier
+    // routes RC below LN_PRIMARY_MIN_RATIO: demote to the best non-LN family.
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "ln", patterns: { ln: 1, chordjack: 0.7, tech: 0.6 } });
-    await seedAnalysis(db, 1, { lnRatio: 0.47 });
+    await seedAnalysis(db, 1, { lnRatio: 0.3 });
     // Majority-holds chart that the skills profile called tech: promote to LN.
     await seedMap(db, { beatmapId: 2, beatmapsetId: 20, primary: "tech", patterns: { tech: 1, ln: 0.4 } });
     await seedAnalysis(db, 2, { lnRatio: 0.74, family: "ln" });
     // No chart analysis: the skills primary stands.
     await seedMap(db, { beatmapId: 3, beatmapsetId: 30, primary: "ln", patterns: { ln: 1 } });
+    // Legend of Millennium shape: just inside the routing line, which is the
+    // same floor the LN rating uses, so it reads LN everywhere rather than
+    // feeding an LN rating with a rice primary.
+    await seedMap(db, { beatmapId: 4, beatmapsetId: 40, primary: "tech", patterns: { tech: 1, ln: 0.9 } });
+    await seedAnalysis(db, 4, { lnRatio: 0.479 });
     await buildAll(db);
 
     const all = await getMapSearchPage(db, baseQuery());
@@ -922,16 +927,18 @@ describe("map search primary derivation", () => {
     expect(byId.get(1)?.primaryPattern).toBe("chordjack");
     expect(byId.get(2)?.primaryPattern).toBe("ln");
     expect(byId.get(3)?.primaryPattern).toBe("ln");
+    expect(byId.get(4)?.primaryPattern).toBe("ln");
 
     const lnOnly = await getMapSearchPage(db, { ...baseQuery(), patterns: ["ln"] });
-    expect(lnOnly.items.map((item) => item.beatmapId).sort()).toEqual([2, 3]);
+    expect(lnOnly.items.map((item) => item.beatmapId).sort()).toEqual([2, 3, 4]);
   });
 
   it("demotes non-4K chordjack primaries the chart analyzer does not corroborate", async () => {
     const db = await makeDb();
     // ALL*NIGHTER shape (5603945): holds-heavy 7K chart whose activity primary
-    // was lnGeneral; the lnRatio-0.46 de-route used to land on the force-capped
-    // phantom chordjack=1.0 even though the analyzer never detected chordjack.
+    // was lnGeneral. At 0.46 holds it routes LN outright now, but it still
+    // carries the force-capped phantom chordjack=1.0 the analyzer never
+    // detected, and that chip has to clamp whether or not it de-routed.
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 7, primary: "lnGeneral", patterns: { chordjack: 1, tech: 0.98, stream: 0.96, ln: 0.99 } });
     await seedAnalysis(db, 1, {
       lnRatio: 0.46,

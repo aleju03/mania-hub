@@ -3,7 +3,7 @@ import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
-import { estimateLnDan } from "../dan/dan-estimator/ln.js";
+import { LN_PRIMARY_MIN_RATIO, estimateLnDan } from "../dan/dan-estimator/ln.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
 import { classifyChart, detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { classifyChartWithCompanella } from "../dan/companella.js";
@@ -1621,54 +1621,65 @@ export async function recomputeDtRateChunk(
   for (const row of rows) {
     const beatmapId = Number(row.beatmap_id);
     nextCursor = Math.max(nextCursor, beatmapId);
-    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
-    if (!osuText) continue;
-    try {
-      const map = parseManiaBeatmap(osuText);
-      // The .osu is the truth for the keymode; a stored key_count the parser
-      // disagrees with keeps its null DT columns.
-      if (map.keyCount !== 4 && map.keyCount !== 7) continue;
-      const starRating = Number((await exec(
-        db,
-        "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
-        [beatmapId],
-      )).rows[0]?.difficulty_rating ?? 0);
-      // The classifier and MinaCalc are the CPU bursts; yield between them and
-      // between charts so ingest/SSE keep moving. MinaCalc rates 4K and 7K the
-      // same way at 1.5x as it does at 1.0x (musicRate passes straight through).
-      // MSD leads so Companella can reuse it instead of running MinaCalc twice.
-      const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(() => null);
-      if (!msd) continue;
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      const classification = await classifyChartWithCompanella(map, osuText, {
-        rate: DT_RATE,
-        starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
-        totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
-        version: map.version,
-      }, { msdValues: msd.values });
-
-      const lean = leanClassification(classification);
-      const danDt = {
-        primaryLabel: lean.primary?.displayName ?? null,
-        primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
-        rawDan: lean.primary?.rawDan ?? null,
-      };
-      await exec(
-        db,
-        `update beatmap_chart_analysis
-         set msd_dt_json = json(?), dan_dt_json = json(?)
-         where beatmap_id = ? and analysis_version = ?`,
-        [json(msd), json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
-      );
-      computed.push(beatmapId);
-    } catch {
-      // A chart the parser/estimator rejects keeps its null DT columns; the full
-      // analysis job (at 1.0x) would fail the same way.
-    }
+    if (await storeDtRateVerdict(db, beatmapId)) computed.push(beatmapId);
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
 
   return { nextCursor, scanned: rows.length, computed, done: rows.length < limit };
+}
+
+/**
+ * The 1.5x MSD + lean dan verdict for one chart, written to the DT columns.
+ * Returns false for a chart the .osu cache, parser or estimator cannot serve,
+ * which keeps its columns as they were. Shared with the LN-primary re-pin
+ * sweep, which has to rewrite rows this one-shot sweep already finished.
+ */
+async function storeDtRateVerdict(db: Db, beatmapId: number): Promise<boolean> {
+  const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+  if (!osuText) return false;
+  try {
+    const map = parseManiaBeatmap(osuText);
+    // The .osu is the truth for the keymode; a stored key_count the parser
+    // disagrees with keeps its null DT columns.
+    if (map.keyCount !== 4 && map.keyCount !== 7) return false;
+    const starRating = Number((await exec(
+      db,
+      "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
+      [beatmapId],
+    )).rows[0]?.difficulty_rating ?? 0);
+    // The classifier and MinaCalc are the CPU bursts; yield between them and
+    // between charts so ingest/SSE keep moving. MinaCalc rates 4K and 7K the
+    // same way at 1.5x as it does at 1.0x (musicRate passes straight through).
+    // MSD leads so Companella can reuse it instead of running MinaCalc twice.
+    const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(() => null);
+    if (!msd) return false;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const classification = await classifyChartWithCompanella(map, osuText, {
+      rate: DT_RATE,
+      starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
+      totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+      version: map.version,
+    }, { msdValues: msd.values });
+
+    const lean = leanClassification(classification);
+    const danDt = {
+      primaryLabel: lean.primary?.displayName ?? null,
+      primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
+      rawDan: lean.primary?.rawDan ?? null,
+    };
+    await exec(
+      db,
+      `update beatmap_chart_analysis
+       set msd_dt_json = json(?), dan_dt_json = json(?)
+       where beatmap_id = ? and analysis_version = ?`,
+      [json(msd), json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
+    );
+    return true;
+  } catch {
+    // A chart the parser/estimator rejects keeps its DT columns; the full
+    // analysis job (at 1.0x) would fail the same way.
+    return false;
+  }
 }
 
 // Boot watchdog: seed the sweep once per meta-key version, resume if a chain
@@ -1704,6 +1715,127 @@ async function enqueueDtRateAnalysis(queue: JobQueue, cursor: number): Promise<v
   await queue.enqueue(
     DT_RATE_ANALYSIS_JOB,
     `${DT_RATE_ANALYSIS_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// ── One-shot LN-primary re-pin sweep ─────────────────────────────────────────
+// LN_PRIMARY_MIN_RATIO (dan/dan-estimator/ln.ts) moved from 0.5 to 0.45 so a
+// chart cannot feed an LN rating and still wear a rice dan badge. Stored
+// verdicts in the band between the two lines (2076 of 132k ready rows on the
+// 2026-08 snapshot, 2029 of them with an LN half to route to) predate that and
+// would keep their rice reading until something else touched them. Same
+// playbook as the floor-pin sweep: a boot-seeded chunked scan re-enqueues the
+// full analysis job for each affected chart, which re-derives the verdict, the
+// search-index row and the LN pattern facet together. The few that carry a
+// stored 1.5x verdict get it rewritten inline, since the one-shot DT sweep is
+// marked done and will never revisit them. Purely local work, no osu! API.
+
+export const LN_PRIMARY_REPIN_JOB = "recompute_ln_primary_repin_sweep";
+const LN_PRIMARY_REPIN_META_KEY = "ln_primary_repin_done:v1";
+const LN_PRIMARY_REPIN_CHUNK = 100;
+// The line routing used before this sweep existed. A literal on purpose: it is
+// history, not a knob, and the sweep is a one-shot migration off it.
+const LN_PRIMARY_REPIN_OLD_RATIO = 0.5;
+
+export interface LnPrimaryRepinChunkResult {
+  nextCursor: number;
+  scanned: number;
+  repinned: number[];
+  dtRewritten: number;
+  done: boolean;
+}
+
+export async function recomputeLnPrimaryRepinChunk(
+  db: Db,
+  cursor: number,
+  limit = LN_PRIMARY_REPIN_CHUNK,
+): Promise<LnPrimaryRepinChunkResult> {
+  // lnRatio lives in the classification JSON, so the band predicate cannot ride
+  // an index; the scan is cursor-paged over beatmap_id and the JSON is only
+  // read again (for the LN half) on rows that already matched.
+  const rows = (await exec(
+    db,
+    `select beatmap_id,
+            dan_dt_json is not null as has_dt,
+            json_extract(classification_json, '$.ln.displayName') as ln_name
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and primary_family = 'dan'
+       and beatmap_id > ?
+       and json_extract(classification_json, '$.lnRatio') >= ?
+       and json_extract(classification_json, '$.lnRatio') < ?
+     order by beatmap_id
+     limit ?`,
+    [
+      CHART_ANALYSIS_VERSION,
+      Math.max(0, Math.floor(cursor)),
+      LN_PRIMARY_MIN_RATIO,
+      LN_PRIMARY_REPIN_OLD_RATIO,
+      Math.max(1, Math.floor(limit)),
+    ],
+  )).rows;
+
+  let nextCursor = cursor;
+  const repinned: number[] = [];
+  let dtRewritten = 0;
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    // No LN half to route to: the chart keeps its rice verdict either way, and
+    // re-analyzing it would only spend a lane slot.
+    if (row.ln_name == null) continue;
+    repinned.push(beatmapId);
+    if (row.has_dt) {
+      if (await storeDtRateVerdict(db, beatmapId)) dtRewritten += 1;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  }
+
+  return { nextCursor, scanned: rows.length, repinned, dtRewritten, done: rows.length < limit };
+}
+
+// Boot watchdog: seed the sweep once per meta-key version, resume if a chain
+// died mid-way (each chunk's job carries its own cursor dedupe key).
+export async function ensureLnPrimaryRepinSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [LN_PRIMARY_REPIN_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [LN_PRIMARY_REPIN_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueLnPrimaryRepin(queue, 0);
+}
+
+export async function runLnPrimaryRepinJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeLnPrimaryRepinChunk(db, cursor);
+  // The re-analysis jobs outrank this sweep and each upserts its search-index
+  // row on completion, so the collections rebuild below sees a mostly-updated
+  // index; the weekly rotation covers any stragglers.
+  for (const beatmapId of result.repinned) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [LN_PRIMARY_REPIN_META_KEY, json({ finishedAt: now }), now],
+    );
+    // Charts that just became LN belong in the LN dan collections now, not on
+    // the next scheduled rotation.
+    await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+    return;
+  }
+  await enqueueLnPrimaryRepin(queue, result.nextCursor);
+}
+
+async function enqueueLnPrimaryRepin(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    LN_PRIMARY_REPIN_JOB,
+    `${LN_PRIMARY_REPIN_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );

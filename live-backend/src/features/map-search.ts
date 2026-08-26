@@ -3,6 +3,7 @@ import type { Db } from "../db.js";
 import { exec, execBatch, json, parseJson, type DbStatement } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "./activity.js";
 import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
+import { LN_PRIMARY_MIN_RATIO } from "../dan/dan-estimator/ln.js";
 import { lnAdjustedMsd } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { nowIso } from "../shared/score.js";
@@ -300,11 +301,12 @@ function clusterFamily(classification: { clusterCategory?: unknown } | null): st
 // dense chord charts as jump/handstream (Planet Shaper indexed as handstream
 // with MinaCalc saying Stamina 23.2 / Handstream 18.5), and it promotes any
 // holds-heavy hybrid to LN off a soft composite even when the classifier
-// routed the chart RC (lnRatio < 0.5). So:
+// routed the chart RC. So:
 // - 4K with MSD: primary = top MinaCalc skillset (Etterna's own labeling),
 //   pat_* mix normalized against it so card tags agree with the modal.
-// - Every keymode with a chart analysis: LN primary iff lnRatio >= 0.5, the
-//   same threshold the classifier uses to route the dan verdict.
+// - Every keymode with a chart analysis: LN primary iff the hold share clears
+//   LN_PRIMARY_MIN_RATIO, the same threshold the classifier uses to route the
+//   dan verdict.
 // - No analysis yet: the skills_json profile as before.
 function derivePatternProfile(row: Record<string, unknown>): { primary: string; scores: Record<string, number> } {
   const { primary, scores } = readPatternProfile(row.skills_json);
@@ -381,9 +383,11 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
 
   const lnRatio = classification != null && Number.isFinite(Number(classification.lnRatio)) ? Number(classification.lnRatio) : null;
   let lnDerouted = false;
-  if (lnRatio != null && lnRatio >= 0.5) {
+  let lnPromoted = false;
+  if (lnRatio != null && lnRatio >= LN_PRIMARY_MIN_RATIO) {
     result = "ln";
     scores.ln = 1;
+    lnPromoted = true;
   } else if (lnRatio != null && result === "ln") {
     let best = "unknown";
     let bestValue = 0;
@@ -407,15 +411,22 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
   // files. 4K primaries are re-derived from MinaCalc above; for the other
   // keymodes, keep a chordjack primary only when the chart analyzer also
   // detected chordjack. An uncorroborated LN de-route goes back to ln (both
-  // engines read those charts as LN-first, they only miss the 0.5 lnRatio
+  // engines read those charts as LN-first, they only miss the lnRatio
   // dan-routing bar); anything else falls to its strongest remaining family.
   // Either way the phantom chip clamps to the analyzer's measured score, so
   // chordjack chips and excludes track the corroborated amount.
-  if (result === "chordjack" && intOr(row.cs) !== 4 && classification != null) {
+  //
+  // The clamp is about the chip, not the primary, which is why an LN-promoted
+  // chart pays it too: charts just under the old 0.5 routing bar used to reach
+  // it through a chordjack de-route and lost the phantom there, and promoting
+  // them to LN directly must not hand it back.
+  if ((result === "chordjack" || lnPromoted) && intOr(row.cs) !== 4 && classification != null) {
     const corroboration = analyzerPatternScore(classification, "chordjack");
     if (corroboration < CHORDJACK_CORROBORATION_MIN) {
       scores.chordjack = Math.min(scores.chordjack, corroboration);
-      if (lnDerouted) {
+      if (result !== "chordjack") {
+        // LN-promoted: the primary is already right, only the chip moved.
+      } else if (lnDerouted) {
         result = "ln";
       } else {
         let best = "unknown";
@@ -1568,7 +1579,7 @@ function parseLnAdjustedMsd(
 // Parses the DT-rate columns (dan_dt_json is a lean {primaryLabel, primaryFamily,
 // rawDan}; msd_dt_json matches msd_json's { values }) into the same shapes the
 // entry uses for the 1.0x dan/msd, so the frontend can swap them under DT.
-function parseDtRateVerdict(row: Record<string, unknown> | undefined): {
+export function parseDtRateVerdict(row: Record<string, unknown> | undefined): {
   danDt: { label: string; family: string; rawDan: number } | null;
   msdDt: Record<string, number> | null;
 } {

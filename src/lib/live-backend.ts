@@ -26,6 +26,10 @@ export interface LivePlayerSkillPlay {
   pp: number | null;
   accuracy: number | null;
   rate: number;
+  // "DT" | "NC" | "HT" | "DC" when the play's own mods are still known: the
+  // rate cannot tell the pitch-shifting variants from the plain ones. Absent on
+  // older backend payloads and on plays whose mods aged out of the cache.
+  rateMod?: string | null;
   playedAt: string | null;
   source: "top" | "tracked";
   scoreId: number | null;
@@ -2034,6 +2038,30 @@ export interface LiveChartAnalysisDetail {
 export async function fetchLiveChartAnalysis(beatmapId: number): Promise<LiveChartAnalysisDetail | null> {
   try {
     return await fetchLiveJson<LiveChartAnalysisDetail>(`/api/chart-analysis?beatmapId=${beatmapId}`);
+  } catch {
+    return null;
+  }
+}
+
+// One chart at the rate a play was set on: the MSD and dan verdict a 1.5x or
+// 0.75x pass is actually worth, not the 1.0x numbers stored for the chart.
+// "unsupported" is a keymode the estimator has no table for (MSD can still be
+// there), "unavailable" means the .osu is gone from every mirror.
+export interface LiveRateChartAnalysis {
+  beatmapId: number;
+  rate: number;
+  ratePercent: number;
+  status: "ready" | "unsupported" | "unavailable";
+  dan: { label: string; family: string; rawDan: number } | null;
+  msd: Record<string, number> | null;
+}
+
+/** Null covers an unreachable backend and a rate the backend refuses alike. */
+export async function fetchLiveRateChartAnalysis(beatmapId: number, rate: number): Promise<LiveRateChartAnalysis | null> {
+  try {
+    return await fetchLiveJson<LiveRateChartAnalysis>(
+      `/api/chart-analysis/rate?beatmapId=${Math.floor(beatmapId)}&rate=${rate.toFixed(2)}`,
+    );
   } catch {
     return null;
   }

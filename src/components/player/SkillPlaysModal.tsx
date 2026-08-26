@@ -21,10 +21,23 @@ import { useLocale } from "../../lib/locale-context";
 const SKILL_PLAYS_PAGE_SIZE = 50;
 
 /** The badge a non-1.0x rate stands for: osu shows the speed mod with the rate
- *  on its extender, so a 0.75x play reads as an HT badge tailed "0.75×". */
-export function rateModFor(rate: number): { acronym: string; rate: number } | null {
+ *  on its extender, so a 0.75x play reads as an HT badge tailed "0.75×". The
+ *  stored acronym names the variant when it survives; without it the rate's
+ *  sign is all there is, and `pitched` keeps the old reading (audio pitch
+ *  follows rate) rather than inventing a mod the play may not have had. */
+export function rateModFor(
+  rate: number,
+  acronym?: string | null,
+): { acronym: string; rate: number; pitched: boolean } | null {
   if (Math.abs(rate - 1) < 0.01) return null;
-  return { acronym: rate > 1 ? "DT" : "HT", rate };
+  const known = acronym === "DT" || acronym === "NC" || acronym === "HT" || acronym === "DC" ? acronym : null;
+  // NC and DC resample the audio (the nightcore/daycore pitch); DT and HT
+  // stretch it and leave the pitch where it was.
+  return {
+    acronym: known ?? (rate > 1 ? "DT" : "HT"),
+    rate,
+    pitched: known ? known === "NC" || known === "DC" : true,
+  };
 }
 
 // What the play row already knows, shaped as a map entry so the detail modal
@@ -303,7 +316,7 @@ export function SkillPlaysModal({
             username,
             accuracy: detail.play.accuracy,
             pp: detail.play.pp,
-            rateMod: rateModFor(detail.play.rate),
+            rateMod: rateModFor(detail.play.rate, detail.play.rateMod),
             playedAt: detail.play.playedAt,
             source: detail.play.source,
             rating: detail.play.rating,
@@ -337,7 +350,7 @@ function SkillPlayRow({
 }) {
   const { t, i18n } = useLingui();
   const locale = useLocale();
-  const rateMod = rateModFor(play.rate);
+  const rateMod = rateModFor(play.rate, play.rateMod);
   // The list ranks by one skillset component of every play, so a dense LN
   // chart can lead "top Chordjack plays" purely by riding a big overall. When
   // a different skillset actually drove the play, its chip says so; only on
