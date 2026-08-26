@@ -67,7 +67,7 @@ const ACC_DERATE_WINDOW = SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL;
 const GAMMA_MIN_SAMPLE = 50;
 const GAMMA_FALLBACK = 1.0;
 const PATTERN_TAG_MIN_SCORE = 0.5;
-const BASELINE_PATTERN_MIN_PLAYS = 3;
+export const BASELINE_PATTERN_MIN_PLAYS = 3;
 
 const AXES = SKILL_RATING_SKILLSETS;
 
@@ -133,7 +133,7 @@ interface AxisCurveEntry {
   median?: number;
 }
 
-type AxisCurveMap = Record<string, AxisCurveEntry>;
+export type AxisCurveMap = Record<string, AxisCurveEntry>;
 
 // Exact curves always carry the raw median their values were shrunk with.
 interface ExactAxisCurveEntry extends AxisCurveEntry {
@@ -589,7 +589,7 @@ export async function buildExactSkillCurves(db: Db): Promise<ExactSkillCurves> {
 // An exact blob with no populated keymode (empty dev DB, roster wiped) is
 // written anyway so the due-check settles, but serving treats it as absent
 // and keeps the approximate fallback.
-function exactCurvesUsable(curves: ExactSkillCurves | null): curves is ExactSkillCurves {
+export function exactCurvesUsable(curves: ExactSkillCurves | null): curves is ExactSkillCurves {
   return curves != null && Object.values(curves.curves).some((axes) => Object.keys(axes).length > 0);
 }
 
@@ -804,7 +804,7 @@ export async function readExactSkillCurves(db: Db): Promise<ExactSkillCurves | n
   return curves;
 }
 
-function percentileFromCurve(curve: number[], value: number): number {
+export function percentileFromCurve(curve: number[], value: number): number {
   if (curve.length === 0) return 0;
   if (value <= curve[0]) return 0;
   const last = curve.length - 1;
@@ -824,7 +824,7 @@ function percentileFromCurve(curve: number[], value: number): number {
 // Axes eligible for a percentile per keymode: 4K speaks the native MSD
 // skillsets (plus pattern axes); other keymodes publish Overall + pattern
 // axes only, since MinaCalc's non-4K skillset names are unreliable.
-function percentileAxes(keyCount: number, ratings: Record<string, number>): string[] {
+export function percentileAxes(keyCount: number, ratings: Record<string, number>): string[] {
   const axes = Object.keys(ratings);
   if (keyCount === 4) return axes;
   return axes.filter((axis) => axis === "Overall" || axis.startsWith("pattern:"));
@@ -842,13 +842,13 @@ function percentileAxes(keyCount: number, ratings: Record<string, number>): stri
 // percentile comparison (raw approx vs raw population) keep unshrunk values.
 const RATING_SHRINK_K = 12;
 
-function shrinkRating(value: number, plays: number, median: number | undefined): number {
+export function shrinkRating(value: number, plays: number, median: number | undefined): number {
   if (!(value > 0) || !(median != null && median > 0)) return value;
   const weight = Math.max(0, plays) / (Math.max(0, plays) + RATING_SHRINK_K);
   return Math.min(value, Math.round((value * weight + median * (1 - weight)) * 100) / 100);
 }
 
-function curveMedian(axisCurves: AxisCurveMap | undefined, axis: string): number | undefined {
+export function curveMedian(axisCurves: AxisCurveMap | undefined, axis: string): number | undefined {
   const entry = axisCurves?.[axis];
   if (!entry) return undefined;
   // Exact curves carry the raw median their values were shrunk with; using it
@@ -859,7 +859,7 @@ function curveMedian(axisCurves: AxisCurveMap | undefined, axis: string): number
   return entry.curve[Math.floor((entry.curve.length - 1) / 2)];
 }
 
-function shrinkMode(mode: PublicPlayerSkillMode, axisCurves: AxisCurveMap | undefined): PublicPlayerSkillMode {
+export function shrinkMode(mode: PublicPlayerSkillMode, axisCurves: AxisCurveMap | undefined): PublicPlayerSkillMode {
   const ratings: Record<string, number> = {};
   for (const [axis, value] of Object.entries(mode.ratings)) {
     ratings[axis] = shrinkRating(Number(value), mode.analyzedPlays, curveMedian(axisCurves, axis));

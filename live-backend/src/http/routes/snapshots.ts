@@ -7,6 +7,7 @@ import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalR
 import { getMapCollection, getMapCollections, getMapCollectionsRotation } from "../../features/map-collections.js";
 import { getMapSearchPage, getMapSearchSetEntry } from "../../features/map-search.js";
 import { getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersPageQuery } from "../../features/maps.js";
+import { getDanLeaderboard, getSkillLeaderboard, isSkillLeaderboardKeyCount } from "../../features/skill-leaderboards.js";
 import { getRankDeltaSnapshot } from "../../features/rank-snapshots.js";
 import { getSnipeBoardSnapshot, getSnipesSnapshot } from "../../features/snipes.js";
 import { getTopPlaysSnapshot } from "../../features/top-plays.js";
@@ -19,7 +20,7 @@ import { buildGlobalMapsResponseOnThread, enforceCompressedLargeBody, getMapsRes
 import { prepareJsonResponse } from "../prepared-json.js";
 import { clampInteger, clampLimit, isBridge, parseModAcronyms, parseUserIds } from "../request.js";
 import { checkRate, negotiateEncoding, sendAccentEnrichedJson, sendJson } from "../respond.js";
-import { parseFarmHelperKeyMode, parseFarmHelperSpeedBucket, parseFarmHelperView, parseGlobalRankingsQuery, parseMapsPageQuery, parseMapsPlayersKind, parseMapsRandomDrawQuery, parseMapSearchQuery, parseTopPlaysSnapshotQuery, parseTrackerSnapshotFilters, parseTrackerSnapshotSort, parseTrackerSnapshotSortDirection } from "../snapshot-queries.js";
+import { parseDanLeaderboardQuery, parseFarmHelperKeyMode, parseFarmHelperSpeedBucket, parseFarmHelperView, parseGlobalRankingsQuery, parseSkillLeaderboardQuery, parseMapsPageQuery, parseMapsPlayersKind, parseMapsRandomDrawQuery, parseMapSearchQuery, parseTopPlaysSnapshotQuery, parseTrackerSnapshotFilters, parseTrackerSnapshotSort, parseTrackerSnapshotSortDirection } from "../snapshot-queries.js";
 
 // The maps surfaces are the one place GLOBAL is a materialized projection
 // rather than a read-time filter, and regions must never grow one (see the
@@ -257,6 +258,57 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
       });
     }
     res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
+    return true;
+  }
+  /* Skill and dan leaderboards. Bridge-gated while the feature is in
+     development: an unauthorized read 404s rather than 401s, so a hidden
+     surface is indistinguishable from one that does not exist (same shape the
+     admin-only GOAT poll uses). Un-gating is deleting the two guards and
+     letting the frontend fetch these directly. */
+  if (url.pathname === "/api/snapshots/skill-leaderboard") {
+    if (!isBridge(req, ctx)) {
+      sendJson(req, res, ctx, 404, { error: "not_found" });
+      return true;
+    }
+    const query = parseSkillLeaderboardQuery(url.searchParams);
+    if (!isSkillLeaderboardKeyCount(query.keyCount)) {
+      sendJson(req, res, ctx, 400, { error: "unsupported_keymode" });
+      return true;
+    }
+    if (!query.axis) {
+      sendJson(req, res, ctx, 400, { error: "unknown_axis" });
+      return true;
+    }
+    const snapshot = await getSkillLeaderboard(ctx.db, {
+      country,
+      keyCount: query.keyCount,
+      axis: query.axis,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    res.setHeader("cache-control", "private, no-store");
+    await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/dan-leaderboard") {
+    if (!isBridge(req, ctx)) {
+      sendJson(req, res, ctx, 404, { error: "not_found" });
+      return true;
+    }
+    const query = parseDanLeaderboardQuery(url.searchParams);
+    if (!isSkillLeaderboardKeyCount(query.keyCount)) {
+      sendJson(req, res, ctx, 400, { error: "unsupported_keymode" });
+      return true;
+    }
+    const snapshot = await getDanLeaderboard(ctx.db, {
+      country,
+      keyCount: query.keyCount,
+      side: query.side,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    res.setHeader("cache-control", "private, no-store");
     await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     return true;
   }

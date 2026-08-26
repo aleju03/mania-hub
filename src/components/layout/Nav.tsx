@@ -533,7 +533,13 @@ export function Nav() {
       return;
     }
     if (location.pathname === "/rankings") {
-      navigate({ to: "/rankings", search: { country, page: 1 }, replace: true });
+      // Keep whichever board the reader is on: dropping tab/keys/axis here
+      // would silently bounce them from the skill leaderboard back to pp.
+      navigate({
+        to: "/rankings",
+        search: ((prev: Record<string, unknown>) => ({ ...prev, country, page: 1 })) as never,
+        replace: true,
+      });
       return;
     }
     if (location.pathname === "/top-plays") {

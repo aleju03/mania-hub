@@ -315,7 +315,7 @@ msgstr "{0} caracteres"
 #. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{0} clears"
-msgstr "{0} pases"
+msgstr "{0} clears"
 
 #. placeholder {0}: formatNumber(card.owners)
 #: src/components/packs/collections/RecordBoards.tsx
@@ -544,10 +544,12 @@ msgid "{0} players"
 msgstr "{0} jugadores"
 
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
+#. placeholder {0}: formatNumber(entry.analyzedPlays)
 #. placeholder {0}: formatNumber(entry.playCount)
-#. placeholder {0}: formatNumber(entry.play_count)
 #: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "{0} plays"
@@ -571,6 +573,11 @@ msgstr "{0} opciones posibles · {1} sets únicos · actualizado {2}"
 #: src/components/skins/SkinCard.tsx
 msgid "{0} preview"
 msgstr "Vista previa de {0}"
+
+#. placeholder {0}: formatNumber(info.players)
+#: src/components/rankings/LeaderboardControls.tsx
+msgid "{0} rated players"
+msgstr "{0} jugadores con rating"
 
 #. placeholder {0}: keymodes.length
 #: src/components/skins/SkinUpdateModal.tsx
@@ -797,8 +804,16 @@ msgid "{count} replay views"
 msgstr "{count} vistas de replays"
 
 #: src/routes/rankings.tsx
+msgid "{countryName} mania dan leaderboards"
+msgstr "Rankings de dan de mania de {countryName}"
+
+#: src/routes/rankings.tsx
 msgid "{countryName} mania rankings"
 msgstr "Rankings de mania de {countryName}"
+
+#: src/routes/rankings.tsx
+msgid "{countryName} mania skill leaderboards"
+msgstr "Rankings de habilidad de mania de {countryName}"
 
 #: src/routes/snipes.tsx
 msgid "{countryName} mania snipes"
@@ -873,11 +888,6 @@ msgstr "{from} a {to}"
 msgid "{gap}pp to go"
 msgstr "faltan {gap}pp"
 
-#. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
-#: src/routes/player/$username.tsx
-msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
-msgstr "Un + significa «al menos»: osu! no entrega más de tus 200 mejores jugadas, así que un modo de teclas con jugadas por debajo de {0}pp solo se cuenta hasta donde alcanzan."
-
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
 #~ msgstr "{goatMissing, plural, one {más # carta GOAT sin conseguir} other {más # cartas GOAT sin conseguir}}"
@@ -938,6 +948,7 @@ msgstr "Miniatura {keys}K"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{label} dan"
 msgstr "{label} dan"
 
@@ -1178,20 +1189,36 @@ msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
 msgstr "{shotCount, plural, one {# captura} other {# capturas}}"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
-msgstr "Estimación de dan {sideLabel}: ~{chip}, respaldada por {clears} pases válidos (96%+ de acc) en charts alrededor de este nivel de dan"
+#~ msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
+#~ msgstr "Estimación de dan {sideLabel}: ~{chip}, respaldada por {clears} pases válidos (96%+ de acc) en charts alrededor de este nivel de dan"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
-msgstr "Estimación de dan {sideLabel}: ~{chip}, respaldada por {clears} pases válidos (96%+ de acc) en charts alrededor de este nivel de dan · clic para ver los pases que la respaldan"
+#~ msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
+#~ msgstr "Estimación de dan {sideLabel}: ~{chip}, respaldada por {clears} pases válidos (96%+ de acc) en charts alrededor de este nivel de dan · clic para ver los pases que la respaldan"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
-msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala de cursos {sideLabel} de {keys}K, respaldada por {clears} pases válidos (96%+ de acc)"
+msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy)"
+msgstr "Estimación de dan {sideLabel}: ~{chip}, con {clears} clears de este nivel o superior (96%+ de acc)"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
-msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala de cursos {sideLabel} de {keys}K, respaldada por {clears} pases válidos (96%+ de acc) · haz clic para ver los pases detrás"
+msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy) · click for the clears behind it"
+msgstr "Estimación de dan {sideLabel}: ~{chip}, con {clears} clears de este nivel o superior (96%+ de acc) · clic para ver los clears detrás"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
+#~ msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala de cursos {sideLabel} de {keys}K, respaldada por {clears} pases válidos (96%+ de acc)"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
+#~ msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala de cursos {sideLabel} de {keys}K, respaldada por {clears} pases válidos (96%+ de acc) · haz clic para ver los pases detrás"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy)"
+msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala {sideLabel} de {keys}K, con {clears} clears de ese nivel o superior (96%+ de acc)"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
+msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala {sideLabel} de {keys}K, con {clears} clears de ese nivel o superior (96%+ de acc) · clic para ver los clears detrás"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
@@ -1443,7 +1470,7 @@ msgstr "0h"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "1 clear"
-msgstr "1 pase"
+msgstr "1 clear"
 
 #: src/components/packs/PackPulse.tsx
 msgid "1 person has your card"
@@ -1546,6 +1573,11 @@ msgstr "7 d Global"
 #: src/lib/packs.ts
 msgid "7K"
 msgstr "7K"
+
+#. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
+#: src/routes/player/$username.tsx
+msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
+msgstr "Un + significa «al menos»: osu! no entrega más de tus 200 mejores jugadas, así que un modo de teclas con jugadas por debajo de {0}pp solo se cuenta hasta donde alcanzan."
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
@@ -1819,7 +1851,7 @@ msgstr "los 10"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "All clears"
-msgstr "Todos los pases"
+msgstr "Todos los clears"
 
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
@@ -2817,6 +2849,10 @@ msgstr "completado {date} · {pp}pp"
 msgid "cleared {date} · #{rank}"
 msgstr "completado {date} · #{rank}"
 
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#~ msgid "Clears"
+#~ msgstr "Pases"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
 msgstr "Haz clic en un sonido para previsualizarlo. Cada nota reproduce el sample que le asigna su mapa, así que todos se pueden escuchar en un replay."
@@ -3195,11 +3231,11 @@ msgstr "No se pudo cargar esa colección."
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Could not load the clears"
-msgstr "No se pudieron cargar los pases"
+msgstr "No se pudieron cargar los clears"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Could not load the clears behind this estimate."
-msgstr "No se pudieron cargar los pases detrás de esta estimación."
+msgstr "No se pudieron cargar los clears detrás de esta estimación."
 
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Could not load the collector list."
@@ -3224,6 +3260,11 @@ msgstr "No se pudieron cargar estas plays"
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load these plays."
 msgstr "No se pudieron cargar estas plays."
+
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "Could not load this leaderboard."
+msgstr "No se pudo cargar este ranking."
 
 #: src/components/communities/field-options.tsx
 msgid "Could not reach Discord to check that invite. Try again in a moment."
@@ -3616,13 +3657,22 @@ msgstr "Cian"
 msgid "Czech"
 msgstr "Checo"
 
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/routes/rankings.tsx
+msgid "Dan"
+msgstr "Dan"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "Dan (est.)"
 msgstr "Dan (est.)"
 
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Dan course"
+msgstr "Tipo de dan"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Dan credit this clear earned after the accuracy discount"
-msgstr "Crédito de dan que ganó este pase tras el descuento por acc"
+msgstr "Crédito de dan que ganó este clear tras el descuento por acc"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -3644,6 +3694,10 @@ msgstr "Estimación de dan: {0} ({1}, confianza baja)"
 #: src/components/ui/DanBadge.tsx
 msgid "Dan estimate: {0} ({1})"
 msgstr "Estimación de dan: {0} ({1})"
+
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
+msgstr "Los dans de aquí se estiman a partir de los mapas que cada jugador ha pasado, no de clears reales de dans. Tómalo como un orden aproximado, no como un ranking."
 
 #: src/lib/signature-shared.ts
 msgid "Dan rating"
@@ -4410,6 +4464,10 @@ msgstr "Menos seguidores"
 msgid "Fewer plays"
 msgstr "Menos plays"
 
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "Fewer plays than the population baseline asks for, so this rating reads as an estimate"
+msgstr "Menos plays de los que pide la base de comparación, así que este rating es una estimación"
+
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "File"
 msgstr "Archivo"
@@ -4982,7 +5040,7 @@ msgstr "Ocultar jugadores"
 #. placeholder {0}: section.label
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Hide the {0} clears"
-msgstr "Ocultar los pases de {0}"
+msgstr "Ocultar los clears de {0}"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Hide the {label} clears"
@@ -5477,6 +5535,7 @@ msgstr "Historial de teclas"
 msgid "Key hitsounds"
 msgstr "Hitsounds de teclas"
 
+#: src/components/rankings/LeaderboardControls.tsx
 #: src/routes/farm-helper.tsx
 msgid "Key mode"
 msgstr "Modo de teclas"
@@ -5787,6 +5846,7 @@ msgstr "Actualizaciones en vivo activas"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -6993,7 +7053,7 @@ msgstr "No hay preview disponible."
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "No qualifying clears yet"
-msgstr "Aún no hay pases válidos"
+msgstr "Aún no hay clears válidos"
 
 #: src/routes/rankings.tsx
 msgid "No rank data from 7 days ago yet"
@@ -7007,6 +7067,11 @@ msgstr "Aún no hay jugadores ranked."
 #: src/components/player/SkillPlaysModal.tsx
 msgid "No rated {label} plays found"
 msgstr "No se encontraron plays de {label} calificables"
+
+#: src/components/rankings/LeaderboardTable.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "No rated players here yet."
+msgstr "Todavía no hay jugadores con rating aquí."
 
 #: src/routes/index.tsx
 msgid "No recent scores"
@@ -7156,6 +7221,14 @@ msgstr "Nadie ha votado en esta fila."
 msgid "Nobody here by that name."
 msgstr "Aquí no hay nadie con ese nombre."
 
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "Nobody here has a rated {axisLabel} pool yet."
+msgstr "Todavía nadie aquí tiene plays suficientes de {axisLabel}."
+
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Nobody here has enough qualifying clears yet."
+msgstr "Todavía nadie aquí tiene suficientes clears válidos."
+
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Nobody here is called \"{debounced}\"."
 msgstr "Aquí no hay nadie llamado \"{debounced}\"."
@@ -7236,7 +7309,7 @@ msgstr "Aún no hay suficientes datos cerca de tu pp"
 #. placeholder {0}: evidence.totalClears
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Not enough qualifying clears for an estimate yet ({0} of {quorum})."
-msgstr "Aún no hay suficientes pases válidos para una estimación ({0} de {quorum})."
+msgstr "Aún no hay suficientes clears válidos para una estimación ({0} de {quorum})."
 
 #: src/routes/farm-helper.tsx
 msgid "not found"
@@ -7505,7 +7578,7 @@ msgstr "Solo yo"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. Lower accuracy gives less credit. Your dan is the level of your {quorum}th best pass, so you need {quorum} passes at a level to reach it."
-msgstr "Solo cuentan las pasadas con {minAccuracyPercent}%+ de precisión, a 1.0x o DT, en charts que tengan nivel de dan. Menos precisión da menos crédito. Tu dan es el nivel de tu {quorum}.ª mejor pasada, así que necesitas {quorum} pasadas en un nivel para llegar a él."
+msgstr "Solo cuentan los clears con {minAccuracyPercent}%+ de acc, a 1.0x o DT, en charts que tengan nivel de dan. Menos acc da menos crédito. Tu dan es el nivel de tu {quorum}.º mejor clear, así que necesitas {quorum} clears en un nivel para llegar a él."
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. The lower the accuracy, the less a pass counts. Your dan is your {quorum}th best pass, not your best one."
@@ -7793,6 +7866,7 @@ msgid "overall"
 msgstr "general"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/lib/skill-axes.ts
 msgid "Overall"
 msgstr "General"
 
@@ -7955,6 +8029,7 @@ msgid "percentiles are among tracked players"
 msgstr "percentiles calculados entre jugadores trackeados"
 
 #: src/routes/player/$username.tsx
+#: src/routes/rankings.tsx
 msgid "Performance"
 msgstr "Rendimiento"
 
@@ -8092,6 +8167,7 @@ msgstr "Jugado en osu!lazer"
 msgid "Played on: <0>{0}</0>"
 msgstr "Jugado en: <0>{0}</0>"
 
+#: src/components/rankings/LeaderboardTable.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/rankings.tsx
 msgid "Player"
@@ -8147,6 +8223,8 @@ msgid "plays"
 msgstr "plays"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
@@ -8846,6 +8924,7 @@ msgstr "Regiones"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Regular"
 msgstr "Regular"
 
@@ -9895,7 +9974,7 @@ msgstr "mostrar skillboost"
 #. placeholder {0}: section.label
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Show the {0} clears"
-msgstr "Ver los pases de {0}"
+msgstr "Ver los clears de {0}"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Show the {label} clears"
@@ -10042,6 +10121,10 @@ msgstr "tamaño"
 msgid "Size"
 msgstr "Tamaño"
 
+#: src/components/rankings/LeaderboardControls.tsx
+msgid "Skill"
+msgstr "Habilidad"
+
 #: src/routes/player/$username.tsx
 msgid "Skill analysis is queued for the maps played on this day."
 msgstr "El análisis de habilidad está en cola para los mapas jugados este día."
@@ -10076,6 +10159,7 @@ msgid "skillboost only"
 msgstr "solo skillboost"
 
 #: src/routes/player/$username.tsx
+#: src/routes/rankings.tsx
 msgid "Skills"
 msgstr "Skills"
 
@@ -10850,7 +10934,7 @@ msgstr "El editor ya contiene {0}"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
-msgstr "La estimación aparece cuando {quorum} pases con {minAccuracyPercent}%+ de acc caen en charts calificados."
+msgstr "La estimación aparece cuando {quorum} clears con {minAccuracyPercent}%+ de acc caen en charts con nivel de dan."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "The exact .osu file works too."
@@ -10900,6 +10984,10 @@ msgstr "El panel del jugador puede quedarse aquí, pero esta vista no devolvió 
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "the player's"
 msgstr "del jugador"
+
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
+msgstr "La base de comparación todavía no está construida, así que estos son ratings sin ajustar y no coincidirán con los números del perfil de cada jugador."
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
@@ -11082,7 +11170,7 @@ msgstr "Este mapa aún no está analizado."
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "This clear backs the estimate"
-msgstr "Este pase respalda la estimación"
+msgstr "Este clear respalda la estimación"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "This clear backs the estimate · view map details"

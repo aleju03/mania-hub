@@ -544,10 +544,12 @@ msgid "{0} players"
 msgstr "{0} players"
 
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
+#. placeholder {0}: formatNumber(entry.analyzedPlays)
 #. placeholder {0}: formatNumber(entry.playCount)
-#. placeholder {0}: formatNumber(entry.play_count)
 #: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "{0} plays"
@@ -571,6 +573,11 @@ msgstr "{0} possible picks · {1} unique sets · updated {2}"
 #: src/components/skins/SkinCard.tsx
 msgid "{0} preview"
 msgstr "{0} preview"
+
+#. placeholder {0}: formatNumber(info.players)
+#: src/components/rankings/LeaderboardControls.tsx
+msgid "{0} rated players"
+msgstr "{0} rated players"
 
 #. placeholder {0}: keymodes.length
 #: src/components/skins/SkinUpdateModal.tsx
@@ -797,8 +804,16 @@ msgid "{count} replay views"
 msgstr "{count} replay views"
 
 #: src/routes/rankings.tsx
+msgid "{countryName} mania dan leaderboards"
+msgstr "{countryName} mania dan leaderboards"
+
+#: src/routes/rankings.tsx
 msgid "{countryName} mania rankings"
 msgstr "{countryName} mania rankings"
+
+#: src/routes/rankings.tsx
+msgid "{countryName} mania skill leaderboards"
+msgstr "{countryName} mania skill leaderboards"
 
 #: src/routes/snipes.tsx
 msgid "{countryName} mania snipes"
@@ -873,11 +888,6 @@ msgstr "{from} to {to}"
 msgid "{gap}pp to go"
 msgstr "{gap}pp to go"
 
-#. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
-#: src/routes/player/$username.tsx
-msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
-msgstr "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
-
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
 #~ msgstr "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
@@ -938,6 +948,7 @@ msgstr "{keys}K thumbnail"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{label} dan"
 msgstr "{label} dan"
 
@@ -1178,20 +1189,36 @@ msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
 msgstr "{shotCount, plural, one {# screenshot} other {# screenshots}}"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
-msgstr "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
+#~ msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
+#~ msgstr "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
-msgstr "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
+#~ msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
+#~ msgstr "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
-msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
+msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy)"
+msgstr "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy)"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
-msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
+msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy) · click for the clears behind it"
+msgstr "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy) · click for the clears behind it"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
+#~ msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
+#~ msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy)"
+msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy)"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
+msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
@@ -1546,6 +1573,11 @@ msgstr "7d Global"
 #: src/lib/packs.ts
 msgid "7K"
 msgstr "7K"
+
+#. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
+#: src/routes/player/$username.tsx
+msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
+msgstr "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
@@ -2817,6 +2849,10 @@ msgstr "cleared {date} · {pp}pp"
 msgid "cleared {date} · #{rank}"
 msgstr "cleared {date} · #{rank}"
 
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#~ msgid "Clears"
+#~ msgstr "Clears"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
 msgstr "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
@@ -3225,6 +3261,11 @@ msgstr "Could not load these plays"
 msgid "Could not load these plays."
 msgstr "Could not load these plays."
 
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "Could not load this leaderboard."
+msgstr "Could not load this leaderboard."
+
 #: src/components/communities/field-options.tsx
 msgid "Could not reach Discord to check that invite. Try again in a moment."
 msgstr "Could not reach Discord to check that invite. Try again in a moment."
@@ -3616,9 +3657,18 @@ msgstr "Cyan"
 msgid "Czech"
 msgstr "Czech"
 
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/routes/rankings.tsx
+msgid "Dan"
+msgstr "Dan"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "Dan (est.)"
 msgstr "Dan (est.)"
+
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Dan course"
+msgstr "Dan course"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Dan credit this clear earned after the accuracy discount"
@@ -3644,6 +3694,10 @@ msgstr "Dan estimate: {0} ({1}, low confidence)"
 #: src/components/ui/DanBadge.tsx
 msgid "Dan estimate: {0} ({1})"
 msgstr "Dan estimate: {0} ({1})"
+
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
+msgstr "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
 
 #: src/lib/signature-shared.ts
 msgid "Dan rating"
@@ -4409,6 +4463,10 @@ msgstr "Fewer followers"
 #: src/lib/streak-game.ts
 msgid "Fewer plays"
 msgstr "Fewer plays"
+
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "Fewer plays than the population baseline asks for, so this rating reads as an estimate"
+msgstr "Fewer plays than the population baseline asks for, so this rating reads as an estimate"
 
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "File"
@@ -5477,6 +5535,7 @@ msgstr "Key history"
 msgid "Key hitsounds"
 msgstr "Key hitsounds"
 
+#: src/components/rankings/LeaderboardControls.tsx
 #: src/routes/farm-helper.tsx
 msgid "Key mode"
 msgstr "Key mode"
@@ -5787,6 +5846,7 @@ msgstr "Live updates on"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -7008,6 +7068,11 @@ msgstr "No ranked players yet."
 msgid "No rated {label} plays found"
 msgstr "No rated {label} plays found"
 
+#: src/components/rankings/LeaderboardTable.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "No rated players here yet."
+msgstr "No rated players here yet."
+
 #: src/routes/index.tsx
 msgid "No recent scores"
 msgstr "No recent scores"
@@ -7155,6 +7220,14 @@ msgstr "Nobody has voted on this row."
 #: src/components/packs/CardCollectors.tsx
 msgid "Nobody here by that name."
 msgstr "Nobody here by that name."
+
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "Nobody here has a rated {axisLabel} pool yet."
+msgstr "Nobody here has a rated {axisLabel} pool yet."
+
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Nobody here has enough qualifying clears yet."
+msgstr "Nobody here has enough qualifying clears yet."
 
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Nobody here is called \"{debounced}\"."
@@ -7793,6 +7866,7 @@ msgid "overall"
 msgstr "overall"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/lib/skill-axes.ts
 msgid "Overall"
 msgstr "Overall"
 
@@ -7955,6 +8029,7 @@ msgid "percentiles are among tracked players"
 msgstr "percentiles are among tracked players"
 
 #: src/routes/player/$username.tsx
+#: src/routes/rankings.tsx
 msgid "Performance"
 msgstr "Performance"
 
@@ -8092,6 +8167,7 @@ msgstr "Played on osu!lazer"
 msgid "Played on: <0>{0}</0>"
 msgstr "Played on: <0>{0}</0>"
 
+#: src/components/rankings/LeaderboardTable.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/rankings.tsx
 msgid "Player"
@@ -8147,6 +8223,8 @@ msgid "plays"
 msgstr "plays"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
@@ -8846,6 +8924,7 @@ msgstr "Regions"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Regular"
 msgstr "Regular"
 
@@ -10042,6 +10121,10 @@ msgstr "size"
 msgid "Size"
 msgstr "Size"
 
+#: src/components/rankings/LeaderboardControls.tsx
+msgid "Skill"
+msgstr "Skill"
+
 #: src/routes/player/$username.tsx
 msgid "Skill analysis is queued for the maps played on this day."
 msgstr "Skill analysis is queued for the maps played on this day."
@@ -10076,6 +10159,7 @@ msgid "skillboost only"
 msgstr "skillboost only"
 
 #: src/routes/player/$username.tsx
+#: src/routes/rankings.tsx
 msgid "Skills"
 msgstr "Skills"
 
@@ -10900,6 +10984,10 @@ msgstr "The player panel can stay here, but this view did not return fresh map d
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "the player's"
 msgstr "the player's"
+
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
+msgstr "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx

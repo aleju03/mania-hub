@@ -4,7 +4,8 @@ import type { I18n, MessageDescriptor } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../lib/my-data";
-import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "../../lib/dan-images";
+import { danBareLabel } from "../../lib/dan-images";
+import { DanLevelBadge } from "./DanLevelBadge";
 import {
   lnPlayShare,
   radarAnchor,
@@ -111,46 +112,36 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
         // ceiling up as a tier ("9++") the estimate never actually earned.
         const beyond = entry.side!.beyondTable === true;
         const label = beyond ? danBareLabel(entry.side!.label) : entry.side!.label;
-        // The course's own logo IS the level, same as the map dan badge; the
-        // tier suffix rides top-right like an exponent, colored by where in
-        // the level it sits. Keymodes without artwork fall back to the text.
-        const image = getDanImageSrc(danBareLabel(label), entry.id === "ln" ? "ln" : undefined, mode.keyCount);
-        const suffix = beyond ? "" : danTierSuffix(label);
-        const approx = beyond ? ">" : "~";
         const sideLabel = i18n._(entry.label);
         const chip = formatDanChip(label);
         const clears = entry.side!.clears;
         const body = (
           <>
             <span className="text-[10px] font-semibold uppercase tracking-wide text-osu-f1">{sideLabel}</span>
-            {image ? (
-              <span className="flex items-center gap-0.5">
-                <span className="text-[12px] leading-none text-osu-f1">{approx}</span>
-                <span className="flex items-start gap-[2px] leading-none">
-                  <img src={image} alt={formatDanChip(label)} className="h-9 w-9 object-contain" />
-                  {suffix ? (
-                    <span
-                      className="mt-0.5 text-[14px] font-bold leading-none"
-                      style={{ color: danTierColor(suffix) ?? undefined }}
-                    >
-                      {suffix}
-                    </span>
-                  ) : null}
-                </span>
-              </span>
-            ) : (
-              <span className="text-[12px] font-bold text-osu-l1">{approx}{formatDanChip(label)}</span>
-            )}
+            <DanLevelBadge
+              label={entry.side!.label}
+              keyCount={mode.keyCount}
+              side={entry.id}
+              beyondTable={beyond}
+              formatLabel={formatDanChip}
+            />
           </>
         );
         const keys = mode.keyCount;
+        /* `clears` is NOT the player's qualifying total: danFromClears counts
+           the clears that tie or beat the quorum-th credited one, and that
+           clear IS the dan, so the number is 4 for ~98% of players. Phrased as
+           "backed by N qualifying clears" it read as "this player has only 4",
+           when the evidence modal right behind it shows 151. Say what the
+           number actually measures - passes at or above this level - and leave
+           the total to the modal, which re-derives it. */
         const title = beyond
           ? onSelect
-            ? t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, backed by ${clears} qualifying clears (96%+ accuracy) · click for the clears behind it`
-            : t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, backed by ${clears} qualifying clears (96%+ accuracy)`
+            ? t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, with ${clears} passes at or above it (96%+ accuracy) · click for the clears behind it`
+            : t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, with ${clears} passes at or above it (96%+ accuracy)`
           : onSelect
-            ? t`${sideLabel} dan estimate: ~${chip}, backed by ${clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it`
-            : t`${sideLabel} dan estimate: ~${chip}, backed by ${clears} qualifying clears (96%+ accuracy) on charts around this dan level`;
+            ? t`${sideLabel} dan estimate: ~${chip}, with ${clears} passes at or above this level (96%+ accuracy) · click for the clears behind it`
+            : t`${sideLabel} dan estimate: ~${chip}, with ${clears} passes at or above this level (96%+ accuracy)`;
         return onSelect ? (
           <button
             type="button"

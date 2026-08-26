@@ -1,5 +1,6 @@
 import type { FarmHelperKeyMode, FarmHelperView } from "../features/farm-helper.js";
 import type { GlobalRankingsSort } from "../features/global-rankings.js";
+import { isLeaderboardAxis, isSkillLeaderboardKeyCount, SKILL_LEADERBOARD_MAX_PAGE_SIZE, type DanSide } from "../features/skill-leaderboards.js";
 import { MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsRandomDrawQuery } from "../features/maps.js";
 import type { MyDataTopPlaysQuery, MyDataTrackedFeedQuery } from "../features/my-data.js";
@@ -204,6 +205,40 @@ export function parseGlobalRankingsQuery(params: URLSearchParams): {
               : {}),
         }
       : {}),
+  };
+}
+
+// The skill and dan leaderboards. `keys` is the numeric keymode (the pack-pool
+// convention on /api/snapshots/global-rankings), and the axis whitelist is the
+// keymode's own published vocabulary, so a 4K skillset name cannot address a 7K
+// board and vice versa.
+export function parseSkillLeaderboardQuery(params: URLSearchParams): {
+  keyCount: number;
+  axis: string | null;
+  page: number;
+  pageSize: number;
+} {
+  const keyCount = clampInteger(params.get("keys"), 0, 20, 4);
+  const axis = (params.get("axis") ?? "").trim();
+  return {
+    keyCount,
+    axis: axis && isSkillLeaderboardKeyCount(keyCount) && isLeaderboardAxis(keyCount, axis) ? axis : null,
+    page: clampInteger(params.get("page"), 1, 2_000, 1),
+    pageSize: clampInteger(params.get("pageSize") ?? params.get("limit"), 1, SKILL_LEADERBOARD_MAX_PAGE_SIZE, SKILL_LEADERBOARD_MAX_PAGE_SIZE),
+  };
+}
+
+export function parseDanLeaderboardQuery(params: URLSearchParams): {
+  keyCount: number;
+  side: DanSide;
+  page: number;
+  pageSize: number;
+} {
+  return {
+    keyCount: clampInteger(params.get("keys"), 0, 20, 4),
+    side: params.get("side") === "ln" ? "ln" : "rc",
+    page: clampInteger(params.get("page"), 1, 2_000, 1),
+    pageSize: clampInteger(params.get("pageSize") ?? params.get("limit"), 1, SKILL_LEADERBOARD_MAX_PAGE_SIZE, SKILL_LEADERBOARD_MAX_PAGE_SIZE),
   };
 }
 

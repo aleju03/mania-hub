@@ -72,6 +72,30 @@ export const DAN_SKILLSET_META: Record<string, { labelMsg: MessageDescriptor; co
   lnrelease: { labelMsg: msg`Release`, color: "#46c7b8" },
 };
 
+// The aggregate rating, kept out of MSD_SKILLSET_META on purpose: it is not a
+// skill to plot next to the others (a radar with an Overall spoke would just
+// draw the average of its own arms), but it IS an axis a leaderboard can rank,
+// and the one every keymode rates. Neutral color, because it belongs to no
+// single skill.
+export const OVERALL_AXIS_META: SkillAxisMeta = {
+  key: "Overall",
+  label: "Overall",
+  labelMsg: msg`Overall`,
+  color: "#c9cfdd",
+};
+
+// Presentation for an axis key that arrived from the backend rather than from a
+// player's own breakdown, which is what the /rankings leaderboards get. Keys are
+// the wire form: a bare MSD skillset name, or `pattern:{id}`.
+export function skillAxisMeta(axis: string): SkillAxisMeta | null {
+  if (axis.startsWith("pattern:")) {
+    const id = axis.slice("pattern:".length);
+    return PATTERN_RATING_META.find((meta) => meta.key === id) ?? null;
+  }
+  if (axis === OVERALL_AXIS_META.key) return OVERALL_AXIS_META;
+  return MSD_SKILLSET_META.find((meta) => meta.key === axis) ?? null;
+}
+
 // Drop trickle keymodes (a few stray plays in an off-keymode) so callers only
 // offer modes the player meaningfully plays; always keep at least the
 // dominant one.

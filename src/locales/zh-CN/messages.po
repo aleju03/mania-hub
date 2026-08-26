@@ -553,10 +553,12 @@ msgid "{0} players"
 msgstr "{0} 名玩家"
 
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
+#. placeholder {0}: formatNumber(entry.analyzedPlays)
 #. placeholder {0}: formatNumber(entry.playCount)
-#. placeholder {0}: formatNumber(entry.play_count)
 #: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "{0} plays"
@@ -580,6 +582,11 @@ msgstr "{0} 个可抽选项 · {1} 个不同谱面集 · 更新于 {2}"
 #: src/components/skins/SkinCard.tsx
 msgid "{0} preview"
 msgstr "{0} 预览"
+
+#. placeholder {0}: formatNumber(info.players)
+#: src/components/rankings/LeaderboardControls.tsx
+msgid "{0} rated players"
+msgstr "{0} 名有评分的玩家"
 
 #. placeholder {0}: keymodes.length
 #: src/components/skins/SkinUpdateModal.tsx
@@ -806,8 +813,16 @@ msgid "{count} replay views"
 msgstr "{count} 次回放观看"
 
 #: src/routes/rankings.tsx
+msgid "{countryName} mania dan leaderboards"
+msgstr "{countryName} mania 段位排行榜"
+
+#: src/routes/rankings.tsx
 msgid "{countryName} mania rankings"
 msgstr "{countryName} mania 排行榜"
+
+#: src/routes/rankings.tsx
+msgid "{countryName} mania skill leaderboards"
+msgstr "{countryName} mania 技能排行榜"
 
 #: src/routes/snipes.tsx
 msgid "{countryName} mania snipes"
@@ -882,11 +897,6 @@ msgstr "{from} 至 {to}"
 msgid "{gap}pp to go"
 msgstr "还差 {gap}pp"
 
-#. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
-#: src/routes/player/$username.tsx
-msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
-msgstr "+ 表示「至少」：osu! 最多只给出前 200 个最佳成绩，低于 {0}pp 的成绩拿不到，该键数只统计到能看到的部分。"
-
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
 #~ msgstr "{goatMissing, plural, other {另有 # 张 GOAT 卡片未收集}}"
@@ -947,6 +957,7 @@ msgstr "{keys}K 缩略图"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{label} dan"
 msgstr "{label} 段位"
 
@@ -1187,20 +1198,36 @@ msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
 msgstr "{shotCount, plural, other {# 张截图}}"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
-msgstr "{sideLabel} 段位估算：约 {chip}，依据是该段位附近谱面上的 {clears} 次达标通过(准确率 96% 以上)"
+#~ msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
+#~ msgstr "{sideLabel} 段位估算：约 {chip}，依据是该段位附近谱面上的 {clears} 次达标通过(准确率 96% 以上)"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
-msgstr "{sideLabel} 段位估算：约 {chip}，依据是该段位附近谱面上的 {clears} 次达标通过(准确率 96% 以上)，点击查看背后的通过记录"
+#~ msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
+#~ msgstr "{sideLabel} 段位估算：约 {chip}，依据是该段位附近谱面上的 {clears} 次达标通过(准确率 96% 以上)，点击查看背后的通过记录"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
-msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位课程的最高级，依据是 {clears} 次达标通过(准确率 96% 以上)"
+msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy)"
+msgstr "{sideLabel} 段位估算：约 {chip}，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上)"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
-msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位课程的最高级，依据是 {clears} 次达标通过(准确率 96% 以上) · 点击查看这些通过记录"
+msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy) · click for the clears behind it"
+msgstr "{sideLabel} 段位估算：约 {chip}，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上) · 点击查看这些通过记录"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
+#~ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位课程的最高级，依据是 {clears} 次达标通过(准确率 96% 以上)"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
+#~ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位课程的最高级，依据是 {clears} 次达标通过(准确率 96% 以上) · 点击查看这些通过记录"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy)"
+msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位的最高级，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上)"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
+msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位的最高级，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上) · 点击查看这些通过记录"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
@@ -1555,6 +1582,11 @@ msgstr "7天全球"
 #: src/lib/packs.ts
 msgid "7K"
 msgstr "7K"
+
+#. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
+#: src/routes/player/$username.tsx
+msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
+msgstr "+ 表示「至少」：osu! 最多只给出前 200 个最佳成绩，低于 {0}pp 的成绩拿不到，该键数只统计到能看到的部分。"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
@@ -2826,6 +2858,10 @@ msgstr "完成于 {date} · {pp}pp"
 msgid "cleared {date} · #{rank}"
 msgstr "完成于 {date} · 第 {rank} 名"
 
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#~ msgid "Clears"
+#~ msgstr "通过次数"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
 msgstr "点击音效即可试听。每个音符会播放谱面指定的采样，所以这些音效在回放里都能听到。"
@@ -3234,6 +3270,11 @@ msgstr "无法加载这些成绩"
 msgid "Could not load these plays."
 msgstr "无法加载这些成绩。"
 
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "Could not load this leaderboard."
+msgstr "无法加载该排行榜。"
+
 #: src/components/communities/field-options.tsx
 msgid "Could not reach Discord to check that invite. Try again in a moment."
 msgstr "无法连接 Discord 校验这个邀请链接。请稍后再试。"
@@ -3625,9 +3666,18 @@ msgstr "青色"
 msgid "Czech"
 msgstr "捷克语"
 
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/routes/rankings.tsx
+msgid "Dan"
+msgstr "段位"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "Dan (est.)"
 msgstr "段位(估算)"
+
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Dan course"
+msgstr "段位类型"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Dan credit this clear earned after the accuracy discount"
@@ -3653,6 +3703,10 @@ msgstr "段位估计：{0}（{1}，置信度低）"
 #: src/components/ui/DanBadge.tsx
 msgid "Dan estimate: {0} ({1})"
 msgstr "段位估计：{0}（{1}）"
+
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
+msgstr "这里的段位是根据玩家通过的谱面估算的，并非真实的段位通过记录。请当作大致排序看待，而不是正式排名。"
 
 #: src/lib/signature-shared.ts
 msgid "Dan rating"
@@ -4418,6 +4472,10 @@ msgstr "更少关注者"
 #: src/lib/streak-game.ts
 msgid "Fewer plays"
 msgstr "更少游玩次数"
+
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "Fewer plays than the population baseline asks for, so this rating reads as an estimate"
+msgstr "游玩次数少于统计基准所需，因此该评分只是估算值"
 
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "File"
@@ -5486,6 +5544,7 @@ msgstr "按键历史"
 msgid "Key hitsounds"
 msgstr "按键音效"
 
+#: src/components/rankings/LeaderboardControls.tsx
 #: src/routes/farm-helper.tsx
 msgid "Key mode"
 msgstr "键数模式"
@@ -5796,6 +5855,7 @@ msgstr "实时更新已开启"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -7017,6 +7077,11 @@ msgstr "还没有上榜玩家。"
 msgid "No rated {label} plays found"
 msgstr "没有找到已评分的 {label} 成绩"
 
+#: src/components/rankings/LeaderboardTable.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "No rated players here yet."
+msgstr "这里还没有已评分的玩家。"
+
 #: src/routes/index.tsx
 msgid "No recent scores"
 msgstr "暂无最近成绩"
@@ -7164,6 +7229,14 @@ msgstr "还没有人为这一项投票。"
 #: src/components/packs/CardCollectors.tsx
 msgid "Nobody here by that name."
 msgstr "这里没有叫这个名字的人。"
+
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "Nobody here has a rated {axisLabel} pool yet."
+msgstr "这里还没有人拥有已评分的{axisLabel}谱面池。"
+
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Nobody here has enough qualifying clears yet."
+msgstr "这里还没有人拥有足够的达标通过记录。"
 
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Nobody here is called \"{debounced}\"."
@@ -7802,6 +7875,7 @@ msgid "overall"
 msgstr "综合"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/lib/skill-axes.ts
 msgid "Overall"
 msgstr "总体"
 
@@ -7964,6 +8038,7 @@ msgid "percentiles are among tracked players"
 msgstr "百分位是在已追踪玩家中的排名"
 
 #: src/routes/player/$username.tsx
+#: src/routes/rankings.tsx
 msgid "Performance"
 msgstr "表现分"
 
@@ -8101,6 +8176,7 @@ msgstr "在 osu!lazer 上游玩"
 msgid "Played on: <0>{0}</0>"
 msgstr "游玩客户端：<0>{0}</0>"
 
+#: src/components/rankings/LeaderboardTable.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/rankings.tsx
 msgid "Player"
@@ -8156,6 +8232,8 @@ msgid "plays"
 msgstr "游玩次数"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
@@ -8855,6 +8933,7 @@ msgstr "区域"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Regular"
 msgstr "单点"
 
@@ -10051,6 +10130,10 @@ msgstr "大小"
 msgid "Size"
 msgstr "大小"
 
+#: src/components/rankings/LeaderboardControls.tsx
+msgid "Skill"
+msgstr "技能"
+
 #: src/routes/player/$username.tsx
 msgid "Skill analysis is queued for the maps played on this day."
 msgstr "这一天打过的谱面已排队等待技能分析。"
@@ -10085,6 +10168,7 @@ msgid "skillboost only"
 msgstr "仅技能提升"
 
 #: src/routes/player/$username.tsx
+#: src/routes/rankings.tsx
 msgid "Skills"
 msgstr "技能"
 
@@ -10909,6 +10993,10 @@ msgstr "玩家面板可以留在这里，但这个视图没有返回新的谱面
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "the player's"
 msgstr "该玩家的"
+
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
+msgstr "统计基准尚未建立，因此这里显示的是未经调整的原始评分，与玩家个人资料页上的数字不一致。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx

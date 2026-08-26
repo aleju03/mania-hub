@@ -1,6 +1,6 @@
 import { createFileRoute, Link, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
@@ -22,6 +22,23 @@ import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
+import { useAuth } from "../lib/auth-context";
+import { canUseAdminFeatures } from "../lib/auth-shared";
+import { PageTabs } from "../components/layout/PageTabs";
+import { SkillLeaderboardBoard } from "../components/rankings/SkillLeaderboardBoard";
+import { DanLeaderboardBoard } from "../components/rankings/DanLeaderboardBoard";
+import {
+  DEFAULT_DAN_SIDE,
+  DEFAULT_LEADERBOARD_KEYS,
+  DEFAULT_LEADERBOARD_TAB,
+  parseDanSide,
+  parseLeaderboardAxis,
+  parseLeaderboardKeys,
+  parseLeaderboardTab,
+  type DanSide,
+  type LeaderboardKeyCount,
+  type LeaderboardTab,
+} from "../lib/skill-leaderboards";
 import { pageSeo } from "../lib/seo";
 import { fetchLiveGlobalRankings, fetchLiveRankDeltas, fetchLiveRankingsSnapshot, type LiveGlobalRankingEntry, type LiveRankDelta } from "../lib/live-backend";
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
@@ -41,8 +58,23 @@ const NO_CHANGE_TITLE = msg`No change in the last 7 days`;
 // and /rankings 307-redirects to /rankings?page=1, which breaks crawling
 // (the sitemap lists /rankings and page 1's canonical points back to it).
 // `page` must be optional in the schema for stripSearchParams to accept it.
-type RankingsSearch = { page?: number; country: string | undefined };
-const RANKINGS_SEARCH_DEFAULTS: Pick<RankingsSearch, "page"> = { page: 1 };
+type RankingsSearch = {
+  page?: number;
+  country: string | undefined;
+  // The skill and dan leaderboards ride on this route as extra tabs. They are
+  // admin-only while in development, so their params default to the pp board
+  // and get stripped from the URL like `page`.
+  tab?: LeaderboardTab;
+  keys?: LeaderboardKeyCount;
+  axis?: string;
+  side?: DanSide;
+};
+const RANKINGS_SEARCH_DEFAULTS: Pick<RankingsSearch, "page" | "tab" | "keys" | "side"> = {
+  page: 1,
+  tab: DEFAULT_LEADERBOARD_TAB,
+  keys: DEFAULT_LEADERBOARD_KEYS,
+  side: DEFAULT_DAN_SIDE,
+};
 
 function parseRankingsPage(value: unknown): number {
   const page = Number(value ?? 1);
@@ -83,6 +115,10 @@ export const Route = createFileRoute("/rankings")({
   validateSearch: (search: Record<string, unknown>): RankingsSearch => ({
     page: parseRankingsPage(search.page),
     country: parseCountrySearchParam(search.country),
+    tab: parseLeaderboardTab(search.tab),
+    keys: parseLeaderboardKeys(search.keys),
+    axis: parseLeaderboardAxis(search.axis),
+    side: parseDanSide(search.side),
   }),
   search: {
     middlewares: [stripSearchParams(RANKINGS_SEARCH_DEFAULTS)],
@@ -96,7 +132,13 @@ export const Route = createFileRoute("/rankings")({
       description: countryName
         ? i18n._(msg`Top osu!mania players in ${countryName}`)
         : i18n._(msg`osu!mania country rankings`),
-      path: withSearchParams("/rankings", { page: (match.search.page ?? 1) > 1 ? match.search.page : undefined, country }),
+      path: withSearchParams("/rankings", {
+        page: (match.search.page ?? 1) > 1 && match.search.tab === "pp" ? match.search.page : undefined,
+        country,
+      }),
+      // The leaderboard tabs are admin-only while in development, so they get
+      // no index entry and the canonical keeps pointing at the pp board.
+      noindex: match.search.tab !== "pp",
       origin: match.context.origin,
       imageCountry: country,
       imageKind: "rankings",
@@ -106,7 +148,78 @@ export const Route = createFileRoute("/rankings")({
   component: RankingsPage,
 });
 
+/* /rankings hosts three boards: the pp ranking it has always served, plus the
+   skill and dan leaderboards. The route itself stays public and indexed - only
+   the tab bar is gated, so a signed-out visitor with ?tab=skills in the URL just
+   gets the pp board rather than a 404 on a public page. */
 function RankingsPage() {
+  const { t } = useLingui();
+  const auth = useAuth();
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+  const fallbackCountry = useSelectedCountry();
+  const selectedCountry = search.country ?? fallbackCountry;
+  const locale = useLocale();
+  const { warming } = useCountryWarming(selectedCountry);
+  const canSeeLeaderboards = canUseAdminFeatures(auth);
+  const tab: LeaderboardTab = canSeeLeaderboards ? (search.tab ?? "pp") : "pp";
+
+  const tabs = canSeeLeaderboards ? (
+    <PageTabs
+      items={[
+        { id: "pp" as LeaderboardTab, label: t`Performance` },
+        { id: "skills" as LeaderboardTab, label: t`Skills` },
+        { id: "dan" as LeaderboardTab, label: t`Dan` },
+      ]}
+      value={tab}
+      onChange={(next) => navigate({ to: "/rankings", search: { ...search, tab: next, page: 1 }, replace: true })}
+    />
+  ) : null;
+
+  if (tab === "pp") return <PpRankingsBoard tabs={tabs} />;
+
+  const keys = search.keys ?? DEFAULT_LEADERBOARD_KEYS;
+  const page = search.page ?? 1;
+  const countryName = displayCountryName(selectedCountry, locale);
+
+  return (
+    <div className="flex-1">
+      <PageHeader
+        iconSrc="/images/icons/rankings.svg"
+        title={tab === "dan" ? t`${countryName} mania dan leaderboards` : t`${countryName} mania skill leaderboards`}
+      />
+      {tabs}
+      {/* A country nobody has visited yet has no roster, so it has no rated
+          players either; the warming notice is the honest reason, not "empty". */}
+      {warming && <CountryWarming country={selectedCountry} />}
+      {!warming && (
+      <div className="bg-osu-b5">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
+          {tab === "skills" ? (
+            <SkillLeaderboardBoard
+              country={selectedCountry}
+              keys={keys}
+              axis={search.axis}
+              page={page}
+              onNavigate={(next) => navigate({ to: "/rankings", search: { ...search, ...next, page: next.page ?? 1 }, replace: true })}
+            />
+          ) : (
+            <DanLeaderboardBoard
+              country={selectedCountry}
+              keys={keys}
+              side={search.side ?? DEFAULT_DAN_SIDE}
+              page={page}
+              onNavigate={(next) => navigate({ to: "/rankings", search: { ...search, ...next, page: next.page ?? 1 }, replace: true })}
+            />
+          )}
+        </div>
+      </div>
+      )}
+    </div>
+  );
+}
+
+function PpRankingsBoard({ tabs }: { tabs: ReactNode }) {
   const { t, i18n } = useLingui();
   const { page = 1, country } = Route.useSearch();
   const navigate = useNavigate();
@@ -405,6 +518,7 @@ function RankingsPage() {
             ) : null
           }
         />
+        {tabs}
         <div className="bg-osu-b5">
           <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
             <div className="sm:hidden">
@@ -662,6 +776,7 @@ function RankingsPage() {
           </>
         }
       />
+      {tabs}
 
       {warming && <CountryWarming country={selectedCountry} />}
 
