@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ExternalLink, Flag, History, Loader2, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, ChevronDown, ExternalLink, Flag, History, Loader2, RefreshCw, Users } from "lucide-react";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { formatTimeAgo, formatTimeAgoTooltip } from "../lib/format";
 import { useLocale } from "../lib/locale-context";
@@ -365,23 +365,21 @@ function CommunityReviewPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  // What has already been decided. Fetched beside the queue rather than behind a
-  // click: an empty queue is the normal state of this page, and "nothing waiting"
-  // on its own was the thing that made a takedown look like it never happened.
-  const [history, setHistory] = useState<CommunityReviewLogEntry[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
+  /*
+   * What has already been decided, behind a click and fetched only once it is
+   * asked for. This page is for deciding what is in front of you; a scrollback
+   * of old decisions opening itself every time is somebody else's question, and
+   * having to scroll past it is worse than having to click for it.
+   */
+  const [history, setHistory] = useState<CommunityReviewLogEntry[] | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // One await, so a slow history cannot hold up the queue being drawn and a
-      // failed one cannot take the page down with it.
-      const [nextQueue, nextHistory] = await Promise.all([
-        fetchCommunityQueue(),
-        fetchCommunityReviewLog().catch(() => [] as CommunityReviewLogEntry[]),
-      ]);
-      setQueue(nextQueue);
-      setHistory(nextHistory);
+      setQueue(await fetchCommunityQueue());
     } catch {
       setNote("Could not load the queue.");
     } finally {
@@ -405,9 +403,9 @@ function CommunityReviewPage() {
       // An approval or a takedown changes what the directory lists, so the
       // pages it is holding go too rather than repainting the old grid.
       clearCommunitiesCache();
-      // The decision just made belongs in the history under it, and the backend
-      // is the only thing that knows how it was recorded.
-      void fetchCommunityReviewLog().then(setHistory).catch(() => {});
+      // The decision just made belongs in the history, but only bother when it
+      // is open: closed, it refetches on the next open anyway.
+      if (historyOpen) void fetchCommunityReviewLog().then(setHistory).catch(() => {});
       // Whatever the decision, the listing leaves every queue, and the reports
       // against it go with it: the backend resolved them on the same call.
       setQueue((prev) => {
@@ -424,6 +422,25 @@ function CommunityReviewPage() {
       setNote("That did not go through.");
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const toggleHistory = async () => {
+    if (historyOpen) {
+      setHistoryOpen(false);
+      return;
+    }
+    setHistoryOpen(true);
+    // Only the first open pays for it; after that the list is already here, and
+    // a decision made on this page refreshes it.
+    if (history !== null) return;
+    setHistoryLoading(true);
+    try {
+      setHistory(await fetchCommunityReviewLog());
+    } catch {
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -552,33 +569,56 @@ function CommunityReviewPage() {
         </div>
       )}
 
-      {/* Under the queue, always: this page is empty most of the time, and a
-          decision that has already been made is exactly what somebody comes
-          here asking about. Eight rows is a glance; the rest is a click. */}
-      {!loading && history.length > 0 && (
-        <section className={empty ? "" : "mt-8"}>
-          <h2 className="mb-1 flex items-center gap-1.5 text-[13px] font-bold text-white">
-            <History className="h-3.5 w-3.5 text-osu-f1" aria-hidden="true" />
+      {/* A closed row under the queue, not a section that opens itself. What is
+          waiting is this page's job; what was already decided is a question
+          somebody comes here with, so it costs a click and nothing until then -
+          including the fetch. */}
+      {!loading && (
+        <div className={empty ? "" : "mt-8"}>
+          <button
+            type="button"
+            onClick={() => void toggleHistory()}
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-white"
+            aria-expanded={historyOpen}
+          >
+            <History className="h-3.5 w-3.5" aria-hidden="true" />
             Recent decisions
-          </h2>
-          <p className="mb-2 text-[11.5px] text-osu-f1">
-            Approvals and takedowns, newest first. Only moderators see this.
-          </p>
-          <ul className="space-y-1.5">
-            {(showHistory ? history : history.slice(0, 8)).map((entry) => (
-              <HistoryRow key={entry.id} entry={entry} />
-            ))}
-          </ul>
-          {history.length > 8 && (
-            <button
-              type="button"
-              onClick={() => setShowHistory((value) => !value)}
-              className="mt-2 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-white"
-            >
-              {showHistory ? "Show less" : `Show all ${history.length}`}
-            </button>
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform ${historyOpen ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
+          </button>
+
+          {historyOpen && (
+            <div className="mt-2">
+              {historyLoading ? (
+                <p className="py-3 text-[12px] text-osu-f1">Loading.</p>
+              ) : history && history.length > 0 ? (
+                <>
+                  <p className="mb-2 text-[11.5px] text-osu-f1">
+                    Approvals and takedowns, newest first. Only moderators see this.
+                  </p>
+                  <ul className="space-y-1.5">
+                    {(showAllHistory ? history : history.slice(0, 8)).map((entry) => (
+                      <HistoryRow key={entry.id} entry={entry} />
+                    ))}
+                  </ul>
+                  {history.length > 8 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllHistory((value) => !value)}
+                      className="mt-2 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-white"
+                    >
+                      {showAllHistory ? "Show less" : `Show all ${history.length}`}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <p className="py-3 text-[12px] text-osu-f1">Nothing decided yet.</p>
+              )}
+            </div>
           )}
-        </section>
+        </div>
       )}
     </div>
   );
