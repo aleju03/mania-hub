@@ -1241,6 +1241,38 @@ describe("loadChartSkillInfo", () => {
       expect(info.get(204)?.patterns.sort()).toEqual(["chordstream", "ln"]);
     });
   });
+
+  it("uses bounded primary-key lookups and ignores non-ready chart rows", async () => {
+    await withDb(async (db) => {
+      const now = new Date().toISOString();
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      await exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+         values (?, ?, 'ready', ?, ?), (?, ?, 'pending', ?, ?)`,
+        [301, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [] }), now,
+          302, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [] }), now],
+      );
+
+      const client = db as unknown as { execute: (stmt: unknown) => Promise<unknown> };
+      const realExecute = client.execute.bind(client);
+      const chartQueries: string[] = [];
+      client.execute = async (stmt: unknown) => {
+        const sql = String((stmt as { sql?: unknown })?.sql ?? stmt ?? "");
+        if (sql.includes("from beatmap_chart_analysis")) chartQueries.push(sql);
+        return realExecute(stmt);
+      };
+
+      // 501 unique ids cross the 500-id pacing boundary without needing 501
+      // seeded rows. The pending row may be returned by the PK lookup, but it
+      // must not become usable chart information.
+      const info = await loadChartSkillInfo(db, Array.from({ length: 501 }, (_, index) => index + 1));
+      expect(chartQueries).toHaveLength(2);
+      expect(chartQueries.every((sql) => !sql.includes("status = 'ready'"))).toBe(true);
+      expect(info.has(301)).toBe(true);
+      expect(info.has(302)).toBe(false);
+    });
+  });
 });
 
 describe("danTableLabelFor", () => {

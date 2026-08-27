@@ -874,62 +874,75 @@ function readRawDan(half: LeanHalfJson | null | undefined): number | null {
   return Number.isFinite(rawDan) && rawDan > 0 ? rawDan : null;
 }
 
+// Local libSQL materializes query results synchronously on the calling thread.
+// Keep a corpus sweep's chart lookup below one frame-sized burst, while a normal
+// one-player compute still needs only one statement. Measured on the live 12k-id
+// sweep batch after fixing the query plan below: 500-id chunks took ~220ms total
+// and held the event loop for ~13ms at a time.
+const CHART_SKILL_INFO_QUERY_CHUNK = 500;
+
 export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<Map<number, ChartSkillInfo>> {
   const ids = [...new Set(beatmapIds)].filter((id) => Number.isInteger(id) && id > 0);
   const info = new Map<number, ChartSkillInfo>();
   if (ids.length === 0) return info;
-  // One statement for the whole id list, however long it is. Splitting it into
-  // 1000-id batches with a yield between them was measured on the live corpus
-  // (12k distinct charts): 260ms and no measurable event-loop delay in one
-  // statement, against 1950ms and ~180ms of delay across twelve. libsql runs
-  // the read off-thread, so the long await is wall clock the loop is free
-  // during, and the parse below is the only part that actually holds it.
-  const placeholders = ids.map(() => "?").join(", ");
-  const rows = (await exec(
-    db,
-    `select beatmap_id, classification_json, dan_dt_json, dan_ht_json from beatmap_chart_analysis
-     where analysis_version = ? and status = 'ready' and beatmap_id in (${placeholders})`,
-    [CHART_ANALYSIS_VERSION, ...ids],
-  )).rows;
-  for (const row of rows) {
-    const parsed = parseJson<LeanClassificationJson | null>(String(row.classification_json ?? ""), null);
-    const patternScores = new Map<string, number>();
-    for (const hit of Array.isArray(parsed?.patterns) ? parsed.patterns : []) {
-      const id = String(hit?.id ?? "");
-      if (id) patternScores.set(id, Math.max(patternScores.get(id) ?? 0, Number(hit?.score ?? 0)));
+  for (let offset = 0; offset < ids.length; offset += CHART_SKILL_INFO_QUERY_CHUNK) {
+    const chunk = ids.slice(offset, offset + CHART_SKILL_INFO_QUERY_CHUNK);
+    const placeholders = chunk.map(() => "?").join(", ");
+    /* Do not put `status = 'ready'` in this SQL. With that predicate SQLite
+       chose idx_beatmap_chart_analysis_status_updated and scanned every ready
+       chart even for one player's few hundred ids (~180ms on the live DB).
+       The primary key is (beatmap_id, analysis_version), so drive from those
+       two terms and discard the at-most-one returned non-ready row in JS. */
+    const rows = (await exec(
+      db,
+      `select beatmap_id, status, classification_json, dan_dt_json, dan_ht_json from beatmap_chart_analysis
+       where analysis_version = ? and beatmap_id in (${placeholders})`,
+      [CHART_ANALYSIS_VERSION, ...chunk],
+    )).rows;
+    for (const row of rows) {
+      if (String(row.status ?? "") !== "ready") continue;
+      const parsed = parseJson<LeanClassificationJson | null>(String(row.classification_json ?? ""), null);
+      const patternScores = new Map<string, number>();
+      for (const hit of Array.isArray(parsed?.patterns) ? parsed.patterns : []) {
+        const id = String(hit?.id ?? "");
+        if (id) patternScores.set(id, Math.max(patternScores.get(id) ?? 0, Number(hit?.score ?? 0)));
+      }
+      const chordjackScore = patternScores.get("chordjack") ?? 0;
+      const rawLnRatio = Number(parsed?.lnRatio);
+      const lnRatio = Number.isFinite(rawLnRatio) ? Math.max(0, Math.min(1, rawLnRatio)) : null;
+      // A chart whose analysis carries no lnRatio cannot be verified as LN, so
+      // it keeps no LN tag rather than being trusted.
+      const chartIsLn = lnRatio != null && lnRatio >= LN_PATTERN_LN_RATIO_MIN;
+      const patternIds = [...patternScores.entries()]
+        .filter(([id, score]) =>
+          score >= patternTagMinScore(id)
+          && !(id === "tech" && chordjackScore >= TECH_TAG_CHORDJACK_VETO)
+          && !(LN_PATTERN_IDS.has(id) && !chartIsLn))
+        .map(([id]) => id);
+      const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
+      const dtRawDan = readRawDan(danDt ?? undefined);
+      const danHt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown } | null>(String(row.dan_ht_json ?? ""), null);
+      const htRawDan = readRawDan(danHt ?? undefined);
+      info.set(Number(row.beatmap_id), {
+        patterns: patternIds,
+        jackShare: clusterShare(parsed, JACK_CLUSTERS),
+        streamShare: clusterShare(parsed, STREAM_CLUSTERS),
+        techCategory: typeof parsed?.clusterCategory === "string"
+          ? TECH_CLUSTER_CATEGORY.test(parsed.clusterCategory)
+          : null,
+        lnRatio,
+        vibro: parsed?.vibro === true,
+        rcRawDan: readRawDan(parsed?.rc),
+        lnRawDan: readRawDan(parsed?.ln),
+        dtRawDan,
+        dtFamily: dtRawDan == null ? null : danDt?.primaryFamily === "ln" ? "ln" : "rc",
+        htRawDan,
+        htFamily: htRawDan == null ? null : danHt?.primaryFamily === "ln" ? "ln" : "rc",
+      });
     }
-    const chordjackScore = patternScores.get("chordjack") ?? 0;
-    const rawLnRatio = Number(parsed?.lnRatio);
-    const lnRatio = Number.isFinite(rawLnRatio) ? Math.max(0, Math.min(1, rawLnRatio)) : null;
-    // A chart whose analysis carries no lnRatio cannot be verified as LN, so
-    // it keeps no LN tag rather than being trusted.
-    const chartIsLn = lnRatio != null && lnRatio >= LN_PATTERN_LN_RATIO_MIN;
-    const patternIds = [...patternScores.entries()]
-      .filter(([id, score]) =>
-        score >= patternTagMinScore(id)
-        && !(id === "tech" && chordjackScore >= TECH_TAG_CHORDJACK_VETO)
-        && !(LN_PATTERN_IDS.has(id) && !chartIsLn))
-      .map(([id]) => id);
-    const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
-    const dtRawDan = readRawDan(danDt ?? undefined);
-    const danHt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown } | null>(String(row.dan_ht_json ?? ""), null);
-    const htRawDan = readRawDan(danHt ?? undefined);
-    info.set(Number(row.beatmap_id), {
-      patterns: patternIds,
-      jackShare: clusterShare(parsed, JACK_CLUSTERS),
-      streamShare: clusterShare(parsed, STREAM_CLUSTERS),
-      techCategory: typeof parsed?.clusterCategory === "string"
-        ? TECH_CLUSTER_CATEGORY.test(parsed.clusterCategory)
-        : null,
-      lnRatio,
-      vibro: parsed?.vibro === true,
-      rcRawDan: readRawDan(parsed?.rc),
-      lnRawDan: readRawDan(parsed?.ln),
-      dtRawDan,
-      dtFamily: dtRawDan == null ? null : danDt?.primaryFamily === "ln" ? "ln" : "rc",
-      htRawDan,
-      htFamily: htRawDan == null ? null : danHt?.primaryFamily === "ln" ? "ln" : "rc",
-    });
+    if (offset + chunk.length < ids.length) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
   }
   return info;
 }
@@ -2530,6 +2543,10 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v1";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
+// A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
+// plays_json blobs in one turn cost ~50ms before the chart lookup even began;
+// breathe between small groups just as the chart lookup does between id groups.
+const PLAYER_SKILL_DAN_SWEEP_PARSE_YIELD = 25;
 
 export interface PlayerSkillDanSweepChunkResult {
   nextCursor: number;
@@ -2556,7 +2573,11 @@ export async function recomputePlayerSkillDanChunk(
   let rewritten = 0;
   const parsed: Array<{ userId: number; summary: StoredModesSummary; plays: StoredPlaySsr[]; readAt: string }> = [];
   const beatmapIds: number[] = [];
-  for (const row of rows) {
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    if (rowIndex > 0 && rowIndex % PLAYER_SKILL_DAN_SWEEP_PARSE_YIELD === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    const row = rows[rowIndex];
     const userId = Number(row.user_id);
     nextCursor = Math.max(nextCursor, userId);
     const summary = parseJson<StoredModesSummary | null>(String(row.modes_json ?? ""), null);
@@ -2875,4 +2896,3 @@ async function enqueuePlayerSkillVibroSweep(queue: JobQueue, cursor: number): Pr
     { priority: -10, replaceDone: true },
   );
 }
-
