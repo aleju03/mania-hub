@@ -1449,20 +1449,20 @@ msgid "<0>First time loading {countryName} maps.</0> Scanning its top players' p
 msgstr "<0>First time loading {countryName} maps.</0> Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own."
 
 #: src/routes/dan-estimates.tsx
-msgid "<0>It is not a ranking.</0> Two players a step apart on the dan leaderboard are not meaningfully apart, and a player who never farms accuracy will read lower than they play."
-msgstr "<0>It is not a ranking.</0> Two players a step apart on the dan leaderboard are not meaningfully apart, and a player who never farms accuracy will read lower than they play."
+#~ msgid "<0>It is not a ranking.</0> Two players a step apart on the dan leaderboard are not meaningfully apart, and a player who never farms accuracy will read lower than they play."
+#~ msgstr "<0>It is not a ranking.</0> Two players a step apart on the dan leaderboard are not meaningfully apart, and a player who never farms accuracy will read lower than they play."
 
 #: src/routes/dan-estimates.tsx
-msgid "<0>It is not a title.</0> The ladders hand those out for clearing the course, and this number has no say in that."
-msgstr "<0>It is not a title.</0> The ladders hand those out for clearing the course, and this number has no say in that."
+#~ msgid "<0>It is not a title.</0> The ladders hand those out for clearing the course, and this number has no say in that."
+#~ msgstr "<0>It is not a title.</0> The ladders hand those out for clearing the course, and this number has no say in that."
 
 #: src/routes/dan-estimates.tsx
-msgid "<0>It moves.</0> The rating engines and the chart analysis get improved, and a recompute can shift a chart by a step, which shifts everyone whose evidence sat on it."
-msgstr "<0>It moves.</0> The rating engines and the chart analysis get improved, and a recompute can shift a chart by a step, which shifts everyone whose evidence sat on it."
+#~ msgid "<0>It moves.</0> The rating engines and the chart analysis get improved, and a recompute can shift a chart by a step, which shifts everyone whose evidence sat on it."
+#~ msgstr "<0>It moves.</0> The rating engines and the chart analysis get improved, and a recompute can shift a chart by a step, which shifts everyone whose evidence sat on it."
 
 #: src/routes/dan-estimates.tsx
-msgid "<0>It only sees the plays the site has.</0> Your osu! top plays are always in. Anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
-msgstr "<0>It only sees the plays the site has.</0> Your osu! top plays are always in. Anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
+#~ msgid "<0>It only sees the plays the site has.</0> Your osu! top plays are always in. Anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
+#~ msgstr "<0>It only sees the plays the site has.</0> Your osu! top plays are always in. Anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "<0>Log in with osu!</0> to put your own cards up here."
@@ -1489,8 +1489,8 @@ msgid "<0>top {0}%</0> of {1} tracked {2}K mains"
 msgstr "<0>top {0}%</0> of {1} tracked {2}K mains"
 
 #: src/routes/dan-estimates.tsx
-msgid "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
-msgstr "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
+#~ msgid "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
+#~ msgstr "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "− bpm & length"
@@ -5556,6 +5556,22 @@ msgstr "Invite link"
 msgid "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 msgstr "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 
+#: src/routes/dan-estimates.tsx
+msgid "It also only sees the plays the site has. Your osu! top plays are always included. Anything below them is included only if the site tracks you, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
+msgstr "It also only sees the plays the site has. Your osu! top plays are always included. Anything below them is included only if the site tracks you, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "It can only judge the plays the site has. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
+#~ msgstr "It can only judge the plays the site has. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "It is not a ranking either. Two players a step apart on the dan leaderboard are not meaningfully apart, and anyone who never farms accuracy will read lower than they play."
+#~ msgstr "It is not a ranking either. Two players a step apart on the dan leaderboard are not meaningfully apart, and anyone who never farms accuracy will read lower than they play."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "It is not a title. Those come from clearing a real course on a ladder, and this number has no say in who gets one."
+#~ msgstr "It is not a title. Those come from clearing a real course on a ladder, and this number has no say in who gets one."
+
 #: src/routes/skins_.$id.tsx
 msgid "It may have been removed by its uploader."
 msgstr "It may have been removed by its uploader."
@@ -5563,6 +5579,10 @@ msgstr "It may have been removed by its uploader."
 #: src/routes/communities_.$id.tsx
 msgid "It may have been taken down, or it is still waiting for approval."
 msgstr "It may have been taken down, or it is still waiting for approval."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "It moves over time, because the rating engines and the chart analysis keep getting improved, and a recompute that shifts a chart by a step shifts everyone whose evidence sat on that chart."
+#~ msgstr "It moves over time, because the rating engines and the chart analysis keep getting improved, and a recompute that shifts a chart by a step shifts everyone whose evidence sat on that chart."
 
 #: src/components/communities/field-options.tsx
 msgid "Italian"
@@ -7155,6 +7175,18 @@ msgstr "No images or sounds were found in the archive."
 #: src/routes/player/$username.tsx
 msgid "No key data"
 msgstr "No key data"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "No ladder recognises this number. Titles come from clearing a real course, and nothing here has a say in who gets one. It makes a poor ranking too, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It also drifts, because the rating engines and the chart analysis keep getting better, so a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
+#~ msgstr "No ladder recognises this number. Titles come from clearing a real course, and nothing here has a say in who gets one. It makes a poor ranking too, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It also drifts, because the rating engines and the chart analysis keep getting better, so a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "No ladder recognizes this number, and titles still come from clearing a real course. It also makes a poor ranking, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It is not fixed either: the rating engines and the chart analysis keep getting better, and a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
+#~ msgstr "No ladder recognizes this number, and titles still come from clearing a real course. It also makes a poor ranking, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It is not fixed either: the rating engines and the chart analysis keep getting better, and a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
+
+#: src/routes/dan-estimates.tsx
+msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+msgstr "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No mania difficulties"
@@ -10516,6 +10548,10 @@ msgstr "Snipes don't apply to Global"
 msgid "Solid"
 msgstr "Solid"
 
+#: src/components/communities/CommunityStatusNote.tsx
+msgid "Someone reported your server and it got taken down for the following reason{said}"
+msgstr "Someone reported your server and it got taken down for the following reason{said}"
+
 #: src/routes/__root.tsx
 msgid "Something broke"
 msgstr "Something broke"
@@ -11147,6 +11183,10 @@ msgstr "The album is unavailable right now. Try again in a bit."
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "The archive could not be read. Tap to try again."
 msgstr "The archive could not be read. Tap to try again."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The bigger limit is that only the plays the site has can count towards it. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
+#~ msgstr "The bigger limit is that only the plays the site has can count towards it. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
 
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "The board is not answering right now."
@@ -12004,6 +12044,26 @@ msgstr "Unmute chart preview"
 #: src/components/packs/album/AlbumView.tsx
 msgid "unranked"
 msgstr "unranked"
+
+#: src/routes/dan-estimates.tsx
+msgid "Unranked plays are only recorded once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
+msgstr "Unranked plays are only recorded once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Unranked plays are only recorded once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard."
+#~ msgstr "Unranked plays are only recorded once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Unranked plays only start counting once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
+#~ msgstr "Unranked plays only start counting once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Unranked plays wait until the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. From there it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Before that first leaderboard score, plays on unranked charts are not kept at all."
+#~ msgstr "Unranked plays wait until the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. From there it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Before that first leaderboard score, plays on unranked charts are not kept at all."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Unranked plays wait until the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. From there it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Start a session on a graveyard map and none of it is kept until that first leaderboard score lands."
+#~ msgstr "Unranked plays wait until the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. From there it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Start a session on a graveyard map and none of it is kept until that first leaderboard score lands."
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx

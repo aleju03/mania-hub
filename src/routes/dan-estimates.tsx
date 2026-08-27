@@ -439,45 +439,37 @@ function DanEstimatesPage() {
         </Section>
 
         <Section title={t`What the number is not`}>
-          <ul className="space-y-2 pl-5 text-[15px] leading-7 text-osu-f1">
-            <Li>
-              <Trans>
-                <B>It is not a title.</B> The ladders hand those out for clearing the course, and this
-                number has no say in that.
-              </Trans>
-            </Li>
-            <Li>
-              <Trans>
-                <B>It is not a ranking.</B> Two players a step apart on the dan leaderboard are not
-                meaningfully apart, and a player who never farms accuracy will read lower than they
-                play.
-              </Trans>
-            </Li>
-            <Li>
-              <Trans>
-                <B>It moves.</B> The rating engines and the chart analysis get improved, and a recompute
-                can shift a chart by a step, which shifts everyone whose evidence sat on it.
-              </Trans>
-            </Li>
-            <Li>
-              <Trans>
-                <B>It only sees the plays the site has.</B> Your osu! top plays are always in. Anything
-                below them exists only if the site tracks you, which means sitting in your country's top
-                100 or turning tracking on yourself, and only from the day that started. Someone who
-                stopped playing years ago is judged on their top 200 alone and reads low for that
-                reason.
-              </Trans>
-            </Li>
-            <Li>
-              <Trans>
-                <B>Unranked plays only count once the site knows you are playing.</B> It finds that out
-                from your first score on a ranked, qualified or loved chart. After that it checks your
-                recent plays every couple of minutes until you stop, and everything you play in that
-                window counts, unranked charts included. Start on a graveyard map and none of it is kept
-                until that first leaderboard score lands.
-              </Trans>
-            </Li>
-          </ul>
+          <P>
+            <Trans>
+              No ladder recognizes this number, and titles still only come from clearing a real course.
+              It also works badly as a ranking. Two players one step apart on the dan leaderboard are
+              not really one step apart, and a player who never farms accuracy will land below their
+              actual level. The number can also change on its own, because the rating engines and the
+              chart analysis get updated, and when a recompute moves a chart up or down a level,
+              everyone whose passes rely on that chart moves with it.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              It also only sees the plays the site has. Your osu! top plays are always included.
+              Anything below them is included only if the site tracks you, which happens if you are in
+              your country's top 100 or if you turn tracking on yourself, and only from that day onward.
+              A player who quit years ago is judged on their top 200 alone, so their estimate comes out
+              low.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              Unranked plays are only recorded once the site knows you are playing, which it learns from
+              your first score on a ranked, qualified or loved chart. After that it checks your recent
+              plays every few minutes until you stop, and everything you play during that time counts,
+              including unranked charts.{' '}
+              <strong className="text-[17px] font-bold text-white">
+                If you only play unranked charts, nothing is recorded until you set a score on a chart
+                with a leaderboard.
+              </strong>
+            </Trans>
+          </P>
         </Section>
 
         <Section title={t`What it looks like across everyone`}>

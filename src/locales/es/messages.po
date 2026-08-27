@@ -1449,20 +1449,20 @@ msgid "<0>First time loading {countryName} maps.</0> Scanning its top players' p
 msgstr "<0>Primera vez cargando los mapas de {countryName}.</0> Analizando las plays y favoritos de sus mejores jugadores. Puede tardar un minuto; la página se completará sola."
 
 #: src/routes/dan-estimates.tsx
-msgid "<0>It is not a ranking.</0> Two players a step apart on the dan leaderboard are not meaningfully apart, and a player who never farms accuracy will read lower than they play."
-msgstr "<0>No es un ranking.</0> Dos jugadores separados por un escalón en la tabla de dan no están de verdad separados, y quien nunca farmea precisión aparecerá más abajo de lo que juega."
+#~ msgid "<0>It is not a ranking.</0> Two players a step apart on the dan leaderboard are not meaningfully apart, and a player who never farms accuracy will read lower than they play."
+#~ msgstr "<0>No es un ranking.</0> Dos jugadores separados por un escalón en la tabla de dan no están de verdad separados, y quien nunca farmea precisión aparecerá más abajo de lo que juega."
 
 #: src/routes/dan-estimates.tsx
-msgid "<0>It is not a title.</0> The ladders hand those out for clearing the course, and this number has no say in that."
-msgstr "<0>No es un título.</0> Los títulos los reparten las escalas por pasar el dan, y este número no tiene nada que decir ahí."
+#~ msgid "<0>It is not a title.</0> The ladders hand those out for clearing the course, and this number has no say in that."
+#~ msgstr "<0>No es un título.</0> Los títulos los reparten las escalas por pasar el dan, y este número no tiene nada que decir ahí."
 
 #: src/routes/dan-estimates.tsx
-msgid "<0>It moves.</0> The rating engines and the chart analysis get improved, and a recompute can shift a chart by a step, which shifts everyone whose evidence sat on it."
-msgstr "<0>Se mueve.</0> Los algoritmos de rating y el análisis de charts van mejorando, y un recálculo puede mover un chart un escalón, lo que mueve a todos los que se apoyaban en él."
+#~ msgid "<0>It moves.</0> The rating engines and the chart analysis get improved, and a recompute can shift a chart by a step, which shifts everyone whose evidence sat on it."
+#~ msgstr "<0>Se mueve.</0> Los algoritmos de rating y el análisis de charts van mejorando, y un recálculo puede mover un chart un escalón, lo que mueve a todos los que se apoyaban en él."
 
 #: src/routes/dan-estimates.tsx
-msgid "<0>It only sees the plays the site has.</0> Your osu! top plays are always in. Anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
-msgstr "<0>Solo ve las plays que el sitio tiene.</0> Tus top plays de osu! siempre están. Todo lo que quede por debajo solo existe si el sitio te trackea, es decir si estás en el top 100 de tu país o activaste el tracking tú mismo, y solo desde el día en que eso empezó. A quien dejó de jugar hace años se le juzga solo por su top 200, y por eso aparece más abajo."
+#~ msgid "<0>It only sees the plays the site has.</0> Your osu! top plays are always in. Anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
+#~ msgstr "<0>Solo ve las plays que el sitio tiene.</0> Tus top plays de osu! siempre están. Todo lo que quede por debajo solo existe si el sitio te trackea, es decir si estás en el top 100 de tu país o activaste el tracking tú mismo, y solo desde el día en que eso empezó. A quien dejó de jugar hace años se le juzga solo por su top 200, y por eso aparece más abajo."
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "<0>Log in with osu!</0> to put your own cards up here."
@@ -1489,8 +1489,8 @@ msgid "<0>top {0}%</0> of {1} tracked {2}K mains"
 msgstr "<0>top {0}%</0> de {1} mains {2}K trackeados"
 
 #: src/routes/dan-estimates.tsx
-msgid "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
-msgstr "<0>Las plays unranked solo cuentan cuando el sitio sabe que estás jugando.</0> Se entera con tu primer score en un chart ranked, qualified o loved. A partir de ahí revisa tus plays recientes cada un par de minutos hasta que pares, y todo lo que juegues en esa ventana cuenta, incluidos los charts unranked. Si empiezas en un mapa graveyard, nada se guarda hasta que llegue ese primer score con leaderboard."
+#~ msgid "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
+#~ msgstr "<0>Las plays unranked solo cuentan cuando el sitio sabe que estás jugando.</0> Se entera con tu primer score en un chart ranked, qualified o loved. A partir de ahí revisa tus plays recientes cada un par de minutos hasta que pares, y todo lo que juegues en esa ventana cuenta, incluidos los charts unranked. Si empiezas en un mapa graveyard, nada se guarda hasta que llegue ese primer score con leaderboard."
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "− bpm & length"
@@ -5556,6 +5556,22 @@ msgstr "Enlace de invitación"
 msgid "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 msgstr "¿El top play más antiguo de {hidden} es más antiguo o más reciente que el de {shown}?"
 
+#: src/routes/dan-estimates.tsx
+msgid "It also only sees the plays the site has. Your osu! top plays are always included. Anything below them is included only if the site tracks you, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
+msgstr "Además solo ve las jugadas que el sitio tiene. Tus top plays de osu! siempre están incluidas. Lo que está por debajo se incluye solo si el sitio te sigue, cosa que pasa si estás en el top 100 de tu país o si activas el seguimiento tú mismo, y solo a partir de ese día. A un jugador que dejó de jugar hace años se le juzga solo por su top 200, así que su estimación sale baja."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "It can only judge the plays the site has. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
+#~ msgstr ""
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "It is not a ranking either. Two players a step apart on the dan leaderboard are not meaningfully apart, and anyone who never farms accuracy will read lower than they play."
+#~ msgstr ""
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "It is not a title. Those come from clearing a real course on a ladder, and this number has no say in who gets one."
+#~ msgstr ""
+
 #: src/routes/skins_.$id.tsx
 msgid "It may have been removed by its uploader."
 msgstr "Puede que quien lo subió lo haya eliminado."
@@ -5563,6 +5579,10 @@ msgstr "Puede que quien lo subió lo haya eliminado."
 #: src/routes/communities_.$id.tsx
 msgid "It may have been taken down, or it is still waiting for approval."
 msgstr "Puede que lo hayan retirado, o que todavía esté esperando aprobación."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "It moves over time, because the rating engines and the chart analysis keep getting improved, and a recompute that shifts a chart by a step shifts everyone whose evidence sat on that chart."
+#~ msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Italian"
@@ -7155,6 +7175,18 @@ msgstr "No se encontraron imágenes ni sonidos en el archivo."
 #: src/routes/player/$username.tsx
 msgid "No key data"
 msgstr "Sin datos de keymodes"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "No ladder recognises this number. Titles come from clearing a real course, and nothing here has a say in who gets one. It makes a poor ranking too, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It also drifts, because the rating engines and the chart analysis keep getting better, so a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
+#~ msgstr ""
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "No ladder recognizes this number, and titles still come from clearing a real course. It also makes a poor ranking, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It is not fixed either: the rating engines and the chart analysis keep getting better, and a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
+#~ msgstr "Ningún ladder reconoce este número, y los títulos siguen saliendo de superar un curso real. También funciona mal como ranking, porque dos jugadores separados por un escalón en la tabla de dan no están separados de verdad, y quien nunca farmea precisión aparece más bajo de lo que juega. Tampoco es fijo: los algoritmos de rating y el análisis de charts van mejorando, y un recálculo que mueve un chart un escalón mueve a todos los que se apoyaban en él."
+
+#: src/routes/dan-estimates.tsx
+msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+msgstr "Ningún ladder reconoce este número, y los títulos siguen saliendo solo de superar un curso real. También funciona mal como ranking. Dos jugadores separados por un escalón en la tabla de dan no están realmente separados por un escalón, y un jugador que nunca farmea precisión va a quedar por debajo de su nivel real. El número también puede cambiar solo, porque los algoritmos de rating y el análisis de charts se actualizan, y cuando un recálculo sube o baja un chart un nivel, todos los que se apoyan en ese chart se mueven con él."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No mania difficulties"
@@ -10516,6 +10548,10 @@ msgstr "Los snipes no aplican a Global"
 msgid "Solid"
 msgstr "Sólido"
 
+#: src/components/communities/CommunityStatusNote.tsx
+msgid "Someone reported your server and it got taken down for the following reason{said}"
+msgstr ""
+
 #: src/routes/__root.tsx
 msgid "Something broke"
 msgstr "Algo se rompió"
@@ -11147,6 +11183,10 @@ msgstr "El álbum no está disponible en este momento. Inténtalo de nuevo en un
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "The archive could not be read. Tap to try again."
 msgstr "No se pudo leer el archivo comprimido. Toca para reintentar."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The bigger limit is that only the plays the site has can count towards it. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
+#~ msgstr "El límite más grande es que solo cuentan las jugadas que el sitio tiene. Tus top plays de osu! siempre entran, pero todo lo que está por debajo existe solo si el sitio te sigue, lo que significa estar en el top 100 de tu país o activar el seguimiento tú mismo, y solo desde el día en que empezó. A quien dejó de jugar hace años se le juzga solo por su top 200 y por eso aparece bajo."
 
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "The board is not answering right now."
@@ -12004,6 +12044,26 @@ msgstr "Activar audio de la vista previa del mapa"
 #: src/components/packs/album/AlbumView.tsx
 msgid "unranked"
 msgstr "sin ranking"
+
+#: src/routes/dan-estimates.tsx
+msgid "Unranked plays are only recorded once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
+msgstr "Las jugadas en charts unranked solo se registran una vez que el sitio sabe que estás jugando, cosa que descubre con tu primer score en un chart ranked, qualified o loved. Después de eso revisa tus jugadas recientes cada pocos minutos hasta que paras, y todo lo que juegues en ese tiempo cuenta, charts unranked incluidos. <0>Si solo juegas charts unranked, no se registra nada hasta que hagas un score en un chart con tabla de clasificación.</0>"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Unranked plays are only recorded once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard."
+#~ msgstr "Las jugadas en charts unranked solo se registran una vez que el sitio sabe que estás jugando, cosa que descubre con tu primer score en un chart ranked, qualified o loved. Después de eso revisa tus jugadas recientes cada pocos minutos hasta que paras, y todo lo que juegues en ese tiempo cuenta, charts unranked incluidos. <0>Si solo juegas charts unranked, no se registra nada hasta que hagas un score en un chart con tabla de clasificación.</0>"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Unranked plays only start counting once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
+#~ msgstr ""
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Unranked plays wait until the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. From there it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Before that first leaderboard score, plays on unranked charts are not kept at all."
+#~ msgstr "Las jugadas unranked esperan a que el sitio sepa que estás jugando, cosa que descubre con tu primer score en un chart ranked, qualified o loved. A partir de ahí revisa tus jugadas recientes cada par de minutos hasta que paras, y todo lo de esa ventana cuenta, charts unranked incluidos. Antes de ese primer score con tabla, las jugadas en charts unranked no se guardan."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Unranked plays wait until the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. From there it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Start a session on a graveyard map and none of it is kept until that first leaderboard score lands."
+#~ msgstr ""
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx
