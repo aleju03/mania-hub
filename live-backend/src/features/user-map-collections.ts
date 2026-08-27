@@ -406,10 +406,11 @@ export async function getUserMapCollection(
 ): Promise<UserMapCollectionDetail | null> {
   const summary = await getUserMapCollectionSummary(db, id, viewerUserId);
   if (!summary) return null;
+  // `id` may be the slug half of the link; the items table only knows the id.
   const memberRows = (await exec(
     db,
     "select beatmap_id from user_map_collection_items where collection_id = ? order by position asc",
-    [id],
+    [summary.id],
   )).rows;
   const orderedIds = memberRows.map((row) => Math.floor(Number(row.beatmap_id))).filter((value) => value > 0);
   const entryById = await getMapSearchEntriesByIds(db, orderedIds);

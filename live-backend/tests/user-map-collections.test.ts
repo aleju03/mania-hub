@@ -168,9 +168,12 @@ describe("user map collections", () => {
     const second = await create({ title: "LN Coordination" });
     expect(second.body.collection.slug).toBe("ln-coordination-2");
 
-    // The slug opens the page, and so does the id.
+    // The slug opens the page, and so does the id. Members come with it either
+    // way: the items table only knows the id, so the slug path must resolve
+    // through it rather than query items with the slug.
     const bySlug = await call(mockReq("GET", "/api/map-collections/get?id=ln-coordination", TOKEN));
     expect(bySlug.body.collection.id).toBe(posted.body.collection.id);
+    expect(bySlug.body.collection.items).toHaveLength(3);
     const byId = await call(mockReq("GET", `/api/map-collections/get?id=${posted.body.collection.id}`, TOKEN));
     expect(byId.body.collection.slug).toBe("ln-coordination");
   });
