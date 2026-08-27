@@ -158,10 +158,7 @@ export function DanLeaderboardBoard({
         onChange={(next) => onNavigate({ skillset: next, page: 1 })}
       />
 
-      {/* Plain line, not a boxed callout: the caveat belongs next to the data,
-          not in furniture around it. */}
       <p className="text-[11px] text-osu-f1">
-        <Trans>Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking.</Trans>{' '}
         <Link to="/dan-estimates" className="text-osu-pink-light transition-colors hover:text-white">
           <Trans>Click here to read how dans are estimated</Trans>
         </Link>
