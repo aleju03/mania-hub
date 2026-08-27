@@ -170,6 +170,26 @@ export function danTableLabelFor(rawDan: number, side: "rc" | "ln", keyCount: nu
 }
 
 /**
+ * The inverse of danTableLabelFor's level naming: the table level a bare
+ * ladder label sits on ("gamma" -> 11 on 7K rice, "terra" -> 10 on 6K LN).
+ *
+ * This exists so the dan course registry can name a course by the level its
+ * community calls it rather than by a number, and have that number come from
+ * the same table the label is printed from. A ladder change then moves both
+ * ends together instead of silently shifting every registered course by one.
+ * Takes a bare label with no +/- variant; returns null when no table covers
+ * the keymode/side or the label is not one of its levels.
+ */
+export function danTableLevelForLabel(label: string, side: "rc" | "ln", keyCount: number): number | null {
+  const tables = DAN_INDEX[keyCount];
+  const table = tables ? (side === "ln" ? tables.LN?.default : tables.RC.default) : undefined;
+  if (!table) return null;
+  const wanted = label.trim().toLowerCase();
+  const entry = tableLevels(table).find((candidate) => tableLabelForBase(candidate.base) === wanted);
+  return entry ? entry.level : null;
+}
+
+/**
  * The rawDan a verdict gets when it lands above the table's last tier: the
  * "> Regular 9 high" sentinel parseTableHalf produces (last level + 0.5).
  * A value at or past it means the ladder stopped measuring, not that the

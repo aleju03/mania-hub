@@ -66,15 +66,57 @@ export interface LivePlayerDanSkillsetEvidence {
   plays: LivePlayerDanEvidencePlay[];
 }
 
+// The dan course whose clear set this headline. Present only when a verified
+// course pass sat above the averaged estimate, which is the whole point of the
+// rule: the player passed the exam, so the estimate is floored at what they
+// passed rather than at the mean of their skillsets.
+export interface LivePlayerDanCourseClear {
+  beatmapId: number;
+  courseName: string;
+  level: string;
+  accuracy: number;
+  /** Which formula `accuracy` is in; a lazer play displays on the ScoreV2 one,
+   *  so it is not always the number the player saw. */
+  currency: "stable" | "v2";
+  /** The bar it was judged against, so a near-clear can say it fell short. */
+  bar: number;
+  displayedAccuracy?: number | null;
+}
+
+/** The course run behind a floored headline, with the play attached as proof. */
+export interface LivePlayerDanCourseEvidence extends LivePlayerDanCourseClear {
+  beatmapsetId: number | null;
+  title: string;
+  artist: string;
+  version: string;
+  rawDan: number;
+  label: string;
+  beatmapStatus: string | null;
+  scoreId: number | null;
+  soloScoreId: number | null;
+  legacyScoreId: number | null;
+  mods: string[];
+  statistics: OsuScoreStatistics | null;
+  maxCombo: number | null;
+  totalScore: number | null;
+  rank: string | null;
+  playedAt: string | null;
+  hasReplay: boolean | null;
+  /** Lazer submissions and stable ones live in different score id spaces, so
+   *  this decides which osu! score URL resolves. */
+  isLazer: boolean | null;
+}
+
 export interface LivePlayerDanEvidence {
   side: "rc" | "ln";
   keyCount: number;
   quorum: number;
   minAccuracy: number;
-  dan: { rawDan: number; label: string; clears: number; beyondTable?: boolean } | null;
+  dan: { rawDan: number; label: string; clears: number; beyondTable?: boolean; courseClear?: LivePlayerDanCourseClear } | null;
   totalClears: number;
   clears: LivePlayerDanEvidencePlay[];
   skillsets: LivePlayerDanSkillsetEvidence[];
+  courseClear: LivePlayerDanCourseEvidence | null;
 }
 
 import type {

@@ -9,6 +9,7 @@ import {
   peekLiveMapSearchEntry,
   prefetchLiveMapSearchEntry,
   type LiveMapSearchEntry,
+  type LivePlayerDanCourseEvidence,
   type LivePlayerDanEvidence,
   type LivePlayerDanEvidencePlay,
 } from "../../lib/live-backend";
@@ -31,9 +32,13 @@ interface DanEvidenceModalProps {
   keyCount: number;
   side: "rc" | "ln";
   onClose: () => void;
+  /* Opening a score card belongs to the profile, which owns the card and knows
+     the viewer it is by; the window only hands the run up. A graveyard course
+     has no osu! page to link, so this is the only proof it can offer. */
+  onOpenCourseScore?: (course: LivePlayerDanCourseEvidence) => void;
 }
 
-export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: DanEvidenceModalProps) {
+export function DanEvidenceModal({ userId, username, keyCount, side, onClose, onOpenCourseScore }: DanEvidenceModalProps) {
   const { t, i18n } = useLingui();
   const [evidence, setEvidence] = useState<LivePlayerDanEvidence | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,6 +130,35 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
   // At the ladder's ceiling the level is a floor, not a reading (6K regular
   // ends at 9th), so the headline says "beyond" and drops the tier suffix.
   const beyond = dan?.beyondTable === true;
+  // Present only when a verified dan course clear sat above the averaged
+  // estimate. The badge never says so - the number is the number - but the
+  // window has to explain why the headline outruns the skill rows under it.
+  const courseClear = evidence?.courseClear ?? null;
+  const courseName = courseClear?.courseName ?? "";
+  // The formula rides on the number rather than in a sentence of its own: when
+  // the client showed something else (a lazer play displays ScoreV2, and the
+  // ladder is judged on stable), naming it is the whole explanation, and the
+  // score card behind the link shows the player's own number anyway. Both
+  // words are client/formula names, untranslated like the mod acronyms.
+  const courseAccuracy = courseClear
+    ? formatAccuracy(courseClear.accuracy) + (courseClear.displayedAccuracy != null ? (courseClear.currency === "v2" ? " ScoreV2" : " stable") : "")
+    : "";
+  const courseBar = courseClear ? formatAccuracy(courseClear.bar) : "";
+  const courseUnderBar = courseClear != null && courseClear.accuracy < courseClear.bar;
+  // osu! only keeps a score page for a map with a leaderboard. The loved
+  // courses have one; the graveyard ones open the site's own card instead.
+  //
+  // Only a real solo id gets linked. The 2-year archive kept one id column for
+  // years and its ids do not resolve: the id on the sample row 404s on osu! in
+  // both URL forms, and none of the 2,391 archived course rows carry a solo id
+  // at all. Guessing the form there buys a dead link, so anything without one
+  // opens the site's own card, which is built from data actually held.
+  const courseScoreUrl = (() => {
+    if (!courseClear || courseClear.soloScoreId == null) return null;
+    const status = courseClear.beatmapStatus;
+    if (status !== "loved" && status !== "ranked" && status !== "approved" && status !== "qualified") return null;
+    return `https://osu.ppy.sh/scores/${courseClear.soloScoreId}`;
+  })();
   const danLabel = dan ? (beyond ? danBareLabel(dan.label) : dan.label) : "";
   const image = dan ? getDanImageSrc(danBareLabel(danLabel), side === "ln" ? "ln" : undefined, keyCount) : null;
   const suffix = dan && !beyond ? danTierSuffix(dan.label) : "";
@@ -206,6 +240,33 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
                         The {keyCount}K {sideLabel} course ladder ends at {formatDan(danLabel)}, so the analyzer cannot rate
                         anything above it. The real level may be higher.
                       </Trans>
+                    </p>
+                  ) : null}
+                  {courseClear ? (
+                    <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-white/70 sm:text-xs">
+                      {courseUnderBar ? (
+                        <Trans>{courseAccuracy} on {courseName}, under its {courseBar}.</Trans>
+                      ) : (
+                        <Trans>Cleared {courseName} at {courseAccuracy}.</Trans>
+                      )}{' '}
+                      {courseScoreUrl ? (
+                        <a
+                          href={courseScoreUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-osu-pink-light underline underline-offset-2 transition-colors hover:text-white"
+                        >
+                          <Trans>See the score</Trans>
+                        </a>
+                      ) : onOpenCourseScore ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenCourseScore(courseClear)}
+                          className="text-osu-pink-light underline underline-offset-2 transition-colors hover:text-white"
+                        >
+                          <Trans>See the score</Trans>
+                        </button>
+                      ) : null}
                     </p>
                   ) : null}
                   {/* The rules used to be spelled out here in four sentences. They live

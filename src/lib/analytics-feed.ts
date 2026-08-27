@@ -366,6 +366,13 @@ function describeNamedAnalyticsEvent(
       return { kind: "visit", verb: "opened", subject: "the dan explainer", detail: null };
     case "dan_estimates_read":
       return { kind: "visit", verb: "read", subject: "the dan explainer", detail: "to the end" };
+    /* The two things on the page that are hidden until someone goes looking:
+       the folded ScoreV2 note, and the tooltip on the one-player top of the
+       4K ladder. */
+    case "dan_estimates_note":
+      return { kind: "visit", verb: "opened", subject: "the ScoreV2 note", detail: "on the dan explainer" };
+    case "dan_estimates_saragi":
+      return { kind: "visit", verb: "found", subject: "the saragi tooltip", detail: "on the dan explainer" };
     case "replay_view": {
       const map = replayMapName(row, replayMaps);
       return {

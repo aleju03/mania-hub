@@ -56,6 +56,19 @@ export interface MyDataSkillDanSide {
   // The estimate pins at the top of this keymode's dan ladder (6K regular
   // ends at 9th, 7K at stellium), so the label is a floor, not a reading.
   beyondTable?: boolean;
+  // Set when a verified clear of a real dan course raised this headline above
+  // the averaged estimate; names the course that did it.
+  courseClear?: MyDataSkillDanCourseClear;
+}
+
+export interface MyDataSkillDanCourseClear {
+  beatmapId: number;
+  courseName: string;
+  level: string;
+  accuracy: number;
+  currency: "stable" | "v2";
+  bar: number;
+  displayedAccuracy?: number | null;
 }
 
 // Share of the tracked population rating below the subject (0-100), from the

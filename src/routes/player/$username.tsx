@@ -3539,6 +3539,10 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   const [skillsError, setSkillsError] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<{ entry: SkillAxisEntry; keyCount: number } | null>(null);
   const [selectedDan, setSelectedDan] = useState<{ side: "rc" | "ln"; keyCount: number } | null>(null);
+  /* The run behind a course-floored dan, shown on the same card a tracked play
+     opens. Built here rather than in the window because the card belongs to the
+     profile and the play is by the profile's owner. */
+  const [courseScore, setCourseScore] = useState<OsuScore | null>(null);
   const liveConfigured = isLiveBackendConfigured();
 
   useEffect(() => {
@@ -3642,7 +3646,41 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           keyCount={selectedDan.keyCount}
           side={selectedDan.side}
           onClose={() => setSelectedDan(null)}
+          onOpenCourseScore={(course) => setCourseScore(buildTrackedPlayScore({
+            beatmapId: course.beatmapId,
+            keyCount: selectedDan.keyCount,
+            // A dan course is loved or graveyard, so the run is worth no pp;
+            // the card reads it as a tracked play, which is what it is.
+            pp: 0,
+            beatmapsetId: course.beatmapsetId,
+            title: course.title,
+            artist: course.artist,
+            version: course.version,
+            // The card is a score card, so it shows the accuracy the player's
+            // own client did. The ladder's number is the window's business.
+            accuracy: course.displayedAccuracy ?? course.accuracy,
+            rank: course.rank,
+            mods: course.mods,
+            playedAt: course.playedAt,
+            maxCombo: course.maxCombo,
+            hasReplay: course.hasReplay,
+            soloScoreId: course.soloScoreId,
+            totalScore: course.totalScore,
+            legacyScoreId: course.legacyScoreId,
+            statistics: course.statistics,
+            creator: null,
+            stars: null,
+            bpm: null,
+          }, {
+            id: user.id,
+            username: user.username,
+            avatar_url: user.avatar_url,
+            country_code: user.country_code,
+          }))}
         />
+      ) : null}
+      {courseScore ? (
+        <ScoreDetailModal score={courseScore} onClose={() => setCourseScore(null)} />
       ) : null}
     </>
   );

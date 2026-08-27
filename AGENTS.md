@@ -38,7 +38,7 @@ Minimum verification: for live backend changes run `npm test` and `npx tsc --noE
 
 ## Hard rules
 
-- Dan and LN dan classification must stay algorithmic: never add title/artist/creator/beatmap-id/beatmapset-id/filename or any chart-identity shortcut to force results.
+- Chart dan and LN dan classification must stay algorithmic: never add title/artist/creator/beatmap-id/beatmapset-id/filename or any chart-identity shortcut to force what a chart is rated. The one sanctioned identity list is `live-backend/src/features/dan-courses.ts` (the real dan courses), which lives at the player layer and rates no chart.
 - Authenticated osu! API access stays server-side; never put osu! credentials or direct authenticated calls in client components. New backend osu! calls go through the token-bucket client in `live-backend/src/osu/client.ts` (~45/min target, 60/min hard limit).
 - New SSE event types must be added to `LIVE_EVENT_NAMES` in `src/lib/live-backend.ts` or follower tabs never see them.
 - Live surfaces (home, tracker, top plays, snipes, maps) hard-require the live backend; use the typed fetchers + `openLiveEventSource()` in `src/lib/live-backend.ts` from client routes. Server functions are only for data the backend does not project.

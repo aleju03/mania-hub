@@ -9,10 +9,12 @@ import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, VIBRO_RECOMPUTE_META
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, persistSessionProfileSnapshot } from "./player-profiles.js";
-import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
+import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getModAcronyms, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
 import { danTableCeilingFor, danTableLabelFor } from "../dan/chart-classifier.js";
+import { loadDanCourseClears } from "./dan-courses.js";
+import type { DanCourseClear, DanCourseCreditOptions } from "./dan-courses.js";
 import { parseDan } from "../dan/dan-estimator/labels.js";
 import { parseLnDan } from "../dan/dan-estimator/ln.js";
 import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
@@ -327,13 +329,27 @@ const STABLE_EQUIVALENT_V2_BAR_OFFSET = 0.005;
  * it. chartDan picks the Normal Kyu band's lower bar on the 6K/7K rice ladder;
  * omit it for the ladder-level answer the evidence surface describes.
  */
-function danClearBarFor(side: "rc" | "ln", keyCount: number, chartDan?: number): DanClearBar {
+export function danClearBarFor(side: "rc" | "ln", keyCount: number, chartDan?: number): DanClearBar {
   if (keyCount === 4) {
     return side === "ln" ? { accuracy: 0.97, currency: "v2" } : { accuracy: 0.96, currency: "stable" };
   }
   if (side === "ln") return { accuracy: 0.95, currency: "stable" };
   const kyu = chartDan != null && chartDan < DAN_KYU_BAND_MAX_RAW_DAN;
   return { accuracy: kyu ? 0.95 : 0.96, currency: "stable" };
+}
+
+// The course registry judges a pass on the same bars an ordinary rated clear
+// is judged on, so a course and a chart cannot disagree about what 96% means.
+// Handed over rather than imported the other way round: the bars live here,
+// with the rest of the clear rules, and dan-courses.ts stays a registry.
+const DAN_COURSE_CREDIT_OPTIONS: DanCourseCreditOptions = {
+  barFor: danClearBarFor,
+  stableEquivalentV2BarOffset: STABLE_EQUIVALENT_V2_BAR_OFFSET,
+};
+
+/** Every registered dan course this player has a verified pass on. */
+export function loadPlayerDanCourseClears(db: Db, userId: number): Promise<DanCourseClear[]> {
+  return loadDanCourseClears(db, userId, DAN_COURSE_CREDIT_OPTIONS);
 }
 
 export interface PlayerSkillPatternRating {
@@ -374,6 +390,30 @@ export interface PlayerSkillDanSide extends PlayerSkillDanVerdict {
    * them).
    */
   skillsets?: Record<string, PlayerSkillDanVerdict>;
+  /**
+   * Set when a verified clear of a real dan course set this headline: the
+   * player passed the exam the ladder is made of, so the estimate is floored
+   * at what they passed rather than at the average of their skillsets. Names
+   * the course so the evidence surface can say why the number moved. Absent
+   * means the averaged estimate already stood at or above every course the
+   * player has cleared, which is the ordinary case.
+   */
+  courseClear?: {
+    beatmapId: number;
+    courseName: string;
+    level: string;
+    accuracy: number;
+    /**
+     * Which accuracy formula that number is in. A lazer play displays on the
+     * ScoreV2 formula, so the number the site judged is not the one the player
+     * saw; `displayedAccuracy` carries theirs when the two differ, and a
+     * surface that quotes one without the other invites "that is not my acc".
+     */
+    currency: "stable" | "v2";
+    /** The threshold it was judged against, so a near-clear can say so. */
+    bar: number;
+    displayedAccuracy?: number | null;
+  };
 }
 
 export interface PlayerSkillModeDan {
@@ -1010,13 +1050,14 @@ function computeModeDan(
   plays: StoredPlaySsr[],
   scoresByIdentity: Map<string, OscScore>,
   infoByBeatmap: Map<number, ChartSkillInfo>,
+  courseClears: DanCourseClear[] = [],
 ): PlayerSkillModeDan {
   const clears: Record<"rc" | "ln", DanClearEvidence[]> = { rc: [], ln: [] };
   for (const clear of collectDanClears(keyCount, plays, scoresByIdentity, infoByBeatmap)) {
     clears[clear.side].push(clear);
   }
   const forSide = (side: "rc" | "ln"): PlayerSkillDanSide | null =>
-    danSideFromClears(keyCount, side, clears[side], infoByBeatmap);
+    danSideFromClears(keyCount, side, clears[side], infoByBeatmap, courseClears);
   return { rc: forSide("rc"), ln: forSide("ln") };
 }
 
@@ -1106,9 +1147,10 @@ export function danSideFromClearsForTest(
   side: "rc" | "ln",
   plays: StoredPlaySsr[],
   infoByBeatmap: Map<number, ChartSkillInfo>,
+  courseClears: DanCourseClear[] = [],
 ): PlayerSkillDanSide | null {
   const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap).filter((clear) => clear.side === side);
-  return danSideFromClears(keyCount, side, clears, infoByBeatmap);
+  return danSideFromClears(keyCount, side, clears, infoByBeatmap, courseClears);
 }
 
 function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): PlayerSkillDanVerdict | null {
@@ -1200,10 +1242,12 @@ function danSideFromClears(
   side: "rc" | "ln",
   list: DanClearEvidence[],
   infoByBeatmap: Map<number, ChartSkillInfo>,
+  courseClears: DanCourseClear[] = [],
 ): PlayerSkillDanSide | null {
+  const best = bestDanCourseClear(courseClears, keyCount, side);
   const clearDans = list.map((clear) => clear.chartDan);
   const quorumDan = danFromClears(clearDans, side, keyCount);
-  if (!quorumDan) return null;
+  if (!quorumDan) return best ? danSideFromCourseClear(best, side, keyCount) : null;
   // Buckets are a subset of the side's clears, so a side under the quorum can
   // never have one: no verdict here means no skillset verdicts either.
   const skillsets: Record<string, PlayerSkillDanVerdict> = {};
@@ -1212,7 +1256,80 @@ function danSideFromClears(
     if (bucketDan) skillsets[id] = bucketDan;
   }
   const headline = averageSkillsetDans(skillsets, clearDans, side, keyCount) ?? quorumDan;
-  return Object.keys(skillsets).length > 0 ? { ...headline, skillsets } : headline;
+  const withCourse = applyDanCourseFloor(headline, best, side, keyCount, clearDans);
+  return Object.keys(skillsets).length > 0 ? { ...withCourse, skillsets } : withCourse;
+}
+
+/** The strongest credited course run on one side of one keymode's ladder. */
+function bestDanCourseClear(clears: DanCourseClear[], keyCount: number, side: "rc" | "ln"): DanCourseClear | null {
+  let best: DanCourseClear | null = null;
+  for (const clear of clears) {
+    if (clear.keyCount !== keyCount || clear.side !== side) continue;
+    if (!best || clear.rawDan > best.rawDan) best = clear;
+  }
+  return best;
+}
+
+/**
+ * A verified dan course clear is a floor under the headline, never a ceiling.
+ *
+ * The averaged estimate answers "what does the mix of charts you pass say you
+ * are"; a course answers the same question by examination, and a player who
+ * has passed the exam has already settled it for every level at or below it.
+ * So the clear can only raise the number. It cannot lower one: clearing
+ * epsilon proves epsilon is within reach, not that zeta is not - the estimate
+ * is still the better evidence above the clear.
+ *
+ * Skillsets are deliberately left alone. The override is a headline rule, and
+ * a course is a mix rather than one pattern, so it says nothing about which
+ * bucket carried it; the per-skillset dan columns keep measuring what they
+ * measure.
+ */
+function applyDanCourseFloor(
+  headline: PlayerSkillDanVerdict,
+  best: DanCourseClear | null,
+  side: "rc" | "ln",
+  keyCount: number,
+  clearDans: number[],
+): PlayerSkillDanSide {
+  if (!best || !(best.rawDan > headline.rawDan + DAN_ROUNDING_EPSILON)) return headline;
+  return {
+    ...danVerdictAt(best.rawDan, side, keyCount, clearDans),
+    courseClear: danCourseCredit(best),
+  };
+}
+
+/** A side that exists only because of a course clear: no quorum, no skillsets. */
+function danSideFromCourseClear(best: DanCourseClear, side: "rc" | "ln", keyCount: number): PlayerSkillDanSide {
+  return {
+    ...danVerdictAt(best.rawDan, side, keyCount, []),
+    courseClear: danCourseCredit(best),
+  };
+}
+
+// The stored half is the summary a badge tooltip needs. The play behind it
+// (ids, mods, judgements) is not stored: it would ride in every player's
+// modes_json to be read on the rare click, so the evidence endpoint re-reads it
+// on demand instead, the same way it re-derives everything else it shows.
+function danCourseCredit(best: DanCourseClear): NonNullable<PlayerSkillDanSide["courseClear"]> {
+  return {
+    beatmapId: best.beatmapId,
+    courseName: best.courseName,
+    level: best.level,
+    accuracy: best.accuracy,
+    currency: best.currency,
+    bar: best.bar,
+    ...(best.displayedAccuracy != null ? { displayedAccuracy: best.displayedAccuracy } : {}),
+  };
+}
+
+function danVerdictAt(rawDan: number, side: "rc" | "ln", keyCount: number, clearDans: number[]): PlayerSkillDanVerdict {
+  return {
+    rawDan,
+    label: danLabelFor(rawDan, side, keyCount),
+    clears: clearDans.filter((value) => value >= rawDan - DAN_ROUNDING_EPSILON).length,
+    ...(isBeyondDanTable(rawDan, side, keyCount) ? { beyondTable: true } : {}),
+  };
 }
 
 // A quorum clear that landed on the table's "> last tier" sentinel carries
@@ -1236,6 +1353,12 @@ function danLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): strin
   }
   const parsed = side === "ln" && keyCount === 4 ? parseLnDan(rawDan) : parseDan(rawDan);
   return `${parsed.label}${parsed.variant ?? ""}`;
+}
+
+/** Test seam over the ladder labeler, so the course registry can assert its
+ *  levels relabel to the names it declares them under. */
+export function danLabelForTest(rawDan: number, side: "rc" | "ln", keyCount: number): string {
+  return danLabelFor(rawDan, side, keyCount);
 }
 
 function parseOsuKeyCount(osuText: string): number | null {
@@ -1274,7 +1397,7 @@ export async function computePlayerSkillRatings(
   osu: Pick<OsuApiClient, "getBeatmapFile">,
   scores: OscScore[],
   previousPlays: StoredPlaySsr[],
-  options: { trackedScores?: OscScore[]; untrustedIdentities?: Set<string> } = {},
+  options: { trackedScores?: OscScore[]; untrustedIdentities?: Set<string>; courseClears?: DanCourseClear[] } = {},
 ): Promise<{ summary: StoredModesSummary; plays: StoredPlaySsr[]; untaggedBeatmapIds: number[] }> {
   const topPlays = scores.filter((score) => typeof score.pp === "number" && score.pp > 0);
   const trackedScores = options.trackedScores ?? [];
@@ -1464,7 +1587,7 @@ export async function computePlayerSkillRatings(
       analyzedPlays: list.length,
       ratings: aggregateModeRatings(list),
       patterns: aggregateModePatternRatings(list),
-      dan: computeModeDan(keyCount, list, scoresByIdentity, infoByBeatmap),
+      dan: computeModeDan(keyCount, list, scoresByIdentity, infoByBeatmap, options.courseClears),
     }))
     .sort((a, b) => b.analyzedPlays - a.analyzedPlays);
 
@@ -1533,6 +1656,7 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
     const result = await computePlayerSkillRatings(db, osu, snapshot.bestScores, previousPlays, {
       trackedScores: [...trackedScores, ...archived.scores],
       untrustedIdentities: archived.unknownModsIdentities,
+      courseClears: await loadPlayerDanCourseClears(db, userId),
     });
     // Personal accuracy curve model (A7), fitted from the same rated plays in
     // this job (never on a request path) and persisted beside the ratings.
@@ -1978,6 +2102,39 @@ export interface PlayerSkillDanSkillsetEvidence {
   plays: PlayerSkillDanEvidencePlay[];
 }
 
+/**
+ * The course run behind a floored headline, with enough of the play attached
+ * for the window to prove it: a loved course has an osu! score page, a
+ * graveyard one has none and opens the site's own details card instead.
+ */
+export interface PlayerSkillDanCourseEvidence {
+  beatmapId: number;
+  beatmapsetId: number | null;
+  courseName: string;
+  title: string;
+  artist: string;
+  version: string;
+  level: string;
+  rawDan: number;
+  label: string;
+  accuracy: number;
+  currency: "stable" | "v2";
+  bar: number;
+  displayedAccuracy: number | null;
+  beatmapStatus: string | null;
+  scoreId: number | null;
+  soloScoreId: number | null;
+  legacyScoreId: number | null;
+  mods: string[];
+  statistics: OsuScoreStatistics | null;
+  maxCombo: number | null;
+  totalScore: number | null;
+  rank: string | null;
+  playedAt: string | null;
+  hasReplay: boolean | null;
+  isLazer: boolean | null;
+}
+
 export interface PlayerSkillDanEvidence {
   side: "rc" | "ln";
   keyCount: number;
@@ -1987,6 +2144,8 @@ export interface PlayerSkillDanEvidence {
   totalClears: number;
   clears: PlayerSkillDanEvidencePlay[];
   skillsets: PlayerSkillDanSkillsetEvidence[];
+  /** Present only when a course clear set this side's headline. */
+  courseClear: PlayerSkillDanCourseEvidence | null;
 }
 
 const DAN_EVIDENCE_MAX_CLEARS = 20;
@@ -2165,7 +2324,8 @@ export async function getPlayerSkillDanEvidence(
       right.chartDan - left.chartDan
       || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
       || left.play.beatmapId - right.play.beatmapId);
-  const dan = danSideFromClears(keyCount, side, clears, infoByBeatmap);
+  const courseClears = await loadPlayerDanCourseClears(db, userId);
+  const dan = danSideFromClears(keyCount, side, clears, infoByBeatmap, courseClears);
   // Everything at or above the estimate "backs" it, matching the stored
   // verdict's clears count. Under the averaged headline that is a real subset
   // of the clears rather than the four that tie the quorum-th.
@@ -2181,7 +2341,9 @@ export async function getPlayerSkillDanEvidence(
   const bySkillset = groupDanClearsBySkillset(keyCount, side, clears, infoByBeatmap);
 
   const topClears = clears.slice(0, DAN_EVIDENCE_MAX_CLEARS);
+  const courseSource = dan?.courseClear ? bestDanCourseClear(courseClears, keyCount, side) : null;
   const evidenceBeatmapIds = [
+    ...(courseSource ? [courseSource.beatmapId] : []),
     ...topClears.map((clear) => clear.play.beatmapId),
     ...[...bySkillset.values()].flatMap((list) => list.slice(0, DAN_EVIDENCE_SKILLSET_PLAYS).map((clear) => clear.play.beatmapId)),
   ];
@@ -2217,6 +2379,43 @@ export async function getPlayerSkillDanEvidence(
     totalClears: clears.length,
     clears: topClears.map(toEvidencePlay),
     skillsets,
+    courseClear: courseSource ? toCourseEvidence(courseSource, side, keyCount, metadata) : null,
+  };
+}
+
+function toCourseEvidence(
+  clear: DanCourseClear,
+  side: "rc" | "ln",
+  keyCount: number,
+  metadata: Map<number, PlayerSkillPlayMetadata>,
+): PlayerSkillDanCourseEvidence {
+  const map = metadata.get(clear.beatmapId);
+  return {
+    beatmapId: clear.beatmapId,
+    beatmapsetId: map?.beatmapsetId ?? null,
+    courseName: clear.courseName,
+    title: map?.title ?? clear.courseName,
+    artist: map?.artist ?? "",
+    version: map?.version ?? "",
+    level: clear.level,
+    rawDan: clear.rawDan,
+    label: danLabelFor(clear.rawDan, side, keyCount),
+    accuracy: clear.accuracy,
+    currency: clear.currency,
+    bar: clear.bar,
+    displayedAccuracy: clear.displayedAccuracy,
+    beatmapStatus: clear.beatmapStatus,
+    scoreId: clear.play.scoreId,
+    soloScoreId: clear.play.soloScoreId,
+    legacyScoreId: clear.play.legacyScoreId,
+    mods: getModAcronyms(clear.play.mods, false),
+    statistics: clear.play.statistics ?? null,
+    maxCombo: clear.play.maxCombo,
+    totalScore: clear.play.totalScore,
+    rank: clear.play.rank,
+    playedAt: clear.play.playedAt,
+    hasReplay: clear.play.hasReplay,
+    isLazer: clear.play.isLazer,
   };
 }
 
@@ -2644,8 +2843,10 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // v2: the side headline became the mean of the skillset dans rather than the
 // quorum-th clear, so every stored verdict is stale and the sweep runs again.
-// It re-derives from plays_json without re-rating, so this costs no MinaCalc.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v2";
+// v3: a verified dan course clear now floors the headline, which no stored row
+// has ever been asked about. It re-derives from plays_json plus the two course
+// lookups without re-rating, so this costs no MinaCalc.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v3";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
@@ -2697,6 +2898,10 @@ export async function recomputePlayerSkillDanChunk(
   const infoByBeatmap = await loadChartSkillInfo(db, beatmapIds);
 
   for (const { userId, summary, plays, readAt } of parsed) {
+    // Course clears do not live in plays_json (that pool is deduped, capped
+    // and mod-blind on old archived rows), so the sweep reads them the same
+    // way the compute does. Two indexed point lookups per user, no MinaCalc.
+    const courseClears = await loadPlayerDanCourseClears(db, userId);
     // computeModeDan takes one keymode's plays, not the whole pool: the clear
     // rules read the chart's verdict rather than the play's keyCount, so an
     // unfiltered pool would credit every keymode with every other one's clears.
@@ -2708,7 +2913,7 @@ export async function recomputePlayerSkillDanChunk(
     }
     const modes = summary.modes.map((mode) => ({
       ...mode,
-      dan: computeModeDan(mode.keyCount, playsByKeyCount.get(mode.keyCount) ?? [], new Map(), infoByBeatmap),
+      dan: computeModeDan(mode.keyCount, playsByKeyCount.get(mode.keyCount) ?? [], new Map(), infoByBeatmap, courseClears),
     }));
     // The chart lookup above sits between the read and this write, and a
     // normal skill computation runs in another lane - so the row can have been

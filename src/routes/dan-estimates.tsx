@@ -14,7 +14,7 @@ import { track } from "../lib/analytics";
 
    Every number quoted here is either a constant from the estimator (the
    accuracy bars, the quorum, the LN line) or a measurement taken from the
-   site's own corpus in August 2026, which is why the counts are given as
+   production corpus in August 2026, which is why the counts are given as
    approximations and dated in the text. Chart names, ladder names and dan
    labels are identifiers and stay untranslated. */
 
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/dan-estimates")({
     return pageSeo({
       title: i18n._(msg`How dan levels are estimated`),
       description: i18n._(
-        msg`How Mania Tracker gives every osu!mania chart a dan level, and how it reads a player's dan off the charts they have passed.`,
+        msg`How every osu!mania chart gets a dan level, and how a player's dan is read from the charts they have passed.`,
       ),
       path: "/dan-estimates",
       origin: match.context.origin,
@@ -47,7 +47,7 @@ const LN_4K_LEVEL_NAMES: Record<string, string> = {
   "17": "Yeehee",
 };
 
-// Every ladder the site can badge, in the order its own community reads it.
+// Every supported ladder, in the order its community reads it.
 // The labels are the ones getDanImageSrc keys its artwork on, so a level with
 // no badge on disk simply does not render rather than 404ing.
 const LADDERS: Array<{ key: LadderKey; keyCount?: number; family?: "ln"; levels: string[]; levelNames?: Record<string, string> }> = [
@@ -95,7 +95,7 @@ const CHART_EXAMPLES: Array<{ id: number; map: string; ladder: LadderKey; dan: s
 // Measured against the production DB in August 2026 (read-only). The article
 // dates them rather than pretending they are live, so a drift of a few hundred
 // does not make the page wrong.
-// One bar per level of the ladder, counted by the label the site itself prints
+// One bar per level of the ladder, counted by the displayed label
 // (the tier suffix stripped), not by rounding the raw number: parseDan's bands
 // are not integers, so rounding invented a theta nobody holds. Measured against
 // the production DB in August 2026, read-only, in one pass so every number on
@@ -174,14 +174,42 @@ function DanEstimatesPage() {
           </h1>
           <p className="text-[15px] leading-7 text-osu-f1">
             <Trans>
-              Nothing on this site is a real dan clear. Nobody here has been checked against a dan
-              course. What the site does instead is give every chart a dan level of its own, look at the
-              charts you have already passed, and read a level off them. That is why every dan on the
-              site is written with a "~" in front of it and why the leaderboard calls itself a rough
-              ordering.
+              These estimates are not real dan clears. Nobody here has been checked against a dan
+              course. Instead, every chart gets a dan level of its own, and your level is read from the
+              charts you have already passed. That is why every estimated dan is written with a "~" in
+              front of it and why the leaderboard calls itself a rough ordering.
             </Trans>
           </p>
         </header>
+
+        {/* The first thing on the page, because it is the answer to the question
+            that brings most people here: why the estimate is lower than they
+            expect. Both halves are the same rule seen twice - the estimator can only
+            read plays it recorded, and it only records plays from the day
+            tracking started, in sessions it noticed. */}
+        <div className="space-y-2 border-l-2 border-osu-pink-light pl-4 text-[15px] font-bold leading-7 text-white">
+          <p>
+            <Trans>
+              Tracking only began on June 9, 2026. Anything you played before that date counts only if
+              it is still in your osu! top plays, and everything else from back then is invisible to the
+              estimate.
+            </Trans>
+          </p>
+          <p>
+            <Trans>
+              The same goes for any session where you never set a score on a ranked, qualified or loved
+              chart: tracking never notices you are playing, so nothing from that session is recorded
+              either.{' '}
+              <a
+                href="#what-the-number-is-not"
+                className="text-osu-pink-light underline underline-offset-2 transition-colors hover:text-white"
+              >
+                Why that is
+              </a>
+              . If your estimate reads low, that is usually the reason, and the only fix is to play more.
+            </Trans>
+          </p>
+        </div>
 
         <Section title={t`A quick reminder of what a dan is`}>
           <P>
@@ -197,8 +225,8 @@ function DanEstimatesPage() {
           <P>
             <Trans>
               Course charts are unranked, and a clear is checked by the people who run that ladder. None
-              of that comes back through the osu! API as a dan level, so the site cannot look yours up.
-              It can only look at your plays.
+              of that comes back through the osu! API as a dan level, so yours cannot be looked up. It
+              can only be inferred from your plays.
             </Trans>
           </P>
         </Section>
@@ -206,8 +234,9 @@ function DanEstimatesPage() {
         <Section title={t`Step 1: every chart gets its own dan level`}>
           <P>
             <Trans>
-              The site downloads the chart file, reads the notes, and runs the pattern through a rating
-              engine. Which engine depends on the keymode, because no single one is best at all of them:
+              The estimator downloads the chart file, reads the notes, and runs the pattern through a
+              rating engine. Which engine depends on the keymode, because no single one is best at all
+              of them:
             </Trans>
           </P>
           <ul className="space-y-2 pl-5 text-[15px] leading-7 text-osu-f1">
@@ -224,7 +253,7 @@ function DanEstimatesPage() {
             </Li>
             <Li>
               <Trans>
-                <B>4K LN</B> goes through that same analyser's LN table, with a small model of our own
+                <B>4K LN</B> goes through that same analyser's LN table, with a small supplementary model
                 filling in the easy charts that sit below where the table starts.
               </Trans>
             </Li>
@@ -327,18 +356,18 @@ function DanEstimatesPage() {
         <Section title={t`Step 3: which of your plays count`}>
           <P>
             <Trans>
-              The pool is your osu! top plays plus every play the site tracked for you, deduplicated
-              down to your best play on each chart at each speed. That tracked half only exists if you
-              are on your country's roster, which is its top 100 plus anyone who turned tracking on
-              themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out
-              everywhere, because the rating engines read a mash wall as enormous density and rate it
-              absurdly.
+              The pool is your osu! top plays plus everything recorded while you were tracked,
+              deduplicated down to your best play on each chart at each speed. That tracked half only
+              exists if you are on your country's roster, which is its top 100 plus anyone who turned
+              tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are
+              thrown out everywhere, because the rating engines read a mash wall as enormous density
+              and rate it absurdly.
             </Trans>
           </P>
           <P>
             <Trans>
               Out of that pool, a play counts as a clear if it passed at or above the accuracy the real
-              course asks for. Each ladder sets its own bar, so the site uses each ladder's:
+              course asks for. Each ladder sets its own bar:
             </Trans>
           </P>
           <Table
@@ -347,12 +376,11 @@ function DanEstimatesPage() {
           />
           <P>
             <Trans>
-              The site does not use the accuracy the game showed you. It works it out again from your
-              judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the
-              stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one
-              of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for
-              the same play, recomputing is what makes that play count, or not count, the same on either
-              client.
+              The accuracy shown by the game is not used. It is worked out again from your judgements,
+              the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula
+              and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K
+              regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same
+              play, recomputing is what makes that play count, or not count, the same on either client.
             </Trans>
           </P>
           <P>
@@ -360,12 +388,12 @@ function DanEstimatesPage() {
               Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x,
               at <ModPill mod="DT" /> or <ModPill mod="NC" /> (1.5x) and at <ModPill mod="HT" /> or{' '}
               <ModPill mod="DC" /> (0.75x) are all credited against the chart's dan at that exact rate,
-              which the site rates separately. Runengon [4K Hard] is a 4th dan chart at
+              with each speed rated separately. Runengon [4K Hard] is a 4th dan chart at
               1.0x and around 9th dan under <ModPill mod="DT" />, so a <ModPill mod="DT" /> pass on it
               is credited as 9th, not as 4th. ANiMA
               [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works
               in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its
-              normal level. Custom lazer rates like 1.15x do not count toward your dan. The site can
+              normal level. Custom lazer rates like 1.15x do not count toward your dan. The estimator can
               rate a chart at any speed on demand, and the map page does exactly that when you open a
               play set at one, but only 0.75x, 1.0x and 1.5x are stored, and the dan only reads stored
               ones.
@@ -395,7 +423,7 @@ function DanEstimatesPage() {
           <P>
             <Trans>
               6K and 7K cannot use those skillsets, because that engine does not rate Technical at all
-              and everything collapses onto Handstream. They use the site's own chart pattern tags
+              and everything collapses onto Handstream. They use pattern tags from the chart analysis
               instead, so a chart tagged both chordjack and tech backs both skills. On the LN side only
               7K gets a split, into general, tech, inverse and release, because those are the only LN
               subtypes the analyzer separates in any volume. The other LN ladders are read as one skill.
@@ -448,7 +476,7 @@ function DanEstimatesPage() {
           <P>
             <Trans>
               It used to be the 4th best pass across all your skills at once, and in practice that was
-              just whatever you specialise in. Measured across the site's 12,974 4K regular estimates,
+              just whatever you specialise in. Measured across 12,974 4K regular estimates,
               the old number sat a median of 0.14 levels above the player's single strongest skill, and
               84% of players were within half a level of theirs. It was measuring your best pattern and
               calling that your dan. A real course does not work that way: it makes you clear a mix in
@@ -475,7 +503,66 @@ function DanEstimatesPage() {
           </P>
         </Section>
 
-        <Section title={t`What the number is not`}>
+        <Section title={t`(extra) Step 7: clearing a real course overrides all of it`}>
+          <P>
+            <Trans>
+              If your recorded plays show that you passed a dan course, your estimate for that side{' '}
+              <B>cannot read below that course</B>, whatever your skills average to. Clear EXTRA-EPSILON
+              and you read as epsilon even if your skills average out to delta. The rest of this page
+              works a number out from your plays. A course hands you one directly, so it wins.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              It only ever raises the number. Clearing epsilon means you can do epsilon; whether zeta is
+              beyond you is still an open question, so if your skills already average higher, the
+              average stands. The skill rows underneath are untouched either way, which is why they can
+              read lower than the number above them. A course throws a mix at you, so it cannot tell you
+              which of your skills got you through it.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              Your accuracy sets the tier. On a ladder whose courses ask for 96%, a bare 96% pass on the
+              delta course reads as <B>delta</B>, 97.5% as <B>delta+</B>, and 98% and up as{' '}
+              <B>delta++</B>. Come up short and you still get something for it: 95% reads as{' '}
+              <B>delta-</B> and 94% as <B>delta--</B>. Below 94% you get nothing. Ladders that ask for a
+              different accuracy shift the whole scale with them.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              These are the packs checked, matched by beatmap. A pass has to be on one of these exact
+              difficulties. Clearing the same courses from a different upload is still a clear, but that
+              upload is not currently checked. More packs can be added.
+            </Trans>
+          </P>
+          <CourseList />
+          <P>
+            <Trans>
+              A few difficulties inside those packs are left out, because they sit below the first level
+              their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN
+              Phase I. None of this changes how a chart is rated either. The estimator never looks at
+              what a map is called or who made it; the list above exists at your end of the calculation,
+              not the chart's, and all it does is credit you with a course you actually passed.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              A run only counts if it was really the course. Easy, No Fail and Random disqualify it, and
+              so does anything that slows the chart down: Half Time, Daycore, or a custom rate under
+              1.0x. Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double
+              Time are all fine, because none of them make the course easier. A pass recorded before mod
+              data was stored cannot be checked, so it counts for nothing rather than being taken on
+              trust.{' '}
+              <strong className="text-[17px] font-bold text-white">
+                Clicking your dan badge shows the course that set your estimate, when one did.
+              </strong>
+            </Trans>
+          </P>
+        </Section>
+
+        <Section id="what-the-number-is-not" title={t`What the number is not`}>
           <P>
             <Trans>
               No ladder recognizes this number, and titles still only come from clearing a real course.
@@ -488,8 +575,8 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
-              It also only sees the plays the site has. Your osu! top plays are always included.
-              Anything below them is included only if the site tracks you, which happens if you are in
+              The estimate only sees the recorded pool. Your osu! top plays are always included. Anything
+              below them is included only while you are tracked, which happens if you are in
               your country's top 100 or if you turn tracking on yourself, and only from that day onward.
               A player who quit years ago is judged on their top 200 alone, so their estimate comes out
               low.
@@ -497,10 +584,10 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
-              Unranked plays are only recorded once the site knows you are playing, which it learns from
-              your first score on a ranked, qualified or loved chart. After that it checks your recent
-              plays every few minutes until you stop, and everything you play during that time counts,
-              including unranked charts.{' '}
+              Unranked plays are only recorded after tracking picks up your session from your first
+              score on a ranked, qualified or loved chart. It then checks your recent plays every few
+              minutes until you stop, and everything you play during that time counts, including
+              unranked charts.{' '}
               <strong className="text-[17px] font-bold text-white">
                 If you only play unranked charts, nothing is recorded until you set a score on a chart
                 with a leaderboard.
@@ -512,9 +599,9 @@ function DanEstimatesPage() {
         <Section title={t`What it looks like across everyone`}>
           <P>
             <Trans>
-              At the time of writing the site had skill ratings for 14,385 players on 4K, 4,119 on 7K
-              and 2,879 on 6K. Of the 4K players, 12,974 had enough qualifying passes for a regular dan
-              and 5,038 for an LN dan. This is where the 4K regular estimates landed:
+              At the time of writing there were skill ratings for 14,385 players on 4K, 4,119 on 7K and
+              2,879 on 6K. Of the 4K players, 12,974 had enough qualifying passes for a regular dan and
+              5,038 for an LN dan. This is where the 4K regular estimates landed:
             </Trans>
           </P>
           <DanDistribution rows={RICE_4K_POPULATION} />
@@ -545,7 +632,7 @@ function DanEstimatesPage() {
 }
 
 /* The same population as a share of the whole, which the bar chart cannot show:
-   bars answer "how many sit at each level", a pie answers "how much of the site
+   bars answer "how many sit at each level", a pie answers "how much of the population
    is each band", and the second question is the one people do in their head off
    the counts above.
 
@@ -736,9 +823,11 @@ function DanShareRing({ rows }: { rows: Array<{ level: string; players: number }
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+// A section only takes an id when something on the page links down to it, and
+// the scroll margin is there so the heading does not land under the sticky nav.
+function Section({ id, title, children }: { id?: string; title: string; children: ReactNode }) {
   return (
-    <section className="space-y-3">
+    <section id={id} className={`space-y-3${id ? " scroll-mt-20" : ""}`}>
       <h2 className="text-lg font-bold text-white sm:text-xl">{title}</h2>
       {children}
     </section>
@@ -747,6 +836,139 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function P({ children }: { children: ReactNode }) {
   return <p className="text-[15px] leading-7 text-osu-f1">{children}</p>;
+}
+
+// The registered dan courses, by pack. Kept beside the rule it explains rather
+// than fetched, because it is a list of six ladders that changes when somebody
+// edits the registry by hand - and when they do, both move together:
+// live-backend/src/features/dan-courses.ts is the source of truth for which
+// beatmaps count, and this is the reader-facing copy of the same six packs.
+// Pack names are the beatmapsets' own titles, so they stay untranslated.
+const COURSE_PACKS: Array<{ ladder: string; author: string; scoreV2Note?: true; packs: Array<{ name: string; setId: number }> }> = [
+  {
+    ladder: "4K regular",
+    author: "Thaumiel",
+    packs: [
+      { name: "Dan ~ REFORM ~ 1st Pack", setId: 1079991 },
+      { name: "2nd Pack", setId: 1079998 },
+      { name: "FINAL", setId: 1156299 },
+    ],
+  },
+  {
+    ladder: "4K LN",
+    author: "_underjoy, hypersovae, Lnlism",
+    // The one row that needs a caveat: its courses are written for a mod osu!
+    // will not file a score under unless you are on lazer.
+    scoreV2Note: true,
+    packs: [
+      { name: "4K LN Dan Courses v2 Level 1", setId: 891143 },
+      { name: "Level 2", setId: 891152 },
+      { name: "Level 3", setId: 891157 },
+      { name: "Extra Level", setId: 891164 },
+      { name: "FINAL", setId: 1116467 },
+      { name: "16th - Yokaze", setId: 2243057 },
+      { name: "17th - Yeehee", setId: 2340696 },
+    ],
+  },
+  {
+    ladder: "7K regular",
+    author: "Jinjin",
+    packs: [
+      { name: "Regular Dan Phase I", setId: 450069 },
+      { name: "Phase II", setId: 451788 },
+      { name: "Phase III", setId: 930218 },
+      { name: "Phase IV (Stellium)", setId: 1061136 },
+    ],
+  },
+  {
+    ladder: "7K LN",
+    author: "Jinjin",
+    packs: [
+      { name: "LN Dan Phase I", setId: 450649 },
+      { name: "Phase II", setId: 895138 },
+      { name: "Phase III", setId: 1220647 },
+      { name: "Phase IV (Stellium)", setId: 1061136 },
+    ],
+  },
+  {
+    ladder: "6K regular",
+    author: "Arkman",
+    packs: [
+      { name: "6K Regular Dan Course Part I", setId: 1118057 },
+      { name: "Part II", setId: 1702752 },
+      { name: "Part III", setId: 1836285 },
+    ],
+  },
+  {
+    ladder: "6K LN",
+    author: "[Crz]sunnyxxy",
+    packs: [
+      { name: "6K LN Dan Course Lower Band", setId: 1204287 },
+      { name: "Upper Band", setId: 1234351 },
+      { name: "Extra Band", setId: 1255809 },
+    ],
+  },
+];
+
+function CourseList() {
+  // Folded away rather than printed: it answers one ladder's objection, and
+  // the reader who has not hit that objection does not need the paragraph.
+  const [noteOpen, setNoteOpen] = useState(false);
+  /* Counted because the note is hidden by default: the number says whether
+     anyone finds the ScoreV2 answer at all, which is the case for printing it
+     instead. Only the opening counts, and only the first one of a visit, so
+     toggling it shut and back open does not read as more readers. */
+  const noteCounted = useRef(false);
+  const openNote = () => {
+    setNoteOpen((open) => {
+      if (!open && !noteCounted.current) {
+        noteCounted.current = true;
+        track("dan_estimates_note");
+      }
+      return !open;
+    });
+  };
+  return (
+    <ul className="space-y-2 text-[15px] leading-7 text-osu-f1">
+      {COURSE_PACKS.map((entry) => (
+        <li key={entry.ladder}>
+          <B>{entry.ladder}</B>
+          <span className="text-osu-f2"> &middot; {entry.author}</span>
+          {entry.scoreV2Note ? (
+            <>
+              <span className="text-osu-f2"> &middot; </span>
+              <button
+                type="button"
+                onClick={openNote}
+                className="text-osu-f2 underline underline-offset-2 transition-colors hover:text-white"
+              >
+                {noteOpen ? <Trans>hide the note</Trans> : <Trans>note on this</Trans>}
+              </button>
+            </>
+          ) : null}
+          <br />
+          {entry.packs.map((pack, index) => (
+            <span key={pack.setId + pack.name}>
+              {index > 0 ? <span className="text-osu-f2">, </span> : null}
+              <ExternalLink href={`https://osu.ppy.sh/beatmapsets/${pack.setId}#mania`}>{pack.name}</ExternalLink>
+            </span>
+          ))}
+          {entry.scoreV2Note && noteOpen ? (
+            <p className="mt-1 text-[14px] leading-6 text-osu-f2">
+              <Trans>
+                The 4K LN courses are meant to be played on ScoreV2. The problem is that osu!stable does
+                not submit ScoreV2 scores, and most people are on stable (I think). So you do not need to
+                play on ScoreV2 at all. Your ScoreV2 accuracy is worked out from your judgements. If a
+                score is old enough that even the judgements are gone, a stable score needs 97.5% instead
+                of 97%, because stable's accuracy is more generous and the same score reads about half a
+                percent higher on it.
+              </Trans>
+            </p>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function ExternalLink({ href, children }: { href: string; children: ReactNode }) {
@@ -815,6 +1037,28 @@ function DanDistribution({ rows }: { rows: Array<{ level: string; players: numbe
      the day a second player gets there. */
   const loneEta = (column: { key: string; players: number }) => column.key === "eta" && column.players === 1;
 
+  /* The joke only lands if the browser actually showed the tooltip, which it
+     does after about half a second of hover, so the dwell is the event rather
+     than the pointer entering. Once per visit, and hover-only on purpose: a
+     touch device never renders a title at all, so there is nothing there to
+     have found. */
+  const saragiTimer = useRef<number | null>(null);
+  const saragiCounted = useRef(false);
+  const clearSaragiTimer = () => {
+    if (saragiTimer.current === null) return;
+    window.clearTimeout(saragiTimer.current);
+    saragiTimer.current = null;
+  };
+  useEffect(() => clearSaragiTimer, []);
+  const startSaragiTimer = () => {
+    if (saragiCounted.current || saragiTimer.current !== null) return;
+    saragiTimer.current = window.setTimeout(() => {
+      saragiTimer.current = null;
+      saragiCounted.current = true;
+      track("dan_estimates_saragi");
+    }, 700);
+  };
+
   return (
     <motion.div layout className="flex items-end gap-[2px] py-2 sm:gap-1">
       <AnimatePresence initial={false} mode="popLayout">
@@ -831,6 +1075,8 @@ function DanDistribution({ rows }: { rows: Array<{ level: string; players: numbe
             <button
               type="button"
               onClick={column.group ? () => setExpanded((value) => !value) : undefined}
+              onMouseEnter={loneEta(column) ? startSaragiTimer : undefined}
+              onMouseLeave={loneEta(column) ? clearSaragiTimer : undefined}
               className={`flex w-full flex-col items-center gap-1 ${column.group ? "cursor-pointer" : "cursor-default"}`}
               title={loneEta(column) ? t`Yes, this is saragi` : `${column.key}: ${formatNumber(column.players)}${column.group ? ` · ${hint}` : ""}`}
             >

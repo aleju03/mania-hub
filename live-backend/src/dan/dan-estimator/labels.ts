@@ -94,6 +94,18 @@ export function srToRawDan(sr: number, family: DanPrimaryFamily, options: { cali
   return rawDanFromMeans(calibratedSr, DAN_MEANS[calibrationFamily]);
 }
 
+/**
+ * The inverse of parseDan's level naming: the level a bare 4K rice ladder
+ * label sits on ("10" -> 10, "epsilon" -> 15). Exported so the dan course
+ * registry can name a course by its community label and take the number from
+ * the same array parseDan prints it back from. Null for anything off the
+ * ladder; takes a bare label with no +/- variant.
+ */
+export function danLevelForLabel(label: string): number | null {
+  const index = DAN_LABELS.indexOf(label.trim().toLowerCase());
+  return index < 0 ? null : index + 1;
+}
+
 export function parseDan(rawDan: number) {
   const maxLevel = (MAX_SUPPORTED_DAN_INDEX >= 0 ? MAX_SUPPORTED_DAN_INDEX : DAN_LABELS.length - 1) + 1;
   const level = Math.min(maxLevel, Math.max(1, Math.round(rawDan)));

@@ -784,6 +784,80 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
+  it("floors the side estimate at a verified dan course clear without touching the skillsets", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      // Jack 12 / stamina 6 again: the averaged headline is 9, well under the
+      // epsilon (15) course this player has actually cleared.
+      const charts: Array<[number, number]> = [
+        [301, 12], [302, 12], [303, 12], [304, 12],
+        [305, 6], [306, 6], [307, 6], [308, 6],
+      ];
+      for (const [beatmapId, rawDan] of charts) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [], rc: { rawDan } }), new Date().toISOString()],
+        );
+      }
+      const { danSideFromClearsForTest, loadChartSkillInfo, danClearBarFor } = await import("../src/features/player-skills.js");
+      const { creditDanCoursePassesForTest } = await import("../src/features/dan-courses.js");
+      const info = await loadChartSkillInfo(db, charts.map(([beatmapId]) => beatmapId));
+      const values = (top: string, rating: number) => ({ Overall: rating, Stream: 1, [top]: rating });
+      const clearPlay = (beatmapId: number, top: string) => ({
+        identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
+        values: values(top, 25), patterns: [], accuracy: 0.98, stableAccuracy: 0.98,
+      });
+      const plays = [
+        ...[301, 302, 303, 304].map((id) => clearPlay(id, "Chordjack")),
+        ...[305, 306, 307, 308].map((id) => clearPlay(id, "Stamina")),
+      ];
+      const options = { barFor: danClearBarFor, stableEquivalentV2BarOffset: 0.005 };
+      // Dan ~ REFORM ~ EXTRA-EPSILON, a bare pass at the 96% bar.
+      const epsilon = creditDanCoursePassesForTest(
+        [{ beatmapId: 2259547, mods: [], displayed: 0.961, stable: 0.961 }],
+        options,
+      );
+
+      const plain = danSideFromClearsForTest(4, "rc", plays, info)!;
+      expect(plain.rawDan).toBe(9);
+      expect(plain.courseClear).toBeUndefined();
+
+      const floored = danSideFromClearsForTest(4, "rc", plays, info, epsilon)!;
+      expect(floored.label).toBe("epsilon");
+      expect(floored.courseClear?.beatmapId).toBe(2259547);
+      expect(floored.courseClear?.level).toBe("epsilon");
+      // The override is a headline rule; the skill rows still measure the mix.
+      expect(floored.skillsets).toEqual(plain.skillsets);
+
+      // A course under the averaged estimate changes nothing: a clear is a
+      // floor, never a ceiling.
+      const gamma = creditDanCoursePassesForTest(
+        [{ beatmapId: 2259503, mods: [], displayed: 0.99, stable: 0.99 }],
+        options,
+      );
+      expect(danSideFromClearsForTest(4, "rc", plays, info, gamma)).toEqual(plain);
+    });
+  });
+
+  it("rates a side that has no quorum at all from a course clear alone", async () => {
+    const { danSideFromClearsForTest, danClearBarFor } = await import("../src/features/player-skills.js");
+    const { creditDanCoursePassesForTest } = await import("../src/features/dan-courses.js");
+    const clears = creditDanCoursePassesForTest(
+      [{ beatmapId: 2259546, mods: [], displayed: 0.961, stable: 0.961 }],
+      { barFor: danClearBarFor, stableEquivalentV2BarOffset: 0.005 },
+    );
+    // No rated plays: the ordinary rule has nothing to say, and the course
+    // clear is the only evidence there is.
+    expect(danSideFromClearsForTest(4, "rc", [], new Map())).toBeNull();
+    const side = danSideFromClearsForTest(4, "rc", [], new Map(), clears)!;
+    expect(side.label).toBe("delta");
+    expect(side.skillsets).toBeUndefined();
+    expect(side.courseClear?.courseName).toContain("EXTRA-DELTA");
+  });
+
   it("keeps the quorum-th clear on a side whose keymode publishes no skillsets", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");

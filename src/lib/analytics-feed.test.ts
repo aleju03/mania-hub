@@ -110,6 +110,21 @@ describe("describeAnalyticsEvent", () => {
     );
   });
 
+  it("names the two hidden things on the dan explainer", () => {
+    expect(describeAnalyticsEvent(row({ event: "dan_estimates_note", path: "/dan-estimates" }))).toEqual({
+      kind: "visit",
+      verb: "opened",
+      subject: "the ScoreV2 note",
+      detail: "on the dan explainer",
+    });
+    expect(describeAnalyticsEvent(row({ event: "dan_estimates_saragi", path: "/dan-estimates" }))).toEqual({
+      kind: "visit",
+      verb: "found",
+      subject: "the saragi tooltip",
+      detail: "on the dan explainer",
+    });
+  });
+
   it("reads the collections page as a shelf or as a tab", () => {
     expect(
       describeAnalyticsEvent(row({ path: "/packs/collections", collectionsCollector: "manolo" })),

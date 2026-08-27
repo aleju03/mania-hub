@@ -5,6 +5,7 @@ import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../lib/my-data";
 import { danBareLabel } from "../../lib/dan-images";
+import { formatAccuracy } from "../../lib/format";
 import { DanLevelBadge } from "./DanLevelBadge";
 import {
   lnPlayShare,
@@ -98,7 +99,17 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
   // Non-4K LN sides label on the numbered/greek ladder backend-side (the 7K
   // LN dan series is named like the regular one), so every keymode shows its
   // LN chip.
-  const sides: Array<{ id: "rc" | "ln"; label: MessageDescriptor; side: { rawDan: number; label: string; clears: number; beyondTable?: boolean } | null }> = [
+  const sides: Array<{
+    id: "rc" | "ln";
+    label: MessageDescriptor;
+    side: {
+      rawDan: number;
+      label: string;
+      clears: number;
+      beyondTable?: boolean;
+      courseClear?: { courseName: string; accuracy: number };
+    } | null;
+  }> = [
     { id: "rc", label: msg`Regular`, side: dan.rc },
     { id: "ln", label: msg`LN`, side: dan.ln },
   ];
@@ -115,6 +126,13 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
         const sideLabel = i18n._(entry.label);
         const chip = formatDanChip(label);
         const clears = entry.side!.clears;
+        // A course clear can floor the estimate above every rated pass the
+        // player has, which leaves `clears` at 0 - true, and unreadable next
+        // to an 8th dan chip. When a course set the level, the tooltip names
+        // the course instead of counting passes that are not what backs it.
+        const courseClear = entry.side!.courseClear ?? null;
+        const courseName = courseClear?.courseName ?? "";
+        const courseAccuracy = courseClear ? formatAccuracy(courseClear.accuracy) : "";
         const body = (
           <>
             <span className="text-[10px] font-semibold uppercase tracking-wide text-osu-f1">{sideLabel}</span>
@@ -135,7 +153,11 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
            right behind it shows 151. Say what the number actually measures -
            passes at or above this level - and leave the total to the modal,
            which re-derives it. */
-        const title = beyond
+        const title = courseClear
+          ? onSelect
+            ? t`${sideLabel} dan estimate: ~${chip}, set by their clear of ${courseName} at ${courseAccuracy} · click for the clears behind it`
+            : t`${sideLabel} dan estimate: ~${chip}, set by their clear of ${courseName} at ${courseAccuracy}`
+          : beyond
           ? onSelect
             ? t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, with ${clears} passes at or above it (96%+ accuracy) · click for the clears behind it`
             : t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, with ${clears} passes at or above it (96%+ accuracy)`
