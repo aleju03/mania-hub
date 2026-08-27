@@ -2757,10 +2757,39 @@ export interface LivePackCommunityCollectionPage {
    placeholder resolves to nobody: the lookup searches the users
    projection and the frozen names for a literal match and 404s, which the
    shelf reads as "has not opened a pack". Those link by id, which always
-   resolves. */
+   resolves.
+
+   A numeric-only real username needs the explicit name marker. Without it the
+   shelf cannot distinguish osu! user `080106` from osu! id 80106 after URL
+   parsing turns both into the same run of digits. */
 export function packCollectorParam(collector: { userId: number; username: string }): string {
   const id = String(collector.userId);
-  return collector.username && collector.username !== `user ${id}` ? collector.username : id;
+  if (!collector.username || collector.username === `user ${id}`) return id;
+  return /^\d+$/.test(collector.username) ? `name:${collector.username}` : collector.username;
+}
+
+/* Turn the shareable route value back into the backend's deliberately
+   separate id/name parameters. Bare digits remain the legacy id form; only
+   links for numeric-only usernames carry the marker above. */
+export function parsePackCollectorParam(collector: string): { userId: number } | { username: string } {
+  if (collector.startsWith("name:")) return { username: collector.slice("name:".length) };
+  const userId = /^\d+$/.test(collector) ? Number(collector) : 0;
+  if (Number.isSafeInteger(userId) && userId > 0) return { userId };
+  return { username: collector };
+}
+
+/* Old shared links used bare digits for both meanings. Keep id first so those
+   links retain their old meaning, then try the exact username only when that
+   id has no collection. New numeric-name links never need the fallback. */
+export function packCollectorLookupSpecs(collector: string): Array<{ userId: number } | { username: string }> {
+  const primary = parsePackCollectorParam(collector);
+  return "userId" in primary ? [primary, { username: collector }] : [primary];
+}
+
+/* The marker disambiguates the request, not the text shown in the page
+   header, empty state or analytics. */
+export function packCollectorLabel(collector: string): string {
+  return collector.startsWith("name:") ? collector.slice("name:".length) : collector;
 }
 
 /* One collector's chosen cards, as the showcase wall and their own page

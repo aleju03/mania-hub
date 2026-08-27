@@ -22,6 +22,7 @@ import {
   fetchLivePackRecentPulls,
   isLiveBackendConfigured,
   openLiveEventSource,
+  packCollectorLabel,
   type LivePackCommunityStats,
   type LivePackPullFeedEntry,
 } from "../lib/live-backend";
@@ -137,7 +138,7 @@ function CollectionsPage() {
     <div ref={scrollRestoreRef} className="flex min-h-screen flex-col">
       <PageHeader
         iconSrc="/images/icons/packs.svg"
-        title={collector ? t`${collector}'s collection` : t`Collections`}
+        title={collector ? t`${packCollectorLabel(collector)}'s collection` : t`Collections`}
       />
       {!collector && (
         <PageTabs

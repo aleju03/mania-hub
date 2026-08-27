@@ -12,6 +12,8 @@ import {
   fetchLivePackCollector,
   fetchLivePackCollectorCards,
   LiveBackendRequestError,
+  packCollectorLabel,
+  packCollectorLookupSpecs,
   type LivePackCollectorProfile,
   type LivePackCommunityCollectionPage,
 } from "#/lib/live-backend";
@@ -328,8 +330,7 @@ export function CollectorShelf({ collector, tab }: {
      display name, so typing a five-letter player name undebounced was five
      of them. */
   const debounced = useDebounced(query, 250);
-
-  const asUserId = /^\d+$/.test(collector) ? Number(collector) : null;
+  const collectorLabel = packCollectorLabel(collector);
 
   useEffect(() => {
     let cancelled = false;
@@ -337,7 +338,22 @@ export function CollectorShelf({ collector, tab }: {
     setMissing(false);
     setFailed(false);
     setPage(0);
-    fetchLivePackCollector(asUserId ? { userId: asUserId } : { username: collector })
+    /* A bare numeric link predating the explicit name marker is ambiguous.
+       Preserve its old id meaning first, then try the exact username if that
+       id has no shelf. */
+    const loadProfile = async () => {
+      let missingError: unknown = null;
+      for (const spec of packCollectorLookupSpecs(collector)) {
+        try {
+          return await fetchLivePackCollector(spec);
+        } catch (error: unknown) {
+          if (!(error instanceof LiveBackendRequestError) || error.status !== 404) throw error;
+          missingError = error;
+        }
+      }
+      throw missingError;
+    };
+    loadProfile()
       .then((next) => {
         if (!cancelled) setProfile(next);
       })
@@ -351,7 +367,7 @@ export function CollectorShelf({ collector, tab }: {
     return () => {
       cancelled = true;
     };
-  }, [collector, asUserId]);
+  }, [collector]);
 
   /* A filter change starts over at the first page. Done while rendering
      rather than in an effect because an effect leaves one commit where the
@@ -438,7 +454,7 @@ export function CollectorShelf({ collector, tab }: {
     track(
       "packs_collections_shelf",
       collectionsShelfProperties({
-        collector: profile?.collector.username ?? collector,
+        collector: profile?.collector.username ?? collectorLabel,
         tierLabel: TIER_FILTERS.find((filter) => filter.id === tier)?.label ?? null,
         query: debounced,
         page,
@@ -453,7 +469,7 @@ export function CollectorShelf({ collector, tab }: {
     return (
       <div className="py-20 text-center">
         <div className="text-[13px] text-osu-l2">
-          <Trans><span className="font-bold text-white">{collector}</span> has not opened a pack.</Trans>
+          <Trans><span className="font-bold text-white">{collectorLabel}</span> has not opened a pack.</Trans>
         </div>
         <BackLink tab={tab} />
       </div>
