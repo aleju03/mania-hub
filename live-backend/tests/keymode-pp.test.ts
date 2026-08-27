@@ -163,6 +163,36 @@ describe("getPlayerKeymodePpTail", () => {
     expect(tail.unknownKeyCount).toBe(0);
   });
 
+  it("buckets a key-mod play at the keymode the mod forced, not the map's", async () => {
+    const db = await makeDb();
+    // The mania view of a std map: `maps_beatmaps` stores it as mania with the
+    // key count the convert defaults to, and the 4K mod makes the play 4K.
+    await addManiaBeatmap(db, 70, 7);
+    await addManiaBeatmap(db, 71, 7);
+    await addPlay(db, { userId: 7, beatmapId: 70, pp: 229, mods: ["NC", "4K", "CL"] });
+    await addPlay(db, { userId: 7, beatmapId: 71, pp: 300, mods: ["NC"] });
+
+    const tail = await getPlayerKeymodePpTail(db, 7);
+
+    expect(tail.plays).toMatchObject([
+      { beatmapId: 70, keyCount: 4, pp: 229, mods: ["NC", "4K"] },
+      // No key mod, so the map's own key count still decides.
+      { beatmapId: 71, keyCount: 7, pp: 300 },
+    ]);
+    expect(tail.unknownKeyCount).toBe(0);
+  });
+
+  it("resolves a key count from the mod even when no mania source knows the map", async () => {
+    const db = await makeDb();
+    await addPlay(db, { userId: 8, beatmapId: 80, pp: 150, mods: ["7K"] });
+    await addPlay(db, { userId: 8, beatmapId: 81, pp: 140 });
+
+    const tail = await getPlayerKeymodePpTail(db, 8);
+
+    expect(tail.plays).toMatchObject([{ beatmapId: 80, keyCount: 7, pp: 150 }]);
+    expect(tail.unknownKeyCount).toBe(1);
+  });
+
   it("caps each keymode at its own limit, keeping the highest pp", async () => {
     const db = await makeDb();
     for (let i = 0; i < 5; i++) {
@@ -322,6 +352,32 @@ describe("getPlayerKeymodePpKeyCounts", () => {
     await addPlay(db, { userId: 12, beatmapId: 999, pp: 500 });
 
     expect(await getPlayerKeymodePpKeyCounts(db, 12)).toMatchObject({ tracked: true, keyCounts: [4] });
+  });
+
+  it("names the keymode a key mod forced, not the map's", async () => {
+    const db = await makeDb();
+    await addManiaBeatmap(db, 121, 7);
+    await addPlay(db, { userId: 13, beatmapId: 121, pp: 229, mods: ["4K"] });
+
+    const keys = await getPlayerKeymodePpKeyCounts(db, 13);
+    const tailKeyCounts = [...new Set((await getPlayerKeymodePpTail(db, 13)).plays.map((play) => play.keyCount))];
+
+    expect(keys.keyCounts).toEqual([4]);
+    expect(keys.keyCounts).toEqual(tailKeyCounts);
+  });
+
+  it("reads the key mod off the same row the tail quotes", async () => {
+    const db = await makeDb();
+    await addManiaBeatmap(db, 131, 7);
+    // Two days on one map: the better play used the mod, so 4K is the answer.
+    await addPlay(db, { userId: 14, beatmapId: 131, pp: 90, day: "2026-06-01" });
+    await addPlay(db, { userId: 14, beatmapId: 131, pp: 240, day: "2026-07-01", mods: ["4K"] });
+
+    const keys = await getPlayerKeymodePpKeyCounts(db, 14);
+    const tailKeyCounts = [...new Set((await getPlayerKeymodePpTail(db, 14)).plays.map((play) => play.keyCount))];
+
+    expect(keys.keyCounts).toEqual([4]);
+    expect(keys.keyCounts).toEqual(tailKeyCounts);
   });
 
   it("reads an untracked player as untracked with no keymodes", async () => {

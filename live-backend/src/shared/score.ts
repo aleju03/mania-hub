@@ -19,6 +19,33 @@ export function getModAcronyms(mods: OsuMod[] | undefined, excludeCl = true): st
     .filter((acronym) => acronym && (!excludeCl || acronym !== "CL"));
 }
 
+/* osu! only offers the xK key mods on converts, so a play carrying one was
+   played at that key count whatever the beatmap's own cs says: the mania
+   convert of a std map can default to 7K and still be a 4K play under the 4K
+   mod, which is the variant osu! files its pp under. Mirrors
+   `getManiaKeyModCount` in src/lib/score.ts on the frontend. */
+const MANIA_KEY_MOD_COUNTS: Record<string, number> = {
+  "1K": 1,
+  "2K": 2,
+  "3K": 3,
+  "4K": 4,
+  "5K": 5,
+  "6K": 6,
+  "7K": 7,
+  "8K": 8,
+  "9K": 9,
+  "10K": 10,
+};
+
+/** The key count a score's mods force, or null when it carries no key mod. */
+export function getManiaKeyModCount(mods: OsuMod[] | undefined): number | null {
+  for (const acronym of getModAcronyms(mods, false)) {
+    const keyCount = MANIA_KEY_MOD_COUNTS[acronym.toUpperCase()];
+    if (keyCount != null) return keyCount;
+  }
+  return null;
+}
+
 function isLegacySubmittedScore(score: ScoreLike): boolean {
   if (score.type != null && score.type !== "solo_score") return true;
   return score.legacy_score_id != null || !!(score.legacy_total_score && score.legacy_total_score > 0);

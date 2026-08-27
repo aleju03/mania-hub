@@ -13,14 +13,18 @@
  * instead of sharing one 200-play budget with every other keymode.
  *
  * Two things this deliberately does not do:
- * - No converts. osu! grows its keymode statistics from natively-mania maps
- *   only, and both key-count sources here are mania-only tables, so a convert
- *   has no row to join and drops out on its own.
+ * - No guessing at a convert's default key count. `maps_beatmaps` has no
+ *   convert column and does store the mania view of a std map (cs 7 for a
+ *   convert osu! defaults to 7K), so converts do reach this. What resolves
+ *   them is the key mod: osu! only offers xK on converts, so a play carrying
+ *   one is that many keys regardless of cs, and that is the variant osu!
+ *   counts its pp in. A convert played without a key mod still buckets on its
+ *   default cs.
  * - No guessing at a key count. A map neither source knows is skipped rather
  *   than bucketed somewhere, which keeps every total a floor.
  */
 import { exec, parseJson, type Db } from "../db.js";
-import { getModAcronyms, nowIso } from "../shared/score.js";
+import { getManiaKeyModCount, getModAcronyms, nowIso } from "../shared/score.js";
 import type { OsuMod, OsuScoreStatistics } from "../shared/types.js";
 
 /** One tracked play, resolved to its keymode and carrying enough to list it
@@ -189,8 +193,12 @@ export async function getPlayerKeymodePpTail(
   const byKeyCount = new Map<number, KeymodePpPlay[]>();
   let unknownKeyCount = 0;
   for (const row of rows) {
+    /* The key mod wins over both key-count sources: a 4K-mod play on a map
+       whose convert defaults to 7K is a 4K play, and osu! files it under 4K. */
+    const parsedMods = parseJson<OsuMod[]>(row.mods_json, []);
     const rawKeyCount = Number(row.key_count);
-    const keyCount = Number.isFinite(rawKeyCount) && rawKeyCount > 0 ? Math.round(rawKeyCount) : null;
+    const mapKeyCount = Number.isFinite(rawKeyCount) && rawKeyCount > 0 ? Math.round(rawKeyCount) : null;
+    const keyCount = getManiaKeyModCount(parsedMods) ?? mapKeyCount;
     const pp = Number(row.pp);
     const beatmapId = Number(row.beatmap_id);
     if (!Number.isFinite(pp) || pp <= 0 || !Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
@@ -215,7 +223,7 @@ export async function getPlayerKeymodePpTail(
       version: row.version == null ? null : String(row.version),
       accuracy: accuracy != null && Number.isFinite(accuracy) ? accuracy : null,
       rank: row.rank == null ? null : String(row.rank),
-      mods: getModAcronyms(parseJson<OsuMod[]>(row.mods_json, [])),
+      mods: getModAcronyms(parsedMods),
       playedAt: row.played_at == null ? null : String(row.played_at),
       maxCombo: row.max_combo == null ? null : Number(row.max_combo),
       hasReplay: row.has_replay == null ? null : Number(row.has_replay) === 1,
@@ -263,25 +271,33 @@ export async function getPlayerKeymodePpKeyCounts(db: Db, userId: number): Promi
   if (!Number.isInteger(userId) || userId <= 0) {
     return { userId, tracked: false, keyCounts: [], generatedAt };
   }
-  /* No row_number here: a map's key count is the same on every day it was
-     played, so the best-row tiebreak the tail needs does not apply. Unknown
-     key counts come back as one null row, which is what tells this a tracked
-     player with nothing resolvable apart from an untracked one. */
+  /* A map's own key count is the same on every day it was played, but the key
+     mod that can override it belongs to one row, so this has to read the same
+     row the tail quotes: the row_number over activityMapBestRowOrder, as
+     there. Unknown key counts come back as null, which is what tells this a
+     tracked player with nothing resolvable apart from an untracked one. */
   const rows = (await exec(
     db,
-    `select distinct coalesce(m.cs, s.key_count) as key_count
-     from player_activity_maps a
+    `with ranked as (
+       select a.*, row_number() over (partition by a.beatmap_id order by ${activityMapBestRowOrder("a")}) as rn
+       from player_activity_maps a
+       where a.user_id = ? and a.best_pp > 0
+     )
+     select distinct a.best_mods_json as mods_json, coalesce(m.cs, s.key_count) as key_count
+     from ranked a
      left join maps_beatmaps m on m.beatmap_id = a.beatmap_id
      left join map_search_index s on s.beatmap_id = a.beatmap_id
-     where a.user_id = ? and a.best_pp > 0`,
+     where a.rn = 1`,
     [userId],
   )).rows;
 
   const keyCounts = new Set<number>();
   for (const row of rows) {
     const raw = Number(row.key_count);
-    if (!Number.isFinite(raw) || raw <= 0) continue;
-    keyCounts.add(Math.round(raw));
+    const mapKeyCount = Number.isFinite(raw) && raw > 0 ? Math.round(raw) : null;
+    const keyCount = getManiaKeyModCount(parseJson<OsuMod[]>(row.mods_json, [])) ?? mapKeyCount;
+    if (keyCount === null) continue;
+    keyCounts.add(keyCount);
   }
   return {
     userId,
