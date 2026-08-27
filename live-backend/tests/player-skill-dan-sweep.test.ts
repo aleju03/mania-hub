@@ -82,6 +82,43 @@ describe("recomputePlayerSkillDanChunk", () => {
     db.close();
   });
 
+  it("stores a per-skillset verdict beside the side's own", async () => {
+    const db = await makeDb();
+    for (const beatmapId of [301, 302, 303, 304]) await seedChart(db, beatmapId, 8);
+    for (const beatmapId of [321, 322, 323, 324]) await seedChart(db, beatmapId, 5);
+    await exec(
+      db,
+      `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+       values (?, ?, 'ready', json(?), json(?), ?, ?)`,
+      [
+        41,
+        PLAYER_SKILLS_VERSION,
+        json({ modes: [{ keyCount: 4, dan: STALE_DAN }] }),
+        json({
+          plays: [
+            // Four jack clears on 8-dan charts and four stamina clears on
+            // 5-dan ones: the side's dan is 8, and only the jack column is.
+            ...[301, 302, 303, 304].map((id) => ({ ...barePass(id), values: { Overall: 22, JackSpeed: 25 } })),
+            ...[321, 322, 323, 324].map((id) => ({ ...barePass(id), values: { Overall: 20, Stamina: 23 } })),
+          ],
+        }),
+        "2026-08-20T00:00:00.000Z",
+        "2026-08-20T00:00:00.000Z",
+      ],
+    );
+
+    await recomputePlayerSkillDanChunk(db, 0);
+    const row = (await exec(db, "select modes_json from player_skill_ratings where user_id = 41", [])).rows[0];
+    const summary = parseJson<{ modes: Array<{ dan: { rc: { rawDan: number; skillsets?: Record<string, { rawDan: number }> } | null } }> }>(String(row.modes_json ?? ""), { modes: [] });
+    const dan = summary.modes[0].dan.rc!;
+    expect(dan.rawDan).toBe(8);
+    expect(dan.skillsets?.jack.rawDan).toBe(8);
+    expect(dan.skillsets?.stamina.rawDan).toBe(5);
+    // A bucket under the quorum has no verdict rather than a thin one.
+    expect(dan.skillsets?.tech).toBeUndefined();
+    db.close();
+  });
+
   it("keeps each keymode's dan on its own plays", async () => {
     const db = await makeDb();
     for (const beatmapId of [301, 302, 303, 304]) await seedChart(db, beatmapId, 8);

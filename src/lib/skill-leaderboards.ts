@@ -21,6 +21,11 @@ export const DEFAULT_LEADERBOARD_TAB: LeaderboardTab = "pp";
 export const DEFAULT_LEADERBOARD_AXIS = "Overall";
 export const DEFAULT_LEADERBOARD_KEYS: LeaderboardKeyCount = 4;
 export const DEFAULT_DAN_SIDE: DanSide = "rc";
+// The dan board's "every clear" column, and what an unset skillset means. The
+// named columns are the dan-evidence buckets (4K rice: jack/tech/speed/stamina,
+// 6K and 7K rice: jack/tech/speed/stream, 7K LN: its four subtypes), and which
+// ones exist is the backend's call - the picker renders the list it published.
+export const DEFAULT_DAN_SKILLSET = "overall";
 
 export function parseLeaderboardTab(value: unknown): LeaderboardTab {
   return value === "skills" || value === "dan" ? value : DEFAULT_LEADERBOARD_TAB;
@@ -35,6 +40,14 @@ export function parseLeaderboardKeys(value: unknown): LeaderboardKeyCount {
 
 export function parseDanSide(value: unknown): DanSide {
   return value === "ln" ? "ln" : DEFAULT_DAN_SIDE;
+}
+
+/* Bounded here for the same reason the axis is: the backend whitelists the
+   skillset per keymode and side, but a garbage value should not reach a fetch. */
+export function parseDanSkillset(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const skillset = value.trim();
+  return /^[a-z]{1,24}$/.test(skillset) ? skillset : undefined;
 }
 
 /* The axis travels in the URL, so it is bounded here rather than trusted: the
@@ -99,6 +112,12 @@ export interface SkillLeaderboardSnapshot extends LeaderboardSnapshotBase {
 
 export interface DanLeaderboardSnapshot extends LeaderboardSnapshotBase {
   side: DanSide;
+  // The column the rows came from: DEFAULT_DAN_SKILLSET, or a skillset bucket
+  // id, in which case every rawDan is that bucket's dan.
+  skillset: string;
   ranking: DanLeaderboardEntry[];
   sides: Array<{ side: DanSide; players: number }>;
+  // Columns with a population in this scope, in the backend's publication
+  // order; the picker is this list, never a local copy of it.
+  skillsets: Array<{ skillset: string; players: number }>;
 }

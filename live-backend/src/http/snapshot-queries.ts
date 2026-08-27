@@ -1,6 +1,6 @@
 import type { FarmHelperKeyMode, FarmHelperView } from "../features/farm-helper.js";
 import type { GlobalRankingsSort } from "../features/global-rankings.js";
-import { isLeaderboardAxis, isSkillLeaderboardKeyCount, SKILL_LEADERBOARD_MAX_PAGE_SIZE, type DanSide } from "../features/skill-leaderboards.js";
+import { DAN_LEADERBOARD_DEFAULT_SKILLSET, isLeaderboardAxis, isSkillLeaderboardKeyCount, SKILL_LEADERBOARD_MAX_PAGE_SIZE, type DanSide } from "../features/skill-leaderboards.js";
 import { MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsRandomDrawQuery } from "../features/maps.js";
 import type { MyDataTopPlaysQuery, MyDataTrackedFeedQuery } from "../features/my-data.js";
@@ -231,12 +231,17 @@ export function parseSkillLeaderboardQuery(params: URLSearchParams): {
 export function parseDanLeaderboardQuery(params: URLSearchParams): {
   keyCount: number;
   side: DanSide;
+  skillset: string;
   page: number;
   pageSize: number;
 } {
+  const skillset = (params.get("skillset") ?? "").trim();
   return {
     keyCount: clampInteger(params.get("keys"), 0, 20, 4),
     side: params.get("side") === "ln" ? "ln" : "rc",
+    // Whitelisted against the keymode/side by the board itself; this only keeps
+    // a junk string out of a cache key.
+    skillset: /^[a-z]{1,24}$/.test(skillset) ? skillset : DAN_LEADERBOARD_DEFAULT_SKILLSET,
     page: clampInteger(params.get("page"), 1, 2_000, 1),
     pageSize: clampInteger(params.get("pageSize") ?? params.get("limit"), 1, SKILL_LEADERBOARD_MAX_PAGE_SIZE, SKILL_LEADERBOARD_MAX_PAGE_SIZE),
   };

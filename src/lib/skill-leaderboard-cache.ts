@@ -18,9 +18,10 @@ import type { DanLeaderboardSnapshot, DanSide, SkillLeaderboardSnapshot } from "
 // The backend rebuilds its board every 5 minutes; asking again inside that
 // window can only return the identical payload (its own max-age says the same).
 const SNAPSHOT_TTL_MS = 5 * 60_000;
-// One scope+keymode holds up to ~10 axes plus 2 dan sides; this covers a few
-// scopes of browsing and nothing like a session history.
-const MAX_ENTRIES = 40;
+// One scope+keymode holds up to ~10 axes plus 2 dan sides with up to 5 skillset
+// columns each; this covers a few scopes of browsing and nothing like a session
+// history.
+const MAX_ENTRIES = 60;
 
 // Browser-only, and not a soft preference: one Node process serves every SSR
 // request, so a module-level map filled during SSR would hand one visitor
@@ -97,6 +98,7 @@ export interface DanBoardRequest {
   country: string;
   keys: number;
   side: DanSide;
+  skillset: string;
   page: number;
 }
 
@@ -105,7 +107,7 @@ function skillKey(request: SkillBoardRequest): string {
 }
 
 function danKey(request: DanBoardRequest): string {
-  return `dan ${request.country} ${request.keys} ${request.side} ${request.page}`;
+  return `dan ${request.country} ${request.keys} ${request.side} ${request.skillset} ${request.page}`;
 }
 
 /** A settled, still-fresh board, or null. Never triggers a request. */

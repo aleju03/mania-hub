@@ -36,7 +36,10 @@ interface SeedPlayer {
   analyzedPlays: number;
   ratings?: Record<string, number>;
   patterns?: Array<{ id: string; rating: number; plays: number }>;
-  dan?: { rc?: { rawDan: number; label: string; clears: number; beyondTable?: boolean }; ln?: { rawDan: number; label: string; clears: number } };
+  dan?: {
+    rc?: { rawDan: number; label: string; clears: number; beyondTable?: boolean; skillsets?: Record<string, { rawDan: number; label: string; clears: number }> };
+    ln?: { rawDan: number; label: string; clears: number };
+  };
 }
 
 async function seed(db: TestDb, players: SeedPlayer[]): Promise<void> {
@@ -363,6 +366,46 @@ describe("dan leaderboard", () => {
       // A player with no dan side is simply absent, not a zero row.
       expect(board.ranking.some((entry) => entry.user.username === "nodan")).toBe(false);
       expect(board.ranking[2].beyondTable).toBeUndefined();
+    });
+  });
+
+  it("ranks a skillset column off the stored bucket verdicts", async () => {
+    await withDb(async (db) => {
+      await seed(db, [
+        // "mid" is the weaker player overall but the stronger jack player, so a
+        // skillset column that merely re-sorted the side's dan would not move.
+        { userId: 41, username: "top", country: "AR", keyCount: 4, analyzedPlays: 200, dan: { rc: { rawDan: 17.51, label: "eta", clears: 9, skillsets: { jack: { rawDan: 14, label: "delta", clears: 4 }, tech: { rawDan: 17, label: "eta", clears: 5 } } } } },
+        { userId: 42, username: "mid", country: "KR", keyCount: 4, analyzedPlays: 200, dan: { rc: { rawDan: 16.96, label: "eta", clears: 4, skillsets: { jack: { rawDan: 16, label: "zeta", clears: 4 } } } } },
+        // No skillsets at all: a row written before the verdicts shipped, and
+        // it must stay on the every-clear board rather than vanish from it.
+        { userId: 43, username: "legacy", country: "KR", keyCount: 4, analyzedPlays: 200, dan: { rc: { rawDan: 17.2, label: "eta", clears: 4 } } },
+      ]);
+
+      const jack = await getDanLeaderboard(db, { country: "GLOBAL", keyCount: 4, side: "rc", skillset: "jack" });
+      expect(jack.skillset).toBe("jack");
+      expect(jack.ranking.map((entry) => entry.user.username)).toEqual(["mid", "top"]);
+      expect(jack.ranking[0].rawDan).toBe(16);
+      expect(jack.ranking[0].label).toBe("zeta");
+      expect(jack.total).toBe(2);
+
+      const overall = await getDanLeaderboard(db, { country: "GLOBAL", keyCount: 4, side: "rc" });
+      expect(overall.skillset).toBe("overall");
+      expect(overall.ranking.map((entry) => entry.user.username)).toEqual(["top", "legacy", "mid"]);
+
+      // Only columns with a population, in publication order, and the side
+      // counts stay the side's own rather than the selected column's.
+      expect(jack.skillsets).toEqual([
+        { skillset: "overall", players: 3 },
+        { skillset: "jack", players: 2 },
+        { skillset: "tech", players: 1 },
+      ]);
+      expect(jack.sides).toEqual([{ side: "rc", players: 3 }]);
+
+      // A column this ladder does not publish falls back to every clear rather
+      // than serving an empty board.
+      const stream = await getDanLeaderboard(db, { country: "GLOBAL", keyCount: 4, side: "rc", skillset: "stream" });
+      expect(stream.skillset).toBe("overall");
+      expect(stream.total).toBe(3);
     });
   });
 

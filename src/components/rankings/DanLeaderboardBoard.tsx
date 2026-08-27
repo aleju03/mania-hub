@@ -4,12 +4,14 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Pagination } from "../ui/Pagination";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { LeaderboardTable, type LeaderboardRow } from "./LeaderboardTable";
-import { KeymodeControl } from "./LeaderboardControls";
+import { DanSkillsetPicker, KeymodeControl } from "./LeaderboardControls";
 import { DanLevelBadge } from "../player/DanLevelBadge";
+import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { loadDanBoard, peekDanBoard } from "../../lib/skill-leaderboard-cache";
 import { formatNumber } from "../../lib/format";
 import { useHiddenUserIds } from "../../store";
 import {
+  DEFAULT_DAN_SKILLSET,
   LEADERBOARD_PAGE_SIZE,
   type DanLeaderboardSnapshot,
   type DanSide,
@@ -24,18 +26,24 @@ export function DanLeaderboardBoard({
   country,
   keys,
   side,
+  skillset,
   page,
   onNavigate,
 }: {
   country: string;
   keys: LeaderboardKeyCount;
   side: DanSide;
+  skillset: string | undefined;
   page: number;
-  onNavigate: (next: { keys?: LeaderboardKeyCount; side?: DanSide; page?: number }) => void;
+  onNavigate: (next: { keys?: LeaderboardKeyCount; side?: DanSide; skillset?: string; page?: number }) => void;
 }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const hiddenUserIds = useHiddenUserIds();
-  const request = { country, keys, side, page };
+  // No skillset in the URL is the every-clear board, the estimate a profile
+  // chip shows. Overall is the first chip on every keymode, so clicking back to
+  // it is how a skill selection is cleared.
+  const requestedSkillset = skillset ?? DEFAULT_DAN_SKILLSET;
+  const request = { country, keys, side, skillset: requestedSkillset, page };
   const [snapshot, setSnapshot] = useState<DanLeaderboardSnapshot | null>(() => peekDanBoard(request));
   const [loading, setLoading] = useState(!snapshot);
   const [error, setError] = useState<string | null>(null);
@@ -67,12 +75,20 @@ export function DanLeaderboardBoard({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [country, keys, side, page]);
+  }, [country, keys, side, requestedSkillset, page]);
 
   // A numbered course reads as a level, not a name, so it needs the word; named
   // ladders (greek letters and the like) already read as one. Same rule the
   // profile's dan chips use.
   const formatDanLabel = (label: string): string => (/^\d/.test(label) ? t`${label} dan` : label);
+
+  /* Two skillsets, deliberately, for the same reason the skill board keeps two
+     axes: the chips answer to the one that was CLICKED so a press lands
+     immediately, the table to the one that has arrived so a header and its
+     numbers always belong together. */
+  const servedSkillset = snapshot?.skillset ?? requestedSkillset;
+  const skillsetMeta = servedSkillset === DEFAULT_DAN_SKILLSET ? null : DAN_SKILLSET_META[servedSkillset];
+  const skillsetLabel = skillsetMeta ? i18n._(skillsetMeta.labelMsg) : servedSkillset;
 
   const rows: LeaderboardRow[] = useMemo(() => {
     return (snapshot?.ranking ?? [])
@@ -113,17 +129,26 @@ export function DanLeaderboardBoard({
         <KeymodeControl
           id="dan-leaderboard-keys"
           value={keys}
-          onChange={(next) => onNavigate({ keys: next, page: 1 })}
+          onChange={(next) => onNavigate({ keys: next, skillset: undefined, page: 1 })}
         />
         <div role="group" aria-label={t`Dan course`}>
           <SegmentedControl
             id="dan-leaderboard-side"
             value={side}
             options={sideOptions}
-            onChange={(next) => onNavigate({ side: next, page: 1 })}
+            onChange={(next) => onNavigate({ side: next, skillset: undefined, page: 1 })}
           />
         </div>
       </div>
+
+      {/* A skillset belongs to one keymode and side (stamina is 4K's, the LN
+          subtypes are 7K's), so changing either drops back to every clear
+          rather than asking for a column that ladder does not have. */}
+      <DanSkillsetPicker
+        skillsets={snapshot?.skillsets ?? []}
+        value={requestedSkillset}
+        onChange={(next) => onNavigate({ skillset: next, page: 1 })}
+      />
 
       {/* Plain line, not a boxed callout: the caveat belongs next to the data,
           not in furniture around it. */}
@@ -138,8 +163,12 @@ export function DanLeaderboardBoard({
         rows={rows}
         loading={loading}
         error={error}
-        emptyMessage={<Trans>Nobody here has enough qualifying clears yet.</Trans>}
-        valueHeader={t`Dan`}
+        emptyMessage={
+          servedSkillset === DEFAULT_DAN_SKILLSET
+            ? <Trans>Nobody here has enough qualifying clears yet.</Trans>
+            : <Trans>Nobody here has enough qualifying {skillsetLabel} clears yet.</Trans>
+        }
+        valueHeader={servedSkillset === DEFAULT_DAN_SKILLSET ? t`Dan` : t`${skillsetLabel} dan`}
         detailHeader={t`Plays`}
       />
 

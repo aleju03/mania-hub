@@ -2517,12 +2517,14 @@ export async function fetchLiveDanLeaderboard(params: {
   country: string;
   keys: number;
   side: DanSide;
+  skillset: string;
   page: number;
 }): Promise<DanLeaderboardSnapshot> {
   const query = new URLSearchParams({
     country: params.country,
     keys: String(params.keys),
     side: params.side,
+    skillset: params.skillset,
     page: String(Math.max(1, Math.floor(params.page))),
     pageSize: String(LEADERBOARD_PAGE_SIZE),
   });

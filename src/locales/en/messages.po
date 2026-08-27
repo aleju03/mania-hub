@@ -1222,6 +1222,10 @@ msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} co
 msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
 msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
 
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "{skillsetLabel} dan"
+msgstr "{skillsetLabel} dan"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
 msgstr "{speedLabel} speed"
@@ -3824,6 +3828,10 @@ msgstr "Dan levels here are estimated from the charts a player has passed, not f
 #: src/lib/signature-shared.ts
 msgid "Dan rating"
 msgstr "Dan rating"
+
+#: src/components/rankings/LeaderboardControls.tsx
+msgid "Dan skill"
+msgstr "Dan skill"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Danger"
@@ -7418,6 +7426,10 @@ msgstr "Nobody here by that name."
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "Nobody here has a rated {axisLabel} pool yet."
 msgstr "Nobody here has a rated {axisLabel} pool yet."
+
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Nobody here has enough qualifying {skillsetLabel} clears yet."
+msgstr "Nobody here has enough qualifying {skillsetLabel} clears yet."
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Nobody here has enough qualifying clears yet."

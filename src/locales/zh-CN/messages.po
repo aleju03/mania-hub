@@ -1231,6 +1231,10 @@ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段�
 msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
 msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位的最高级，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上) · 点击查看这些通过记录"
 
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "{skillsetLabel} dan"
+msgstr "{skillsetLabel} 段位"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
 msgstr "{speedLabel} 速度"
@@ -3833,6 +3837,10 @@ msgstr "这里的段位是根据玩家通过的谱面估算的，并非真实的
 #: src/lib/signature-shared.ts
 msgid "Dan rating"
 msgstr "段位评定"
+
+#: src/components/rankings/LeaderboardControls.tsx
+msgid "Dan skill"
+msgstr "段位技能"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Danger"
@@ -7427,6 +7435,10 @@ msgstr "这里没有叫这个名字的人。"
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "Nobody here has a rated {axisLabel} pool yet."
 msgstr "这里还没有人拥有已评分的{axisLabel}谱面池。"
+
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Nobody here has enough qualifying {skillsetLabel} clears yet."
+msgstr "这里还没有人拥有足够的{skillsetLabel}达标通过记录。"
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Nobody here has enough qualifying clears yet."

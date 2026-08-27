@@ -339,7 +339,7 @@ export interface PlayerSkillPatternRating {
 // The community-legible axis: "4K RC ~ 8th dan". rawDan is continuous on the
 // chart-dan scale (labels via parseDan); clears counts the qualifying plays
 // that back it.
-export interface PlayerSkillDanSide {
+export interface PlayerSkillDanVerdict {
   rawDan: number;
   label: string;
   clears: number;
@@ -350,6 +350,21 @@ export interface PlayerSkillDanSide {
    * label measures the estimate.
    */
   beyondTable?: boolean;
+}
+
+export interface PlayerSkillDanSide extends PlayerSkillDanVerdict {
+  /**
+   * The same verdict re-run over one skillset bucket's clears ("your jack dan"),
+   * keyed by danSkillsetBuckets id. Stored rather than derived on read because
+   * the dan leaderboards rank a whole roster by it and re-deriving would mean
+   * reading every player's plays_json; the evidence window computes the same
+   * numbers on demand from the same clears, so the two agree by construction.
+   *
+   * A bucket under the quorum has no verdict and is simply absent, and so is
+   * the whole map on rows written before this shipped (the dan sweep backfills
+   * them).
+   */
+  skillsets?: Record<string, PlayerSkillDanVerdict>;
 }
 
 export interface PlayerSkillModeDan {
@@ -968,11 +983,24 @@ function computeModeDan(
   scoresByIdentity: Map<string, OscScore>,
   infoByBeatmap: Map<number, ChartSkillInfo>,
 ): PlayerSkillModeDan {
-  const clears: Record<"rc" | "ln", number[]> = { rc: [], ln: [] };
+  const clears: Record<"rc" | "ln", DanClearEvidence[]> = { rc: [], ln: [] };
   for (const clear of collectDanClears(keyCount, plays, scoresByIdentity, infoByBeatmap)) {
-    clears[clear.side].push(clear.chartDan);
+    clears[clear.side].push(clear);
   }
-  return { rc: danFromClears(clears.rc, "rc", keyCount), ln: danFromClears(clears.ln, "ln", keyCount) };
+  const forSide = (side: "rc" | "ln"): PlayerSkillDanSide | null => {
+    const list = clears[side];
+    const dan = danFromClears(list.map((clear) => clear.chartDan), side, keyCount);
+    if (!dan) return null;
+    // Buckets are a subset of the side's clears, so a side under the quorum can
+    // never have one: no verdict here means no skillset verdicts either.
+    const skillsets: Record<string, PlayerSkillDanVerdict> = {};
+    for (const [id, bucketClears] of groupDanClearsBySkillset(keyCount, side, list, infoByBeatmap)) {
+      const bucketDan = danFromClears(bucketClears.map((clear) => clear.chartDan), side, keyCount);
+      if (bucketDan) skillsets[id] = bucketDan;
+    }
+    return Object.keys(skillsets).length > 0 ? { ...dan, skillsets } : dan;
+  };
+  return { rc: forSide("rc"), ln: forSide("ln") };
 }
 
 // One qualifying clear and the chart dan it demonstrates; the shared currency
@@ -1055,7 +1083,7 @@ export function collectDanClearsForTest(
   return collectDanClears(keyCount, plays, new Map(), infoByBeatmap);
 }
 
-function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): PlayerSkillDanSide | null {
+function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): PlayerSkillDanVerdict | null {
   if (rawDans.length < DAN_CLEAR_QUORUM) return null;
   const sorted = [...rawDans].sort((a, b) => b - a);
   // The quorum-th best credited clear IS the dan: outlier clears above it
@@ -1952,6 +1980,39 @@ function danSkillsetBuckets(keyCount: number, side: "rc" | "ln"): DanSkillsetBuc
   ];
 }
 
+/** The bucket ids a keymode/side publishes, in declaration order. */
+export function danSkillsetBucketIds(keyCount: number, side: "rc" | "ln"): string[] {
+  return danSkillsetBuckets(keyCount, side).map((bucket) => bucket.id);
+}
+
+/**
+ * The side's clears filed into their skillset buckets, one entry per bucket the
+ * keymode publishes (empty lists included). Shared by the stored verdict and the
+ * on-demand evidence window so "your jack dan" is the same number on the
+ * leaderboard and in the window that explains it.
+ */
+function groupDanClearsBySkillset(
+  keyCount: number,
+  side: "rc" | "ln",
+  clears: DanClearEvidence[],
+  infoByBeatmap: Map<number, ChartSkillInfo>,
+): Map<string, DanClearEvidence[]> {
+  const buckets = danSkillsetBuckets(keyCount, side);
+  const bySkillset = new Map<string, DanClearEvidence[]>();
+  for (const bucket of buckets) bySkillset.set(bucket.id, []);
+  for (const clear of clears) {
+    const chart = infoByBeatmap.get(clear.play.beatmapId);
+    const topSkillset = bucketingSkillset(clear.play.values);
+    for (const bucket of buckets) {
+      const belongs = bucket.skillsets
+        ? topSkillset != null && bucket.skillsets.includes(topSkillset)
+        : chartBelongsToTagBucket(bucket, chart);
+      if (belongs) bySkillset.get(bucket.id)!.push(clear);
+    }
+  }
+  return bySkillset;
+}
+
 /**
  * The qualifying clears behind one side of a player's dan estimate, plus the
  * same estimate re-run per skillset bucket ("your jack dan" = the dan the
@@ -1995,18 +2056,7 @@ export async function getPlayerSkillDanEvidence(
   // vocabulary is 18 ids deep and a player reads their dan through the four
   // skills their scene actually names (DAN_SKILLSET_BUCKETS).
   const buckets = danSkillsetBuckets(keyCount, side);
-  const bySkillset = new Map<string, DanClearEvidence[]>();
-  for (const bucket of buckets) bySkillset.set(bucket.id, []);
-  for (const clear of clears) {
-    const chart = infoByBeatmap.get(clear.play.beatmapId);
-    const topSkillset = bucketingSkillset(clear.play.values);
-    for (const bucket of buckets) {
-      const belongs = bucket.skillsets
-        ? topSkillset != null && bucket.skillsets.includes(topSkillset)
-        : chartBelongsToTagBucket(bucket, chart);
-      if (belongs) bySkillset.get(bucket.id)!.push(clear);
-    }
-  }
+  const bySkillset = groupDanClearsBySkillset(keyCount, side, clears, infoByBeatmap);
 
   const topClears = clears.slice(0, DAN_EVIDENCE_MAX_CLEARS);
   const evidenceBeatmapIds = [
@@ -2466,6 +2516,11 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // bar falls back to STABLE_EQUIVALENT_V2_BAR_OFFSET for stable submissions
 // until each row next recomputes on its own. Lazer plays and every other
 // ladder are exact from the stored fields.
+//
+// It carries the per-skillset verdicts too, on the same argument: they are the
+// side's own clears re-counted per bucket, so a stored row already holds
+// everything they need. Without this sweep they would only ever appear on rows
+// that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v1";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;

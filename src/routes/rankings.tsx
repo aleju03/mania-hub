@@ -27,10 +27,12 @@ import { SkillLeaderboardBoard } from "../components/rankings/SkillLeaderboardBo
 import { DanLeaderboardBoard } from "../components/rankings/DanLeaderboardBoard";
 import {
   DEFAULT_DAN_SIDE,
+  DEFAULT_DAN_SKILLSET,
   DEFAULT_LEADERBOARD_AXIS,
   DEFAULT_LEADERBOARD_KEYS,
   DEFAULT_LEADERBOARD_TAB,
   parseDanSide,
+  parseDanSkillset,
   parseLeaderboardAxis,
   parseLeaderboardKeys,
   parseLeaderboardTab,
@@ -66,12 +68,14 @@ type RankingsSearch = {
   keys?: LeaderboardKeyCount;
   axis?: string;
   side?: DanSide;
+  skillset?: string;
 };
-const RANKINGS_SEARCH_DEFAULTS: Pick<RankingsSearch, "page" | "tab" | "keys" | "side"> = {
+const RANKINGS_SEARCH_DEFAULTS: Pick<RankingsSearch, "page" | "tab" | "keys" | "side" | "skillset"> = {
   page: 1,
   tab: DEFAULT_LEADERBOARD_TAB,
   keys: DEFAULT_LEADERBOARD_KEYS,
   side: DEFAULT_DAN_SIDE,
+  skillset: DEFAULT_DAN_SKILLSET,
 };
 
 function parseRankingsPage(value: unknown): number {
@@ -117,6 +121,7 @@ export const Route = createFileRoute("/rankings")({
     keys: parseLeaderboardKeys(search.keys),
     axis: parseLeaderboardAxis(search.axis),
     side: parseDanSide(search.side),
+    skillset: parseDanSkillset(search.skillset),
   }),
   search: {
     middlewares: [stripSearchParams(RANKINGS_SEARCH_DEFAULTS)],
@@ -134,7 +139,8 @@ export const Route = createFileRoute("/rankings")({
       page === 1
       && (match.search.keys ?? DEFAULT_LEADERBOARD_KEYS) === DEFAULT_LEADERBOARD_KEYS
       && (match.search.axis ?? DEFAULT_LEADERBOARD_AXIS) === DEFAULT_LEADERBOARD_AXIS
-      && (match.search.side ?? DEFAULT_DAN_SIDE) === DEFAULT_DAN_SIDE;
+      && (match.search.side ?? DEFAULT_DAN_SIDE) === DEFAULT_DAN_SIDE
+      && (match.search.skillset ?? DEFAULT_DAN_SKILLSET) === DEFAULT_DAN_SKILLSET;
     const title = countryName
       ? tab === "skills"
         ? i18n._(msg`${countryName} mania skill leaderboards`)
@@ -223,6 +229,7 @@ function RankingsPage() {
               country={selectedCountry}
               keys={keys}
               side={search.side ?? DEFAULT_DAN_SIDE}
+              skillset={search.skillset}
               page={page}
               onNavigate={(next) => navigate({ to: "/rankings", search: { ...search, ...next, page: next.page ?? 1 }, replace: true })}
             />

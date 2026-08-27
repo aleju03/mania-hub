@@ -7,6 +7,7 @@ import {
   PLAYER_SKILLS_VERSION,
   PLAYER_SKILL_PATTERN_AXES,
   SKILL_RATING_SKILLSETS,
+  danSkillsetBucketIds,
   type PlayerSkillModeBreakdown,
 } from "./player-skills.js";
 import {
@@ -79,6 +80,29 @@ export function isLeaderboardAxis(keyCount: number, axis: string): boolean {
   return leaderboardAxesFor(keyCount).includes(axis);
 }
 
+/**
+ * The dan board's "no particular skill" column: every clear the side credited,
+ * which is the estimate a profile chip shows. Skillset columns narrow it to the
+ * clears of one dan-evidence bucket (4K rice names jack/tech/speed/stamina, 6K
+ * and 7K rice jack/tech/speed/stream, 7K LN its four subtypes), so picking one
+ * answers "who is the best jack player at their dan level" rather than
+ * re-sorting the same estimate.
+ */
+export const DAN_LEADERBOARD_DEFAULT_SKILLSET = "overall";
+
+export function danLeaderboardSkillsetsFor(keyCount: number, side: DanSide): string[] {
+  return [DAN_LEADERBOARD_DEFAULT_SKILLSET, ...danSkillsetBucketIds(keyCount, side)];
+}
+
+export function isDanLeaderboardSkillset(keyCount: number, side: DanSide, skillset: string): boolean {
+  return danLeaderboardSkillsetsFor(keyCount, side).includes(skillset);
+}
+
+/** The dan column key a (side, skillset) pair reads. */
+function danColumnKey(side: DanSide, skillset: string): string {
+  return `${side}:${skillset}`;
+}
+
 export interface SkillLeaderboardUser {
   id: number;
   username: string;
@@ -149,8 +173,15 @@ export interface SkillLeaderboardSnapshot extends LeaderboardSnapshotBase {
 
 export interface DanLeaderboardSnapshot extends LeaderboardSnapshotBase {
   side: DanSide;
+  // The served skillset column: DAN_LEADERBOARD_DEFAULT_SKILLSET, or a
+  // dan-evidence bucket id. Rows carry that column's dan, not the side's.
+  skillset: string;
   ranking: DanLeaderboardEntry[];
   sides: Array<{ side: DanSide; players: number }>;
+  /* Columns with a population in this scope, in publication order, so the
+     frontend renders the list the keymode/side actually has instead of keeping
+     its own copy (same contract as `axes` on the skill board). */
+  skillsets: Array<{ skillset: string; players: number }>;
 }
 
 // --- Board memory ---
@@ -175,7 +206,8 @@ interface KeymodeBoard {
   countries: string[];
   analyzedPlays: Int32Array;
   axes: Map<string, AxisColumn>;
-  dan: Map<DanSide, DanColumn>;
+  // Keyed by danColumnKey: one column per (side, skillset) pair a player has.
+  dan: Map<string, DanColumn>;
 }
 
 interface SkillBoardCache {
@@ -236,7 +268,7 @@ interface DraftKeymode {
   countries: string[];
   analyzedPlays: number[];
   axes: Map<string, DraftAxis>;
-  dan: Map<DanSide, DraftDan>;
+  dan: Map<string, DraftDan>;
 }
 
 function draftFor(drafts: Map<number, DraftKeymode>, keyCount: number): DraftKeymode {
@@ -369,18 +401,29 @@ async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
           column.plays.push(plays);
         }
 
-        for (const side of ["rc", "ln"] as const) {
-          const dan = mode?.dan?.[side];
-          const rawDan = Number(dan?.rawDan);
-          if (!dan || !(rawDan > 0)) continue;
-          let column = draft.dan.get(side);
-          if (!column) draft.dan.set(side, (column = { raw: [], labels: [], beyond: [] }));
+        const pushDan = (key: string, verdict: { rawDan?: unknown; label?: unknown; beyondTable?: unknown }) => {
+          const rawDan = Number(verdict?.rawDan);
+          if (!(rawDan > 0)) return;
+          let column = draft.dan.get(key);
+          if (!column) draft.dan.set(key, (column = { raw: [], labels: [], beyond: [] }));
           padTo(column.raw, slot, 0);
           padLabels(column.labels, slot);
           padTo(column.beyond, slot, 0);
           column.raw.push(rawDan);
-          column.labels.push(String(dan.label ?? ""));
-          column.beyond.push(dan.beyondTable === true ? 1 : 0);
+          column.labels.push(String(verdict.label ?? ""));
+          column.beyond.push(verdict.beyondTable === true ? 1 : 0);
+        };
+        for (const side of ["rc", "ln"] as const) {
+          const dan = mode?.dan?.[side];
+          if (!dan || !(Number(dan.rawDan) > 0)) continue;
+          pushDan(danColumnKey(side, DAN_LEADERBOARD_DEFAULT_SKILLSET), dan);
+          // Absent on rows written before the skillset verdicts shipped; the
+          // dan sweep backfills them, and until it does those players are
+          // simply not on a skillset column.
+          for (const bucket of danSkillsetBucketIds(keyCount, side)) {
+            const verdict = dan.skillsets?.[bucket];
+            if (verdict) pushDan(danColumnKey(side, bucket), verdict);
+          }
         }
       }
     }
@@ -402,12 +445,12 @@ async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
         order: sortedOrder(column.values),
       });
     }
-    const dan = new Map<DanSide, DanColumn>();
-    for (const [side, column] of draft.dan) {
+    const dan = new Map<string, DanColumn>();
+    for (const [key, column] of draft.dan) {
       padTo(column.raw, size, 0);
       padLabels(column.labels, size);
       padTo(column.beyond, size, 0);
-      dan.set(side, {
+      dan.set(key, {
         raw: Float32Array.from(column.raw),
         labels: column.labels,
         beyond: Uint8Array.from(column.beyond),
@@ -591,6 +634,7 @@ export interface DanLeaderboardQuery {
   country: string;
   keyCount: number;
   side: DanSide;
+  skillset?: string;
   page?: number;
   pageSize?: number;
 }
@@ -673,22 +717,42 @@ export async function getDanLeaderboard(db: Db, query: DanLeaderboardQuery): Pro
   const keymode = board.keymodes.get(query.keyCount);
   const page = clampPage(query.page);
   const pageSize = clampPageSize(query.pageSize);
+  const skillset = query.skillset && isDanLeaderboardSkillset(query.keyCount, query.side, query.skillset)
+    ? query.skillset
+    : DAN_LEADERBOARD_DEFAULT_SKILLSET;
+
+  // One helper for both published lists and the served column, so a population
+  // count and the board it describes can never come off different orders.
+  const danOrder = (side: DanSide, column: string): Int32Array | null => {
+    if (!keymode) return null;
+    const key = danColumnKey(side, column);
+    const stored = keymode.dan.get(key);
+    if (!stored) return null;
+    return scopedOrder(db, board, keymode, `${scope.code}:${keymode.keyCount}:dan:${key}`, stored.order, codes);
+  };
 
   const sides: Array<{ side: DanSide; players: number }> = [];
+  const skillsets: Array<{ skillset: string; players: number }> = [];
   if (keymode) {
     for (const side of ["rc", "ln"] as const) {
-      const column = keymode.dan.get(side);
-      if (!column) continue;
-      const order = scopedOrder(db, board, keymode, `${scope.code}:${keymode.keyCount}:dan:${side}`, column.order, codes);
-      if (order.length === 0) continue;
-      sides.push({ side, players: order.length });
+      // The side toggle counts the side's own board, not the selected
+      // skillset's: it says which sides exist, and flipping to one lands on a
+      // column the picker then narrows.
+      const order = danOrder(side, DAN_LEADERBOARD_DEFAULT_SKILLSET);
+      if (order && order.length > 0) sides.push({ side, players: order.length });
+    }
+    for (const column of danLeaderboardSkillsetsFor(query.keyCount, query.side)) {
+      const order = danOrder(query.side, column);
+      if (order && order.length > 0) skillsets.push({ skillset: column, players: order.length });
     }
   }
 
   const base: DanLeaderboardSnapshot = {
     side: query.side,
+    skillset,
     ranking: [],
     sides,
+    skillsets,
     total: 0,
     page,
     pageSize,
@@ -696,10 +760,10 @@ export async function getDanLeaderboard(db: Db, query: DanLeaderboardQuery): Pro
     fetchedAt: board.builtAt,
     coverage: board.coverage,
   };
-  const column = keymode?.dan.get(query.side);
-  if (!keymode || !column) return base;
+  const column = keymode?.dan.get(danColumnKey(query.side, skillset));
+  const order = danOrder(query.side, skillset);
+  if (!keymode || !column || !order) return base;
 
-  const order = scopedOrder(db, board, keymode, `${scope.code}:${keymode.keyCount}:dan:${query.side}`, column.order, codes);
   const start = (page - 1) * pageSize;
   const ranking: DanLeaderboardEntry[] = [];
   for (let index = start; index < Math.min(order.length, start + pageSize); index += 1) {

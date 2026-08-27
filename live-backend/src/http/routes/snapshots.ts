@@ -299,6 +299,7 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
       country,
       keyCount: query.keyCount,
       side: query.side,
+      skillset: query.skillset,
       page: query.page,
       pageSize: query.pageSize,
     });
