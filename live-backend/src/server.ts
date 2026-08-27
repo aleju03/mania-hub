@@ -13,17 +13,20 @@ import { enqueueGlobalFarmedBoardRepack, enqueueGlobalMapsRefreshIfDue, enqueueM
 import { cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
-import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureLnMsdSweepSeeded, ensureLnLeoblackRecomputeSeeded, ensureLnPrimaryRepinSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
+import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureHtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureLnMsdSweepSeeded, ensureLnLeoblackRecomputeSeeded, ensureLnPrimaryRepinSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-feedback.js";
 import { registerPackCommunitySnapshots, startPackCommunitySnapshotRefresh } from "./features/pack-community.js";
 import { ensurePackCommunityRollupTriggers } from "./features/pack-community-rollups.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
-import { enqueuePlayerSkills, ensurePlayerSkillFloorSweepSeeded, ensurePlayerSkillMsdCapSweepSeeded, ensurePlayerSkillPoisonRecoverySeeded, ensurePlayerSkillVibroSweepSeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
+import { warmSkillLeaderboardBoard } from "./features/skill-leaderboards.js";
+import { enqueuePlayerSkills, ensurePlayerSkillDanSweepSeeded, ensurePlayerSkillFloorSweepSeeded, ensurePlayerSkillMsdCapSweepSeeded, ensurePlayerSkillPoisonRecoverySeeded, ensurePlayerSkillVibroSweepSeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
 import { ensureActivityModsBackfillSeeded } from "./features/activity-mods-backfill.js";
+import { ensureActivityComboBackfillSeeded } from "./features/activity-combo-backfill.js";
+import { backfillActivityPlayDetails, trackActivityPlayDetailsBackfill } from "./features/activity-play-details-backfill.js";
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
 import { backfillPackCardSerials } from "./features/pack-pulls.js";
 import { ensurePackCardCatalog, ensurePackCardVariantKeys, ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
@@ -207,6 +210,21 @@ export async function createApp() {
         })
         .catch((error) => logWarn("skin_archive_meta_backfill_failed", errorContext(error)));
     }
+    // Combo and replay availability for activity rows written before those
+    // columns existed, re-derived from payloads the database still holds. One
+    // sweep over a million rows, so it runs behind boot rather than holding it
+    // up, and it marks itself done so every later boot is a single lookup.
+    // Tracked, not just fired: the capped combo sweep seeds later in boot and
+    // must not spend its slots on rows this pass is about to fill for free.
+    trackActivityPlayDetailsBackfill(
+      backfillActivityPlayDetails(db)
+        .then((result) => {
+          if (!result.skipped) {
+            logInfo("activity_play_details_backfilled", { candidates: result.candidates, healed: result.healed, updated: result.updated });
+          }
+        })
+        .catch((error) => logWarn("activity_play_details_backfill_failed", errorContext(error))),
+    );
     // GOAT cards split off from their player's ordinary card, so collection
     // rows are keyed (owner, card_key) now. Rebuilds the table once on a
     // database created before that; a no-op on every boot after.
@@ -438,6 +456,7 @@ export async function createApp() {
   if (config.role !== "worker") {
     warmStatusBodyCache(ctx);
     warmGlobalMapsFarmedBoard(ctx);
+    warmSkillLeaderboardBoard(db);
     startPackCommunitySnapshotRefresh(db);
   }
   return { server, db, rateLimitDb, serveWriteDb, serveWriteQueue, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord, analytics, ghost };
@@ -490,12 +509,21 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // DB work only.
       void ensurePlayerSkillMsdCapSweepSeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-msd-cap] seed failed", error));
       void ensurePlayerSkillVibroSweepSeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-vibro] seed failed", error));
+      // Course-rule dan bars: the stored verdicts predate them, but the plays
+      // behind them do not, so the dan block rewrites in place instead of
+      // costing the corpus a full re-rate. Local DB work only.
+      // 0.75x verdicts, so an HT clear is credited what the chart is worth at
+      // that rate instead of being dropped. Seeded before the dan sweep on
+      // purpose: the sweep re-runs itself once this one stamps done.
+      void ensureHtRateAnalysisSeeded(app.db, app.queue).catch((error) => console.warn("[ht-rate-analysis] seed failed", error));
+      void ensurePlayerSkillDanSweepSeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-dan-sweep] seed failed", error));
       // Unlike the sweeps above this one consumes osu! API budget (one best-
       // scores call per user), so it also requires osu! API jobs to be enabled.
       // Guarded by its done key: post-completion boots schedule nothing.
       if (app.config.enableOsuApiJobs) {
         void ensureTopScoresBackfillSeeded(app.db, app.queue).catch((error) => console.warn("[top-scores-backfill] seed failed", error));
         void ensureActivityModsBackfillSeeded(app.db, app.queue).catch((error) => console.warn("[activity-mods-backfill] seed failed", error));
+        void ensureActivityComboBackfillSeeded(app.db, app.queue).catch((error) => console.warn("[activity-combo-backfill] seed failed", error));
         // Skill-vector version backfill: almost entirely local CPU over the
         // cached .osu corpus, but the shared compute path can fall through to
         // an osu! download on a cache miss, so it takes the same gate.

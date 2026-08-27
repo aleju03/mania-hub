@@ -27,9 +27,13 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-26", text: "Click Key Split on a player page to see how much pp each keymode is worth, 4K, 5K, 6K, 7K and up, so you can track your pp on each. Pick a keymode on the Best Performance tab and the plays this site tracked below your osu! top 200 show up in the list too, so every keymode gets a top of up to 200 plays of its own instead of sharing one" },
+  { date: "2026-08-26", text: "Rankings now has MSD and Dan tabs next to Performance: see who is rated highest on each skillset, per keymode, and who holds the highest dan", to: "/rankings" },
+  { date: "2026-08-26", text: "Click a dan on the skills tab of a player page to see the clears the estimate is built on" },
+  { date: "2026-08-26", text: "Made a page to explain how dan levels are estimated", to: "/dan-estimates" },
+  { date: "2026-08-26", text: "You can now build and post your own map collections. The collections tab on maps has a Community half: pick maps, give the list a title and tags, post it, and like anyone else's. Each one gets its own page to share", to: "/maps" },
   { date: "2026-08-26", text: "Fixed vibro maps getting a huge MSD and inflating skill ratings", to: "/maps" },
   { date: "2026-08-26", text: "Improved LN Release detection for 7K" },
-  { date: "2026-08-26", text: "Click Key Split on a player page to see how much pp each keymode is worth, 4K, 5K, 6K, 7K and up, with the plays behind it, so you can track your pp on each. For now it only counts your osu! top 200 plays, and soon it will use the plays this site tracks to build a top of up to 200 plays per keymode" },
   { date: "2026-08-24", text: "Recycle duplicates now takes a press and hold, so you can no longer accidentally recycle all your copies", to: "/packs" },
   { date: "2026-08-24", text: "If you complete your collection the next pack you open comes with an Eternal card of yourself", to: "/packs" },
   { date: "2026-08-24", text: "Dan estimates, map difficulty values and player skill ratings are being recalculated after a rating-system update. The recalculation should take about a day, and results may be missing or mix old and new values until it finishes" },

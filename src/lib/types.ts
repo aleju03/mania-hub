@@ -494,11 +494,18 @@ export interface UserProfileKeyPpBucket {
      ranked-score count of that keymode alone, a number no API hands out. */
   weightedPp: number;
   count: number;
+  /* How many of `count` came from plays this site tracked below the osu!
+     window rather than from the window itself. 0 when the backend had nothing
+     to add (an untracked country, or a keymode whose plays all rank inside the
+     window anyway). */
+  trackedCount: number;
   /* Upper bound on the weighted pp still hiding below the window's cutoff.
      osu! serves at most 200 best scores, so a keymode someone plays on the
      side can have most of its plays outside that window, and only the bound
      says whether the total is the answer or a floor. 0 when the window holds
-     every ranked play. */
+     every ranked play. Measured from the window alone even when tracked plays
+     are folded in: an unseen play is only known to be under the cutoff, so it
+     could still outrank every tracked one. */
   missingBound: number;
 }
 
@@ -549,6 +556,11 @@ export interface UserProfileInsights {
   /* Lowest pp in the window when the window is capped (the 200th play), 0
      when it holds everything the player has. What "below the cutoff" means. */
   keyPpCutoff: number;
+  /* Plays folded in from this site's own tracking, across every keymode. */
+  keyPpTracked: number;
+  /* Earliest day that tracking covers, as YYYY-MM-DD. Null when nothing was
+     folded in. Plays from before it are only visible through the window. */
+  keyPpTrackedFrom: string | null;
   mostUsedMod: UserProfileCountStat | null;
   modBreakdown: UserProfileCountStat[];
   medianBpm: number | null;

@@ -5,7 +5,7 @@ import { exec, json, parseJson, writeVariantPps } from "./db.js";
 import { AVATAR_ACCENT_JOB, computeAvatarAccentJob } from "./features/avatar-accents.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
-import { BRACKET_CONTENT_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, INVERSE_CLUSTER_BPM_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LN_MSD_SWEEP_JOB, LN_LEOBLACK_RECOMPUTE_JOB, LN_PRIMARY_REPIN_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, NOTE_BPM_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runBracketContentRecomputeJob, runBracketTagRecomputeJob, runChartAnalysisBackfillJob, runChordjackTagRecomputeJob, runCompanellaRecomputeJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runInverseClusterBpmRecoveryJob, runLeoblackRepinDtRecomputeJob, runLeoblackRepinRecomputeJob, runLnLeoblackRecomputeJob, runLnMsdSweepJob, runLnPrimaryRepinJob, runLnSourceRecomputeJob, runLnSubtypeRecomputeJob, runMsdPoisonRecoveryJob, runNoteBpmRecomputeJob, runSunnyRepinDtRecomputeJob, runSunnyRepinRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
+import { BRACKET_CONTENT_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, INVERSE_CLUSTER_BPM_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LN_MSD_SWEEP_JOB, LN_LEOBLACK_RECOMPUTE_JOB, LN_PRIMARY_REPIN_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, NOTE_BPM_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runBracketContentRecomputeJob, runBracketTagRecomputeJob, runChartAnalysisBackfillJob, runChordjackTagRecomputeJob, runCompanellaRecomputeJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runHtRateAnalysisJob, runInverseClusterBpmRecoveryJob, runLeoblackRepinDtRecomputeJob, runLeoblackRepinRecomputeJob, runLnLeoblackRecomputeJob, runLnMsdSweepJob, runLnPrimaryRepinJob, runLnSourceRecomputeJob, runLnSubtypeRecomputeJob, runMsdPoisonRecoveryJob, runNoteBpmRecomputeJob, runSunnyRepinDtRecomputeJob, runSunnyRepinRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
@@ -14,7 +14,7 @@ import { GLOBAL_FARMED_BOARD_REPACK_JOB, MapsEmptyResultError, MapsRosterNotRead
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { RECONCILE_SETTLED_SETS_JOB, runSettledSetsReconcile } from "./features/settled-sets-reconcile.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
-import { PLAYER_SKILLS_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, computePlayerSkillsJob, runPlayerSkillFloorSweepJob, runPlayerSkillMsdCapSweepJob, runPlayerSkillPoisonRecoveryJob, runPlayerSkillVibroSweepJob } from "./features/player-skills.js";
+import { PLAYER_SKILLS_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, computePlayerSkillsJob, ensurePlayerSkillDanSweepSeeded, runPlayerSkillDanSweepJob, runPlayerSkillFloorSweepJob, runPlayerSkillMsdCapSweepJob, runPlayerSkillPoisonRecoveryJob, runPlayerSkillVibroSweepJob } from "./features/player-skills.js";
 import { SKILL_VECTOR_BACKFILL_JOB, runSkillVectorBackfillJob } from "./features/skill-vector-backfill.js";
 import { SKILL_BASELINE_JOB, runSkillBaselineJob } from "./features/skill-baseline.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
@@ -22,6 +22,8 @@ import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB, runProfileSnaps
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { TOP_SCORES_BACKFILL_JOB, runTopScoresBackfillJob } from "./features/top-scores-backfill.js";
 import { ACTIVITY_MODS_BACKFILL_JOB_TYPE, runActivityModsBackfillJob } from "./features/activity-mods-backfill.js";
+import { ACTIVITY_COMBO_BACKFILL_JOB_TYPE, runActivityComboBackfillJob } from "./features/activity-combo-backfill.js";
+import { ACTIVITY_DETAIL_ON_DEMAND_JOB, runActivityDetailOnDemandJob } from "./features/activity-detail-on-demand.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
 import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs } from "./jobs/recent-reconcile.js";
@@ -39,6 +41,7 @@ import { startPeakMemorySampler } from "./shared/process-memory.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
 import type { OscScore } from "./shared/types.js";
 import { markUserMissing } from "./users.js";
+import { isUserKnownInactive } from "./user-status.js";
 
 interface WorkerLane {
   name: string;
@@ -164,7 +167,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // the work is local (cached .osu text), no osu! API pressure. Tunable via
     // CHART_ANALYSIS_LANE_INTERVAL_MS so a local backfill can run flat out.
     name: "chart-analysis",
-    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_LEOBLACK_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, LN_PRIMARY_REPIN_JOB, NOTE_BPM_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB],
+    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_LEOBLACK_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, LN_PRIMARY_REPIN_JOB, NOTE_BPM_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, PLAYER_SKILL_DAN_SWEEP_JOB],
     claimLimit: 1,
     intervalMs: readConfig().chartAnalysisLaneIntervalMs,
   },
@@ -201,6 +204,18 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // the pace and the osu! token bucket still governs the request rate.
     name: "activity-mods-backfill",
     jobTypes: [ACTIVITY_MODS_BACKFILL_JOB_TYPE],
+    claimLimit: 1,
+    intervalMs: 5_000,
+  },
+  {
+    // Own lane for the same reason, and separate from the mods chain so
+    // neither can starve the other out of its first claim.
+    // Both archived-detail paths share this lane on purpose: one claim slot
+    // means the blind sweep and the view-driven completion can never double
+    // the osu! pressure between them, and the on-demand job's higher priority
+    // lets a profile somebody is reading go first.
+    name: "activity-combo-backfill",
+    jobTypes: [ACTIVITY_COMBO_BACKFILL_JOB_TYPE, ACTIVITY_DETAIL_ON_DEMAND_JOB],
     claimLimit: 1,
     intervalMs: 5_000,
   },
@@ -275,6 +290,8 @@ const OSU_API_JOB_TYPES = new Set([
   PROFILE_SNAPSHOT_REFRESH_JOB,
   TOP_SCORES_BACKFILL_JOB,
   ACTIVITY_MODS_BACKFILL_JOB_TYPE,
+  ACTIVITY_COMBO_BACKFILL_JOB_TYPE,
+  ACTIVITY_DETAIL_ON_DEMAND_JOB,
   // Mostly local CPU over the cached .osu corpus, but a cache miss falls
   // through to an osu! download inside the shared compute path, so it pauses
   // with the rest of the API jobs like analyze_activity_beatmap does.
@@ -485,6 +502,11 @@ export class WorkerRunner {
   }
 
   private async handle(job: Job, signal?: AbortSignal): Promise<void> {
+    const payloadUserId = Math.floor(Number((job.payload as { userId?: unknown } | null)?.userId));
+    if (Number.isSafeInteger(payloadUserId) && payloadUserId > 0 && await isUserKnownInactive(this.db, payloadUserId)) {
+      logInfo("job_skipped_inactive_user", { job_id: job.id, type: job.type, user_id: payloadUserId });
+      return;
+    }
     if (!readConfig().enableOsuApiJobs && OSU_API_JOB_TYPES.has(job.type)) {
       logInfo("job_skipped_osu_api_disabled", { job_id: job.id, type: job.type });
       return;
@@ -524,6 +546,14 @@ export class WorkerRunner {
       await runActivityModsBackfillJob(this.db, this.queue, this.osu, job.payload as { cursor?: { position: number } });
       return;
     }
+    if (job.type === ACTIVITY_COMBO_BACKFILL_JOB_TYPE) {
+      await runActivityComboBackfillJob(this.db, this.queue, this.osu, job.payload as { cursor?: number });
+      return;
+    }
+    if (job.type === ACTIVITY_DETAIL_ON_DEMAND_JOB) {
+      await runActivityDetailOnDemandJob(this.db, this.queue, this.osu, job.payload as { userId?: number; link?: number });
+      return;
+    }
     if (job.type === TOP_SCORES_BACKFILL_JOB) {
       // Per-user 404s are handled inside the chunk (markUserMissing + skip);
       // only transient API errors reach the job's fail/backoff path.
@@ -551,6 +581,7 @@ export class WorkerRunner {
       // so a regression back into watchdog territory is visible in journald.
       const farmedStartedAt = Date.now();
       const result = await refreshUserMapsFarmedScores(this.db, this.osu, this.queue, job.payload as { userId: number; country: string });
+      if (await isUserKnownInactive(this.db, result.userId)) return;
       logInfo("refresh_user_maps_farmed_scores_done", { user_id: result.userId, country: result.country, score_count: result.scoreCount, duration_ms: Date.now() - farmedStartedAt });
       await this.events.append(
         "maps_farmed_update",
@@ -731,6 +762,20 @@ export class WorkerRunner {
       await runPlayerSkillMsdCapSweepJob(this.db, this.queue, job.payload as { cursor?: number });
       return;
     }
+    if (job.type === PLAYER_SKILL_DAN_SWEEP_JOB) {
+      await runPlayerSkillDanSweepJob(this.db, this.queue, job.payload as { cursor?: number });
+      return;
+    }
+    if (job.type === HT_RATE_ANALYSIS_JOB) {
+      // On the chunk that finishes the sweep, re-seed the dan sweep: the dans
+      // it wrote earlier could not credit HT clears, because these verdicts
+      // did not exist yet. Its seeder compares finishedAt stamps, so this is a
+      // no-op on every other boot.
+      if (await runHtRateAnalysisJob(this.db, this.queue, job.payload as { cursor?: number })) {
+        await ensurePlayerSkillDanSweepSeeded(this.db, this.queue);
+      }
+      return;
+    }
     if (job.type === DT_RATE_ANALYSIS_JOB) {
       await runDtRateAnalysisJob(this.db, this.queue, job.payload as { cursor?: number });
       return;
@@ -760,6 +805,10 @@ export class WorkerRunner {
     if (job.type === "enrich_user") {
       const payload = job.payload as { userId: number };
       const user = await this.osu.getUser(payload.userId, "job:enrich_user");
+      // The wipe may have landed while the osu! request was in flight. The
+      // start-of-job guard above cannot cover that race, so re-check at the
+      // last point before this job can recreate identity or snipe metadata.
+      if (await isUserKnownInactive(this.db, payload.userId)) return;
       await exec(
         this.db,
         `insert into users (user_id, username, avatar_url, country_code, profile_json, updated_at)

@@ -261,19 +261,13 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
     await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     return true;
   }
-  /* Skill and dan leaderboards. Bridge-gated while the feature is in
-     development: an unauthorized read 404s rather than 401s, so a hidden
-     surface is indistinguishable from one that does not exist (same shape the
-     admin-only GOAT poll uses). Un-gating is deleting the two guards, letting
-     the frontend fetch these directly, and swapping the `private, no-store`
-     header below for `public, max-age=300, stale-while-revalidate=600` to match
-     the board's own 5-minute TTL - left as-is while every read arrives through
-     a bridge-authenticated server fn that must not be cached anywhere. */
+  /* Skill and dan leaderboards. Public reads: the board is one global
+     projection the scope filters, so the response caches for the board's own
+     5-minute rebuild rather than being recomputed per visitor. Activation runs
+     like every other country-scoped snapshot, so landing straight on ?tab=skills
+     for a cold country starts warming it instead of showing an empty board. */
   if (url.pathname === "/api/snapshots/skill-leaderboard") {
-    if (!isBridge(req, ctx)) {
-      sendJson(req, res, ctx, 404, { error: "not_found" });
-      return true;
-    }
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     const query = parseSkillLeaderboardQuery(url.searchParams);
     if (!isSkillLeaderboardKeyCount(query.keyCount)) {
       sendJson(req, res, ctx, 400, { error: "unsupported_keymode" });
@@ -290,15 +284,12 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
       page: query.page,
       pageSize: query.pageSize,
     });
-    res.setHeader("cache-control", "private, no-store");
+    res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=600");
     await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     return true;
   }
   if (url.pathname === "/api/snapshots/dan-leaderboard") {
-    if (!isBridge(req, ctx)) {
-      sendJson(req, res, ctx, 404, { error: "not_found" });
-      return true;
-    }
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     const query = parseDanLeaderboardQuery(url.searchParams);
     if (!isSkillLeaderboardKeyCount(query.keyCount)) {
       sendJson(req, res, ctx, 400, { error: "unsupported_keymode" });
@@ -311,7 +302,7 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
       page: query.page,
       pageSize: query.pageSize,
     });
-    res.setHeader("cache-control", "private, no-store");
+    res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=600");
     await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     return true;
   }

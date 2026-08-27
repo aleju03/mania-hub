@@ -1166,6 +1166,33 @@ async function migrateActivityMapsBestPayload(db: Db): Promise<void> {
   if (!columns.includes("best_statistics_json")) {
     await db.execute("alter table player_activity_maps add column best_statistics_json text");
   }
+  /* What a Best Performance row and its details card show beyond pp and
+     accuracy. The osu! window carries these on its own scores, but a play
+     below that window has nothing else holding them: score_events keeps the
+     full payload for 14 days and then it is gone. These small columns keep the
+     row whole for every play ingested from here on; older rows read them as
+     unknown, and a row superseded by a better play on the same map has them
+     cleared again (activity.ts), so only the play a profile lists keeps them. */
+  if (!columns.includes("best_max_combo")) {
+    await db.execute("alter table player_activity_maps add column best_max_combo integer");
+  }
+  if (!columns.includes("best_has_replay")) {
+    await db.execute("alter table player_activity_maps add column best_has_replay integer");
+  }
+  // The solo score id, which is what /replay resolves. best_score_id prefers
+  // the legacy id when a score has one, so it cannot double as this.
+  if (!columns.includes("best_solo_score_id")) {
+    await db.execute("alter table player_activity_maps add column best_solo_score_id integer");
+  }
+  if (!columns.includes("best_total_score")) {
+    await db.execute("alter table player_activity_maps add column best_total_score integer");
+  }
+  /* When the day's best play happened. last_played_at moves with every later
+     attempt that day, so on a row whose best came first it names a different
+     play than the one the row describes (6% of rows on the current DB). */
+  if (!columns.includes("best_played_at")) {
+    await db.execute("alter table player_activity_maps add column best_played_at text");
+  }
 }
 
 async function migrateChartAnalysisDtRate(db: Db): Promise<void> {
@@ -1180,6 +1207,15 @@ async function migrateChartAnalysisDtRate(db: Db): Promise<void> {
   // readers blend it toward msd_json by the keymode weight in dan/msd.ts.
   if (!columns.includes("msd_ln_json")) {
     await db.execute("alter table beatmap_chart_analysis add column msd_ln_json text");
+  }
+  // The 0.75x pair of the DT columns, so an HT/DC clear can be credited the dan
+  // the chart is worth AT that rate rather than being dropped for having no
+  // verdict to compare against. Same shapes as msd_dt_json / dan_dt_json.
+  if (!columns.includes("msd_ht_json")) {
+    await db.execute("alter table beatmap_chart_analysis add column msd_ht_json text");
+  }
+  if (!columns.includes("dan_ht_json")) {
+    await db.execute("alter table beatmap_chart_analysis add column dan_ht_json text");
   }
 }
 
@@ -3176,6 +3212,80 @@ async function migrateMapCollections(db: Db): Promise<void> {
     create index if not exists idx_map_collection_members_pos
       on map_collection_members(collection_id, position)
   `);
+
+  // Collections players build and post themselves (features/user-map-collections.ts),
+  // which share the /maps Collections tab with the auto packs above but nothing
+  // else: these are owned rows, never rebuilt, and public the moment they are
+  // written. key_count, member_count and cover_sets_json are derived from the
+  // member list on every write rather than typed by the author.
+  await db.execute(`
+    create table if not exists user_map_collections (
+      id text primary key,
+      -- The pretty half of /collections/<slug>, unique and fixed at creation.
+      slug text,
+      owner_user_id integer not null,
+      owner_username text not null,
+      owner_country text,
+      title text not null,
+      description text,
+      tags_json text not null default '[]',
+      search_text text not null default '',
+      key_count integer,
+      member_count integer not null default 0,
+      favourite_count integer not null default 0,
+      cover_sets_json text not null default '[]',
+      created_at text not null,
+      updated_at text not null
+    )
+  `);
+  // Slugs arrived after the first collections shipped, and `create table if not
+  // exists` is a no-op on a database that already has the older shape, so the
+  // unique index below would fail on a column that was never added.
+  const userMapCollectionColumns = (await db.execute("pragma table_info(user_map_collections)")).rows.map((row) => String(row.name));
+  if (!userMapCollectionColumns.includes("slug")) {
+    await db.execute("alter table user_map_collections add column slug text");
+  }
+  await db.execute(`
+    create unique index if not exists idx_user_map_collections_slug
+      on user_map_collections(slug)
+  `);
+  await db.execute(`
+    create index if not exists idx_user_map_collections_owner
+      on user_map_collections(owner_user_id, created_at desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_user_map_collections_recent
+      on user_map_collections(created_at desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_user_map_collections_favourites
+      on user_map_collections(favourite_count desc, created_at desc)
+  `);
+  await db.execute(`
+    create table if not exists user_map_collection_items (
+      collection_id text not null,
+      beatmap_id integer not null,
+      position integer not null,
+      added_at text not null,
+      primary key (collection_id, beatmap_id)
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_user_map_collection_items_pos
+      on user_map_collection_items(collection_id, position)
+  `);
+  await db.execute(`
+    create table if not exists user_map_collection_favourites (
+      collection_id text not null,
+      user_id integer not null,
+      created_at text not null,
+      primary key (collection_id, user_id)
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_user_map_collection_favourites_user
+      on user_map_collection_favourites(user_id, created_at desc)
+  `);
   // The archived-mods backfill's work list (features/activity-mods-backfill.ts).
   // Materialized once at seed time because picking it needs a per-player
   // ranking, which does not chunk against a cursor; the chain then walks this
@@ -3189,6 +3299,33 @@ async function migrateMapCollections(db: Db): Promise<void> {
       beatmap_id integer not null,
       score_id integer not null,
       dan real not null
+    )
+  `);
+  /* Archived day-bests osu! could not answer for: a pruned score, or an id
+     that resolved to somebody else's play. Remembered so the view-driven
+     completion does not re-ask on every profile open; a row that fills by any
+     other path simply stops being selected. */
+  await db.execute(`
+    create table if not exists activity_play_detail_misses (
+      user_id integer not null,
+      beatmap_id integer not null,
+      day text not null,
+      reason text not null,
+      checked_at text not null,
+      primary key (user_id, beatmap_id, day)
+    )
+  `);
+  // Same shape for the archived-combo sweep, ranked by the play's pp instead
+  // of the chart's dan. Bounded by the player/row caps in config.
+  await db.execute(`
+    create table if not exists activity_combo_backfill_queue (
+      position integer primary key,
+      country text not null,
+      user_id integer not null,
+      day text not null,
+      beatmap_id integer not null,
+      score_id integer not null,
+      pp real not null
     )
   `);
 }

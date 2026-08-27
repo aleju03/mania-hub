@@ -7,6 +7,7 @@ import type { LiveMapsRandomDrawParams } from "./maps-random-draw-params";
 import type { MyDataSkillBreakdown } from "./my-data";
 import type { ServerPackCollectionCard } from "./pack-wallet-sync";
 import type { ReplaySpectatorTicket } from "./replay-spectator";
+import { LEADERBOARD_PAGE_SIZE, type DanLeaderboardSnapshot, type DanSide, type SkillLeaderboardSnapshot } from "./skill-leaderboards";
 import { CrossTabEventSource, supportsCrossTabEventSource } from "./cross-tab-event-source";
 import { SharedEventSourcePool, type PoolableEventSource, type SharedEventSource } from "./shared-event-source";
 
@@ -46,13 +47,15 @@ export interface LivePlayerSkillPlaysPage {
   offset: number;
 }
 
-// One qualifying clear behind a dan estimate: the play, the chart's dan on
-// the credited side, and the credit it earned after the accuracy discount.
+// One qualifying clear behind a dan estimate: the play, the chart's dan on the
+// side it testifies for, and the accuracy it was judged on in that ladder's
+// own currency (stable's 300-weighted accuracy, or ScoreV2's for 4K LN), which
+// is not always the accuracy the client displayed.
 export interface LivePlayerDanEvidencePlay {
   play: LivePlayerSkillPlay;
   chartDan: number;
   chartDanLabel: string;
-  creditedDan: number;
+  clearAccuracy: number;
   countsTowardDan: boolean;
 }
 
@@ -83,6 +86,7 @@ import type {
   MapsFarmedEntry,
   MapsFavouriteBeatmapset,
   OsuScore,
+  OsuScoreStatistics,
   OsuUser,
   SnipeEvent,
 } from "./types";
@@ -336,6 +340,10 @@ export interface LiveRankDeltaSnapshot {
 export interface LivePlayerProfileSnapshot {
   user: OsuUser;
   bestScores: OsuScore[];
+  /* Every keymode with a tracked pp play, ascending. Optional because a
+     response cached before the backend started sending it has no such field,
+     and the profile page falls back to asking for them on their own. */
+  keymodeKeyCounts?: number[];
   fetchedAt: string;
   userFetchedAt: string;
   isStale: boolean;
@@ -891,7 +899,9 @@ export const setLiveBackendUserActive = createServerFn({ method: "POST" })
       const message = body && typeof body === "object" && "error" in body
         ? String((body as { error?: unknown }).error)
         : `Server ${response.status} for /api/admin/set-user-active`;
-      throw new Error(message === "user_not_found" ? "No user with that id or username." : message);
+      if (message === "user_not_found") throw new Error("No user with that id or username.");
+      if (message === "user_permanently_wiped") throw new Error("This user was permanently purged and cannot be reactivated.");
+      throw new Error(message);
     }
     return body;
   });
@@ -903,22 +913,73 @@ export interface LiveBackendUserWipeResult {
   untrackedRosters?: number;
   deletedJobs?: number;
   deleted: Record<string, number>;
+  updated: Record<string, number>;
 }
+
+export interface LiveBackendUserWipePreview {
+  ok: boolean;
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  countryCode: string | null;
+  active: boolean;
+  impact: {
+    trackerScores: number;
+    snipeEvents: number;
+    mapRows: number;
+    packHoldings: number;
+    packOwners: number;
+    packCopies: number;
+    accountDataRows: number;
+  };
+  canWipe: boolean;
+}
+
+export const previewLiveBackendUserWipe = createServerFn({ method: "POST" })
+  .validator((data: { query?: unknown }) => {
+    const query = typeof data?.query === "string" ? data.query.trim().slice(0, 120) : "";
+    if (!query) throw new Error("Enter a username, #user-id, or id:user-id.");
+    return { query };
+  })
+  .handler(async ({ data }): Promise<LiveBackendUserWipePreview> => {
+    await requireAdminAccess("Preview server user wipe");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = { "content-type": "application/json" };
+    if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    const response = await fetch(`${base}/api/admin/wipe-user-preview`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(data),
+    });
+    const body = await response.json() as LiveBackendUserWipePreview & { error?: unknown };
+    if (!response.ok) {
+      const code = String(body?.error ?? `Server ${response.status}`);
+      if (code === "user_not_found") throw new Error("No tracked user matches that username or ID.");
+      if (code === "ambiguous_username") throw new Error("More than one stored account has that username; use # followed by the exact osu! user ID.");
+      throw new Error(code);
+    }
+    return body;
+  });
 
 // Admin hard purge: deactivates the player AND permanently deletes their
 // board/score projection rows (farmed scores, snipe boards, top scores, key
-// stats, skill ratings, feedback marks). Irreversible; re-tracking rebuilds
-// only from future fetches. Accepts a user id or username like set-user-active.
+// stats, skill ratings, feedback marks) plus the cached profile snapshot,
+// activity heatmap and top-play events that would otherwise keep rendering
+// them. The destructive request accepts only the immutable id returned by the
+// preview plus the exact previewed username and confirmation phrase.
 export const wipeLiveBackendUserData = createServerFn({ method: "POST" })
-  .validator((data: { userId?: unknown; username?: unknown }) => {
+  .validator((data: { userId?: unknown; expectedUsername?: unknown; confirmation?: unknown }) => {
     const userId = Number(data?.userId);
-    const username = typeof data?.username === "string" ? data.username.trim().slice(0, 60) : "";
-    if ((!Number.isInteger(userId) || userId <= 0) && !username) {
-      throw new Error("Provide a user id or username.");
+    const expectedUsername = typeof data?.expectedUsername === "string" ? data.expectedUsername.slice(0, 120) : "";
+    const confirmation = typeof data?.confirmation === "string" ? data.confirmation : "";
+    if (!Number.isSafeInteger(userId) || userId <= 0 || !expectedUsername || confirmation !== `WIPE ${userId}`) {
+      throw new Error("Preview the account again before wiping it.");
     }
     return {
-      userId: Number.isInteger(userId) && userId > 0 ? userId : null,
-      username: username || null,
+      userId,
+      expectedUsername,
+      confirmation,
     };
   })
   .handler(async ({ data }): Promise<LiveBackendUserWipeResult> => {
@@ -932,14 +993,18 @@ export const wipeLiveBackendUserData = createServerFn({ method: "POST" })
     const response = await fetch(`${base}/api/admin/wipe-user-data`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ userId: data.userId, username: data.username }),
+      body: JSON.stringify(data),
     });
     const body = await response.json() as LiveBackendUserWipeResult & { error?: unknown };
     if (!response.ok) {
       const message = body && typeof body === "object" && "error" in body
         ? String((body as { error?: unknown }).error)
         : `Server ${response.status} for /api/admin/wipe-user-data`;
-      throw new Error(message === "user_not_found" ? "No user with that id or username." : message);
+      if (message === "user_not_found") throw new Error("That previewed user no longer exists.");
+      if (message === "user_changed_since_preview") throw new Error("The stored username changed after preview; preview the account again.");
+      if (message === "user_has_account_data") throw new Error("Wipe refused: this account has login-owned data. This control is only for tracked-only banned accounts.");
+      if (message === "invalid_confirmation") throw new Error("Invalid wipe confirmation; preview the account again.");
+      throw new Error(message);
     }
     return body;
   });
@@ -1351,6 +1416,80 @@ export async function fetchLivePlayerSkillPlaysDirect(
     offset: String(Math.max(0, Math.floor(options.offset ?? 0))),
   });
   return fetchLiveJson(`/api/profiles/${userId}/skill-plays?${query.toString()}`, options.signal ? { signal: options.signal } : undefined);
+}
+
+/** One play this site tracked, shaped to list beside an osu! window score. */
+export interface LiveKeymodePpPlay {
+  beatmapId: number;
+  keyCount: number;
+  pp: number;
+  /** Display metadata, null when no mania source stored the map's set. */
+  beatmapsetId: number | null;
+  title: string | null;
+  artist: string | null;
+  version: string | null;
+  accuracy: number | null;
+  rank: string | null;
+  mods: string[];
+  /** When the play that won this map happened, as an ISO instant. */
+  playedAt: string | null;
+  /* Null for anything ingested before the day-best rows started keeping them:
+     the raw score payload they would have come from is pruned after 14 days.
+     Unknown, not zero, so a row can say so instead of inventing a number. */
+  maxCombo: number | null;
+  hasReplay: boolean | null;
+  /** The solo score id /replay resolves, when the play kept one. */
+  soloScoreId: number | null;
+  /** Total score as the site displays it, null for a row from before it was kept. */
+  totalScore: number | null;
+  /** Set when the play also has a legacy id, which makes it a stable score. */
+  legacyScoreId: number | null;
+  /** Judgement counts, so a tracked row can open the same details card a window
+      row does. Null for a play stored before they were kept. */
+  statistics: OsuScoreStatistics | null;
+  creator: string | null;
+  /** The map's own numbers at 1.0x, not the play's: a rate-modded play is not
+      described by them, so its details card leaves them out. */
+  stars: number | null;
+  bpm: number | null;
+}
+
+export interface LivePlayerKeymodePpTail {
+  userId: number;
+  tracked: boolean;
+  /** Earliest day the tail covers, as YYYY-MM-DD. Null when nothing is tracked. */
+  trackedFrom: string | null;
+  plays: LiveKeymodePpPlay[];
+  /** Tracked plays skipped because no mania source carries the map's keymode. */
+  unknownKeyCount: number;
+  generatedAt: string;
+}
+
+/* The pp plays this site tracked below a player's osu! top-200 window. What
+   they buy is a keymode pp total that is not capped by how much of the shared
+   200-play window that keymode happened to win: a 6K list of 11 plays becomes
+   its own list of up to 200. Nothing here is required - a player from an
+   untracked country reads back `tracked: false` with no plays, and the totals
+   stay window-only. */
+export async function fetchLivePlayerKeymodePpDirect(userId: number): Promise<LivePlayerKeymodePpTail> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  return fetchLiveJson(`/api/profiles/${userId}/keymode-pp`);
+}
+
+/** Which keymodes that tail holds, without the plays. */
+export interface LivePlayerKeymodePpKeys {
+  userId: number;
+  tracked: boolean;
+  keyCounts: number[];
+  generatedAt: string;
+}
+
+/* The keymode chips have to be complete before anyone touches them, and a
+   keymode can live entirely below the window, so the strip asks for the tail's
+   key counts on every view and leaves the plays themselves to the first pick. */
+export async function fetchLivePlayerKeymodePpKeysDirect(userId: number): Promise<LivePlayerKeymodePpKeys> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  return fetchLiveJson(`/api/profiles/${userId}/keymode-pp?view=keys`);
 }
 
 // The clears behind one side of a player's dan estimate, plus per-skillset
@@ -2355,6 +2494,41 @@ export async function fetchLiveRankDeltas(country: string, userIds: number[]): P
   return fetchLiveJson(`/api/snapshots/rank-deltas?country=${encodeURIComponent(country)}&userIds=${uniqueUserIds.join(",")}`);
 }
 
+/* The /rankings skill and dan boards. One global projection filtered to the
+   scope, so these are plain public reads like the pp board; the backend caches
+   the response for its own 5-minute board rebuild. */
+export async function fetchLiveSkillLeaderboard(params: {
+  country: string;
+  keys: number;
+  axis: string;
+  page: number;
+}): Promise<SkillLeaderboardSnapshot> {
+  const query = new URLSearchParams({
+    country: params.country,
+    keys: String(params.keys),
+    axis: params.axis,
+    page: String(Math.max(1, Math.floor(params.page))),
+    pageSize: String(LEADERBOARD_PAGE_SIZE),
+  });
+  return fetchLiveJson(`/api/snapshots/skill-leaderboard?${query.toString()}`);
+}
+
+export async function fetchLiveDanLeaderboard(params: {
+  country: string;
+  keys: number;
+  side: DanSide;
+  page: number;
+}): Promise<DanLeaderboardSnapshot> {
+  const query = new URLSearchParams({
+    country: params.country,
+    keys: String(params.keys),
+    side: params.side,
+    page: String(Math.max(1, Math.floor(params.page))),
+    pageSize: String(LEADERBOARD_PAGE_SIZE),
+  });
+  return fetchLiveJson(`/api/snapshots/dan-leaderboard?${query.toString()}`);
+}
+
 export async function fetchLiveDanEstimates(items: LiveDanEstimateRequest[], estimatorVersion: number): Promise<LiveDanEstimateBatch> {
   return fetchLiveJson("/api/dan-estimates", {
     method: "POST",
@@ -2684,6 +2858,8 @@ export interface LiveStreakBoardEntry {
   rank: number;
   userId: number;
   username: string;
+  /* Null for an account the backend has no `users` row for yet. */
+  countryCode: string | null;
   streak: number;
   achievedAt: number;
 }

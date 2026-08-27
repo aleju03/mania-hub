@@ -9,6 +9,7 @@ import {
   fetchLiveBackendTableRows,
   getLiveBackendUrl,
   openLiveEventSource,
+  previewLiveBackendUserWipe,
   runLiveBackendAdminAction,
   setLiveBackendUserActive,
   wipeLiveBackendUserData,
@@ -17,6 +18,7 @@ import {
   type LiveBackendTableCell,
   type LiveBackendTablePreview,
   type LiveBackendUserActiveResult,
+  type LiveBackendUserWipePreview,
   type LiveBackendUserWipeResult,
   type LiveEventName,
 } from "../../lib/live-backend";
@@ -709,7 +711,7 @@ function LiveBackendPage() {
             <RateBreakdownCard status={status} />
           </Section>
 
-          <Section title="Users" subtitle="Two controls: a reversible soft-deactivate/reactivate (untracks the player and marks them inactive, deletes nothing), and an irreversible wipe that also deletes their board/score projections.">
+          <Section title="Users" subtitle="Two controls: a reversible soft-deactivate/reactivate (untracks the player and marks them inactive, deletes nothing), and an irreversible wipe that also deletes their board/score projections, profile page and activity.">
             <UserModerationCard />
             <UserWipeCard />
           </Section>
@@ -1582,92 +1584,125 @@ function UserModerationCard() {
 // pattern as the row button) since nothing here can be undone.
 function UserWipeCard() {
   const [query, setQuery] = useState("");
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<LiveBackendUserWipePreview | null>(null);
+  const [busy, setBusy] = useState<"preview" | "wipe" | null>(null);
   const [result, setResult] = useState<LiveBackendUserWipeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const arm = () => {
     if (!query.trim()) { setError("Enter a user id or username."); return; }
+    setBusy("preview");
     setError(null);
-    setConfirming(true);
+    setResult(null);
+    setPreview(null);
+    previewLiveBackendUserWipe({ data: { query: query.trim() } })
+      .then((value) => setPreview(value))
+      .catch((err) => setError(err instanceof Error ? err.message : "Preview failed."))
+      .finally(() => setBusy(null));
   };
 
   const submit = () => {
-    const trimmed = query.trim();
-    if (!trimmed) { setError("Enter a user id or username."); setConfirming(false); return; }
-    const asId = Number(trimmed);
-    const payload = Number.isInteger(asId) && asId > 0 ? { userId: asId } : { username: trimmed };
-    setBusy(true);
+    if (!preview || !preview.canWipe) { setError("Preview a tracked-only account before wiping it."); return; }
+    setBusy("wipe");
     setError(null);
     setResult(null);
-    wipeLiveBackendUserData({ data: payload })
-      .then((res) => setResult(res))
+    wipeLiveBackendUserData({
+      data: {
+        userId: preview.userId,
+        expectedUsername: preview.username,
+        confirmation: `WIPE ${preview.userId}`,
+      },
+    })
+      .then((res) => { setResult(res); setPreview(null); })
       .catch((err) => setError(err instanceof Error ? err.message : "Action failed."))
-      .finally(() => { setBusy(false); setConfirming(false); });
+      .finally(() => setBusy(null));
   };
 
   const deletedEntries = result ? Object.entries(result.deleted ?? {}) : [];
   const deletedTotal = deletedEntries.reduce((sum, [, count]) => sum + count, 0);
+  const updatedEntries = result ? Object.entries(result.updated ?? {}) : [];
 
   return (
     <div className="rounded-lg border border-osu-red/30 bg-osu-b4/30 p-3">
       <div className="text-[11px] text-osu-f1">
-        Wipe data: deactivates the player AND permanently deletes their board/score projections
-        (farmed maps, snipe boards, top scores, key stats, skill ratings, feedback marks).
-        Irreversible; re-tracking them later would rebuild only from future fetches.
+        Purge a banned tracked player: keeps one inactive tombstone so ingest, roster refreshes,
+        jobs and profile lookups cannot restore them, then removes their Tracker scores, boards,
+        histories, maps, profile/activity/skills data and any maniacards of that player. The lookup
+        always previews the exact username and immutable osu! id first; plain numeric text is treated
+        as a username, while <span className="font-mono text-osu-l2">#123</span> forces user id 123.
+        The purge refuses accounts with login-owned data such as goals, wallets, skins, uploads,
+        signatures, collections or linked Discord data.
       </div>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           value={query}
-          onChange={(event) => { setQuery(event.target.value); setConfirming(false); }}
-          onKeyDown={(event) => { if (event.key === "Enter") arm(); }}
-          placeholder="User id or username"
+          onChange={(event) => { setQuery(event.target.value); setPreview(null); setError(null); }}
+          onKeyDown={(event) => { if (event.key === "Enter" && busy === null) arm(); }}
+          placeholder="Username or #user id"
+          disabled={busy !== null}
           className="min-w-0 flex-1 rounded-md border border-osu-b3/40 bg-osu-b5 px-2.5 py-1.5 text-[12px] text-osu-l2 placeholder:text-osu-f1/50 focus:border-osu-c2/60 focus:outline-none"
         />
         <div className="flex gap-2">
-          {confirming ? (
-            <>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={arm}
+            className="inline-flex items-center gap-1.5 rounded-md border border-osu-red/40 bg-osu-red/15 px-3 py-1.5 text-[12px] text-osu-red-light transition-colors hover:bg-osu-red/30 disabled:opacity-50 cursor-pointer"
+          >
+            <Search className="h-3.5 w-3.5" /> {busy === "preview" ? "Checking..." : "Preview purge"}
+          </button>
+        </div>
+      </div>
+      {preview ? (
+        <div className="mt-3 rounded-md border border-osu-b3/40 bg-osu-b5/70 p-3 text-[11px] text-osu-f1">
+          <div className="flex flex-wrap items-center gap-2 text-osu-l2">
+            {preview.avatarUrl ? <img src={preview.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" /> : null}
+            <span className="font-semibold">{preview.username}</span>
+            <span className="font-mono text-osu-f1">#{preview.userId}</span>
+            {preview.countryCode ? <CountryFlag code={preview.countryCode} size="xs" decorative /> : null}
+            <span className={preview.active ? "text-osu-green-light" : "text-osu-f1"}>{preview.active ? "active" : "already inactive"}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-osu-f1/85">
+            <span>tracker: {formatNumber(preview.impact.trackerScores)}</span>
+            <span>snipes: {formatNumber(preview.impact.snipeEvents)}</span>
+            <span>map rows: {formatNumber(preview.impact.mapRows)}</span>
+            <span>card holdings: {formatNumber(preview.impact.packHoldings)}</span>
+            <span>card owners: {formatNumber(preview.impact.packOwners)}</span>
+            <span>card copies: {formatNumber(preview.impact.packCopies)}</span>
+          </div>
+          {preview.canWipe ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy !== null}
                 onClick={submit}
                 className="inline-flex items-center gap-1.5 rounded-md bg-osu-red px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-osu-red-light disabled:opacity-50 cursor-pointer"
               >
-                <Trash2 className="h-3.5 w-3.5" /> {busy ? "..." : `Confirm wipe ${query.trim()}`}
+                <Trash2 className="h-3.5 w-3.5" /> {busy === "wipe" ? "Purging..." : `Confirm purge ${preview.username} (#${preview.userId})`}
               </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setConfirming(false)}
-                className="rounded-md px-2 py-1.5 text-[12px] text-osu-f1 hover:text-white disabled:opacity-50 cursor-pointer"
-              >
-                cancel
-              </button>
-            </>
+              <button type="button" disabled={busy !== null} onClick={() => setPreview(null)} className="rounded-md px-2 py-1.5 text-[12px] text-osu-f1 hover:text-white disabled:opacity-50 cursor-pointer">cancel</button>
+            </div>
           ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={arm}
-              className="inline-flex items-center gap-1.5 rounded-md border border-osu-red/40 bg-osu-red/15 px-3 py-1.5 text-[12px] text-osu-red-light transition-colors hover:bg-osu-red/30 disabled:opacity-50 cursor-pointer"
-            >
-              <Trash2 className="h-3.5 w-3.5" /> {busy ? "..." : "Wipe data"}
-            </button>
+            <div className="mt-2 text-osu-red-light">
+              Refused: this account has {formatNumber(preview.impact.accountDataRows)} login-owned row{preview.impact.accountDataRows === 1 ? "" : "s"}. Use a purpose-built account deletion workflow instead.
+            </div>
           )}
         </div>
-      </div>
+      ) : null}
       {error ? <div className="mt-2 text-[11px] text-osu-red-light">{error}</div> : null}
       {result ? (
         <div className="mt-2 text-[11px] text-osu-f1">
           <div>
-            Wiped {result.username ?? `User ${result.userId}`} (#{result.userId}): deleted {formatNumber(deletedTotal)} row{deletedTotal === 1 ? "" : "s"}
+            Purged {result.username ?? `User ${result.userId}`} (#{result.userId}): deleted {formatNumber(deletedTotal)} row{deletedTotal === 1 ? "" : "s"}
             {result.untrackedRosters ? ` · untracked ${result.untrackedRosters} roster${result.untrackedRosters === 1 ? "" : "s"}` : ""}
             {result.deletedJobs ? ` · cleared ${result.deletedJobs} pending job${result.deletedJobs === 1 ? "" : "s"}` : ""}. The user row stays as an inactive tombstone.
           </div>
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[10px] text-osu-f1/80">
             {deletedEntries.map(([table, count]) => (
               <span key={table}>{table}: <span className="text-osu-l2">{formatNumber(count)}</span></span>
+            ))}
+            {updatedEntries.map(([table, count]) => (
+              <span key={`updated:${table}`}>{table} updated: <span className="text-osu-l2">{formatNumber(count)}</span></span>
             ))}
           </div>
         </div>

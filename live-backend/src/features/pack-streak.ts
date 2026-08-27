@@ -156,6 +156,10 @@ export interface StreakBoardEntry {
   rank: number;
   userId: number;
   username: string;
+  /* Read off the site account rather than stored with the best: a player who
+     moves country should read as where they are now. Null when the account is
+     not in `users` yet. */
+  countryCode: string | null;
   streak: number;
   achievedAt: number;
 }
@@ -637,6 +641,11 @@ export async function cashOutStreakRun(
    is not on the board - which is the honest reading of "longest streaks
    recorded" anyway, and abandoned runs are swept in so nothing earned goes
    missing. */
+function streakCountryCode(value: unknown): string | null {
+  const code = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return code ? code : null;
+}
+
 export async function getStreakBoard(
   db: Db,
   pool: StreakPool,
@@ -644,10 +653,11 @@ export async function getStreakBoard(
 ): Promise<StreakBoard> {
   const rows = (await exec(
     db,
-    `select user_id, username, streak, achieved_at
-       from pack_streak_bests
-      where pool = ?
-      order by streak desc, achieved_at asc
+    `select b.user_id, b.username, b.streak, b.achieved_at,
+            (select u.country_code from users u where u.user_id = b.user_id) as country_code
+       from pack_streak_bests b
+      where b.pool = ?
+      order by b.streak desc, b.achieved_at asc
       limit ?`,
     [pool, STREAK_BOARD_SIZE],
   )).rows;
@@ -655,6 +665,7 @@ export async function getStreakBoard(
     rank: index + 1,
     userId: Number(row.user_id) || 0,
     username: String(row.username ?? ""),
+    countryCode: streakCountryCode(row.country_code),
     streak: Math.max(0, Number(row.streak) || 0),
     achievedAt: Number(row.achieved_at) || 0,
   }));
@@ -666,7 +677,10 @@ export async function getStreakBoard(
     else {
       const own = (await exec(
         db,
-        "select username, streak, achieved_at from pack_streak_bests where pool = ? and user_id = ?",
+        `select b.username, b.streak, b.achieved_at,
+                (select u.country_code from users u where u.user_id = b.user_id) as country_code
+           from pack_streak_bests b
+          where b.pool = ? and b.user_id = ?`,
         [pool, viewerId],
       )).rows[0];
       const best = Math.max(0, Number(own?.streak) || 0);
@@ -687,6 +701,7 @@ export async function getStreakBoard(
           rank: Math.max(1, (Number(ahead?.ahead) || 0) + 1),
           userId: viewerId ?? 0,
           username: String(own?.username ?? ""),
+          countryCode: streakCountryCode(own?.country_code),
           streak: best,
           achievedAt,
         };
@@ -716,6 +731,7 @@ export async function removeStreakBest(
     rank: 0,
     userId: input.userId,
     username: String(row.username ?? ""),
+    countryCode: null,
     streak: Math.max(0, Number(row.streak) || 0),
     achievedAt: Number(row.achieved_at) || 0,
   };

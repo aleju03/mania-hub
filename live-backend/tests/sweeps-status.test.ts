@@ -55,6 +55,7 @@ describe("sweeps status registry", () => {
     const ids = reports.map((entry) => entry.id);
     expect(ids).toEqual([
       "activity-mods-backfill",
+      "activity-combo-backfill",
       "top-scores-backfill",
       "skill-vector-backfill-v5",
       "dt-rate-analysis",

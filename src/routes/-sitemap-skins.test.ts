@@ -12,7 +12,7 @@ describe("sitemap", () => {
     expect(xml).toContain("<loc>https://mania-tracker.com/skins</loc>");
     expect(xml).toContain("<loc>https://mania-tracker.com/communities</loc>");
     expect(xml).toContain("<loc>https://mania-tracker.com/packs/collections</loc>");
-    expect(xml.match(/<url>/g)).toHaveLength(11);
+    expect(xml.match(/<url>/g)).toHaveLength(12);
   });
 
   it("adds a url per skin, with the lastmod at date precision", () => {
@@ -23,7 +23,7 @@ describe("sitemap", () => {
     expect(xml).toContain("<loc>https://mania-tracker.com/skins/r-skin-v1-2-bars</loc>");
     expect(xml).toContain("<lastmod>2026-08-10</lastmod>");
     expect(xml).toContain("<loc>https://mania-tracker.com/skins/gray-malevich-edited</loc>");
-    expect(xml.match(/<url>/g)).toHaveLength(13);
+    expect(xml.match(/<url>/g)).toHaveLength(14);
     // The undated skin carries no lastmod rather than an empty or invalid one.
     expect(xml.match(/<lastmod>/g)).toHaveLength(1);
   });

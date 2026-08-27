@@ -18,7 +18,7 @@ import type { LiveEventLog } from "../live/event-log.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay, toLeanTrackerScore } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { logInfo, logWarn } from "../logger.js";
-import { isUserKnownInactive } from "../users.js";
+import { isUserKnownInactive } from "../user-status.js";
 
 export interface ScoreIngestOptions {
   enqueueRecentReconcile?: boolean;
@@ -66,6 +66,11 @@ export class ScoreIngestor {
     const scoreId = Number(score.id);
     const beatmapId = Number(score.beatmap_id ?? score.beatmap?.id);
     if (!Number.isFinite(scoreId) || scoreId < 0 || !Number.isFinite(beatmapId) || beatmapId <= 0) return false;
+    // An inactive row is a durable suppression tombstone (admin wipe or osu!
+    // missing-user detection), not merely a rankings filter. Check it before
+    // feedback, metadata, raw-event and activity writes so a later hydrated
+    // oSC score cannot re-track or partially recreate a wiped player.
+    if (await isUserKnownInactive(this.db, score.user_id)) return false;
     // Farm-helper feedback auto-resolution: a genuinely new passed score on a
     // marked lane retires the mark (the real play drives recs from now on) and
     // evicts this process's snapshot cache for the player. Runs before the
@@ -187,17 +192,16 @@ export class ScoreIngestor {
     }
     if (source.startsWith("osc_")) await this.updateOscCursor(score, receivedAt);
     const canUseOsuApi = this.canUseOsuApi();
-    const userKnownInactive = await isUserKnownInactive(this.db, score.user_id);
-    if (canUseOsuApi && !userKnownInactive && !score.user) {
+    if (canUseOsuApi && !score.user) {
       await this.queue.enqueue("enrich_user", `user:${score.user_id}`, { userId: score.user_id }, { priority: 100 });
     }
     if (canUseOsuApi && (!score.beatmap || !score.beatmapset)) {
       await this.queue.enqueue("enrich_beatmap", `beatmap:${beatmapId}`, { beatmapId }, { priority: 90 });
     }
-    if (canUseOsuApi && !userKnownInactive && enqueueRecentReconcile) {
+    if (canUseOsuApi && enqueueRecentReconcile) {
       await this.enqueueRecentReconcileIfDue(score);
     }
-    if (canUseOsuApi && !userKnownInactive && (processTopPlayFeatures || processMapsFarmedFeatures)) {
+    if (canUseOsuApi && (processTopPlayFeatures || processMapsFarmedFeatures)) {
       for (const country of countries) {
         if (processTopPlayFeatures) {
           await maybeEnqueueTopPlayRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);

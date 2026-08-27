@@ -1730,6 +1730,167 @@ async function enqueueDtRateAnalysis(queue: JobQueue, cursor: number): Promise<v
   );
 }
 
+// ── One-shot rate-adjusted (HT / 0.75x) analysis sweep ───────────────────────
+// The DT pair above, at the other rate, for a different consumer: player dan
+// clears. An HT pass used to contribute nothing, because the only stored
+// verdicts are 1.0x and 1.5x and there was nothing to credit a 0.75x clear
+// against. Crediting it the chart's 1.0x dan would be plain wrong (a 12th-dan
+// chart slowed to 0.75x is not a 12th-dan clear), so this computes what the
+// chart is actually worth at that rate and the clear rules credit that.
+//
+// Scope is charts anyone is observed to play slowed down, from both surfaces
+// that record mods: farmed scores and tracked activity. Measured on the 2026-08
+// snapshot that is 8142 candidates covering 94.7% of the charts actually
+// sitting at 0.75x in stored plays, against 121688 rated 4K/7K charts if this
+// swept everything. The residual fills in as those plays land in activity.
+// Purely local work (cached .osu corpus), no osu! API.
+export const HT_RATE_ANALYSIS_JOB = "recompute_ht_rate_analysis_sweep";
+export const HT_RATE_ANALYSIS_META_KEY = "ht_rate_analysis_done:v1";
+const HT_RATE_ANALYSIS_CHUNK = 40;
+const HT_RATE = 0.75;
+
+export interface HtRateAnalysisChunkResult {
+  nextCursor: number;
+  scanned: number;
+  computed: number[];
+  done: boolean;
+}
+
+export async function recomputeHtRateChunk(
+  db: Db,
+  cursor: number,
+  limit = HT_RATE_ANALYSIS_CHUNK,
+): Promise<HtRateAnalysisChunkResult> {
+  // Correlated EXISTS per candidate, same reasoning as the DT sweep's scope
+  // query: both seek their beatmap_id index instead of LIKE-scanning the whole
+  // farmed/activity table once per chunk.
+  const rows = (await exec(
+    db,
+    `select a.beatmap_id as beatmap_id
+     from beatmap_chart_analysis a
+     where a.analysis_version = ? and a.status = 'ready'
+       and a.key_count in (4, 7) and a.msd_ht_json is null
+       and a.beatmap_id > ?
+       and (
+         exists (
+           select 1 from country_maps_farmed_scores f
+           where f.beatmap_id = a.beatmap_id
+             and (f.mods_json like '%"HT"%' or f.mods_json like '%"DC"%')
+         )
+         or exists (
+           select 1 from player_activity_maps m
+           where m.beatmap_id = a.beatmap_id
+             and (m.best_mods_json like '%"HT"%' or m.best_mods_json like '%"DC"%')
+         )
+       )
+     order by a.beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const computed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    if (await storeHtRateVerdict(db, beatmapId)) computed.push(beatmapId);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, computed, done: rows.length < limit };
+}
+
+/**
+ * The 0.75x MSD + lean dan verdict for one chart, written to the HT columns.
+ * Mirrors storeDtRateVerdict exactly, including leaving a chart the .osu cache,
+ * parser or estimator cannot serve with its columns untouched.
+ */
+export async function storeHtRateVerdict(db: Db, beatmapId: number): Promise<boolean> {
+  const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+  if (!osuText) return false;
+  try {
+    const map = parseManiaBeatmap(osuText);
+    if (map.keyCount !== 4 && map.keyCount !== 7) return false;
+    const starRating = Number((await exec(
+      db,
+      "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
+      [beatmapId],
+    )).rows[0]?.difficulty_rating ?? 0);
+    const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: HT_RATE }).catch(() => null);
+    if (!msd) return false;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const classification = await classifyChartWithCompanella(map, osuText, {
+      rate: HT_RATE,
+      starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
+      totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+      version: map.version,
+    }, { msdValues: msd.values });
+
+    const lean = leanClassification(classification);
+    const danHt = {
+      primaryLabel: lean.primary?.displayName ?? null,
+      primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
+      rawDan: lean.primary?.rawDan ?? null,
+    };
+    await exec(
+      db,
+      `update beatmap_chart_analysis
+       set msd_ht_json = json(?), dan_ht_json = json(?)
+       where beatmap_id = ? and analysis_version = ?`,
+      [json(msd), json(danHt), beatmapId, CHART_ANALYSIS_VERSION],
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function ensureHtRateAnalysisSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [HT_RATE_ANALYSIS_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [HT_RATE_ANALYSIS_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueHtRateAnalysis(queue, 0);
+}
+
+/**
+ * Returns true on the chunk that finishes the sweep. The caller uses that to
+ * chain the player-skill dan sweep, which has to run again now that HT
+ * verdicts exist: every stored dan was computed with nothing to credit an HT
+ * clear against. The chaining lives in the worker rather than here because
+ * chart-analysis cannot import player-skills (that dependency already runs the
+ * other way), and boot seeding alone would not do it - sweeps seed once at
+ * startup, and this one finishes long after.
+ */
+export async function runHtRateAnalysisJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<boolean> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeHtRateChunk(db, cursor);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [HT_RATE_ANALYSIS_META_KEY, json({ finishedAt: now }), now],
+    );
+    return true;
+  }
+  await enqueueHtRateAnalysis(queue, result.nextCursor);
+  return false;
+}
+
+async function enqueueHtRateAnalysis(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    HT_RATE_ANALYSIS_JOB,
+    `${HT_RATE_ANALYSIS_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
 // ── One-shot LN-primary re-pin sweep ─────────────────────────────────────────
 // LN_PRIMARY_MIN_RATIO (dan/dan-estimator/ln.ts) moved from 0.5 to 0.45 so a
 // chart cannot feed an LN rating and still wear a rice dan badge. Stored

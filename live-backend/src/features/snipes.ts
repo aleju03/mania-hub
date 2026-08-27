@@ -428,6 +428,7 @@ export async function getSnipeBoardSnapshot(
      from country_beatmap_scores s
      left join users u on u.user_id = s.user_id
      where ${scopeSql.clause} and s.beatmap_id = ? and s.lane_key = ?
+       and coalesce(u.is_active, 1) != 0
      order by s.total_score desc
      limit ?`,
     [...scopeSql.args, beatmapId, laneKey, limit],
@@ -480,6 +481,8 @@ export async function getSnipesSnapshot(db: Db, country: string, limit: number):
      left join users sniper on sniper.user_id = s.sniper_id
      left join users victim on victim.user_id = s.victim_id
      where ${scopeSql.clause}
+       and coalesce(sniper.is_active, 1) != 0
+       and coalesce(victim.is_active, 1) != 0
      order by s.detected_at desc
      limit ?`,
     [...scopeSql.args, limit],

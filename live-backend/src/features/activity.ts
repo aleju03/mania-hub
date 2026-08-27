@@ -10,8 +10,9 @@ import type { OsuApiClient } from "../osu/client.js";
 import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { enqueueChartAnalysisIfNeeded, enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
+import { activityMapBestRowOrder } from "./keymode-pp.js";
 import { addDayKeyDays, getCountryTimezone, getZonedDayKey } from "../shared/country-timezones.js";
-import { getDisplayedAccuracy, getDisplayedRank, getScoreTimestamp, nowIso } from "../shared/score.js";
+import { getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getScoreTimestamp, nowIso, scoreHasReplay } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 
 // v5: chordjack requires actual chord-column repetition (chordColumnOverlapRatio
@@ -544,11 +545,15 @@ async function upsertActivityMap(
   const pp = score.pp == null ? null : Number(score.pp);
   const accuracy = getDisplayedAccuracy(score);
   const scoreId = Number(score.legacy_score_id && score.legacy_score_id > 0 ? score.legacy_score_id : score.id);
+  const maxCombo = Number(score.max_combo);
+  // /replay resolves the solo id, which is score.id even when a legacy id
+  // exists beside it, so it is kept apart from best_score_id.
+  const soloScoreId = Number(score.id);
   await exec(
     db,
     `insert into player_activity_maps
-       (country, user_id, day, beatmap_id, play_count, best_score_id, best_pp, best_accuracy, best_rank, best_mods_json, best_statistics_json, first_played_at, last_played_at, updated_at)
-     values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (country, user_id, day, beatmap_id, play_count, best_score_id, best_pp, best_accuracy, best_rank, best_mods_json, best_statistics_json, best_max_combo, best_has_replay, best_solo_score_id, best_total_score, best_played_at, first_played_at, last_played_at, updated_at)
+     values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(country, user_id, day, beatmap_id) do update set
        play_count = player_activity_maps.play_count + 1,
        best_score_id = case when ${activityMapBetterSql()} then excluded.best_score_id else player_activity_maps.best_score_id end,
@@ -557,6 +562,11 @@ async function upsertActivityMap(
        best_rank = case when ${activityMapBetterSql()} then excluded.best_rank else player_activity_maps.best_rank end,
        best_mods_json = case when ${activityMapBetterSql()} then excluded.best_mods_json else player_activity_maps.best_mods_json end,
        best_statistics_json = case when ${activityMapBetterSql()} then excluded.best_statistics_json else player_activity_maps.best_statistics_json end,
+       best_max_combo = case when ${activityMapBetterSql()} then excluded.best_max_combo else player_activity_maps.best_max_combo end,
+       best_has_replay = case when ${activityMapBetterSql()} then excluded.best_has_replay else player_activity_maps.best_has_replay end,
+       best_solo_score_id = case when ${activityMapBetterSql()} then excluded.best_solo_score_id else player_activity_maps.best_solo_score_id end,
+       best_total_score = case when ${activityMapBetterSql()} then excluded.best_total_score else player_activity_maps.best_total_score end,
+       best_played_at = case when ${activityMapBetterSql()} then excluded.best_played_at else player_activity_maps.best_played_at end,
        first_played_at = case
          when player_activity_maps.first_played_at is null or excluded.first_played_at < player_activity_maps.first_played_at
            then excluded.first_played_at
@@ -581,10 +591,59 @@ async function upsertActivityMap(
       // pruned: mods carry the rate, judgement counts carry goal + miss share.
       JSON.stringify(score.mods ?? []),
       JSON.stringify(score.statistics ?? {}),
+      // What a listed play shows next to its pp once the raw payload is gone.
+      Number.isFinite(maxCombo) && maxCombo >= 0 ? maxCombo : null,
+      scoreHasReplay(score) ? 1 : 0,
+      Number.isFinite(soloScoreId) && soloScoreId > 0 ? soloScoreId : null,
+      getDisplayedTotalScore(score),
+      // The instant of the play these best_* columns describe, which is not the
+      // day's last attempt once the map is replayed after the best run.
+      activity.endedAt,
       activity.endedAt,
       activity.endedAt,
       now,
     ],
+  );
+  // Only a play worth pp can have taken the map's best spot, and most plays
+  // are not, so the extra statement stays off the hot path for them.
+  if (pp != null && Number.isFinite(pp) && pp > 0) {
+    await clearSupersededPlayDetails(db, activity.userId, activity.beatmapId);
+  }
+}
+
+/**
+ * Keep the details of one play per map, the way an osu! profile does.
+ *
+ * A map played on twenty days is twenty rows here, and the per-keymode lists
+ * quote exactly one of them: the best pp any day saw. Carrying combo, score
+ * and the replay id on the other nineteen stores the same play over and over
+ * for nothing, so a better play takes those columns off every row it beat.
+ *
+ * Mods, judgement counts and best_played_at deliberately stay on every row:
+ * the first two are dan evidence, and the dan pipeline reads each archived
+ * day-best on its own rather than only the strongest one; the third is that
+ * day's own fact and costs one timestamp.
+ *
+ * "Beat" is decided by activityMapBestRowOrder, not by pp alone, so the row
+ * this leaves whole is exactly the row the endpoint reads. Deciding it with
+ * `best_pp < max(best_pp)` left every row of a tie holding a copy, and let
+ * the endpoint quote a different one of them than this pruned around.
+ */
+export async function clearSupersededPlayDetails(db: Db, userId: number, beatmapId: number): Promise<void> {
+  await exec(
+    db,
+    `update player_activity_maps
+     set best_max_combo = null, best_has_replay = null, best_solo_score_id = null, best_total_score = null
+     where rowid in (
+       select rowid from (
+         select a.rowid as rowid, row_number() over (order by ${activityMapBestRowOrder("a")}) as rn
+         from player_activity_maps a
+         where a.user_id = ? and a.beatmap_id = ?
+       ) where rn > 1
+     )
+       and (best_max_combo is not null or best_has_replay is not null
+            or best_solo_score_id is not null or best_total_score is not null)`,
+    [userId, beatmapId],
   );
 }
 

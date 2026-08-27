@@ -24,7 +24,7 @@ import { getCachedBeatmapFile } from "../../osu/beatmap-file-cache.js";
 import { getDbDiskUsage, getStorageBreakdownSnapshot, getStorageFootprint, getTablePreview, runRetention } from "../../retention.js";
 import { enqueueRosterRefreshes } from "../../rosters/country-rosters.js";
 import { deleteSkinObjects } from "../../skins/r2.js";
-import { setUserActive, wipeUserProjections } from "../../users.js";
+import { PermanentlyWipedUserError, previewUserWipe, setUserActive, UserWipeLookupError, wipeUserProjections } from "../../users.js";
 import type { HttpContext } from "../context.js";
 import { parseCountryFeatureTierParam, parseCountryStatusParam } from "../country-activation.js";
 import { isAdmin, normalizeIdList, readBody } from "../request.js";
@@ -110,7 +110,16 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 404, { error: "user_not_found" });
       return true;
     }
-    const result = await setUserActive(ctx.serveWriteDb ?? ctx.db, userId, active, "admin: manual toggle");
+    let result;
+    try {
+      result = await setUserActive(ctx.serveWriteDb ?? ctx.db, userId, active, "admin: manual toggle");
+    } catch (error) {
+      if (error instanceof PermanentlyWipedUserError) {
+        sendJson(req, res, ctx, 409, { error: "user_permanently_wiped" });
+        return true;
+      }
+      throw error;
+    }
     sendJson(req, res, ctx, 200, { ok: true, ...result });
     return true;
   }
@@ -126,25 +135,34 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; username?: unknown }>((await readBody(req)) || "{}", {});
-    let userId = Number(body.userId);
-    let userRow = Number.isInteger(userId) && userId > 0
-      ? (await exec(ctx.db, "select user_id, username from users where user_id = ? limit 1", [userId])).rows[0]
-      : undefined;
-    if (!userRow) {
-      const username = typeof body.username === "string" ? body.username.trim() : "";
-      if (username) {
-        userRow = (await exec(ctx.db, "select user_id, username from users where lower(username) = lower(?) limit 1", [username])).rows[0];
-        if (userRow) userId = Number(userRow.user_id);
-      }
+    const body = parseJson<{ userId?: unknown; expectedUsername?: unknown; confirmation?: unknown }>((await readBody(req)) || "{}", {});
+    const userId = Number(body.userId);
+    const expectedUsername = typeof body.expectedUsername === "string" ? body.expectedUsername : "";
+    if (!Number.isSafeInteger(userId) || userId <= 0 || body.confirmation !== `WIPE ${userId}`) {
+      sendJson(req, res, ctx, 400, { error: "invalid_confirmation" });
+      return true;
     }
-    if (!userRow || !Number.isInteger(userId) || userId <= 0) {
+    const userRow = (await exec(ctx.db, "select username from users where user_id = ? limit 1", [userId])).rows[0];
+    if (!userRow) {
       sendJson(req, res, ctx, 404, { error: "user_not_found" });
       return true;
     }
-    const username = userRow.username == null ? null : String(userRow.username);
-    const result = await wipeUserProjections(ctx.serveWriteDb ?? ctx.db, userId);
-    logInfo("admin_wipe_user_data", { userId, username, deleted: result.deleted, untrackedRosters: result.untrackedRosters, deletedJobs: result.deletedJobs });
+    const username = String(userRow.username ?? "");
+    if (!expectedUsername || username !== expectedUsername) {
+      sendJson(req, res, ctx, 409, { error: "user_changed_since_preview" });
+      return true;
+    }
+    let result;
+    try {
+      result = await wipeUserProjections(ctx.serveWriteDb ?? ctx.db, userId);
+    } catch (error) {
+      if (error instanceof UserWipeLookupError && error.code === "user_has_account_data") {
+        sendJson(req, res, ctx, 409, { error: error.code });
+        return true;
+      }
+      throw error;
+    }
+    logInfo("admin_wipe_user_data", { userId, username, deleted: result.deleted, updated: result.updated, untrackedRosters: result.untrackedRosters, deletedJobs: result.deletedJobs });
     sendJson(req, res, ctx, 200, {
       ok: true,
       userId,
@@ -152,7 +170,30 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       untrackedRosters: result.untrackedRosters,
       deletedJobs: result.deletedJobs,
       deleted: result.deleted,
+      updated: result.updated,
     });
+    return true;
+  }
+  if (url.pathname === "/api/admin/wipe-user-preview") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ query?: unknown }>((await readBody(req)) || "{}", {});
+    const query = typeof body.query === "string" ? body.query.slice(0, 120) : "";
+    try {
+      sendJson(req, res, ctx, 200, { ok: true, ...(await previewUserWipe(ctx.db, query)) });
+    } catch (error) {
+      if (error instanceof UserWipeLookupError) {
+        sendJson(req, res, ctx, error.code === "ambiguous_username" ? 409 : 404, { error: error.code });
+        return true;
+      }
+      throw error;
+    }
     return true;
   }
   if (url.pathname === "/api/admin/skins/moderate") {

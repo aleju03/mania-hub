@@ -8,7 +8,8 @@ import {
   setPersistentCache
 } from "../api";
 import type { OsuFetchContextValue } from "../api";
-import { calculateUserProfileInsights } from "../profile-insights";
+import { liveBridgeToken } from "../live-backend-tokens";
+import { calculateUserProfileInsights, type KeyPpTrackedPlay } from "../profile-insights";
 import { getScoreTimestamp } from "../score";
 import type {
   OsuScore,
@@ -420,14 +421,42 @@ export const getUserScoresBestWindow = createServerFn({ method: "GET" })
     });
   });
 
+/* The plays this site tracked below someone's osu! top-200 window, which is
+   what lets each keymode carry its own list instead of sharing one 200-play
+   budget. Best-effort by design: no backend, an untracked country, or a failed
+   call all return nothing, and the insights fall back to window-only totals
+   rather than failing the profile. */
+async function fetchTrackedKeymodePp(userId: number): Promise<{ plays: KeyPpTrackedPlay[]; trackedFrom: string | null }> {
+  const empty = { plays: [] as KeyPpTrackedPlay[], trackedFrom: null };
+  const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
+  if (!base) return empty;
+  const headers: Record<string, string> = {};
+  const bridgeToken = liveBridgeToken();
+  if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
+  try {
+    const response = await fetch(`${base}/api/profiles/${userId}/keymode-pp`, { headers });
+    if (!response.ok) return empty;
+    const payload = await response.json() as { plays?: unknown; trackedFrom?: unknown };
+    if (!Array.isArray(payload.plays)) return empty;
+    return {
+      plays: payload.plays as KeyPpTrackedPlay[],
+      trackedFrom: typeof payload.trackedFrom === "string" ? payload.trackedFrom : null,
+    };
+  } catch {
+    return empty;
+  }
+}
+
 export const getUserProfileInsights = createServerFn({ method: "GET" })
   .validator(normalizeUserIdPayload)
   .handler(async ({ data }: { data: { userId: number } }) => {
     edgeCache(1800, 21600);
     const cacheKey = `user-profile-insights:v${USER_PROFILE_INSIGHTS_CACHE_VERSION}:${data.userId}`;
-    return fetchWithCacheLock(cacheKey, USER_PROFILE_INSIGHTS_CACHE_TTL, async () =>
-      calculateUserProfileInsights(await fetchUserBestScoresWindow(data.userId, 200, {
-        feature: "profile-insights",
-      })),
-    );
+    return fetchWithCacheLock(cacheKey, USER_PROFILE_INSIGHTS_CACHE_TTL, async () => {
+      const [windowScores, tracked] = await Promise.all([
+        fetchUserBestScoresWindow(data.userId, 200, { feature: "profile-insights" }),
+        fetchTrackedKeymodePp(data.userId),
+      ]);
+      return calculateUserProfileInsights(windowScores, tracked);
+    });
   });

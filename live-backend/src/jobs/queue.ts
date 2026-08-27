@@ -142,7 +142,7 @@ export class JobQueue {
   constructor(private readonly db: Db) {}
 
   async enqueue(type: string, dedupeKey: string, payload: unknown, options: { priority?: number; runAfter?: Date; replaceDone?: boolean; debounce?: boolean } = {}): Promise<void> {
-    const pressureStatus = await this.pressureStatusFor(type);
+    const pressureStatus = await this.pressureStatusFor(type, dedupeKey);
     const now = nowIso();
     const status = pressureStatus.defer ? "deferred_pressure" : "queued";
     const runAfter = pressureStatus.defer ? new Date(Date.now() + PRESSURE_DEFER_MS) : options.runAfter ?? new Date();
@@ -400,10 +400,10 @@ export class JobQueue {
     return Number(result.rowsAffected ?? 0);
   }
 
-  private async pressureStatusFor(type: string): Promise<{ defer: boolean; reason: string | null }> {
+  private async pressureStatusFor(type: string, dedupeKey?: string): Promise<{ defer: boolean; reason: string | null }> {
     const reserve = RESERVED_LANE_TYPES[type];
     if (reserve != null) {
-      const activeOfType = await activeDepth(this.db, type);
+      const activeOfType = await activeDepth(this.db, type, dedupeKey);
       if (activeOfType >= reserve) {
         return { defer: true, reason: `deferred by ${type} reserve (${activeOfType}/${reserve})` };
       }
@@ -417,7 +417,7 @@ export class JobQueue {
 
     const cap = ACTIVE_TYPE_CAPS[type];
     if (cap == null || depth < QUEUE_TARGET_DEPTH) return { defer: false, reason: null };
-    const activeOfType = await activeDepth(this.db, type);
+    const activeOfType = await activeDepth(this.db, type, dedupeKey);
     if (activeOfType >= cap) {
       return { defer: true, reason: `deferred by ${type} cap (${activeOfType}/${cap})` };
     }
@@ -529,14 +529,19 @@ export class JobQueue {
   }
 }
 
-async function activeDepth(db: Db, type?: string): Promise<number> {
+async function activeDepth(db: Db, type?: string, excludeDedupeKey?: string): Promise<number> {
   // Jobs scheduled for the future (self-rescheduling reconciles, retry backoffs)
   // are appointments, not backlog; counting them kept the queue permanently
   // above the shedding threshold.
   const now = nowIso();
   const runnable = "(status = 'running' or (status in ('queued', 'failed') and run_after <= ?))";
   if (type != null) {
-    const row = (await exec(db, `select count(*) as count from jobs where ${runnable} and type = ?`, [now, type])).rows[0];
+    // An enqueue that lands on a dedupe key already sitting in the queue is the
+    // SAME unit of work, so it must not count itself as pressure: on a reserved
+    // lane (reserve 1) it otherwise deferred the very job it was re-requesting.
+    const selfFilter = excludeDedupeKey == null ? "" : " and dedupe_key != ?";
+    const selfArgs = excludeDedupeKey == null ? [] : [excludeDedupeKey];
+    const row = (await exec(db, `select count(*) as count from jobs where ${runnable} and type = ?${selfFilter}`, [now, type, ...selfArgs])).rows[0];
     return Number(row?.count ?? 0);
   }
   // Reserved-lane jobs are capped on their own; counting them here would push

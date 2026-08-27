@@ -9,6 +9,7 @@ import {
   type LiveStreakBoardEntry,
 } from "#/lib/live-backend";
 import type { StreakPool } from "#/lib/streak-game";
+import { CountryFlag } from "../ui/CountryFlag";
 
 // The blitz board, read next to the game that writes it. Only blitz runs
 // reach it: a casual streak is scored in the browser, so it is a personal best
@@ -40,6 +41,7 @@ function Row({
         params={{ username: entry.username }}
         className="group flex min-w-0 flex-1 items-center gap-2"
       >
+        <CountryFlag code={entry.countryCode} size="xs" decorative />
         {/* The board rows carry a user id and nothing else, so the avatar comes
             off the same proxy the game's own cards fall back to. */}
         <img

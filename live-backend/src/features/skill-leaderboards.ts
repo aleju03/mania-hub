@@ -2,6 +2,7 @@ import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { resolveCountryScope } from "../countries.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
+import { BOARD_WARMUP_DELAY_MS, unrefDelay, waitForQuietSchema } from "../warmup.js";
 import {
   PLAYER_SKILLS_VERSION,
   PLAYER_SKILL_PATTERN_AXES,
@@ -298,8 +299,9 @@ async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
       db,
       `select r.user_id, r.modes_json, u.username, u.avatar_url, u.country_code, u.global_rank
          from player_skill_ratings r
-         join users u on u.user_id = r.user_id
+        join users u on u.user_id = r.user_id
         where r.analysis_version = ? and r.status = 'ready' and r.modes_json is not null
+          and u.is_active != 0
           and r.user_id > ?
         order by r.user_id
         limit ?`,
@@ -490,6 +492,22 @@ async function getSkillBoard(db: Db): Promise<SkillBoardCache> {
     return memory.board;
   }
   return refresh;
+}
+
+/* The board is a ~15k-player scan that costs seconds, and getSkillBoard has
+   nothing to serve until the first one finishes, so without this the first
+   visitor after a restart waits it out inside their request (measured at 4.3s
+   on prod). Build it shortly after boot instead, on the same terms as the
+   global farmed board: settle the boot burst, stay off a deploy's schema
+   migration, and never hold the process open. A failure here is the same
+   failure the first request would have hit, and leaves the retry cooldown
+   exactly where refreshSkillBoard puts it. */
+export function warmSkillLeaderboardBoard(db: Db): void {
+  void (async () => {
+    await unrefDelay(BOARD_WARMUP_DELAY_MS);
+    await waitForQuietSchema(db, "skill_leaderboard");
+    await getSkillBoard(db);
+  })().catch((error) => logWarn("skill_leaderboard_warmup_failed", errorContext(error)));
 }
 
 /** Test seam: drop the cached board so a seeded DB rebuilds on the next read. */

@@ -17,6 +17,8 @@ import { rememberMapsCollection } from "../../lib/analytics-maps";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
 import { useLocale } from "../../lib/locale-context";
 import { danScaleImage, danScaleLabel, type DanScaleContext } from "../../lib/dan-images";
+import { CoverStrip } from "./CollectionCovers";
+import { UserCollectionsSection } from "./UserCollectionsSection";
 import { MapDetailModal } from "./MapDetailModal";
 import { MapPreviewPlayerBar, useMapPreviewAudio } from "./MapPreviewAudio";
 import { PATTERN_COLOR, SearchCard, patternLabel, toPreviewTrack } from "./SearchCard";
@@ -27,7 +29,12 @@ import { PATTERN_COLOR, SearchCard, patternLabel, toPreviewTrack } from "./Searc
 // their bucket pool on every backend rotation, so the grid changes every few
 // days instead of pinning the same top-40 forever.
 
+export type CollectionSource = "auto" | "community";
+
 interface Props {
+  /** Which half of the tab is showing: the auto packs or the posted ones. */
+  source: CollectionSource;
+  onSourceChange: (source: CollectionSource) => void;
   selectedCollectionId: string;
   onSelect: (id: string) => void;
   // Both pickers live in the route's search params: opening a pack unmounts
@@ -187,37 +194,6 @@ function SegmentedControl<T extends string | number>({
   );
 }
 
-// Covers that 404ed this session, shared across tiles: axis/keymode switches
-// remount every tile, and per-instance state would retry known-dead covers on
-// each switch, flashing a 3-slot collage that collapses back to 2.
-const failedCoverSetIds = new Set<number>();
-
-function CoverStrip({ setIds, className = "" }: { setIds: number[]; className?: string }) {
-  // Covers can 404 even for sets the backend vetted (backgrounds removed after
-  // upload, e.g. DMCA). Dropping the failed image and re-flowing the collage
-  // beats leaving a blank cell.
-  const [, bumpFailures] = useState(0);
-  const visible = setIds.filter((setId) => !failedCoverSetIds.has(setId));
-  if (visible.length === 0) return <div className={`bg-osu-b3/40 ${className}`} />;
-  return (
-    <div className={`grid ${visible.length >= 3 ? "grid-cols-3" : visible.length === 2 ? "grid-cols-2" : "grid-cols-1"} gap-px ${className}`}>
-      {visible.map((setId) => (
-        <img
-          key={setId}
-          src={`https://assets.ppy.sh/beatmaps/${setId}/covers/card.jpg`}
-          alt=""
-          className="h-full w-full object-cover opacity-80"
-          loading="lazy"
-          onError={() => {
-            failedCoverSetIds.add(setId);
-            bumpFailures((count) => count + 1);
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 function CollectionTile({ summary, onClick }: { summary: LiveMapCollectionSummary; onClick: () => void }) {
   const badges = bucketBadgeSrcs(summary);
   const label = bucketLabel(summary);
@@ -257,7 +233,7 @@ function CollectionTile({ summary, onClick }: { summary: LiveMapCollectionSummar
   );
 }
 
-function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxisChange, liveBackendEnabled }: Omit<Props, "selectedCollectionId">) {
+function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxisChange, liveBackendEnabled }: Pick<Props, "onSelect" | "keyFilter" | "axis" | "onKeyFilterChange" | "onAxisChange" | "liveBackendEnabled">) {
   const [collections, setCollections] = useState<LiveMapCollectionSummary[] | null>(null);
   const [rotation, setRotation] = useState<LiveMapCollectionsRotation | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -512,11 +488,38 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
   );
 }
 
-export function MapCollectionsSection({ selectedCollectionId, onSelect, keyFilter, axis, onKeyFilterChange, onAxisChange, liveBackendEnabled }: Props) {
+export function MapCollectionsSection({
+  source,
+  onSourceChange,
+  selectedCollectionId,
+  onSelect,
+  keyFilter,
+  axis,
+  onKeyFilterChange,
+  onAxisChange,
+  liveBackendEnabled,
+}: Props) {
+  const { t } = useLingui();
+  // The switch belongs to the two browse grids, not to a pack that is open:
+  // each detail view already has its own way back, and a source switch beside
+  // it would read as a filter on the thing being looked at.
+  const showSwitch = source === "community" || !selectedCollectionId;
   return (
     <div className="bg-osu-b5 min-h-[60vh]">
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-4">
-        {selectedCollectionId ? (
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-4 flex flex-col gap-4">
+        {showSwitch && (
+          <div className="flex">
+            <SegmentedControl<CollectionSource>
+              options={["auto", "community"]}
+              value={source}
+              onChange={onSourceChange}
+              render={(option) => (option === "auto" ? t`Auto packs` : t`Community`)}
+            />
+          </div>
+        )}
+        {source === "community" ? (
+          <UserCollectionsSection liveBackendEnabled={liveBackendEnabled} />
+        ) : selectedCollectionId ? (
           <CollectionDetail id={selectedCollectionId} onBack={() => onSelect("")} liveBackendEnabled={liveBackendEnabled} />
         ) : (
           <CollectionsBrowse

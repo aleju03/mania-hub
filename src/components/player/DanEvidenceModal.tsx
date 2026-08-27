@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Link } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
@@ -155,6 +156,10 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
   // opens on, so nothing jumps when the estimate lands. Only 7K LN has skill
   // buckets on the LN side; every other LN keymode is the one "all" column.
   const skeletonColumns = side === "ln" && keyCount !== 7 ? 1 : 5;
+  // A lone column has nothing to sit beside, so it takes the whole row instead
+  // of half of one - otherwise the only reading in the window hugs the left
+  // edge on phones, where the columns wrap two to a row.
+  const columnBasis = (count: number) => (count === 1 ? "basis-full" : "basis-1/2");
 
   return (
     <>
@@ -202,12 +207,12 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
                       </Trans>
                     </p>
                   ) : null}
-                  <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-osu-f1 sm:text-xs">
-                    <Trans>
-                      Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan
-                      rating. Lower accuracy gives less credit. Your dan is the level of your {quorum}th best pass, so
-                      you need {quorum} passes at a level to reach it.
-                    </Trans>
+                  {/* The rules used to be spelled out here in four sentences. They live
+                      in the article now, so this is one line the reader can ignore. */}
+                  <p className="mt-1.5 text-[11px] leading-relaxed sm:text-xs">
+                    <Link to="/dan-estimates" className="text-osu-pink-light transition-colors hover:text-white">
+                      <Trans>Click here to read how dans are estimated</Trans>
+                    </Link>
                   </p>
                 </div>
                 {image ? (
@@ -239,7 +244,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
                   {Array.from({ length: skeletonColumns }).map((_, index) => (
                     <div
                       key={index}
-                      className="flex min-w-0 basis-1/2 flex-col items-center gap-1.5 border-l border-osu-b3/15 px-2 py-3 first:border-l-0 sm:basis-0 sm:flex-1"
+                      className={`flex min-w-0 ${columnBasis(skeletonColumns)} flex-col items-center gap-1.5 border-l border-osu-b3/15 px-2 py-3 first:border-l-0 sm:basis-0 sm:flex-1`}
                     >
                       <Skeleton className="h-3 w-14" />
                       <Skeleton className="h-12 w-12 rounded-full" />
@@ -293,7 +298,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
                           onClick={() => setOpenSection(open ? null : section.id)}
                           aria-expanded={open}
                           title={open ? t`Hide the ${section.label} clears` : t`Show the ${section.label} clears`}
-                          className={`relative flex min-w-0 basis-1/2 flex-col items-center gap-1.5 border-l border-osu-b3/15 px-2 py-3 text-center transition-colors first:border-l-0 sm:basis-0 sm:flex-1 ${
+                          className={`relative flex min-w-0 ${columnBasis(sections.length)} flex-col items-center gap-1.5 border-l border-osu-b3/15 px-2 py-3 text-center transition-colors first:border-l-0 sm:basis-0 sm:flex-1 ${
                             open ? "bg-osu-b4" : "hover:bg-osu-b4/50"
                           }`}
                         >
@@ -381,8 +386,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
             rateMod: rateModFor(detail.clear.play.rate, detail.clear.play.rateMod),
             playedAt: detail.clear.play.playedAt,
             source: detail.clear.play.source,
-            rating: detail.clear.creditedDan,
-            ratingLabel: t`credited dan`,
+            rating: detail.clear.chartDan,
+            ratingLabel: t`chart dan`,
             ratingColor: color,
           }}
         />
@@ -437,17 +442,14 @@ function ClearRow({
         <span className="ml-1.5 text-[10px] font-normal text-osu-f1">[{play.version}]</span>
       </span>
       {rateMod ? <ModBadge mod={rateMod.acronym} rate={rateMod.rate} size={0.75} /> : null}
-      <span className="w-12 shrink-0 text-right text-[11px] tabular-nums text-osu-l2">
-        {play.accuracy != null ? formatAccuracy(play.accuracy) : ""}
+      <span
+        className="w-12 shrink-0 text-right text-[11px] tabular-nums text-osu-l2"
+        title={t`Accuracy this clear was judged on, in the ladder's own scoring`}
+      >
+        {formatAccuracy(clear.clearAccuracy)}
       </span>
       <span className="w-16 shrink-0 text-right text-[11px] font-black sm:w-20" style={{ color }}>
         {formatDan(clear.chartDanLabel)}
-      </span>
-      <span
-        className="w-9 shrink-0 text-right text-[10px] tabular-nums text-osu-f1"
-        title={t`Dan credit this clear earned after the accuracy discount`}
-      >
-        {clear.creditedDan.toFixed(2)}
       </span>
     </button>
   );

@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as BbcodeRouteImport } from './routes/bbcode'
 import { Route as CommunitiesRouteImport } from './routes/communities'
+import { Route as DanEstimatesRouteImport } from './routes/dan-estimates'
 import { Route as DiscordRouteImport } from './routes/discord'
 import { Route as DynamicRendersRouteImport } from './routes/dynamic-renders'
 import { Route as FarmHelperRouteImport } from './routes/farm-helper'
@@ -60,6 +61,7 @@ import { Route as ApiOszRouteImport } from './routes/api/osz'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSignaturePreviewRouteImport } from './routes/api/signature-preview'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
+import { Route as CollectionsIdRouteImport } from './routes/collections_.$id'
 import { Route as CommunitiesIdRouteImport } from './routes/communities_.$id'
 import { Route as CommunitiesReviewRouteImport } from './routes/communities_.review'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
@@ -100,6 +102,11 @@ const BbcodeRoute = BbcodeRouteImport.update({
 const CommunitiesRoute = CommunitiesRouteImport.update({
   id: '/communities',
   path: '/communities',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DanEstimatesRoute = DanEstimatesRouteImport.update({
+  id: '/dan-estimates',
+  path: '/dan-estimates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DiscordRoute = DiscordRouteImport.update({
@@ -337,6 +344,11 @@ const ApiSyncRoute = ApiSyncRouteImport.update({
   path: '/api/sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CollectionsIdRoute = CollectionsIdRouteImport.update({
+  id: '/collections_/$id',
+  path: '/collections/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CommunitiesIdRoute = CommunitiesIdRouteImport.update({
   id: '/communities_/$id',
   path: '/communities/$id',
@@ -449,6 +461,7 @@ export interface FileRoutesByFullPath {
   '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
+  '/dan-estimates': typeof DanEstimatesRoute
   '/discord': typeof DiscordRoute
   '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
@@ -496,6 +509,7 @@ export interface FileRoutesByFullPath {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
+  '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
@@ -523,6 +537,7 @@ export interface FileRoutesByTo {
   '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
+  '/dan-estimates': typeof DanEstimatesRoute
   '/discord': typeof DiscordRoute
   '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
@@ -570,6 +585,7 @@ export interface FileRoutesByTo {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
+  '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
@@ -598,6 +614,7 @@ export interface FileRoutesById {
   '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
+  '/dan-estimates': typeof DanEstimatesRoute
   '/discord': typeof DiscordRoute
   '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
@@ -645,6 +662,7 @@ export interface FileRoutesById {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
+  '/collections_/$id': typeof CollectionsIdRoute
   '/communities_/$id': typeof CommunitiesIdRoute
   '/communities_/review': typeof CommunitiesReviewRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
@@ -674,6 +692,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/bbcode'
     | '/communities'
+    | '/dan-estimates'
     | '/discord'
     | '/dynamic-renders'
     | '/farm-helper'
@@ -721,6 +740,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/sync'
+    | '/collections/$id'
     | '/communities/$id'
     | '/communities/review'
     | '/dev/opt-in-preview'
@@ -748,6 +768,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/bbcode'
     | '/communities'
+    | '/dan-estimates'
     | '/discord'
     | '/dynamic-renders'
     | '/farm-helper'
@@ -795,6 +816,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/sync'
+    | '/collections/$id'
     | '/communities/$id'
     | '/communities/review'
     | '/dev/opt-in-preview'
@@ -822,6 +844,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/bbcode'
     | '/communities'
+    | '/dan-estimates'
     | '/discord'
     | '/dynamic-renders'
     | '/farm-helper'
@@ -869,6 +892,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/sync'
+    | '/collections_/$id'
     | '/communities_/$id'
     | '/communities_/review'
     | '/dev/opt-in-preview'
@@ -897,6 +921,7 @@ export interface RootRouteChildren {
   SplatRoute: typeof SplatRoute
   BbcodeRoute: typeof BbcodeRoute
   CommunitiesRoute: typeof CommunitiesRoute
+  DanEstimatesRoute: typeof DanEstimatesRoute
   DiscordRoute: typeof DiscordRoute
   DynamicRendersRoute: typeof DynamicRendersRoute
   FarmHelperRoute: typeof FarmHelperRouteWithChildren
@@ -944,6 +969,7 @@ export interface RootRouteChildren {
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSignaturePreviewRoute: typeof ApiSignaturePreviewRoute
   ApiSyncRoute: typeof ApiSyncRoute
+  CollectionsIdRoute: typeof CollectionsIdRoute
   CommunitiesIdRoute: typeof CommunitiesIdRoute
   CommunitiesReviewRoute: typeof CommunitiesReviewRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
@@ -987,6 +1013,13 @@ declare module '@tanstack/react-router' {
       path: '/communities'
       fullPath: '/communities'
       preLoaderRoute: typeof CommunitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dan-estimates': {
+      id: '/dan-estimates'
+      path: '/dan-estimates'
+      fullPath: '/dan-estimates'
+      preLoaderRoute: typeof DanEstimatesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/discord': {
@@ -1318,6 +1351,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/collections_/$id': {
+      id: '/collections_/$id'
+      path: '/collections/$id'
+      fullPath: '/collections/$id'
+      preLoaderRoute: typeof CollectionsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/communities_/$id': {
       id: '/communities_/$id'
       path: '/communities/$id'
@@ -1529,6 +1569,7 @@ const rootRouteChildren: RootRouteChildren = {
   SplatRoute: SplatRoute,
   BbcodeRoute: BbcodeRoute,
   CommunitiesRoute: CommunitiesRoute,
+  DanEstimatesRoute: DanEstimatesRoute,
   DiscordRoute: DiscordRoute,
   DynamicRendersRoute: DynamicRendersRoute,
   FarmHelperRoute: FarmHelperRouteWithChildren,
@@ -1576,6 +1617,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSignaturePreviewRoute: ApiSignaturePreviewRoute,
   ApiSyncRoute: ApiSyncRoute,
+  CollectionsIdRoute: CollectionsIdRoute,
   CommunitiesIdRoute: CommunitiesIdRoute,
   CommunitiesReviewRoute: CommunitiesReviewRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,

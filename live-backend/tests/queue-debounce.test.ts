@@ -48,4 +48,31 @@ describe("job queue debounce merge", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  // Two hydration paths (enrich_user and enrich_beatmap) replay the same score
+  // and re-request the same seed job. The second request must not read the job
+  // it is re-requesting as pressure: on a reserve-1 lane that deferred the seed
+  // by the full pressure window, and the snipe it was seeding never landed.
+  it("does not defer a reserved-lane job against its own queued row", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mania-live-queue-"));
+    try {
+      const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+      await migrate(db);
+      const queue = new JobQueue(db);
+
+      const payload = { country: "CR", beatmapId: 502, laneKey: "normal:lazer" };
+      await queue.enqueue("seed_snipe_board", "snipe-seed:CR:502:normal:lazer", payload, { priority: 40 });
+      await queue.enqueue("seed_snipe_board", "snipe-seed:CR:502:normal:lazer", payload, { priority: 40 });
+      const row = (await exec(db, "select status from jobs where dedupe_key = 'snipe-seed:CR:502:normal:lazer'")).rows[0];
+      expect(String(row?.status)).toBe("queued");
+
+      // A DIFFERENT seed job still respects the reserve while that one is due.
+      await queue.enqueue("seed_snipe_board", "snipe-seed:CR:503:normal:lazer", { ...payload, beatmapId: 503 }, { priority: 40 });
+      const other = (await exec(db, "select status from jobs where dedupe_key = 'snipe-seed:CR:503:normal:lazer'")).rows[0];
+      expect(String(other?.status)).toBe("deferred_pressure");
+      db.close();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

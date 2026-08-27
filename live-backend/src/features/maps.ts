@@ -13,6 +13,7 @@ import { throwIfAborted } from "../shared/abort.js";
 import type { OscScore } from "../shared/types.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
 import { markUserMissing } from "../users.js";
+import { isUserKnownInactive } from "../user-status.js";
 import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { refreshFarmHelperKeyStatsForUser } from "./farm-helper-key-stats.js";
 import { buildMapStatusPropagationStatement } from "./map-search.js";
@@ -647,6 +648,7 @@ function mapsDetailsBoardSql(kind: MapsPlayersKind, global: boolean): string {
                b.pp, b.mods_json, b.score_url, b.played_at,
                row_number() over (order by b.pp desc, b.id asc) as rank
         from best b left join users u on u.user_id = b.id
+        where coalesce(u.is_active, 1) != 0
       )`;
   }
   if (kind === "popular") {
@@ -4434,6 +4436,111 @@ export async function syncGlobalMapsFarmedUserBeatmaps(
   }
 }
 
+/**
+ * Removes one player from the compact compatibility snapshots immediately.
+ * Those blobs can outlive their normalized source rows until the next country
+ * refresh, so deleting only country_maps_* rows would leave the player visible
+ * on Popular/Favourites (and on a legacy country farmed snapshot).
+ *
+ * Candidate selection looks for the exact compact player key and every match
+ * is parsed and checked structurally before it is rewritten. This avoids both
+ * loading every multi-megabyte country blob and mistaking a beatmap id for a
+ * user id.
+ */
+export async function purgeUserFromMapsSnapshots(db: Db, userId: number): Promise<number> {
+  const safeUserId = Math.floor(Number(userId));
+  if (!Number.isSafeInteger(safeUserId) || safeUserId <= 0) return 0;
+  const rows = (await exec(
+    db,
+    `select country, payload_json
+       from country_maps_snapshots
+      where payload_json like ? or payload_json like ?`,
+    [`%"id":${safeUserId},%`, `%"id":${safeUserId}}%`],
+  )).rows;
+  const statements: DbStatement[] = [];
+  const refreshedAt = nowIso();
+  for (const row of rows) {
+    const stored = toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null));
+    if (!stored) continue;
+    let changed = false;
+
+    const farmed = stored.farmed.flatMap((entry): StoredCountryMapsData["farmed"] => {
+      const removed = entry.players.find((player) => player.id === safeUserId);
+      if (!removed) return [entry];
+      changed = true;
+      const players = entry.players.filter((player) => player.id !== safeUserId);
+      const playerCount = Math.max(0, entry.playerCount - 1);
+      const maxPp = players.reduce((max, player) => Math.max(max, player.pp), 0);
+      if (playerCount === 0 || (playerCount < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN)) return [];
+      const ppSum = Math.max(0, entry.avgPp * entry.playerCount - removed.pp);
+      return [{
+        ...entry,
+        players,
+        playerCount,
+        avgPp: playerCount > 0 ? ppSum / playerCount : 0,
+        maxPp,
+        dominantMod: dominantStoredMapsSpeedMod(players),
+      }];
+    });
+
+    const mostPlayed = stored.mostPlayed.flatMap((entry): StoredCountryMapsData["mostPlayed"] => {
+      const removed = entry.players.find((player) => player.id === safeUserId);
+      if (!removed) return [entry];
+      changed = true;
+      const players = entry.players.filter((player) => player.id !== safeUserId);
+      const playerCount = Math.max(0, entry.playerCount - 1);
+      if (playerCount < 2) return [];
+      return [{ ...entry, players, playerCount, totalPlays: Math.max(0, entry.totalPlays - removed.count) }];
+    });
+
+    const favourites = stored.favourites.flatMap((entry): StoredCountryMapsData["favourites"] => {
+      if (!entry.players.some((player) => player.id === safeUserId)) return [entry];
+      changed = true;
+      const players = entry.players.filter((player) => player.id !== safeUserId);
+      const playerCount = Math.max(0, entry.playerCount - 1);
+      return playerCount >= 2 ? [{ ...entry, players, playerCount }] : [];
+    });
+
+    const removedFavouriteSets = new Set<number>();
+    const favouritesByPlayer = stored.favouritesByPlayer.filter((player) => {
+      if (player.id !== safeUserId) return true;
+      changed = true;
+      for (const beatmapsetId of player.beatmapsetIds) removedFavouriteSets.add(beatmapsetId);
+      return false;
+    });
+    const remainingFavouriteSets = new Set(favouritesByPlayer.flatMap((player) => player.beatmapsetIds));
+    const beatmapsetsPool = stored.beatmapsetsPool.filter(
+      (beatmapsetId) => !removedFavouriteSets.has(beatmapsetId) || remainingFavouriteSets.has(beatmapsetId),
+    );
+    if (beatmapsetsPool.length !== stored.beatmapsetsPool.length) changed = true;
+    if (!changed) continue;
+
+    statements.push({
+      sql: "update country_maps_snapshots set payload_json = ?, refreshed_at = ? where country = ?",
+      args: [json({ ...stored, farmed, mostPlayed, favourites, favouritesByPlayer, beatmapsetsPool }), refreshedAt, String(row.country)],
+    });
+  }
+  await execBatch(db, statements);
+  return statements.length;
+}
+
+function dominantStoredMapsSpeedMod(players: StoredMapsFarmedPlayer[]): "DT" | "HT" | null {
+  if (players.length === 0) return null;
+  let dtCount = 0;
+  let htCount = 0;
+  for (const player of players) {
+    const speed = mapsFarmedSpeedMod(player.mods ?? []);
+    if (speed === "DT") dtCount++;
+    else if (speed === "HT") htCount++;
+  }
+  if (dtCount >= htCount && dtCount > players.length * FARMED_DOMINANT_MOD_SHARE) return "DT";
+  if (htCount > dtCount && htCount > players.length * FARMED_DOMINANT_MOD_SHARE) {
+    const top = players.reduce((best, player) => (player.pp > best.pp ? player : best), players[0]);
+    return mapsFarmedSpeedMod(top.mods ?? []) === "HT" ? "HT" : null;
+  }
+  return null;
+}
+
 function globalMapsFarmedProjectionUpsertStatement(
   beatmapId: number,
   player: StoredMapsFarmedPlayer,
@@ -5266,6 +5373,9 @@ export async function refreshUserMapsFarmedScores(
   payload: { country: string; userId: number },
 ): Promise<{ country: string; userId: number; scoreCount: number; updatedAt: string }> {
   const country = payload.country.toUpperCase();
+  if (await isUserKnownInactive(db, payload.userId)) {
+    return { country, userId: payload.userId, scoreCount: 0, updatedAt: nowIso() };
+  }
   let bestScores: OscScore[];
   try {
     bestScores = await osu.getUserBestScoresWindow(payload.userId, MAPS_FARMED_SCORE_WINDOW, "job:refresh_user_maps_farmed_scores");
@@ -5275,6 +5385,11 @@ export async function refreshUserMapsFarmedScores(
     const updatedAt = nowIso();
     await replaceUserMapsFarmedOverlay(db, queue, country, payload.userId, [], updatedAt);
     return { country, userId: payload.userId, scoreCount: 0, updatedAt };
+  }
+  // A destructive wipe can commit while the network request above is in
+  // flight. Never let that older job repopulate the projection afterwards.
+  if (await isUserKnownInactive(db, payload.userId)) {
+    return { country, userId: payload.userId, scoreCount: 0, updatedAt: nowIso() };
   }
   const updatedAt = nowIso();
   const rows = buildMapsFarmedOverlayRows(country, bestScores, updatedAt, payload.userId);

@@ -81,19 +81,23 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
       {
         sql: `insert into users (user_id, username, avatar_url, country_code, is_active, pp, global_rank, country_rank, profile_json, updated_at)
               values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
-              on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, pp = excluded.pp, global_rank = excluded.global_rank, country_rank = excluded.country_rank, profile_json = excluded.profile_json, updated_at = excluded.updated_at`,
+              on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, pp = excluded.pp, global_rank = excluded.global_rank, country_rank = excluded.country_rank, profile_json = excluded.profile_json, updated_at = excluded.updated_at
+              where users.is_active != 0`,
         args: [user.id, user.username, user.avatar_url, user.country_code, pp, globalRank, countryRank, json(storedUser), now],
       },
       {
         sql: `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
-              values (?, ?, ?, 'osu_rankings', 1, ?)
-              on conflict(country, user_id) do update set rank = excluded.rank, is_tracked = 1, refreshed_at = excluded.refreshed_at`,
-        args: [country, user.id, countryRank, now],
+              select ?, ?, ?, 'osu_rankings', 1, ?
+              where not exists (select 1 from users suppressed where suppressed.user_id = ? and suppressed.is_active = 0)
+              on conflict(country, user_id) do update set rank = excluded.rank, is_tracked = 1, refreshed_at = excluded.refreshed_at
+              where not exists (select 1 from users suppressed where suppressed.user_id = excluded.user_id and suppressed.is_active = 0)`,
+        args: [country, user.id, countryRank, now, user.id],
       },
       {
         sql: `insert into country_rank_snapshots (country, user_id, country_rank, global_rank, pp, captured_at)
-              values (?, ?, ?, ?, ?, ?)`,
-        args: [country, user.id, countryRank, globalRank, pp, now],
+              select ?, ?, ?, ?, ?, ?
+              where not exists (select 1 from users suppressed where suppressed.user_id = ? and suppressed.is_active = 0)`,
+        args: [country, user.id, countryRank, globalRank, pp, now, user.id],
       },
     );
     // Rankings payloads usually omit statistics.variants, so this is normally a

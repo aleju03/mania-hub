@@ -10,6 +10,7 @@ import type { LiveEventLog } from "../live/event-log.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { recordMapsFarmedScore } from "./maps.js";
 import { isRankedRosterMember } from "../rosters/country-rosters.js";
+import { isUserKnownInactive } from "../user-status.js";
 
 const TOP_PLAY_CONFIRMATION_PENDING_MS = 30 * 60_000;
 const TOP_PLAYS_DEFAULT_PAGE_SIZE = 200;
@@ -91,7 +92,11 @@ export async function confirmTopPlay(
   payload: { userId: number; scoreId: number; country: string },
   batch?: TopPlayConfirmationBatch,
 ): Promise<boolean> {
+  if (await isUserKnownInactive(db, payload.userId)) return false;
   const bestScores = dedupeScoresById(await getUserBestScoresForPpGain(osu, payload.userId));
+  // The request can outlive an admin wipe. Re-check before the first durable
+  // write so an already-running confirmation cannot restore top-score rows.
+  if (await isUserKnownInactive(db, payload.userId)) return false;
   const refreshedAt = nowIso();
   // Snapshot the projection before replaceUserTopScores overwrites it: osu!
   // unpreserves (and hides from the score-history endpoint) a same-map best
@@ -122,6 +127,7 @@ async function confirmTopPlayAgainstWindow(
   payload: { userId: number; scoreId: number; country: string },
   window: TopPlayScoreWindow,
 ): Promise<TopPlayConfirmationOutcome> {
+  if (await isUserKnownInactive(db, payload.userId)) return "unconfirmed";
   const { bestScores, previousTopScores, refreshedAt } = window;
   const confirmation = await getTopPlayConfirmationScoreIdCandidates(db, payload);
   const confirmedIndex = bestScores.findIndex((score) => confirmation.ids.has(score.id));
@@ -135,6 +141,7 @@ async function confirmTopPlayAgainstWindow(
   if (score.pp == null || !score.user) return "unconfirmed";
   const confirmedScoreId = score.id;
   const ppGain = await calculateTopPlayPpGain(osu, bestScores, score, previousTopScores);
+  if (await isUserKnownInactive(db, payload.userId)) return "unconfirmed";
   await upsertTopPlayUser(db, score.user, refreshedAt);
   const event: CountryTopPlay = {
     user: { id: score.user_id, username: score.user.username, avatar_url: score.user.avatar_url, country_code: score.user.country_code },
@@ -444,6 +451,7 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
   // catch-up after downtime doesn't surface days-old plays under "24 hours".
   const scopeSql = countryScopeSql(resolveCountryScope(country), "e.country");
   const where = scopeSql ? [scopeSql.clause, "e.score_time >= ?"] : ["e.score_time >= ?"];
+  where.push("not exists (select 1 from users suppressed where suppressed.user_id = e.user_id and suppressed.is_active = 0)");
   const args: Array<string | number> = scopeSql ? [...scopeSql.args, cutoff] : [cutoff];
   if (options.keys === "4k") {
     where.push("e.key_count = 4");
@@ -500,6 +508,7 @@ async function getTopPlaysPpGains(db: Db, country: string, cutoff: string, optio
   const where = scopeSql
     ? [scopeSql.clause, "e.score_time >= ?", "e.pp_gain >= 0.05"]
     : ["e.score_time >= ?", "e.pp_gain >= 0.05"];
+  where.push("not exists (select 1 from users suppressed where suppressed.user_id = e.user_id and suppressed.is_active = 0)");
   const args: Array<string | number> = scopeSql ? [...scopeSql.args, cutoff] : [cutoff];
   if (options.keys === "4k") {
     where.push("e.key_count = 4");

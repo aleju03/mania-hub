@@ -191,6 +191,9 @@ type MapsSearch = {
   col: string;
   cKey: number;
   cAxis: "dan" | "msd";
+  // Which half of the Collections tab is showing. A posted collection has its
+  // own page (/collections/<slug>), so only the auto packs open in the tab.
+  cSrc: "auto" | "community";
   // Shared map link: beatmap id whose detail modal auto-opens (0 = none).
   map: number;
   country: string | undefined;
@@ -282,6 +285,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   col: "",
   cKey: 4,
   cAxis: "dan",
+  cSrc: "auto",
   map: 0,
   country: undefined,
 };
@@ -710,6 +714,7 @@ export const Route = createFileRoute("/maps")({
       return Number.isInteger(n) && n >= 1 && n <= 10 ? n : DEFAULT_MAPS_SEARCH.cKey;
     })(),
     cAxis: search.cAxis === "msd" ? "msd" : DEFAULT_MAPS_SEARCH.cAxis,
+    cSrc: search.cSrc === "community" ? "community" : DEFAULT_MAPS_SEARCH.cSrc,
     map: Math.max(0, Math.floor(Number(search.map) || 0)),
     country: parseCountrySearchParam(search.country),
   }),
@@ -1707,6 +1712,8 @@ function MapsPage() {
           />
         ) : (
           <MapCollectionsSection
+            source={mapsSearch.cSrc}
+            onSourceChange={(cSrc) => updateMapsSearch({ cSrc })}
             selectedCollectionId={mapsSearch.col}
             onSelect={(id) => updateMapsSearch({ col: id })}
             keyFilter={mapsSearch.cKey}

@@ -10,6 +10,7 @@ import { calculateWeightedPpTotal, getScoreIdentity, getScoreTimestamp, nowIso, 
 import { compactScoresForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata, selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { packJson, unpackJson } from "../shared/compressed-json.js";
 import { readNoteBpms } from "./chart-analysis.js";
+import { getPlayerKeymodePpKeyCounts } from "./keymode-pp.js";
 import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 
 const PROFILE_SNAPSHOT_TTL_MS = 24 * 60 * 60_000;
@@ -56,6 +57,11 @@ type ProfileLookupMode = "auto" | "userId";
 export interface PlayerProfileSnapshot {
   user: Record<string, unknown>;
   bestScores: OscScore[];
+  /* Every keymode this player has a tracked pp play in, ascending. The profile
+     page's keymode chips are drawn from the best-200 window plus this, and a
+     keymode can live entirely below the window, so shipping it with the
+     snapshot is what keeps the strip from growing a beat after it paints. */
+  keymodeKeyCounts: number[];
   fetchedAt: string;
   userFetchedAt: string;
   isStale: boolean;
@@ -208,6 +214,10 @@ export async function getPlayerProfileSnapshot(
 
   // Nothing stored at all (someone searched a player we have never seen), so
   // there is no snapshot to serve and the mint has to happen inline.
+  const knownUser = await getStoredProfileUser(db, key, lookupMode);
+  if (knownUser && Number(knownUser.is_active ?? 1) === 0) {
+    throw new ProfileUserSuppressedError(Number(knownUser.user_id));
+  }
   const fetchedRow = await fetchAndStoreProfileSnapshotShared(db, osu, key, lookupMode);
   return buildServedSnapshot(
     db,
@@ -216,6 +226,14 @@ export async function getPlayerProfileSnapshot(
     await getTrackedProfileRecentScores(db, fetchedRow.user_id, PROFILE_TRACKED_OVERLAY_LIMIT),
     includeNoteBpms,
   );
+}
+
+/** A durable inactive tombstone must look exactly like an osu! 404 publicly. */
+export class ProfileUserSuppressedError extends Error {
+  constructor(readonly userId: number) {
+    super("Profile is unavailable");
+    this.name = "ProfileUserSuppressedError";
+  }
 }
 
 /* Best-effort by contract: a queue write must never fail or delay a page load,
@@ -363,7 +381,12 @@ export async function getCachedPackCardSnapshots(
   db: Db,
   userIds: readonly number[],
 ): Promise<PackCardProfileSnapshot[]> {
-  const ids = [...new Set(userIds.map((id) => Math.floor(Number(id))).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const requestedIds = [...new Set(userIds.map((id) => Math.floor(Number(id))).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const suppressedRows = requestedIds.length > 0
+    ? await selectRowsByIntegerSet(db, "select user_id from users where is_active = 0 and user_id in", requestedIds)
+    : [];
+  const suppressed = new Set(suppressedRows.map((row) => Number(row.user_id)));
+  const ids = requestedIds.filter((id) => !suppressed.has(id));
   if (ids.length === 0) return [];
   const sources = new Map<number, PackCardSource>();
   const snapshotRows = await selectRowsByIntegerSet(
@@ -440,7 +463,12 @@ export async function getCachedPackCardSnapshots(
  * definition of ready as the snapshot reader: a stored profile snapshot, or a
  * populated top-score projection. */
 export async function selectReadyPackCardUserIds(db: Db, userIds: readonly number[]): Promise<number[]> {
-  const ids = [...new Set(userIds.map((id) => Math.floor(Number(id))).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const requestedIds = [...new Set(userIds.map((id) => Math.floor(Number(id))).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const suppressedRows = requestedIds.length > 0
+    ? await selectRowsByIntegerSet(db, "select user_id from users where is_active = 0 and user_id in", requestedIds)
+    : [];
+  const suppressed = new Set(suppressedRows.map((row) => Number(row.user_id)));
+  const ids = requestedIds.filter((id) => !suppressed.has(id));
   if (ids.length === 0) return [];
   const ready = new Set<number>();
   for (const [table, column] of [["profile_snapshots", "user_id"], ["user_top_scores", "user_id"]] as const) {
@@ -1053,9 +1081,13 @@ async function fetchAndStoreProfileSnapshot(
   const userId = Number(user.id);
   const username = typeof user.username === "string" ? user.username : key;
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("osu! profile response was missing a user id");
+  // A wipe can commit while the cold-mint /users request is in flight. The
+  // tombstone wins; do not recreate the snapshot or its top-score window.
+  if (await isUserKnownMissing(db, userId)) throw new ProfileUserSuppressedError(userId);
 
   const storedUser = stripProfilePage(user);
   const bestScores = await osu.getUserBestScoresWindow(userId, PROFILE_BEST_SCORES_LIMIT, `${caller}:best`);
+  if (await isUserKnownMissing(db, userId)) throw new ProfileUserSuppressedError(userId);
   const fetchedAt = nowIso();
   const usernameKey = normalizeProfileKey(username);
   await persistScoresDisplayMetadata(db, bestScores, fetchedAt);
@@ -1255,6 +1287,7 @@ async function buildServedSnapshot(
   return {
     user,
     bestScores: projection.scores,
+    keymodeKeyCounts: (await getPlayerKeymodePpKeyCounts(db, row.user_id)).keyCounts,
     fetchedAt: row.fetched_at,
     userFetchedAt,
     isStale: forceStale || isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS),

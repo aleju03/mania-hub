@@ -14,6 +14,8 @@ import {
   fetchLivePlayerActivityDirect,
   fetchLivePlayerActivityDayDirect,
   fetchLivePlayerAboutDirect,
+  fetchLivePlayerKeymodePpDirect,
+  fetchLivePlayerKeymodePpKeysDirect,
   fetchLivePlayerProfileSnapshotDirect,
   fetchLivePlayerRecentScoresDirect,
   fetchLivePlayerSkillsDirect,
@@ -25,6 +27,8 @@ import {
   type LivePlayerActivitySkillReadout,
   type LivePlayerActivitySkillVector,
   type LivePlayerActivityTimelineSegment,
+  type LiveKeymodePpPlay,
+  type LivePlayerKeymodePpTail,
   type LivePlayerProfileSnapshot,
 } from "../../lib/live-backend";
 import {
@@ -52,7 +56,6 @@ import {
   scoreHasReplay,
 } from "../../lib/score";
 import { useAuth } from "../../lib/auth-context";
-import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { addSelfToRoster } from "../../lib/roster-self-track";
 import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
 import { GradeImg } from "../../components/ui/GradeImg";
@@ -72,7 +75,8 @@ import { qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "..
 import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
-import { buildPpCumulativeDistribution, buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
+import { buildPpCumulativeDistribution, buildPpDistribution, calculateUserProfileInsights, KEY_PP_LIST_LIMIT } from "../../lib/profile-insights";
+import { buildTrackedPlayScore } from "../../lib/tracked-play-score";
 import {
   playedWithinOnlineWindow,
   readPlayerRecentPlay,
@@ -98,6 +102,7 @@ const userBestWindowDataCache = new Map<number, { data: OsuScore[]; expiresAt: n
 type PlayerSnapshotData = {
   user: OsuUser;
   bestScores: OsuScore[];
+  keymodeKeyCounts?: number[];
   fetchedAt: string;
   userFetchedAt: string;
   isStale: boolean;
@@ -581,6 +586,17 @@ function matchesKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
   return getBeatmapKeyCount(score.beatmap) === Number(keyFilter.replace("k", ""));
 }
 
+/* A keymode list is the plays behind that keymode's pp, and osu! grows its
+   keymode statistics from natively-mania maps only, which is what the Key
+   Split modal already tells the reader it leaves out. So a convert is a play
+   under "All", where osu! does rank it, and not a row in one keymode's list:
+   listing it there would put a play on screen that the total beside it never
+   counted. Recent keeps the plain filter; nothing there is a total. */
+export function matchesBestKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
+  if (keyFilter === "all") return true;
+  return !score.beatmap?.convert && matchesKeyFilter(score, keyFilter);
+}
+
 function getAvailableKeyModes(scores: OsuScore[]): string[] {
   const keys = new Set<number>();
   for (const score of scores) {
@@ -604,6 +620,77 @@ function matchesModFilter(score: OsuScore, modFilter: ModFilterState): boolean {
     } else {
       const group = getModFilterGroup(key);
       present = group ? group.some((m) => scoreMods.has(m)) : scoreMods.has(key);
+    }
+    if (mode === "include" && !present) return false;
+    if (mode === "exclude" && present) return false;
+  }
+  return true;
+}
+
+/** A Best Performance row: an osu! window score, or a play only this site's
+    tracking has. Both are real plays; only their provenance differs. */
+export type BestListRow =
+  | { kind: "score"; score: OsuScore }
+  | { kind: "tracked"; play: LiveKeymodePpPlay };
+
+function bestListRowKey(row: BestListRow): string {
+  return row.kind === "score" ? getScoreIdentity(row.score) : `tracked:${row.play.beatmapId}`;
+}
+
+function bestListRowPp(row: BestListRow): number | null {
+  return row.kind === "score" ? getSortablePp(row.score) : row.play.pp;
+}
+
+function bestListRowTimeMs(row: BestListRow): number {
+  if (row.kind === "score") return getScoreTimeMs(row.score);
+  const ms = row.play.playedAt ? new Date(row.play.playedAt).getTime() : 0;
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+export function sortBestListRows(rows: BestListRow[], sort: BestSort): BestListRow[] {
+  const copy = [...rows];
+  if (sort === "pp-desc" || sort === "pp-asc") {
+    copy.sort((a, b) => {
+      const aPp = bestListRowPp(a);
+      const bPp = bestListRowPp(b);
+      if (aPp == null && bPp == null) return 0;
+      if (aPp == null) return 1;
+      if (bPp == null) return -1;
+      return sort === "pp-desc" ? bPp - aPp : aPp - bPp;
+    });
+    return copy;
+  }
+
+  copy.sort((a, b) => {
+    const diff = bestListRowTimeMs(b) - bestListRowTimeMs(a);
+    return sort === "newest" ? diff : -diff;
+  });
+  return copy;
+}
+
+/** The mod filter over either kind of row, so a merged keymode list can be
+    ranked and cut once and filtered afterwards. */
+export function bestListRowMatchesModFilter(row: BestListRow, modFilter: ModFilterState): boolean {
+  return row.kind === "score"
+    ? matchesModFilter(row.score, modFilter)
+    : matchesModAcronymFilter(row.play.mods, modFilter);
+}
+
+/** The mod filter, against the acronyms a tracked play carries instead of a
+    score's mod objects. Same rules, so both kinds of row filter alike. */
+export function matchesModAcronymFilter(acronyms: string[], modFilter: ModFilterState): boolean {
+  const entries = Object.entries(modFilter);
+  if (entries.length === 0) return true;
+
+  const mods = new Set(acronyms);
+  const hasNoMods = mods.size === 0;
+  for (const [key, mode] of entries) {
+    let present: boolean;
+    if (key === NO_MOD_KEY) {
+      present = hasNoMods;
+    } else {
+      const group = getModFilterGroup(key);
+      present = group ? group.some((m) => mods.has(m)) : mods.has(key);
     }
     if (mode === "include" && !present) return false;
     if (mode === "exclude" && present) return false;
@@ -1114,6 +1201,23 @@ export function PlayerProfilePage({
   const [bestPpSort, setBestPpSort] = useState<BestPpSort>("pp-desc");
   const [bestAgeSort, setBestAgeSort] = useState<BestAgeSort>("newest");
   const [bestWindowLoaded, setBestWindowLoaded] = useState(() => loaderBestScores.length > 0);
+  const [keyPpTail, setKeyPpTail] = useState<LivePlayerKeymodePpTail | null>(null);
+  /* Which keymodes the tail holds, so the chip strip is whole on the first
+     paint: a keymode can live entirely below the osu! window, and 16K and 18K
+     appearing a beat after the rest is a flicker on every refresh. The
+     snapshot carries them, and null means no snapshot has said yet, which is
+     what makes the standalone fetch below a fallback rather than a second
+     source. */
+  const [keyPpKeyCounts, setKeyPpKeyCounts] = useState<number[] | null>(() => loaderSnapshot?.keymodeKeyCounts ?? null);
+  /* "idle" until something asks for the tail, then "loading" until it answers.
+     The modal shows nothing but a skeleton while it is loading: a total that
+     lands and then grows is worse than a total that arrives late. */
+  const [keyPpTailState, setKeyPpTailState] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
+  /* Whether `best` holds the whole 200-play window rather than the 50 the SSR
+     loader ships. The loader computes its insights before trimming, so they are
+     full-window either way; anything that recomputes them from `best` has to
+     wait for this or it would shrink them to the 50 on screen. */
+  const [bestWindowComplete, setBestWindowComplete] = useState(false);
   const [waitingForSnapshotBest, setWaitingForSnapshotBest] = useState(() => loaderBestScores.length === 0);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [modModalOpen, setModModalOpen] = useState(false);
@@ -1135,6 +1239,12 @@ export function PlayerProfilePage({
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const tabsRailRef = useRef<HTMLDivElement | null>(null);
   const loadedProfileKeyRef = useRef<string | null>(null);
+  const keyPpTailRequestedRef = useRef<number | null>(null);
+  /* Mirrors keyPpTail for the two callbacks that rebuild insights off their own
+     fetches. Without it, a snapshot or window load that lands after the merge
+     would recompute window-only totals and drop the tracked plays back out,
+     which is the 6,150 -> 5,010 flip. */
+  const keyPpTailRef = useRef<LivePlayerKeymodePpTail | null>(null);
   const recentOsuRequestRef = useRef(0);
   const ppManiaBestScores = useMemo(
     () => best.filter((score) => score.beatmap?.mode === "mania"),
@@ -1196,6 +1306,104 @@ export function PlayerProfilePage({
     return () => document.removeEventListener("keydown", onKey);
   }, [avatarOpen, modModalOpen, bpmModalOpen, ppModalOpen, keyPpModalOpen, detailScore]);
 
+  /* The plays this site tracked below this player's osu! top-200 window. Asked
+     for on the first hover or open of the Key Split card, never with the
+     profile: nothing else reads them, most visits never open it, and a heavy
+     profile's tail is a few thousand plays. Hovering is what usually pays for
+     it, so the modal is already holding the answer by the time it opens. A
+     profile with none (an untracked country, no live backend) keeps the
+     window-only totals it always had. */
+  const loadKeyPpTail = useCallback(() => {
+    const userId = user?.id;
+    if (!userId || !isLiveBackendConfigured()) {
+      setKeyPpTailState("unavailable");
+      return;
+    }
+    if (keyPpTailRequestedRef.current === userId) return;
+    keyPpTailRequestedRef.current = userId;
+    setKeyPpTailState("loading");
+    fetchLivePlayerKeymodePpDirect(userId)
+      .then((tail) => {
+        if (keyPpTailRequestedRef.current !== userId) return;
+        keyPpTailRef.current = tail;
+        setKeyPpTail(tail);
+        setKeyPpTailState("ready");
+      })
+      .catch(() => {
+        if (keyPpTailRequestedRef.current !== userId) return;
+        // Let the next open try again rather than pinning the failure.
+        keyPpTailRequestedRef.current = null;
+        setKeyPpTailState("unavailable");
+      });
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (keyPpModalOpen) loadKeyPpTail();
+  }, [keyPpModalOpen, loadKeyPpTail]);
+
+  /* Only for a snapshot that predates the field, since a response cached
+     before the backend started sending it has none. Key counts only: a few
+     hundred bytes and one indexed read, against the megabyte of plays the full
+     tail is. A failure leaves the strip with the keymodes the window named. */
+  useEffect(() => {
+    const userId = user?.id;
+    if (keyPpKeyCounts !== null || !userId || !isLiveBackendConfigured()) return;
+    let active = true;
+    fetchLivePlayerKeymodePpKeysDirect(userId)
+      .then((keys) => {
+        if (active) setKeyPpKeyCounts(keys.keyCounts);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [keyPpKeyCounts, user?.id]);
+
+  /* A tracked play opens the same details card a window play does, built from
+     the day-best row on the spot. No fetch: 200 rows on screen must not become
+     200 osu! calls, and what the row never stored stays a dash on the card. */
+  const openTrackedPlayDetails = useCallback((play: LiveKeymodePpPlay) => {
+    if (!user) return;
+    setDetailScore(buildTrackedPlayScore(play, {
+      id: user.id,
+      username: user.username,
+      avatar_url: user.avatar_url,
+      country_code: user.country_code,
+    }));
+  }, [user]);
+
+  /* Tracked plays for the keymode the Best tab is filtered to, minus every map
+     the window already lists. Empty for "all", for an untracked player, and
+     until the tail has been fetched.
+
+     Also empty until the whole window is in hand. The SSR loader seeds 50
+     scores, so window plays 51-200 are not in `best` yet: merging against that
+     would label a play the window does hold as "tracked here" and then drop
+     the row when the rest arrives. */
+  const trackedPlaysForKeyFilter = useMemo(() => {
+    if (keyFilter === "all" || !keyPpTail || !bestWindowComplete) return [];
+    const keyCount = Number(keyFilter.replace("k", ""));
+    if (!Number.isFinite(keyCount) || keyCount <= 0) return [];
+    const inWindow = new Set(
+      best
+        .filter((score) => getBeatmapKeyCount(score.beatmap) === keyCount && !score.beatmap?.convert)
+        .map((score) => Number(score.beatmap?.id)),
+    );
+    return keyPpTail.plays.filter((play) => play.keyCount === keyCount && !inWindow.has(play.beatmapId));
+  }, [best, bestWindowComplete, keyFilter, keyPpTail]);
+
+  /* Picking a keymode is a request for that keymode's whole list, so it pays
+     for the tail the same way opening the Key Split modal does. */
+  useEffect(() => {
+    if (tab === "best" && keyFilter !== "all") loadKeyPpTail();
+  }, [keyFilter, loadKeyPpTail, tab]);
+
+  /* Redone once the whole window is in hand, because a keymode's own list is
+     the window's plays plus the tracked ones, and a half-loaded window would
+     rank them against the wrong neighbours. */
+  useEffect(() => {
+    if (!bestWindowComplete || !keyPpTail || keyPpTail.plays.length === 0 || best.length === 0) return;
+    setProfileInsights(calculateUserProfileInsights(best, keyPpTail));
+  }, [best, bestWindowComplete, keyPpTail]);
+
   useEffect(() => {
     const rail = tabsRailRef.current;
     const activeTab = rail?.querySelector<HTMLButtonElement>(`[data-player-tab="${tab}"]`);
@@ -1230,6 +1438,12 @@ export function PlayerProfilePage({
       setManiaCardSkills(loaderManiaCardSkills);
       setProfileInsights(loaderProfileInsights);
       setBestWindowLoaded(hasLoaderBestScores);
+      setBestWindowComplete(false);
+      setKeyPpTail(null);
+      setKeyPpKeyCounts(loaderSnapshot?.keymodeKeyCounts ?? null);
+      keyPpTailRef.current = null;
+      keyPpTailRequestedRef.current = null;
+      setKeyPpTailState("idle");
       setWaitingForSnapshotBest(!hasLoaderBestScores);
       setLoadingUser(!seededUser);
       setLoadingRankHistory(!loaderSnapshot?.user);
@@ -1282,14 +1496,16 @@ export function PlayerProfilePage({
       setLoadingUser(false);
       setLoadingRankHistory(false);
       setWaitingForSnapshotBest(false);
+      if (result.keymodeKeyCounts) setKeyPpKeyCounts(result.keymodeKeyCounts);
       if (result.bestScores.length > 0) {
         const dedupedScores = dedupeScores(result.bestScores);
         setBest((current) => scoreListsAreEquivalent(current, dedupedScores) ? current : dedupedScores);
         setBestFilters(buildPlayerBestFilterMetadata(dedupedScores));
         setManiaCardSkills(computeManiaSkills(dedupedScores, { globalPp: result.user.statistics?.pp }));
         setBestWindowLoaded(true);
+        setBestWindowComplete(true);
         setBestError(null);
-        setProfileInsights(calculateUserProfileInsights(dedupedScores));
+        setProfileInsights(calculateUserProfileInsights(dedupedScores, keyPpTailRef.current ?? undefined));
         setInsightsError(null);
         setLoadingInsights(false);
       }
@@ -1415,8 +1631,9 @@ export function PlayerProfilePage({
           setBestFilters(buildPlayerBestFilterMetadata(dedupedScores));
           setManiaCardSkills(computeManiaSkills(dedupedScores, { globalPp: user!.statistics?.pp }));
           setBestWindowLoaded(true);
+          setBestWindowComplete(true);
           setBestError(null);
-          setProfileInsights(calculateUserProfileInsights(dedupedScores));
+          setProfileInsights(calculateUserProfileInsights(dedupedScores, keyPpTailRef.current ?? undefined));
           setInsightsError(null);
         })
         .catch(() => {
@@ -1560,10 +1777,38 @@ export function PlayerProfilePage({
     return positions;
   }, [best]);
 
+  /* How much of this profile each keymode actually is, used to decide which
+     chips are worth a tap when there are more keymodes than fit. The insights
+     count window plays and tracked ones together; before they land, the window
+     on its own ranks the same mains first. */
+  const keyModePlayCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const score of best) {
+      const keyCount = getBeatmapKeyCount(score.beatmap);
+      if (keyCount == null) continue;
+      const key = `${keyCount}k`;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    for (const bucket of profileInsights?.keyPp ?? []) {
+      counts[`${bucket.keyCount}k`] = bucket.count;
+    }
+    return counts;
+  }, [best, profileInsights]);
+
+  /* Five keeps All plus the mains on one phone row. Past that the strip is
+     wider than the screen and the chips at the end are unreachable without a
+     swipe nothing announces. */
+  const MAX_INLINE_KEY_MODES = 5;
+
   const availableKeyModes = useMemo(() => {
     const modes = new Set([...bestFilters.keyModes, ...getAvailableKeyModes(recent)]);
+    // A keymode can exist entirely below the osu! window (every 5K play worth
+    // less than the 200th), and the chip has to be there or the list this site
+    // can show has no way to be asked for.
+    for (const keyCount of keyPpKeyCounts ?? []) modes.add(`${keyCount}k`);
+    for (const play of keyPpTail?.plays ?? []) modes.add(`${play.keyCount}k`);
     return [...modes].sort((a, b) => Number(a.replace("k", "")) - Number(b.replace("k", "")));
-  }, [bestFilters.keyModes, recent]);
+  }, [bestFilters.keyModes, keyPpKeyCounts, keyPpTail, recent]);
   const displayedProfileInsights = profileInsights;
   const cachedAboutFallback = user ? readCachedPlayerAbout(user.id) : undefined;
   const displayedAboutHtml = aboutHtml ?? cachedAboutFallback?.html;
@@ -1606,6 +1851,12 @@ export function PlayerProfilePage({
     });
   }, [navigate, showCountryFlag, username]);
 
+  /* The overflow chip opens the PP by Keymode modal, which is already the full
+     list of this profile's keymodes with what each is worth. Only offered when
+     that modal has rows to show, so the chip can never open nothing. */
+  const openKeyModeOverflow = useCallback(() => setKeyPpModalOpen(true), []);
+  const keyModeOverflowHandler = (profileInsights?.keyPp.length ?? 0) > 0 ? openKeyModeOverflow : undefined;
+
   const handleBestSortChange = useCallback((nextSort: BestSort) => {
     setBestSort(nextSort);
     if (nextSort === "pp-desc" || nextSort === "pp-asc") {
@@ -1632,33 +1883,76 @@ export function PlayerProfilePage({
   const stats = user.statistics;
   const currentScores = tab === "best" ? best : recent;
   const currentVisibleCount = tab === "best" ? bestVisibleCount : recentVisibleCount;
-  const keyFilteredScores = currentScores.filter((score) => matchesKeyFilter(score, keyFilter));
+  const keyFilteredScores = currentScores.filter((score) =>
+    tab === "best" ? matchesBestKeyFilter(score, keyFilter) : matchesKeyFilter(score, keyFilter));
   const filteredScores = tab === "best"
     ? sortBestScores(
       keyFilteredScores.filter((score) => matchesModFilter(score, bestModFilter)),
       bestSort,
     )
     : keyFilteredScores;
-  const visibleScores = filteredScores.slice(0, currentVisibleCount);
-  const scoreRowLayout = getScoreRowLayout(visibleScores);
+  /* One keymode's whole list, not the slice of it osu! had room for. Picking a
+     keymode is the moment the shared 200-play window stops being the right
+     answer, so the plays this site tracked below it join the rows here, in the
+     same order and under one ranking. "All" is left alone: there the window is
+     exactly what osu! ranks, and 200 more rows under it would be a different
+     list wearing the same name. */
+  /* The keymode's list itself: window plays and tracked ones under one pp
+     ranking, cut at the same 200 the Key Split modal's total is built from.
+     Ranked and cut before the mod filter, so filtering narrows the list rather
+     than pulling in the 201st play to backfill it, and so the two numbers on
+     screen describe the same set of plays. */
+  const keymodeListRows: BestListRow[] | null = tab === "best" && trackedPlaysForKeyFilter.length > 0
+    ? sortBestListRows(
+      [
+        ...keyFilteredScores.map((score) => ({ kind: "score" as const, score })),
+        ...trackedPlaysForKeyFilter.map((play) => ({ kind: "tracked" as const, play })),
+      ],
+      "pp-desc",
+    ).slice(0, KEY_PP_LIST_LIMIT)
+    : null;
+  const bestListRows: BestListRow[] = keymodeListRows
+    ? sortBestListRows(keymodeListRows.filter((row) => bestListRowMatchesModFilter(row, bestModFilter)), bestSort)
+    : filteredScores.map((score) => ({ kind: "score" as const, score }));
+  const visibleRows = bestListRows.slice(0, currentVisibleCount);
+  const scoreRowLayout = getScoreRowLayout(visibleRows);
+  /* With tracked plays in, the row numbers have to rank the merged list: a
+     window play's place in the profile-wide top 200 would read as a different
+     scale from the tracked row beside it. */
+  const keymodeListPositions = new Map<string, number>();
+  if (keymodeListRows) {
+    keymodeListRows.forEach((row, index) => {
+      keymodeListPositions.set(bestListRowKey(row), index + 1);
+    });
+  }
   const loadingBest = best.length === 0 && !bestWindowLoaded && !bestError;
   const loadingScores = tab === "best" ? loadingBest : loadingRecent;
   const scoresError = tab === "best" ? bestError : recentError;
   const currentHasMore = tab === "best" ? !bestWindowLoaded : recentHasMore;
   const isLoadingMoreCurrentTab = false;
   const canShowMore = tab === "best"
-    ? bestWindowLoaded && filteredScores.length > visibleScores.length
-    : filteredScores.length > visibleScores.length || recentHasMore;
+    ? bestWindowLoaded && bestListRows.length > visibleRows.length
+    : filteredScores.length > visibleRows.length || recentHasMore;
   const isSettlingInitialFilteredView =
     !loadingScores &&
     currentVisibleCount === INITIAL_SCORE_BATCH_SIZE &&
-    filteredScores.length < INITIAL_SCORE_BATCH_SIZE &&
+    bestListRows.length < INITIAL_SCORE_BATCH_SIZE &&
     currentHasMore;
+  /* A keymode list is the window's plays and the tracked ones together, so it
+     waits for both rather than painting half of it and inserting the rest a
+     frame later. Sub-200ms in practice, and the prefetch usually beats it.
+     The window half counts too: the SSR loader seeds only 50 of its 200
+     scores, and ranking tracked plays against those puts rows in places they
+     do not keep. */
+  const isWaitingForTrackedPlays =
+    tab === "best" &&
+    keyFilter !== "all" &&
+    (keyPpTailState === "idle" || keyPpTailState === "loading" || !bestWindowComplete);
   const scoreListState = loadingScores
     ? "loading"
-    : isSettlingInitialFilteredView
+    : isWaitingForTrackedPlays || isSettlingInitialFilteredView
       ? "settling"
-      : visibleScores.length > 0
+      : visibleRows.length > 0
         ? "loaded"
         : scoresError
           ? "error"
@@ -2241,60 +2535,103 @@ export function PlayerProfilePage({
                   <Trans>each keymode weighted against its own plays, the way osu! totals 4K and 7K</Trans>
                 </div>
 
-                {(() => {
-                  const buckets = profileInsights.keyPp;
-                  const topPp = buckets.reduce((top, bucket) => Math.max(top, bucket.weightedPp), 0);
-                  const hasFloor = buckets.some(isKeyPpFloor);
-                  return (
-                    <>
-                      <div className="mt-4 space-y-3">
-                        {buckets.map((bucket) => (
-                          <div key={bucket.keyCount} className="flex items-center gap-3">
-                            <span className={`w-8 shrink-0 text-xs font-bold tabular-nums ${KEYMODE_TEXT_COLORS[bucket.keyCount] ?? "text-white"}`}>
-                              {bucket.keyCount}K
-                            </span>
-                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-osu-b3/40">
-                              <div
-                                className={`h-full rounded-full ${KEYMODE_BAR_COLORS[bucket.keyCount] ?? "bg-osu-b1"}`}
-                                style={{ width: `${topPp > 0 ? (bucket.weightedPp / topPp) * 100 : 0}%` }}
-                              />
-                            </div>
-                            <div className="w-[112px] shrink-0 text-right">
-                              <div className="text-[17px] font-black leading-none tabular-nums text-white">
-                                {formatNumber(Math.round(bucket.weightedPp))}
-                                {isKeyPpFloor(bucket) && <span className="text-osu-f1">+</span>}
-                                <span className="ml-1 text-[11px] font-bold text-osu-f1">pp</span>
-                              </div>
-                              <div className="mt-1 text-[11px] tabular-nums text-osu-f1">
-                                <Plural value={bucket.count} one={`${formatNumber(bucket.count)} play`} other={`${formatNumber(bucket.count)} plays`} />
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="mt-4 space-y-1 text-[11px] text-osu-f1">
-                        {hasFloor && (
-                          <div>
-                            <Trans>A + reads as "at least": osu! serves no more than your top 200 plays, so a keymode with plays under {formatNumber(Math.round(profileInsights.keyPpCutoff))}pp is only counted as far as they go.</Trans>
-                          </div>
-                        )}
-                        {profileInsights.keyPpConverts > 0 && (
-                          <div>
-                            <Plural
-                              value={profileInsights.keyPpConverts}
-                              one={`# convert is left out, as osu! leaves converts out of its own keymode totals.`}
-                              other={`# converts are left out, as osu! leaves converts out of its own keymode totals.`}
-                            />
-                          </div>
-                        )}
-                        <div>
-                          <Trans>Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile.</Trans>
+                {keyPpTailState === "loading" ? (
+                  /* No half-answer: a total that appears and then grows once
+                     the tracked plays land reads as a bug, so the rows wait. */
+                  <div className="mt-4 space-y-3" aria-busy="true">
+                    {profileInsights.keyPp.map((bucket) => (
+                      <div key={bucket.keyCount} className="flex items-center gap-3">
+                        <span className={`w-8 shrink-0 text-xs font-bold tabular-nums ${KEYMODE_TEXT_COLORS[bucket.keyCount] ?? "text-white"}`}>
+                          {bucket.keyCount}K
+                        </span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-osu-b3/40">
+                          <div className="h-full w-1/3 animate-pulse rounded-full bg-osu-b3" />
+                        </div>
+                        <div className="w-[112px] shrink-0">
+                          <div className="ml-auto h-4 w-20 animate-pulse rounded bg-osu-b3/60" />
+                          <div className="ml-auto mt-1.5 h-2.5 w-12 animate-pulse rounded bg-osu-b3/40" />
                         </div>
                       </div>
-                    </>
-                  );
-                })()}
+                    ))}
+                  </div>
+                ) : (
+                  (() => {
+                    const buckets = profileInsights.keyPp;
+                    const topPp = buckets.reduce((top, bucket) => Math.max(top, bucket.weightedPp), 0);
+                    const hasFloor = buckets.some(isKeyPpFloor);
+                    return (
+                      <>
+                        <div className="mt-4 space-y-3">
+                          {/* A row is also how you pick that keymode: it is the
+                              one place that lists every keymode this profile has,
+                              which is what the chip strip sends the overflow to. */}
+                          {buckets.map((bucket) => (
+                            <button
+                              key={bucket.keyCount}
+                              type="button"
+                              onClick={() => {
+                                setKeyFilter(`${bucket.keyCount}k`);
+                                handleTabChange("best");
+                                setKeyPpModalOpen(false);
+                              }}
+                              title={t`Show ${bucket.keyCount}K plays`}
+                              className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-osu-b3/30"
+                            >
+                              <span className={`w-8 shrink-0 text-xs font-bold tabular-nums ${KEYMODE_TEXT_COLORS[bucket.keyCount] ?? "text-white"}`}>
+                                {bucket.keyCount}K
+                              </span>
+                              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-osu-b3/40">
+                                <div
+                                  className={`h-full rounded-full ${KEYMODE_BAR_COLORS[bucket.keyCount] ?? "bg-osu-b1"}`}
+                                  style={{ width: `${topPp > 0 ? (bucket.weightedPp / topPp) * 100 : 0}%` }}
+                                />
+                              </div>
+                              <div className="w-[112px] shrink-0 text-right">
+                                <div className="text-[17px] font-black leading-none tabular-nums text-white">
+                                  {formatNumber(Math.round(bucket.weightedPp))}
+                                  {isKeyPpFloor(bucket) && <span className="text-osu-f1">+</span>}
+                                  <span className="ml-1 text-[11px] font-bold text-osu-f1">pp</span>
+                                </div>
+                                <div className="mt-1 text-[11px] tabular-nums text-osu-f1">
+                                  <Plural value={bucket.count} one={`${formatNumber(bucket.count)} play`} other={`${formatNumber(bucket.count)} plays`} />
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="mt-4 space-y-1 text-[11px] text-osu-f1">
+                          {hasFloor && (
+                            <div>
+                              <Trans>A + reads as "at least": osu! serves no more than your top 200 plays, so a keymode with plays under {formatNumber(Math.round(profileInsights.keyPpCutoff))}pp is only counted as far as they go.</Trans>
+                            </div>
+                          )}
+                          {profileInsights.keyPpTracked > 0 && (
+                            <div>
+                              <Plural
+                                value={profileInsights.keyPpTracked}
+                                one={`# play this site tracked below your top 200 counts here too, so each keymode gets its own list instead of sharing one.`}
+                                other={`# plays this site tracked below your top 200 count here too, so each keymode gets its own list instead of sharing one.`}
+                              />
+                            </div>
+                          )}
+                          {profileInsights.keyPpConverts > 0 && (
+                            <div>
+                              <Plural
+                                value={profileInsights.keyPpConverts}
+                                one={`# convert is left out, as osu! leaves converts out of its own keymode totals.`}
+                                other={`# converts are left out, as osu! leaves converts out of its own keymode totals.`}
+                              />
+                            </div>
+                          )}
+                          <div>
+                            <Trans>Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile.</Trans>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()
+                )}
               </div>
             </motion.div>
           </motion.div>
@@ -2491,6 +2828,7 @@ export function PlayerProfilePage({
                     keySplit={profileInsights.keySplit}
                     sampleSize={profileInsights.sampleSize}
                     onOpen={hasKeyPp ? () => setKeyPpModalOpen(true) : undefined}
+                    onPrefetch={hasKeyPp ? loadKeyPpTail : undefined}
                   />
                   <div
                     className={`${INSIGHT_CELL_CLASS} group ${profileInsights.mostUsedMod ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
@@ -2630,6 +2968,9 @@ export function PlayerProfilePage({
               availableKeyModes={availableKeyModes}
               keyFilter={keyFilter}
               onChangeKeyFilter={setKeyFilter}
+              maxInlineKeyModes={MAX_INLINE_KEY_MODES}
+              keyModePlayCounts={keyModePlayCounts}
+              onKeyModeOverflow={keyModeOverflowHandler}
               mods={relevantBestMods}
               modFilter={bestModFilter}
               onCycleMod={cycleBestMod}
@@ -2658,6 +2999,9 @@ export function PlayerProfilePage({
                   availableKeyModes={availableKeyModes}
                   keyFilter={keyFilter}
                   onChangeKeyFilter={setKeyFilter}
+                  maxVisible={MAX_INLINE_KEY_MODES}
+                  playCounts={keyModePlayCounts}
+                  onOverflow={keyModeOverflowHandler}
                 />
               )}
             </div>
@@ -2780,16 +3124,25 @@ export function PlayerProfilePage({
                 ) : scoreListState === "error" ? (
                   <div className="text-center py-8 text-osu-f1 text-sm">{scoresError}</div>
                 ) : scoreListState === "loaded" ? (
-                  visibleScores.map((s: OsuScore, i: number) => {
-                    const identity = getScoreIdentity(s);
-                    const position = tab === "best" ? (bestPositionByIdentity.get(identity) ?? i + 1) : i + 1;
-                    return (
+                  visibleRows.map((row: BestListRow, i: number) => {
+                    const key = bestListRowKey(row);
+                    const position = keymodeListPositions.get(key)
+                      ?? (row.kind === "score" && tab === "best" ? bestPositionByIdentity.get(key) ?? i + 1 : i + 1);
+                    return row.kind === "score" ? (
                       <ScoreRow
-                        key={identity}
-                        score={s}
+                        key={key}
+                        score={row.score}
                         position={position}
                         layout={scoreRowLayout}
                         onOpenDetails={setDetailScore}
+                      />
+                    ) : (
+                      <TrackedScoreRow
+                        key={key}
+                        play={row.play}
+                        position={position}
+                        layout={scoreRowLayout}
+                        onOpenDetails={openTrackedPlayDetails}
                       />
                     );
                   })
@@ -3186,9 +3539,6 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   const [skillsError, setSkillsError] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<{ entry: SkillAxisEntry; keyCount: number } | null>(null);
   const [selectedDan, setSelectedDan] = useState<{ side: "rc" | "ln"; keyCount: number } | null>(null);
-  // The dan evidence window is still being built, so the chip only opens for
-  // admins; everyone else gets the plain, unclickable chip.
-  const canOpenDanEvidence = canUseAdminFeatures(useAuth());
   const liveConfigured = isLiveBackendConfigured();
 
   useEffect(() => {
@@ -3270,7 +3620,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
             skills={skills}
             mode={mode}
             onSelectEntry={(entry) => setSelectedSkill({ entry, keyCount: mode.keyCount })}
-            onSelectDan={canOpenDanEvidence ? (side) => setSelectedDan({ side, keyCount: mode.keyCount }) : undefined}
+            onSelectDan={(side) => setSelectedDan({ side, keyCount: mode.keyCount })}
           />
         ))}
       </div>
@@ -3285,7 +3635,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           onClose={() => setSelectedSkill(null)}
         />
       ) : null}
-      {selectedDan && canOpenDanEvidence ? (
+      {selectedDan ? (
         <DanEvidenceModal
           userId={user.id}
           username={user.username}
@@ -4658,6 +5008,9 @@ function BestScoresControlBar({
   availableKeyModes,
   keyFilter,
   onChangeKeyFilter,
+  maxInlineKeyModes,
+  keyModePlayCounts,
+  onKeyModeOverflow,
   mods,
   modFilter,
   onCycleMod,
@@ -4671,6 +5024,9 @@ function BestScoresControlBar({
   availableKeyModes: string[];
   keyFilter: KeyFilter;
   onChangeKeyFilter: (keyFilter: KeyFilter) => void;
+  maxInlineKeyModes: number;
+  keyModePlayCounts: Record<string, number>;
+  onKeyModeOverflow?: () => void;
   mods: string[];
   modFilter: ModFilterState;
   onCycleMod: (mod: string) => void;
@@ -4715,13 +5071,18 @@ function BestScoresControlBar({
           </>
         )}
       </div>
-      <div className="order-1 flex w-full flex-nowrap items-center justify-between gap-2 overflow-x-auto scrollbar-hide lg:order-2 lg:w-auto lg:flex-col lg:items-end lg:justify-start lg:overflow-visible">
+      <div className="order-1 flex w-full min-w-0 flex-nowrap items-center justify-between gap-2 lg:order-2 lg:w-auto lg:flex-col lg:items-end lg:justify-start">
         {availableKeyModes.length > 1 && (
-          <div className="lg:hidden">
+          // Shrinks so the keymode strip scrolls inside itself instead of pushing
+          // the sort buttons off the right edge (a 4K-to-18K player overflows).
+          <div className="min-w-0 flex-1 lg:hidden">
             <KeyModeControl
               availableKeyModes={availableKeyModes}
               keyFilter={keyFilter}
               onChangeKeyFilter={onChangeKeyFilter}
+              maxVisible={maxInlineKeyModes}
+              playCounts={keyModePlayCounts}
+              onOverflow={onKeyModeOverflow}
             />
           </div>
         )}
@@ -4786,22 +5147,64 @@ function BestSortControl({
   );
 }
 
+/**
+ * Which keymodes a crowded strip keeps inline, and which fall to the overflow.
+ *
+ * A profile with 4K through 18K on it has more chips than a phone row holds,
+ * and they are not worth the same: two 18K plays are a novelty beside a 200
+ * play 7K list. So the strip keeps the keymodes with the most plays, and the
+ * rest go behind one chip. What is kept is still drawn in numeric order, since
+ * ranking the chips themselves would move 4K around per profile.
+ *
+ * The active filter is always kept, or picking a keymode from the overflow
+ * would hide the chip that says which one is on.
+ */
+export function selectVisibleKeyModes(
+  availableKeyModes: string[],
+  keyFilter: KeyFilter,
+  playCounts: Record<string, number>,
+  maxVisible: number,
+): string[] {
+  if (availableKeyModes.length <= maxVisible) return availableKeyModes;
+  const ranked = [...availableKeyModes].sort((a, b) =>
+    (playCounts[b] ?? 0) - (playCounts[a] ?? 0)
+    || Number(a.replace("k", "")) - Number(b.replace("k", "")));
+  const kept = new Set(ranked.slice(0, Math.max(1, maxVisible)));
+  if (keyFilter !== "all") kept.add(keyFilter);
+  return availableKeyModes.filter((keyMode) => kept.has(keyMode));
+}
+
 function KeyModeControl({
   availableKeyModes,
   keyFilter,
   onChangeKeyFilter,
+  maxVisible,
+  playCounts,
+  onOverflow,
 }: {
   availableKeyModes: string[];
   keyFilter: KeyFilter;
   onChangeKeyFilter: (keyFilter: KeyFilter) => void;
+  /** Chips to keep inline before the rest collapse. Unset keeps all of them. */
+  maxVisible?: number;
+  playCounts?: Record<string, number>;
+  /** Opens the fuller picker. Without one the strip keeps every chip. */
+  onOverflow?: () => void;
 }) {
   const { t } = useLingui();
+  const visibleKeyModes = useMemo(() => (
+    maxVisible == null || !onOverflow
+      ? availableKeyModes
+      : selectVisibleKeyModes(availableKeyModes, keyFilter, playCounts ?? {}, maxVisible)
+  ), [availableKeyModes, keyFilter, maxVisible, onOverflow, playCounts]);
+  const hiddenCount = availableKeyModes.length - visibleKeyModes.length;
+
   return (
-    // Someone who plays every keymode makes this strip wider than a phone, so it
-    // scrolls inside its own box rather than running off the screen. Desktop keeps
-    // it at full width and lets the tab rail beside it take the squeeze instead.
+    // Someone who plays every keymode makes this strip wider than a phone. It
+    // scrolls inside its own box rather than running off the screen, and the
+    // box never grows past its parent, so the sort buttons beside it stay put.
     <div className="inline-flex max-w-full items-center gap-0.5 overflow-x-auto scrollbar-hide rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1 lg:shrink-0">
-      {[["all", t`All`] as const, ...availableKeyModes.map((k) => [k, k.toUpperCase()] as const)].map(([value, label]) => (
+      {[["all", t`All`] as const, ...visibleKeyModes.map((k) => [k, k.toUpperCase()] as const)].map(([value, label]) => (
         <button
           key={value}
           onClick={() => onChangeKeyFilter(value)}
@@ -4813,6 +5216,19 @@ function KeyModeControl({
           {label}
         </button>
       ))}
+      {hiddenCount > 0 && onOverflow && (
+        /* The rest live in the PP by Keymode modal, which lists every keymode
+           with what it is worth and how many plays it holds - more to go on
+           than a menu of the same chips would give. */
+        <button
+          type="button"
+          onClick={onOverflow}
+          title={t`All keymodes`}
+          className="shrink-0 px-2 py-1.5 rounded-md text-[10px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l2 hover:bg-osu-b3/50 sm:px-3 sm:text-[11px]"
+        >
+          +{hiddenCount}
+        </button>
+      )}
     </div>
   );
 }
@@ -5059,8 +5475,11 @@ const INSIGHT_LABEL_CLASS = "text-[9px] font-semibold uppercase tracking-[0.18em
 // purple theme it collapsed onto 4K's blue or 6K's purple. Keymode identity
 // has to read the same under every theme, and 4K/7K (the pair that almost
 // always appears together) get complementary ends of the range.
-const KEYMODE_BAR_COLORS: Record<number, string> = { 4: "bg-osu-blue", 5: "bg-osu-green-light", 6: "bg-osu-purple-light", 7: "bg-osu-orange", 8: "bg-osu-yellow", 9: "bg-osu-red-light", 10: "bg-osu-green" };
-const KEYMODE_TEXT_COLORS: Record<number, string> = { 4: "text-osu-blue", 5: "text-osu-green-light", 6: "text-osu-purple-light", 7: "text-osu-orange", 8: "text-osu-yellow", 9: "text-osu-red-light", 10: "text-osu-green-light" };
+// The two-stage keymodes (12K up) take the other shade of the keymode each one
+// doubles, so 18K reads as 9K's deeper red and nothing above 10K falls back to
+// a colourless bar. 10K already worked this way against 5K.
+const KEYMODE_BAR_COLORS: Record<number, string> = { 4: "bg-osu-blue", 5: "bg-osu-green-light", 6: "bg-osu-purple-light", 7: "bg-osu-orange", 8: "bg-osu-yellow", 9: "bg-osu-red-light", 10: "bg-osu-green", 12: "bg-osu-purple", 14: "bg-osu-orange-dark", 16: "bg-osu-yellow-light", 18: "bg-osu-red" };
+const KEYMODE_TEXT_COLORS: Record<number, string> = { 4: "text-osu-blue", 5: "text-osu-green-light", 6: "text-osu-purple-light", 7: "text-osu-orange", 8: "text-osu-yellow", 9: "text-osu-red-light", 10: "text-osu-green-light", 12: "text-osu-purple", 14: "text-osu-orange-dark", 16: "text-osu-yellow-light", 18: "text-osu-red" };
 // A keymode total counts only what the top-200 window still holds, so mark it
 // as a floor once the plays below the cutoff could move it by more than this.
 const KEY_PP_FLOOR_RATIO = 0.02;
@@ -5069,7 +5488,7 @@ function isKeyPpFloor(bucket: UserProfileInsights["keyPp"][number]): boolean {
   return bucket.missingBound > bucket.weightedPp * KEY_PP_FLOOR_RATIO;
 }
 
-function KeySplitCard({ keySplit, sampleSize, onOpen }: { keySplit: UserProfileInsights["keySplit"]; sampleSize: number; onOpen?: () => void }) {
+function KeySplitCard({ keySplit, sampleSize, onOpen, onPrefetch }: { keySplit: UserProfileInsights["keySplit"]; sampleSize: number; onOpen?: () => void; onPrefetch?: () => void }) {
   const { t } = useLingui();
   const colors = KEYMODE_BAR_COLORS;
   const textColors = KEYMODE_TEXT_COLORS;
@@ -5081,6 +5500,10 @@ function KeySplitCard({ keySplit, sampleSize, onOpen }: { keySplit: UserProfileI
       type="button"
       className={`${INSIGHT_CELL_CLASS} group w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-osu-pink/50 ${onOpen ? INSIGHT_CELL_INTERACTIVE_CLASS : "cursor-default"}`}
       onClick={onOpen}
+      // Hovering or tabbing to the card is the earliest honest signal that the
+      // totals are about to be read, and it buys the fetch a head start.
+      onPointerEnter={onPrefetch}
+      onFocus={onPrefetch}
       disabled={!onOpen}
     >
       <div className="flex items-center justify-between">
@@ -5388,9 +5811,22 @@ const EMPTY_SCORE_ROW_LAYOUT: ScoreRowLayout = {
 const MOD_BADGE_WIDTH = 36;
 const MOD_BADGE_GAP = 2;
 
-function getScoreRowLayout(scores: OsuScore[]): ScoreRowLayout {
+/* Every visible row, not just the window ones. A keymode list can be all
+   tracked rows, and reading the layout off the window scores alone gave that
+   list modColumns: 0 and showPp: false, which drops the mods and the feature's
+   own number on desktop while mobile still shows both. showLazer stays a
+   window-only signal: a tracked row has no lazer badge to align. */
+export function getScoreRowLayout(rows: BestListRow[]): ScoreRowLayout {
   const layout = { ...EMPTY_SCORE_ROW_LAYOUT };
-  for (const score of scores) {
+  for (const row of rows) {
+    if (row.kind === "tracked") {
+      const { play } = row;
+      layout.modColumns = Math.max(layout.modColumns, getModDisplayList(play.mods.map((acronym) => ({ acronym }))).length);
+      layout.showPp = true;
+      if (play.hasReplay === true && play.soloScoreId != null) layout.showReplay = true;
+      continue;
+    }
+    const { score } = row;
     layout.modColumns = Math.max(layout.modColumns, getModDisplayList(score.mods).length);
     if (getScoreDisplayValues(score).isLazer) layout.showLazer = true;
     if (score.pp != null) layout.showPp = true;
@@ -5401,6 +5837,148 @@ function getScoreRowLayout(scores: OsuScore[]): ScoreRowLayout {
 
 const REPLAY_BUTTON_CLASS =
   "relative z-20 hidden flex-shrink-0 rounded-md border border-osu-pink/20 bg-osu-pink/15 px-2.5 py-1.5 text-[10px] font-semibold text-osu-pink-light sm:block";
+
+/**
+ * A play only this site's tracking has, drawn to sit in line with ScoreRow.
+ *
+ * It shows what the tracking stored and nothing else: combo and the replay
+ * button are recorded at ingest, and a play from before that reads a dash
+ * instead of a made-up zero. The cells it skips keep their width so the
+ * numbers stay in their columns, and the details card it opens is built from
+ * the same row rather than fetched.
+ */
+function TrackedScoreRow({
+  play,
+  position,
+  layout = EMPTY_SCORE_ROW_LAYOUT,
+  onOpenDetails,
+}: {
+  play: LiveKeymodePpPlay;
+  position: number;
+  layout?: ScoreRowLayout;
+  onOpenDetails: (play: LiveKeymodePpPlay) => void;
+}) {
+  const locale = useLocale();
+  const { t } = useLingui();
+  const mods = getModDisplayList(play.mods.map((acronym) => ({ acronym })));
+  const coverUrl = play.beatmapsetId ? `/api/background?beatmapsetId=${play.beatmapsetId}` : null;
+  const canReplay = play.hasReplay === true && play.soloScoreId != null;
+
+  return (
+    <div className="player-score-row relative flex items-center gap-2 sm:gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms] cursor-pointer">
+      {/* Same full-row target as a window score. */}
+      <button
+        type="button"
+        onClick={() => onOpenDetails(play)}
+        aria-label={t`Show details for ${play.title || t`score`}`}
+        className="absolute inset-0 z-0 rounded-lg cursor-pointer"
+      />
+      <span className="pointer-events-none relative z-10 sm:hidden text-xs text-osu-f1 font-bold flex-shrink-0">{position}.</span>
+      <div
+        className="score-position-indicator pointer-events-none absolute -left-14 top-1/2 -translate-y-1/2 w-10 text-right text-white/90 opacity-0 translate-x-2 transition-all duration-150 ease-out hidden sm:block"
+        style={{ fontFamily: "Venera" }}
+      >
+        <span className="block text-[24px] leading-none">{position}</span>
+      </div>
+      <div className="pointer-events-none relative z-10 flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+        <GradeImg grade={play.rank ?? "D"} size={28} />
+        {coverUrl ? (
+          <img src={coverUrl} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" loading="lazy" />
+        ) : (
+          <div className="w-12 h-8 rounded flex-shrink-0 border border-osu-b3/50 bg-osu-b4" />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-white truncate">{play.title || t`Unknown`}</span>
+            <span className="text-[11px] text-osu-f1 truncate hidden sm:inline">[{play.version}]</span>
+            {play.keyCount > 0 && (
+              <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
+                {play.keyCount}K
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] text-osu-f1">
+            {play.artist}
+            {play.playedAt && (
+              <>
+                {" "}&middot;{" "}
+                <span suppressHydrationWarning title={formatTimeAgoTooltip(play.playedAt, locale)}>
+                  {formatTimeAgo(play.playedAt, locale)}
+                </span>
+              </>
+            )}
+          </span>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
+            <div className="flex flex-wrap items-center gap-0.5">
+              {mods.map((m) => (
+                <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} size={0.82} />
+              ))}
+            </div>
+            <div className="ml-auto flex flex-shrink-0 items-center gap-1.5">
+              {play.accuracy != null && (
+                <span className="whitespace-nowrap text-xs text-osu-l2 tabular-nums">{formatAccuracy(play.accuracy)}</span>
+              )}
+              {play.maxCombo != null && (
+                <span className="whitespace-nowrap text-xs text-osu-f1 tabular-nums">{formatNumber(play.maxCombo)}x</span>
+              )}
+              <span className="whitespace-nowrap text-sm font-bold tabular-nums text-osu-pink-light">{formatPP(play.pp)}</span>
+              {canReplay && (
+                <Link
+                  to="/replay"
+                  search={{ scoreId: play.soloScoreId ?? undefined, beatmapsetId: play.beatmapsetId ?? undefined }}
+                  title={t`Watch replay`}
+                  aria-label={t`Watch replay`}
+                  className="pointer-events-auto inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-osu-pink/20 text-[9px] font-semibold leading-none text-osu-pink-light transition-colors hover:bg-osu-pink/30"
+                >
+                  <span aria-hidden="true">&#9654;</span>
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
+          {layout.modColumns > 0 && (
+            <div
+              className="flex flex-shrink-0 gap-0.5 justify-end"
+              style={{ width: layout.modColumns * MOD_BADGE_WIDTH + (layout.modColumns - 1) * MOD_BADGE_GAP }}
+            >
+              {mods.map((m) => (
+                <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
+              ))}
+            </div>
+          )}
+          {layout.showLazer && <div className="w-11 flex-shrink-0" />}
+          <div className="flex items-center gap-2">
+            <span className="w-14 text-right text-xs tabular-nums text-osu-l2">
+              {play.accuracy != null ? formatAccuracy(play.accuracy) : "-"}
+            </span>
+            <span className={`w-14 text-right text-xs tabular-nums ${play.maxCombo != null ? "text-osu-f1" : "text-osu-f1/40"}`}>
+              {play.maxCombo != null ? `${formatNumber(play.maxCombo)}x` : "-"}
+            </span>
+            {layout.showPp && (
+              <span className="w-16 text-right text-sm font-bold tabular-nums text-osu-pink-light">{formatPP(play.pp)}</span>
+            )}
+          </div>
+        </div>
+      </div>
+      {canReplay ? (
+        <Link
+          to="/replay"
+          search={{ scoreId: play.soloScoreId ?? undefined, beatmapsetId: play.beatmapsetId ?? undefined }}
+          title={t`Watch replay`}
+          aria-label={t`Watch replay`}
+          className={`pointer-events-auto relative z-10 transition-colors hover:bg-osu-pink/25 ${REPLAY_BUTTON_CLASS}`}
+        >
+          {t`Replay`}
+        </Link>
+      ) : layout.showReplay ? (
+        <span aria-hidden="true" className={`pointer-events-none invisible ${REPLAY_BUTTON_CLASS}`}>
+          {t`Replay`}
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 function ScoreRow({
   score,
@@ -5578,7 +6156,11 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
   const locale = useLocale();
   const scoreTitleFallback = t`Score`;
   const display = getScoreDisplayValues(score);
+  /* A play whose judgement counts were never stored (a tracked play from
+     before the day-best rows kept them) would otherwise draw six zeros, which
+     reads as a real score of nothing. The grid is dropped instead. */
   const judgements = getManiaJudgementStats(score);
+  const hasJudgements = judgements.some((judgement) => judgement.value > 0);
   const mods = getModDisplayList(score.mods);
   const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
   const scoreUrl = getScoreUrl(score);
@@ -5703,23 +6285,25 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
             {/* Narrow screens wrap these into 3x2 and 2x2 blocks; centring the
                 cells there keeps the wrapped rows reading as a grid instead of
                 as columns with ragged space to their right. */}
-            <div className="mt-5 grid grid-cols-3 gap-3 text-center sm:grid-cols-6 sm:text-left">
-              {judgements.map((judgement) => (
-                <ScoreDetailStat
-                  key={judgement.label}
-                  label={judgement.label}
-                  value={formatNumber(judgement.value)}
-                  color={judgement.className}
-                />
-              ))}
-            </div>
+            {hasJudgements && (
+              <div className="mt-5 grid grid-cols-3 gap-3 text-center sm:grid-cols-6 sm:text-left">
+                {judgements.map((judgement) => (
+                  <ScoreDetailStat
+                    key={judgement.label}
+                    label={judgement.label}
+                    value={formatNumber(judgement.value)}
+                    color={judgement.className}
+                  />
+                ))}
+              </div>
+            )}
 
             <div className="mt-5 grid grid-cols-2 gap-3 text-center sm:grid-cols-4 sm:text-left">
-              <ScoreDetailStat label={t`Combo`} value={`${formatNumber(score.max_combo)}x`} />
+              <ScoreDetailStat label={t`Combo`} value={score.max_combo ? `${formatNumber(score.max_combo)}x` : "-"} />
               {hasPp && (
                 <ScoreDetailStat
                   label={t`Score`}
-                  value={display.totalScore != null ? formatNumber(display.totalScore) : "-"}
+                  value={display.totalScore ? formatNumber(display.totalScore) : "-"}
                 />
               )}
               <ScoreDetailStat
@@ -5741,14 +6325,17 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
                 <Trans>Played {formatDetailedTimeAgo(playedAt, locale)} on {display.isLazer ? "Lazer" : "Stable"}</Trans>
               </span>
               <div className="flex items-center justify-between gap-3 sm:justify-end">
-                {scoreUrl && (
+                {/* A tracked play whose row never kept a score id has no page
+                    on osu! to open, so the link falls back to the map it was
+                    set on rather than leaving the card with nothing to follow. */}
+                {(scoreUrl ?? beatmapUrl) && (
                   <a
-                    href={scoreUrl}
+                    href={scoreUrl ?? beatmapUrl ?? undefined}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 text-[11px] text-osu-f1 hover:text-osu-pink-light transition-colors"
                   >
-                    {t`View on osu!`}
+                    {scoreUrl ? t`View on osu!` : t`Open beatmap on osu!`}
                     <ExternalLink size={11} className="shrink-0" />
                   </a>
                 )}

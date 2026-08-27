@@ -221,9 +221,9 @@ describe("calculateUserProfileInsights", () => {
     // Each keymode is weighted from its own index, not its place in the
     // profile-wide list: the second 4K play decays by 0.95, not by 0.95^2.
     expect(insights.keyPp).toEqual([
-      { keyCount: 4, weightedPp: 500 + 300 * 0.95, count: 2, missingBound: 0 },
-      { keyCount: 7, weightedPp: 400, count: 1, missingBound: 0 },
-      { keyCount: 5, weightedPp: 200, count: 1, missingBound: 0 },
+      { keyCount: 4, weightedPp: 500 + 300 * 0.95, count: 2, trackedCount: 0, missingBound: 0 },
+      { keyCount: 7, weightedPp: 400, count: 1, trackedCount: 0, missingBound: 0 },
+      { keyCount: 5, weightedPp: 200, count: 1, trackedCount: 0, missingBound: 0 },
     ]);
     // A window this short is the player's whole ranked history, so nothing
     // hides below it.
@@ -238,7 +238,7 @@ describe("calculateUserProfileInsights", () => {
     ]);
 
     expect(insights.keyPp).toEqual([
-      { keyCount: 7, weightedPp: 300, count: 1, missingBound: 0 },
+      { keyCount: 7, weightedPp: 300, count: 1, trackedCount: 0, missingBound: 0 },
     ]);
     expect(insights.keyPpConverts).toBe(1);
     // The play still happened, so the key split keeps counting it.
@@ -267,5 +267,117 @@ describe("calculateUserProfileInsights", () => {
     expect(fourKey.missingBound).toBeLessThan(fourKey.weightedPp * 0.02);
     expect(fiveKey.missingBound).toBeGreaterThan(fiveKey.weightedPp * 0.02);
     expect(fiveKey.missingBound).toBeCloseTo((396 * 0.95 ** 10) / 0.05, 6);
+  });
+  it("folds tracked plays into the keymode they were played on", () => {
+    const insights = calculateUserProfileInsights(
+      [
+        createScore({ id: 1, cs: 4, bpm: 180, created_at: "2025-01-01T00:00:00Z", pp: 500 }),
+        createScore({ id: 2, cs: 6, bpm: 180, created_at: "2025-01-02T00:00:00Z", pp: 400 }),
+      ],
+      {
+        plays: [
+          { beatmapId: 90_001, keyCount: 6, pp: 300 },
+          { beatmapId: 90_002, keyCount: 6, pp: 200 },
+        ],
+        trackedFrom: "2026-05-27",
+      },
+    );
+
+    const sixKey = insights.keyPp.find((bucket) => bucket.keyCount === 6)!;
+    // 6K had one play in the window; the two tracked ones extend its own list.
+    expect(sixKey.weightedPp).toBeCloseTo(400 + 300 * 0.95 + 200 * 0.95 ** 2, 6);
+    expect(sixKey.count).toBe(3);
+    expect(sixKey.trackedCount).toBe(2);
+    expect(insights.keyPpTracked).toBe(2);
+    expect(insights.keyPpTrackedFrom).toBe("2026-05-27");
+  });
+
+  it("counts a map in both the window and the tail once, at the window's pp", () => {
+    const insights = calculateUserProfileInsights(
+      [createScore({ id: 3, cs: 7, bpm: 180, created_at: "2025-01-01T00:00:00Z", pp: 500 })],
+      // Same beatmap the window play is on (createScore ids are 10_000 + id),
+      // carrying whatever the ingest last saw there.
+      { plays: [{ beatmapId: 10_003, keyCount: 7, pp: 420 }] },
+    );
+
+    expect(insights.keyPp).toEqual([
+      { keyCount: 7, weightedPp: 500, count: 1, trackedCount: 0, missingBound: 0 },
+    ]);
+    expect(insights.keyPpTracked).toBe(0);
+  });
+
+  it("gives each keymode its own list of 200 rather than one shared budget", () => {
+    const insights = calculateUserProfileInsights(
+      [createScore({ id: 4, cs: 5, bpm: 180, created_at: "2025-01-01T00:00:00Z", pp: 400 })],
+      {
+        plays: Array.from({ length: 250 }, (_, i) => ({
+          beatmapId: 80_000 + i,
+          keyCount: 5,
+          pp: 399 - i,
+        })),
+      },
+    );
+
+    const fiveKey = insights.keyPp.find((bucket) => bucket.keyCount === 5)!;
+    expect(fiveKey.count).toBe(200);
+    expect(fiveKey.trackedCount).toBe(199);
+  });
+
+  it("leaves the missing bound measured from the window alone", () => {
+    const scores = Array.from({ length: 200 }, (_, i) =>
+      createScore({
+        id: i + 1,
+        cs: i < 190 ? 4 : 5,
+        bpm: 180,
+        created_at: "2025-01-01T00:00:00Z",
+        pp: 600 - i,
+      }),
+    );
+    const trackedPlays = Array.from({ length: 40 }, (_, i) => ({
+      beatmapId: 70_000 + i,
+      keyCount: 5,
+      pp: 395 - i,
+    }));
+
+    const withTail = calculateUserProfileInsights(scores, { plays: trackedPlays });
+    const fiveKey = withTail.keyPp.find((bucket) => bucket.keyCount === 5)!;
+
+    // The tail raises the total, because those plays are real and were unseen.
+    expect(fiveKey.weightedPp).toBeGreaterThan(
+      calculateUserProfileInsights(scores).keyPp.find((bucket) => bucket.keyCount === 5)!.weightedPp,
+    );
+    // It does not narrow what is still unseen: a play the ingest never saw is
+    // only known to be under the cutoff, so it could outrank every tracked one.
+    expect(fiveKey.missingBound).toBeCloseTo((401 * 0.95 ** 10) / 0.05, 6);
+  });
+
+  it("ignores tracked plays that carry no usable keymode, map or pp", () => {
+    const insights = calculateUserProfileInsights(
+      [createScore({ id: 5, cs: 4, bpm: 180, created_at: "2025-01-01T00:00:00Z", pp: 300 })],
+      {
+        plays: [
+          { beatmapId: 60_001, keyCount: 0, pp: 250 },
+          { beatmapId: 0, keyCount: 4, pp: 250 },
+          { beatmapId: 60_002, keyCount: 4, pp: 0 },
+        ],
+      },
+    );
+
+    expect(insights.keyPpTracked).toBe(0);
+    expect(insights.keyPp).toEqual([
+      { keyCount: 4, weightedPp: 300, count: 1, trackedCount: 0, missingBound: 0 },
+    ]);
+  });
+  it("weights a tracked play by where it lands in its keymode's own list", () => {
+    const scores = [
+      createScore({ id: 1, cs: 7, bpm: 180, created_at: "2025-01-01T00:00:00Z", pp: 600 }),
+      createScore({ id: 2, cs: 7, bpm: 180, created_at: "2025-01-02T00:00:00Z", pp: 450 }),
+    ];
+    const tracked = { plays: [{ beatmapId: 40_001, keyCount: 7, pp: 500 }] };
+
+    const bucket = calculateUserProfileInsights(scores, tracked).keyPp.find((entry) => entry.keyCount === 7)!;
+
+    // The tracked 500 sits second, so the window's 450 is pushed to third.
+    expect(bucket.weightedPp).toBeCloseTo(600 + 500 * 0.95 + 450 * 0.95 ** 2, 10);
   });
 });

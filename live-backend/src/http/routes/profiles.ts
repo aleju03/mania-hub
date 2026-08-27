@@ -2,11 +2,14 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { exec } from "../../db.js";
 import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../../features/activity.js";
 import { enrichPayloadAvatarAccents } from "../../features/avatar-accents.js";
-import { getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, getPlayerReplayScores } from "../../features/player-profiles.js";
+import { getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, getPlayerReplayScores, ProfileUserSuppressedError } from "../../features/player-profiles.js";
+import { getPlayerKeymodePpKeyCounts, getPlayerKeymodePpTail } from "../../features/keymode-pp.js";
+import { enqueueMissingPlayDetails } from "../../features/activity-detail-on-demand.js";
 import { getPlayerSkillBreakdown, getPlayerSkillDanEvidence, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import { OsuApiError } from "../../osu/client.js";
+import { isUserKnownInactive } from "../../user-status.js";
 import type { OscScore } from "../../shared/types.js";
 import type { Db } from "../../db.js";
 import type { HttpContext } from "../context.js";
@@ -50,7 +53,7 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
         // surfaces here as a 404 OsuApiError. That is a miss, not a fault: it
         // used to fall through to the server's catch-all as a 500 plus an
         // http_unhandled_error warn.
-        if (!isOsuNotFound(error)) throw error;
+        if (!isOsuNotFound(error) && !(error instanceof ProfileUserSuppressedError)) throw error;
         sendJson(req, res, ctx, 404, { error: "profile_not_found" });
         return true;
       }
@@ -60,6 +63,10 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
     const userId = Number(profileRoute.key);
     if (!Number.isInteger(userId) || userId <= 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    if (await isUserKnownInactive(ctx.db, userId)) {
+      sendJson(req, res, ctx, 404, { error: "profile_not_found" });
       return true;
     }
     if (profileRoute.kind === "recent") {
@@ -155,6 +162,32 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       sendJson(req, res, ctx, 200, page);
       return true;
     }
+    if (profileRoute.kind === "keymode-pp") {
+      if (!checkRate(req, res, ctx, "publicCostly")) return true;
+      /* The keymode chips are drawn on every profile view, so they ask for the
+         key counts alone. No plays, and no detail backfill either: nobody has
+         opened a list yet. */
+      if (url.searchParams.get("view") === "keys") {
+        res.setHeader("cache-control", "public, max-age=300");
+        sendJson(req, res, ctx, 200, await getPlayerKeymodePpKeyCounts(ctx.db, userId));
+        return true;
+      }
+      // Read-only and index-scoped, but it is the profile page's per-view call,
+      // so it caches like the other derived reads rather than re-running for
+      // every tab someone opens.
+      res.setHeader("cache-control", "public, max-age=300");
+      sendJson(req, res, ctx, 200, await getPlayerKeymodePpTail(ctx.db, userId));
+      /* Somebody is reading this profile's per-keymode lists, so any play on
+         them still missing its combo, score and replay button is worth one
+         osu! call. Queued after the response, on the bookkeeping connection,
+         and skipped entirely when this process has none: it must never make a
+         page load wait, and it must never touch the serving connection. */
+      if (ctx.serveWriteDb && ctx.serveWriteQueue) {
+        void enqueueMissingPlayDetails(ctx.serveWriteDb, ctx.serveWriteQueue, userId)
+          .catch((error) => logWarn("activity_detail_on_demand_enqueue_failed", { user_id: userId, ...errorContext(error) }));
+      }
+      return true;
+    }
     if (profileRoute.kind === "dan-evidence") {
       if (!checkRate(req, res, ctx, "publicCostly")) return true;
       const side = url.searchParams.get("side") === "ln" ? "ln" : "rc";
@@ -192,8 +225,8 @@ function isOsuNotFound(error: unknown): boolean {
   return error instanceof OsuApiError && error.status === 404;
 }
 
-function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays" | "dan-evidence"; key: string } | null {
-  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|replay-scores|about|activity|activity-day|activity-availability|skills|skill-plays|dan-evidence)$/.exec(pathname);
+function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays" | "dan-evidence" | "keymode-pp"; key: string } | null {
+  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|replay-scores|about|activity|activity-day|activity-availability|skills|skill-plays|dan-evidence|keymode-pp)$/.exec(pathname);
   if (!match) return null;
   let key: string;
   try {
@@ -203,7 +236,7 @@ function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snaps
   }
   return {
     key,
-    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays",
+    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays" | "keymode-pp",
   };
 }
 

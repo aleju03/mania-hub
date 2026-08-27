@@ -31,6 +31,10 @@ msgstr " · actualizado {0}"
 msgid " or "
 msgstr " o "
 
+#: src/routes/dan-estimates.tsx
+msgid "_Underjoy LN dan courses, ScoreV2 accuracy"
+msgstr "Dans LN de _Underjoy, precisión ScoreV2"
+
 #: src/components/packs/CardSpotlight.tsx
 msgid ", {ordinalText} of {totalText} to pull it"
 msgstr ", {ordinalText} de {totalText} en sacar esta carta"
@@ -128,12 +132,19 @@ msgstr "{0, plural, one {# diff} other {# diffs}}"
 msgid "{0, plural, one {# mania diff} other {# mania diffs}}"
 msgstr "{0, plural, one {# diff de mania} other {# diffs de mania}}"
 
+#. placeholder {0}: collection.memberCount
 #. placeholder {0}: recs.length
 #. placeholder {0}: summary.memberCount
 #: src/components/maps/MapCollectionsSection.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/routes/farm-helper.tsx
 msgid "{0, plural, one {# map} other {# maps}}"
 msgstr "{0, plural, one {# mapa} other {# mapas}}"
+
+#. placeholder {0}: cards.length
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "{0, plural, one {# mapset} other {# mapsets}}"
+msgstr "{0, plural, one {# mapset} other {# mapsets}}"
 
 #. placeholder {0}: community.memberCount
 #: src/components/communities/CommunityCard.tsx
@@ -154,6 +165,11 @@ msgstr "{0, plural, one {# otro score encontrado, pero no hay replay disponible}
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "{0, plural, one {# pack} other {# packs}}"
 msgstr "{0, plural, one {# pack} other {# packs}}"
+
+#. placeholder {0}: profileInsights.keyPpTracked
+#: src/routes/player/$username.tsx
+msgid "{0, plural, one {# play this site tracked below your top 200 counts here too, so each keymode gets its own list instead of sharing one.} other {# plays this site tracked below your top 200 count here too, so each keymode gets its own list instead of sharing one.}}"
+msgstr "{0, plural, one {# jugada trackeada aquí por debajo de tus 200 mejores también cuenta, así que cada modo de teclas tiene su propia lista en vez de compartir una.} other {# jugadas trackeadas aquí por debajo de tus 200 mejores también cuentan, así que cada modo de teclas tiene su propia lista en vez de compartir una.}}"
 
 #. placeholder {0}: byHour[hovered]
 #: src/components/me/MyDataPanel.tsx
@@ -216,6 +232,11 @@ msgstr "{0, plural, one {titular} other {titulares}}"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "{0, plural, one {in # collection} other {in # collections}}"
 msgstr "{0, plural, one {en # colección} other {en # colecciones}}"
+
+#. placeholder {0}: detail.memberCount
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "{0, plural, one {map} other {maps}}"
+msgstr "{0, plural, one {mapa} other {mapas}}"
 
 #. placeholder {0}: entry.count
 #. placeholder {0}: map.plays
@@ -813,7 +834,7 @@ msgstr "Rankings de mania de {countryName}"
 
 #: src/routes/rankings.tsx
 msgid "{countryName} mania skill leaderboards"
-msgstr "Rankings de habilidad de mania de {countryName}"
+msgstr "Rankings de MSD de mania de {countryName}"
 
 #: src/routes/snipes.tsx
 msgid "{countryName} mania snipes"
@@ -887,10 +908,6 @@ msgstr "{from} a {to}"
 #: src/components/me/GoalsPanel.tsx
 msgid "{gap}pp to go"
 msgstr "faltan {gap}pp"
-
-#: src/components/packs/CollectionPanel.tsx
-#~ msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
-#~ msgstr "{goatMissing, plural, one {más # carta GOAT sin conseguir} other {más # cartas GOAT sin conseguir}}"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{have} / {want} plays"
@@ -972,6 +989,11 @@ msgstr "falta {left}%"
 msgid "{mapCount, plural, one {across # map} other {across # maps}}"
 msgstr "{mapCount, plural, one {en # mapa} other {en # mapas}}"
 
+#. placeholder {0}: collection.owner.username
+#: src/routes/collections_.$id.tsx
+msgid "{maps} osu!mania maps picked by {0}."
+msgstr "{maps} mapas de osu!mania elegidos por {0}."
+
 #: src/routes/maps.tsx
 msgid "{message} ({percent}%)"
 msgstr "{message} ({percent}%)"
@@ -984,10 +1006,6 @@ msgstr "{mins}m"
 #: src/lib/format.ts
 msgid "{mins}m ago"
 msgstr "hace {mins}m"
-
-#: src/routes/farm-helper.tsx
-#~ msgid "{misses, plural, one {# miss} other {# misses}}"
-#~ msgstr "{misses, plural, one {# miss} other {# misses}}"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "{mod}: {pct}% of plays"
@@ -1189,28 +1207,12 @@ msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
 msgstr "{shotCount, plural, one {# captura} other {# capturas}}"
 
 #: src/components/player/SkillBreakdown.tsx
-#~ msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
-#~ msgstr "Estimación de dan {sideLabel}: ~{chip}, respaldada por {clears} pases válidos (96%+ de acc) en charts alrededor de este nivel de dan"
-
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
-#~ msgstr "Estimación de dan {sideLabel}: ~{chip}, respaldada por {clears} pases válidos (96%+ de acc) en charts alrededor de este nivel de dan · clic para ver los pases que la respaldan"
-
-#: src/components/player/SkillBreakdown.tsx
 msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy)"
 msgstr "Estimación de dan {sideLabel}: ~{chip}, con {clears} clears de este nivel o superior (96%+ de acc)"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy) · click for the clears behind it"
 msgstr "Estimación de dan {sideLabel}: ~{chip}, con {clears} clears de este nivel o superior (96%+ de acc) · clic para ver los clears detrás"
-
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
-#~ msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala de cursos {sideLabel} de {keys}K, respaldada por {clears} pases válidos (96%+ de acc)"
-
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
-#~ msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala de cursos {sideLabel} de {keys}K, respaldada por {clears} pases válidos (96%+ de acc) · haz clic para ver los pases detrás"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy)"
@@ -1255,6 +1257,10 @@ msgstr "Pack {typeName}"
 #: src/routes/packs.tsx
 msgid "{typeName} pack, {typeBlurb}"
 msgstr "Pack {typeName}, {typeBlurb}"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "{USER_COLLECTION_MIN_ITEMS} maps minimum"
+msgstr "mínimo {USER_COLLECTION_MIN_ITEMS} mapas"
 
 #. placeholder {0}: formatDan(danLabel)
 #: src/components/player/DanEvidenceModal.tsx
@@ -1406,14 +1412,6 @@ msgstr "<0>{collector}</0> no ha abierto ningún pack."
 msgid "<0>{percent}%</0> of the rated plays are LN charts ({lnPlays} of {total})"
 msgstr "El <0>{percent}%</0> de los plays calificados son charts LN ({lnPlays} de {total})"
 
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "<0>{percent}%</0> of the rated plays are on LN charts"
-#~ msgstr "El <0>{percent}%</0> de los plays calificados son de charts LN"
-
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "<0>{percent}%</0> of the rated plays have LN content ({lnPlays} of {total})"
-#~ msgstr "El <0>{percent}%</0> de los plays calificados tienen contenido LN ({lnPlays} de {total})"
-
 #: src/components/packs/CollectionPanel.tsx
 msgid "<0>{selectedCount}</0> selected"
 msgstr "<0>{selectedCount}</0> seleccionadas"
@@ -1426,9 +1424,41 @@ msgstr "<0>/subscribe feed:Top plays country:{country}</0> publica cada nuevo to
 msgid "<0>+pp</0> is the estimated gain if you hit the target score, after weighting against your current top plays."
 msgstr "<0>+pp</0> es la ganancia estimada si logras el puntaje objetivo, ponderada contra tus top plays actuales."
 
+#: src/routes/dan-estimates.tsx
+msgid "<0>4K LN</0> goes through that same analyser's LN table, with a small model of our own filling in the easy charts that sit below where the table starts."
+msgstr "<0>4K LN</0> pasa por la tabla LN de ese mismo analizador, con un modelo propio pequeño que cubre los charts fáciles que quedan por debajo de donde empieza la tabla."
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>4K regular</0> goes through the Mixed estimator from <1>Leo_Black's map analyser</1>, which blends four difficulty models: <2>Roxy</2>, <3>Azusa</3>, <4>Daniel</4> and <5>Sunny</5>."
+msgstr "<0>4K regular</0> pasa por el estimador Mixed del <1>analizador de mapas de Leo_Black</1>, que combina cuatro modelos de dificultad: <2>Roxy</2>, <3>Azusa</3>, <4>Daniel</4> y <5>Sunny</5>."
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>6K and 7K</0> get a Sunny star rating, mapped through the published 6K and 7K dan tables."
+msgstr "<0>6K y 7K</0> reciben un star rating de Sunny, traducido con las tablas de dan publicadas de 6K y 7K."
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>Every other keymode</0> gets no dan at all. There is no ladder to map it onto."
+msgstr "<0>El resto de modos de teclas</0> no recibe ningún dan. No hay escala a la que asignarlo."
+
 #: src/routes/maps.tsx
 msgid "<0>First time loading {countryName} maps.</0> Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own."
 msgstr "<0>Primera vez cargando los mapas de {countryName}.</0> Analizando las plays y favoritos de sus mejores jugadores. Puede tardar un minuto; la página se completará sola."
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>It is not a ranking.</0> Two players a step apart on the dan leaderboard are not meaningfully apart, and a player who never farms accuracy will read lower than they play."
+msgstr "<0>No es un ranking.</0> Dos jugadores separados por un escalón en la tabla de dan no están de verdad separados, y quien nunca farmea precisión aparecerá más abajo de lo que juega."
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>It is not a title.</0> The ladders hand those out for clearing the course, and this number has no say in that."
+msgstr "<0>No es un título.</0> Los títulos los reparten las escalas por pasar el dan, y este número no tiene nada que decir ahí."
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>It moves.</0> The rating engines and the chart analysis get improved, and a recompute can shift a chart by a step, which shifts everyone whose evidence sat on it."
+msgstr "<0>Se mueve.</0> Los algoritmos de rating y el análisis de charts van mejorando, y un recálculo puede mover un chart un escalón, lo que mueve a todos los que se apoyaban en él."
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>It only sees the plays the site has.</0> Your osu! top plays are always in. Anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
+msgstr "<0>Solo ve las plays que el sitio tiene.</0> Tus top plays de osu! siempre están. Todo lo que quede por debajo solo existe si el sitio te trackea, es decir si estás en el top 100 de tu país o activaste el tracking tú mismo, y solo desde el día en que eso empezó. A quien dejó de jugar hace años se le juzga solo por su top 200, y por eso aparece más abajo."
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "<0>Log in with osu!</0> to put your own cards up here."
@@ -1453,6 +1483,10 @@ msgstr "<0>Página</0><1/><2>de {totalPages}</2>"
 #: src/components/player/SkillBreakdown.tsx
 msgid "<0>top {0}%</0> of {1} tracked {2}K mains"
 msgstr "<0>top {0}%</0> de {1} mains {2}K trackeados"
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
+msgstr "<0>Las plays unranked solo cuentan cuando el sitio sabe que estás jugando.</0> Se entera con tu primer score en un chart ranked, qualified o loved. A partir de ahí revisa tus plays recientes cada un par de minutos hasta que pares, y todo lo que juegues en esa ventana cuenta, incluidos los charts unranked. Si empiezas en un mapa graveyard, nada se guarda hasta que llegue ese primer score con leaderboard."
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "− bpm & length"
@@ -1532,6 +1566,14 @@ msgstr "La vista previa 3D de la carta no está disponible en este dispositivo."
 msgid "4K"
 msgstr "4K"
 
+#: src/routes/dan-estimates.tsx
+msgid "4K LN"
+msgstr "4K LN"
+
+#: src/routes/dan-estimates.tsx
+msgid "4K regular"
+msgstr "4K regular"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "50"
@@ -1544,6 +1586,22 @@ msgstr "6 a. m."
 #: src/routes/player/$username.tsx
 msgid "6 PM"
 msgstr "6 p. m."
+
+#: src/routes/dan-estimates.tsx
+msgid "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use the site's own chart pattern tags instead, so a chart tagged both chordjack and tech backs both dans. On the LN side only 7K gets a breakdown, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume."
+msgstr "6K y 7K no pueden usar esos skillsets, porque ese algoritmo no puntúa Technical en absoluto y todo se acumula en Handstream. En su lugar usan las etiquetas de patrón del propio sitio, así que un chart etiquetado como chordjack y tech respalda ambos dan. En el lado LN solo 7K tiene desglose, en general, tech, inverse y release, porque son los únicos subtipos de LN que el analizador separa en volumen suficiente."
+
+#: src/routes/dan-estimates.tsx
+msgid "6K LN"
+msgstr "6K LN"
+
+#: src/routes/dan-estimates.tsx
+msgid "6K regular"
+msgstr "6K regular"
+
+#: src/routes/dan-estimates.tsx
+msgid "6K regular and LN"
+msgstr "6K regular y LN"
 
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
@@ -1574,18 +1632,30 @@ msgstr "7 d Global"
 msgid "7K"
 msgstr "7K"
 
+#: src/routes/dan-estimates.tsx
+msgid "7K LN"
+msgstr "7K LN"
+
+#: src/routes/dan-estimates.tsx
+msgid "7K regular"
+msgstr "7K regular"
+
+#: src/routes/dan-estimates.tsx
+msgid "96%, or 95% in the Normal Kyu band below 1st dan"
+msgstr "96%, o 95% en la banda Normal Kyu por debajo del 1er dan"
+
 #. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
 #: src/routes/player/$username.tsx
 msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
 msgstr "Un + significa «al menos»: osu! no entrega más de tus 200 mejores jugadas, así que un modo de teclas con jugadas por debajo de {0}pp solo se cuenta hasta donde alcanzan."
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
-#~ msgstr "Un pase cuenta con {minAccuracyPercent}%+ de precisión a 1.0x o DT, en un mapa al que el analizador le dio un nivel de dan. Los pases por debajo de la precisión completa reciben un nivel con descuento, y la estimación es el {quorum}º mejor pase acreditado, así que un solo resultado atípico nunca puede fijarla."
+#: src/routes/dan-estimates.tsx
+msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
+msgstr "Un chart cuenta como LN cuando las notas largas son el 45% o más, y como regular por debajo de eso. Es la misma línea que usan las páginas de mapas para etiquetar un chart, así que un chart no puede alimentar tu rating de LN y llevar una insignia regular a la vez."
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass with almost no misses, at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
-#~ msgstr "Un pase válido es una pasada con {minAccuracyPercent}%+ de acc y casi sin misses, a 1.0x o DT, en un chart al que el analizador dio un nivel de dan. Las pasadas por debajo de la acc completa reciben crédito con descuento, y la estimación es el {quorum}.º mejor pase acreditado, así que un solo outlier nunca puede definirla."
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "A collection needs at least {USER_COLLECTION_MIN_ITEMS} maps"
+msgstr "Una colección necesita al menos {USER_COLLECTION_MIN_ITEMS} mapas"
 
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "a collector"
@@ -1594,6 +1664,10 @@ msgstr "un coleccionista"
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "A customizable picture for your osu! profile that keeps itself updated."
 msgstr "Una imagen personalizable para tu perfil de osu! que se actualiza sola."
+
+#: src/routes/dan-estimates.tsx
+msgid "A dan course is a fixed set of charts, played back to back in one sitting, with an accuracy bar you have to finish above. Clearing the course awards you that level. Each keymode has its own community ladder, run by different people: 4K regular uses DDMythical's Reform courses, 4K LN uses the _Underjoy courses, 7K uses the JinJin courses, and 6K has two of its own, Arkman's ladder on the regular side and sunnyxxy's on the LN side."
+msgstr "Un dan es un conjunto fijo de charts que juegas seguidos, con una precisión mínima requerida. Pasarlo te da ese nivel. Cada modo de teclas tiene su propia escala comunitaria, llevada por gente distinta: 4K regular usa los dans Reform de DDMythical, 4K LN usa los de _Underjoy, 7K usa los de JinJin, y 6K tiene dos propias, la escala de Arkman en el lado regular y la de sunnyxxy en el lado LN."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
@@ -1621,6 +1695,10 @@ msgstr "Una maniacard sacada de un pack booster. Abre tus propios packs y arma u
 msgid "a map"
 msgstr "un mapa"
 
+#: src/routes/dan-estimates.tsx
+msgid "A quick reminder of what a dan is"
+msgstr "Un recordatorio rápido de qué es un dan"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB."
 msgstr "No se pudo leer la captura como PNG, JPEG o WebP de menos de 4 MB."
@@ -1641,6 +1719,7 @@ msgstr "Un snipe ocurre cuando el jugador de un país le gana el puesto a otro e
 msgid "a while"
 msgstr "un tiempo"
 
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/packs/album/AlbumView.tsx
 msgid "A-Z"
 msgstr "A-Z"
@@ -1686,6 +1765,10 @@ msgstr "Acc"
 #: src/routes/snipes.tsx
 msgid "Accuracy <0>{0}</0>"
 msgstr "Acc <0>{0}</0>"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Accuracy this clear was judged on, in the ladder's own scoring"
+msgstr "Acc con la que se juzgó este clear, en el sistema de puntuación de la propia escalera"
 
 #. placeholder {0}: formatDate(peakRankDate)
 #: src/routes/player/$username.tsx
@@ -1749,6 +1832,11 @@ msgstr "Agrega una carta a tus destacados"
 msgid "Add a screenshot"
 msgstr "Agrega una captura"
 
+#. placeholder {0}: diffs.length
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Add all {0}"
+msgstr "Añadir las {0}"
+
 #: src/routes/report.tsx
 msgid "Add an image"
 msgstr "Agregar una imagen"
@@ -1761,9 +1849,17 @@ msgstr "agregar otro"
 msgid "Add area"
 msgstr "Agregar área"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Add at least {USER_COLLECTION_MIN_ITEMS} maps before posting."
+msgstr "Añade al menos {USER_COLLECTION_MIN_ITEMS} mapas antes de publicar."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Add color"
 msgstr "Agregar color"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Add every difficulty of this mapset"
+msgstr "Añadir todas las dificultades de este mapset"
 
 #: src/routes/player/$username.tsx
 msgid "Add failed or otherwise missed plays from osu!'s latest recent history."
@@ -1772,6 +1868,10 @@ msgstr "Agrega las jugadas fallidas u otras que falten del historial reciente de
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Add link…"
 msgstr "Agregar enlace…"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Add maps"
+msgstr "Añadir mapas"
 
 #: src/routes/report.tsx
 msgid "Add more details"
@@ -1854,6 +1954,7 @@ msgid "All clears"
 msgstr "Todos los clears"
 
 #: src/components/maps/MapCollectionsSection.tsx
+#: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "All collections"
 msgstr "Todas las colecciones"
@@ -1865,6 +1966,10 @@ msgstr "Todos los servidores de Discord"
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "all keymodes"
 msgstr "todos los modos de teclas"
+
+#: src/routes/player/$username.tsx
+msgid "All keymodes"
+msgstr "Todos los modos de teclas"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "All keys"
@@ -1902,6 +2007,10 @@ msgstr "Casi listo{elapsedLabel}"
 #: src/components/packs/GoatPoll.tsx
 msgid "already a GOAT"
 msgstr "ya es un GOAT"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Already in the collection"
+msgstr "Ya está en la colección"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "Already on the board."
@@ -1961,15 +2070,6 @@ msgstr "y {0} más"
 msgid "and {0} more below these"
 msgstr "y {0} más por debajo de estos"
 
-#. placeholder {0}: evidence.totalClears - evidence.clears.length
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "and {0} more qualifying clears below these"
-#~ msgstr "y {0} pases válidos más por debajo de estos"
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "and {hidden} more below these"
-#~ msgstr "y {hidden} más por debajo de estos"
-
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/farm-helper.tsx
@@ -1979,6 +2079,7 @@ msgstr "cualquiera"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/maps/RangeSlider.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
@@ -2109,6 +2210,14 @@ msgstr "Proporción desbloqueada"
 msgid "Assets"
 msgstr "Recursos"
 
+#: src/routes/dan-estimates.tsx
+msgid "At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan and 5,504 for an LN dan. This is where the 4K regular estimates landed:"
+msgstr "Al momento de escribir esto el sitio tenía ratings de habilidad de 14,229 jugadores en 4K, 4,035 en 7K y 2,824 en 6K. De los de 4K, 12,800 tenían suficientes pases válidos para un dan regular y 5,504 para uno de LN. Así se repartían las estimaciones de 4K regular:"
+
+#: src/routes/dan-estimates.tsx
+msgid "At the time of writing there were around 138,000 charts with a dan estimate: about 97,000 4K regular, 22,000 7K regular, 8,500 4K LN, 7,500 7K LN and 3,000 6K regular."
+msgstr "Al momento de escribir esto había unos 138,000 charts con estimación de dan: cerca de 97,000 de 4K regular, 22,000 de 7K regular, 8,500 de 4K LN, 7,500 de 7K LN y 3,000 de 6K regular."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/bbcode.tsx
@@ -2131,6 +2240,10 @@ msgstr "Autoriza. El bot necesita enviar mensajes e insertar enlaces."
 #: src/lib/signature-style.ts
 msgid "Auto"
 msgstr "Auto"
+
+#: src/components/maps/MapCollectionsSection.tsx
+msgid "Auto packs"
+msgstr "Packs automáticos"
 
 #: src/components/ui/Avatar.tsx
 msgid "avatar"
@@ -2323,10 +2436,6 @@ msgstr "Beatmaps jugados en {countryName}"
 msgid "Below the credit that sets the estimate"
 msgstr "Por debajo del crédito que fija la estimación"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Below the credit that sets the estimate · view map details"
-#~ msgstr "Por debajo del crédito que define la estimación · ver detalles del mapa"
-
 #: src/components/me/GoalsPanel.tsx
 msgid "best"
 msgstr "mejor"
@@ -2356,21 +2465,17 @@ msgid "BG Dim"
 msgstr "Atenuación"
 
 #: src/components/me/GoalsPanel.tsx
-#~ msgid "big"
-#~ msgstr "grande"
-
-#: src/components/me/GoalsPanel.tsx
 msgid "Big play"
 msgstr "PP Play"
+
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Biggest"
+msgstr "Más grandes"
 
 #. placeholder {0}: formatGainWithUnit(biggest, unit)
 #: src/routes/farm-helper.tsx
 msgid "biggest {0}"
 msgstr "mayor {0}"
-
-#: src/components/packs/collections/RecordBoards.tsx
-#~ msgid "biggest collections"
-#~ msgstr "colecciones más grandes"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Biggest day"
@@ -2471,6 +2576,10 @@ msgstr "explorar todo"
 msgid "Browse and download osu!mania skins with previews rendered from each skin's own notes, or publish a skin from an .osk file."
 msgstr "Explora y descarga skins de osu!mania con vistas previas generadas con las notas de cada skin, o publica una skin desde un archivo .osk."
 
+#: src/routes/collections_.$id.tsx
+msgid "Browse collections"
+msgstr "Ver colecciones"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Browse every image and sound this skin ships, without downloading it."
 msgstr "Explora todas las imágenes y sonidos que trae esta skin, sin descargarla."
@@ -2527,14 +2636,11 @@ msgstr "por <0>{0}</0>"
 msgid "By Player"
 msgstr "Por jugador"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "By skillset"
-#~ msgstr "Por skillset"
-
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "Calculating skills..."
 msgstr "Calculando habilidades..."
 
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
@@ -2651,6 +2757,14 @@ msgstr "No se pudo cambiar la etiqueta del modo de teclas. Inténtalo de nuevo."
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing who can see this skin failed. Try again."
 msgstr "No se pudo cambiar quién puede ver esta skin. Inténtalo de nuevo."
+
+#: src/routes/dan-estimates.tsx
+msgid "Chart"
+msgstr "Chart"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "chart dan"
+msgstr "dan del chart"
 
 #: src/routes/replay.tsx
 msgid "Chart loaded. Fetching the replay."
@@ -2849,10 +2963,6 @@ msgstr "completado {date} · {pp}pp"
 msgid "cleared {date} · #{rank}"
 msgstr "completado {date} · #{rank}"
 
-#: src/components/rankings/DanLeaderboardBoard.tsx
-#~ msgid "Clears"
-#~ msgstr "Pases"
-
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
 msgstr "Haz clic en un sonido para previsualizarlo. Cada nota reproduce el sample que le asigna su mapa, así que todos se pueden escuchar en un replay."
@@ -2873,6 +2983,15 @@ msgstr "Haz clic de nuevo para descartar los cambios"
 msgid "Click an image first. Imagemap turns that image into clickable areas."
 msgstr "Primero haz clic en una imagen. Imagemap convierte esa imagen en áreas clicables."
 
+#: src/components/player/DanEvidenceModal.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Click here to read how dans are estimated"
+msgstr "Haz clic aquí para leer cómo se estiman los dan"
+
+#: src/routes/dan-estimates.tsx
+msgid "Click to group the numbered levels"
+msgstr "Clic para agrupar los niveles numerados"
+
 #: src/components/maps/FilterChips.tsx
 #: src/components/maps/PatternPicker.tsx
 msgid "Click to include, right-click to exclude"
@@ -2881,6 +3000,10 @@ msgstr "Haz clic para incluir, clic derecho para excluir"
 #: src/components/ui/Pagination.tsx
 msgid "Click to jump to page"
 msgstr "Haz clic para ir a la página"
+
+#: src/routes/dan-estimates.tsx
+msgid "Click to open the numbered levels"
+msgstr "Clic para abrir los niveles numerados"
 
 #: src/routes/player/$username.tsx
 msgid "Click to require {label}"
@@ -2911,6 +3034,7 @@ msgstr "Cliente"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -2981,10 +3105,6 @@ msgstr "cerrada"
 msgid "Closed"
 msgstr "Cerrado"
 
-#: src/components/packs/collections/RecordBoards.tsx
-#~ msgid "closest to every pullable player"
-#~ msgstr "más cerca de tener a cada jugador sacable"
-
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Code block"
@@ -3008,6 +3128,7 @@ msgid "collecting the longest"
 msgstr "coleccionando desde hace más tiempo"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/routes/collections_.$id.tsx
 msgid "Collection"
 msgstr "Colección"
 
@@ -3029,6 +3150,7 @@ msgid "Collections are being rebuilt. Check back in a few minutes."
 msgstr "Las colecciones se están reconstruyendo. Vuelve en unos minutos."
 
 #: src/components/maps/MapCollectionsSection.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 msgid "Collections are unavailable right now. Try again in a bit."
 msgstr "Las colecciones no están disponibles en este momento. Inténtalo de nuevo en un rato."
 
@@ -3108,6 +3230,10 @@ msgstr "Separados por comas. Hasta {COMMUNITY_MAX_TAGS}, y se convierten en filt
 msgid "common pick"
 msgstr "elección común"
 
+#: src/components/maps/MapCollectionsSection.tsx
+msgid "Community"
+msgstr "Comunidad"
+
 #: src/components/communities/field-options.tsx
 msgid "Community server"
 msgstr "Servidor de comunidad"
@@ -3148,6 +3274,7 @@ msgstr "Continuar con Discord"
 msgid "Convert hits to notes"
 msgstr "Convertir hits en notas"
 
+#: src/components/maps/UserCollectionDetail.tsx
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
@@ -3321,6 +3448,10 @@ msgstr "No se pudo decodificar esa imagen."
 msgid "Couldn't delete that upload; try again."
 msgstr "No se pudo eliminar esa subida; inténtalo de nuevo."
 
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "Couldn't delete this collection."
+msgstr "No se pudo eliminar esta colección."
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Couldn't export the image."
 msgstr "No se pudo exportar la imagen."
@@ -3490,6 +3621,10 @@ msgstr "No se pudo guardar esa meta. Inténtalo de nuevo en un momento."
 msgid "Couldn't save that. Try again in a moment."
 msgstr "No se pudo guardar. Inténtalo de nuevo en un momento."
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Couldn't save the collection."
+msgstr "No se pudo guardar la colección."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Couldn't save. Try again."
 msgstr "No se pudo guardar. Inténtalo de nuevo."
@@ -3535,9 +3670,9 @@ msgstr "Leaderboard por país (o global), jugadores top por pp."
 msgid "Country mania rankings"
 msgstr "Rankings de mania por país"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Counts passes with {minAccuracyPercent}%+ accuracy on rated charts, at 1.0x or DT. Low accuracy counts for a bit less than the chart's dan. The estimate is your {quorum}th best pass, so one lucky score won't change it."
-#~ msgstr ""
+#: src/routes/dan-estimates.tsx
+msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so the site cannot look yours up. It can only look at your plays."
+msgstr "Los charts de los dans son unranked, y un clear lo verifica la gente que lleva esa escala. Nada de eso vuelve por la API de osu! como un nivel de dan, así que el sitio no puede consultar el tuyo. Solo puede mirar tus plays."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Create"
@@ -3547,15 +3682,6 @@ msgstr "Crear"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Created {0}"
 msgstr "Creado {0}"
-
-#. placeholder {0}: clear.creditedDan.toFixed(2)
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "credit {0}"
-#~ msgstr "crédito {0}"
-
-#: src/components/player/DanEvidenceModal.tsx
-msgid "credited dan"
-msgstr "dan acreditado"
 
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
@@ -3670,10 +3796,6 @@ msgstr "Dan (est.)"
 msgid "Dan course"
 msgstr "Tipo de dan"
 
-#: src/components/player/DanEvidenceModal.tsx
-msgid "Dan credit this clear earned after the accuracy discount"
-msgstr "Crédito de dan que ganó este clear tras el descuento por acc"
-
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "dan est."
@@ -3719,6 +3841,10 @@ msgstr "oscuro"
 msgid "Darkens the beatmap background so notes stay readable."
 msgstr "Oscurece el fondo del beatmap para que las notas se mantengan legibles."
 
+#: src/routes/dan-estimates.tsx
+msgid "DDMythical's Reform dan courses, stable accuracy"
+msgstr "Dans Reform de DDMythical, precisión de stable"
+
 #: src/components/communities/field-options.tsx
 msgid "Dead server, or the invite does not work"
 msgstr "Servidor caído, o la invitación no funciona"
@@ -3751,6 +3877,7 @@ msgstr "Volumen predeterminado"
 msgid "Delay"
 msgstr "Delay"
 
+#: src/components/maps/UserCollectionDetail.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete"
@@ -3815,10 +3942,7 @@ msgstr "descendente"
 msgid "Descending"
 msgstr "Descendente"
 
-#: src/routes/report.tsx
-#~ msgid "Describe the problem and how to reproduce it."
-#~ msgstr "Describe el problema y cómo reproducirlo."
-
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Description <0>(optional)</0>"
 msgstr "Descripción <0>(opcional)</0>"
@@ -4090,10 +4214,6 @@ msgstr "renders dinámicos"
 msgid "Dynamic Renders"
 msgstr "Renders dinámicos"
 
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it."
-#~ msgstr "Cada keymode se califica en su propia escala. Un número más bajo en un keymode no significa que seas peor en él."
-
 #: src/routes/player/$username.tsx
 msgid "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
 msgstr "cada modo de teclas ponderado con sus propias jugadas, igual que osu! totaliza 4K y 7K"
@@ -4122,6 +4242,7 @@ msgstr "Logra <0/> <1/> en {mapSlot}"
 msgid "easy"
 msgstr "fácil"
 
+#: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/communities_.$id.tsx
 msgid "Edit"
@@ -4131,6 +4252,14 @@ msgstr "Editar"
 #: src/components/communities/CommunityCard.tsx
 msgid "Edit {0}"
 msgstr "Editar {0}"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "edit collection"
+msgstr "editar colección"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Edit collection"
+msgstr "Editar colección"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Edit goal"
@@ -4218,6 +4347,10 @@ msgstr "error"
 msgid "Estimate a chart's dan level, with its dan emblem."
 msgstr "Estima el nivel de dan de un chart, con su emblema de dan."
 
+#: src/routes/dan-estimates.tsx
+msgid "Estimated dan"
+msgstr "Dan estimado"
+
 #: src/routes/farm-helper.tsx
 msgid "estimated gain"
 msgstr "ganancia estimada"
@@ -4246,10 +4379,6 @@ msgstr "Cada carta salió en dos partes"
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "every collector"
 msgstr "todos los coleccionistas"
-
-#: src/components/packs/CollectionPanel.tsx
-#~ msgid "Every extra copy leaves the collection. You keep one of each card."
-#~ msgstr "Cada copia de más sale de la colección. Te quedas con una de cada carta."
 
 #: src/routes/farm-helper.tsx
 msgid "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
@@ -4288,6 +4417,7 @@ msgid "Every tracked player, same odds"
 msgstr "Todos los jugadores con seguimiento, misma probabilidad"
 
 #: src/components/communities/AccessScopePicker.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Everyone"
 msgstr "Todos"
@@ -4707,9 +4837,9 @@ msgstr "encontrada {0}x"
 msgid "Found something broken? Describe what happened."
 msgstr "¿Encontraste algo que no funciona? Describe qué pasó."
 
-#: src/routes/report.tsx
-#~ msgid "Found something broken? Let me know what happened."
-#~ msgstr "¿Encontraste algo que no funciona? Describe qué pasó."
+#: src/routes/dan-estimates.tsx
+msgid "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
+msgstr "El cuatro está en lugar de la duración de un dan real. Si tienes menos de cuatro pases válidos en un lado, no recibes ninguna estimación en vez de una poco fiable. Y si tu 4º mejor pase está en lo más alto de una escala, la insignia cambia de \"~\" a \">\" y se lee como <0>más allá</0> de ese nivel en vez de fijarte en él, porque a la escala se le acabaron los niveles con los que medirte."
 
 #: src/routes/packs.tsx
 msgid "free"
@@ -4807,6 +4937,10 @@ msgstr "Obtener mi enlace"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Getting the map out of osu!"
 msgstr "Sacando el mapa de osu!"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Give the collection a title."
+msgstr "Ponle un título a la colección."
 
 #: src/components/me/GoalsPanel.tsx
 msgid "global"
@@ -5042,10 +5176,6 @@ msgstr "Ocultar jugadores"
 msgid "Hide the {0} clears"
 msgstr "Ocultar los clears de {0}"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Hide the {label} clears"
-#~ msgstr "Ocultar los pases de {label}"
-
 #: src/routes/player/$username.tsx
 msgid "Hiding {label}"
 msgstr "Ocultando {label}"
@@ -5127,6 +5257,14 @@ msgstr "Mantén presionada <0>C</0> y mueve el cursor para dibujar humo, igual q
 msgid "Hold and drag across the dotted line"
 msgstr "Mantén presionado y arrastra sobre la línea punteada"
 
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "hold to delete"
+msgstr "mantén para eliminar"
+
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "Hold to delete this collection"
+msgstr "Mantén pulsado para eliminar esta colección"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "hold to recycle"
 msgstr "mantén para reciclar"
@@ -5153,6 +5291,10 @@ msgstr "Plantel honorífico"
 msgid "How card rating is calculated"
 msgstr "Cómo se calcula el rating de las cartas"
 
+#: src/routes/dan-estimates.tsx
+msgid "How dan levels are estimated"
+msgstr "Cómo se estiman los niveles de dan"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "How far the colored glow reaches around the cursor core."
 msgstr "Qué tan lejos llega el brillo de color alrededor del núcleo del cursor."
@@ -5164,6 +5306,10 @@ msgstr "Cómo debería decirse"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "How it will look"
 msgstr "Cómo se verá"
+
+#: src/routes/dan-estimates.tsx
+msgid "How Mania Tracker gives every osu!mania chart a dan level, and how it reads a player's dan off the charts they have passed."
+msgstr "Cómo Mania Tracker asigna un nivel de dan a cada chart de osu!mania y cómo deduce el dan de un jugador a partir de los charts que ha pasado."
 
 #: src/routes/farm-helper.tsx
 msgid "how many players near you farm it"
@@ -5402,10 +5548,6 @@ msgstr "Enlace de invitación"
 msgid "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 msgstr "¿El top play más antiguo de {hidden} es más antiguo o más reciente que el de {shown}?"
 
-#: src/routes/report.tsx
-#~ msgid "It is on the list below, and a reply shows up there too."
-#~ msgstr "Ya está en la lista de abajo, y la respuesta aparece ahí también."
-
 #: src/routes/skins_.$id.tsx
 msgid "It may have been removed by its uploader."
 msgstr "Puede que quien lo subió lo haya eliminado."
@@ -5413,10 +5555,6 @@ msgstr "Puede que quien lo subió lo haya eliminado."
 #: src/routes/communities_.$id.tsx
 msgid "It may have been taken down, or it is still waiting for approval."
 msgstr "Puede que lo hayan retirado, o que todavía esté esperando aprobación."
-
-#: src/routes/report.tsx
-#~ msgid "It went straight to the owner. Nothing else to do."
-#~ msgstr "Le llegó directo al dueño. No hay nada más que hacer."
 
 #: src/components/communities/field-options.tsx
 msgid "Italian"
@@ -5448,6 +5586,18 @@ msgstr "Jackspeed"
 #: src/components/communities/field-options.tsx
 msgid "Japanese"
 msgstr "Japonés"
+
+#: src/routes/dan-estimates.tsx
+msgid "JinJin dan courses"
+msgstr "Dans de JinJin"
+
+#: src/routes/dan-estimates.tsx
+msgid "JinJin LN dan courses"
+msgstr "Dans LN de JinJin"
+
+#: src/routes/dan-estimates.tsx
+msgid "JinJin's numbers, reused for 6K"
+msgstr "Los números de JinJin, reutilizados para 6K"
 
 #: src/components/communities/CommunityCard.tsx
 msgid "Join"
@@ -5507,6 +5657,10 @@ msgstr "Ir a una página"
 msgid "Jumpstream"
 msgstr "Jumpstream"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "jumpstream, warmup, ..."
+msgstr "jumpstream, calentamiento, ..."
+
 #: src/lib/format.ts
 msgid "just now"
 msgstr "justo ahora"
@@ -5557,6 +5711,7 @@ msgid "Key Split"
 msgstr "Distribución de modos"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/dan-estimates.tsx
 msgid "Keymode"
 msgstr "Modo de teclas"
 
@@ -5612,6 +5767,10 @@ msgstr "Etiquetar como {0}K+1"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Label as a plain {keys}K layout"
 msgstr "Etiquetar como layout normal de {keys}K"
+
+#: src/routes/dan-estimates.tsx
+msgid "Ladder"
+msgstr "Escala"
 
 #: src/lib/goal-format.ts
 msgid "Land a {pp}pp play"
@@ -5775,6 +5934,15 @@ msgstr "claro"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Light"
 msgstr "Luz"
+
+#: src/components/maps/UserCollectionDetail.tsx
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Like this collection"
+msgstr "Dar me gusta a esta colección"
+
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Liked"
+msgstr "Con me gusta"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "lime"
@@ -5993,6 +6161,7 @@ msgid "Loading collection..."
 msgstr "Cargando colección..."
 
 #: src/components/maps/MapCollectionsSection.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 msgid "Loading collections..."
 msgstr "Cargando colecciones..."
 
@@ -6294,9 +6463,17 @@ msgstr "Mapa"
 msgid "map #{0}"
 msgstr "mapa #{0}"
 
+#: src/routes/collections_.$id.tsx
+msgid "Map collection"
+msgstr "Colección de mapas"
+
 #: src/routes/maps.tsx
 msgid "Map collections"
 msgstr "Colecciones de mapas"
+
+#: src/routes/collections_.$id.tsx
+msgid "Map collections built by osu!mania players."
+msgstr "Colecciones de mapas hechas por jugadores de osu!mania."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Map completion percentage."
@@ -6334,6 +6511,7 @@ msgstr "mapeado por {0} · {1} plays"
 msgid "maps"
 msgstr "Mapas"
 
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/routes/player/$username.tsx
 msgid "Maps"
 msgstr "Mapas"
@@ -6383,10 +6561,6 @@ msgstr "marcado fácil"
 msgid "marked hard"
 msgstr "marcado difícil"
 
-#: src/routes/farm-helper.tsx
-#~ msgid "marked maxed"
-#~ msgstr "marcado al máximo"
-
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Matching against the replay's checksum."
 msgstr "Comparando el checksum del replay."
@@ -6402,10 +6576,6 @@ msgstr "MAX"
 #: src/routes/maps.tsx
 msgid "Max PP"
 msgstr "PP máx."
-
-#: src/routes/farm-helper.tsx
-#~ msgid "maxed"
-#~ msgstr "al máximo"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
@@ -6451,6 +6621,10 @@ msgstr "Pulgar de la columna central"
 #: src/routes/maps.tsx
 msgid "Min PP"
 msgstr "PP mín."
+
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Mine"
+msgstr "Mías"
 
 #: src/routes/maps.tsx
 msgid "Minimum PP"
@@ -6593,6 +6767,10 @@ msgstr "Los más farmeados globalmente"
 msgid "Most farmed in {countryName}"
 msgstr "Los más farmeados en {countryName}"
 
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Most liked"
+msgstr "Más gustadas"
+
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most packs opened"
 msgstr "más packs abiertos"
@@ -6621,12 +6799,21 @@ msgstr "más cartas únicas"
 msgid "Most Used Mod"
 msgstr "Mod más usado"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Move down"
+msgstr "Bajar"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Move up"
+msgstr "Subir"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "msd"
 msgstr "msd"
 
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/MapDetailModal.tsx
+#: src/routes/rankings.tsx
 msgid "MSD"
 msgstr "MSD"
 
@@ -6703,14 +6890,6 @@ msgstr "jugadores cercanos te superan"
 msgid "needs {quorum}"
 msgstr "faltan {quorum}"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "needs {quorum} clears"
-#~ msgstr "necesita {quorum} pases"
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "needs {quorum} clears for an estimate"
-#~ msgstr "necesita {quorum} pases para una estimación"
-
 #: src/components/packs/GoatPoll.tsx
 msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "Necesita un enlace de web.archive.org a su perfil de osu!."
@@ -6727,6 +6906,15 @@ msgstr "nuevo"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "New"
 msgstr "Nuevo"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "new collection"
+msgstr "nueva colección"
+
+#: src/components/maps/UserCollectionEditor.tsx
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "New collection"
+msgstr "Nueva colección"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
@@ -6762,6 +6950,7 @@ msgid "newest"
 msgstr "más recientes"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/CollectionPanel.tsx
 msgid "Newest"
@@ -6775,6 +6964,7 @@ msgstr "Más recientes primero"
 msgid "Newest Top Play"
 msgstr "Top play más reciente"
 
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/packs/collections/CollectorDirectory.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -6909,6 +7099,10 @@ msgstr "Aún no tienes cartas. Abre un pack para empezar tu colección."
 #: src/routes/rankings.tsx
 msgid "No change in the last 7 days"
 msgstr "Sin cambios en los últimos 7 días"
+
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "No collections here yet. Post the first one."
+msgstr "Todavía no hay colecciones. Publica la primera."
 
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
@@ -7392,6 +7586,10 @@ msgstr "No hay nada con ese nombre."
 msgid "Nothing here would move your total"
 msgstr "Nada de esto movería tu total"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Nothing in here yet"
+msgstr "Todavía no hay nada aquí"
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nothing in the loaded plays matches \"{trimmedQuery}\"."
 msgstr "Nada de las plays cargadas coincide con \"{trimmedQuery}\"."
@@ -7405,9 +7603,17 @@ msgstr "No se publica nada hasta que lo revises y lo envíes, y el acceso termin
 msgid "Nothing listed for {0} yet."
 msgstr "Aún no hay nada listado para {0}."
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Nothing matched that"
+msgstr "Nada coincide con eso"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Nothing missing. Every player in the pool is in your collection."
 msgstr "No falta nada. Todos los jugadores del pool están en tu colección."
+
+#: src/routes/dan-estimates.tsx
+msgid "Nothing on this site is a real dan clear. Nobody here has been checked against a dan course. What the site does instead is give every chart a dan level of its own, look at the charts you have already passed, and read a level off them. That is why every dan on the site is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
+msgstr "Nada en este sitio es un clear de dan real. A nadie aquí se le ha comprobado contra un dan. Lo que el sitio hace es darle a cada chart su propio nivel de dan, mirar los charts que ya pasaste y leer un nivel a partir de ellos. Por eso cada dan del sitio lleva un \"~\" delante y por eso la tabla se llama a sí misma un orden aproximado."
 
 #: src/routes/farm-helper.tsx
 msgid "Nothing qualifies under this filter at the moment, but other reasons still have maps."
@@ -7548,9 +7754,17 @@ msgstr "En /skins para que cualquiera la descargue"
 msgid "On /skins, anyone can download the .osk."
 msgstr "En /skins, cualquiera puede descargar el .osk."
 
+#: src/routes/dan-estimates.tsx
+msgid "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
+msgstr "En 4K las porciones salen de los ratings de skillset MSD de la propia play, agrupadas según el skillset más fuerte de ese chart: jack (JackSpeed y Chordjack), tech (Technical y Jumpstream), speed (Stream) y stamina (Handstream y Stamina). Jumpstream va con tech a propósito. El Jumpstream de MinaCalc se dispara con el jumptrill denso, que se siente mucho más como tech que como speed, así que juntarlo con Stream ponía charts como Blastix Riotz [GRAVITY] en una casilla etiquetada speed. Comprobado contra un pack de 25 charts de speed gamma real, Stream por sí solo elige los 25 y rechaza los charts de jumptrill por mucho margen."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "on a map"
 msgstr "en un mapa"
+
+#: src/routes/dan-estimates.tsx
+msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
+msgstr "Un nivel de dan es amplio, así que cada uno se divide en cinco escalones. Un chart puede ser 7--, 7-, 7, 7+ o 7++, del extremo más fácil del 7º dan al más difícil. Esos sufijos ordenan dentro de un nivel, nada más."
 
 #: src/routes/communities_.$id.tsx
 msgid "online"
@@ -7563,26 +7777,6 @@ msgstr "En línea"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
 msgstr "Solo yo"
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Only passes at {minAccuracyPercent}%+ accuracy count, played at 1.0x or DT on a chart the analyzer rated. Each clear is credited a dan at or below the chart's own, depending on how clean the pass was, and the estimate needs {quorum} clears at a level to read it, so one clear never sets it."
-#~ msgstr "Solo cuentan las pasadas con {minAccuracyPercent}%+ de acc, jugadas a 1.0x o DT en un chart al que el analizador dio un nivel de dan. Cada pase recibe un dan igual o menor al del chart según lo limpio que fuera, y la estimación necesita {quorum} pases en un nivel para leerlo, así que un solo pase nunca la fija."
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Only passes with {minAccuracyPercent}% accuracy or better count, at 1.0x speed or DT, on a chart the analyzer has rated. Each pass is worth the chart's dan, or a bit less if the accuracy is low. You need {quorum} of them at a level before the estimate shows that level, so one score never decides it."
-#~ msgstr "Solo cuentan las pasadas con {minAccuracyPercent}% de precisión o más, a 1.0x o con DT, en un chart que el analizador haya evaluado. Cada pasada vale el dan del chart, o un poco menos si la precisión es baja. Necesitas {quorum} de ellas en un nivel para que la estimación muestre ese nivel, así que un solo score nunca lo decide."
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. Lower accuracy gives less credit. Your dan is the {quorum}th highest of those passes."
-#~ msgstr "Solo cuentan las pasadas con {minAccuracyPercent}%+ de precisión, a 1.0x o DT, en charts que tengan nivel de dan. Menos precisión da menos crédito. Tu dan es la {quorum}.ª pasada más alta de esas."
-
-#: src/components/player/DanEvidenceModal.tsx
-msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. Lower accuracy gives less credit. Your dan is the level of your {quorum}th best pass, so you need {quorum} passes at a level to reach it."
-msgstr "Solo cuentan los clears con {minAccuracyPercent}%+ de acc, a 1.0x o DT, en charts que tengan nivel de dan. Menos acc da menos crédito. Tu dan es el nivel de tu {quorum}.º mejor clear, así que necesitas {quorum} clears en un nivel para llegar a él."
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. The lower the accuracy, the less a pass counts. Your dan is your {quorum}th best pass, not your best one."
-#~ msgstr "Solo cuentan las pasadas con {minAccuracyPercent}%+ de precisión, a 1.0x o DT, en charts que tengan nivel de dan. Cuanta menos precisión, menos cuenta la pasada. Tu dan es tu {quorum}.ª mejor pasada, no la mejor."
 
 #: src/components/communities/CommunityCard.tsx
 msgid "Only people from here can join"
@@ -7724,6 +7918,10 @@ msgstr "abierto a"
 msgid "Open your own packs"
 msgstr "Abre tus propios packs"
 
+#: src/routes/dan-estimates.tsx
+msgid "Opening a dan badge on a player's Skills tab shows the same estimate run again over slices of the same passes. Your jack dan is the level your jack passes demonstrate, under exactly the same rules and the same count of four."
+msgstr "Abrir una insignia de dan en la pestaña Skills de un jugador muestra la misma estimación aplicada otra vez sobre porciones de esos mismos pases. Tu dan de jack es el nivel que demuestran tus pases de jack, con exactamente las mismas reglas y el mismo conteo de cuatro."
+
 #: src/routes/replay.tsx
 msgid "Opening shared replay{elapsedLabel}"
 msgstr "Abriendo replay compartido{elapsedLabel}"
@@ -7827,6 +8025,7 @@ msgid "other"
 msgstr "otro"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Other"
@@ -7836,6 +8035,10 @@ msgstr "Otro"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "out of {0}"
 msgstr "de {0}"
+
+#: src/routes/dan-estimates.tsx
+msgid "Out of that pool, a play counts as a clear if it passed at or above the accuracy the real course asks for. Each ladder sets its own bar, so the site uses each ladder's:"
+msgstr "De ese conjunto, una play cuenta como clear si pasó con la precisión que pide el dan real o por encima. Cada escala pide su propio mínimo, así que el sitio usa el de cada una:"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Out of time."
@@ -7893,6 +8096,12 @@ msgid "packs opened"
 msgstr "packs abiertos"
 
 #. placeholder {0}: page + 1
+#. placeholder {1}: lastPage + 1
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Page {0} of {1}"
+msgstr "Página {0} de {1}"
+
+#. placeholder {0}: page + 1
 #: src/components/ui/Pagination.tsx
 msgid "Page {0} of {totalPages}"
 msgstr "Página {0} de {totalPages}"
@@ -7925,6 +8134,10 @@ msgstr "Pass <0/>"
 #: src/components/me/GoalsPanel.tsx
 msgid "Pass <0/> on {mapSlot}"
 msgstr "Pasa <0/> en {mapSlot}"
+
+#: src/routes/dan-estimates.tsx
+msgid "Pass bar"
+msgstr "Clear"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste"
@@ -8283,6 +8496,10 @@ msgstr "Portugués"
 msgid "Post a Discord server"
 msgstr "Publicar un servidor de Discord"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Post collection"
+msgstr "Publicar colección"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Post your Discord server"
 msgstr "Publica tu servidor de Discord"
@@ -8410,6 +8627,7 @@ msgstr "Vistas previas"
 msgid "Previews uploaded."
 msgstr "Vistas previas subidas."
 
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/packs/collections/CollectorDirectory.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -8665,6 +8883,10 @@ msgstr "Rareza"
 msgid "Rate"
 msgstr "Velocidad"
 
+#: src/routes/dan-estimates.tsx
+msgid "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x) and at <2/> or <3/> (0.75x) are all credited against the chart's dan at that exact rate, which the site rates separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. Custom lazer rates like 1.15x do not count toward your dan. The site can rate a chart at any speed on demand, and the map page does exactly that when you open a play set at one, but only 0.75x, 1.0x and 1.5x are stored, and the dan only reads stored ones."
+msgstr "Los mods de velocidad cuentan, y cuentan por lo que vale el chart a esa velocidad. Un pase a 1.0x, con <0/> o <1/> (1.5x) y con <2/> o <3/> (0.75x) se acreditan contra el dan del chart a esa velocidad exacta, que el sitio puntúa por separado. Runengon [4K Hard] es un chart de 4º dan a 1.0x y de alrededor de 9º con <4/>, así que un pase con <5/> ahí se acredita como 9º, no como 4º. ANiMA [Starry's 4K Lv.15] pasa de 3º a cerca de 7º de la misma forma. Ralentizar un chart funciona al revés: un pase a 0.75x vale lo que el chart vale a 0.75x, bastante por debajo de su nivel normal. Los rates personalizados de lazer como 1.15x no cuentan para tu dan. El sitio sí puede puntuar un chart a cualquier velocidad cuando se lo pides, y la página del mapa hace justo eso al abrir una play hecha con uno, pero solo guarda 0.75x, 1.0x y 1.5x, y el dan solo lee los guardados."
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 msgstr "calificado con {plays} plays de los top plays y el historial trackeado, DT y HT a su velocidad real, acc ponderada por la proporción de MAX:300 contra las ventanas de OD de cada chart, charts vibro sin rankear excluidos"
@@ -8864,15 +9086,6 @@ msgstr "Reciclar duplicados +{0}"
 msgid "Recycle duplicates +{recyclable}"
 msgstr "Reciclar duplicados +{recyclable}"
 
-#: src/components/packs/CollectionPanel.tsx
-#~ msgid "Recycle every duplicate?"
-#~ msgstr "¿Reciclar todos los duplicados?"
-
-#. placeholder {0}: recyclable.toLocaleString("en-US")
-#: src/components/packs/CollectionPanel.tsx
-#~ msgid "Recycle for {0} shards"
-#~ msgstr "Reciclar por {0} fragmentos"
-
 #: src/components/packs/PackSummary.tsx
 msgid "Recycle the rest +{allValue}"
 msgstr "Reciclar el resto +{allValue}"
@@ -8988,6 +9201,10 @@ msgstr "Eliminar {tag}"
 msgid "Remove color"
 msgstr "Quitar color"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Remove from the collection"
+msgstr "Quitar de la colección"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/report.tsx
 msgid "Remove image"
@@ -9006,6 +9223,10 @@ msgstr "eliminar el listado"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Remove screenshot {0}"
 msgstr "Eliminar la captura {0}"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Remove tag"
+msgstr "Quitar etiqueta"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Remove this screenshot"
@@ -9151,10 +9372,6 @@ msgstr "Reportar otra cosa"
 msgid "report this server"
 msgstr "reportar este servidor"
 
-#: src/routes/report.tsx
-#~ msgid "Reports work signed out. Sign in with osu! if you want to read the reply."
-#~ msgstr "Puedes reportar sin iniciar sesión. Inicia sesión con osu! si quieres leer la respuesta."
-
 #: src/routes/maps.tsx
 msgid "Reroll"
 msgstr "Otra vez"
@@ -9236,15 +9453,6 @@ msgstr "revelar todo"
 msgid "Revealing the rest..."
 msgstr "Revelando el resto..."
 
-#: src/components/me/DynamicRendersPanel.tsx
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "Rice"
-#~ msgstr "Rice"
-
-#: src/lib/signature-shared.ts
-#~ msgid "Rice and LN"
-#~ msgstr "Rice y LN"
-
 #: src/components/packs/StreakGame.tsx
 msgid "right"
 msgstr "correcto"
@@ -9320,6 +9528,7 @@ msgstr "sábados"
 msgid "Save"
 msgstr "Guardar"
 
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Save changes"
 msgstr "Guardar cambios"
@@ -9410,6 +9619,10 @@ msgstr "Dile algo a {0}"
 msgid "Say something to {name}"
 msgstr "Dile algo a {name}"
 
+#: src/routes/dan-estimates.tsx
+msgid "Say your 4K regular passes at 96% or better land on charts rated:"
+msgstr "Digamos que tus pases de 4K regular con 96% o más caen en charts con estos ratings:"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Scale the image to fit"
 msgstr "Escalar la imagen para que quepa"
@@ -9465,10 +9678,6 @@ msgstr "capturas"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Screenshots"
 msgstr "Capturas"
-
-#: src/routes/report.tsx
-#~ msgid "Screenshots (optional)"
-#~ msgstr "Capturas (opcional)"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll"
@@ -9532,6 +9741,10 @@ msgstr "Buscar beatmap..."
 msgid "Search by title, artist, mapper, or difficulty"
 msgstr "Busca por título, artista, mapper o dificultad"
 
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Search collections"
+msgstr "Buscar colecciones"
+
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Search countries"
@@ -9587,6 +9800,10 @@ msgstr "Buscar mapas"
 msgid "search maps..."
 msgstr "buscar mapas..."
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Search on the right, then tap a difficulty to drop it in. Three maps minimum"
+msgstr "Busca a la derecha y toca una dificultad para añadirla. Mínimo tres mapas"
+
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Search places"
 msgstr "Buscar lugares"
@@ -9622,6 +9839,10 @@ msgstr "Buscar skins"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Search skins by name"
 msgstr "Busca skins por nombre"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Search the whole mania catalog"
+msgstr "Busca en todo el catálogo de mania"
 
 #: src/routes/maps.tsx
 msgid "Search title, artist, mapper, or difficulty"
@@ -9843,6 +10064,7 @@ msgid "shards"
 msgstr "fragmentos"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplayInfo.tsx
@@ -9911,6 +10133,11 @@ msgstr "Mostrar {0} más"
 msgid "Show {0} picks"
 msgstr "Mostrar {0} selecciones"
 
+#. placeholder {0}: bucket.keyCount
+#: src/routes/player/$username.tsx
+msgid "Show {0}K plays"
+msgstr "Ver jugadas de {0}K"
+
 #: src/routes/report.tsx
 msgid "Show {hiddenCount} earlier updates"
 msgstr "Mostrar {hiddenCount} actualizaciones anteriores"
@@ -9924,6 +10151,7 @@ msgstr "Mostrar {totalLabel} mapas"
 msgid "Show all {0}"
 msgstr "Mostrar los {0}"
 
+#. placeholder {0}: play.title || t`score`
 #. placeholder {0}: score.beatmapset?.title || scoreFallbackLabel
 #: src/routes/player/$username.tsx
 msgid "Show details for {0}"
@@ -9975,10 +10203,6 @@ msgstr "mostrar skillboost"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Show the {0} clears"
 msgstr "Ver los clears de {0}"
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Show the {label} clears"
-#~ msgstr "Ver los pases de {label}"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Show the image at its real pixel size"
@@ -10041,6 +10265,15 @@ msgstr "Comparativa"
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in and runs like that pay shards."
 msgstr "Inicia sesión y rachas así pagan fragmentos."
+
+#: src/components/maps/UserCollectionDetail.tsx
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Sign in to like collections"
+msgstr "Inicia sesión para dar me gusta a colecciones"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Sign in to post a collection."
+msgstr "Inicia sesión para publicar una colección."
 
 #: src/routes/report.tsx
 msgid "Sign in to read replies"
@@ -10159,7 +10392,6 @@ msgid "skillboost only"
 msgstr "solo skillboost"
 
 #: src/routes/player/$username.tsx
-#: src/routes/rankings.tsx
 msgid "Skills"
 msgstr "Skills"
 
@@ -10280,10 +10512,6 @@ msgstr "Algo se rompió"
 msgid "Something else"
 msgstr "Otra cosa"
 
-#: src/routes/report.tsx
-#~ msgid "Something on the site not working? Say what happened and it lands on the owner's desk."
-#~ msgstr "¿Algo del sitio no funciona? Cuenta qué pasó y le llega directo al dueño."
-
 #: src/routes/farm-helper.tsx
 msgid "Something went wrong loading these maps. Try the toggle again in a moment."
 msgstr "Algo salió mal al cargar estos mapas. Vuelve a usar el toggle en un momento."
@@ -10299,6 +10527,10 @@ msgstr "Algo salió mal."
 #: src/components/communities/field-options.tsx
 msgid "Something went wrong. Try again."
 msgstr "Algo salió mal. Inténtalo de nuevo."
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Song, artist or mapper"
+msgstr "Canción, artista o mapper"
 
 #: src/routes/farm-helper.tsx
 msgid "sort"
@@ -10450,6 +10682,22 @@ msgstr "Estadísticas y top play"
 msgid "Status"
 msgstr "Estado"
 
+#: src/routes/dan-estimates.tsx
+msgid "Step 1: every chart gets its own dan level"
+msgstr "Paso 1: cada chart recibe su propio nivel de dan"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 2: what makes a chart LN"
+msgstr "Paso 2: qué hace que un chart sea LN"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 3: which of your plays count"
+msgstr "Paso 3: cuáles de tus plays cuentan"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 4: your dan is your 4th best pass"
+msgstr "Paso 4: tu dan es tu 4º mejor pase"
+
 #: src/routes/replay.tsx
 msgid "Still fetching the replay and chart."
 msgstr "Todavía se está cargando el replay y el chart."
@@ -10582,10 +10830,6 @@ msgid "sure? +{lastCopyValue}"
 msgstr "¿seguro? +{lastCopyValue}"
 
 #: src/components/packs/CollectionPanel.tsx
-#~ msgid "Sure? every duplicate copy goes +{recyclable}"
-#~ msgstr "¿Seguro? se van todas las copias duplicadas +{recyclable}"
-
-#: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
 msgid "Sure? The card leaves the collection"
 msgstr "¿Seguro? La carta sale de la colección"
@@ -10629,9 +10873,14 @@ msgstr "etiquetas"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/communities/TagInput.tsx
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/routes/maps.tsx
 msgid "Tags"
 msgstr "Etiquetas"
+
+#: src/routes/dan-estimates.tsx
+msgid "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
+msgstr "El sitio ordena tus pases válidos de un lado de un modo de teclas por el nivel de dan del chart y se queda con el cuarto. Ese es tu dan. No se le suma nada encima, y ningún pase por encima puede subirlo por sí solo."
 
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Take it down for good?"
@@ -10869,7 +11118,7 @@ msgstr "Es el mismo score en ambos lados. Elige otra run para el otro lado."
 #. placeholder {0}: formatDan(danLabel)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "The {keyCount}K {sideLabel} course ladder ends at {0}, so the analyzer cannot rate anything above it. The real level may be higher."
-msgstr "La escala de cursos {sideLabel} de {keyCount}K termina en {0}, así que el analizador no puede calificar nada por encima. El nivel real puede ser más alto."
+msgstr "La escala de dans {sideLabel} de {keyCount}K termina en {0}, así que el analizador no puede calificar nada por encima. El nivel real puede ser más alto."
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "The {keys}K block resolves no note images; the preview shows flat colours."
@@ -10911,10 +11160,6 @@ msgstr "El analizador de mapas está calificando tus top plays ahora mismo."
 msgid "The chart file isn't available, so only the replay will load."
 msgstr "El archivo del mapa no está disponible, así que solo cargará el replay."
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "The clears behind it"
-#~ msgstr "Los pases que lo respaldan"
-
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The customized settings are too large to store"
 msgstr "Los ajustes personalizados son demasiado grandes para guardarlos"
@@ -10931,6 +11176,10 @@ msgstr "No se pudo leer el pool de cartas en este momento. Inténtalo en un mome
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The editor already holds {0}"
 msgstr "El editor ya contiene {0}"
+
+#: src/routes/dan-estimates.tsx
+msgid "The engine gives back a continuous number, and the number is what everything else uses. The label you see is just that number printed in the ladder's own language. 4K regular runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1 to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. 6K stops at 9th, and its LN ladder carries on through Terra, Celestial, Mystery, Nihility and Finish."
+msgstr "El algoritmo devuelve un número continuo, y ese número es lo que usa todo lo demás. La etiqueta que ves es solo ese número escrito en el idioma de cada escala. 4K regular va del 1º al 10º y luego entra en los niveles griegos (alpha, beta, gamma y arriba). 4K LN va de 1 a 17, numerado hasta 10 y con nombre por encima: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K va de 0 a 10º y luego Gamma, Azimuth, Zenith, Stellium. 6K se detiene en 9º, y su escala LN sigue con Terra, Celestial, Mystery, Nihility y Finish."
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
@@ -10984,6 +11233,10 @@ msgstr "El panel del jugador puede quedarse aquí, pero esta vista no devolvió 
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "the player's"
 msgstr "del jugador"
+
+#: src/routes/dan-estimates.tsx
+msgid "The pool is your osu! top plays plus every play the site tracked for you, deduplicated down to your best play on each chart at each speed. That tracked half only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+msgstr "El conjunto son tus top plays de osu! más cada play que el sitio trackeó para ti, reducido a tu mejor play en cada chart a cada velocidad. Esa mitad trackeada solo existe si estás en el roster de tu país, que es su top 100 más quien haya activado el tracking por su cuenta, y empieza el día en que empezó el tracking. Los charts marcados como vibro se descartan en todas partes, porque los algoritmos de rating leen un muro de mash como densidad enorme y lo puntúan de forma absurda."
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
@@ -11039,9 +11292,9 @@ msgstr "Los replays que has subido a Mania Hub, con sus enlaces para compartir y
 msgid "The report was sent, but at least one image did not upload."
 msgstr "El reporte se envió, pero al menos una imagen no se subió."
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "The same rule run over only the clears whose charts carry each pattern."
-#~ msgstr "La misma regla aplicada solo a los pases cuyos charts llevan cada patrón."
+#: src/routes/dan-estimates.tsx
+msgid "the same 96% and 95%"
+msgstr "los mismos 96% y 95%"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."
@@ -11058,6 +11311,18 @@ msgstr "Los servidores donde estás, para mostrarte aquellos donde puedes public
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "The side-by-side playfields failed to mount."
 msgstr "No se pudieron montar los playfields lado a lado."
+
+#: src/routes/dan-estimates.tsx
+msgid "The site does not use the accuracy the game showed you. It works it out again from your judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same play, recomputing is what makes that play count, or not count, the same on either client."
+msgstr "El sitio no usa la precisión que te mostró el juego. La vuelve a calcular desde tus judgements, los 300, 200, 100 y demás. En mania hay dos formas de sumarlos, la fórmula de stable y la de ScoreV2 que muestra lazer. Cada escala pide su mínimo en una de las dos: 4K regular en la de stable, 4K LN en la de ScoreV2. Como las dos dan números distintos para la misma play, recalcular es lo que hace que esa play cuente, o no cuente, igual en cualquiera de los dos clientes."
+
+#: src/routes/dan-estimates.tsx
+msgid "The site downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
+msgstr "El sitio descarga el archivo del chart, lee las notas y pasa el patrón por un algoritmo de rating. Cuál depende del modo de teclas, porque ninguno es el mejor en todos:"
+
+#: src/routes/dan-estimates.tsx
+msgid "The skill breakdown"
+msgstr "El desglose por skill"
 
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 msgid "The skin could not be loaded. Try again in a moment."
@@ -11094,6 +11359,10 @@ msgstr "El creador original de la skin"
 #: src/routes/skins.tsx
 msgid "The skins list could not be loaded."
 msgstr "No se pudo cargar la lista de skins."
+
+#: src/routes/dan-estimates.tsx
+msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around. You get one dan per side, per keymode, and a play only ever testifies for the side its chart belongs to."
+msgstr "La separación importa porque un lado no dice nada del otro. La precisión en un chart LN se gana casi por completo en los holds y los releases, así que pasarlo no es evidencia sobre tu nivel regular, ni al revés. Tienes un dan por lado y por modo de teclas, y una play solo testifica por el lado al que pertenece su chart."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -11172,9 +11441,13 @@ msgstr "Este mapa aún no está analizado."
 msgid "This clear backs the estimate"
 msgstr "Este clear respalda la estimación"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "This clear backs the estimate · view map details"
-#~ msgstr "Este pase respalda la estimación · ver detalles del mapa"
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "This collection has no maps in it yet."
+msgstr "Esta colección aún no tiene mapas."
+
+#: src/routes/collections_.$id.tsx
+msgid "This collection is gone, or the link is wrong."
+msgstr "Esta colección ya no existe, o el enlace está mal."
 
 #: src/components/me/RosterOptInCard.tsx
 #: src/routes/player/$username.tsx
@@ -11349,6 +11622,7 @@ msgstr "Diminuto"
 msgid "title"
 msgstr "título"
 
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Title"
 msgstr "Título"
@@ -11384,16 +11658,8 @@ msgid "too hard"
 msgstr "muy difícil"
 
 #: src/routes/farm-helper.tsx
-#~ msgid "too hard and maxed hide the lane from your gain views (maxed for 60 days); setting a real score also clears a mark"
-#~ msgstr "\"muy difícil\" y \"al máximo\" ocultan el mapa de tus vistas de ganancia (\"al máximo\" por 60 días); poner un puntaje real también borra la marca"
-
-#: src/routes/farm-helper.tsx
 msgid "too hard hides the lane from your gain views, done with it does the same for 60 days; setting a real score also clears a mark"
 msgstr "muy difícil oculta el mapa de tus vistas de ganancia, suficiente hace lo mismo por 60 días; poner un puntaje real también borra la marca"
-
-#: src/routes/farm-helper.tsx
-#~ msgid "too hard hides the lane from your gain views; setting a real score also clears a mark"
-#~ msgstr "muy difícil oculta el mapa de tus vistas de ganancia; poner un puntaje real también limpia la marca"
 
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
@@ -11800,10 +12066,6 @@ msgstr "Sube una skin y aparecerá aquí."
 msgid "Upload another"
 msgstr "Subir otra"
 
-#: src/routes/report.tsx
-#~ msgid "Upload failed"
-#~ msgstr "Falló la subida"
-
 #: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins.tsx
 msgid "Upload skin"
@@ -11825,10 +12087,6 @@ msgstr "subida por <0>{0}</0>"
 #: src/routes/skins.tsx
 msgid "uploader"
 msgstr "subida por"
-
-#: src/routes/report.tsx
-#~ msgid "Uploading"
-#~ msgstr "Subiendo"
 
 #: src/lib/skins.ts
 msgid "Uploading {list} previews."
@@ -12106,10 +12364,6 @@ msgstr "La votación cerró. Gracias por tus votos."
 msgid "vs"
 msgstr "vs"
 
-#: src/routes/report.tsx
-#~ msgid "Waiting"
-#~ msgstr "En espera"
-
 #: src/components/me/GoalsPanel.tsx
 msgid "waiting for another {want}pp+ play"
 msgstr "esperando otro play de {want}pp o más"
@@ -12195,14 +12449,6 @@ msgstr "mié"
 msgid "Wednesdays"
 msgstr "Miércoles"
 
-#: src/routes/report.tsx
-#~ msgid "What gets sent with this"
-#~ msgstr "Qué se envía con esto"
-
-#: src/routes/report.tsx
-#~ msgid "What happened"
-#~ msgstr "Qué pasó"
-
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "What is it for"
@@ -12211,6 +12457,10 @@ msgstr "¿Para qué sirve?"
 #: src/routes/communities_.$id.tsx
 msgid "What it is for"
 msgstr "Descripción"
+
+#: src/routes/dan-estimates.tsx
+msgid "What it looks like across everyone"
+msgstr "Cómo se reparte entre todos"
 
 #: src/routes/farm-helper.tsx
 msgid "what nearby players actually farm"
@@ -12224,9 +12474,9 @@ msgstr "lo último que jugaron los jugadores cerca de ti"
 msgid "What seems wrong?"
 msgstr "¿Qué parece estar mal?"
 
-#: src/routes/report.tsx
-#~ msgid "What you did, what you expected, and what happened instead."
-#~ msgstr "Qué hiciste, qué esperabas y qué pasó en su lugar."
+#: src/routes/dan-estimates.tsx
+msgid "What the number is not"
+msgstr "Lo que el número no es"
 
 #: src/routes/farm-helper.tsx
 msgid "what you're browsing"
@@ -12255,6 +12505,14 @@ msgstr "Cuando juegas"
 #: src/routes/communities.tsx
 msgid "where"
 msgstr "dónde"
+
+#: src/routes/dan-estimates.tsx
+msgid "Where it comes from"
+msgstr "De dónde sale"
+
+#: src/routes/dan-estimates.tsx
+msgid "Where to see it"
+msgstr "Dónde verlo"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "while tracked"
@@ -12369,10 +12627,6 @@ msgid "You already beat the players near you here, but a higher-acc rerun is sti
 msgstr "Ya superaste a los jugadores cerca de ti aquí, pero una repetición con más acc todavía vale pp. Oculto por defecto hasta que logres uno de sus puntajes."
 
 #: src/routes/farm-helper.tsx
-#~ msgid "You already beat the typical score here with {yourPp}pp, but that run had {missCount}. Cutting them out is worth about {target}pp."
-#~ msgstr "Ya superaste el score típico de aquí con {yourPp}pp, pero esa run tuvo {missCount}. Quitarlos vale unos {target}pp."
-
-#: src/routes/farm-helper.tsx
 msgid "You already beat the typical score here with {yourPp}pp, but that run had {misses, plural, one {# miss} other {# misses}}. Cutting them out is worth about {target}pp."
 msgstr "Ya superaste el score típico de aquí con {yourPp}pp, pero esa run tuvo {misses, plural, one {# miss} other {# misses}}. Quitarlos vale unos {target}pp."
 
@@ -12381,28 +12635,20 @@ msgid "You already beat the typical score here with {yourPp}pp. A cleaner acc ru
 msgstr "Ya superaste el score típico de aquí con {yourPp}pp. Una run con mejor acc vale unos {target}pp."
 
 #: src/routes/farm-helper.tsx
-#~ msgid "You already beat the typical score here with {yourPp}pp. Raising your 320 rate from {from}% to {to}% is worth about {target}pp."
-#~ msgstr "Ya superaste el score típico de aquí con {yourPp}pp. Subir tu tasa de 320 de {from}% a {to}% vale unos {target}pp."
-
-#: src/routes/farm-helper.tsx
 msgid "You already beat the typical score here with {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "Ya superaste el score típico de aquí con {yourPp}pp. Subir tu acc ponderada a 320 de {from}% a {to}% vale unos {target}pp."
-
-#: src/routes/farm-helper.tsx
-#~ msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320 rate from {from}% to {to}% is worth about {target}pp."
-#~ msgstr "Ya superaste el score típico de aquí con {yourPp}pp sin misses. Subir tu tasa de 320 de {from}% a {to}% vale unos {target}pp."
 
 #: src/routes/farm-helper.tsx
 msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "Ya superaste el score típico de aquí con {yourPp}pp sin misses. Subir tu acc ponderada a 320 de {from}% a {to}% vale unos {target}pp."
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "You already have the maximum number of collections."
+msgstr "Ya tienes el número máximo de colecciones."
+
 #: src/components/packs/PackStage.tsx
 msgid "You are cutting through the cards"
 msgstr "Estás cortando las cartas"
-
-#: src/routes/report.tsx
-#~ msgid "You can also drop images here."
-#~ msgstr "También puedes soltar imágenes aquí."
 
 #: src/components/communities/field-options.tsx
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
@@ -12440,13 +12686,17 @@ msgstr "Llegaste al límite de {HIDDEN_USERS_LIMIT} jugadores ocultos. Quita a a
 msgid "you have too many active marks, clear some first"
 msgstr "tienes demasiadas marcas activas, borra algunas primero"
 
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "You haven't liked a collection yet."
+msgstr "Todavía no le has dado me gusta a ninguna colección."
+
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "You haven't posted a collection yet."
+msgstr "Todavía no has publicado ninguna colección."
+
 #: src/routes/farm-helper.tsx
 msgid "You marked this done with it"
 msgstr "Marcaste este mapa como suficiente"
-
-#: src/routes/farm-helper.tsx
-#~ msgid "You marked this maxed"
-#~ msgstr "Marcaste esto como al máximo"
 
 #: src/routes/farm-helper.tsx
 msgid "You marked this too easy"
@@ -12529,9 +12779,17 @@ msgstr "Tu descripción se verá aquí."
 msgid "Your dynamic renders were turned off."
 msgstr "Se desactivaron tus renders dinámicos."
 
+#: src/routes/dan-estimates.tsx
+msgid "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
+msgstr "Tu estimación es alpha++, la cuarta. El pase de gamma no te hace gamma: un chart puede ser una racha con suerte, un chart que te viene bien, o el intento entre cincuenta que se quedó por encima del mínimo de precisión. Pedir cuatro es lo que evita que un solo buen día fije tu nivel."
+
 #: src/routes/farm-helper.tsx
 msgid "your marks"
 msgstr "tus marcas"
+
+#: src/routes/dan-estimates.tsx
+msgid "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it, broken down by skill. The whole population is on the <0>Dan tab of the rankings page</0>, per country and per keymode."
+msgstr "Tu propia estimación está en la pestaña Skills de tu página de jugador. Haz clic en cualquier insignia de dan para ver los pases que hay detrás, desglosados por skill. Toda la población está en la <0>pestaña Dan de la página de rankings</0>, por país y por modo de teclas."
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."

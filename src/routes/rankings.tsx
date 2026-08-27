@@ -22,13 +22,12 @@ import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
-import { useAuth } from "../lib/auth-context";
-import { canUseAdminFeatures } from "../lib/auth-shared";
 import { PageTabs } from "../components/layout/PageTabs";
 import { SkillLeaderboardBoard } from "../components/rankings/SkillLeaderboardBoard";
 import { DanLeaderboardBoard } from "../components/rankings/DanLeaderboardBoard";
 import {
   DEFAULT_DAN_SIDE,
+  DEFAULT_LEADERBOARD_AXIS,
   DEFAULT_LEADERBOARD_KEYS,
   DEFAULT_LEADERBOARD_TAB,
   parseDanSide,
@@ -61,9 +60,8 @@ const NO_CHANGE_TITLE = msg`No change in the last 7 days`;
 type RankingsSearch = {
   page?: number;
   country: string | undefined;
-  // The skill and dan leaderboards ride on this route as extra tabs. They are
-  // admin-only while in development, so their params default to the pp board
-  // and get stripped from the URL like `page`.
+  // The skill and dan leaderboards ride on this route as extra tabs. Their
+  // defaults get stripped from the URL like `page`.
   tab?: LeaderboardTab;
   keys?: LeaderboardKeyCount;
   axis?: string;
@@ -127,18 +125,34 @@ export const Route = createFileRoute("/rankings")({
     const country = match.search.country;
     const countryName = country ? displayCountryName(country, match.context.locale) : null;
     const i18n = getI18n(match.context.locale);
+    const tab = match.search.tab ?? DEFAULT_LEADERBOARD_TAB;
+    const page = match.search.page ?? 1;
+    // Each tab's default board is worth one entry; every keymode, axis and dan
+    // side after that is the same players re-sorted, so they canonicalize back
+    // to that board rather than each getting one of their own.
+    const isDefaultBoard =
+      page === 1
+      && (match.search.keys ?? DEFAULT_LEADERBOARD_KEYS) === DEFAULT_LEADERBOARD_KEYS
+      && (match.search.axis ?? DEFAULT_LEADERBOARD_AXIS) === DEFAULT_LEADERBOARD_AXIS
+      && (match.search.side ?? DEFAULT_DAN_SIDE) === DEFAULT_DAN_SIDE;
+    const title = countryName
+      ? tab === "skills"
+        ? i18n._(msg`${countryName} mania skill leaderboards`)
+        : tab === "dan"
+          ? i18n._(msg`${countryName} mania dan leaderboards`)
+          : i18n._(msg`${countryName} mania rankings`)
+      : i18n._(msg`Country mania rankings`);
     return pageSeo({
-      title: countryName ? i18n._(msg`${countryName} mania rankings`) : i18n._(msg`Country mania rankings`),
+      title,
       description: countryName
         ? i18n._(msg`Top osu!mania players in ${countryName}`)
         : i18n._(msg`osu!mania country rankings`),
       path: withSearchParams("/rankings", {
-        page: (match.search.page ?? 1) > 1 && match.search.tab === "pp" ? match.search.page : undefined,
+        page: page > 1 && tab === "pp" ? page : undefined,
+        tab: tab === "pp" ? undefined : tab,
         country,
       }),
-      // The leaderboard tabs are admin-only while in development, so they get
-      // no index entry and the canonical keeps pointing at the pp board.
-      noindex: match.search.tab !== "pp",
+      noindex: tab !== "pp" && !isDefaultBoard,
       origin: match.context.origin,
       imageCountry: country,
       imageKind: "rankings",
@@ -149,34 +163,35 @@ export const Route = createFileRoute("/rankings")({
 });
 
 /* /rankings hosts three boards: the pp ranking it has always served, plus the
-   skill and dan leaderboards. The route itself stays public and indexed - only
-   the tab bar is gated, so a signed-out visitor with ?tab=skills in the URL just
-   gets the pp board rather than a 404 on a public page. */
+   skill and dan leaderboards. */
 function RankingsPage() {
   const { t } = useLingui();
-  const auth = useAuth();
   const search = Route.useSearch();
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = search.country ?? fallbackCountry;
   const locale = useLocale();
   const { warming } = useCountryWarming(selectedCountry);
-  const canSeeLeaderboards = canUseAdminFeatures(auth);
-  const tab: LeaderboardTab = canSeeLeaderboards ? (search.tab ?? "pp") : "pp";
+  const tab: LeaderboardTab = search.tab ?? DEFAULT_LEADERBOARD_TAB;
 
-  const tabs = canSeeLeaderboards ? (
+  /* One tab bar for all three boards, with the per-board status text riding in
+     its right slot: PageHeader's own `right` wraps onto a second row on mobile,
+     so a stat only the pp board has used to move the tab bar under the reader
+     every time they switched tabs. */
+  const renderTabs = (right?: ReactNode) => (
     <PageTabs
       items={[
         { id: "pp" as LeaderboardTab, label: t`Performance` },
-        { id: "skills" as LeaderboardTab, label: t`Skills` },
+        { id: "skills" as LeaderboardTab, label: t`MSD` },
         { id: "dan" as LeaderboardTab, label: t`Dan` },
       ]}
       value={tab}
       onChange={(next) => navigate({ to: "/rankings", search: { ...search, tab: next, page: 1 }, replace: true })}
+      right={right}
     />
-  ) : null;
+  );
 
-  if (tab === "pp") return <PpRankingsBoard tabs={tabs} />;
+  if (tab === "pp") return <PpRankingsBoard renderTabs={renderTabs} />;
 
   const keys = search.keys ?? DEFAULT_LEADERBOARD_KEYS;
   const page = search.page ?? 1;
@@ -188,7 +203,7 @@ function RankingsPage() {
         iconSrc="/images/icons/rankings.svg"
         title={tab === "dan" ? t`${countryName} mania dan leaderboards` : t`${countryName} mania skill leaderboards`}
       />
-      {tabs}
+      {renderTabs()}
       {/* A country nobody has visited yet has no roster, so it has no rated
           players either; the warming notice is the honest reason, not "empty". */}
       {warming && <CountryWarming country={selectedCountry} />}
@@ -219,7 +234,7 @@ function RankingsPage() {
   );
 }
 
-function PpRankingsBoard({ tabs }: { tabs: ReactNode }) {
+function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => ReactNode }) {
   const { t, i18n } = useLingui();
   const { page = 1, country } = Route.useSearch();
   const navigate = useNavigate();
@@ -512,13 +527,12 @@ function PpRankingsBoard({ tabs }: { tabs: ReactNode }) {
         <PageHeader
           iconSrc="/images/icons/rankings.svg"
           title={selectedIsGlobal ? t`Global mania rankings` : t`${countryName} mania rankings`}
-          right={
-            globalRankingsTotal > 0 ? (
-              <span className="text-[10px] text-osu-f1"><Trans>{formatNumber(globalRankingsTotal)} tracked players</Trans></span>
-            ) : null
-          }
         />
-        {tabs}
+        {renderTabs(
+          globalRankingsTotal > 0 ? (
+            <span className="text-[10px] text-osu-f1"><Trans>{formatNumber(globalRankingsTotal)} tracked players</Trans></span>
+          ) : null,
+        )}
         <div className="bg-osu-b5">
           <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
             <div className="sm:hidden">
@@ -767,16 +781,15 @@ function PpRankingsBoard({ tabs }: { tabs: ReactNode }) {
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
         title={t`${countryName} mania rankings`}
-        right={
-          <>
-            {!pageData && rankingsLoading && !error && <span className="text-[10px] text-osu-f1"><Trans>Loading rankings...</Trans></span>}
-            {pageData && deltasLoading && (
-              <span className="text-[10px] text-osu-f1"><Trans>Checking 7d changes...</Trans></span>
-            )}
-          </>
-        }
       />
-      {tabs}
+      {renderTabs(
+        <>
+          {!pageData && rankingsLoading && !error && <span className="text-[10px] text-osu-f1"><Trans>Loading rankings...</Trans></span>}
+          {pageData && deltasLoading && (
+            <span className="text-[10px] text-osu-f1"><Trans>Checking 7d changes...</Trans></span>
+          )}
+        </>,
+      )}
 
       {warming && <CountryWarming country={selectedCountry} />}
 

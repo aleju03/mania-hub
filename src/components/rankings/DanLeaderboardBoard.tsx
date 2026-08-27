@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Pagination } from "../ui/Pagination";
 import { SegmentedControl } from "../ui/SegmentedControl";
@@ -127,7 +128,10 @@ export function DanLeaderboardBoard({
       {/* Plain line, not a boxed callout: the caveat belongs next to the data,
           not in furniture around it. */}
       <p className="text-[11px] text-osu-f1">
-        <Trans>Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking.</Trans>
+        <Trans>Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking.</Trans>{' '}
+        <Link to="/dan-estimates" className="text-osu-pink-light transition-colors hover:text-white">
+          <Trans>Click here to read how dans are estimated</Trans>
+        </Link>
       </p>
 
       <LeaderboardTable

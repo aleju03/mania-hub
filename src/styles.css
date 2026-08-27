@@ -76,7 +76,7 @@ html {
   --color-osu-green: #88b300; --color-osu-green-light: #b3d944;
   --color-osu-red: #ed1221; --color-osu-red-light: #ed7887;
   --color-osu-purple: #8866ee; --color-osu-purple-light: #aa88ff;
-  --color-osu-orange: #ff8e5d;
+  --color-osu-orange: #ff8e5d; --color-osu-orange-dark: #d9683c;
 }
 body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family: var(--font-sans); }
 
@@ -296,6 +296,19 @@ html[data-custom-cursor="true"] * {
    half. A mismatch shows as the album resizing when the live book swaps in. */
 .album-book-stage {
   container-type: inline-size;
+  /* A page folding forward spills far past the right edge for the length of
+     the animation - measured at 543px wide, body.scrollWidth went to 1152 -
+     and that spill counts as scrollable width. A phone answers by widening
+     the layout viewport to fit it (543x955 became 1152x2027 for two frames,
+     at zoom scale 1), reflowing the page and handing the scroll position back
+     somewhere else entirely: a forward turn near the bottom of the album threw
+     the reader up into the pack summary. Backward turns fold left, and left
+     overflow is not scrollable, which is why only one direction did it.
+     Clipping the horizontal axis keeps the spill from ever being width. The
+     margin leaves room for the landscape closed-cover translateX nudge, and
+     overflow-y stays visible so nothing about the book is cropped. */
+  overflow-x: clip;
+  overflow-clip-margin: 200px;
 }
 .album-book-standin {
   width: min(100%, 440px);

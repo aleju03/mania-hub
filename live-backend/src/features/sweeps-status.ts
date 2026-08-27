@@ -9,6 +9,13 @@ import {
   readActivityModsBackfillProgress,
 } from "./activity-mods-backfill.js";
 import {
+  ACTIVITY_COMBO_BACKFILL_DONE_META_KEY,
+  ACTIVITY_COMBO_BACKFILL_JOB_TYPE,
+  ACTIVITY_COMBO_BACKFILL_PROGRESS_META_KEY,
+  countActivityComboBackfillRemaining,
+  readActivityComboBackfillProgress,
+} from "./activity-combo-backfill.js";
+import {
   TOP_SCORES_BACKFILL_DONE_META_KEY,
   TOP_SCORES_BACKFILL_JOB,
   TOP_SCORES_BACKFILL_PROGRESS_META_KEY,
@@ -278,6 +285,25 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
       total: async (dbInner, progress) => {
         const stored = await readActivityModsBackfillProgress(dbInner);
         const remaining = await countActivityModsBackfillRemaining(dbInner, stored.cursor, ACTIVITY_MODS_BACKFILL_MIN_ACCURACY);
+        return (progress.processed ?? 0) + remaining;
+      },
+    }),
+  },
+  {
+    id: "activity-combo-backfill",
+    label: "Archived combo backfill",
+    description: "Refetches archived day-bests to fill the combo and replay button on tracked plays written before those columns shipped (2026-08-26). Boot-seeded chain, strongest play first, capped at ACTIVITY_COMBO_BACKFILL_PLAYERS x ROWS_PER_PLAYER; everything past the cap keeps its dash until that play is set again.",
+    kind: "one-time",
+    read: (db) => readChainSweep(db, {
+      doneKey: ACTIVITY_COMBO_BACKFILL_DONE_META_KEY,
+      jobType: ACTIVITY_COMBO_BACKFILL_JOB_TYPE,
+      progressKey: ACTIVITY_COMBO_BACKFILL_PROGRESS_META_KEY,
+      progressFields: ["cursor", "processed", "filled", "missing", "mismatched"],
+      // Links chain every 150s; 3x that before "running" stops being credible.
+      recentProgressMs: 8 * 60_000,
+      total: async (dbInner, progress) => {
+        const stored = await readActivityComboBackfillProgress(dbInner);
+        const remaining = await countActivityComboBackfillRemaining(dbInner, stored.cursor);
         return (progress.processed ?? 0) + remaining;
       },
     }),

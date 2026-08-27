@@ -644,6 +644,22 @@ function emptySlot<T extends { computedAt: number }>(): SnapshotSlot<T> {
 
 const stores = new WeakMap<Db, PackCommunityStore>();
 
+// A banned-player wipe can remove holdings from many collectors at once. The
+// normal TTLs are intentionally long for these heavy snapshots, so explicitly
+// drop the in-process values and suppress disk restore; the next read waits for
+// a fresh roll-up instead of serving the deleted card for up to 30 minutes.
+export function clearPackCommunitySnapshots(db: Db): void {
+  const store = stores.get(db);
+  if (!store) return;
+  for (const slot of [store.collector, store.card, store.totals]) {
+    slot.value = null;
+    slot.source = "none";
+    // Mark restore as completed so an old on-disk snapshot cannot immediately
+    // put the wiped player back. A fresh build persists the replacement.
+    slot.restore = Promise.resolve();
+  }
+}
+
 function storeFor(db: Db): PackCommunityStore {
   let store = stores.get(db);
   if (!store) {

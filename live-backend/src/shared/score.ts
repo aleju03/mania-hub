@@ -90,6 +90,20 @@ export function calculateStableAccuracy(stats: OsuScoreStatistics): number {
   return (counts.countMax * 300 + counts.count300 * 300 + counts.count200 * 200 + counts.count100 * 100 + counts.count50 * 50) / (total * 300);
 }
 
+// osu!'s ScoreV2 / lazer accuracy: MAX weighs 305 against a 305 denominator,
+// where stable's display accuracy weighs it 300 against 300. Computed from the
+// judgement counts so a stable play and a lazer play of the same performance
+// land on the same number - the dan tables that set their bar in ScoreV2 terms
+// (4K LN) can then be checked against either client without an assumed offset.
+// Returns 0 when the score carries no judgement counts, like the stable one.
+export function calculateScoreV2Accuracy(stats: OsuScoreStatistics | null | undefined): number {
+  const counts = getHitCounts(stats);
+  const total = counts.countMax + counts.count300 + counts.count200 + counts.count100 + counts.count50 + counts.countMiss;
+  if (total === 0) return 0;
+  const weighted = counts.countMax * 305 + counts.count300 * 300 + counts.count200 * 200 + counts.count100 * 100 + counts.count50 * 50;
+  return Math.min(1, Math.max(0, weighted / (total * 305)));
+}
+
 // ManiaPerformanceCalculator.calculateCustomAccuracy: the 320-weighted
 // judgement accuracy mania pp is computed from (Perfect weighs 320 here,
 // unlike stable's 300-weighted display accuracy). For a fixed map+mods, mania

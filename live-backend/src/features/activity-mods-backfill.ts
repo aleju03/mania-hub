@@ -4,7 +4,8 @@ import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logInfo, logWarn, errorContext } from "../logger.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
-import { nowIso } from "../shared/score.js";
+import { getDisplayedTotalScore, getScoreTimestamp, nowIso } from "../shared/score.js";
+import { clearSupersededPlayDetails } from "./activity.js";
 
 // ── One-time archived-mods backfill ──────────────────────────────────────────
 // player_activity_maps rows written before best_mods_json/best_statistics_json
@@ -313,7 +314,9 @@ const DAY_WINDOW_MS = 36 * 60 * 60_000;
  * oSC feed's displayed value and legitimately differs in the last decimals from
  * what the API reports, so matching on it would reject good rows.
  */
-export function scoreMatchesRow(score: Record<string, unknown> | null, row: ActivityModsBackfillRow): boolean {
+export type ActivityRowIdentity = Pick<ActivityModsBackfillRow, "userId" | "beatmapId" | "day" | "scoreId">;
+
+export function scoreMatchesRow(score: Record<string, unknown> | null, row: ActivityRowIdentity): boolean {
   if (!score || typeof score !== "object") return false;
   if (Number(score.ruleset_id) !== 3) return false;
   if (Number(score.user_id) !== row.userId) return false;
@@ -340,6 +343,39 @@ export async function backfillActivityModsRow(
   row: ActivityModsBackfillRow,
   caller: string,
 ): Promise<ActivityModsRowOutcome> {
+  const found = await fetchVerifiedRowScore(osu, row, caller);
+  if (found.outcome !== "filled") return found.outcome;
+  const score = found.score;
+  const mods = Array.isArray(score.mods) ? score.mods : [];
+  const statistics = score.statistics && typeof score.statistics === "object" ? score.statistics : {};
+  await exec(
+    db,
+    `update player_activity_maps
+     set best_mods_json = json(?), best_statistics_json = json(?),
+         ${ACTIVITY_PLAY_DETAIL_SET_SQL},
+         updated_at = ?
+     where country = ? and user_id = ? and day = ? and beatmap_id = ?`,
+    [json(mods), json(statistics), ...readPlayDetailArgs(score), nowIso(), row.country, row.userId, row.day, row.beatmapId],
+  );
+  /* This sweep is ordered by dan rating, so the row it just filled is any day
+     of that map, not necessarily the one a profile lists. The play details it
+     wrote belong to one play per map, so hand them straight to the same prune
+     ingest uses: if this row is not the map's best, they come off again. */
+  await clearSupersededPlayDetails(db, row.userId, row.beatmapId);
+  return "filled";
+}
+
+/**
+ * The score a row recorded, fetched and verified, or why it could not be.
+ *
+ * Both archived sweeps go through this: the id-space overlap above is the
+ * subtle part, and one copy of it is the only way both stay right.
+ */
+export async function fetchVerifiedRowScore(
+  osu: Pick<OsuApiClient, "getScoreById">,
+  row: ActivityRowIdentity,
+  caller: string,
+): Promise<{ outcome: "filled"; score: Record<string, unknown> } | { outcome: "missing" | "mismatched" }> {
   const spaces: Array<"solo" | "legacy"> = row.scoreId >= SOLO_SCORE_ID_FLOOR
     ? ["solo", "legacy"]
     : ["legacy", "solo"];
@@ -356,18 +392,36 @@ export async function backfillActivityModsRow(
     }
     sawAnyScore = true;
     if (!scoreMatchesRow(score, row)) continue;
-    const mods = Array.isArray(score.mods) ? score.mods : [];
-    const statistics = score.statistics && typeof score.statistics === "object" ? score.statistics : {};
-    await exec(
-      db,
-      `update player_activity_maps
-       set best_mods_json = json(?), best_statistics_json = json(?), updated_at = ?
-       where country = ? and user_id = ? and day = ? and beatmap_id = ?`,
-      [json(mods), json(statistics), nowIso(), row.country, row.userId, row.day, row.beatmapId],
-    );
-    return "filled";
+    return { outcome: "filled", score };
   }
-  return sawAnyScore ? "mismatched" : "missing";
+  return { outcome: sawAnyScore ? "mismatched" : "missing" };
+}
+
+/* What a listed play shows beside its pp. Written by both sweeps because both
+   already hold the payload it comes from, and never over a value ingest wrote:
+   coalesce keeps whatever the row already knows. */
+export const ACTIVITY_PLAY_DETAIL_SET_SQL = `best_max_combo = coalesce(best_max_combo, ?),
+         best_has_replay = coalesce(best_has_replay, ?),
+         best_solo_score_id = coalesce(best_solo_score_id, ?),
+         best_total_score = coalesce(best_total_score, ?),
+         best_played_at = coalesce(best_played_at, ?)`;
+
+export type ActivityPlayDetailArgs = [number | null, number | null, number | null, number | null, string | null];
+
+export function readPlayDetailArgs(score: Record<string, unknown>): ActivityPlayDetailArgs {
+  const maxCombo = Number(score.max_combo);
+  const soloScoreId = Number(score.id);
+  const hasReplay = score.has_replay ?? score.replay;
+  const playedAt = getScoreTimestamp(score as unknown as Parameters<typeof getScoreTimestamp>[0]);
+  return [
+    Number.isFinite(maxCombo) && maxCombo >= 0 ? maxCombo : null,
+    hasReplay == null ? null : hasReplay ? 1 : 0,
+    Number.isSafeInteger(soloScoreId) && soloScoreId > 0 ? soloScoreId : null,
+    // Same preference the site displays a score by, so a tracked row's number
+    // matches the one a window row shows.
+    getDisplayedTotalScore(score as unknown as Parameters<typeof getDisplayedTotalScore>[0]),
+    playedAt === "" ? null : playedAt,
+  ];
 }
 
 /**

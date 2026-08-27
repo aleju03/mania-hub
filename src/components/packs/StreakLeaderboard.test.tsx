@@ -32,8 +32,8 @@ const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
 const board: LiveStreakBoard = {
   pool: "top500",
   entries: [
-    { rank: 1, userId: 11, username: "alpha", streak: 31, achievedAt: 1 },
-    { rank: 2, userId: 22, username: "bravo", streak: 12, achievedAt: 2 },
+    { rank: 1, userId: 11, username: "alpha", countryCode: "CR", streak: 31, achievedAt: 1 },
+    { rank: 2, userId: 22, username: "bravo", countryCode: null, streak: 12, achievedAt: 2 },
   ],
   viewer: null,
 };

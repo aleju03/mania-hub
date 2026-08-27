@@ -60,11 +60,29 @@ const KEY_PP_DECAY = 0.95;
    plays is a cut of a longer list, so plays below its weakest one exist and
    are invisible. Below it, the window is everything the player has. */
 const KEY_PP_WINDOW_MIN = 100;
+/* How long one keymode's own list may get once tracked plays are folded in.
+   Same 200 the window carries, except each keymode now gets its own instead of
+   sharing one budget with every keymode the player touches. Past it the 0.95
+   decay leaves a play worth under 0.004% of its face value. */
+export const KEY_PP_LIST_LIMIT = 200;
 
-function getKeyPpWeightedTotal(ppValues: number[]): number {
-  return [...ppValues]
-    .sort((a, b) => b - a)
-    .reduce((total, pp, index) => total + pp * KEY_PP_DECAY ** index, 0);
+/** One play in a keymode's list. The beatmap id is what dedupes the tracked
+    tail against the window, since both can hold the same map. */
+interface KeyPpPlay {
+  beatmapId: number;
+  pp: number;
+}
+
+/** A play this site tracked, as the live backend serves it. Display fields
+    ride along for the per-keymode list and are not read here. */
+export interface KeyPpTrackedPlay {
+  beatmapId: number;
+  keyCount: number;
+  pp: number;
+}
+
+function getKeyPpWeightedTotal(plays: KeyPpPlay[]): number {
+  return plays.reduce((total, play, index) => total + play.pp * KEY_PP_DECAY ** index, 0);
 }
 
 /* Every play the window hides is worth less than its cutoff and lands at index
@@ -74,18 +92,89 @@ function getKeyPpMissingBound(count: number, cutoffPp: number): number {
   return (cutoffPp * KEY_PP_DECAY ** count) / (1 - KEY_PP_DECAY);
 }
 
+function sortKeyPpPlays(plays: KeyPpPlay[]): KeyPpPlay[] {
+  return [...plays].sort((a, b) => b.pp - a.pp || a.beatmapId - b.beatmapId);
+}
+
 function buildKeyPpBuckets(
-  ppByKeyCount: Map<number, number[]>,
+  windowByKeyCount: Map<number, KeyPpPlay[]>,
+  trackedByKeyCount: Map<number, KeyPpPlay[]>,
   cutoffPp: number,
 ): UserProfileInsights["keyPp"] {
-  return [...ppByKeyCount.entries()]
-    .map(([keyCount, ppValues]) => ({
-      keyCount,
-      weightedPp: getKeyPpWeightedTotal(ppValues),
-      count: ppValues.length,
-      missingBound: getKeyPpMissingBound(ppValues.length, cutoffPp),
-    }))
+  const keyCounts = new Set([...windowByKeyCount.keys(), ...trackedByKeyCount.keys()]);
+  return [...keyCounts]
+    .map((keyCount) => {
+      const windowPlays = windowByKeyCount.get(keyCount) ?? [];
+      const inWindow = new Set(windowPlays.map((play) => play.beatmapId));
+      // The same map can sit in both: the window carries the play osu! ranks,
+      // and the tail carries whatever the ingest last saw on it. The window
+      // wins, so a map is never counted twice.
+      const tracked = (trackedByKeyCount.get(keyCount) ?? []).filter((play) => !inWindow.has(play.beatmapId));
+      const trackedIds = new Set(tracked.map((play) => play.beatmapId));
+      const merged = sortKeyPpPlays([...windowPlays, ...tracked]).slice(0, KEY_PP_LIST_LIMIT);
+      return {
+        keyCount,
+        weightedPp: getKeyPpWeightedTotal(merged),
+        count: merged.length,
+        trackedCount: merged.filter((play) => trackedIds.has(play.beatmapId)).length,
+        /* Measured from the window alone, on purpose. A play the ingest never
+           saw is only known to be below the window's cutoff, so in the worst
+           case it outranks every tracked play and lands right behind the window
+           ones. Folding the tail in raises the total; it does not narrow what
+           is still unseen. */
+        missingBound: getKeyPpMissingBound(windowPlays.length, cutoffPp),
+      };
+    })
     .sort((a, b) => b.weightedPp - a.weightedPp || a.keyCount - b.keyCount);
+}
+
+/**
+ * The window's own key-pp plays, grouped by keymode.
+ *
+ * Shared by the totals and by the per-keymode list so the two can never
+ * disagree about what the window holds or how it is ordered.
+ */
+function collectWindowKeyPpPlays(bestScores: OsuScore[]): { byKeyCount: Map<number, KeyPpPlay[]>; converts: number } {
+  const byKeyCount = new Map<number, KeyPpPlay[]>();
+  let converts = 0;
+  bestScores
+    .filter((score) => score.beatmap?.mode === "mania")
+    .forEach((score, index) => {
+      if (score.pp == null || score.pp <= 0) return;
+      if (score.beatmap?.convert) {
+        converts++;
+        return;
+      }
+      const rawKeyCount = Number(score.beatmap?.cs);
+      if (!Number.isFinite(rawKeyCount) || rawKeyCount <= 0) return;
+      const keyCount = Math.round(rawKeyCount);
+      // A window play with no beatmap id gets a negative one: unique, and it
+      // can never collide with a tracked play's id during the merge.
+      const rawBeatmapId = Number(score.beatmap?.id);
+      const beatmapId = Number.isSafeInteger(rawBeatmapId) && rawBeatmapId > 0 ? rawBeatmapId : -(index + 1);
+      const play = { beatmapId, pp: score.pp };
+      const bucket = byKeyCount.get(keyCount);
+      if (bucket) bucket.push(play);
+      else byKeyCount.set(keyCount, [play]);
+    });
+  return { byKeyCount, converts };
+}
+
+/** Tracked plays grouped by keymode, cheapest-to-merge shape. */
+function groupTrackedKeyPpPlays(plays: KeyPpTrackedPlay[]): Map<number, KeyPpPlay[]> {
+  const byKeyCount = new Map<number, KeyPpPlay[]>();
+  for (const play of plays) {
+    const keyCount = Math.round(Number(play.keyCount));
+    const pp = Number(play.pp);
+    const beatmapId = Number(play.beatmapId);
+    if (!Number.isFinite(keyCount) || keyCount <= 0) continue;
+    if (!Number.isFinite(pp) || pp <= 0) continue;
+    if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
+    const bucket = byKeyCount.get(keyCount);
+    if (bucket) bucket.push({ beatmapId, pp });
+    else byKeyCount.set(keyCount, [{ beatmapId, pp }]);
+  }
+  return byKeyCount;
 }
 
 function getTimestampMs(score: OsuScore): number {
@@ -188,11 +277,16 @@ function scoreToSnapshot(score: OsuScore): InsightScoreSnapshot {
   };
 }
 
-export function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsights {
+export function calculateUserProfileInsights(
+  bestScores: OsuScore[],
+  /* Plays this site tracked below the window, from the live backend. Left out
+     (an untracked country, no backend configured, a failed call) the totals are
+     exactly the window-only ones this used to return. */
+  tracked: { plays: KeyPpTrackedPlay[]; trackedFrom?: string | null } = { plays: [] },
+): UserProfileInsights {
   const scores = bestScores.filter((score) => score.beatmap?.mode === "mania");
   const keyCounts = new Map<number, number>();
-  const keyPpValues = new Map<number, number[]>();
-  let convertPlays = 0;
+  const { byKeyCount: keyPpValues, converts: convertPlays } = collectWindowKeyPpPlays(scores);
   const modCounts = new Map<string, number>();
   let moddedPlayCount = 0;
   const bpmEntries: Array<{ bpm: number; weight: number; keyCount: number | null; score: OsuScore }> = [];
@@ -230,13 +324,6 @@ export function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfil
 
     if (score.pp != null && score.pp > 0) {
       ppValues.push(score.pp);
-      if (score.beatmap?.convert) {
-        convertPlays++;
-      } else if (normalizedKeyCount !== null) {
-        const keyPp = keyPpValues.get(normalizedKeyCount);
-        if (keyPp) keyPp.push(score.pp);
-        else keyPpValues.set(normalizedKeyCount, [score.pp]);
-      }
     }
 
     const timestampMs = getTimestampMs(score);
@@ -282,12 +369,16 @@ export function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfil
     ? sortedPpValues[sortedPpValues.length - 1]
     : 0;
 
+  const keyPp = buildKeyPpBuckets(keyPpValues, groupTrackedKeyPpPlays(tracked.plays), keyPpCutoff);
+
   return {
     sampleSize: scores.length,
     keySplit: sortedKeySplit,
-    keyPp: buildKeyPpBuckets(keyPpValues, keyPpCutoff),
+    keyPp,
     keyPpConverts: convertPlays,
     keyPpCutoff,
+    keyPpTracked: keyPp.reduce((total, bucket) => total + bucket.trackedCount, 0),
+    keyPpTrackedFrom: tracked.trackedFrom ?? null,
     mostUsedMod: getTopCountEntry(modCounts, moddedPlayCount),
     modBreakdown: [...modCounts.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))

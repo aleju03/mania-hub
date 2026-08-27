@@ -23,6 +23,7 @@ import {
   getScore,
 } from "../../lib/osu";
 import { getServerLiveBackendUrl } from "../../lib/live-backend";
+import { bridgeAuthHeaders } from "../../lib/live-backend-tokens";
 import { parsePackCardKey } from "../../lib/pack-collection";
 import { getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
@@ -3321,6 +3322,170 @@ function farmHelperRecCard(props: {
   );
 }
 
+/* The card behind a shared /collections/<slug> link: the collection's own cover
+   collage as the backdrop, its title, who built it, and how much is in it.
+   Keyed on the collection id rather than the title, since a rename keeps the
+   link and should re-mint the image. */
+interface CollectionOgData {
+  title: string;
+  description: string | null;
+  memberCount: number;
+  keyCount: number | null;
+  favouriteCount: number;
+  tags: string[];
+  coverSetIds: number[];
+  owner: { userId: number; username: string; avatarUrl: string | null };
+}
+
+async function fetchCollectionForOg(base: string, id: string): Promise<CollectionOgData | null> {
+  // Bridge-gated like every /api/map-collections route; this runs on our own
+  // server, which is the only caller that credential is for.
+  const response = await fetch(
+    `${base}/api/map-collections/get?id=${encodeURIComponent(id)}`,
+    { headers: bridgeAuthHeaders() },
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) throw new OgFallbackError(`collection ${response.status}`);
+  const body = (await response.json()) as { ok?: boolean; collection?: CollectionOgData };
+  return body.ok && body.collection ? body.collection : null;
+}
+
+async function renderCollectionOg(request: Request, id: string): Promise<Response> {
+  const base = getServerLiveBackendUrl();
+  if (!base) throw new OgFallbackError("live backend not configured");
+  const [[regularFont, heavyFont], collection] = await Promise.all([
+    loadOgFonts(request),
+    fetchCollectionForOg(base, id),
+  ]);
+  if (!collection) throw new OgFallbackError(`no collection ${id}`);
+
+  // The collage is the collection's own covers, stretched across the card and
+  // dimmed to texture. One cover fills it; three split it into columns.
+  const covers = collection.coverSetIds.slice(0, 3);
+  const columnWidth = covers.length > 0 ? WIDTH / covers.length : WIDTH;
+  const facts = [
+    `${collection.memberCount} ${collection.memberCount === 1 ? "map" : "maps"}`,
+    collection.keyCount != null ? `${collection.keyCount}K` : "",
+    collection.favouriteCount > 0 ? `${collection.favouriteCount} likes` : "",
+  ].filter(Boolean).join("  ·  ");
+  const blurb = (collection.description ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: SURFACE_COLOR,
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        h(
+          "div",
+          { key: "covers", style: { position: "absolute", inset: "0", display: "flex", flexDirection: "row" } },
+          covers.map((setId) =>
+            h("img", {
+              key: `cover-${setId}`,
+              src: `https://assets.ppy.sh/beatmaps/${setId}/covers/cover@2x.jpg`,
+              style: { width: `${columnWidth}px`, height: `${HEIGHT}px`, objectFit: "cover", opacity: 0.42 },
+            }),
+          ),
+        ),
+        // Satori has no `inset` support, so the scrim is sized explicitly.
+        h("div", {
+          key: "scrim",
+          style: {
+            position: "absolute",
+            top: "0",
+            left: "0",
+            width: `${WIDTH}px`,
+            height: `${HEIGHT}px`,
+            display: "flex",
+            background: "linear-gradient(180deg, rgba(20,16,24,0.55) 0%, rgba(20,16,24,0.88) 55%, rgba(20,16,24,0.97) 100%)",
+          },
+        }),
+        h(
+          "div",
+          {
+            key: "body",
+            style: {
+              position: "absolute",
+              top: "0",
+              left: "0",
+              width: `${WIDTH}px`,
+              height: `${HEIGHT}px`,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-end",
+              padding: "64px 72px",
+            },
+          },
+          [
+            h(
+              "div",
+              {
+                key: "kicker",
+                style: {
+                  display: "flex",
+                  fontSize: "22px",
+                  letterSpacing: "4px",
+                  textTransform: "uppercase",
+                  color: "#ff8ec2",
+                  marginBottom: "14px",
+                },
+              },
+              "map collection",
+            ),
+            h(
+              "div",
+              { key: "title", style: { display: "flex", fontSize: collection.title.length > 34 ? "58px" : "74px", fontWeight: 900, lineHeight: 1.05 } },
+              collection.title.slice(0, 64),
+            ),
+            blurb
+              ? h(
+                  "div",
+                  { key: "blurb", style: { display: "flex", marginTop: "16px", fontSize: "26px", color: "rgba(255,255,255,0.78)", lineHeight: 1.3 } },
+                  blurb,
+                )
+              : null,
+            h(
+              "div",
+              { key: "meta", style: { display: "flex", alignItems: "center", marginTop: "26px", gap: "16px" } },
+              [
+                h("img", {
+                  key: "avatar",
+                  src: ogAvatarUrl(request, collection.owner.avatarUrl, collection.owner.userId),
+                  style: { width: "48px", height: "48px", borderRadius: "24px" },
+                }),
+                h(
+                  "div",
+                  { key: "by", style: { display: "flex", fontSize: "28px", fontWeight: 700 } },
+                  collection.owner.username,
+                ),
+                h(
+                  "div",
+                  { key: "facts", style: { display: "flex", fontSize: "26px", color: "rgba(255,255,255,0.7)" } },
+                  facts,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
+  );
+
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
 async function renderFarmHelperOg(request: Request): Promise<Response> {
   // Farmed-map covers for the backdrop. The tool itself is global, but
   // farmed data is per-country; CR (the project's home scene) seeds the
@@ -5106,6 +5271,22 @@ export const Route = createFileRoute("/api/og")({
             );
           } catch (err) {
             if (!isOgFallbackError(err)) console.warn("[og] maniacard render failed, falling back", err);
+          }
+        }
+
+        // A posted map collection, for the link its author shares.
+        if (kind === "collection") {
+          const collectionId = (url.searchParams.get("id") ?? "").trim().slice(0, 64);
+          if (/^[a-zA-Z0-9_-]+$/.test(collectionId)) {
+            try {
+              return await serveOg(
+                request,
+                `collection:${collectionId}:v${version}`,
+                () => renderCollectionOg(request, collectionId),
+              );
+            } catch (err) {
+              if (!isOgFallbackError(err)) console.warn("[og] collection render failed, falling back", err);
+            }
           }
         }
 

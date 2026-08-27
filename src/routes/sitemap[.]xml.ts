@@ -16,6 +16,7 @@ const STATIC_PATHS = [
   { path: "/packs", changefreq: "weekly", priority: "0.6" },
   { path: "/packs/collections", changefreq: "daily", priority: "0.6" },
   { path: "/bbcode", changefreq: "monthly", priority: "0.5" },
+  { path: "/dan-estimates", changefreq: "monthly", priority: "0.5" },
 ] as const;
 
 // A skin slug comes from an uploader-chosen name, so it reaches this file as

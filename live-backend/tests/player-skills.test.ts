@@ -636,20 +636,139 @@ describe("computePlayerSkillRatings", () => {
       const result = await computePlayerSkillRatings(db, failingOsu, scores, []);
       expect(result.summary.analyzedPlays).toBe(9);
       const dan = result.summary.modes[0].dan!;
-      // rc evidence uses stable-formula accuracy from the judgement counts
-      // (these fixtures are all perfect/great = stable 100%, so full credit),
+      // rc evidence uses stable-formula accuracy from the judgement counts,
       // rice-primary charts only: 8.0, 9.0 (DT), 9.0 (hybrid counts rice),
-      // 7.4. The quorum-th (4th) best credited clear IS the dan.
+      // 7.4. The quorum-th (4th) best clear IS the dan.
       expect(dan.rc?.rawDan).toBe(7.4);
       expect(dan.rc?.clears).toBe(4);
       expect(dan.rc?.label).toBeTruthy();
       // The LN side labels on the numeric LN ladder (never the rice greek
-      // levels), LN-primary charts only: credited 6.0 / 5.5 / 5.4 / 4.8
-      // position 4.8 -> "5". If chart 109's ln half leaked in, the 4th-best
-      // would be 5.4 instead.
-      expect(dan.ln?.rawDan).toBe(4.8);
+      // levels), LN-primary charts only, each crediting its chart's full dan:
+      // 7.0 / 6.3 / 6.0 / 5.4, position 5.4 -> "5". If chart 109's ln half
+      // leaked in, the 4th-best would be 6.0 instead.
+      expect(dan.ln?.rawDan).toBe(5.4);
       expect(dan.ln?.label).toBe("5");
       expect(dan.ln?.clears).toBe(4);
+    });
+  });
+
+  it("holds 4K LN clears to the course ladder's 97% ScoreV2 bar, not the displayed accuracy", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      for (const [beatmapId, lnRawDan] of [[201, 8.0], [202, 7.0], [203, 6.5], [204, 6.0], [205, 9.0]] as const) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0.8, patterns: [], rc: { rawDan: 3.0 }, ln: { rawDan: lnRawDan } }), new Date().toISOString()],
+        );
+      }
+
+      // 956 max / 44 ok is 97.04% in ScoreV2's 305-weighted accuracy; 949/51
+      // is 96.57% and misses the bar. Both would read as ~96.6% and ~96.0% on
+      // stable's 300-weighted display accuracy, so a bar checked in the wrong
+      // currency lets the 9.0 chart in and sets the dan a level and a half high.
+      const clearing = { perfect: 956, ok: 44 };
+      const failing = { perfect: 949, ok: 51 };
+      const scores = [
+        play({ id: 1, beatmap_id: 201, accuracy: 0.9704, statistics: clearing }),
+        play({ id: 2, beatmap_id: 202, accuracy: 0.9704, statistics: clearing }),
+        play({ id: 3, beatmap_id: 203, accuracy: 0.9704, statistics: clearing }),
+        play({ id: 4, beatmap_id: 204, accuracy: 0.9704, statistics: clearing }),
+        play({ id: 5, beatmap_id: 205, accuracy: 0.9657, statistics: failing }),
+      ];
+      const dan = (await computePlayerSkillRatings(db, failingOsu, scores, [])).summary.modes[0].dan!;
+      // 8.0 / 7.0 / 6.5 / 6.0 qualify and each credits its chart's full dan;
+      // the 9.0 does not. If it had counted, the 4th-best would be 6.5.
+      expect(dan.ln?.rawDan).toBe(6);
+      expect(dan.ln?.clears).toBe(4);
+    });
+  });
+
+  it("credits a chart's full dan for a bare pass at the bar, the way clearing a course does", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      for (const beatmapId of [211, 212, 213, 214]) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [], rc: { rawDan: 8.0 } }), new Date().toISOString()],
+        );
+      }
+
+      // 940 max / 60 ok is exactly 96.00% stable, the 4K rice courses' bar.
+      const scores = [211, 212, 213, 214].map((beatmapId, index) =>
+        play({ id: index + 1, beatmap_id: beatmapId, accuracy: 0.96, statistics: { perfect: 940, ok: 60 } }));
+      const dan = (await computePlayerSkillRatings(db, failingOsu, scores, [])).summary.modes[0].dan!;
+      expect(dan.rc?.rawDan).toBe(8);
+      expect(dan.rc?.clears).toBe(4);
+    });
+  });
+
+  it("holds a stable submission with no stored ScoreV2 accuracy to the converted 4K LN bar", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      for (const beatmapId of [221, 222, 223, 224]) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0.8, patterns: [], ln: { rawDan: 7.0 } }), new Date().toISOString()],
+        );
+      }
+      const { collectDanClearsForTest } = await import("../src/features/player-skills.js");
+      const infoByBeatmap = await (await import("../src/features/player-skills.js")).loadChartSkillInfo(db, [221, 222, 223, 224]);
+      // A stable submission displays the 300-weighted accuracy, so displayed
+      // and stableAccuracy match and the play carries no ScoreV2 reading.
+      const stablePlay = (beatmapId: number, accuracy: number) => ({
+        identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
+        values: { Overall: 20 }, patterns: [], accuracy, stableAccuracy: accuracy,
+      });
+      // 97.2% stable converts to below the 97% ScoreV2 bar; 97.6% clears it.
+      const below = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.972)), infoByBeatmap);
+      expect(below.length).toBe(0);
+      const above = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.976)), infoByBeatmap);
+      expect(above.length).toBe(4);
+      expect(above.every((clear) => clear.side === "ln" && clear.chartDan === 7)).toBe(true);
+    });
+  });
+
+  it("credits an HT clear the chart's 0.75x dan, not its 1.0x one", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      for (const beatmapId of [231, 232, 233, 234]) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, dan_ht_json, updated_at)
+           values (?, ?, 'ready', ?, ?, ?)`,
+          [
+            beatmapId,
+            CHART_ANALYSIS_VERSION,
+            JSON.stringify({ lnRatio: 0, patterns: [], rc: { rawDan: 12.0 } }),
+            JSON.stringify({ rawDan: 8.0, primaryFamily: "dan" }),
+            new Date().toISOString(),
+          ],
+        );
+      }
+      const { collectDanClearsForTest, loadChartSkillInfo } = await import("../src/features/player-skills.js");
+      const info = await loadChartSkillInfo(db, [231, 232, 233, 234]);
+      const htPlay = (beatmapId: number) => ({
+        identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 0.75, goal: 0.95, pp: 100,
+        values: { Overall: 20 }, patterns: [], accuracy: 0.98, stableAccuracy: 0.98,
+      });
+      const clears = collectDanClearsForTest(4, [231, 232, 233, 234].map(htPlay), info);
+      expect(clears.length).toBe(4);
+      // 8.0 (the 0.75x verdict), never the chart's own 12.0.
+      expect(clears.every((clear) => clear.chartDan === 8 && clear.side === "rc")).toBe(true);
+
+      // A rate with no stored verdict still contributes nothing.
+      const oddRate = collectDanClearsForTest(4, [231, 232, 233, 234].map((id) => ({ ...htPlay(id), rate: 1.2 })), info);
+      expect(oddRate.length).toBe(0);
     });
   });
 

@@ -53,7 +53,10 @@ export async function getTrackerSnapshot(
   // A region narrows the same table to its member countries at read time.
   const scope = resolveCountryScope(country);
   const scopeSql = countryScopeSql(scope, "se.country");
-  const clauses = ["se.passed = 1"];
+  const clauses = [
+    "se.passed = 1",
+    "not exists (select 1 from users suppressed where suppressed.user_id = se.user_id and suppressed.is_active = 0)",
+  ];
   const args: Array<string | number> = [];
   if (scopeSql) {
     clauses.push(scopeSql.clause);

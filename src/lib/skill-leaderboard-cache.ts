@@ -1,27 +1,22 @@
-import {
-  fetchDanLeaderboard,
-  fetchSkillLeaderboard,
-  type DanLeaderboardSnapshot,
-  type DanSide,
-  type SkillLeaderboardSnapshot,
-} from "./skill-leaderboards";
+import { fetchLiveDanLeaderboard, fetchLiveSkillLeaderboard } from "./live-backend";
+import type { DanLeaderboardSnapshot, DanSide, SkillLeaderboardSnapshot } from "./skill-leaderboards";
 
 /**
  * Module-level snapshot cache for the /rankings skill and dan boards.
  *
- * These reads go through a server function while the feature is admin-gated, so
- * they get no HTTP cache of their own: without this, every axis chip and every
- * tab flip would repaint the skeleton and re-fetch a board the visitor was
- * looking at a second earlier. Entries hold the in-flight promise rather than
- * only the settled value, so React's Strict Mode double-mount and a fast
- * double-click issue one request between them.
+ * The endpoint carries an HTTP cache, but a browser cache hit still costs a
+ * round trip and a repaint: without this, every axis chip and every tab flip
+ * would show the skeleton again for a board the visitor was looking at a second
+ * earlier. Entries hold the in-flight promise rather than only the settled
+ * value, so React's Strict Mode double-mount and a fast double-click issue one
+ * request between them.
  *
  * Same shape as farm-helper-snapshot-cache.ts, with the TTL matched to the
  * backend board's own 5-minute rebuild instead of an endpoint max-age.
  */
 
 // The backend rebuilds its board every 5 minutes; asking again inside that
-// window can only return the identical payload.
+// window can only return the identical payload (its own max-age says the same).
 const SNAPSHOT_TTL_MS = 5 * 60_000;
 // One scope+keymode holds up to ~10 axes plus 2 dan sides; this covers a few
 // scopes of browsing and nothing like a session history.
@@ -130,10 +125,10 @@ export function peekDanBoard(request: DanBoardRequest): DanLeaderboardSnapshot |
  * own render with a cancelled flag, which is what keeps a stale axis from being
  * shown as current.
  */
-export function loadSkillBoard(request: SkillBoardRequest): Promise<SkillLeaderboardSnapshot | null> {
-  return load(skillKey(request), () => fetchSkillLeaderboard({ data: request }));
+export function loadSkillBoard(request: SkillBoardRequest): Promise<SkillLeaderboardSnapshot> {
+  return load(skillKey(request), () => fetchLiveSkillLeaderboard(request));
 }
 
-export function loadDanBoard(request: DanBoardRequest): Promise<DanLeaderboardSnapshot | null> {
-  return load(danKey(request), () => fetchDanLeaderboard({ data: request }));
+export function loadDanBoard(request: DanBoardRequest): Promise<DanLeaderboardSnapshot> {
+  return load(danKey(request), () => fetchLiveDanLeaderboard(request));
 }

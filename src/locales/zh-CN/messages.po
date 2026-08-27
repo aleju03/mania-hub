@@ -40,6 +40,10 @@ msgstr " · 更新于 {0}"
 msgid " or "
 msgstr " 或 "
 
+#: src/routes/dan-estimates.tsx
+msgid "_Underjoy LN dan courses, ScoreV2 accuracy"
+msgstr "_Underjoy 的 LN 段位课题，ScoreV2 准确率"
+
 #: src/components/packs/CardSpotlight.tsx
 msgid ", {ordinalText} of {totalText} to pull it"
 msgstr "，是{ordinalText} 个抽到的（共 {totalText} 人）"
@@ -137,12 +141,19 @@ msgstr "{0, plural, other {# 个难度}}"
 msgid "{0, plural, one {# mania diff} other {# mania diffs}}"
 msgstr "{0, plural, other {# 个 mania 难度}}"
 
+#. placeholder {0}: collection.memberCount
 #. placeholder {0}: recs.length
 #. placeholder {0}: summary.memberCount
 #: src/components/maps/MapCollectionsSection.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/routes/farm-helper.tsx
 msgid "{0, plural, one {# map} other {# maps}}"
 msgstr "{0, plural, other {# 个谱面}}"
+
+#. placeholder {0}: cards.length
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "{0, plural, one {# mapset} other {# mapsets}}"
+msgstr "{0, plural, other {# 个谱面集}}"
 
 #. placeholder {0}: community.memberCount
 #: src/components/communities/CommunityCard.tsx
@@ -163,6 +174,11 @@ msgstr "{0, plural, other {另外找到 # 个成绩，但没有可用回放}}"
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "{0, plural, one {# pack} other {# packs}}"
 msgstr "{0, plural, other {# 个卡包}}"
+
+#. placeholder {0}: profileInsights.keyPpTracked
+#: src/routes/player/$username.tsx
+msgid "{0, plural, one {# play this site tracked below your top 200 counts here too, so each keymode gets its own list instead of sharing one.} other {# plays this site tracked below your top 200 count here too, so each keymode gets its own list instead of sharing one.}}"
+msgstr "{0, plural, other {本站记录的 # 个低于你前 200 名的成绩也计入其中，因此每个键数都有自己的榜单，而不是共用一个。}}"
 
 #. placeholder {0}: byHour[hovered]
 #: src/components/me/MyDataPanel.tsx
@@ -225,6 +241,11 @@ msgstr "{0, plural, other {持有者}}"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "{0, plural, one {in # collection} other {in # collections}}"
 msgstr "{0, plural, other {存在于 # 个收藏册}}"
+
+#. placeholder {0}: detail.memberCount
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "{0, plural, one {map} other {maps}}"
+msgstr "{0, plural, other {张谱面}}"
 
 #. placeholder {0}: entry.count
 #. placeholder {0}: map.plays
@@ -897,10 +918,6 @@ msgstr "{from} 至 {to}"
 msgid "{gap}pp to go"
 msgstr "还差 {gap}pp"
 
-#: src/components/packs/CollectionPanel.tsx
-#~ msgid "{goatMissing, plural, one {plus # GOAT card still missing} other {plus # GOAT cards still missing}}"
-#~ msgstr "{goatMissing, plural, other {另有 # 张 GOAT 卡片未收集}}"
-
 #: src/components/me/GoalsPanel.tsx
 msgid "{have} / {want} plays"
 msgstr "{have} / {want} 个成绩"
@@ -981,6 +998,11 @@ msgstr "还差 {left}%"
 msgid "{mapCount, plural, one {across # map} other {across # maps}}"
 msgstr "{mapCount, plural, other {共 # 张谱面}}"
 
+#. placeholder {0}: collection.owner.username
+#: src/routes/collections_.$id.tsx
+msgid "{maps} osu!mania maps picked by {0}."
+msgstr "{0} 挑选的 {maps} 张 osu!mania 谱面。"
+
 #: src/routes/maps.tsx
 msgid "{message} ({percent}%)"
 msgstr "{message}（{percent}%）"
@@ -993,10 +1015,6 @@ msgstr "{mins} 分"
 #: src/lib/format.ts
 msgid "{mins}m ago"
 msgstr "{mins} 分钟前"
-
-#: src/routes/farm-helper.tsx
-#~ msgid "{misses, plural, one {# miss} other {# misses}}"
-#~ msgstr "{misses, plural, other {# 个 miss}}"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "{mod}: {pct}% of plays"
@@ -1198,28 +1216,12 @@ msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
 msgstr "{shotCount, plural, other {# 张截图}}"
 
 #: src/components/player/SkillBreakdown.tsx
-#~ msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level"
-#~ msgstr "{sideLabel} 段位估算：约 {chip}，依据是该段位附近谱面上的 {clears} 次达标通过(准确率 96% 以上)"
-
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "{sideLabel} dan estimate: ~{chip}, backed by {clears} qualifying clears (96%+ accuracy) on charts around this dan level · click for the clears behind it"
-#~ msgstr "{sideLabel} 段位估算：约 {chip}，依据是该段位附近谱面上的 {clears} 次达标通过(准确率 96% 以上)，点击查看背后的通过记录"
-
-#: src/components/player/SkillBreakdown.tsx
 msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy)"
 msgstr "{sideLabel} 段位估算：约 {chip}，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上)"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy) · click for the clears behind it"
 msgstr "{sideLabel} 段位估算：约 {chip}，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上) · 点击查看这些通过记录"
-
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy)"
-#~ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位课程的最高级，依据是 {clears} 次达标通过(准确率 96% 以上)"
-
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, backed by {clears} qualifying clears (96%+ accuracy) · click for the clears behind it"
-#~ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位课程的最高级，依据是 {clears} 次达标通过(准确率 96% 以上) · 点击查看这些通过记录"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy)"
@@ -1264,6 +1266,10 @@ msgstr "{typeName} 卡包"
 #: src/routes/packs.tsx
 msgid "{typeName} pack, {typeBlurb}"
 msgstr "{typeName} 卡包，{typeBlurb}"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "{USER_COLLECTION_MIN_ITEMS} maps minimum"
+msgstr "至少 {USER_COLLECTION_MIN_ITEMS} 张谱面"
 
 #. placeholder {0}: formatDan(danLabel)
 #: src/components/player/DanEvidenceModal.tsx
@@ -1415,14 +1421,6 @@ msgstr "<0>{collector}</0> 还没有开过卡包。"
 msgid "<0>{percent}%</0> of the rated plays are LN charts ({lnPlays} of {total})"
 msgstr "已评分成绩中有 <0>{percent}%</0> 是 LN 谱面（{lnPlays}/{total}）"
 
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "<0>{percent}%</0> of the rated plays are on LN charts"
-#~ msgstr "已评分成绩中有 <0>{percent}%</0> 来自 LN 谱面"
-
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "<0>{percent}%</0> of the rated plays have LN content ({lnPlays} of {total})"
-#~ msgstr "已评分成绩中有 <0>{percent}%</0> 包含 LN（{lnPlays}/{total}）"
-
 #: src/components/packs/CollectionPanel.tsx
 msgid "<0>{selectedCount}</0> selected"
 msgstr "已选 <0>{selectedCount}</0> 个"
@@ -1435,9 +1433,41 @@ msgstr "<0>/subscribe feed:Top plays country:{country}</0> 会把每个新的 {c
 msgid "<0>+pp</0> is the estimated gain if you hit the target score, after weighting against your current top plays."
 msgstr "<0>+pp</0> 是你达到目标分数后的预计收益，已按你当前的最佳成绩加权。"
 
+#: src/routes/dan-estimates.tsx
+msgid "<0>4K LN</0> goes through that same analyser's LN table, with a small model of our own filling in the easy charts that sit below where the table starts."
+msgstr "<0>4K LN</0> 走的是同一个分析器的 LN 表，表的起点以下那些简单谱面由我们自己的一个小模型补上。"
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>4K regular</0> goes through the Mixed estimator from <1>Leo_Black's map analyser</1>, which blends four difficulty models: <2>Roxy</2>, <3>Azusa</3>, <4>Daniel</4> and <5>Sunny</5>."
+msgstr "<0>4K 单点</0> 走的是 <1>Leo_Black 的谱面分析器</1> 里的 Mixed 估算器，它把四个难度模型混在一起：<2>Roxy</2>、<3>Azusa</3>、<4>Daniel</4> 和 <5>Sunny</5>。"
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>6K and 7K</0> get a Sunny star rating, mapped through the published 6K and 7K dan tables."
+msgstr "<0>6K 和 7K</0> 拿的是 Sunny 的星级，再用公开的 6K、7K 段位表换算过来。"
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>Every other keymode</0> gets no dan at all. There is no ladder to map it onto."
+msgstr "<0>其它键数</0> 完全没有段位，因为没有可以对应的段位表。"
+
 #: src/routes/maps.tsx
 msgid "<0>First time loading {countryName} maps.</0> Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own."
 msgstr "<0>首次加载 {countryName} 的谱面。</0>正在扫描该地区顶尖玩家的游玩记录和收藏。这可能需要一分钟，页面会自动填充。"
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>It is not a ranking.</0> Two players a step apart on the dan leaderboard are not meaningfully apart, and a player who never farms accuracy will read lower than they play."
+msgstr "<0>它不是排名。</0> 段位排行榜上相差一个台阶的两名玩家，其实分不出高下，而从不刷准确率的玩家，显示出来的段位会低于其真实水平。"
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>It is not a title.</0> The ladders hand those out for clearing the course, and this number has no say in that."
+msgstr "<0>它不是称号。</0> 称号是各段位表发给通过课题的人的，这个数字说了不算。"
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>It moves.</0> The rating engines and the chart analysis get improved, and a recompute can shift a chart by a step, which shifts everyone whose evidence sat on it."
+msgstr "<0>它会变。</0> 评分算法和谱面分析都在改进，一次重算可能把某张谱面挪动一个台阶，靠这张谱面撑着的人也会跟着动。"
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>It only sees the plays the site has.</0> Your osu! top plays are always in. Anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
+msgstr "<0>它只看得到本站有的成绩。</0> 你的 osu! 最佳成绩一定在内。排在这些之外的成绩，只有在本站追踪你的时候才存在，也就是你在所在国家/地区的前 100 名，或者你自己开了追踪，而且只从开始追踪那天算起。多年前就不玩了的玩家只能靠 top 200 来判断，显示出来自然偏低。"
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "<0>Log in with osu!</0> to put your own cards up here."
@@ -1462,6 +1492,10 @@ msgstr "<0>第</0><1/><2>页 / 共 {totalPages} 页</2>"
 #: src/components/player/SkillBreakdown.tsx
 msgid "<0>top {0}%</0> of {1} tracked {2}K mains"
 msgstr "在已追踪的 {1} 名 {2}K 主玩家中位列<0>前 {0}%</0>"
+
+#: src/routes/dan-estimates.tsx
+msgid "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
+msgstr "<0>未上架谱面的成绩要等本站知道你在玩才算数。</0> 它靠你在上架、过审或社区喜爱谱面上的第一个成绩来判断。之后每隔几分钟检查一次你的最近成绩，直到你停下为止，这段时间里你打的一切都会计入，未上架的谱面也算。如果你从坟场谱面开打，在第一个带排行榜的成绩出现之前，什么都不会保留。"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "− bpm & length"
@@ -1541,6 +1575,14 @@ msgstr "此设备无法显示 3D 卡片预览。"
 msgid "4K"
 msgstr "4K"
 
+#: src/routes/dan-estimates.tsx
+msgid "4K LN"
+msgstr "4K LN"
+
+#: src/routes/dan-estimates.tsx
+msgid "4K regular"
+msgstr "4K 单点"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "50"
@@ -1553,6 +1595,22 @@ msgstr "6:00"
 #: src/routes/player/$username.tsx
 msgid "6 PM"
 msgstr "18:00"
+
+#: src/routes/dan-estimates.tsx
+msgid "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use the site's own chart pattern tags instead, so a chart tagged both chordjack and tech backs both dans. On the LN side only 7K gets a breakdown, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume."
+msgstr "6K 和 7K 用不了这些技能项，因为那个算法根本不评 Technical，所有东西都塌到 Handstream 上。它们改用本站自己的谱型标签，所以一张同时标了大叠和技的谱面会同时支撑两个段位。LN 那边只有 7K 有细分，分成综合、技、反键和放键，因为分析器只对这几个 LN 子类型做出了有规模的区分。"
+
+#: src/routes/dan-estimates.tsx
+msgid "6K LN"
+msgstr "6K LN"
+
+#: src/routes/dan-estimates.tsx
+msgid "6K regular"
+msgstr "6K 单点"
+
+#: src/routes/dan-estimates.tsx
+msgid "6K regular and LN"
+msgstr "6K 单点和 LN"
 
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
@@ -1583,18 +1641,30 @@ msgstr "7天全球"
 msgid "7K"
 msgstr "7K"
 
+#: src/routes/dan-estimates.tsx
+msgid "7K LN"
+msgstr "7K LN"
+
+#: src/routes/dan-estimates.tsx
+msgid "7K regular"
+msgstr "7K 单点"
+
+#: src/routes/dan-estimates.tsx
+msgid "96%, or 95% in the Normal Kyu band below 1st dan"
+msgstr "96%，1 段以下的 Normal Kyu 区间是 95%"
+
 #. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
 #: src/routes/player/$username.tsx
 msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
 msgstr "+ 表示「至少」：osu! 最多只给出前 200 个最佳成绩，低于 {0}pp 的成绩拿不到，该键数只统计到能看到的部分。"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
-#~ msgstr "通过是指在 1.0x 或 DT 下、准确率 {minAccuracyPercent}%+ 的成绩，且谱面已被分析器评定段位。低于满准确率的通过会获得打折后的等级，估算取第 {quorum} 高的计入通过，因此单个异常成绩永远无法决定它。"
+#: src/routes/dan-estimates.tsx
+msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
+msgstr "长条占到 45% 或以上的谱面算 LN 谱面，低于这个比例就算单点谱面。这和谱面页面给谱面打标签用的是同一条线，所以一张谱面不可能一边喂你的 LN 评分，一边挂着单点的标签。"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "A clear is a {minAccuracyPercent}%+ accuracy pass with almost no misses, at 1.0x or DT, on a chart the analyzer gave a dan rating. Passes below full accuracy earn a discounted level, and the estimate is the {quorum}th best credited clear, so a single outlier can never set it."
-#~ msgstr "达标通过指以 1.0x 或 DT、准确率 {minAccuracyPercent}% 以上且几乎无 miss 通过一张被分析器评定段位的谱面。准确率未达满额的通过会按折扣计入，估算取第 {quorum} 好的计入成绩，因此单个离群成绩不会左右它。"
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "A collection needs at least {USER_COLLECTION_MIN_ITEMS} maps"
+msgstr "一个收藏册至少要有 {USER_COLLECTION_MIN_ITEMS} 张谱面"
 
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "a collector"
@@ -1603,6 +1673,10 @@ msgstr "一位收藏者"
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "A customizable picture for your osu! profile that keeps itself updated."
 msgstr "一张可以自定义的图片，放在你的 osu! 个人资料里，还会自己更新。"
+
+#: src/routes/dan-estimates.tsx
+msgid "A dan course is a fixed set of charts, played back to back in one sitting, with an accuracy bar you have to finish above. Clearing the course awards you that level. Each keymode has its own community ladder, run by different people: 4K regular uses DDMythical's Reform courses, 4K LN uses the _Underjoy courses, 7K uses the JinJin courses, and 6K has two of its own, Arkman's ladder on the regular side and sunnyxxy's on the LN side."
+msgstr "一个段位课题是一组固定的谱面，一口气连着打完，最后准确率要高于一条线。通过课题就拿到那个段位。每种键数都有自己的社区段位表，各由不同的人维护：4K 单点用 DDMythical 的 Reform 段位表，4K LN 用 _Underjoy 的段位表，7K 用 JinJin 的段位表，6K 自己有两套，单点这边是 Arkman 的，LN 这边是 sunnyxxy 的。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
@@ -1630,6 +1704,10 @@ msgstr "从补充包中抽到的 maniacard。打开你自己的卡包，建立�
 msgid "a map"
 msgstr "某张谱面"
 
+#: src/routes/dan-estimates.tsx
+msgid "A quick reminder of what a dan is"
+msgstr "先说清楚段位是什么"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB."
 msgstr "有一张截图无法读取为 4 MB 以内的 PNG、JPEG 或 WebP。"
@@ -1650,6 +1728,7 @@ msgstr "狙击是指同一国家/地区的玩家在某个排行榜上反超另�
 msgid "a while"
 msgstr "一段时间"
 
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/packs/album/AlbumView.tsx
 msgid "A-Z"
 msgstr "A-Z"
@@ -1695,6 +1774,10 @@ msgstr "准确率"
 #: src/routes/snipes.tsx
 msgid "Accuracy <0>{0}</0>"
 msgstr "准确率 <0>{0}</0>"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Accuracy this clear was judged on, in the ladder's own scoring"
+msgstr "这次通过所依据的准确率，按该段位表自己的计分方式计算"
 
 #. placeholder {0}: formatDate(peakRankDate)
 #: src/routes/player/$username.tsx
@@ -1758,6 +1841,11 @@ msgstr "把一张卡片加入展示柜"
 msgid "Add a screenshot"
 msgstr "添加截图"
 
+#. placeholder {0}: diffs.length
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Add all {0}"
+msgstr "全部添加（{0}）"
+
 #: src/routes/report.tsx
 msgid "Add an image"
 msgstr "添加图片"
@@ -1770,9 +1858,17 @@ msgstr "继续添加"
 msgid "Add area"
 msgstr "添加区域"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Add at least {USER_COLLECTION_MIN_ITEMS} maps before posting."
+msgstr "发布前请至少添加 {USER_COLLECTION_MIN_ITEMS} 张谱面。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Add color"
 msgstr "添加颜色"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Add every difficulty of this mapset"
+msgstr "添加这个谱面集的所有难度"
 
 #: src/routes/player/$username.tsx
 msgid "Add failed or otherwise missed plays from osu!'s latest recent history."
@@ -1781,6 +1877,10 @@ msgstr "从 osu! 最近成绩里补上失败或漏掉的记录。"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Add link…"
 msgstr "添加链接…"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Add maps"
+msgstr "添加谱面"
 
 #: src/routes/report.tsx
 msgid "Add more details"
@@ -1863,6 +1963,7 @@ msgid "All clears"
 msgstr "全部通过"
 
 #: src/components/maps/MapCollectionsSection.tsx
+#: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "All collections"
 msgstr "全部收藏册"
@@ -1873,6 +1974,10 @@ msgstr "全部 Discord 服务器"
 
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "all keymodes"
+msgstr "全部键数"
+
+#: src/routes/player/$username.tsx
+msgid "All keymodes"
 msgstr "全部键数"
 
 #: src/components/me/MyDataPanel.tsx
@@ -1911,6 +2016,10 @@ msgstr "快好了{elapsedLabel}"
 #: src/components/packs/GoatPoll.tsx
 msgid "already a GOAT"
 msgstr "已经是 GOAT"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Already in the collection"
+msgstr "已经在收藏册里了"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "Already on the board."
@@ -1970,15 +2079,6 @@ msgstr "还有 {0} 位"
 msgid "and {0} more below these"
 msgstr "此外还有 {0} 次排在这些之后"
 
-#. placeholder {0}: evidence.totalClears - evidence.clears.length
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "and {0} more qualifying clears below these"
-#~ msgstr "此外还有 {0} 次达标通过排在这些之后"
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "and {hidden} more below these"
-#~ msgstr "此外还有 {hidden} 次排在这些之后"
-
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/farm-helper.tsx
@@ -1988,6 +2088,7 @@ msgstr "不限"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/maps/RangeSlider.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
@@ -2118,6 +2219,14 @@ msgstr "未锁定宽高比"
 msgid "Assets"
 msgstr "素材"
 
+#: src/routes/dan-estimates.tsx
+msgid "At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan and 5,504 for an LN dan. This is where the 4K regular estimates landed:"
+msgstr "写这篇文章的时候，本站有 14,229 名 4K 玩家、4,035 名 7K 玩家和 2,824 名 6K 玩家的技能评分。4K 玩家里，12,800 人的达标通过数够算一个单点段位，5,504 人够算一个 LN 段位。4K 单点的估算是这样分布的："
+
+#: src/routes/dan-estimates.tsx
+msgid "At the time of writing there were around 138,000 charts with a dan estimate: about 97,000 4K regular, 22,000 7K regular, 8,500 4K LN, 7,500 7K LN and 3,000 6K regular."
+msgstr "写这篇文章的时候，大约有 138,000 张谱面有段位估算：4K 单点约 97,000 张，7K 单点约 22,000 张，4K LN 约 8,500 张，7K LN 约 7,500 张，6K 单点约 3,000 张。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/bbcode.tsx
@@ -2140,6 +2249,10 @@ msgstr "授权。机器人需要发送消息和嵌入链接的权限。"
 #: src/lib/signature-style.ts
 msgid "Auto"
 msgstr "自动"
+
+#: src/components/maps/MapCollectionsSection.tsx
+msgid "Auto packs"
+msgstr "自动谱包"
 
 #: src/components/ui/Avatar.tsx
 msgid "avatar"
@@ -2332,10 +2445,6 @@ msgstr "{countryName} 玩过的谱面"
 msgid "Below the credit that sets the estimate"
 msgstr "低于决定估算的计入段位"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Below the credit that sets the estimate · view map details"
-#~ msgstr "低于决定估算的计入线 · 查看谱面详情"
-
 #: src/components/me/GoalsPanel.tsx
 msgid "best"
 msgstr "最佳"
@@ -2365,21 +2474,17 @@ msgid "BG Dim"
 msgstr "背景变暗"
 
 #: src/components/me/GoalsPanel.tsx
-#~ msgid "big"
-#~ msgstr "大"
-
-#: src/components/me/GoalsPanel.tsx
 msgid "Big play"
 msgstr "大分"
+
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Biggest"
+msgstr "谱面最多"
 
 #. placeholder {0}: formatGainWithUnit(biggest, unit)
 #: src/routes/farm-helper.tsx
 msgid "biggest {0}"
 msgstr "最大 {0}"
-
-#: src/components/packs/collections/RecordBoards.tsx
-#~ msgid "biggest collections"
-#~ msgstr "最大的收藏册"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Biggest day"
@@ -2480,6 +2585,10 @@ msgstr "浏览全部"
 msgid "Browse and download osu!mania skins with previews rendered from each skin's own notes, or publish a skin from an .osk file."
 msgstr "浏览并下载 osu!mania 皮肤，预览用皮肤自己的音符渲染，也可以用 .osk 文件发布皮肤。"
 
+#: src/routes/collections_.$id.tsx
+msgid "Browse collections"
+msgstr "浏览收藏册"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Browse every image and sound this skin ships, without downloading it."
 msgstr "无需下载即可浏览这个皮肤自带的每一张图片和每一个音效。"
@@ -2536,14 +2645,11 @@ msgstr "由 <0>{0}</0> 上传"
 msgid "By Player"
 msgstr "按玩家"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "By skillset"
-#~ msgstr "按技能组"
-
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "Calculating skills..."
 msgstr "正在计算技能…"
 
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
@@ -2660,6 +2766,14 @@ msgstr "修改键数标签失败。请重试。"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing who can see this skin failed. Try again."
 msgstr "修改皮肤可见范围失败。请重试。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Chart"
+msgstr "谱面"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "chart dan"
+msgstr "谱面段位"
 
 #: src/routes/replay.tsx
 msgid "Chart loaded. Fetching the replay."
@@ -2858,10 +2972,6 @@ msgstr "完成于 {date} · {pp}pp"
 msgid "cleared {date} · #{rank}"
 msgstr "完成于 {date} · 第 {rank} 名"
 
-#: src/components/rankings/DanLeaderboardBoard.tsx
-#~ msgid "Clears"
-#~ msgstr "通过次数"
-
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
 msgstr "点击音效即可试听。每个音符会播放谱面指定的采样，所以这些音效在回放里都能听到。"
@@ -2882,6 +2992,15 @@ msgstr "再点一次以放弃修改"
 msgid "Click an image first. Imagemap turns that image into clickable areas."
 msgstr "请先点击一张图片。Imagemap 会把这张图片变成可点击的区域。"
 
+#: src/components/player/DanEvidenceModal.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "Click here to read how dans are estimated"
+msgstr "点击这里了解段位是如何估算的"
+
+#: src/routes/dan-estimates.tsx
+msgid "Click to group the numbered levels"
+msgstr "点击收起数字段位"
+
 #: src/components/maps/FilterChips.tsx
 #: src/components/maps/PatternPicker.tsx
 msgid "Click to include, right-click to exclude"
@@ -2890,6 +3009,10 @@ msgstr "左键包含，右键排除"
 #: src/components/ui/Pagination.tsx
 msgid "Click to jump to page"
 msgstr "点击跳转到指定页"
+
+#: src/routes/dan-estimates.tsx
+msgid "Click to open the numbered levels"
+msgstr "点击展开数字段位"
 
 #: src/routes/player/$username.tsx
 msgid "Click to require {label}"
@@ -2920,6 +3043,7 @@ msgstr "客户端"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -2990,10 +3114,6 @@ msgstr "已结束"
 msgid "Closed"
 msgstr "不开放"
 
-#: src/components/packs/collections/RecordBoards.tsx
-#~ msgid "closest to every pullable player"
-#~ msgstr "最接近集齐所有可抽玩家"
-
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Code block"
@@ -3017,6 +3137,7 @@ msgid "collecting the longest"
 msgstr "收集时间最长"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/routes/collections_.$id.tsx
 msgid "Collection"
 msgstr "收藏册"
 
@@ -3038,6 +3159,7 @@ msgid "Collections are being rebuilt. Check back in a few minutes."
 msgstr "收藏册正在重建，过几分钟再来看看。"
 
 #: src/components/maps/MapCollectionsSection.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 msgid "Collections are unavailable right now. Try again in a bit."
 msgstr "收藏册暂时不可用，请稍后再试。"
 
@@ -3117,6 +3239,10 @@ msgstr "每个标签后面加逗号。最多 {COMMUNITY_MAX_TAGS} 个，它们�
 msgid "common pick"
 msgstr "常见选择"
 
+#: src/components/maps/MapCollectionsSection.tsx
+msgid "Community"
+msgstr "社区"
+
 #: src/components/communities/field-options.tsx
 msgid "Community server"
 msgstr "社区服务器"
@@ -3157,6 +3283,7 @@ msgstr "用 Discord 继续"
 msgid "Convert hits to notes"
 msgstr "把打击转成音符"
 
+#: src/components/maps/UserCollectionDetail.tsx
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
@@ -3330,6 +3457,10 @@ msgstr "无法解码这张图片。"
 msgid "Couldn't delete that upload; try again."
 msgstr "无法删除这个上传，请重试。"
 
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "Couldn't delete this collection."
+msgstr "无法删除这个收藏册。"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Couldn't export the image."
 msgstr "无法导出图片。"
@@ -3499,6 +3630,10 @@ msgstr "目标保存失败，请稍后再试。"
 msgid "Couldn't save that. Try again in a moment."
 msgstr "保存失败。请稍后再试。"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Couldn't save the collection."
+msgstr "无法保存这个收藏册。"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Couldn't save. Try again."
 msgstr "保存失败，请重试。"
@@ -3544,9 +3679,9 @@ msgstr "国家/地区(或全球)排行榜，按 pp 排列的顶尖玩家。"
 msgid "Country mania rankings"
 msgstr "国家/地区 mania 排行榜"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Counts passes with {minAccuracyPercent}%+ accuracy on rated charts, at 1.0x or DT. Low accuracy counts for a bit less than the chart's dan. The estimate is your {quorum}th best pass, so one lucky score won't change it."
-#~ msgstr ""
+#: src/routes/dan-estimates.tsx
+msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so the site cannot look yours up. It can only look at your plays."
+msgstr "课题谱面都没有上架，通过与否由维护那张段位表的人来认定。这些都不会以段位的形式从 osu! API 回来，所以本站查不到你的段位，只能看你打过的成绩。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Create"
@@ -3556,15 +3691,6 @@ msgstr "创建"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Created {0}"
 msgstr "已创建 {0}"
-
-#. placeholder {0}: clear.creditedDan.toFixed(2)
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "credit {0}"
-#~ msgstr "计入 {0}"
-
-#: src/components/player/DanEvidenceModal.tsx
-msgid "credited dan"
-msgstr "计入段位"
 
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
@@ -3679,10 +3805,6 @@ msgstr "段位(估算)"
 msgid "Dan course"
 msgstr "段位类型"
 
-#: src/components/player/DanEvidenceModal.tsx
-msgid "Dan credit this clear earned after the accuracy discount"
-msgstr "这次通过在准确率折扣后计入的段位"
-
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "dan est."
@@ -3728,6 +3850,10 @@ msgstr "深色"
 msgid "Darkens the beatmap background so notes stay readable."
 msgstr "调暗谱面背景，让音符更清晰。"
 
+#: src/routes/dan-estimates.tsx
+msgid "DDMythical's Reform dan courses, stable accuracy"
+msgstr "DDMythical 的 Reform 段位课题，stable 准确率"
+
 #: src/components/communities/field-options.tsx
 msgid "Dead server, or the invite does not work"
 msgstr "服务器已废弃，或邀请链接失效"
@@ -3760,6 +3886,7 @@ msgstr "默认音量"
 msgid "Delay"
 msgstr "延迟"
 
+#: src/components/maps/UserCollectionDetail.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete"
@@ -3824,10 +3951,7 @@ msgstr "降序"
 msgid "Descending"
 msgstr "降序"
 
-#: src/routes/report.tsx
-#~ msgid "Describe the problem and how to reproduce it."
-#~ msgstr "请描述问题以及如何复现。"
-
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Description <0>(optional)</0>"
 msgstr "简介 <0>(可选)</0>"
@@ -4099,10 +4223,6 @@ msgstr "动态渲染图"
 msgid "Dynamic Renders"
 msgstr "动态渲染"
 
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "Each keymode is rated on its own scale. A lower number in one keymode doesn't mean you're worse at it."
-#~ msgstr "每个键数都有自己的评分标准。某个键数的数值更低，并不代表你在这个键数上更差。"
-
 #: src/routes/player/$username.tsx
 msgid "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
 msgstr "每个键数按自己的成绩加权，与 osu! 统计 4K 和 7K 的方式一致"
@@ -4131,6 +4251,7 @@ msgstr "在 {mapSlot} 上拿到 <0/>（<1/>）"
 msgid "easy"
 msgstr "易"
 
+#: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/communities_.$id.tsx
 msgid "Edit"
@@ -4140,6 +4261,14 @@ msgstr "编辑"
 #: src/components/communities/CommunityCard.tsx
 msgid "Edit {0}"
 msgstr "编辑 {0}"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "edit collection"
+msgstr "编辑收藏册"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Edit collection"
+msgstr "编辑收藏册"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Edit goal"
@@ -4227,6 +4356,10 @@ msgstr "错误"
 msgid "Estimate a chart's dan level, with its dan emblem."
 msgstr "估算谱面的段位等级，并附上段位徽章。"
 
+#: src/routes/dan-estimates.tsx
+msgid "Estimated dan"
+msgstr "段位估算"
+
 #: src/routes/farm-helper.tsx
 msgid "estimated gain"
 msgstr "预计收益"
@@ -4255,10 +4388,6 @@ msgstr "每张卡都碎成了两半"
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "every collector"
 msgstr "全部收藏者"
-
-#: src/components/packs/CollectionPanel.tsx
-#~ msgid "Every extra copy leaves the collection. You keep one of each card."
-#~ msgstr "多余的副本都会离开收藏册，每张卡片保留一张。"
 
 #: src/routes/farm-helper.tsx
 msgid "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
@@ -4297,6 +4426,7 @@ msgid "Every tracked player, same odds"
 msgstr "所有已追踪玩家，概率相同"
 
 #: src/components/communities/AccessScopePicker.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Everyone"
 msgstr "所有人"
@@ -4716,9 +4846,9 @@ msgstr "被找到 {0} 次"
 msgid "Found something broken? Describe what happened."
 msgstr "发现了什么问题？请描述一下发生了什么。"
 
-#: src/routes/report.tsx
-#~ msgid "Found something broken? Let me know what happened."
-#~ msgstr "发现哪里出问题了？告诉我发生了什么。"
+#: src/routes/dan-estimates.tsx
+msgid "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
+msgstr "四这个数字对应的是一个真实课题的长度。某一侧的达标通过不到四次，就干脆不给估算，而不是给一个站不住的。如果你第四好的通过正好落在段位表的最顶端，标记会从「~」变成「>」，读作<0>高于</0>那个段位，而不是把你钉在上面，因为段位表已经没有更高的级别来衡量你了。"
 
 #: src/routes/packs.tsx
 msgid "free"
@@ -4816,6 +4946,10 @@ msgstr "获取我的链接"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Getting the map out of osu!"
 msgstr "从 osu! 里把谱面导出"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Give the collection a title."
+msgstr "给收藏册起个标题。"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "global"
@@ -5051,10 +5185,6 @@ msgstr "隐藏玩家"
 msgid "Hide the {0} clears"
 msgstr "隐藏 {0} 的通过记录"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Hide the {label} clears"
-#~ msgstr "隐藏 {label} 的通过记录"
-
 #: src/routes/player/$username.tsx
 msgid "Hiding {label}"
 msgstr "隐藏 {label}"
@@ -5136,6 +5266,14 @@ msgstr "按住 <0>C</0> 并移动光标即可画出烟雾，就像在 osu! 游�
 msgid "Hold and drag across the dotted line"
 msgstr "按住并沿虚线拖动"
 
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "hold to delete"
+msgstr "长按删除"
+
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "Hold to delete this collection"
+msgstr "长按以删除这个收藏册"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "hold to recycle"
 msgstr "长按回收"
@@ -5162,6 +5300,10 @@ msgstr "荣誉名单"
 msgid "How card rating is calculated"
 msgstr "卡片评分是怎么算的"
 
+#: src/routes/dan-estimates.tsx
+msgid "How dan levels are estimated"
+msgstr "段位等级是如何估算的"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "How far the colored glow reaches around the cursor core."
 msgstr "彩色光晕从光标中心向外延伸的范围。"
@@ -5173,6 +5315,10 @@ msgstr "建议的译法"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "How it will look"
 msgstr "实际效果"
+
+#: src/routes/dan-estimates.tsx
+msgid "How Mania Tracker gives every osu!mania chart a dan level, and how it reads a player's dan off the charts they have passed."
+msgstr "Mania Tracker 如何为每张 osu!mania 谱面给出段位等级，以及如何根据玩家通过的谱面推算其段位。"
 
 #: src/routes/farm-helper.tsx
 msgid "how many players near you farm it"
@@ -5411,10 +5557,6 @@ msgstr "邀请链接"
 msgid "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 msgstr "{hidden} 最早的最佳成绩比 {shown} 更早还是更晚？"
 
-#: src/routes/report.tsx
-#~ msgid "It is on the list below, and a reply shows up there too."
-#~ msgstr "已经在下面的列表里了，回复也会显示在那里。"
-
 #: src/routes/skins_.$id.tsx
 msgid "It may have been removed by its uploader."
 msgstr "可能已被上传者删除。"
@@ -5422,10 +5564,6 @@ msgstr "可能已被上传者删除。"
 #: src/routes/communities_.$id.tsx
 msgid "It may have been taken down, or it is still waiting for approval."
 msgstr "它可能已被下架，或者还在等待审核。"
-
-#: src/routes/report.tsx
-#~ msgid "It went straight to the owner. Nothing else to do."
-#~ msgstr "已经直接送到站长那里了，你不用再做别的。"
 
 #: src/components/communities/field-options.tsx
 msgid "Italian"
@@ -5457,6 +5595,18 @@ msgstr "叠键速度"
 #: src/components/communities/field-options.tsx
 msgid "Japanese"
 msgstr "日语"
+
+#: src/routes/dan-estimates.tsx
+msgid "JinJin dan courses"
+msgstr "JinJin 的段位课题"
+
+#: src/routes/dan-estimates.tsx
+msgid "JinJin LN dan courses"
+msgstr "JinJin 的 LN 段位课题"
+
+#: src/routes/dan-estimates.tsx
+msgid "JinJin's numbers, reused for 6K"
+msgstr "JinJin 的数值，6K 沿用"
 
 #: src/components/communities/CommunityCard.tsx
 msgid "Join"
@@ -5516,6 +5666,10 @@ msgstr "跳转到某一页"
 msgid "Jumpstream"
 msgstr "双押切"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "jumpstream, warmup, ..."
+msgstr "jumpstream、热手、……"
+
 #: src/lib/format.ts
 msgid "just now"
 msgstr "刚刚"
@@ -5566,6 +5720,7 @@ msgid "Key Split"
 msgstr "键数分布"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/dan-estimates.tsx
 msgid "Keymode"
 msgstr "键数"
 
@@ -5621,6 +5776,10 @@ msgstr "标记为 {0}K+1"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Label as a plain {keys}K layout"
 msgstr "标记为普通 {keys}K 布局"
+
+#: src/routes/dan-estimates.tsx
+msgid "Ladder"
+msgstr "段位表"
 
 #: src/lib/goal-format.ts
 msgid "Land a {pp}pp play"
@@ -5784,6 +5943,15 @@ msgstr "浅色"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Light"
 msgstr "灯光"
+
+#: src/components/maps/UserCollectionDetail.tsx
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Like this collection"
+msgstr "喜欢这个收藏册"
+
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Liked"
+msgstr "已喜欢"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "lime"
@@ -6002,6 +6170,7 @@ msgid "Loading collection..."
 msgstr "正在加载收藏册…"
 
 #: src/components/maps/MapCollectionsSection.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 msgid "Loading collections..."
 msgstr "正在加载收藏册…"
 
@@ -6303,9 +6472,17 @@ msgstr "谱面"
 msgid "map #{0}"
 msgstr "谱面 #{0}"
 
+#: src/routes/collections_.$id.tsx
+msgid "Map collection"
+msgstr "谱面收藏册"
+
 #: src/routes/maps.tsx
 msgid "Map collections"
 msgstr "谱面收藏夹"
+
+#: src/routes/collections_.$id.tsx
+msgid "Map collections built by osu!mania players."
+msgstr "由 osu!mania 玩家自己做的谱面收藏册。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Map completion percentage."
@@ -6343,6 +6520,7 @@ msgstr "谱师 {0} · {1} 次游玩"
 msgid "maps"
 msgstr "谱面"
 
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/routes/player/$username.tsx
 msgid "Maps"
 msgstr "谱面"
@@ -6392,10 +6570,6 @@ msgstr "已标记太易"
 msgid "marked hard"
 msgstr "已标记太难"
 
-#: src/routes/farm-helper.tsx
-#~ msgid "marked maxed"
-#~ msgstr "已标记打满"
-
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Matching against the replay's checksum."
 msgstr "正在与回放的校验值比对。"
@@ -6411,10 +6585,6 @@ msgstr "MAX"
 #: src/routes/maps.tsx
 msgid "Max PP"
 msgstr "最高 PP"
-
-#: src/routes/farm-helper.tsx
-#~ msgid "maxed"
-#~ msgstr "已打满"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
@@ -6460,6 +6630,10 @@ msgstr "中间轨道拇指"
 #: src/routes/maps.tsx
 msgid "Min PP"
 msgstr "最低 PP"
+
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Mine"
+msgstr "我的"
 
 #: src/routes/maps.tsx
 msgid "Minimum PP"
@@ -6602,6 +6776,10 @@ msgstr "全球刷分最多"
 msgid "Most farmed in {countryName}"
 msgstr "{countryName} 刷分最多"
 
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Most liked"
+msgstr "最多喜欢"
+
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most packs opened"
 msgstr "开包最多"
@@ -6630,12 +6808,21 @@ msgstr "最多不重复卡牌"
 msgid "Most Used Mod"
 msgstr "最常用 Mod"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Move down"
+msgstr "下移"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Move up"
+msgstr "上移"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "msd"
 msgstr "msd"
 
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/MapDetailModal.tsx
+#: src/routes/rankings.tsx
 msgid "MSD"
 msgstr "MSD"
 
@@ -6712,14 +6899,6 @@ msgstr "附近玩家的分数比你高"
 msgid "needs {quorum}"
 msgstr "需要 {quorum} 次"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "needs {quorum} clears"
-#~ msgstr "需要 {quorum} 次通过"
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "needs {quorum} clears for an estimate"
-#~ msgstr "需要 {quorum} 次通过才能估算"
-
 #: src/components/packs/GoatPoll.tsx
 msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "需要一个指向其 osu! 主页的 web.archive.org 链接。"
@@ -6736,6 +6915,15 @@ msgstr "新"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "New"
 msgstr "新建"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "new collection"
+msgstr "新建收藏册"
+
+#: src/components/maps/UserCollectionEditor.tsx
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "New collection"
+msgstr "新建收藏册"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
@@ -6771,6 +6959,7 @@ msgid "newest"
 msgstr "最新"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/CollectionPanel.tsx
 msgid "Newest"
@@ -6784,6 +6973,7 @@ msgstr "从新到旧"
 msgid "Newest Top Play"
 msgstr "最新的最佳成绩"
 
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/packs/collections/CollectorDirectory.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -6918,6 +7108,10 @@ msgstr "还没有卡片。开一个卡包，开始你的收藏册。"
 #: src/routes/rankings.tsx
 msgid "No change in the last 7 days"
 msgstr "最近 7 天无变化"
+
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "No collections here yet. Post the first one."
+msgstr "这里还没有收藏册，来发布第一个吧。"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
@@ -7401,6 +7595,10 @@ msgstr "没有叫这个名字的。"
 msgid "Nothing here would move your total"
 msgstr "这里没有能提升你总 pp 的谱面"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Nothing in here yet"
+msgstr "这里还什么都没有"
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nothing in the loaded plays matches \"{trimmedQuery}\"."
 msgstr "已加载的成绩里没有符合「{trimmedQuery}」的。"
@@ -7414,9 +7612,17 @@ msgstr "在你确认并提交之前不会发布任何内容，提交之后授权
 msgid "Nothing listed for {0} yet."
 msgstr "{0} 还没有任何条目。"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Nothing matched that"
+msgstr "没有匹配的结果"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Nothing missing. Every player in the pool is in your collection."
 msgstr "没有缺失。卡池里的每位玩家都在你的收藏册里。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Nothing on this site is a real dan clear. Nobody here has been checked against a dan course. What the site does instead is give every chart a dan level of its own, look at the charts you have already passed, and read a level off them. That is why every dan on the site is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
+msgstr "本站上的任何东西都不是真正的段位通过。这里没有人是按段位课题认定过的。本站做的是另一件事：给每一张谱面自己评一个段位，再看你已经通过的那些谱面，从中读出一个段位。这就是为什么站内每个段位前面都写着「~」，也是为什么排行榜只把自己称作一个大致的排序。"
 
 #: src/routes/farm-helper.tsx
 msgid "Nothing qualifies under this filter at the moment, but other reasons still have maps."
@@ -7557,9 +7763,17 @@ msgstr "出现在 /skins，任何人都可以下载"
 msgid "On /skins, anyone can download the .osk."
 msgstr "出现在 /skins，任何人都可以下载 .osk。"
 
+#: src/routes/dan-estimates.tsx
+msgid "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
+msgstr "4K 这边的分项来自成绩本身的 MSD 技能项评分，按谱面上最强的那一项归类：叠(JackSpeed 和 Chordjack)、技(Technical 和 Jumpstream)、速度(Stream)、耐力(Handstream 和 Stamina)。把 Jumpstream 放进技是有意为之。MinaCalc 的 Jumpstream 在密集对拍上会飙得很高，而那种谱面打起来更像技而不是速度，所以一旦把它和 Stream 归在一起，Blastix Riotz [GRAVITY] 这类谱面就会被贴到速度那一格。拿一个装了 25 张真正 gamma 速度谱的谱包来验证，只用 Stream 能把这 25 张全部选中，并且以很大的差距把对拍谱排除掉。"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "on a map"
 msgstr "单图"
+
+#: src/routes/dan-estimates.tsx
+msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
+msgstr "一个段位的跨度很大，所以每个段位又分成五档。一张谱面可以是 7--、7-、7、7+ 或 7++，从 7 段最简单的一端排到最难的一端。这些后缀只是段位内部的排序，没有别的意思。"
 
 #: src/routes/communities_.$id.tsx
 msgid "online"
@@ -7572,26 +7786,6 @@ msgstr "在线"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
 msgstr "仅自己"
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Only passes at {minAccuracyPercent}%+ accuracy count, played at 1.0x or DT on a chart the analyzer rated. Each clear is credited a dan at or below the chart's own, depending on how clean the pass was, and the estimate needs {quorum} clears at a level to read it, so one clear never sets it."
-#~ msgstr "只有在 1.0x 或 DT 下、准确率 {minAccuracyPercent}%+ 且谱面已被分析器评定段位的成绩才计入。每个通过按打得多干净，计入不高于谱面本身的段位；估算需要在某个段位上有 {quorum} 个通过才会读到它，所以单个通过永远无法决定它。"
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Only passes with {minAccuracyPercent}% accuracy or better count, at 1.0x speed or DT, on a chart the analyzer has rated. Each pass is worth the chart's dan, or a bit less if the accuracy is low. You need {quorum} of them at a level before the estimate shows that level, so one score never decides it."
-#~ msgstr "只有准确率达到 {minAccuracyPercent}% 或以上、在 1.0x 或 DT 下、且谱面已被分析器评定过的成绩才计入。每次通过算作该谱面的段位，准确率偏低则略低一些。某个段位需要 {quorum} 次这样的通过，估算才会显示该段位，所以单个成绩永远不会决定它。"
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. Lower accuracy gives less credit. Your dan is the {quorum}th highest of those passes."
-#~ msgstr "只有在 1.0x 或 DT 下、准确率 {minAccuracyPercent}%+、且谱面有段位评级的成绩才计入。准确率越低，给的段位越少。你的段位是这些成绩里第 {quorum} 高的那个。"
-
-#: src/components/player/DanEvidenceModal.tsx
-msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. Lower accuracy gives less credit. Your dan is the level of your {quorum}th best pass, so you need {quorum} passes at a level to reach it."
-msgstr "只有在 1.0x 或 DT 下、准确率 {minAccuracyPercent}%+、且谱面有段位评级的成绩才计入。准确率越低，给的段位越少。你的段位是第 {quorum} 好的那次通过的等级，所以要达到某个段位需要 {quorum} 次该等级的通过。"
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Only passes with {minAccuracyPercent}%+ accuracy count, at 1.0x or DT, on charts that have a dan rating. The lower the accuracy, the less a pass counts. Your dan is your {quorum}th best pass, not your best one."
-#~ msgstr "只有在 1.0x 或 DT 下、准确率 {minAccuracyPercent}%+、且谱面有段位评级的成绩才计入。准确率越低，这次通过算得越少。你的段位取第 {quorum} 好的通过，而不是最好的那次。"
 
 #: src/components/communities/CommunityCard.tsx
 msgid "Only people from here can join"
@@ -7733,6 +7927,10 @@ msgstr "开放给"
 msgid "Open your own packs"
 msgstr "开你自己的卡包"
 
+#: src/routes/dan-estimates.tsx
+msgid "Opening a dan badge on a player's Skills tab shows the same estimate run again over slices of the same passes. Your jack dan is the level your jack passes demonstrate, under exactly the same rules and the same count of four."
+msgstr "在玩家页的技能标签里点开一个段位标记，看到的是同一套估算在同一批通过的各个分项上再跑一遍。你的叠段位就是你的叠类通过所能证明的水平，规则完全一样，同样要凑够四次。"
+
 #: src/routes/replay.tsx
 msgid "Opening shared replay{elapsedLabel}"
 msgstr "正在打开分享的回放{elapsedLabel}"
@@ -7836,6 +8034,7 @@ msgid "other"
 msgstr "其他"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Other"
@@ -7845,6 +8044,10 @@ msgstr "其他"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "out of {0}"
 msgstr "共 {0} 人"
+
+#: src/routes/dan-estimates.tsx
+msgid "Out of that pool, a play counts as a clear if it passed at or above the accuracy the real course asks for. Each ladder sets its own bar, so the site uses each ladder's:"
+msgstr "在这个池子里，一个成绩要达到或超过真实课题要求的准确率才算通过。每张段位表自己定这条线，所以本站按各自的来："
 
 #: src/components/packs/StreakGame.tsx
 msgid "Out of time."
@@ -7902,6 +8105,12 @@ msgid "packs opened"
 msgstr "已开卡包"
 
 #. placeholder {0}: page + 1
+#. placeholder {1}: lastPage + 1
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Page {0} of {1}"
+msgstr "第 {0} 页，共 {1} 页"
+
+#. placeholder {0}: page + 1
 #: src/components/ui/Pagination.tsx
 msgid "Page {0} of {totalPages}"
 msgstr "第 {0} / {totalPages} 页"
@@ -7934,6 +8143,10 @@ msgstr "通关 <0/>"
 #: src/components/me/GoalsPanel.tsx
 msgid "Pass <0/> on {mapSlot}"
 msgstr "在 {mapSlot} 上通关 <0/>"
+
+#: src/routes/dan-estimates.tsx
+msgid "Pass bar"
+msgstr "通过线"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste"
@@ -8292,6 +8505,10 @@ msgstr "葡萄牙语"
 msgid "Post a Discord server"
 msgstr "发布 Discord 服务器"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Post collection"
+msgstr "发布收藏册"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Post your Discord server"
 msgstr "发布你的 Discord 服务器"
@@ -8419,6 +8636,7 @@ msgstr "预览图"
 msgid "Previews uploaded."
 msgstr "预览图已上传。"
 
+#: src/components/maps/UserCollectionsSection.tsx
 #: src/components/packs/collections/CollectorDirectory.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -8674,6 +8892,10 @@ msgstr "稀有度"
 msgid "Rate"
 msgstr "速率"
 
+#: src/routes/dan-estimates.tsx
+msgid "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x) and at <2/> or <3/> (0.75x) are all credited against the chart's dan at that exact rate, which the site rates separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. Custom lazer rates like 1.15x do not count toward your dan. The site can rate a chart at any speed on demand, and the map page does exactly that when you open a play set at one, but only 0.75x, 1.0x and 1.5x are stored, and the dan only reads stored ones."
+msgstr "变速 Mod 算数，而且按谱面在那个速度下值多少来算。1.0x、<0/> 或 <1/>(1.5x)、<2/> 或 <3/>(0.75x) 下的通过，都会按谱面在那个速度下的段位计入，而这个段位是本站单独评的。Runengon [4K Hard] 在 1.0x 是 4 段谱面，在 <4/> 下大约是 9 段，所以一次 <5/> 的通过按 9 段计入，而不是 4 段。ANiMA [Starry's 4K Lv.15] 同理，从 3 段变到大约 7 段。降速则反过来：0.75x 的通过只值这张谱面在 0.75x 下的水平，远低于它原速的段位。lazer 的自定义倍速比如 1.15x 不会计入你的段位。本站可以按需给任意速度评一个段位，你打开一个自定义倍速的成绩时谱面页就是这么做的，但只有 0.75x、1.0x 和 1.5x 会存下来，而段位只读存下来的那些。"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 msgstr "评分依据最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
@@ -8873,15 +9095,6 @@ msgstr "回收重复 +{0}"
 msgid "Recycle duplicates +{recyclable}"
 msgstr "回收重复 +{recyclable}"
 
-#: src/components/packs/CollectionPanel.tsx
-#~ msgid "Recycle every duplicate?"
-#~ msgstr "回收所有重复卡？"
-
-#. placeholder {0}: recyclable.toLocaleString("en-US")
-#: src/components/packs/CollectionPanel.tsx
-#~ msgid "Recycle for {0} shards"
-#~ msgstr "回收换 {0} 碎片"
-
 #: src/components/packs/PackSummary.tsx
 msgid "Recycle the rest +{allValue}"
 msgstr "回收剩下的 +{allValue}"
@@ -8997,6 +9210,10 @@ msgstr "移除 {tag}"
 msgid "Remove color"
 msgstr "移除颜色"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Remove from the collection"
+msgstr "从收藏册中移除"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/report.tsx
 msgid "Remove image"
@@ -9015,6 +9232,10 @@ msgstr "移除收录"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Remove screenshot {0}"
 msgstr "移除截图 {0}"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Remove tag"
+msgstr "移除标签"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Remove this screenshot"
@@ -9160,10 +9381,6 @@ msgstr "再反馈一个问题"
 msgid "report this server"
 msgstr "举报这个服务器"
 
-#: src/routes/report.tsx
-#~ msgid "Reports work signed out. Sign in with osu! if you want to read the reply."
-#~ msgstr "未登录也能反馈。想看到回复，请用 osu! 登录。"
-
 #: src/routes/maps.tsx
 msgid "Reroll"
 msgstr "重抽"
@@ -9245,15 +9462,6 @@ msgstr "全部揭晓"
 msgid "Revealing the rest..."
 msgstr "正在揭晓剩下的…"
 
-#: src/components/me/DynamicRendersPanel.tsx
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "Rice"
-#~ msgstr "单点"
-
-#: src/lib/signature-shared.ts
-#~ msgid "Rice and LN"
-#~ msgstr "单点与长条"
-
 #: src/components/packs/StreakGame.tsx
 msgid "right"
 msgstr "答对"
@@ -9329,6 +9537,7 @@ msgstr "周六"
 msgid "Save"
 msgstr "保存"
 
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Save changes"
 msgstr "保存更改"
@@ -9419,6 +9628,10 @@ msgstr "对 {0} 说点什么"
 msgid "Say something to {name}"
 msgstr "对 {name} 说点什么"
 
+#: src/routes/dan-estimates.tsx
+msgid "Say your 4K regular passes at 96% or better land on charts rated:"
+msgstr "假设你 96% 以上的 4K 单点通过，落在这些段位的谱面上："
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Scale the image to fit"
 msgstr "缩放图片以适应"
@@ -9474,10 +9687,6 @@ msgstr "截图"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Screenshots"
 msgstr "截图"
-
-#: src/routes/report.tsx
-#~ msgid "Screenshots (optional)"
-#~ msgstr "截图（可选）"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll"
@@ -9541,6 +9750,10 @@ msgstr "搜索谱面…"
 msgid "Search by title, artist, mapper, or difficulty"
 msgstr "按标题、艺术家、谱师或难度搜索"
 
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Search collections"
+msgstr "搜索收藏册"
+
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Search countries"
@@ -9596,6 +9809,10 @@ msgstr "搜索谱面"
 msgid "search maps..."
 msgstr "搜索谱面…"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Search on the right, then tap a difficulty to drop it in. Three maps minimum"
+msgstr "在右侧搜索，点一个难度就能加进来。至少三张谱面"
+
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Search places"
 msgstr "搜索地区"
@@ -9631,6 +9848,10 @@ msgstr "搜索皮肤"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Search skins by name"
 msgstr "按名称搜索皮肤"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Search the whole mania catalog"
+msgstr "搜索整个 mania 谱面库"
 
 #: src/routes/maps.tsx
 msgid "Search title, artist, mapper, or difficulty"
@@ -9852,6 +10073,7 @@ msgid "shards"
 msgstr "碎片"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplayInfo.tsx
@@ -9920,6 +10142,11 @@ msgstr "再显示 {0} 个"
 msgid "Show {0} picks"
 msgstr "显示 {0} 个选项"
 
+#. placeholder {0}: bucket.keyCount
+#: src/routes/player/$username.tsx
+msgid "Show {0}K plays"
+msgstr "查看 {0}K 成绩"
+
 #: src/routes/report.tsx
 msgid "Show {hiddenCount} earlier updates"
 msgstr "显示之前的 {hiddenCount} 条更新"
@@ -9933,6 +10160,7 @@ msgstr "显示 {totalLabel} 个谱面"
 msgid "Show all {0}"
 msgstr "显示全部 {0} 个"
 
+#. placeholder {0}: play.title || t`score`
 #. placeholder {0}: score.beatmapset?.title || scoreFallbackLabel
 #: src/routes/player/$username.tsx
 msgid "Show details for {0}"
@@ -9984,10 +10212,6 @@ msgstr "显示技能提升谱面"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Show the {0} clears"
 msgstr "查看 {0} 的通过记录"
-
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "Show the {label} clears"
-#~ msgstr "查看 {label} 的通过记录"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Show the image at its real pixel size"
@@ -10050,6 +10274,15 @@ msgstr "并排对比"
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in and runs like that pay shards."
 msgstr "登录后，这样的连胜就能赚碎片。"
+
+#: src/components/maps/UserCollectionDetail.tsx
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "Sign in to like collections"
+msgstr "登录后才能喜欢收藏册"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Sign in to post a collection."
+msgstr "登录后才能发布收藏册。"
 
 #: src/routes/report.tsx
 msgid "Sign in to read replies"
@@ -10168,7 +10401,6 @@ msgid "skillboost only"
 msgstr "仅技能提升"
 
 #: src/routes/player/$username.tsx
-#: src/routes/rankings.tsx
 msgid "Skills"
 msgstr "技能"
 
@@ -10289,10 +10521,6 @@ msgstr "出错了"
 msgid "Something else"
 msgstr "其他问题"
 
-#: src/routes/report.tsx
-#~ msgid "Something on the site not working? Say what happened and it lands on the owner's desk."
-#~ msgstr "站点哪里出问题了？写下经过，会直接送到站长手里。"
-
 #: src/routes/farm-helper.tsx
 msgid "Something went wrong loading these maps. Try the toggle again in a moment."
 msgstr "加载这些谱面时出错。请稍后再切换一次。"
@@ -10308,6 +10536,10 @@ msgstr "出了点问题。"
 #: src/components/communities/field-options.tsx
 msgid "Something went wrong. Try again."
 msgstr "出错了。请重试。"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Song, artist or mapper"
+msgstr "歌曲、艺术家或谱师"
 
 #: src/routes/farm-helper.tsx
 msgid "sort"
@@ -10459,6 +10691,22 @@ msgstr "数据与最佳成绩"
 msgid "Status"
 msgstr "状态"
 
+#: src/routes/dan-estimates.tsx
+msgid "Step 1: every chart gets its own dan level"
+msgstr "第一步：每张谱面都有自己的段位"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 2: what makes a chart LN"
+msgstr "第二步：什么样的谱面算 LN"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 3: which of your plays count"
+msgstr "第三步：你的哪些成绩会被算进去"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 4: your dan is your 4th best pass"
+msgstr "第四步：你的段位是第四好的那次通过"
+
 #: src/routes/replay.tsx
 msgid "Still fetching the replay and chart."
 msgstr "仍在获取回放和谱面。"
@@ -10591,10 +10839,6 @@ msgid "sure? +{lastCopyValue}"
 msgstr "确定？+{lastCopyValue}"
 
 #: src/components/packs/CollectionPanel.tsx
-#~ msgid "Sure? every duplicate copy goes +{recyclable}"
-#~ msgstr "确定？所有重复卡都会被回收 +{recyclable}"
-
-#: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
 msgid "Sure? The card leaves the collection"
 msgstr "确定？这张卡片将离开收藏册"
@@ -10638,9 +10882,14 @@ msgstr "标签"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/communities/TagInput.tsx
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/routes/maps.tsx
 msgid "Tags"
 msgstr "标签"
+
+#: src/routes/dan-estimates.tsx
+msgid "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
+msgstr "把某个键数某一侧的所有达标通过拿出来，按谱面的段位排好，然后看第四个。那就是你的段位。上面不会再加任何东西，排在它之上的任何一次通过也拉不高它。"
 
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Take it down for good?"
@@ -10920,10 +11169,6 @@ msgstr "谱面分析器正在为你的最佳成绩评分。"
 msgid "The chart file isn't available, so only the replay will load."
 msgstr "谱面文件不可用，所以只会加载回放。"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "The clears behind it"
-#~ msgstr "背后的通过记录"
-
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The customized settings are too large to store"
 msgstr "自定义设置太大，无法保存"
@@ -10940,6 +11185,10 @@ msgstr "现在无法读取卡池。请稍后再试。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The editor already holds {0}"
 msgstr "编辑器里已经是 {0} 了"
+
+#: src/routes/dan-estimates.tsx
+msgid "The engine gives back a continuous number, and the number is what everything else uses. The label you see is just that number printed in the ladder's own language. 4K regular runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1 to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. 6K stops at 9th, and its LN ladder carries on through Terra, Celestial, Mystery, Nihility and Finish."
+msgstr "算法给回来的是一个连续的数值，后面所有东西用的都是这个数值。你看到的标签只是把这个数值用各段位表自己的说法印出来而已。4K 单点从 1 段排到 10 段，再进入希腊字母段位(alpha、beta、gamma 往上)。4K LN 从 1 排到 17，10 以内用数字，往上用名字：Yoake、Yuugure、Yoru、Yami、Yume、Yokaze、Yeehee。7K 从 0 段排到 10 段，再是 Gamma、Azimuth、Zenith、Stellium。6K 到 9 段为止，它的 LN 段位表继续往上是 Terra、Celestial、Mystery、Nihility 和 Finish。"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
@@ -10993,6 +11242,10 @@ msgstr "玩家面板可以留在这里，但这个视图没有返回新的谱面
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "the player's"
 msgstr "该玩家的"
+
+#: src/routes/dan-estimates.tsx
+msgid "The pool is your osu! top plays plus every play the site tracked for you, deduplicated down to your best play on each chart at each speed. That tracked half only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+msgstr "池子是你的 osu! 最佳成绩，加上本站为你追踪到的所有成绩，再按每张谱面每个速度只保留你最好的一次去重。追踪的那一半只有在你进了所在国家/地区的名单时才有，名单是该地区前 100 名，再加上自己开了追踪的人，而且从开始追踪那天才算起。被标为 Vibro 的谱面在任何地方都会被丢掉，因为评分算法会把一堵乱搓的音符墙读成极高的密度，评出离谱的数值。"
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
@@ -11048,9 +11301,9 @@ msgstr "你上传到 Mania Hub 的回放，附带分享链接和删除操作。"
 msgid "The report was sent, but at least one image did not upload."
 msgstr "反馈已提交，但至少有一张图片没能上传。"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "The same rule run over only the clears whose charts carry each pattern."
-#~ msgstr "同一条规则，只统计谱面带有对应谱型的通过。"
+#: src/routes/dan-estimates.tsx
+msgid "the same 96% and 95%"
+msgstr "同样是 96% 和 95%"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."
@@ -11067,6 +11320,18 @@ msgstr "你所在的服务器列表，好让我们列出你能发布的那些"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "The side-by-side playfields failed to mount."
 msgstr "并排游玩区域加载失败。"
+
+#: src/routes/dan-estimates.tsx
+msgid "The site does not use the accuracy the game showed you. It works it out again from your judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same play, recomputing is what makes that play count, or not count, the same on either client."
+msgstr "本站不用游戏里显示给你的准确率，而是拿你的判定，300、200、100 这些，重新算一遍。mania 有两种加总方式，stable 的算法和 lazer 显示的 ScoreV2 算法，每张段位表的线都是用其中一种写的：4K 单点用 stable，4K LN 用 ScoreV2。同一个成绩在两种算法下算出来的数字不一样，所以只有重新算一遍，这个成绩算不算数在两个客户端上才是一致的。"
+
+#: src/routes/dan-estimates.tsx
+msgid "The site downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
+msgstr "本站会下载谱面文件，读出音符，再把谱型交给一个评分算法。用哪个算法取决于键数，因为没有哪一个在所有键数上都是最好的："
+
+#: src/routes/dan-estimates.tsx
+msgid "The skill breakdown"
+msgstr "按技能拆开看"
 
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 msgid "The skin could not be loaded. Try again in a moment."
@@ -11103,6 +11368,10 @@ msgstr "皮肤的原作者"
 #: src/routes/skins.tsx
 msgid "The skins list could not be loaded."
 msgstr "皮肤列表加载失败。"
+
+#: src/routes/dan-estimates.tsx
+msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around. You get one dan per side, per keymode, and a play only ever testifies for the side its chart belongs to."
+msgstr "分开算很重要，因为这两边说明不了对方。LN 谱面上的准确率几乎全都是在按住和放键上挣来的，所以通过一张 LN 谱面并不能说明你的单点水平，反过来也一样。每种键数的每一侧各给你一个段位，一个成绩只为它所属的那一侧作证。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -11181,9 +11450,13 @@ msgstr "这张谱面还没有被分析。"
 msgid "This clear backs the estimate"
 msgstr "这次通过支撑了估算"
 
-#: src/components/player/DanEvidenceModal.tsx
-#~ msgid "This clear backs the estimate · view map details"
-#~ msgstr "这次通过支撑着该估算 · 查看谱面详情"
+#: src/components/maps/UserCollectionDetail.tsx
+msgid "This collection has no maps in it yet."
+msgstr "这个收藏册里还没有谱面。"
+
+#: src/routes/collections_.$id.tsx
+msgid "This collection is gone, or the link is wrong."
+msgstr "这个收藏册不在了，或者链接不对。"
 
 #: src/components/me/RosterOptInCard.tsx
 #: src/routes/player/$username.tsx
@@ -11358,6 +11631,7 @@ msgstr "极小"
 msgid "title"
 msgstr "标题"
 
+#: src/components/maps/UserCollectionEditor.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Title"
 msgstr "标题"
@@ -11393,16 +11667,8 @@ msgid "too hard"
 msgstr "太难"
 
 #: src/routes/farm-helper.tsx
-#~ msgid "too hard and maxed hide the lane from your gain views (maxed for 60 days); setting a real score also clears a mark"
-#~ msgstr "「太难」和「已打满」会把该谱面从你的收益视图中隐藏（「已打满」隐藏 60 天）；打出真实成绩也会清除标记"
-
-#: src/routes/farm-helper.tsx
 msgid "too hard hides the lane from your gain views, done with it does the same for 60 days; setting a real score also clears a mark"
 msgstr "「太难」会把该谱面从你的收益视图中隐藏，「刷够了」同样隐藏 60 天；打出真实成绩也会清除标记"
-
-#: src/routes/farm-helper.tsx
-#~ msgid "too hard hides the lane from your gain views; setting a real score also clears a mark"
-#~ msgstr "「太难」会把该谱面从你的收益视图中隐藏；打出真实成绩也会清除标记"
 
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
@@ -11809,10 +12075,6 @@ msgstr "上传一个皮肤，它就会出现在这里。"
 msgid "Upload another"
 msgstr "再上传一个"
 
-#: src/routes/report.tsx
-#~ msgid "Upload failed"
-#~ msgstr "上传失败"
-
 #: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins.tsx
 msgid "Upload skin"
@@ -11834,10 +12096,6 @@ msgstr "由 <0>{0}</0> 上传"
 #: src/routes/skins.tsx
 msgid "uploader"
 msgstr "上传者"
-
-#: src/routes/report.tsx
-#~ msgid "Uploading"
-#~ msgstr "上传中"
 
 #: src/lib/skins.ts
 msgid "Uploading {list} previews."
@@ -12115,10 +12373,6 @@ msgstr "投票已结束。感谢你的选择。"
 msgid "vs"
 msgstr "vs"
 
-#: src/routes/report.tsx
-#~ msgid "Waiting"
-#~ msgstr "等待中"
-
 #: src/components/me/GoalsPanel.tsx
 msgid "waiting for another {want}pp+ play"
 msgstr "等待下一个 {want}pp+ 的成绩"
@@ -12204,14 +12458,6 @@ msgstr "三"
 msgid "Wednesdays"
 msgstr "周三"
 
-#: src/routes/report.tsx
-#~ msgid "What gets sent with this"
-#~ msgstr "一并提交的信息"
-
-#: src/routes/report.tsx
-#~ msgid "What happened"
-#~ msgstr "发生了什么"
-
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "What is it for"
@@ -12220,6 +12466,10 @@ msgstr "这个服务器是做什么的"
 #: src/routes/communities_.$id.tsx
 msgid "What it is for"
 msgstr "服务器简介"
+
+#: src/routes/dan-estimates.tsx
+msgid "What it looks like across everyone"
+msgstr "所有人加起来是什么样"
 
 #: src/routes/farm-helper.tsx
 msgid "what nearby players actually farm"
@@ -12233,9 +12483,9 @@ msgstr "与你水平相近的玩家最近在打什么"
 msgid "What seems wrong?"
 msgstr "哪里看起来不对？"
 
-#: src/routes/report.tsx
-#~ msgid "What you did, what you expected, and what happened instead."
-#~ msgstr "你做了什么、预期是什么、实际又发生了什么。"
+#: src/routes/dan-estimates.tsx
+msgid "What the number is not"
+msgstr "这个数字不是什么"
 
 #: src/routes/farm-helper.tsx
 msgid "what you're browsing"
@@ -12264,6 +12514,14 @@ msgstr "你什么时候打图"
 #: src/routes/communities.tsx
 msgid "where"
 msgstr "地区"
+
+#: src/routes/dan-estimates.tsx
+msgid "Where it comes from"
+msgstr "来源"
+
+#: src/routes/dan-estimates.tsx
+msgid "Where to see it"
+msgstr "在哪里看"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "while tracked"
@@ -12378,10 +12636,6 @@ msgid "You already beat the players near you here, but a higher-acc rerun is sti
 msgstr "你在这张上已经超过了附近玩家，但更高 acc 的重打仍然值 pp。默认隐藏，直到你达成其中一个目标成绩。"
 
 #: src/routes/farm-helper.tsx
-#~ msgid "You already beat the typical score here with {yourPp}pp, but that run had {missCount}. Cutting them out is worth about {target}pp."
-#~ msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平，但那次有 {missCount}。去掉它们能拿到大约 {target}pp。"
-
-#: src/routes/farm-helper.tsx
 msgid "You already beat the typical score here with {yourPp}pp, but that run had {misses, plural, one {# miss} other {# misses}}. Cutting them out is worth about {target}pp."
 msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平，但那次有 {misses, plural, other {# 个 miss}}。去掉它们能拿到大约 {target}pp。"
 
@@ -12390,28 +12644,20 @@ msgid "You already beat the typical score here with {yourPp}pp. A cleaner acc ru
 msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。打一次准确率更干净的能拿到大约 {target}pp。"
 
 #: src/routes/farm-helper.tsx
-#~ msgid "You already beat the typical score here with {yourPp}pp. Raising your 320 rate from {from}% to {to}% is worth about {target}pp."
-#~ msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。把 320 比率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
-
-#: src/routes/farm-helper.tsx
 msgid "You already beat the typical score here with {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。把 320 加权准确率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
-
-#: src/routes/farm-helper.tsx
-#~ msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320 rate from {from}% to {to}% is worth about {target}pp."
-#~ msgstr "你在这里已经无 miss 打出 {yourPp}pp，超过了常见水平。把 320 比率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
 
 #: src/routes/farm-helper.tsx
 msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "你在这里已经无 miss 打出 {yourPp}pp，超过了常见水平。把 320 加权准确率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "You already have the maximum number of collections."
+msgstr "你的收藏册数量已达上限。"
+
 #: src/components/packs/PackStage.tsx
 msgid "You are cutting through the cards"
 msgstr "你正在划开卡片"
-
-#: src/routes/report.tsx
-#~ msgid "You can also drop images here."
-#~ msgstr "也可以将图片拖到这里。"
 
 #: src/components/communities/field-options.tsx
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
@@ -12449,13 +12695,17 @@ msgstr "已达到 {HIDDEN_USERS_LIMIT} 名隐藏玩家的上限。移除一些�
 msgid "you have too many active marks, clear some first"
 msgstr "你标记的谱面太多了，先清掉一些"
 
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "You haven't liked a collection yet."
+msgstr "你还没有喜欢过任何收藏册。"
+
+#: src/components/maps/UserCollectionsSection.tsx
+msgid "You haven't posted a collection yet."
+msgstr "你还没有发布过收藏册。"
+
 #: src/routes/farm-helper.tsx
 msgid "You marked this done with it"
 msgstr "你已把它标记为刷够了"
-
-#: src/routes/farm-helper.tsx
-#~ msgid "You marked this maxed"
-#~ msgstr "你已将它标记为打满"
 
 #: src/routes/farm-helper.tsx
 msgid "You marked this too easy"
@@ -12538,9 +12788,17 @@ msgstr "你的描述会显示在这里。"
 msgid "Your dynamic renders were turned off."
 msgstr "你的动态渲染图已被关闭。"
 
+#: src/routes/dan-estimates.tsx
+msgid "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
+msgstr "你的估算是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
+
 #: src/routes/farm-helper.tsx
 msgid "your marks"
 msgstr "你的标记"
+
+#: src/routes/dan-estimates.tsx
+msgid "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it, broken down by skill. The whole population is on the <0>Dan tab of the rankings page</0>, per country and per keymode."
+msgstr "你自己的估算在玩家页的技能标签里。点那里的任意段位标记，就能看到背后的通过记录，按技能分开。全体玩家的情况在<0>排行榜页面的段位标签</0>，可以按国家/地区和键数查看。"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."

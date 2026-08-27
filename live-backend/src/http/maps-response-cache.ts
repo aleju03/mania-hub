@@ -1,8 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { GLOBAL_COUNTRY_CODE } from "../countries.js";
-import { readSchemaMigrationState, SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS, type Db } from "../db.js";
+import type { Db } from "../db.js";
 import { getMapsSnapshotMeta } from "../features/maps.js";
-import { errorContext, logInfo, logWarn } from "../logger.js";
+import { errorContext, logWarn } from "../logger.js";
+import { BOARD_WARMUP_DELAY_MS, unrefDelay, waitForQuietSchema } from "../warmup.js";
 import type { HttpContext } from "./context.js";
 import { getMapsSnapshotThread, MapsSnapshotBuildError, type MapsSnapshotThreadBuildRequest } from "./maps-snapshot-thread.js";
 import type { PreparedJsonResponse } from "./prepared-json.js";
@@ -258,19 +259,13 @@ function startMapsResponseBuild(options: MapsResponseCachedServeOptions): Promis
 // so a delay big enough for the contended case would penalize every ordinary
 // restart (where the migration is done in seconds) with minutes of cold board.
 // So observe it instead — migrate() publishes its start/finish in live_meta —
-// and keep the floor at the boot-burst settle time it always was.
-const MAPS_GLOBAL_FARMED_WARMUP_DELAY_MS = 15_000;
-// Poll only while a migration is actually in flight, and never longer than the
-// window in which one could still be making progress: past that the worker has
-// either finished, died (systemd restarts it), or left a stale in-flight marker
-// behind, and none of those is a reason to leave the board cold forever.
-const MAPS_GLOBAL_FARMED_WARMUP_POLL_MS = 5_000;
-const MAPS_GLOBAL_FARMED_WARMUP_MAX_WAIT_MS = SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS + 60_000;
+// and keep the floor at the boot-burst settle time it always was. Both halves
+// live in warmup.ts now; the skill/dan board warms on the same terms.
 
 export function warmGlobalMapsFarmedBoard(ctx: HttpContext): void {
   void (async () => {
-    await unrefDelay(MAPS_GLOBAL_FARMED_WARMUP_DELAY_MS);
-    await waitForQuietSchema(ctx.db);
+    await unrefDelay(BOARD_WARMUP_DELAY_MS);
+    await waitForQuietSchema(ctx.db, "maps_global_farmed");
     const meta = await getMapsSnapshotMeta(ctx.db, GLOBAL_COUNTRY_CODE);
     if (!meta.refreshedAt) return;
     await buildGlobalMapsResponseOnThread(ctx, {
@@ -285,44 +280,3 @@ export function warmGlobalMapsFarmedBoard(ctx: HttpContext): void {
   })().catch((error) => logWarn("maps_global_farmed_board_warmup_failed", errorContext(error)));
 }
 
-// Blocks while a worker/all-role process is inside migrate(). By the time this
-// first runs the floor above has elapsed, which is far longer than a restarting
-// worker needs to reach its in-flight marker (written right after the initial
-// schema), so "no marker in flight" here really does mean nobody is migrating.
-async function waitForQuietSchema(db: Db): Promise<void> {
-  const startedAt = Date.now();
-  let polls = 0;
-  for (;;) {
-    const state = await readSchemaMigrationState(db);
-    if (!state || state.completedAt) {
-      if (polls > 0) {
-        logInfo("maps_global_farmed_board_warmup_waited", {
-          detail: "deferred the global farmed board build until the schema migration finished",
-          waited_ms: Date.now() - startedAt,
-        });
-      }
-      return;
-    }
-    const migrationAgeMs = Date.now() - Date.parse(state.startedAt);
-    const stale = !Number.isFinite(migrationAgeMs) || migrationAgeMs > MAPS_GLOBAL_FARMED_WARMUP_MAX_WAIT_MS;
-    if (stale || Date.now() - startedAt >= MAPS_GLOBAL_FARMED_WARMUP_MAX_WAIT_MS) {
-      logWarn("maps_global_farmed_board_warmup_impatient", {
-        detail: "schema migration still marked in flight; building the global farmed board anyway",
-        migration_started_at: state.startedAt,
-        waited_ms: Date.now() - startedAt,
-      });
-      return;
-    }
-    polls += 1;
-    await unrefDelay(MAPS_GLOBAL_FARMED_WARMUP_POLL_MS);
-  }
-}
-
-// unref'd so a pending warm-up never holds the process open (the headless worker
-// role and every test rely on the event loop draining on its own).
-function unrefDelay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    timer.unref();
-  });
-}

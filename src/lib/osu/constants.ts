@@ -15,7 +15,7 @@ export const COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL = 10 * 60 * 1000;
 export const BEATMAP_USER_SCORES_ALL_CACHE_TTL = 10 * 60 * 1000;
 export const COUNTRY_BEATMAP_LOOKUP_CONCURRENCY = 15;
 export const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
-export const USER_PROFILE_INSIGHTS_CACHE_VERSION = 8;
+export const USER_PROFILE_INSIGHTS_CACHE_VERSION = 9;
 export const USER_CACHE_TTL = 5 * 60 * 1000;
 export const USER_SCORE_LIST_CACHE_TTL = 5 * 60 * 1000;
 // Progress writes for the replay-browse country scoreboard scans.

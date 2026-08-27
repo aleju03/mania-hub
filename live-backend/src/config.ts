@@ -106,6 +106,10 @@ export interface Config {
   chartAnalysisLaneIntervalMs: number;
   activityModsBackfillChainDelayMs: number;
   activityModsBackfillPinUsers: number[];
+  activityComboBackfillChainDelayMs: number;
+  activityComboBackfillPinUsers: number[];
+  activityComboBackfillPlayers: number;
+  activityComboBackfillRowsPerPlayer: number;
   oscBackfillMaxAgeMs: number;
   oscBackfillPageLimit: number;
   oscBackfillMaxPages: number;
@@ -391,6 +395,16 @@ export function readConfig(): Config {
     // 30 rows per link at this spacing is ~15 osu! calls/min. Lower it to
     // spend the sweep faster, raise it to give the budget back.
     activityModsBackfillChainDelayMs: readBoundedInt("ACTIVITY_MODS_BACKFILL_CHAIN_DELAY_MS", 120_000, 1_000, 3_600_000),
+    // 20 rows per link on a 150s chain is ~8 calls/min, a sixth of the 45/min
+    // target, and it yields to everything else in the limiter's job lane.
+    activityComboBackfillChainDelayMs: readBoundedInt("ACTIVITY_COMBO_BACKFILL_CHAIN_DELAY_MS", 150_000, 1_000, 3_600_000),
+    // Even after the work list drops everything a profile cannot draw, the
+    // scope is ~177k rows over 4.9k players: 15 days at this chain's pace.
+    // These caps make it ~9.3k rows, under a day. Raise them if the budget is
+    // idle; ACTIVITY_COMBO_BACKFILL_PLAYERS above the roster size means all of
+    // them.
+    activityComboBackfillPlayers: readBoundedInt("ACTIVITY_COMBO_BACKFILL_PLAYERS", 400, 0, 100_000),
+    activityComboBackfillRowsPerPlayer: readBoundedInt("ACTIVITY_COMBO_BACKFILL_ROWS_PER_PLAYER", 40, 1, 1_000),
     // osu! user ids whose eligible archived rows join the backfill work list
     // regardless of where the headroom ranking puts them. For players who ask
     // to be recovered, so nobody has to run the maintenance script by hand.
@@ -398,6 +412,9 @@ export function readConfig(): Config {
     // frontend's src/lib/auth-server.ts, so the sweep covers him with no VPS
     // env change. Set the var to override; set it to a single space to clear.
     activityModsBackfillPinUsers: csv(process.env.ACTIVITY_MODS_BACKFILL_PIN_USERS, "7095193")
+      .map((part) => Number(part))
+      .filter((userId) => Number.isSafeInteger(userId) && userId > 0),
+    activityComboBackfillPinUsers: csv(process.env.ACTIVITY_COMBO_BACKFILL_PIN_USERS, "7095193")
       .map((part) => Number(part))
       .filter((userId) => Number.isSafeInteger(userId) && userId > 0),
     oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 24 * 60 * 60 * 1000),
