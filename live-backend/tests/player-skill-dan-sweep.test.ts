@@ -97,7 +97,7 @@ describe("recomputePlayerSkillDanChunk", () => {
         json({
           plays: [
             // Four jack clears on 8-dan charts and four stamina clears on
-            // 5-dan ones: the side's dan is 8, and only the jack column is.
+            // 5-dan ones: two rated skillsets, so the side averages them.
             ...[301, 302, 303, 304].map((id) => ({ ...barePass(id), values: { Overall: 22, JackSpeed: 25 } })),
             ...[321, 322, 323, 324].map((id) => ({ ...barePass(id), values: { Overall: 20, Stamina: 23 } })),
           ],
@@ -111,7 +111,8 @@ describe("recomputePlayerSkillDanChunk", () => {
     const row = (await exec(db, "select modes_json from player_skill_ratings where user_id = 41", [])).rows[0];
     const summary = parseJson<{ modes: Array<{ dan: { rc: { rawDan: number; skillsets?: Record<string, { rawDan: number }> } | null } }> }>(String(row.modes_json ?? ""), { modes: [] });
     const dan = summary.modes[0].dan.rc!;
-    expect(dan.rawDan).toBe(8);
+    // The mean of the two rated skillsets, not the 4th best clear (8).
+    expect(dan.rawDan).toBe(6.5);
     expect(dan.skillsets?.jack.rawDan).toBe(8);
     expect(dan.skillsets?.stamina.rawDan).toBe(5);
     // A bucket under the quorum has no verdict rather than a thin one.
@@ -210,7 +211,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     for (const userId of [21, 22, 23]) await seedRow(db, userId, [301, 302, 303, 304]);
 
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v1'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v2'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.

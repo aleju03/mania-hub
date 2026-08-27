@@ -737,6 +737,78 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
+  it("averages the skillset dans into the side estimate instead of taking the best clears", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      // Four 12th-dan jack charts and four 6th-dan stamina ones. Sorted by
+      // chart dan the side reads 12/12/12/12/6/6/6/6, so the old quorum-th
+      // rule would call this player 12th dan off jack alone.
+      const charts: Array<[number, number]> = [
+        [301, 12], [302, 12], [303, 12], [304, 12],
+        [305, 6], [306, 6], [307, 6], [308, 6],
+      ];
+      for (const [beatmapId, rawDan] of charts) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [], rc: { rawDan } }), new Date().toISOString()],
+        );
+      }
+      const { danSideFromClearsForTest, loadChartSkillInfo } = await import("../src/features/player-skills.js");
+      const info = await loadChartSkillInfo(db, charts.map(([beatmapId]) => beatmapId));
+      // 4K buckets are an MSD argmax, so the vector picks the bucket. Stream
+      // is held well clear of the winner so the near-tie rule cannot claim it.
+      const values = (top: string, rating: number) => ({ Overall: rating, Stream: 1, [top]: rating });
+      const clearPlay = (beatmapId: number, top: string) => ({
+        identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
+        values: values(top, 25), patterns: [], accuracy: 0.98, stableAccuracy: 0.98,
+      });
+      const jackPlays = [301, 302, 303, 304].map((id) => clearPlay(id, "Chordjack"));
+      const staminaPlays = [305, 306, 307, 308].map((id) => clearPlay(id, "Stamina"));
+
+      const side = danSideFromClearsForTest(4, "rc", [...jackPlays, ...staminaPlays], info)!;
+      expect(side.skillsets?.jack?.rawDan).toBe(12);
+      expect(side.skillsets?.stamina?.rawDan).toBe(6);
+      // The mean of the two rated skillsets, not the 4th best clear (12).
+      expect(side.rawDan).toBe(9);
+      // Only the four jack clears reach the estimate.
+      expect(side.clears).toBe(4);
+
+      // One rated skillset is not an average, so the side keeps the quorum-th
+      // clear: this is the thin-evidence player, not a measured specialist.
+      const jackOnly = danSideFromClearsForTest(4, "rc", jackPlays, info)!;
+      expect(Object.keys(jackOnly.skillsets ?? {})).toEqual(["jack"]);
+      expect(jackOnly.rawDan).toBe(12);
+    });
+  });
+
+  it("keeps the quorum-th clear on a side whose keymode publishes no skillsets", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      for (const [beatmapId, lnRawDan] of [[311, 9.0], [312, 8.0], [313, 7.0], [314, 6.0]] as const) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0.8, patterns: [], ln: { rawDan: lnRawDan } }), new Date().toISOString()],
+        );
+      }
+      const { danSideFromClearsForTest, loadChartSkillInfo } = await import("../src/features/player-skills.js");
+      const info = await loadChartSkillInfo(db, [311, 312, 313, 314]);
+      const lnPlay = (beatmapId: number) => ({
+        identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
+        values: { Overall: 20, Stamina: 20, Stream: 1 }, patterns: [], accuracy: 0.99, stableAccuracy: 0.99,
+      });
+      // 4K LN publishes no buckets at all, so there is nothing to average.
+      const side = danSideFromClearsForTest(4, "ln", [311, 312, 313, 314].map(lnPlay), info)!;
+      expect(side.skillsets).toBeUndefined();
+      expect(side.rawDan).toBe(6);
+    });
+  });
+
   it("credits an HT clear the chart's 0.75x dan, not its 1.0x one", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");

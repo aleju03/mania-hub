@@ -1592,8 +1592,12 @@ msgid "6 PM"
 msgstr "6 PM"
 
 #: src/routes/dan-estimates.tsx
-msgid "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use the site's own chart pattern tags instead, so a chart tagged both chordjack and tech backs both dans. On the LN side only 7K gets a breakdown, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume."
-msgstr "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use the site's own chart pattern tags instead, so a chart tagged both chordjack and tech backs both dans. On the LN side only 7K gets a breakdown, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume."
+#~ msgid "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use the site's own chart pattern tags instead, so a chart tagged both chordjack and tech backs both dans. On the LN side only 7K gets a breakdown, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume."
+#~ msgstr "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use the site's own chart pattern tags instead, so a chart tagged both chordjack and tech backs both dans. On the LN side only 7K gets a breakdown, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume."
+
+#: src/routes/dan-estimates.tsx
+msgid "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use the site's own chart pattern tags instead, so a chart tagged both chordjack and tech backs both skills. On the LN side only 7K gets a split, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume. The other LN ladders are read as one skill."
+msgstr "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use the site's own chart pattern tags instead, so a chart tagged both chordjack and tech backs both skills. On the LN side only 7K gets a split, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume. The other LN ladders are read as one skill."
 
 #: src/routes/dan-estimates.tsx
 msgid "6K LN"
@@ -2215,8 +2219,12 @@ msgid "Assets"
 msgstr "Assets"
 
 #: src/routes/dan-estimates.tsx
-msgid "At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan and 5,504 for an LN dan. This is where the 4K regular estimates landed:"
-msgstr "At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan and 5,504 for an LN dan. This is where the 4K regular estimates landed:"
+#~ msgid "At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan and 5,504 for an LN dan. This is where the 4K regular estimates landed:"
+#~ msgstr "At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan and 5,504 for an LN dan. This is where the 4K regular estimates landed:"
+
+#: src/routes/dan-estimates.tsx
+msgid "At the time of writing the site had skill ratings for 14,385 players on 4K, 4,119 on 7K and 2,879 on 6K. Of the 4K players, 12,974 had enough qualifying passes for a regular dan and 5,038 for an LN dan. This is where the 4K regular estimates landed:"
+msgstr "At the time of writing the site had skill ratings for 14,385 players on 4K, 4,119 on 7K and 2,879 on 6K. Of the 4K players, 12,974 had enough qualifying passes for a regular dan and 5,038 for an LN dan. This is where the 4K regular estimates landed:"
 
 #: src/routes/dan-estimates.tsx
 msgid "At the time of writing there were around 138,000 charts with a dan estimate: about 97,000 4K regular, 22,000 7K regular, 8,500 4K LN, 7,500 7K LN and 3,000 6K regular."
@@ -4420,6 +4428,10 @@ msgstr "Every pack is a random sample of its difficulty bucket"
 msgid "Every pack pays {PACK_OPEN_SHARD_REWARD} shards. Recycle duplicates for more."
 msgstr "Every pack pays {PACK_OPEN_SHARD_REWARD} shards. Recycle duplicates for more."
 
+#: src/routes/dan-estimates.tsx
+msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
+msgstr "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
+
 #: src/lib/packs.ts
 msgid "Every tracked player, same odds"
 msgstr "Every tracked player, same odds"
@@ -4846,8 +4858,12 @@ msgid "Found something broken? Describe what happened."
 msgstr "Found something broken? Describe what happened."
 
 #: src/routes/dan-estimates.tsx
-msgid "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
-msgstr "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
+msgid "Four is standing in for the length of a real course. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+msgstr "Four is standing in for the length of a real course. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
+#~ msgstr "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
 
 #: src/routes/packs.tsx
 msgid "free"
@@ -5327,6 +5343,10 @@ msgstr "how many players near you farm it"
 msgid "how many players near you have it"
 msgstr "how many players near you have it"
 
+#: src/routes/dan-estimates.tsx
+msgid "How much this moves you depends on how lopsided you are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
+msgstr "How much this moves you depends on how lopsided you are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
+
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "How to pick"
@@ -5584,6 +5604,14 @@ msgstr "It may have been taken down, or it is still waiting for approval."
 #~ msgid "It moves over time, because the rating engines and the chart analysis keep getting improved, and a recompute that shifts a chart by a step shifts everyone whose evidence sat on that chart."
 #~ msgstr "It moves over time, because the rating engines and the chart analysis keep getting improved, and a recompute that shifts a chart by a step shifts everyone whose evidence sat on that chart."
 
+#: src/routes/dan-estimates.tsx
+#~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs - it was not a summary of your playing, it was your best pattern restated. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
+#~ msgstr "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs - it was not a summary of your playing, it was your best pattern restated. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
+
+#: src/routes/dan-estimates.tsx
+msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
+msgstr "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
+
 #: src/components/communities/field-options.tsx
 msgid "Italian"
 msgstr "Italian"
@@ -5684,6 +5712,10 @@ msgstr "Jump to a page"
 #: src/routes/player/$username.tsx
 msgid "Jumpstream"
 msgstr "Jumpstream"
+
+#: src/routes/dan-estimates.tsx
+msgid "Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
+msgstr "Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "jumpstream, warmup, ..."
@@ -7799,8 +7831,8 @@ msgid "On /skins, anyone can download the .osk."
 msgstr "On /skins, anyone can download the .osk."
 
 #: src/routes/dan-estimates.tsx
-msgid "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
-msgstr "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
+#~ msgid "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
+#~ msgstr "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
 
 #: src/components/me/GoalsPanel.tsx
 msgid "on a map"
@@ -7963,8 +7995,8 @@ msgid "Open your own packs"
 msgstr "Open your own packs"
 
 #: src/routes/dan-estimates.tsx
-msgid "Opening a dan badge on a player's Skills tab shows the same estimate run again over slices of the same passes. Your jack dan is the level your jack passes demonstrate, under exactly the same rules and the same count of four."
-msgstr "Opening a dan badge on a player's Skills tab shows the same estimate run again over slices of the same passes. Your jack dan is the level your jack passes demonstrate, under exactly the same rules and the same count of four."
+#~ msgid "Opening a dan badge on a player's Skills tab shows the same estimate run again over slices of the same passes. Your jack dan is the level your jack passes demonstrate, under exactly the same rules and the same count of four."
+#~ msgstr "Opening a dan badge on a player's Skills tab shows the same estimate run again over slices of the same passes. Your jack dan is the level your jack passes demonstrate, under exactly the same rules and the same count of four."
 
 #: src/routes/replay.tsx
 msgid "Opening shared replay{elapsedLabel}"
@@ -8443,6 +8475,7 @@ msgid "Player's skin"
 msgstr "Player's skin"
 
 #: src/components/layout/Nav.tsx
+#: src/routes/dan-estimates.tsx
 #: src/routes/farm-helper.tsx
 msgid "players"
 msgstr "players"
@@ -9664,8 +9697,12 @@ msgid "Say something to {name}"
 msgstr "Say something to {name}"
 
 #: src/routes/dan-estimates.tsx
-msgid "Say your 4K regular passes at 96% or better land on charts rated:"
-msgstr "Say your 4K regular passes at 96% or better land on charts rated:"
+msgid "Say your 4K jack passes at 96% or better land on charts rated:"
+msgstr "Say your 4K jack passes at 96% or better land on charts rated:"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Say your 4K regular passes at 96% or better land on charts rated:"
+#~ msgstr "Say your 4K regular passes at 96% or better land on charts rated:"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Scale the image to fit"
@@ -10128,6 +10165,10 @@ msgstr "Share code"
 msgid "Share code copied"
 msgstr "Share code copied"
 
+#: src/routes/dan-estimates.tsx
+msgid "Share of players at each dan level"
+msgstr "Share of players at each dan level"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Share this replay"
 msgstr "Share this replay"
@@ -10439,6 +10480,10 @@ msgstr "skillboost only"
 msgid "Skills"
 msgstr "Skills"
 
+#: src/routes/dan-estimates.tsx
+msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - keep the old rule and are read off their 4th best pass overall."
+msgstr "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - keep the old rule and are read off their 4th best pass overall."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Skin"
@@ -10743,8 +10788,20 @@ msgid "Step 3: which of your plays count"
 msgstr "Step 3: which of your plays count"
 
 #: src/routes/dan-estimates.tsx
-msgid "Step 4: your dan is your 4th best pass"
-msgstr "Step 4: your dan is your 4th best pass"
+#~ msgid "Step 4: your dan is your 4th best pass"
+#~ msgstr "Step 4: your dan is your 4th best pass"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 4: your passes are sorted into four skills"
+msgstr "Step 4: your passes are sorted into four skills"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 5: each skill's dan is your 4th best pass in it"
+msgstr "Step 5: each skill's dan is your 4th best pass in it"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 6: your dan is the average of your skills"
+msgstr "Step 6: your dan is the average of your skills"
 
 #: src/routes/replay.tsx
 msgid "Still fetching the replay and chart."
@@ -10927,12 +10984,16 @@ msgid "Tags"
 msgstr "Tags"
 
 #: src/routes/dan-estimates.tsx
-msgid "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
-msgstr "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
+#~ msgid "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
+#~ msgstr "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
 
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Take it down for good?"
 msgstr "Take it down for good?"
+
+#: src/routes/dan-estimates.tsx
+msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and look at the 4th one down. That is your dan in that skill. Nothing is added on top of it, and no single pass above it can raise it."
+msgstr "Take your qualifying passes in one skill, sort them by the chart's dan level, and look at the 4th one down. That is your dan in that skill. Nothing is added on top of it, and no single pass above it can raise it."
 
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
@@ -11373,8 +11434,8 @@ msgid "The site downloads the chart file, reads the notes, and runs the pattern 
 msgstr "The site downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
 
 #: src/routes/dan-estimates.tsx
-msgid "The skill breakdown"
-msgstr "The skill breakdown"
+#~ msgid "The skill breakdown"
+#~ msgstr "The skill breakdown"
 
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 msgid "The skin could not be loaded. Try again in a moment."
@@ -12673,6 +12734,10 @@ msgstr "Write your page here. Select text and use the toolbar to format it. Righ
 msgid "wrong"
 msgstr "wrong"
 
+#: src/routes/dan-estimates.tsx
+msgid "Yes, this is saragi"
+msgstr "Yes, this is saragi"
+
 #: src/lib/changelog.ts
 msgid "yesterday"
 msgstr "yesterday"
@@ -12852,8 +12917,16 @@ msgid "Your dynamic renders were turned off."
 msgstr "Your dynamic renders were turned off."
 
 #: src/routes/dan-estimates.tsx
-msgid "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
-msgstr "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
+msgid "Your estimate for a side is the plain arithmetic average of the skill dans you have. Skills at 10, 9, 7 and 6 make an estimate of 8. If it lands at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
+msgstr "Your estimate for a side is the plain arithmetic average of the skill dans you have. Skills at 10, 9, 7 and 6 make an estimate of 8. If it lands at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
+#~ msgstr "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
+
+#: src/routes/dan-estimates.tsx
+msgid "Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
+msgstr "Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"

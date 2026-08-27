@@ -27,6 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-27", text: "Your dan is now the average of your skillset dans, instead of your 4th best pass overall. The page explaining how dan is estimated is updated to match, along with its distribution data", to: "/dan-estimates" },
   { date: "2026-08-26", text: "Click Key Split on a player page to see how much pp each keymode is worth, 4K, 5K, 6K, 7K and up, so you can track your pp on each. Pick a keymode on the Best Performance tab and the plays this site tracked below your osu! top 200 show up in the list too, so every keymode gets a top of up to 200 plays of its own instead of sharing one" },
   { date: "2026-08-26", text: "Rankings now has MSD and Dan tabs next to Performance: see who is rated highest on each skillset, per keymode, and who holds the highest dan", to: "/rankings" },
   { date: "2026-08-26", text: "Click a dan on the skills tab of a player page to see the clears the estimate is built on" },

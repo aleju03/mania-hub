@@ -286,6 +286,12 @@ const AGGREGATE_RATING_SCALER = 1.04;
 // "one short chart is thin evidence", that taxed the same thing twice and
 // sat below what the community tables actually require.)
 //
+// The quorum rates a SKILLSET now, not the headline: the side's estimate is
+// the mean of its skillset dans (averageSkillsetDans), each of which is its
+// own bucket's quorum-th clear. It still gates the side as a whole - four
+// qualifying clears or no estimate - and it is still the headline on a side
+// with too few rated skillsets to average.
+//
 // The bars come from the courses themselves rather than a single site-wide
 // number, because each ladder sets its own:
 //   4K RC (Reform)        96% stable
@@ -338,7 +344,8 @@ export interface PlayerSkillPatternRating {
 
 // The community-legible axis: "4K RC ~ 8th dan". rawDan is continuous on the
 // chart-dan scale (labels via parseDan); clears counts the qualifying plays
-// that back it.
+// at or above it. On a skillset that is the quorum rule's near-constant 4; on
+// an averaged side estimate it is a real count of the clears that reach it.
 export interface PlayerSkillDanVerdict {
   rawDan: number;
   label: string;
@@ -354,11 +361,13 @@ export interface PlayerSkillDanVerdict {
 
 export interface PlayerSkillDanSide extends PlayerSkillDanVerdict {
   /**
-   * The same verdict re-run over one skillset bucket's clears ("your jack dan"),
-   * keyed by danSkillsetBuckets id. Stored rather than derived on read because
-   * the dan leaderboards rank a whole roster by it and re-deriving would mean
-   * reading every player's plays_json; the evidence window computes the same
-   * numbers on demand from the same clears, so the two agree by construction.
+   * The same quorum rule run over one skillset bucket's clears ("your jack
+   * dan"), keyed by danSkillsetBuckets id. These are the terms the side's own
+   * rawDan is the mean of, so they are the estimate rather than a breakdown of
+   * it. Stored rather than derived on read because the dan leaderboards rank a
+   * whole roster by it and re-deriving would mean reading every player's
+   * plays_json; the evidence window computes the same numbers on demand from
+   * the same clears, so the two agree by construction.
    *
    * A bucket under the quorum has no verdict and is simply absent, and so is
    * the whole map on rows written before this shipped (the dan sweep backfills
@@ -1006,19 +1015,8 @@ function computeModeDan(
   for (const clear of collectDanClears(keyCount, plays, scoresByIdentity, infoByBeatmap)) {
     clears[clear.side].push(clear);
   }
-  const forSide = (side: "rc" | "ln"): PlayerSkillDanSide | null => {
-    const list = clears[side];
-    const dan = danFromClears(list.map((clear) => clear.chartDan), side, keyCount);
-    if (!dan) return null;
-    // Buckets are a subset of the side's clears, so a side under the quorum can
-    // never have one: no verdict here means no skillset verdicts either.
-    const skillsets: Record<string, PlayerSkillDanVerdict> = {};
-    for (const [id, bucketClears] of groupDanClearsBySkillset(keyCount, side, list, infoByBeatmap)) {
-      const bucketDan = danFromClears(bucketClears.map((clear) => clear.chartDan), side, keyCount);
-      if (bucketDan) skillsets[id] = bucketDan;
-    }
-    return Object.keys(skillsets).length > 0 ? { ...dan, skillsets } : dan;
-  };
+  const forSide = (side: "rc" | "ln"): PlayerSkillDanSide | null =>
+    danSideFromClears(keyCount, side, clears[side], infoByBeatmap);
   return { rc: forSide("rc"), ln: forSide("ln") };
 }
 
@@ -1102,6 +1100,17 @@ export function collectDanClearsForTest(
   return collectDanClears(keyCount, plays, new Map(), infoByBeatmap);
 }
 
+/** Test seam over one side's whole verdict, skillset dans and averaged headline. */
+export function danSideFromClearsForTest(
+  keyCount: number,
+  side: "rc" | "ln",
+  plays: StoredPlaySsr[],
+  infoByBeatmap: Map<number, ChartSkillInfo>,
+): PlayerSkillDanSide | null {
+  const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap).filter((clear) => clear.side === side);
+  return danSideFromClears(keyCount, side, clears, infoByBeatmap);
+}
+
 function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): PlayerSkillDanVerdict | null {
   if (rawDans.length < DAN_CLEAR_QUORUM) return null;
   const sorted = [...rawDans].sort((a, b) => b - a);
@@ -1114,6 +1123,96 @@ function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): 
     clears: sorted.filter((value) => value >= sorted[DAN_CLEAR_QUORUM - 1]).length,
     ...(isBeyondDanTable(rawDan, side, keyCount) ? { beyondTable: true } : {}),
   };
+}
+
+// A dan is stored rounded to two decimals, so "clears at or above the
+// estimate" has to compare against the rounded number with room for the
+// rounding itself - otherwise the very clear that set an unrounded 10.126
+// falls out of its own 10.13 estimate.
+const DAN_ROUNDING_EPSILON = 0.005;
+
+// How many skillsets have to carry a dan of their own before the average is
+// the headline. Under this the side falls back to the quorum-th clear.
+//
+// Two rather than all four because bucket coverage is play depth, not
+// specialisation: measured over the 11,652 rated 4K rice players, everyone
+// past 200 analysed plays has three or more buckets and everyone past 500 has
+// all four, while the players missing three of them sit at a median of 23
+// plays. Demanding four would grade newcomers on how little they have played,
+// and on 6K/7K - where the buckets come from analyzer tags rather than an MSD
+// argmax - it would grade them on how narrow that tag vocabulary is (only
+// 2.2% of 7K LN players and 0.8% of 6K rice players have all four). Two keeps
+// the fallback to the 6.8% of 4K players with too little to average.
+const DAN_SKILLSET_AVERAGE_MIN_BUCKETS = 2;
+
+/**
+ * The headline dan for a side: the arithmetic mean of the skillset dans the
+ * player has, NOT their best clears.
+ *
+ * The quorum-th best clear on the whole side answers "what is the hardest
+ * thing you can do four of", which on a specialist is four charts of the one
+ * pattern they play. Measured over the corpus, the old headline sat a median
+ * of 0.00-0.18 levels above the player's single best skillset - it WAS the
+ * best specialty, by construction. Averaging asks the question a real course
+ * asks instead, since a course makes you clear a mix rather than four of your
+ * favourite. It bites in proportion to how lopsided the player is: 4K players
+ * whose jack dan leads their next skillset by two levels or more drop a median
+ * of 2.74 levels, while balanced players barely move.
+ *
+ * Skillsets absent for want of a quorum are left out of the mean rather than
+ * counted as zero. A missing bucket is overwhelmingly thin evidence rather
+ * than a hole in the player's skill - among 4K players missing exactly one,
+ * the missing one is jack 77.5% of the time, so zeroing it would penalise not
+ * being a jack main, which is the opposite of the point.
+ */
+function averageSkillsetDans(
+  skillsets: Record<string, PlayerSkillDanVerdict>,
+  clearDans: number[],
+  side: "rc" | "ln",
+  keyCount: number,
+): PlayerSkillDanVerdict | null {
+  const values = Object.values(skillsets).map((verdict) => verdict.rawDan);
+  if (values.length < DAN_SKILLSET_AVERAGE_MIN_BUCKETS) return null;
+  const rawDan = Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 100) / 100;
+  return {
+    rawDan,
+    label: danLabelFor(rawDan, side, keyCount),
+    // The clears that reach the estimate, which for an average is a real count
+    // instead of the quorum rule's near-constant 4.
+    clears: clearDans.filter((value) => value >= rawDan - DAN_ROUNDING_EPSILON).length,
+    ...(isBeyondDanTable(rawDan, side, keyCount) ? { beyondTable: true } : {}),
+  };
+}
+
+/**
+ * One side's whole verdict: the skillset dans and the headline averaged from
+ * them. Shared by the stored compute and the on-demand evidence window so the
+ * badge, the leaderboard and the modal can never disagree.
+ *
+ * The side still needs a full quorum of clears to be rated at all - fewer than
+ * four qualifying passes is no estimate rather than a shaky one - and a side
+ * with fewer than DAN_SKILLSET_AVERAGE_MIN_BUCKETS rated skillsets keeps the
+ * quorum-th clear as its headline. Keymodes that publish no buckets at all
+ * (4K and 6K LN) therefore keep the old rule everywhere.
+ */
+function danSideFromClears(
+  keyCount: number,
+  side: "rc" | "ln",
+  list: DanClearEvidence[],
+  infoByBeatmap: Map<number, ChartSkillInfo>,
+): PlayerSkillDanSide | null {
+  const clearDans = list.map((clear) => clear.chartDan);
+  const quorumDan = danFromClears(clearDans, side, keyCount);
+  if (!quorumDan) return null;
+  // Buckets are a subset of the side's clears, so a side under the quorum can
+  // never have one: no verdict here means no skillset verdicts either.
+  const skillsets: Record<string, PlayerSkillDanVerdict> = {};
+  for (const [id, bucketClears] of groupDanClearsBySkillset(keyCount, side, list, infoByBeatmap)) {
+    const bucketDan = danFromClears(bucketClears.map((clear) => clear.chartDan), side, keyCount);
+    if (bucketDan) skillsets[id] = bucketDan;
+  }
+  const headline = averageSkillsetDans(skillsets, clearDans, side, keyCount) ?? quorumDan;
+  return Object.keys(skillsets).length > 0 ? { ...headline, skillsets } : headline;
 }
 
 // A quorum clear that landed on the table's "> last tier" sentinel carries
@@ -1857,7 +1956,7 @@ function buildPlayerSkillPlay(
 // One clear as the dan-detail modal shows it: the play, the chart's own dan on
 // the side it testifies for, and the accuracy it was judged on in that
 // ladder's currency (which is not always the client's displayed number).
-// `countsTowardDan` marks the clears at or above the quorum-th chart dan (the
+// `countsTowardDan` marks the clears at or above the side's estimate (the
 // ones the stored verdict's `clears` count refers to).
 export interface PlayerSkillDanEvidencePlay {
   play: PlayerSkillPlay;
@@ -1873,8 +1972,8 @@ export interface PlayerSkillDanSkillsetEvidence {
   // "ln*" subtypes on the LN side. Not a raw analyzer pattern tag.
   id: string;
   clears: number;
-  // Same quorum rule as the headline dan, applied to only this skillset's
-  // clears; null while the skillset has fewer than quorum clears.
+  // This skillset's own quorum-th clear, one of the terms the headline dan
+  // averages; null while the skillset has fewer than quorum clears.
   dan: { rawDan: number; label: string } | null;
   plays: PlayerSkillDanEvidencePlay[];
 }
@@ -2034,8 +2133,8 @@ function groupDanClearsBySkillset(
 
 /**
  * The qualifying clears behind one side of a player's dan estimate, plus the
- * same estimate re-run per skillset bucket ("your jack dan" = the dan the
- * jack charts you clear demonstrate, same quorum rule).
+ * skillset dans that estimate is the mean of ("your jack dan" = the dan the
+ * jack charts you clear demonstrate, under the quorum rule).
  *
  * Recomputed on read from the same durable per-play cache and clear rules the
  * stored verdict used (collectDanClears), so it explains the number rather
@@ -2066,14 +2165,18 @@ export async function getPlayerSkillDanEvidence(
       right.chartDan - left.chartDan
       || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
       || left.play.beatmapId - right.play.beatmapId);
-  const dan = danFromClears(clears.map((clear) => clear.chartDan), side, keyCount);
-  // The quorum-th best clear is the dan; everything at or above it "backs"
-  // the estimate (matching the stored verdict's clears count).
-  const threshold = dan ? clears[DAN_CLEAR_QUORUM - 1].chartDan : null;
+  const dan = danSideFromClears(keyCount, side, clears, infoByBeatmap);
+  // Everything at or above the estimate "backs" it, matching the stored
+  // verdict's clears count. Under the averaged headline that is a real subset
+  // of the clears rather than the four that tie the quorum-th.
+  const threshold = dan ? dan.rawDan - DAN_ROUNDING_EPSILON : null;
 
   // Skillset grouping, by bucket rather than by raw analyzer tag: the tag
   // vocabulary is 18 ids deep and a player reads their dan through the four
-  // skills their scene actually names (DAN_SKILLSET_BUCKETS).
+  // skills their scene actually names (DAN_SKILLSET_BUCKETS). The dans come
+  // off `dan.skillsets` rather than being recomputed here, because they are
+  // the terms the headline averaged - deriving them twice invites the window
+  // to explain a number it did not produce.
   const buckets = danSkillsetBuckets(keyCount, side);
   const bySkillset = groupDanClearsBySkillset(keyCount, side, clears, infoByBeatmap);
 
@@ -2095,13 +2198,11 @@ export async function getPlayerSkillDanEvidence(
   const skillsets = buckets
     .map((bucket): PlayerSkillDanSkillsetEvidence => {
       const list = bySkillset.get(bucket.id)!;
-      const skillsetDan = list.length >= DAN_CLEAR_QUORUM
-        ? Math.round(list[DAN_CLEAR_QUORUM - 1].chartDan * 100) / 100
-        : null;
+      const skillsetDan = dan?.skillsets?.[bucket.id] ?? null;
       return {
         id: bucket.id,
         clears: list.length,
-        dan: skillsetDan != null ? { rawDan: skillsetDan, label: danLabelFor(skillsetDan, side, keyCount) } : null,
+        dan: skillsetDan ? { rawDan: skillsetDan.rawDan, label: skillsetDan.label } : null,
         plays: list.slice(0, DAN_EVIDENCE_SKILLSET_PLAYS).map(toEvidencePlay),
       };
     })
@@ -2541,7 +2642,10 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // everything they need. Without this sweep they would only ever appear on rows
 // that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v1";
+// v2: the side headline became the mean of the skillset dans rather than the
+// quorum-th clear, so every stored verdict is stale and the sweep runs again.
+// It re-derives from plays_json without re-rating, so this costs no MinaCalc.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v2";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

@@ -133,8 +133,9 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose }: 
 
   // The window opens on the breakdown, never on a wall of plays: every row is
   // one dan number, and the clears behind it unfold on the click. The headline
-  // estimate is just the first row, so "all clears" and "your jack clears" are
-  // the same gesture instead of two different-looking surfaces.
+  // estimate leads as the first row and is the average of the skill rows next
+  // to it, so "all clears" and "your jack clears" are the same gesture instead
+  // of two different-looking surfaces.
   const sections = evidence
     ? [
       { id: "all", label: t`All clears`, color, dan: evidence.dan, clears: evidence.totalClears, plays: evidence.clears },

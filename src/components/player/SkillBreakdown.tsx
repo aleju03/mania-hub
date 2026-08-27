@@ -128,13 +128,13 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
           </>
         );
         const keys = mode.keyCount;
-        /* `clears` is NOT the player's qualifying total: danFromClears counts
-           the clears that tie or beat the quorum-th credited one, and that
-           clear IS the dan, so the number is 4 for ~98% of players. Phrased as
-           "backed by N qualifying clears" it read as "this player has only 4",
-           when the evidence modal right behind it shows 151. Say what the
-           number actually measures - passes at or above this level - and leave
-           the total to the modal, which re-derives it. */
+        /* `clears` is NOT the player's qualifying total: it counts the clears
+           that reach the estimate, which on a side falling back to the quorum
+           rule is 4 by construction. Phrased as "backed by N qualifying
+           clears" it read as "this player has only 4", when the evidence modal
+           right behind it shows 151. Say what the number actually measures -
+           passes at or above this level - and leave the total to the modal,
+           which re-derives it. */
         const title = beyond
           ? onSelect
             ? t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, with ${clears} passes at or above it (96%+ accuracy) · click for the clears behind it`

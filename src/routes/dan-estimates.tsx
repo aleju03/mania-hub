@@ -102,23 +102,23 @@ const CHART_EXAMPLES: Array<{ id: number; map: string; ladder: LadderKey; dan: s
 // the page agrees with the others.
 // Level names are the ladder's own, so they are identifiers and stay untranslated.
 const RICE_4K_POPULATION: Array<{ level: string; players: number }> = [
-  { level: "1", players: 404 },
-  { level: "2", players: 819 },
-  { level: "3", players: 632 },
-  { level: "4", players: 800 },
-  { level: "5", players: 934 },
-  { level: "6", players: 1013 },
-  { level: "7", players: 912 },
-  { level: "8", players: 305 },
-  { level: "9", players: 821 },
-  { level: "10", players: 1258 },
-  { level: "alpha", players: 860 },
-  { level: "beta", players: 1097 },
-  { level: "gamma", players: 1388 },
-  { level: "delta", players: 1067 },
-  { level: "epsilon", players: 378 },
-  { level: "zeta", players: 103 },
-  { level: "eta", players: 9 },
+  { level: "1", players: 464 },
+  { level: "2", players: 890 },
+  { level: "3", players: 862 },
+  { level: "4", players: 903 },
+  { level: "5", players: 1252 },
+  { level: "6", players: 1159 },
+  { level: "7", players: 846 },
+  { level: "8", players: 867 },
+  { level: "9", players: 866 },
+  { level: "10", players: 1087 },
+  { level: "alpha", players: 1062 },
+  { level: "beta", players: 1138 },
+  { level: "gamma", players: 821 },
+  { level: "delta", players: 539 },
+  { level: "epsilon", players: 199 },
+  { level: "zeta", players: 18 },
+  { level: "eta", players: 1 },
 ];
 
 function DanEstimatesPage() {
@@ -373,24 +373,54 @@ function DanEstimatesPage() {
           </P>
         </Section>
 
-        <Section title={t`Step 4: your dan is your 4th best pass`}>
+        <Section title={t`Step 4: your passes are sorted into four skills`}>
           <P>
             <Trans>
-              Take every qualifying pass on one side of one keymode, sort them by the chart's dan level,
-              and look at the 4th one down. That is your dan. Nothing is added on top of it, and no
+              Every qualifying pass lands in one of four skills, and those four are what the estimate is
+              built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD
+              skillset ratings and filed under whichever skillset is strongest on that chart: jack
+              (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina
+              (Handstream and Stamina).
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill,
+              which feels a lot more like tech than like speed, so pairing it with Stream put charts like
+              Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real
+              gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide
+              margin.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              6K and 7K cannot use those skillsets, because that engine does not rate Technical at all
+              and everything collapses onto Handstream. They use the site's own chart pattern tags
+              instead, so a chart tagged both chordjack and tech backs both skills. On the LN side only
+              7K gets a split, into general, tech, inverse and release, because those are the only LN
+              subtypes the analyzer separates in any volume. The other LN ladders are read as one skill.
+            </Trans>
+          </P>
+        </Section>
+
+        <Section title={t`Step 5: each skill's dan is your 4th best pass in it`}>
+          <P>
+            <Trans>
+              Take your qualifying passes in one skill, sort them by the chart's dan level, and look at
+              the 4th one down. That is your dan in that skill. Nothing is added on top of it, and no
               single pass above it can raise it.
             </Trans>
           </P>
           <div className="space-y-2 border-l-2 border-osu-b3 pl-4 text-[15px] leading-7 text-osu-f1">
             <p>
-              <Trans>Say your 4K regular passes at 96% or better land on charts rated:</Trans>
+              <Trans>Say your 4K jack passes at 96% or better land on charts rated:</Trans>
             </p>
             <p className="font-bold tabular-nums text-white">
               gamma, beta+, beta, <span className="text-osu-pink-light">alpha++</span>, alpha, 10+, 10, 9++ ...
             </p>
             <p>
               <Trans>
-                Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart
+                Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart
                 can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty
                 that stayed above the accuracy bar. Asking for four of them is what keeps a single good
                 day from setting your level.
@@ -399,41 +429,48 @@ function DanEstimatesPage() {
           </div>
           <P>
             <Trans>
-              Four is standing in for the length of a real course. If you have fewer than four
-              qualifying passes on a side, you get no estimate for it at all rather than a shaky one.
-              And if your 4th best pass sits at the very top of a ladder, the badge switches from "~" to
-              "&gt;" and reads as <B>beyond</B> that level instead of pinning you to it, because the
-              ladder has run out of levels to measure you with.
+              Four is standing in for the length of a real course. A skill you have fewer than four
+              qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no
+              estimate at all rather than a shaky one.
             </Trans>
           </P>
         </Section>
 
-        <Section title={t`The skill breakdown`}>
+        <Section title={t`Step 6: your dan is the average of your skills`}>
           <P>
             <Trans>
-              Opening a dan badge on a player's Skills tab shows the same estimate run again over slices
-              of the same passes. Your jack dan is the level your jack passes demonstrate, under exactly
-              the same rules and the same count of four.
+              Your estimate for a side is the plain arithmetic average of the skill dans you have. Skills
+              at 10, 9, 7 and 6 make an estimate of 8. If it lands at the very top of a ladder, the badge
+              switches from "~" to "&gt;" and reads as <B>beyond</B> that level instead of pinning you to
+              it, because the ladder has run out of levels to measure you with.
             </Trans>
           </P>
           <P>
             <Trans>
-              On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever
-              skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and
-              Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with
-              tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot
-              more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz
-              [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed
-              charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin.
+              It used to be the 4th best pass across all your skills at once, and in practice that was
+              just whatever you specialise in. Measured across the site's 12,974 4K regular estimates,
+              the old number sat a median of 0.14 levels above the player's single strongest skill, and
+              84% of players were within half a level of theirs. It was measuring your best pattern and
+              calling that your dan. A real course does not work that way: it makes you clear a mix in
+              one sitting. Averaging asks the same question.
             </Trans>
           </P>
           <P>
             <Trans>
-              6K and 7K cannot use those skillsets, because that engine does not rate Technical at all
-              and everything collapses onto Handstream. They use the site's own chart pattern tags
-              instead, so a chart tagged both chordjack and tech backs both dans. On the LN side only 7K
-              gets a breakdown, into general, tech, inverse and release, because those are the only LN
-              subtypes the analyzer separates in any volume.
+              Skills you do not have four passes in are left out of the average rather than counted as
+              zero, because a missing skill is nearly always a short play history rather than a hole in
+              your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past
+              200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K
+              regular estimates, at a median of 23 analysed plays - keep the old rule and are read off
+              their 4th best pass overall.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              How much this moves you depends on how lopsided you are, which is the point. The typical
+              4K player drops about a level, and the gap between a player's best and worst skill runs a
+              median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be
+              invisible.
             </Trans>
           </P>
         </Section>
@@ -475,12 +512,13 @@ function DanEstimatesPage() {
         <Section title={t`What it looks like across everyone`}>
           <P>
             <Trans>
-              At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K
-              and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan
-              and 5,504 for an LN dan. This is where the 4K regular estimates landed:
+              At the time of writing the site had skill ratings for 14,385 players on 4K, 4,119 on 7K
+              and 2,879 on 6K. Of the 4K players, 12,974 had enough qualifying passes for a regular dan
+              and 5,038 for an LN dan. This is where the 4K regular estimates landed:
             </Trans>
           </P>
           <DanDistribution rows={RICE_4K_POPULATION} />
+          <DanShareRing rows={RICE_4K_POPULATION} />
         </Section>
 
         <Section title={t`Where to see it`}>
@@ -502,6 +540,198 @@ function DanEstimatesPage() {
 
         <div ref={endRef} aria-hidden="true" />
       </article>
+    </div>
+  );
+}
+
+/* The same population as a share of the whole, which the bar chart cannot show:
+   bars answer "how many sit at each level", a pie answers "how much of the site
+   is each band", and the second question is the one people do in their head off
+   the counts above.
+
+   Slices are the bar chart's collapsed columns, with anything under
+   PIE_MIN_SHARE folded up into the level below it: eta is 1 player in 12,974,
+   which is three hundredths of a degree of arc and cannot be drawn at all, let
+   alone read. The fold is named on the slice ("zeta and up") rather than
+   quietly dropped.
+
+   Every percentage sits outside the rim, never on the fill: on a slice it would
+   collide with the badge and would be white type on a saturated colour, and out
+   here it wears the page's own text token. Labels on the thin slices are fanned
+   apart to PIE_LABEL_MIN_GAP_DEG and joined back to their own wedge by a stem,
+   because the top three levels together are under 6% and their true angles sit
+   on top of each other.
+
+   Each level wears its own course badge's colour, sampled off the artwork:
+   beta gold, gamma green, delta orange, epsilon pink, zeta sky, alpha the red
+   end of its orange. Only the two numbered bands are free choices, since their
+   badges are plain type. The hues are the badges'; the lightness of each is not,
+   and was solved rather than picked - every slot sits inside the dark-mode
+   OKLCH band, clears 3:1 against the page, and the pass moved alpha down and
+   beta up specifically because orange beside gold is the one neighbouring pair
+   that merges under colour blindness. It lands at dE 7.5 simulated, inside the
+   6-8 floor band, which is legal only because colour is not carrying identity
+   here: every slice is labelled with its own badge and separated by a
+   surface-coloured gap, so the chart reads with the colour taken away entirely.
+   Re-run the palette through a CVD check before touching any of these values. */
+const PIE_MIN_SHARE = 0.005;
+const PIE_RADIUS = 44;
+// Surface-coloured gap between neighbouring slices, in viewBox units.
+const PIE_GAP = 0.8;
+// A slice narrower than this cannot seat its badge, so the badge rides outside
+// the rim beside its percentage.
+const PIE_INSIDE_MIN_SHARE = 0.07;
+const PIE_LABEL_MIN_GAP_DEG = 14;
+const PIE_COLORS = ["#9847ca", "#497cfd", "#ce3401", "#b48706", "#04ab62", "#c96805", "#e14076", "#0994ba"];
+
+/** A point on the circle, clockwise from twelve o'clock. */
+function polar(deg: number, distance: number): { x: number; y: number } {
+  const rad = ((deg - 90) * Math.PI) / 180;
+  return { x: 50 + distance * Math.cos(rad), y: 50 + distance * Math.sin(rad) };
+}
+
+/** The wedge path for one slice, as a filled sector from the centre. */
+function sectorPath(fromDeg: number, toDeg: number, radius: number): string {
+  const from = polar(fromDeg, radius);
+  const to = polar(toDeg, radius);
+  const large = toDeg - fromDeg > 180 ? 1 : 0;
+  return `M 50 50 L ${from.x.toFixed(3)} ${from.y.toFixed(3)} A ${radius} ${radius} 0 ${large} 1 ${to.x.toFixed(3)} ${to.y.toFixed(3)} Z`;
+}
+
+function DanShareRing({ rows }: { rows: Array<{ level: string; players: number }> }) {
+  const { t } = useLingui();
+  const [hovered, setHovered] = useState<string | null>(null);
+
+  const total = rows.reduce((sum, row) => sum + row.players, 0);
+  const banded = [
+    ...NUMERIC_GROUPS.map(([from, to]) => {
+      const band = rows.filter(
+        (row) => /^\d+$/.test(row.level) && Number(row.level) >= Number(from) && Number(row.level) <= Number(to),
+      );
+      return { key: `${from}-${to}`, levels: [from, to], players: band.reduce((sum, row) => sum + row.players, 0) };
+    }),
+    ...rows.filter((row) => !/^\d+$/.test(row.level)).map((row) => ({ key: row.level, levels: [row.level], players: row.players })),
+  ];
+  // Fold the tail: walk down from the top while each level is too thin to draw.
+  let foldFrom = banded.length;
+  while (foldFrom > 1 && banded[foldFrom - 1].players / total < PIE_MIN_SHARE) foldFrom -= 1;
+  const folded = banded.slice(foldFrom);
+  const slices = [
+    ...banded.slice(0, foldFrom).map((band) => ({ ...band, folded: false })),
+    ...(folded.length > 0
+      ? [{
+        key: `${folded[0].key}+`,
+        levels: [folded[0].levels[0]],
+        players: folded.reduce((sum, band) => sum + band.players, 0),
+        folded: true,
+      }]
+      : []),
+  ];
+
+  const share = (players: number) => `${((players / total) * 100).toFixed(1)}%`;
+
+  let cursor = 0;
+  const wedges = slices.map((slice, index) => {
+    const sweep = (slice.players / total) * 360;
+    // Half a gap comes off each end, so the gaps read as even all round. A
+    // slice thinner than the gap keeps a hairline rather than inverting.
+    const gapDeg = Math.min((PIE_GAP / (2 * Math.PI * PIE_RADIUS)) * 180, sweep / 3);
+    const wedge = {
+      slice,
+      color: PIE_COLORS[index % PIE_COLORS.length],
+      path: sectorPath(cursor + gapDeg, cursor + sweep - gapDeg, PIE_RADIUS),
+      mid: cursor + sweep / 2,
+      labelAngle: cursor + sweep / 2,
+      inside: slice.players / total >= PIE_INSIDE_MIN_SHARE,
+    };
+    cursor += sweep;
+    return wedge;
+  });
+
+  // Fan the labels apart, working back from the last one so the tail spreads
+  // away from twelve o'clock instead of running into the first slice. Every
+  // slice takes part, not just the ones whose badge went outside: a wedge can
+  // be wide enough to seat its badge and still have its percentage land in the
+  // crowd at the top. A wide slice's own angle always wins the Math.min, so
+  // this only ever moves the thin end of the ladder.
+  for (let index = wedges.length - 2; index >= 0; index -= 1) {
+    wedges[index].labelAngle = Math.min(wedges[index].labelAngle, wedges[index + 1].labelAngle - PIE_LABEL_MIN_GAP_DEG);
+  }
+
+  return (
+    <div className="flex justify-center py-2">
+      <svg
+        viewBox="-16 -16 132 132"
+        className="h-[300px] w-[300px] sm:h-[360px] sm:w-[360px]"
+        role="img"
+        aria-label={t`Share of players at each dan level`}
+      >
+        {wedges.map(({ slice, color, path, mid, labelAngle, inside }) => {
+          const dim = hovered != null && hovered !== slice.key;
+          const badgeSize = inside ? 13 : 11;
+          // Seated at 0.70 of the radius, not the centroid: a wedge is widest
+          // near its rim, and a badge parked closer in overhangs its own slice.
+          const seat = inside ? polar(mid, PIE_RADIUS * 0.7) : polar(labelAngle, PIE_RADIUS + 11);
+          const label = inside ? polar(labelAngle, PIE_RADIUS + 8) : polar(labelAngle, PIE_RADIUS + 11);
+          // Two badges joined by a rule for a numbered band, the same way the
+          // bars below read "1 through 5" rather than as a single level.
+          const badges = slice.levels.map((level) => ({ level, src: getDanImageSrc(level) }));
+          const ruleWidth = 4;
+          const rowWidth = badges.length * badgeSize + (badges.length - 1) * ruleWidth;
+          return (
+            <g
+              key={slice.key}
+              opacity={dim ? 0.4 : 1}
+              className="transition-opacity duration-150"
+              onMouseEnter={() => setHovered(slice.key)}
+              onMouseLeave={() => setHovered((current) => (current === slice.key ? null : current))}
+            >
+              <title>{`${slice.key}: ${formatNumber(slice.players)} ${t`players`} (${share(slice.players)})`}</title>
+              <path d={path} fill={color} />
+              {!inside ? (
+                <line
+                  x1={polar(mid, PIE_RADIUS - 1).x}
+                  y1={polar(mid, PIE_RADIUS - 1).y}
+                  x2={polar(labelAngle, PIE_RADIUS + 5).x}
+                  y2={polar(labelAngle, PIE_RADIUS + 5).y}
+                  stroke={color}
+                  strokeWidth="0.9"
+                />
+              ) : null}
+              <g transform={`translate(${(seat.x - rowWidth / 2).toFixed(2)} ${(seat.y - badgeSize / 2).toFixed(2)})`}>
+                {badges.map(({ level, src }, position) => {
+                  const x = position * (badgeSize + ruleWidth);
+                  return (
+                    <g key={level}>
+                      {position > 0 ? (
+                        <rect x={x - ruleWidth + 0.6} y={badgeSize / 2 - 0.4} width={ruleWidth - 1.2} height="0.8" rx="0.4" className="fill-osu-b1" />
+                      ) : null}
+                      {src
+                        ? <image href={src} x={x} y={0} width={badgeSize} height={badgeSize} />
+                        : <text x={x + badgeSize / 2} y={badgeSize / 2 + 2} textAnchor="middle" fontSize="6" className="fill-white font-black">{level}</text>}
+                    </g>
+                  );
+                })}
+                {slice.folded ? (
+                  <text x={rowWidth - 0.5} y={badgeSize / 2 + 1.5} fontSize="5.5" className="fill-osu-f1 font-black">+</text>
+                ) : null}
+              </g>
+              {/* Percentages ride outside the rim: inside they would sit on the
+                  badge, and on the fill they would be white type on a
+                  saturated colour. Out here they wear the page's text token. */}
+              <text
+                x={label.x}
+                y={inside ? label.y + 2 : label.y + badgeSize / 2 + 6}
+                textAnchor="middle"
+                fontSize="5.5"
+                className="fill-white font-black tabular-nums"
+              >
+                {share(slice.players)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }
@@ -580,6 +810,10 @@ function DanDistribution({ rows }: { rows: Array<{ level: string; players: numbe
       ];
   const max = Math.max(...columns.map((column) => column.players), 1);
   const hint = expanded ? t`Click to group the numbered levels` : t`Click to open the numbered levels`;
+  /* The top of the ladder is one person, and everybody who reads this page
+     already knows which one. Guarded on the count so it disappears by itself
+     the day a second player gets there. */
+  const loneEta = (column: { key: string; players: number }) => column.key === "eta" && column.players === 1;
 
   return (
     <motion.div layout className="flex items-end gap-[2px] py-2 sm:gap-1">
@@ -598,7 +832,7 @@ function DanDistribution({ rows }: { rows: Array<{ level: string; players: numbe
               type="button"
               onClick={column.group ? () => setExpanded((value) => !value) : undefined}
               className={`flex w-full flex-col items-center gap-1 ${column.group ? "cursor-pointer" : "cursor-default"}`}
-              title={`${column.key}: ${formatNumber(column.players)}${column.group ? ` · ${hint}` : ""}`}
+              title={loneEta(column) ? t`Yes, this is saragi` : `${column.key}: ${formatNumber(column.players)}${column.group ? ` · ${hint}` : ""}`}
             >
               <span className="hidden text-[10px] font-bold tabular-nums text-white sm:block">
                 {formatNumber(column.players)}

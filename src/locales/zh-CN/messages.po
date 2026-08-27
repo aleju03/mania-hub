@@ -1601,8 +1601,12 @@ msgid "6 PM"
 msgstr "18:00"
 
 #: src/routes/dan-estimates.tsx
-msgid "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use the site's own chart pattern tags instead, so a chart tagged both chordjack and tech backs both dans. On the LN side only 7K gets a breakdown, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume."
-msgstr "6K 和 7K 用不了这些技能项，因为那个算法根本不评 Technical，所有东西都塌到 Handstream 上。它们改用本站自己的谱型标签，所以一张同时标了大叠和技的谱面会同时支撑两个段位。LN 那边只有 7K 有细分，分成综合、技、反键和放键，因为分析器只对这几个 LN 子类型做出了有规模的区分。"
+#~ msgid "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use the site's own chart pattern tags instead, so a chart tagged both chordjack and tech backs both dans. On the LN side only 7K gets a breakdown, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume."
+#~ msgstr "6K 和 7K 用不了这些技能项，因为那个算法根本不评 Technical，所有东西都塌到 Handstream 上。它们改用本站自己的谱型标签，所以一张同时标了大叠和技的谱面会同时支撑两个段位。LN 那边只有 7K 有细分，分成综合、技、反键和放键，因为分析器只对这几个 LN 子类型做出了有规模的区分。"
+
+#: src/routes/dan-estimates.tsx
+msgid "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use the site's own chart pattern tags instead, so a chart tagged both chordjack and tech backs both skills. On the LN side only 7K gets a split, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume. The other LN ladders are read as one skill."
+msgstr "6K 和 7K 用不了这些技能项，因为那个算法根本不评 Technical，所有东西都塌到 Handstream 上。它们改用本站自己的谱型标签，所以一张同时标了大叠和技的谱面会同时支撑这两个技能。LN 那边只有 7K 有细分，分成综合、技、反键和放键，因为分析器只对这几个 LN 子类型做出了有规模的区分。其余的 LN 段位表都按一个技能来读。"
 
 #: src/routes/dan-estimates.tsx
 msgid "6K LN"
@@ -2224,8 +2228,12 @@ msgid "Assets"
 msgstr "素材"
 
 #: src/routes/dan-estimates.tsx
-msgid "At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan and 5,504 for an LN dan. This is where the 4K regular estimates landed:"
-msgstr "写这篇文章的时候，本站有 14,229 名 4K 玩家、4,035 名 7K 玩家和 2,824 名 6K 玩家的技能评分。4K 玩家里，12,800 人的达标通过数够算一个单点段位，5,504 人够算一个 LN 段位。4K 单点的估算是这样分布的："
+#~ msgid "At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan and 5,504 for an LN dan. This is where the 4K regular estimates landed:"
+#~ msgstr "写这篇文章的时候，本站有 14,229 名 4K 玩家、4,035 名 7K 玩家和 2,824 名 6K 玩家的技能评分。4K 玩家里，12,800 人的达标通过数够算一个单点段位，5,504 人够算一个 LN 段位。4K 单点的估算是这样分布的："
+
+#: src/routes/dan-estimates.tsx
+msgid "At the time of writing the site had skill ratings for 14,385 players on 4K, 4,119 on 7K and 2,879 on 6K. Of the 4K players, 12,974 had enough qualifying passes for a regular dan and 5,038 for an LN dan. This is where the 4K regular estimates landed:"
+msgstr "写这篇文章的时候，本站有 14,385 名 4K 玩家、4,119 名 7K 玩家和 2,879 名 6K 玩家的技能评分。4K 玩家里，12,974 人的达标通过数够算一个单点段位，5,038 人够算一个 LN 段位。4K 单点的估算是这样分布的："
 
 #: src/routes/dan-estimates.tsx
 msgid "At the time of writing there were around 138,000 charts with a dan estimate: about 97,000 4K regular, 22,000 7K regular, 8,500 4K LN, 7,500 7K LN and 3,000 6K regular."
@@ -4429,6 +4437,10 @@ msgstr "每个卡包都是对应难度区间里的随机抽样"
 msgid "Every pack pays {PACK_OPEN_SHARD_REWARD} shards. Recycle duplicates for more."
 msgstr "每个卡包都给 {PACK_OPEN_SHARD_REWARD} 个碎片。回收重复卡片可以拿到更多。"
 
+#: src/routes/dan-estimates.tsx
+msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
+msgstr "每一次达标通过都会落到四个技能中的一个，而整个估算就是用这四个搭起来的。4K 这边是叠、技、速度和耐力，取自成绩本身的 MSD 技能项评分，按谱面上最强的那一项归类：叠(JackSpeed 和 Chordjack)、技(Technical 和 Jumpstream)、速度(Stream)、耐力(Handstream 和 Stamina)。"
+
 #: src/lib/packs.ts
 msgid "Every tracked player, same odds"
 msgstr "所有已追踪玩家，概率相同"
@@ -4855,8 +4867,12 @@ msgid "Found something broken? Describe what happened."
 msgstr "发现了什么问题？请描述一下发生了什么。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
-msgstr "四这个数字对应的是一个真实课题的长度。某一侧的达标通过不到四次，就干脆不给估算，而不是给一个站不住的。如果你第四好的通过正好落在段位表的最顶端，标记会从「~」变成「>」，读作<0>高于</0>那个段位，而不是把你钉在上面，因为段位表已经没有更高的级别来衡量你了。"
+msgid "Four is standing in for the length of a real course. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+msgstr "四这个数字对应的是一个真实课题的长度。某个技能上的达标通过不到四次，它就没有自己的段位；某一侧的达标通过不到四次，就干脆不给估算，而不是给一个站不住的。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
+#~ msgstr "四这个数字对应的是一个真实课题的长度。某一侧的达标通过不到四次，就干脆不给估算，而不是给一个站不住的。如果你第四好的通过正好落在段位表的最顶端，标记会从「~」变成「>」，读作<0>高于</0>那个段位，而不是把你钉在上面，因为段位表已经没有更高的级别来衡量你了。"
 
 #: src/routes/packs.tsx
 msgid "free"
@@ -5336,6 +5352,10 @@ msgstr "有多少与你水平相近的玩家在刷它"
 msgid "how many players near you have it"
 msgstr "有多少与你水平相近的玩家打过它"
 
+#: src/routes/dan-estimates.tsx
+msgid "How much this moves you depends on how lopsided you are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
+msgstr "这个改动对你影响多大，取决于你有多偏科，而这正是重点所在。典型的 4K 玩家会掉一级左右。玩家最强与最弱技能之间的差距，中位数是 1.7 级，到 90 分位则达到 4.3 级，而这个差距过去是完全看不见的。"
+
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "抽取方式"
@@ -5593,6 +5613,14 @@ msgstr "它可能已被下架，或者还在等待审核。"
 #~ msgid "It moves over time, because the rating engines and the chart analysis keep getting improved, and a recompute that shifts a chart by a step shifts everyone whose evidence sat on that chart."
 #~ msgstr ""
 
+#: src/routes/dan-estimates.tsx
+#~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs - it was not a summary of your playing, it was your best pattern restated. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
+#~ msgstr "以前的做法是把你所有技能的通过混在一起，取第四好的那次，而实际上那测出来的就是你最擅长的那一项。拿本站 12,974 个 4K 单点估算来量，旧的数字中位数只比玩家最强的那一个技能高 0.14 级，84% 的玩家与自己最强技能的差距在半级以内。它并不是对你水平的总结，只是把你最拿手的谱型换个说法讲了一遍。真实的课题不是这样的：它要你在一场之内把混在一起的谱面全部通过。取平均问的正是同一个问题。"
+
+#: src/routes/dan-estimates.tsx
+msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
+msgstr "以前的做法是把你所有技能的通过混在一起，取第四好的那次，而实际上那测出来的就是你最擅长的那一项。拿本站 12,974 个 4K 单点估算来量，旧的数字中位数只比玩家最强的那一个技能高 0.14 级，84% 的玩家与自己最强技能的差距在半级以内。它量的是你最拿手的谱型，然后把这个数字当作你的段位。真实的课题不是这样的：它要你在一场之内把混在一起的谱面全部通过。取平均问的正是同一个问题。"
+
 #: src/components/communities/field-options.tsx
 msgid "Italian"
 msgstr "意大利语"
@@ -5693,6 +5721,10 @@ msgstr "跳转到某一页"
 #: src/routes/player/$username.tsx
 msgid "Jumpstream"
 msgstr "双押切"
+
+#: src/routes/dan-estimates.tsx
+msgid "Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
+msgstr "把 Jumpstream 放进技是有意为之。MinaCalc 的 Jumpstream 在密集对拍上会飙得很高，而那种谱面打起来更像技而不是速度，所以一旦把它和 Stream 归在一起，Blastix Riotz [GRAVITY] 这类谱面就会被贴到速度那一格。拿一个装了 25 张真正 gamma 速度谱的谱包来验证，只用 Stream 能把这 25 张全部选中，并且以很大的差距把对拍谱排除掉。"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "jumpstream, warmup, ..."
@@ -7808,8 +7840,8 @@ msgid "On /skins, anyone can download the .osk."
 msgstr "出现在 /skins，任何人都可以下载 .osk。"
 
 #: src/routes/dan-estimates.tsx
-msgid "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
-msgstr "4K 这边的分项来自成绩本身的 MSD 技能项评分，按谱面上最强的那一项归类：叠(JackSpeed 和 Chordjack)、技(Technical 和 Jumpstream)、速度(Stream)、耐力(Handstream 和 Stamina)。把 Jumpstream 放进技是有意为之。MinaCalc 的 Jumpstream 在密集对拍上会飙得很高，而那种谱面打起来更像技而不是速度，所以一旦把它和 Stream 归在一起，Blastix Riotz [GRAVITY] 这类谱面就会被贴到速度那一格。拿一个装了 25 张真正 gamma 速度谱的谱包来验证，只用 Stream 能把这 25 张全部选中，并且以很大的差距把对拍谱排除掉。"
+#~ msgid "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
+#~ msgstr "4K 这边的分项来自成绩本身的 MSD 技能项评分，按谱面上最强的那一项归类：叠(JackSpeed 和 Chordjack)、技(Technical 和 Jumpstream)、速度(Stream)、耐力(Handstream 和 Stamina)。把 Jumpstream 放进技是有意为之。MinaCalc 的 Jumpstream 在密集对拍上会飙得很高，而那种谱面打起来更像技而不是速度，所以一旦把它和 Stream 归在一起，Blastix Riotz [GRAVITY] 这类谱面就会被贴到速度那一格。拿一个装了 25 张真正 gamma 速度谱的谱包来验证，只用 Stream 能把这 25 张全部选中，并且以很大的差距把对拍谱排除掉。"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "on a map"
@@ -7972,8 +8004,8 @@ msgid "Open your own packs"
 msgstr "开你自己的卡包"
 
 #: src/routes/dan-estimates.tsx
-msgid "Opening a dan badge on a player's Skills tab shows the same estimate run again over slices of the same passes. Your jack dan is the level your jack passes demonstrate, under exactly the same rules and the same count of four."
-msgstr "在玩家页的技能标签里点开一个段位标记，看到的是同一套估算在同一批通过的各个分项上再跑一遍。你的叠段位就是你的叠类通过所能证明的水平，规则完全一样，同样要凑够四次。"
+#~ msgid "Opening a dan badge on a player's Skills tab shows the same estimate run again over slices of the same passes. Your jack dan is the level your jack passes demonstrate, under exactly the same rules and the same count of four."
+#~ msgstr "在玩家页的技能标签里点开一个段位标记，看到的是同一套估算在同一批通过的各个分项上再跑一遍。你的叠段位就是你的叠类通过所能证明的水平，规则完全一样，同样要凑够四次。"
 
 #: src/routes/replay.tsx
 msgid "Opening shared replay{elapsedLabel}"
@@ -8452,6 +8484,7 @@ msgid "Player's skin"
 msgstr "玩家的皮肤"
 
 #: src/components/layout/Nav.tsx
+#: src/routes/dan-estimates.tsx
 #: src/routes/farm-helper.tsx
 msgid "players"
 msgstr "玩家"
@@ -9673,8 +9706,12 @@ msgid "Say something to {name}"
 msgstr "对 {name} 说点什么"
 
 #: src/routes/dan-estimates.tsx
-msgid "Say your 4K regular passes at 96% or better land on charts rated:"
-msgstr "假设你 96% 以上的 4K 单点通过，落在这些段位的谱面上："
+msgid "Say your 4K jack passes at 96% or better land on charts rated:"
+msgstr "假设你 96% 以上的 4K 叠类通过，落在这些段位的谱面上："
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Say your 4K regular passes at 96% or better land on charts rated:"
+#~ msgstr "假设你 96% 以上的 4K 单点通过，落在这些段位的谱面上："
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Scale the image to fit"
@@ -10137,6 +10174,10 @@ msgstr "分享码"
 msgid "Share code copied"
 msgstr "分享码已复制"
 
+#: src/routes/dan-estimates.tsx
+msgid "Share of players at each dan level"
+msgstr "各段位玩家占比"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Share this replay"
 msgstr "分享这份回放"
@@ -10448,6 +10489,10 @@ msgstr "仅技能提升"
 msgid "Skills"
 msgstr "技能"
 
+#: src/routes/dan-estimates.tsx
+msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - keep the old rule and are read off their 4th best pass overall."
+msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。已分析成绩不到 25 个时，只有 18% 的 4K 玩家能评出两个技能；超过 200 个之后，每一个玩家都能。评出的技能不到两个的玩家占 4K 单点估算的 7.6%，他们的已分析成绩中位数是 23 个，这部分人仍按旧规则来，取全部通过里第四好的那次。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Skin"
@@ -10752,8 +10797,20 @@ msgid "Step 3: which of your plays count"
 msgstr "第三步：你的哪些成绩会被算进去"
 
 #: src/routes/dan-estimates.tsx
-msgid "Step 4: your dan is your 4th best pass"
-msgstr "第四步：你的段位是第四好的那次通过"
+#~ msgid "Step 4: your dan is your 4th best pass"
+#~ msgstr "第四步：你的段位是第四好的那次通过"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 4: your passes are sorted into four skills"
+msgstr "第四步：你的通过会被分进四个技能"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 5: each skill's dan is your 4th best pass in it"
+msgstr "第五步：每个技能的段位，是你在它上面第四好的那次通过"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 6: your dan is the average of your skills"
+msgstr "第六步：你的段位是各个技能的平均"
 
 #: src/routes/replay.tsx
 msgid "Still fetching the replay and chart."
@@ -10936,12 +10993,16 @@ msgid "Tags"
 msgstr "标签"
 
 #: src/routes/dan-estimates.tsx
-msgid "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
-msgstr "把某个键数某一侧的所有达标通过拿出来，按谱面的段位排好，然后看第四个。那就是你的段位。上面不会再加任何东西，排在它之上的任何一次通过也拉不高它。"
+#~ msgid "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
+#~ msgstr "把某个键数某一侧的所有达标通过拿出来，按谱面的段位排好，然后看第四个。那就是你的段位。上面不会再加任何东西，排在它之上的任何一次通过也拉不高它。"
 
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Take it down for good?"
 msgstr "确定要永久下架吗？"
+
+#: src/routes/dan-estimates.tsx
+msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and look at the 4th one down. That is your dan in that skill. Nothing is added on top of it, and no single pass above it can raise it."
+msgstr "把你在某一个技能上的达标通过拿出来，按谱面的段位排好，然后看第四个。那就是你在这个技能上的段位。上面不会再加任何东西，排在它之上的任何一次通过也拉不高它。"
 
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
@@ -11382,8 +11443,8 @@ msgid "The site downloads the chart file, reads the notes, and runs the pattern 
 msgstr "本站会下载谱面文件，读出音符，再把谱型交给一个评分算法。用哪个算法取决于键数，因为没有哪一个在所有键数上都是最好的："
 
 #: src/routes/dan-estimates.tsx
-msgid "The skill breakdown"
-msgstr "按技能拆开看"
+#~ msgid "The skill breakdown"
+#~ msgstr "按技能拆开看"
 
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 msgid "The skin could not be loaded. Try again in a moment."
@@ -12682,6 +12743,10 @@ msgstr "在这里编写你的页面。选中文本后用工具栏设置格式，
 msgid "wrong"
 msgstr "答错"
 
+#: src/routes/dan-estimates.tsx
+msgid "Yes, this is saragi"
+msgstr "对，就是 saragi"
+
 #: src/lib/changelog.ts
 msgid "yesterday"
 msgstr "昨天"
@@ -12861,8 +12926,16 @@ msgid "Your dynamic renders were turned off."
 msgstr "你的动态渲染图已被关闭。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
-msgstr "你的估算是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
+msgid "Your estimate for a side is the plain arithmetic average of the skill dans you have. Skills at 10, 9, 7 and 6 make an estimate of 8. If it lands at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
+msgstr "你在某一侧的估算，就是你已有的那些技能段位的算术平均。10、9、7、6 这四个技能，算出来的估算是 8。如果它正好落在段位表的最顶端，标记会从「~」变成「>」，读作<0>高于</0>那个段位，而不是把你钉在上面，因为段位表已经没有更高的级别来衡量你了。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
+#~ msgstr "你的估算是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
+msgstr "你的叠段位是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"
