@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -8,6 +8,7 @@ import { getDanImageSrc } from "../lib/dan-images";
 import { formatNumber } from "../lib/format";
 import { ModBadge } from "../components/ui/ModBadge";
 import { pageSeo } from "../lib/seo";
+import { track } from "../lib/analytics";
 
 /* The one place the dan estimate explains itself in full.
 
@@ -122,6 +123,28 @@ const RICE_4K_POPULATION: Array<{ level: string; players: number }> = [
 
 function DanEstimatesPage() {
   const { t } = useLingui();
+
+  /* This page is worth counting on its own, so it says who it is instead of
+     leaving the admin to pick /dan-estimates out of every pageview: the
+     analytics tab's event lookup answers "who read the dan explainer" by name.
+     Two events, because opening the page and reading it are different things -
+     the second only fires once the end of the article has actually been on
+     screen, and only once per visit. */
+  const endRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    track("dan_estimates_view");
+  }, []);
+  useEffect(() => {
+    const end = endRef.current;
+    if (!end || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      track("dan_estimates_read");
+    });
+    observer.observe(end);
+    return () => observer.disconnect();
+  }, []);
 
   // Ladder names read the same in every table on the page, so they are named
   // once here rather than once per row.
@@ -484,6 +507,8 @@ function DanEstimatesPage() {
             </Trans>
           </P>
         </Section>
+
+        <div ref={endRef} aria-hidden="true" />
       </article>
     </div>
   );

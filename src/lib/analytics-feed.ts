@@ -135,6 +135,7 @@ const SIMPLE_PAGE_LABELS: Record<string, string> = {
   "/settings": "settings",
   "/bbcode": "the BBCode editor",
   "/discord": "the Discord page",
+  "/dan-estimates": "the dan explainer",
 };
 
 /* The country scope the visitor had selected when the event fired, as a name
@@ -359,6 +360,12 @@ function describeNamedAnalyticsEvent(
   switch (row.event) {
     case "changelog_open":
       return { kind: "visit", verb: "opened", subject: "the changelog", detail: null };
+    /* The dan explainer fires both: the open, and the read once the end of the
+       article has been on screen. A visitor who bounced has only the first. */
+    case "dan_estimates_view":
+      return { kind: "visit", verb: "opened", subject: "the dan explainer", detail: null };
+    case "dan_estimates_read":
+      return { kind: "visit", verb: "read", subject: "the dan explainer", detail: "to the end" };
     case "replay_view": {
       const map = replayMapName(row, replayMaps);
       return {

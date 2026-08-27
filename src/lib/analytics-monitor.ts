@@ -170,6 +170,8 @@ const ANALYTICS_EVENT_LABELS: Record<string, string> = {
   community_post_pick: "Server picker reached",
   community_post_start: "Post-a-server opened",
   community_post_submitted: "Server submitted",
+  dan_estimates_read: "Dan explainer read to the end",
+  dan_estimates_view: "Dan explainer opened",
   dom_translate_conflict: "Page translator conflict",
   map_opened: "Map opened",
   osu_api_error: "osu! API error",

@@ -72,10 +72,15 @@ export function SkillLeaderboardBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [country, keys, requestedAxis, page]);
 
-  const activeAxis = snapshot?.axis ?? requestedAxis;
-  const isOverall = activeAxis === DEFAULT_LEADERBOARD_AXIS;
-  const meta = skillAxisMeta(activeAxis);
-  const axisLabel = meta ? i18n._(meta.labelMsg) : activeAxis;
+  /* Two axes, deliberately: the chips answer to the one that was CLICKED, the
+     table to the one that has arrived. Highlighting the chips from the snapshot
+     left the pressed chip dark until the response landed, which read as a
+     network stall on every click; highlighting the table from the request would
+     print the new axis's header and color over the old axis's numbers. */
+  const servedAxis = snapshot?.axis ?? requestedAxis;
+  const isOverall = servedAxis === DEFAULT_LEADERBOARD_AXIS;
+  const meta = skillAxisMeta(servedAxis);
+  const axisLabel = meta ? i18n._(meta.labelMsg) : servedAxis;
 
   const rows: LeaderboardRow[] = useMemo(() => {
     return (snapshot?.ranking ?? [])
@@ -114,7 +119,7 @@ export function SkillLeaderboardBoard({
         />
         <AxisPicker
           axes={snapshot?.axes ?? []}
-          value={activeAxis}
+          value={requestedAxis}
           onChange={(next) => onNavigate({ axis: next, page: 1 })}
         />
       </div>

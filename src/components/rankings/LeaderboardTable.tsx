@@ -48,17 +48,23 @@ export function LeaderboardTable({
     navigate({ to: "/player/$username", params: { username } });
   };
 
+  // A refetch keeps the rows it already has, dimmed, instead of blanking to a
+  // skeleton: switching axis is a re-sort of the same board, and tearing the
+  // table down for the length of a round trip is what made a fast request feel
+  // like a slow one. The skeleton is for a board with nothing to show yet.
+  const stale = loading && rows.length > 0;
   const body = (() => {
     if (error) return "error" as const;
-    if (loading) return "loading" as const;
+    if (loading && rows.length === 0) return "loading" as const;
     if (rows.length === 0) return "empty" as const;
     return "rows" as const;
   })();
+  const staleClass = stale ? " opacity-40" : "";
 
   return (
     <>
       {/* Mobile cards */}
-      <div className="sm:hidden space-y-2">
+      <div className={`sm:hidden space-y-2 transition-opacity duration-150${staleClass}`} aria-busy={loading}>
         {body === "error" ? (
           <div className="px-4 py-8 text-center text-sm text-osu-f1">{error}</div>
         ) : body === "empty" ? (
@@ -104,7 +110,10 @@ export function LeaderboardTable({
       </div>
 
       {/* Desktop table */}
-      <div className="hidden sm:block rounded-xl overflow-hidden border border-osu-b3/30">
+      <div
+        className={`hidden sm:block rounded-xl overflow-hidden border border-osu-b3/30 transition-opacity duration-150${staleClass}`}
+        aria-busy={loading}
+      >
         <table className="w-full table-fixed">
           <colgroup>
             <col className="w-[6%]" />

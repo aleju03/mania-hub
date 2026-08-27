@@ -92,6 +92,24 @@ describe("describeAnalyticsEvent", () => {
     });
   });
 
+  it("separates opening the dan explainer from reading it", () => {
+    expect(describeAnalyticsEvent(row({ event: "dan_estimates_view", path: "/dan-estimates" }))).toEqual({
+      kind: "visit",
+      verb: "opened",
+      subject: "the dan explainer",
+      detail: null,
+    });
+    expect(describeAnalyticsEvent(row({ event: "dan_estimates_read", path: "/dan-estimates" }))).toEqual({
+      kind: "visit",
+      verb: "read",
+      subject: "the dan explainer",
+      detail: "to the end",
+    });
+    expect(describeAnalyticsEvent(row({ event: "$pageview", path: "/dan-estimates" })).subject).toBe(
+      "the dan explainer",
+    );
+  });
+
   it("reads the collections page as a shelf or as a tab", () => {
     expect(
       describeAnalyticsEvent(row({ path: "/packs/collections", collectionsCollector: "manolo" })),

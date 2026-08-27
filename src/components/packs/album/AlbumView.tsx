@@ -1095,6 +1095,7 @@ export function AlbumView({
   trackedCountries,
   viewerId,
   openAlbumCode = null,
+  scrollLinkedAlbumIntoView,
 }: {
   wallet: PackWallet;
   syncStatus: "local" | "syncing" | "synced";
@@ -1103,6 +1104,10 @@ export function AlbumView({
   /** Album the URL asks for, so one can be linked to rather than only reached
       by tapping the shelf. Null is the shelf. */
   openAlbumCode?: string | null;
+  /** False when the packs page is restoring this subtree below a completed
+      reveal. The album code is still in the URL then, but it is not a new
+      navigation and must not pull the viewport away from the pack summary. */
+  scrollLinkedAlbumIntoView: boolean;
 }) {
   const { t, i18n } = useLingui();
   const sections = useMemo(() => buildAlbumSections(trackedCountries ?? []), [trackedCountries]);
@@ -1117,7 +1122,7 @@ export function AlbumView({
   const urlAlbumRef = useRef<string | null>(openCode);
   /* Set only by the two URL-driven opens, never by a tap on the shelf: a
      reader who tapped is already looking at the right part of the page. */
-  const scrollToAlbumRef = useRef(Boolean(linkedCode));
+  const scrollToAlbumRef = useRef(Boolean(linkedCode) && scrollLinkedAlbumIntoView);
   const rootRef = useRef<HTMLElement | null>(null);
   const [rosters, setRosters] = useState<Record<string, RosterData>>(() => {
     const seeded: Record<string, RosterData> = {};
@@ -1473,11 +1478,11 @@ export function AlbumView({
     if (!openAlbumCode || urlAlbumRef.current === openAlbumCode) return;
     if (!sections.some((section) => section.code === openAlbumCode)) return;
     urlAlbumRef.current = openAlbumCode;
-    scrollToAlbumRef.current = true;
+    scrollToAlbumRef.current = scrollLinkedAlbumIntoView;
     setOpenCode(openAlbumCode);
     setCurrentPage(0);
     setBookReady(false);
-  }, [openAlbumCode, sections]);
+  }, [openAlbumCode, scrollLinkedAlbumIntoView, sections]);
 
   /* The album sits well below the pack opener, so a link to one has to bring
      it into frame or it lands the reader at the top of the page with nothing

@@ -1193,6 +1193,11 @@ function PacksPage() {
                       trackedCountries={trackedCountries}
                       viewerId={auth.viewer?.id ?? null}
                       openAlbumCode={openAlbumCode ?? null}
+                      /* A direct album link should land at the book. A summary
+                         remount is only restoring the collection below the
+                         cards just dealt, so scrolling there would yank the
+                         Android viewport away before they can be read. */
+                      scrollLinkedAlbumIntoView={phase === "pack"}
                     />
                   </div>
                 )}
