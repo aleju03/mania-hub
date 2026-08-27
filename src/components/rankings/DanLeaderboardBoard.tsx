@@ -87,6 +87,12 @@ export function DanLeaderboardBoard({
      immediately, the table to the one that has arrived so a header and its
      numbers always belong together. */
   const servedSkillset = snapshot?.skillset ?? requestedSkillset;
+  /* Same rule one level up: a badge's art and its ladder come from the snapshot
+     that is on screen, not from the keymode the last click asked for. Reading
+     them off the props drew 7K art over 4K rows for the length of a refetch. */
+  const servedKeys = snapshot?.keyCount ?? keys;
+  const servedSide = snapshot?.side ?? side;
+  const staleLadder = snapshot != null && (snapshot.keyCount !== keys || snapshot.side !== side);
   const skillsetMeta = servedSkillset === DEFAULT_DAN_SKILLSET ? null : DAN_SKILLSET_META[servedSkillset];
   const skillsetLabel = skillsetMeta ? i18n._(skillsetMeta.labelMsg) : servedSkillset;
 
@@ -102,8 +108,8 @@ export function DanLeaderboardBoard({
             <span className="text-[11px] tabular-nums text-osu-f1">{entry.rawDan.toFixed(2)}</span>
             <DanLevelBadge
               label={entry.label}
-              keyCount={keys}
-              side={side}
+              keyCount={servedKeys}
+              side={servedSide}
               beyondTable={entry.beyondTable === true}
               size="sm"
               formatLabel={formatDanLabel}
@@ -115,7 +121,7 @@ export function DanLeaderboardBoard({
         // dan earned off a deep pool from one off a handful of maps.
         detail: <Trans>{formatNumber(entry.analyzedPlays)} plays</Trans>,
       }));
-  }, [snapshot, hiddenUserIds, keys, side, t]);
+  }, [snapshot, hiddenUserIds, servedKeys, servedSide, t]);
 
   const totalPages = Math.max(1, Math.ceil((snapshot?.total ?? 0) / LEADERBOARD_PAGE_SIZE));
   const sideOptions: Array<{ value: DanSide; label: string }> = [
@@ -143,9 +149,11 @@ export function DanLeaderboardBoard({
 
       {/* A skillset belongs to one keymode and side (stamina is 4K's, the LN
           subtypes are 7K's), so changing either drops back to every clear
-          rather than asking for a column that ladder does not have. */}
+          rather than asking for a column that ladder does not have - and the
+          chips go away until the new ladder's list arrives, rather than
+          offering the old one's. */}
       <DanSkillsetPicker
-        skillsets={snapshot?.skillsets ?? []}
+        skillsets={staleLadder ? [] : snapshot?.skillsets ?? []}
         value={requestedSkillset}
         onChange={(next) => onNavigate({ skillset: next, page: 1 })}
       />

@@ -119,6 +119,45 @@ describe("recomputePlayerSkillDanChunk", () => {
     db.close();
   });
 
+  it("leaves a row alone when a recompute wrote it between the read and the rewrite", async () => {
+    const db = await makeDb();
+    for (const beatmapId of [301, 302, 303, 304]) await seedChart(db, beatmapId, 8);
+    await seedRow(db, 51, [301, 302, 303, 304]);
+
+    // The chart lookup sits between the sweep's read and its write, and skill
+    // computation runs in another lane, so that gap is a real window. Landing
+    // a fresh row in it and watching the sweep decline to overwrite it is the
+    // whole point of the updated_at guard.
+    const client = db as unknown as { execute: (stmt: unknown) => Promise<unknown> };
+    const realExecute = client.execute.bind(client);
+    let raced = false;
+    client.execute = async (stmt: unknown) => {
+      const sql = String((stmt as { sql?: unknown })?.sql ?? stmt ?? "");
+      if (!raced && sql.includes("beatmap_chart_analysis")) {
+        raced = true;
+        await realExecute({
+          sql: "update player_skill_ratings set modes_json = json(?), updated_at = ? where user_id = ?",
+          args: [
+            json({ modes: [{ keyCount: 4, dan: { rc: { rawDan: 9, label: "9", clears: 4 }, ln: null } }] }),
+            "2026-08-21T00:00:00.000Z",
+            51,
+          ],
+        });
+      }
+      return realExecute(stmt);
+    };
+
+    const result = await recomputePlayerSkillDanChunk(db, 0);
+    expect(raced).toBe(true);
+    expect(result).toMatchObject({ scanned: 1, rewritten: 0, done: true });
+
+    const row = (await exec(db, "select modes_json, updated_at from player_skill_ratings where user_id = 51", [])).rows[0];
+    const summary = parseJson<{ modes: Array<{ dan: { rc: { rawDan: number } | null } }> }>(String(row.modes_json ?? ""), { modes: [] });
+    expect(summary.modes[0].dan.rc?.rawDan).toBe(9);
+    expect(String(row.updated_at)).toBe("2026-08-21T00:00:00.000Z");
+    db.close();
+  });
+
   it("keeps each keymode's dan on its own plays", async () => {
     const db = await makeDb();
     for (const beatmapId of [301, 302, 303, 304]) await seedChart(db, beatmapId, 8);
