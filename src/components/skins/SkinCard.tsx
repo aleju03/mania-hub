@@ -182,7 +182,10 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
         style={{ "--skin-accent": accent } as CSSProperties}
         className="flex h-full flex-col overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 transition-[border-color,box-shadow] group-hover:border-(--skin-accent) group-hover:shadow-[0_0_18px_-8px_var(--skin-accent)]"
       >
-        <div className="relative aspect-video w-full bg-osu-b5">
+        {/* overflow-hidden + absolute: an aspect-ratio box still grows to fit
+            its content, so a cover screenshot taller than 16:9 would stretch
+            this card past every other one in the grid. */}
+        <div className="relative aspect-video w-full overflow-hidden bg-osu-b5">
           {preview.url ? (
             <SkinPreviewImage
               key={preview.url}
@@ -190,7 +193,7 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
               alt={t`${skin.name} preview`}
               width={preview.width ?? 1280}
               height={preview.height ?? 720}
-              className="h-full w-full object-cover group-hover:brightness-110"
+              className="absolute inset-0 h-full w-full object-cover group-hover:brightness-110"
             />
           ) : null}
           <div className="absolute right-1.5 top-1.5">
