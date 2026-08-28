@@ -2428,8 +2428,11 @@ export interface PlayerSkillDanEvidence {
   courseClear: PlayerSkillDanCourseEvidence | null;
 }
 
-const DAN_EVIDENCE_MAX_CLEARS = 20;
-const DAN_EVIDENCE_SKILLSET_PLAYS = 10;
+// Every play the average actually reads must ship: each list averages its best
+// DAN_CLEAR_AVERAGE_WINDOW clears, so a shorter cap would hide clears that set
+// the number the window exists to explain.
+const DAN_EVIDENCE_MAX_CLEARS = DAN_CLEAR_AVERAGE_WINDOW;
+const DAN_EVIDENCE_SKILLSET_PLAYS = DAN_CLEAR_AVERAGE_WINDOW;
 
 interface DanSkillsetBucket {
   id: string;
