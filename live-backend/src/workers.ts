@@ -14,9 +14,9 @@ import { GLOBAL_FARMED_BOARD_REPACK_JOB, MapsEmptyResultError, MapsRosterNotRead
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { RECONCILE_SETTLED_SETS_JOB, runSettledSetsReconcile } from "./features/settled-sets-reconcile.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
-import { PLAYER_SKILLS_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, computePlayerSkillsJob, ensurePlayerSkillDanSweepSeeded, runPlayerSkillDanSweepJob, runPlayerSkillFloorSweepJob, runPlayerSkillMsdCapSweepJob, runPlayerSkillPoisonRecoveryJob, runPlayerSkillVibroSweepJob } from "./features/player-skills.js";
+import { PLAYER_SKILLS_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_PATTERN_SWEEP_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, computePlayerSkillsJob, ensurePlayerSkillDanSweepSeeded, ensurePlayerSkillPatternSweepSeeded, runPlayerSkillDanSweepJob, runPlayerSkillFloorSweepJob, runPlayerSkillMsdCapSweepJob, runPlayerSkillPatternSweepJob, runPlayerSkillPoisonRecoveryJob, runPlayerSkillVibroSweepJob } from "./features/player-skills.js";
 import { SKILL_VECTOR_BACKFILL_JOB, runSkillVectorBackfillJob } from "./features/skill-vector-backfill.js";
-import { SKILL_BASELINE_JOB, runSkillBaselineJob } from "./features/skill-baseline.js";
+import { SKILL_BASELINE_JOB, enqueueSkillBaselineIfDue, runSkillBaselineJob } from "./features/skill-baseline.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
 import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB, runProfileSnapshotRefreshJob, runProfileUserRefreshJob } from "./features/player-profiles.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
@@ -167,7 +167,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // the work is local (cached .osu text), no osu! API pressure. Tunable via
     // CHART_ANALYSIS_LANE_INTERVAL_MS so a local backfill can run flat out.
     name: "chart-analysis",
-    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_ELIGIBILITY_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_LEOBLACK_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, JACK_TAG_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, LN_PRIMARY_REPIN_JOB, NOTE_BPM_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, PLAYER_SKILL_DAN_SWEEP_JOB],
+    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_ELIGIBILITY_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_LEOBLACK_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, JACK_TAG_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, LN_PRIMARY_REPIN_JOB, NOTE_BPM_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_PATTERN_SWEEP_JOB],
     claimLimit: 1,
     intervalMs: readConfig().chartAnalysisLaneIntervalMs,
   },
@@ -703,7 +703,11 @@ export class WorkerRunner {
       return;
     }
     if (job.type === JACK_TAG_RECOMPUTE_JOB) {
-      await runJackTagRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
+      // On the chunk that finishes the chart-side re-tag, seed the player
+      // sweep that re-folds stored pattern ratings over the final tags.
+      if (await runJackTagRecomputeJob(this.db, this.queue, job.payload as { cursor?: number })) {
+        await ensurePlayerSkillPatternSweepSeeded(this.db, this.queue);
+      }
       return;
     }
     if (job.type === COMPANELLA_RECOMPUTE_JOB) {
@@ -777,6 +781,15 @@ export class WorkerRunner {
     }
     if (job.type === PLAYER_SKILL_DAN_SWEEP_JOB) {
       await runPlayerSkillDanSweepJob(this.db, this.queue, job.payload as { cursor?: number });
+      return;
+    }
+    if (job.type === PLAYER_SKILL_PATTERN_SWEEP_JOB) {
+      // The finishing chunk forces a baseline rebuild (interval 0): the
+      // percentile curves should learn the refreshed pattern axes now, not at
+      // the next weekly refresh.
+      if (await runPlayerSkillPatternSweepJob(this.db, this.queue, job.payload as { cursor?: number })) {
+        await enqueueSkillBaselineIfDue(this.db, this.queue, 0);
+      }
       return;
     }
     if (job.type === HT_RATE_ANALYSIS_JOB) {

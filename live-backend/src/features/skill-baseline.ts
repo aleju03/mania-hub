@@ -5,6 +5,7 @@ import type { JobQueue } from "../jobs/queue.js";
 import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
 import {
   PLAYER_SKILLS_VERSION,
+  PLAYER_SKILL_PATTERN_SWEEP_META_KEY,
   SKILL_RATING_SKILLSETS,
   SSR_CALC_GOAL_CAP,
   SSR_EXTRAPOLATION_BASE_GOAL,
@@ -731,10 +732,22 @@ export async function enqueueSkillBaselineIfDue(db: Db, queue: JobQueue, interva
   // finalize). The old blob keeps serving until that finalize overwrites it.
   const exactRow = (await exec(db, "select value_json from live_meta where key = ? limit 1", [EXACT_SKILL_CURVES_META_KEY])).rows[0];
   const exactStored = parseJson<ExactSkillCurves | null>(String(exactRow?.value_json ?? ""), null);
+  // A finished pattern re-fold (the player-side companion of a chart re-tag
+  // sweep) outdates otherwise-fresh curves: blobs computed before its stamp
+  // were folded over the pre-sweep pattern entries and can be missing whole
+  // axes (pattern:jack). Checking it here lets the 6-hour scheduler tick
+  // rebuild even when the sweep's own finishing chunk found a chain already
+  // in flight and could not enqueue.
+  const refoldRow = (await exec(db, "select value_json from live_meta where key = ? limit 1", [PLAYER_SKILL_PATTERN_SWEEP_META_KEY])).rows[0];
+  const refoldedAtMs = Date.parse(String(parseJson<{ finishedAt?: unknown }>(String(refoldRow?.value_json ?? ""), {}).finishedAt ?? ""));
+  const exactComputedAtMs = Date.parse(exactStored?.computedAt ?? "");
+  const coversRefold = !Number.isFinite(refoldedAtMs)
+    || (Number.isFinite(exactComputedAtMs) && exactComputedAtMs >= refoldedAtMs);
   if (
     approxFresh
     && exactStored?.playerSkillsVersion === PLAYER_SKILLS_VERSION
     && exactStored?.format === EXACT_SKILL_CURVES_FORMAT
+    && coversRefold
   ) {
     return false;
   }

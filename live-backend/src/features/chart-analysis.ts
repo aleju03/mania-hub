@@ -1513,7 +1513,7 @@ async function enqueueChordjackTagRecompute(queue: JobQueue, cursor: number): Pr
 // random 7K charts mint a visible jack entry, so most of the scan is
 // compare-and-skip.
 export const JACK_TAG_RECOMPUTE_JOB = "recompute_jack_tag_sweep";
-const JACK_TAG_META_KEY = "jack_tag_recompute_done:v1";
+export const JACK_TAG_META_KEY = "jack_tag_recompute_done:v1";
 const JACK_TAG_CHUNK = 50;
 const JACK_TAG_SWEEP_KEY_COUNTS = [6, 7];
 
@@ -1588,7 +1588,10 @@ export async function ensureJackTagRecomputeSeeded(db: Db, queue: JobQueue): Pro
   await enqueueJackTagRecompute(queue, 0);
 }
 
-export async function runJackTagRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+/** Returns true on the chunk that finishes the sweep, so the dispatcher can
+ * seed the player-side pattern sweep that re-folds stored ratings over the
+ * refreshed tags. */
+export async function runJackTagRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<boolean> {
   const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
   const result = await recomputeJackTagChunk(db, cursor);
   // Each re-analysis upserts its own search-index row on completion, so the
@@ -1601,9 +1604,10 @@ export async function runJackTagRecomputeJob(db: Db, queue: JobQueue, payload: {
       "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
       [JACK_TAG_META_KEY, json({ finishedAt: now }), now],
     );
-    return;
+    return true;
   }
   await enqueueJackTagRecompute(queue, result.nextCursor);
+  return false;
 }
 
 async function enqueueJackTagRecompute(queue: JobQueue, cursor: number): Promise<void> {

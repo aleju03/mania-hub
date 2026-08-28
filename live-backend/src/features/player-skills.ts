@@ -5,7 +5,7 @@ import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, compute
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
-import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_TAG_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { MAX_RATE_PERCENT, MIN_RATE_PERCENT, computeAndStoreRateDanVerdictFromText, enqueueRateDanEstimate, loadStoredRateDanVerdicts, rateDanVerdictKey } from "./dan-estimates.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -3421,6 +3421,157 @@ async function enqueuePlayerSkillDanSweep(
     PLAYER_SKILL_DAN_SWEEP_JOB,
     rateVerdictRestart ? `${PLAYER_SKILL_DAN_SWEEP_JOB}:rate-verdict-restart` : `${PLAYER_SKILL_DAN_SWEEP_JOB}:${cursor}`,
     { cursor, startedAt: startedAt ?? nowIso() },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// One-shot sweep behind the 6K/7K jack re-tag (the chart-side
+// JACK_TAG_RECOMPUTE_JOB): a mode's pattern ratings are folded from stored
+// plays against whatever chart tags existed at compute time, and a stored row
+// otherwise refreshes only when a profile view or a new top play triggers a
+// recompute - which is nobody inactive, so the population would take weeks to
+// grow enough jack entries for the baseline to mint a pattern:jack percentile
+// curve. This rewrites just the patterns block of modes_json from plays_json
+// plus a fresh tag lookup - no MinaCalc, no osu! API, the dan sweep's shape.
+// Seeded only once the chart sweep stamps done, so it folds final tags rather
+// than a moving set; on its own finishing chunk the dispatcher forces a
+// skill-baseline rebuild so the percentile curves learn the new axis in the
+// same rollout instead of at the next weekly refresh.
+export const PLAYER_SKILL_PATTERN_SWEEP_JOB = "recompute_player_skill_pattern_sweep";
+// Exported for the skill-baseline due-check: curves computed before this
+// stamp cannot carry the refolded axes and read as stale.
+export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v1";
+const PLAYER_SKILL_PATTERN_SWEEP_CHUNK = 200;
+
+export interface PlayerSkillPatternSweepChunkResult {
+  nextCursor: number;
+  scanned: number;
+  rewritten: number;
+  done: boolean;
+}
+
+export async function recomputePlayerSkillPatternChunk(
+  db: Db,
+  cursor: number,
+  limit = PLAYER_SKILL_PATTERN_SWEEP_CHUNK,
+): Promise<PlayerSkillPatternSweepChunkResult> {
+  // Only rows with a keymode the re-tag touched: the 4K pipeline is
+  // deliberately bit-identical, so pure-4K rows cannot change. The LIKE terms
+  // bound the scan on the small modes_json column.
+  const rows = (await exec(
+    db,
+    `select user_id, modes_json, plays_json, updated_at from player_skill_ratings
+     where user_id > ? and analysis_version = ? and status = 'ready'
+       and (modes_json like '%"keyCount":6%' or modes_json like '%"keyCount":7%')
+     order by user_id
+     limit ?`,
+    [Math.max(0, Math.floor(cursor)), PLAYER_SKILLS_VERSION, Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  let rewritten = 0;
+  const parsed: Array<{ userId: number; summary: StoredModesSummary; plays: StoredPlaySsr[]; readAt: string }> = [];
+  const beatmapIds: number[] = [];
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    if (rowIndex > 0 && rowIndex % PLAYER_SKILL_DAN_SWEEP_PARSE_YIELD === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    const row = rows[rowIndex];
+    const userId = Number(row.user_id);
+    nextCursor = Math.max(nextCursor, userId);
+    const summary = parseJson<StoredModesSummary | null>(String(row.modes_json ?? ""), null);
+    const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row.plays_json ?? ""), null);
+    const plays = (Array.isArray(stored?.plays) ? stored.plays : [])
+      .filter((play) => play && Number.isInteger(play.beatmapId) && play.beatmapId > 0);
+    if (!summary || !Array.isArray(summary.modes) || summary.modes.length === 0 || plays.length === 0) continue;
+    parsed.push({ userId, summary, plays, readAt: String(row.updated_at ?? "") });
+    for (const play of plays) beatmapIds.push(play.beatmapId);
+  }
+  const infoByBeatmap = await loadChartSkillInfo(db, beatmapIds);
+
+  for (const { userId, summary, plays, readAt } of parsed) {
+    // Same tag policy as the compute: fresh tags where an analysis row
+    // exists, the stored ones where it does not (a straggler still waiting on
+    // its post-sweep re-analysis heals on the row's next ordinary recompute).
+    const playsByKeyCount = new Map<number, StoredPlaySsr[]>();
+    for (const play of plays) {
+      const info = infoByBeatmap.get(play.beatmapId);
+      const refreshed = info ? { ...play, patterns: info.patterns } : play;
+      const list = playsByKeyCount.get(play.keyCount);
+      if (list) list.push(refreshed);
+      else playsByKeyCount.set(play.keyCount, [refreshed]);
+    }
+    const modes = summary.modes.map((mode) => ({
+      ...mode,
+      patterns: aggregateModePatternRatings(playsByKeyCount.get(mode.keyCount) ?? []),
+    }));
+    // Most rows fold to the tags they already hold; skip the no-op writes so
+    // the sweep costs reads, not a table-wide rewrite.
+    const unchanged = modes.every((mode, index) =>
+      json(mode.patterns) === json(summary.modes[index]?.patterns ?? []));
+    if (unchanged) continue;
+    // updated_at guard, same as the dan sweep: a normal recompute in another
+    // lane can rewrite the row between our read and this write, and its fold
+    // is fresher than ours.
+    const written = await exec(
+      db,
+      `update player_skill_ratings
+       set modes_json = json(?), updated_at = ?
+       where user_id = ? and analysis_version = ? and updated_at = ?`,
+      [json({ ...summary, modes }), nowIso(), userId, PLAYER_SKILLS_VERSION, readAt],
+    );
+    if (Number(written.rowsAffected ?? 0) > 0) rewritten += 1;
+  }
+
+  return { nextCursor, scanned: rows.length, rewritten, done: rows.length < limit };
+}
+
+export async function ensurePlayerSkillPatternSweepSeeded(db: Db, queue: JobQueue): Promise<void> {
+  // Folding mid-chart-sweep would bake half-swept tags into stored rows and
+  // call the sweep done; wait for the chart side to stamp its marker.
+  const chartSweepDone = (await exec(db, "select 1 from live_meta where key = ? limit 1", [JACK_TAG_META_KEY])).rows[0];
+  if (!chartSweepDone) return;
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [PLAYER_SKILL_PATTERN_SWEEP_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [PLAYER_SKILL_PATTERN_SWEEP_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueuePlayerSkillPatternSweep(queue, 0);
+}
+
+/** Returns true on the chunk that finishes the sweep, so the dispatcher can
+ * force the skill-baseline rebuild over the refreshed rows. */
+export async function runPlayerSkillPatternSweepJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<boolean> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputePlayerSkillPatternChunk(db, cursor);
+  if (result.rewritten > 0) {
+    logInfo("player_skill_pattern_sweep_chunk", { users: result.rewritten, cursor: result.nextCursor });
+  }
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [PLAYER_SKILL_PATTERN_SWEEP_META_KEY, json({ finishedAt: now }), now],
+    );
+    return true;
+  }
+  await enqueuePlayerSkillPatternSweep(queue, result.nextCursor);
+  return false;
+}
+
+async function enqueuePlayerSkillPatternSweep(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    PLAYER_SKILL_PATTERN_SWEEP_JOB,
+    `${PLAYER_SKILL_PATTERN_SWEEP_JOB}:${cursor}`,
+    { cursor },
     { priority: -10, replaceDone: true },
   );
 }

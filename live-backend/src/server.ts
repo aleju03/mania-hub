@@ -21,7 +21,7 @@ import { registerPackCommunitySnapshots, startPackCommunitySnapshotRefresh } fro
 import { ensurePackCommunityRollupTriggers } from "./features/pack-community-rollups.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
 import { warmSkillLeaderboardBoard } from "./features/skill-leaderboards.js";
-import { enqueuePlayerSkills, ensurePlayerSkillDanSweepSeeded, ensurePlayerSkillFloorSweepSeeded, ensurePlayerSkillMsdCapSweepSeeded, ensurePlayerSkillPoisonRecoverySeeded, ensurePlayerSkillVibroSweepSeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
+import { enqueuePlayerSkills, ensurePlayerSkillDanSweepSeeded, ensurePlayerSkillFloorSweepSeeded, ensurePlayerSkillMsdCapSweepSeeded, ensurePlayerSkillPatternSweepSeeded, ensurePlayerSkillPoisonRecoverySeeded, ensurePlayerSkillVibroSweepSeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
 import { ensureActivityModsBackfillSeeded } from "./features/activity-mods-backfill.js";
@@ -524,6 +524,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // purpose: the sweep re-runs itself once this one stamps done.
       void ensureHtRateAnalysisSeeded(app.db, app.queue).catch((error) => console.warn("[ht-rate-analysis] seed failed", error));
       void ensurePlayerSkillDanSweepSeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-dan-sweep] seed failed", error));
+      // Player-side companion of the 6K/7K jack re-tag: re-fold stored
+      // pattern ratings over the refreshed tags, then force the baseline so
+      // the pattern:jack percentile curve exists without waiting a week. Its
+      // seeder no-ops until the chart-side sweep stamps done. Local DB only.
+      void ensurePlayerSkillPatternSweepSeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-pattern-sweep] seed failed", error));
       // Unlike the sweeps above this one consumes osu! API budget (one best-
       // scores call per user), so it also requires osu! API jobs to be enabled.
       // Guarded by its done key: post-completion boots schedule nothing.
