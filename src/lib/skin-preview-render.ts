@@ -1,5 +1,5 @@
 import type { SkinPreviewChartNote, SkinPreviewChartSnippet } from "./skin-preview-patterns";
-import type { ReplaySkinKeymodeProfile, ReplaySkinSettings } from "./replay-skin";
+import type { ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "./replay-skin";
 import {
   getReplaySkinProfile,
   getReplaySkinStagePosition,
@@ -1105,7 +1105,6 @@ function drawJudgementAndCombo(
   settings: ReplaySkinSettings,
 ): void {
   const centerX = layout.stageX + layout.stageWidth / 2;
-  const averageLane = layout.stageWidth / Math.max(1, layout.laneWidths.length);
   const stagePositionY = (key: "scorePosition" | "comboPosition") => {
     const fromBottom = Math.max(0, Math.min(768, getReplaySkinStagePosition(profile, settings, key)))
       * (480 / 768) * layout.scale;
@@ -1135,30 +1134,52 @@ function drawJudgementAndCombo(
   const combo = profile.assets.combo;
   // ComboPosition pushed off the stage means the skin wants no counter.
   if (!combo || profile.comboHidden) return;
-  const digitImages = "727".split("").map((digit) => {
+  const glyphs = "727".split("").map((digit) => {
     const asset = combo.digits[Number(digit)];
-    return asset ? images.get(asset.src) : undefined;
+    const image = asset ? images.get(asset.src) : undefined;
+    return asset && image ? { asset, image } : null;
   });
-  if (digitImages.some((image) => !image)) return;
-  const digitHeight = Math.min(64, Math.max(28, averageLane * 0.45));
-  const overlap = combo.overlap * (digitHeight / 80);
-  const widths = digitImages.map((image) => image!.naturalWidth * (digitHeight / image!.naturalHeight));
-  const totalWidth = widths.reduce((sum, width) => sum + width, 0) - overlap * (widths.length - 1);
-  let x = centerX - totalWidth / 2;
+  if (!glyphs.every((glyph): glyph is { asset: ReplaySkinImageAsset; image: HTMLImageElement } => glyph !== null)) return;
+  // Skin digits draw at their native texture size in the game's 768-unit
+  // space (the same @2x-aware rule as the judgement above), times the
+  // counter's own scale when a lazer HUD edit ships one in the .osk - the
+  // sizing ReplayCanvas.getComboGlyphSize uses, so a skin with a tiny combo
+  // font stays tiny on the card like it is in game.
+  const unit = (480 / 768) * layout.scale * profile.comboScale;
+  const glyphSize = (asset: ReplaySkinImageAsset, image: HTMLImageElement) => {
+    const assetScale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+    const nativeWidth = (asset.width && asset.width > 0 ? asset.width : image.naturalWidth || 1) / assetScale;
+    const nativeHeight = (asset.height && asset.height > 0 ? asset.height : image.naturalHeight || 1) / assetScale;
+    return { width: Math.max(1, nativeWidth * unit), height: Math.max(1, nativeHeight * unit) };
+  };
+  const sizes = glyphs.map(({ asset, image }) => glyphSize(asset, image));
+  // Tabular cells: every digit occupies the widest digit's cell, with
+  // skin.ini ComboOverlap pulling neighbouring cells together (in the same
+  // native-pixel units as the digits themselves).
+  const tabularWidths = combo.digits.flatMap((asset) => {
+    const image = asset ? images.get(asset.src) : undefined;
+    return asset && image ? [glyphSize(asset, image).width] : [];
+  });
+  const cellWidth = Math.max(...sizes.map((size) => size.width), ...tabularWidths);
+  const overlap = combo.overlap * unit;
+  const totalWidth = cellWidth * sizes.length - overlap * (sizes.length - 1);
+  const maxHeight = Math.max(...sizes.map((size) => size.height));
   // Centred on skin.ini ComboPosition (kept by the importer as the replay
   // viewer's from-the-bottom 768-space), through the same stage zoom as the
   // hit line so it stays aligned with the stage furniture. Skins design
   // around the declared spot - tekkito2 paints a mania-stage-bottom bar
-  // there as the counter's backdrop - so a fixed height left that art
-  // orphaned. Clamped to the card for degenerate values.
+  // there as the counter's backdrop. Clamped to the card for degenerate
+  // values.
   const comboCenter = stagePositionY("comboPosition");
-  const y = Math.max(
-    SKIN_PREVIEW_HEIGHT * 0.05,
-    Math.min(SKIN_PREVIEW_HEIGHT * 0.8, comboCenter - digitHeight / 2),
+  const centerY = Math.max(
+    SKIN_PREVIEW_HEIGHT * 0.05 + maxHeight / 2,
+    Math.min(SKIN_PREVIEW_HEIGHT * 0.8 + maxHeight / 2, comboCenter),
   );
-  digitImages.forEach((image, index) => {
-    ctx.drawImage(image!, x, y, widths[index], digitHeight);
-    x += widths[index] - overlap;
+  let x = centerX - totalWidth / 2;
+  glyphs.forEach(({ image }, index) => {
+    const size = sizes[index];
+    ctx.drawImage(image, x + (cellWidth - size.width) / 2, centerY - size.height / 2, size.width, size.height);
+    x += cellWidth - overlap;
   });
 }
 
