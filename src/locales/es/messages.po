@@ -4588,6 +4588,10 @@ msgstr "Europa, Centroamérica, Francia"
 msgid "Every card came out in two pieces"
 msgstr "Cada carta salió en dos partes"
 
+#: src/routes/dan-estimates.tsx
+msgid "Every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard is a rough ordering."
+msgstr "Se le da a cada chart su propio nivel de dan, se miran los charts que ya pasaste y se lee un nivel a partir de ellos. Por eso cada dan lleva un \"~\" delante y por eso la tabla es un orden aproximado."
+
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "every collector"
 msgstr "todos los coleccionistas"
@@ -6510,6 +6514,10 @@ msgstr "Cargando skin…"
 msgid "Loading skins…"
 msgstr "Cargando skins…"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Loading the rest..."
+msgstr "Cargando el resto…"
+
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 msgid "Loading the skin…"
 msgstr "Cargando la skin…"
@@ -7473,8 +7481,12 @@ msgstr "Sin datos de keymodes"
 #~ msgstr "Ningún ladder reconoce este número, y los títulos siguen saliendo de superar un curso real. También funciona mal como ranking, porque dos jugadores separados por un escalón en la tabla de dan no están separados de verdad, y quien nunca farmea precisión aparece más bajo de lo que juega. Tampoco es fijo: los algoritmos de rating y el análisis de charts van mejorando, y un recálculo que mueve un chart un escalón mueve a todos los que se apoyaban en él."
 
 #: src/routes/dan-estimates.tsx
-msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
-msgstr "Ningún ladder reconoce este número, y los títulos siguen saliendo solo de superar un dan real. También funciona mal como ranking. Dos jugadores separados por un escalón en la tabla de dan no están realmente separados por un escalón, y un jugador que nunca farmea precisión va a quedar por debajo de su nivel real. El número también puede cambiar solo, porque los algoritmos de rating y el análisis de charts se actualizan, y cuando un recálculo sube o baja un chart un nivel, todos los que se apoyan en ese chart se mueven con él."
+msgid "No ladder recognizes this number, and titles still only come from clearing a real course. A player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+msgstr "Ningún ladder reconoce este número, y los títulos siguen saliendo solo de superar un dan real. Un jugador que nunca farmea precisión va a quedar por debajo de su nivel real. El número también puede cambiar solo, porque los algoritmos de rating y el análisis de charts se actualizan, y cuando un recálculo sube o baja un chart un nivel, todos los que se apoyan en ese chart se mueven con él."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+#~ msgstr "Ningún ladder reconoce este número, y los títulos siguen saliendo solo de superar un dan real. También funciona mal como ranking. Dos jugadores separados por un escalón en la tabla de dan no están realmente separados por un escalón, y un jugador que nunca farmea precisión va a quedar por debajo de su nivel real. El número también puede cambiar solo, porque los algoritmos de rating y el análisis de charts se actualizan, y cuando un recálculo sube o baja un chart un nivel, todos los que se apoyan en ese chart se mueven con él."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No mania difficulties"
@@ -8101,6 +8113,10 @@ msgstr "En /skins, cualquiera puede descargar el .osk."
 #: src/components/me/GoalsPanel.tsx
 msgid "on a map"
 msgstr "en un mapa"
+
+#: src/routes/dan-estimates.tsx
+msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
+msgstr "En charts densos, Stream y Technical suelen puntuar a una fracción el uno del otro, y cuál queda por delante es casi un cara o cruz. Speed normalmente gana esos casi empates, pero cuando Technical queda así de cerca y el propio análisis del chart está seguro de que el chart es tech, esa play se archiva en tech."
 
 #: src/routes/dan-estimates.tsx
 msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
@@ -10552,6 +10568,11 @@ msgstr "Mostrar {totalLabel} mapas"
 msgid "Show all {0}"
 msgstr "Mostrar los {0}"
 
+#. placeholder {0}: openedSection.clears
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Show all {0} clears"
+msgstr "Mostrar los {0} clears"
+
 #. placeholder {0}: play.title || t`score`
 #. placeholder {0}: score.beatmapset?.title || scoreFallbackLabel
 #: src/routes/player/$username.tsx
@@ -12095,8 +12116,8 @@ msgstr "Estos son los packs que se comprueban, identificados por beatmap. Un pas
 #~ msgstr "estos piden ScoreV2, lee esto"
 
 #: src/routes/dan-estimates.tsx
-msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
-msgstr "Nada de esto es un clear de dan real. A nadie aquí se le ha comprobado contra un dan. En su lugar, se le da a cada chart su propio nivel de dan, se miran los charts que ya pasaste y se lee un nivel a partir de ellos. Por eso cada dan lleva un \"~\" delante y por eso la tabla se llama a sí misma un orden aproximado."
+#~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
+#~ msgstr "Nada de esto es un clear de dan real. A nadie aquí se le ha comprobado contra un dan. En su lugar, se le da a cada chart su propio nivel de dan, se miran los charts que ya pasaste y se lee un nivel a partir de ellos. Por eso cada dan lleva un \"~\" delante y por eso la tabla se llama a sí misma un orden aproximado."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."

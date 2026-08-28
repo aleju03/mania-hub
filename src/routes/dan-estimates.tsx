@@ -174,10 +174,9 @@ function DanEstimatesPage() {
           </h1>
           <p className="text-[15px] leading-7 text-osu-f1">
             <Trans>
-              These estimates are not real dan clears. Nobody here has been checked against a dan
-              course. Instead, every chart gets a dan level of its own, and your level is read from the
+              Every chart gets a dan level of its own, and your level is read from the
               charts you have already passed. That is why every estimated dan is written with a "~" in
-              front of it and why the leaderboard calls itself a rough ordering.
+              front of it and why the leaderboard is a rough ordering.
             </Trans>
           </p>
         </header>
@@ -451,6 +450,14 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
+              On dense charts Stream and Technical often rate within a fraction of each other, and
+              whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but
+              when Technical sits that close and the chart analysis itself is confident the chart is
+              tech, the pass files under tech instead.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
               6K and 7K cannot use those skillsets, because that engine does not rate Technical at all
               and everything collapses onto Handstream. They use pattern tags from the chart analysis
               instead, so a chart tagged both chordjack and tech backs both skills. On the LN side only
@@ -595,8 +602,7 @@ function DanEstimatesPage() {
           <P>
             <Trans>
               No ladder recognizes this number, and titles still only come from clearing a real course.
-              It also works badly as a ranking. Two players one step apart on the dan leaderboard are
-              not really one step apart, and a player who never farms accuracy will land below their
+              A player who never farms accuracy will land below their
               actual level. The number can also change on its own, because the rating engines and the
               chart analysis get updated, and when a recompute moves a chart up or down a level,
               everyone whose passes rely on that chart moves with it.

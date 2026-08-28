@@ -4588,6 +4588,14 @@ msgstr "Europe, Central America, France"
 msgid "Every card came out in two pieces"
 msgstr "Every card came out in two pieces"
 
+#: src/routes/dan-estimates.tsx
+#~ msgid "Every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
+#~ msgstr "Every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
+
+#: src/routes/dan-estimates.tsx
+msgid "Every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard is a rough ordering."
+msgstr "Every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard is a rough ordering."
+
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "every collector"
 msgstr "every collector"
@@ -6514,6 +6522,10 @@ msgstr "Loading skin…"
 msgid "Loading skins…"
 msgstr "Loading skins…"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Loading the rest..."
+msgstr "Loading the rest..."
+
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 msgid "Loading the skin…"
 msgstr "Loading the skin…"
@@ -7477,8 +7489,12 @@ msgstr "No key data"
 #~ msgstr "No ladder recognizes this number, and titles still come from clearing a real course. It also makes a poor ranking, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It is not fixed either: the rating engines and the chart analysis keep getting better, and a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
 
 #: src/routes/dan-estimates.tsx
-msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
-msgstr "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+msgid "No ladder recognizes this number, and titles still only come from clearing a real course. A player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+msgstr "No ladder recognizes this number, and titles still only come from clearing a real course. A player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+#~ msgstr "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No mania difficulties"
@@ -8105,6 +8121,10 @@ msgstr "On /skins, anyone can download the .osk."
 #: src/components/me/GoalsPanel.tsx
 msgid "on a map"
 msgstr "on a map"
+
+#: src/routes/dan-estimates.tsx
+msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
+msgstr "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
 
 #: src/routes/dan-estimates.tsx
 msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
@@ -10556,6 +10576,11 @@ msgstr "Show {totalLabel} maps"
 msgid "Show all {0}"
 msgstr "Show all {0}"
 
+#. placeholder {0}: openedSection.clears
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Show all {0} clears"
+msgstr "Show all {0} clears"
+
 #. placeholder {0}: play.title || t`score`
 #. placeholder {0}: score.beatmapset?.title || scoreFallbackLabel
 #: src/routes/player/$username.tsx
@@ -12099,8 +12124,8 @@ msgstr "These are the packs checked, matched by beatmap. A pass has to be on one
 #~ msgstr "these ask for ScoreV2, read this"
 
 #: src/routes/dan-estimates.tsx
-msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
-msgstr "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
+#~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
+#~ msgstr "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."

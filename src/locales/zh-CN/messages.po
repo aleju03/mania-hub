@@ -4597,6 +4597,10 @@ msgstr "欧洲、中美洲、法国"
 msgid "Every card came out in two pieces"
 msgstr "每张卡都碎成了两半"
 
+#: src/routes/dan-estimates.tsx
+msgid "Every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard is a rough ordering."
+msgstr "每张谱面都会得到自己的段位，再根据你已经通过的谱面推算你的水平。因此，每个估算段位前都会带「~」，排行榜也因此只是粗略排序。"
+
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "every collector"
 msgstr "全部收藏者"
@@ -6519,6 +6523,10 @@ msgstr "正在加载皮肤…"
 msgid "Loading skins…"
 msgstr "正在加载皮肤…"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Loading the rest..."
+msgstr "正在加载其余通过…"
+
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 msgid "Loading the skin…"
 msgstr "正在加载皮肤…"
@@ -7482,8 +7490,12 @@ msgstr "无键数数据"
 #~ msgstr "没有哪个段位系统承认这个数字，头衔仍然只能靠真正打过课题来拿。它当排名也不好用，段位榜上差一级的两个人并没有真的差一级，从不刷准度的人看起来会比实际水平低。它也不是定死的：评级算法和谱面分析一直在改进，一次重算把某张谱面挪一级，就会带动所有把证据压在这张谱面上的人。"
 
 #: src/routes/dan-estimates.tsx
-msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
-msgstr "没有哪个段位系统承认这个数字，头衔仍然只能靠真正打过课题来拿。它当排名也不好用。段位榜上差一级的两个人并不是真的差一级，从不刷准度的玩家会落在自己真实水平之下。这个数字本身也会变，因为评级算法和谱面分析会更新，一次重算把某张谱面上调或下调一级，所有靠这张谱面撑着的人也跟着动。"
+msgid "No ladder recognizes this number, and titles still only come from clearing a real course. A player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+msgstr "没有哪个段位系统承认这个数字，头衔仍然只能靠真正打过课题来拿。从不刷准度的玩家会落在自己真实水平之下。这个数字本身也会变，因为评级算法和谱面分析会更新，一次重算把某张谱面上调或下调一级，所有靠这张谱面撑着的人也跟着动。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+#~ msgstr "没有哪个段位系统承认这个数字，头衔仍然只能靠真正打过课题来拿。它当排名也不好用。段位榜上差一级的两个人并不是真的差一级，从不刷准度的玩家会落在自己真实水平之下。这个数字本身也会变，因为评级算法和谱面分析会更新，一次重算把某张谱面上调或下调一级，所有靠这张谱面撑着的人也跟着动。"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No mania difficulties"
@@ -8110,6 +8122,10 @@ msgstr "出现在 /skins，任何人都可以下载 .osk。"
 #: src/components/me/GoalsPanel.tsx
 msgid "on a map"
 msgstr "单图"
+
+#: src/routes/dan-estimates.tsx
+msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
+msgstr "在密集谱面上，Stream 和 Technical 的评分经常只差一丝，哪个略微领先几乎等于抛硬币。这种几乎持平的情况通常判给速度，但当 Technical 咬得这么紧、而谱面分析本身也确信这张谱是技时，这次通过就会改归到技。"
 
 #: src/routes/dan-estimates.tsx
 msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
@@ -10561,6 +10577,11 @@ msgstr "显示 {totalLabel} 个谱面"
 msgid "Show all {0}"
 msgstr "显示全部 {0} 个"
 
+#. placeholder {0}: openedSection.clears
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Show all {0} clears"
+msgstr "显示全部 {0} 次通过"
+
 #. placeholder {0}: play.title || t`score`
 #. placeholder {0}: score.beatmapset?.title || scoreFallbackLabel
 #: src/routes/player/$username.tsx
@@ -12104,8 +12125,8 @@ msgstr "这些是目前会核对的图包，按谱面匹配。通过必须发生
 #~ msgstr "这些要求 ScoreV2，点开看看"
 
 #: src/routes/dan-estimates.tsx
-msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
-msgstr "这些估算都不是真正的段位通过，这里的玩家都没有接受过段位课题认定。取而代之的是，每张谱面都会得到自己的段位，再根据你已经通过的谱面推算你的水平。因此，每个估算段位前都会带「~」，排行榜也因此只被称作粗略排序。"
+#~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
+#~ msgstr "这些估算都不是真正的段位通过，这里的玩家都没有接受过段位课题认定。取而代之的是，每张谱面都会得到自己的段位，再根据你已经通过的谱面推算你的水平。因此，每个估算段位前都会带「~」，排行榜也因此只被称作粗略排序。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
