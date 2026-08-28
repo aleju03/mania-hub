@@ -27,12 +27,17 @@ async function makeDb(): Promise<Db> {
   return db;
 }
 
-async function seedChart(db: Db, beatmapId: number, rcRawDan: number): Promise<void> {
+async function seedChart(
+  db: Db,
+  beatmapId: number,
+  rcRawDan: number,
+  patterns: Array<{ id: string; score: number }> = [],
+): Promise<void> {
   await exec(
     db,
     `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
      values (?, ?, 'ready', json(?), ?)`,
-    [beatmapId, CHART_ANALYSIS_VERSION, json({ lnRatio: 0, patterns: [], rc: { rawDan: rcRawDan } }), "2026-08-20T00:00:00.000Z"],
+    [beatmapId, CHART_ANALYSIS_VERSION, json({ lnRatio: 0, patterns, rc: { rawDan: rcRawDan } }), "2026-08-20T00:00:00.000Z"],
   );
 }
 
@@ -117,6 +122,44 @@ describe("recomputePlayerSkillDanChunk", () => {
     expect(dan.skillsets?.stamina.rawDan).toBe(5);
     // A bucket under the quorum has no verdict rather than a thin one.
     expect(dan.skillsets?.tech).toBeUndefined();
+    db.close();
+  });
+
+  it("rewrites speedjack-tagged Jumpstream clears into the jack verdict", async () => {
+    const db = await makeDb();
+    const beatmapIds = [331, 332, 333, 334];
+    for (const beatmapId of beatmapIds) {
+      await seedChart(db, beatmapId, 8, [{ id: "speedjack", score: 0.947 }]);
+    }
+    await exec(
+      db,
+      `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+       values (?, ?, 'ready', json(?), json(?), ?, ?)`,
+      [
+        42,
+        PLAYER_SKILLS_VERSION,
+        json({ modes: [{ keyCount: 4, dan: STALE_DAN }] }),
+        json({
+          plays: beatmapIds.map((id) => ({
+            ...barePass(id),
+            // Beatmap 4627199's measured shape: Jumpstream wins while
+            // JackSpeed is last, which used to put every clear in tech.
+            values: {
+              Overall: 34, Stream: 22.26, Jumpstream: 33.95, Handstream: 32.29,
+              Stamina: 33.14, JackSpeed: 17.94, Chordjack: 31.32, Technical: 32.53,
+            },
+          })),
+        }),
+        "2026-08-20T00:00:00.000Z",
+        "2026-08-20T00:00:00.000Z",
+      ],
+    );
+
+    await recomputePlayerSkillDanChunk(db, 0);
+    const row = (await exec(db, "select modes_json from player_skill_ratings where user_id = 42", [])).rows[0];
+    const summary = parseJson<{ modes: Array<{ dan: { rc: { skillsets?: Record<string, { rawDan: number }> } | null } }> }>(String(row.modes_json ?? ""), { modes: [] });
+    expect(summary.modes[0].dan.rc?.skillsets?.jack.rawDan).toBe(8);
+    expect(summary.modes[0].dan.rc?.skillsets?.tech).toBeUndefined();
     db.close();
   });
 
@@ -211,7 +254,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     for (const userId of [21, 22, 23]) await seedRow(db, userId, [301, 302, 303, 304]);
 
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v5'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v8'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.

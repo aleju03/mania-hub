@@ -97,10 +97,13 @@ describe("leaderboardAxesFor", () => {
   it("gives non-4K keymodes the pattern vocabulary only", () => {
     for (const keyCount of [6, 7]) {
       const axes = leaderboardAxesFor(keyCount);
-      expect(axes).toContain("pattern:chordjack");
+      expect(axes).toContain("pattern:jack");
       expect(axes).toContain("pattern:chordstream");
       // MinaCalc's skillset names are 4K-born and unreliable elsewhere.
       expect(axes).not.toContain("Chordjack");
+      // The jack tile absorbed chordjack; publishing both would rank the
+      // same charts twice under two names.
+      expect(axes).not.toContain("pattern:chordjack");
     }
   });
 
@@ -113,16 +116,16 @@ describe("leaderboardAxesFor", () => {
 
 describe("skill leaderboard", () => {
   const sevenKPlayers: SeedPlayer[] = [
-    { userId: 11, username: "deep", country: "JP", keyCount: 7, analyzedPlays: 300, patterns: [{ id: "chordjack", rating: 30, plays: 200 }] },
-    { userId: 12, username: "mid", country: "KR", keyCount: 7, analyzedPlays: 200, patterns: [{ id: "chordjack", rating: 28, plays: 60 }] },
-    { userId: 13, username: "thin", country: "JP", keyCount: 7, analyzedPlays: 4, patterns: [{ id: "chordjack", rating: 26, plays: 4 }] },
+    { userId: 11, username: "deep", country: "JP", keyCount: 7, analyzedPlays: 300, patterns: [{ id: "jack", rating: 30, plays: 200 }] },
+    { userId: 12, username: "mid", country: "KR", keyCount: 7, analyzedPlays: 200, patterns: [{ id: "jack", rating: 28, plays: 60 }] },
+    { userId: 13, username: "thin", country: "JP", keyCount: 7, analyzedPlays: 4, patterns: [{ id: "jack", rating: 26, plays: 4 }] },
     { userId: 14, username: "rice", country: "US", keyCount: 7, analyzedPlays: 120, patterns: [{ id: "tech", rating: 24, plays: 40 }] },
   ];
 
   it("ranks an axis descending, pages it, and reports evidence", async () => {
     await withDb(async (db) => {
       await seed(db, sevenKPlayers);
-      const board = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" });
+      const board = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:jack" });
       expect(board.total).toBe(3);
       expect(board.ranking.map((entry) => entry.user.username)).toEqual(["deep", "mid", "thin"]);
       expect(board.ranking[0].rank).toBe(1);
@@ -132,7 +135,7 @@ describe("skill leaderboard", () => {
       expect(board.shrunk).toBe(false);
       expect(board.ranking[0].value).toBe(30);
 
-      const second = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack", page: 2, pageSize: 2 });
+      const second = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:jack", page: 2, pageSize: 2 });
       expect(second.ranking.map((entry) => entry.user.username)).toEqual(["thin"]);
       expect(second.ranking[0].rank).toBe(3);
       expect(second.total).toBe(3);
@@ -142,7 +145,7 @@ describe("skill leaderboard", () => {
   it("marks thin keymodes provisional at the same floor the profile uses", async () => {
     await withDb(async (db) => {
       await seed(db, sevenKPlayers);
-      const board = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" });
+      const board = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:jack" });
       const byName = new Map(board.ranking.map((entry) => [entry.user.username, entry]));
       expect(byName.get("deep")!.provisional).toBeUndefined();
       expect(byName.get("thin")!.provisional).toBe(true);
@@ -152,13 +155,13 @@ describe("skill leaderboard", () => {
   it("publishes only axes that have a population, per scope", async () => {
     await withDb(async (db) => {
       await seed(db, sevenKPlayers);
-      const global = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" });
+      const global = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:jack" });
       const axes = new Map(global.axes.map((info) => [info.axis, info.players]));
-      expect(axes.get("pattern:chordjack")).toBe(3);
+      expect(axes.get("pattern:jack")).toBe(3);
       expect(axes.get("pattern:tech")).toBe(1);
       // Nobody has these, so the picker must never offer them.
       expect(axes.has("pattern:stream")).toBe(false);
-      expect(axes.has("pattern:jack")).toBe(false);
+      expect(axes.has("pattern:chordjack")).toBe(false);
 
       const us = await getSkillLeaderboard(db, { country: "US", keyCount: 7, axis: "pattern:tech" });
       const usAxes = new Map(us.axes.map((info) => [info.axis, info.players]));
@@ -170,13 +173,13 @@ describe("skill leaderboard", () => {
   it("narrows to a country and a region and renumbers", async () => {
     await withDb(async (db) => {
       await seed(db, sevenKPlayers);
-      const jp = await getSkillLeaderboard(db, { country: "JP", keyCount: 7, axis: "pattern:chordjack" });
+      const jp = await getSkillLeaderboard(db, { country: "JP", keyCount: 7, axis: "pattern:jack" });
       expect(jp.ranking.map((entry) => entry.user.username)).toEqual(["deep", "thin"]);
       expect(jp.ranking.map((entry) => entry.rank)).toEqual([1, 2]);
       expect(jp.total).toBe(2);
 
       // R-EASIA covers JP and KR but not US.
-      const region = await getSkillLeaderboard(db, { country: "R-EASIA", keyCount: 7, axis: "pattern:chordjack" });
+      const region = await getSkillLeaderboard(db, { country: "R-EASIA", keyCount: 7, axis: "pattern:jack" });
       expect(region.ranking.map((entry) => entry.user.username)).toEqual(["deep", "mid", "thin"]);
     });
   });
@@ -306,14 +309,14 @@ describe("skill leaderboard", () => {
   it("holds a failed rebuild for a retry window instead of rescanning per request", async () => {
     await withDb(async (db) => {
       await seed(db, sevenKPlayers);
-      const first = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" });
+      const first = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:jack" });
       expect(first.total).toBe(3);
 
       // Break the scan, then age the board out: the read answers stale.
       await exec(db, "drop table country_rosters");
       expireSkillLeaderboardBoard(db);
       const builds = skillLeaderboardBuildCount();
-      const stale = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" });
+      const stale = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:jack" });
       expect(stale.total).toBe(3);
       // Let the background rebuild fail and set its cooldown.
       await new Promise((resolve) => setTimeout(resolve, 30));
@@ -322,7 +325,7 @@ describe("skill leaderboard", () => {
       // Every read inside the cooldown is served from the stale board without
       // starting another doomed scan.
       for (let i = 0; i < 5; i += 1) {
-        expect((await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" })).total).toBe(3);
+        expect((await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:jack" })).total).toBe(3);
       }
       expect(skillLeaderboardBuildCount()).toBe(builds + 1);
     });
@@ -331,9 +334,9 @@ describe("skill leaderboard", () => {
   it("holds a cold-start failure too, where there is no stale board to serve", async () => {
     await withDb(async (db) => {
       await exec(db, "drop table country_rosters");
-      await expect(getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" })).rejects.toThrow();
+      await expect(getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:jack" })).rejects.toThrow();
       const builds = skillLeaderboardBuildCount();
-      await expect(getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:chordjack" })).rejects.toThrow();
+      await expect(getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:jack" })).rejects.toThrow();
       expect(skillLeaderboardBuildCount()).toBe(builds);
     });
   });

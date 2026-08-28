@@ -14,6 +14,7 @@ import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
 import { danTableCeilingFor, danTableLabelFor } from "../dan/chart-classifier.js";
+import { DAN_CREDIT_BELOW_BAR_WINDOW, creditedDanFor } from "../dan/dan-credit.js";
 import { loadDanCourseClears } from "./dan-courses.js";
 import type { DanCourseClear, DanCourseCreditOptions } from "./dan-courses.js";
 import { parseDan } from "../dan/dan-estimator/labels.js";
@@ -114,7 +115,7 @@ const CHORDJACK_TAG_MIN_SCORE = 0.8;
 // buys nothing measurable.
 const DELAY_TAG_MIN_SCORE = 0.25;
 
-/** Whether a tag/cluster bucket (6K/7K) takes this chart. */
+/** Whether chart analysis places a chart in a bucket's tag/cluster arm. */
 function chartBelongsToTagBucket(bucket: DanSkillsetBucket, chart: ChartSkillInfo | undefined): boolean {
   // Tech is a label rather than a share: LeoBlack names the whole chart (see
   // techCategory), where jack and stream weigh one family against the rest.
@@ -142,21 +143,76 @@ export function patternTagMinScoreForTest(patternId: string): number {
   return patternTagMinScore(patternId);
 }
 
+/** Test seams over chartIsJack / jackVetoesTech, which are module-private. */
+export function chartIsJackForTest(keyCount: number | null, chordjackScore: number, jackScore: number, jackShare: number | null): boolean {
+  return chartIsJack(keyCount, chordjackScore, jackScore, jackShare);
+}
+export function jackVetoesTechForTest(keyCount: number | null, chordjackScore: number, jackScore: number, jackShare: number | null): boolean {
+  return jackVetoesTech(keyCount, chordjackScore, jackScore, jackShare);
+}
+
 /** The score a pattern must reach to tag a chart, per tag. */
 function patternTagMinScore(patternId: string): number {
   if (patternId === "chordjack") return CHORDJACK_TAG_MIN_SCORE;
   if (patternId === "delay") return DELAY_TAG_MIN_SCORE;
   return PATTERN_TAG_MIN_SCORE;
 }
-// A chart the analyzer reads as near-certain chordjack never counts as a tech
-// chart, even when its tech score clears the bar: dense chordjack saturates
-// the tech detector's ingredients (chord-size churn, direction changes, row
-// variety), so pure CJ charts carried a 0.5-0.76 tech score and, ranked by
-// Overall SSR, topped every "top Tech plays" list. Checked 2026-08 against
-// mapper-tagged sets: only ~2-3% of tech-labelled diffs reach chordjack 0.8,
-// so the veto costs genuine tech charts almost nothing, while unambiguous CJ
+// The jack tile takes chord jack and single-note jack alike. On 6K/7K a
+// chart is jack when either LeoBlack's jack clusters carry
+// CLUSTER_SHARE_MIN of the chart's difficulty (the same line the dan jack
+// bucket draws), or the analyzer's single-note jack score clears the ordinary
+// tag bar (minijacks and trills, the shape the clusters can understate:
+// Ningen Shikkaku [Zenx's 7K Miscreation] is 40% two-row trills at chordjack
+// 0.35 and jack share 0.26). The in-house chordjack score is the fallback only
+// when no clusters exist: it counts repeated chords without knowing whether
+// those jacks are the hard part of a mixed chart. Star of the COME ON!!
+// [STARRY REVOLUTION!!] is the measured counterexample: chordjack 0.93, but
+// its clusters are 22.4% jack against 77.6% stream and its single-note jack
+// score is only 0.38. Calling that whole chart Jack made the player's Jack
+// skill list read a hard stream/tech clear as a jack specialist clear.
+//
+// None of the two primary arms covers the tile alone: KKKC [7K Extreme]
+// scores chordjack 0.77 and sat on the Tech tile until the cluster share
+// (0.405) caught it. Measured 2026-08
+// against mapper-named 7K pack corpora (279 jack / 78 tech / 136 stream /
+// 150 delay charts): the union keeps ~90% of the jack corpus and admits
+// 6-9% of tech and stream (mostly charts LeoBlack itself labels
+// Chordjacks/Minijacks) and 3% of delay.
+//
+// 4K keeps the old rule (chordjack certainty alone): its analyzer already
+// names the jack family natively, its tiles read MSD skillsets rather than
+// these tags, and what its tags do feed (skill-baseline cohort vectors) was
+// not re-measured, so the pipeline stays bit-identical there.
+function chartIsJack(keyCount: number | null, chordjackScore: number, jackScore: number, jackShare: number | null): boolean {
+  if (keyCount !== 6 && keyCount !== 7) return chordjackScore >= CHORDJACK_TAG_MIN_SCORE;
+  if (jackScore >= PATTERN_TAG_MIN_SCORE) return true;
+  return jackShare != null
+    ? jackShare >= CLUSTER_SHARE_MIN
+    : chordjackScore >= CHORDJACK_TAG_MIN_SCORE;
+}
+
+// A jack chart never counts as a tech chart, even when its tech score clears
+// the bar: dense jack saturates the tech detector's ingredients (chord-size
+// churn, direction changes, row variety), so pure CJ charts carried a
+// 0.5-0.76 tech score and, ranked by Overall SSR, topped every "top Tech
+// plays" list. Checked 2026-08 against mapper-tagged sets: unambiguous CJ
 // diffs (chordjack >= 0.8) carried a false tech tag 75-88% of the time.
-const TECH_TAG_CHORDJACK_VETO = 0.8;
+//
+// The single-note score vetoes only at its own near-certainty bar, not the
+// 0.5 tag line: at 0.5 it would strip tech from genuinely dual charts like
+// EGOISM 440 [EGOMANIA] (jack 0.67, in a mapper-named tech dan pack). When
+// clusters exist they also overrule a high chordjack score: a stream-led
+// hybrid can contain a confident chordjack section without making the tech
+// detector's reading false. Chordjack certainty stays the fallback for the
+// ~1% of charts with no cluster evidence.
+const JACK_TECH_VETO_MIN_SCORE = 0.8;
+function jackVetoesTech(keyCount: number | null, chordjackScore: number, jackScore: number, jackShare: number | null): boolean {
+  if (keyCount !== 6 && keyCount !== 7) return chordjackScore >= CHORDJACK_TAG_MIN_SCORE;
+  if (jackScore >= JACK_TECH_VETO_MIN_SCORE) return true;
+  return jackShare != null
+    ? jackShare >= CLUSTER_SHARE_MIN
+    : chordjackScore >= CHORDJACK_TAG_MIN_SCORE;
+}
 // The ln tag's score is driven by holdRatio pressure, so a rice or jack chart
 // with a token hold section clears PATTERN_TAG_MIN_SCORE while the analyzer
 // itself would never call the chart LN: of the 4K charts tagged ln at 0.5 in
@@ -280,14 +336,24 @@ const AGGREGATE_RATING_SCALER = 1.04;
 // accuracy bar had missed. Gating on it also discarded every play whose
 // judgement counts were unknown.
 //
-// A clear credits the chart's full rawDan, exactly as clearing a course
-// awards the whole dan in game: a bare pass at the bar IS the pass. What
-// keeps one lucky chart from setting a level is DAN_CLEAR_QUORUM, which
-// stands in for the course length - four rated charts at a level, the same
-// count a course asks you to survive back to back. (An earlier revision also
-// faded the credit down toward the bar; with the quorum already modelling
-// "one short chart is thin evidence", that taxed the same thing twice and
-// sat below what the community tables actually require.)
+// A bare pass at the bar credits the chart's full rawDan, exactly as clearing
+// a course awards the whole dan in game: the bar IS the pass, and it is the
+// zero point of the accuracy credit curve (dan-credit.ts). Away from the bar
+// the credit moves with the accuracy in both directions: a pass up to
+// DAN_CREDIT_BELOW_BAR_WINDOW under the bar still credits the chart minus a
+// decay (capped so it can never equal the chart's own dan, and reaching a
+// full level down at the window's edge), and accuracy above the bar credits a
+// bonus that reaches +1.5 levels at 100% in the ladder's own currency. This
+// is not the danCreditFor fade an earlier revision had and 75373b2b removed:
+// that one discounted the at-bar clear itself, which taxed thin evidence
+// twice on top of the quorum and sat below what the community tables
+// actually require. Here the at-bar clear is untouched; the curve only
+// credits passes the old gate threw away and rewards accuracy the old rule
+// ignored. What keeps one lucky chart from setting a level is still
+// DAN_CLEAR_QUORUM, which stands in for the course length - four rated
+// charts at a level, the same count a course asks you to survive back to
+// back - and every credited clear counts toward it, sub-bar ones included,
+// since the decay already prices the miss.
 //
 // The quorum rates a SKILLSET now, not the headline: the side's estimate is
 // the mean of its skillset dans (averageSkillsetDans), each of which is the
@@ -458,13 +524,15 @@ export interface PlayerSkillBreakdown {
   stale?: boolean;
 }
 
+// No chordjack axis: the jack tile absorbed it (chartIsJack), so publishing
+// both would rank the same charts twice under two names. The chordjack tag
+// itself is still emitted for the consumers that mean chord jack specifically.
 export const PLAYER_SKILL_PATTERN_AXES = [
   "chordstream",
   "bracket",
   "delay",
   "stream",
   "jack",
-  "chordjack",
   "tech",
   "ln",
 ] as const;
@@ -513,7 +581,7 @@ export function isPlayerSkillAxis(axis: string): boolean {
   return PLAYER_SKILL_AXES.has(axis);
 }
 
-interface StoredPlaySsr {
+export interface StoredPlaySsr {
   identity: string;
   beatmapId: number;
   keyCount: number;
@@ -842,6 +910,8 @@ export interface ChartSkillInfo {
   dtFamily: "rc" | "ln" | null;
   htRawDan: number | null;
   htFamily: "rc" | "ln" | null;
+  /** Drain length at 1.0x, for the stamina gate in bucketingSkillset. */
+  lengthSeconds: number | null;
 }
 
 interface LeanHalfJson {
@@ -946,8 +1016,11 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
        two terms and discard the at-most-one returned non-ready row in JS. */
     const rows = (await exec(
       db,
-      `select beatmap_id, status, classification_json, dan_dt_json, dan_ht_json from beatmap_chart_analysis
-       where analysis_version = ? and beatmap_id in (${placeholders})`,
+      `select a.beatmap_id, a.status, a.key_count, a.classification_json, a.dan_dt_json, a.dan_ht_json,
+              json_extract(b.metadata_json, '$.total_length') as total_length
+         from beatmap_chart_analysis a
+         left join beatmaps b on b.beatmap_id = a.beatmap_id
+        where a.analysis_version = ? and a.beatmap_id in (${placeholders})`,
       [CHART_ANALYSIS_VERSION, ...chunk],
     )).rows;
     for (const row of rows) {
@@ -958,7 +1031,13 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         const id = String(hit?.id ?? "");
         if (id) patternScores.set(id, Math.max(patternScores.get(id) ?? 0, Number(hit?.score ?? 0)));
       }
+      const rawKeyCount = Number(row.key_count);
+      const keyCount = Number.isFinite(rawKeyCount) && rawKeyCount > 0 ? rawKeyCount : null;
       const chordjackScore = patternScores.get("chordjack") ?? 0;
+      const jackScore = patternScores.get("jack") ?? 0;
+      const jackShare = clusterShare(parsed, JACK_CLUSTERS);
+      const isJack = chartIsJack(keyCount, chordjackScore, jackScore, jackShare);
+      const vetoesTech = jackVetoesTech(keyCount, chordjackScore, jackScore, jackShare);
       const rawLnRatio = Number(parsed?.lnRatio);
       const lnRatio = Number.isFinite(rawLnRatio) ? Math.max(0, Math.min(1, rawLnRatio)) : null;
       // A chart whose analysis carries no lnRatio cannot be verified as LN, so
@@ -967,16 +1046,20 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       const patternIds = [...patternScores.entries()]
         .filter(([id, score]) =>
           score >= patternTagMinScore(id)
-          && !(id === "tech" && chordjackScore >= TECH_TAG_CHORDJACK_VETO)
+          && !(id === "tech" && vetoesTech)
           && !(LN_PATTERN_IDS.has(id) && !chartIsLn))
         .map(([id]) => id);
+      // The derived whole-jack tag (see chartIsJack). The chordjack tag stays
+      // beside it for the consumers that mean chord jack specifically; 4K
+      // keeps its native analyzer tags untouched.
+      if ((keyCount === 6 || keyCount === 7) && isJack && !patternIds.includes("jack")) patternIds.push("jack");
       const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
       const dtRawDan = readRawDan(danDt ?? undefined);
       const danHt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown } | null>(String(row.dan_ht_json ?? ""), null);
       const htRawDan = readRawDan(danHt ?? undefined);
       info.set(Number(row.beatmap_id), {
         patterns: patternIds,
-        jackShare: clusterShare(parsed, JACK_CLUSTERS),
+        jackShare,
         streamShare: clusterShare(parsed, STREAM_CLUSTERS),
         techCategory: typeof parsed?.clusterCategory === "string"
           ? TECH_CLUSTER_CATEGORY.test(parsed.clusterCategory)
@@ -989,6 +1072,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         dtFamily: dtRawDan == null ? null : danDt?.primaryFamily === "ln" ? "ln" : "rc",
         htRawDan,
         htFamily: htRawDan == null ? null : danHt?.primaryFamily === "ln" ? "ln" : "rc",
+        lengthSeconds: readLengthSeconds(row.total_length),
       });
     }
     if (offset + chunk.length < ids.length) {
@@ -1067,18 +1151,26 @@ function computeModeDan(
   return { rc: forSide("rc"), ln: forSide("ln") };
 }
 
-// One qualifying clear and the chart dan it demonstrates; the shared currency
+// One credited clear and the dan it demonstrates; the shared currency
 // between the stored verdict (computeModeDan) and the on-demand evidence
 // surface (getPlayerSkillDanEvidence), so the two can never disagree on what
-// counts as a clear.
-interface DanClearEvidence {
+// counts as a clear. Exported for the dan-credit-drift maintenance script,
+// which replays the aggregation over modified copies of these.
+export interface DanClearEvidence {
   play: StoredPlaySsr;
   side: "rc" | "ln";
+  // The chart's own dan at the played rate, before the accuracy credit.
   chartDan: number;
+  // chartDan plus the accuracy offset, clamped to the ladder (creditedDanFor):
+  // the number every aggregation below reads. Equal to chartDan for a bare
+  // pass at the bar.
+  creditedDan: number;
   // The accuracy the clear was judged on, in this ladder's own currency
   // (danClearBarFor), so the evidence surface can show what it was measured
   // against rather than the client's displayed number.
   accuracy: number;
+  // The bar it was judged against, after any stable->v2 conversion.
+  bar: number;
 }
 
 /**
@@ -1186,8 +1278,12 @@ function collectDanClears(
         accuracy = stable ?? displayed;
         threshold += STABLE_EQUIVALENT_V2_BAR_OFFSET;
       }
-      if (!(accuracy >= threshold)) return;
-      clears.push({ play, side, chartDan: rawDan, accuracy });
+      // For a stable-only row judged against a v2 bar, threshold is already
+      // the converted 97.5%, so the credit window and the bonus headroom both
+      // shift with it: the whole scale rides the converted bar, deliberately.
+      const creditedDan = creditedDanFor(rawDan, accuracy, threshold, side, keyCount);
+      if (creditedDan == null) return;
+      clears.push({ play, side, chartDan: rawDan, creditedDan, accuracy, bar: threshold });
     };
     if (play.rate === 1 && info.lnRatio != null) {
       const side = info.lnRatio >= LN_PRIMARY_MIN_RATIO ? "ln" : "rc";
@@ -1231,6 +1327,17 @@ export function danSideFromClearsForTest(
   rateVerdicts: RateVerdictMap = new Map(),
 ): PlayerSkillDanSide | null {
   const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap, rateVerdicts).filter((clear) => clear.side === side);
+  return danSideFromClears(keyCount, side, clears, infoByBeatmap, courseClears);
+}
+
+/** Test seam over the aggregation alone, given clears already collected. */
+export function danSideFromClearEvidenceForTest(
+  keyCount: number,
+  side: "rc" | "ln",
+  clears: DanClearEvidence[],
+  infoByBeatmap: Map<number, ChartSkillInfo>,
+  courseClears: DanCourseClear[] = [],
+): PlayerSkillDanSide | null {
   return danSideFromClears(keyCount, side, clears, infoByBeatmap, courseClears);
 }
 
@@ -1334,14 +1441,14 @@ function danSideFromClears(
   courseClears: DanCourseClear[] = [],
 ): PlayerSkillDanSide | null {
   const best = bestDanCourseClear(courseClears, keyCount, side);
-  const clearDans = list.map((clear) => clear.chartDan);
+  const clearDans = list.map((clear) => clear.creditedDan);
   const quorumDan = danFromClears(clearDans, side, keyCount);
   if (!quorumDan) return best ? danSideFromCourseClear(best, side, keyCount) : null;
   // Buckets are a subset of the side's clears, so a side under the quorum can
   // never have one: no verdict here means no skillset verdicts either.
   const skillsets: Record<string, PlayerSkillDanVerdict> = {};
   for (const [id, bucketClears] of groupDanClearsBySkillset(keyCount, side, list, infoByBeatmap)) {
-    const bucketDan = danFromClears(bucketClears.map((clear) => clear.chartDan), side, keyCount);
+    const bucketDan = danFromClears(bucketClears.map((clear) => clear.creditedDan), side, keyCount);
     if (bucketDan) skillsets[id] = bucketDan;
   }
   const headline = averageSkillsetDans(skillsets, clearDans, side, keyCount) ?? quorumDan;
@@ -1423,7 +1530,10 @@ function danVerdictAt(rawDan: number, side: "rc" | "ln", keyCount: number, clear
 
 // A quorum clear that landed on the table's "> last tier" sentinel carries
 // the whole ladder's ceiling with it: the estimate is a floor, and the chip
-// says so rather than showing the top level as if it were measured.
+// says so rather than showing the top level as if it were measured. Accuracy
+// bonuses can reach the sentinel too (creditedDanFor clamps there), so a
+// window of maxed clears on the last tiers reads the same way; that is real
+// evidence the ladder stopped measuring the player, and the chip stays honest.
 function isBeyondDanTable(rawDan: number, side: "rc" | "ln", keyCount: number): boolean {
   const ceiling = danTableCeilingFor(side, keyCount);
   return ceiling != null && rawDan >= ceiling;
@@ -2056,7 +2166,19 @@ export async function getPlayerSkillBreakdown(
         "select count(*) as cnt from top_play_events where user_id = ? and detected_at > ?",
         [userId, row.computed_at],
       )).rows[0]?.cnt ?? 0);
-      shouldEnqueue = newTopPlays > 0;
+      // Tracked plays feed the rating too (loadTrackedScores), so a view
+      // mid-session must not wait out the session debounce just because no
+      // play entered the top-200. received_at rather than ended_at: it shares
+      // computed_at's clock (ended_at is osu!'s) and covers backfill, and a
+      // play the compute already read was received before the ratings write
+      // stamped computed_at, so a fresh row stays quiet.
+      const newTrackedPlays = newTopPlays > 0 ? 1 : Number((await exec(
+        db,
+        `select count(*) as cnt from score_events
+         where user_id = ? and passed = 1 and ruleset_id = 3 and received_at > ?`,
+        [userId, row.computed_at],
+      )).rows[0]?.cnt ?? 0);
+      shouldEnqueue = newTrackedPlays > 0;
     }
   }
   const enqueueMode: SkillEnqueueMode = options.allowEnqueue === false ? "none" : options.enqueueMode ?? "await";
@@ -2194,15 +2316,19 @@ function buildPlayerSkillPlay(
 
 // --- Dan evidence: the clears behind a player's dan estimate ---
 
-// One clear as the dan-detail modal shows it: the play, the chart's own dan on
-// the side it testifies for, and the accuracy it was judged on in that
-// ladder's currency (which is not always the client's displayed number).
-// `countsTowardDan` marks the clears at or above the side's estimate (the
-// ones the stored verdict's `clears` count refers to).
+// One credited clear as the dan-detail modal shows it: the play, the chart's
+// own dan on the side it testifies for, the dan the clear actually credited
+// after the accuracy curve (equal to the chart's for a bare pass at the bar),
+// and the accuracy it was judged on in that ladder's currency (which is not
+// always the client's displayed number). `countsTowardDan` marks the clears
+// whose credit sits at or above the side's estimate (the ones the stored
+// verdict's `clears` count refers to).
 export interface PlayerSkillDanEvidencePlay {
   play: PlayerSkillPlay;
   chartDan: number;
   chartDanLabel: string;
+  creditedDan: number;
+  creditedDanLabel: string;
   clearAccuracy: number;
   countsTowardDan: boolean;
 }
@@ -2256,7 +2382,10 @@ export interface PlayerSkillDanEvidence {
   side: "rc" | "ln";
   keyCount: number;
   quorum: number;
+  /** The lowest accuracy that credits anything: barAccuracy minus the credit window. */
   minAccuracy: number;
+  /** The ladder's own pass bar, where a clear credits the chart's full dan. */
+  barAccuracy: number;
   dan: PlayerSkillDanSide | null;
   totalClears: number;
   clears: PlayerSkillDanEvidencePlay[];
@@ -2329,6 +2458,22 @@ interface DanSkillsetBucket {
  * only 4.2% of Jumpstream-argmax plays. Re-measure against both packs and a
  * jumptrill set before touching the constant.
  *
+ * Jack is the one 4K tile that also reads the analyzer, because MinaCalc
+ * cannot see speedjack: it rates those charts Jumpstream-argmax with JackSpeed
+ * dead last (Gamma speedjack pack 3's FINAL BOSS: Jumpstream 32.0, JackSpeed
+ * 17.6), which filed half of every named speedjack pack under tech. A chart
+ * wearing the analyzer's chordjack tag (>= 0.8, near-certainty) or speedjack
+ * tag (>= 0.5, the ordinary bar; the detector is silent - p90 0.00 - on every
+ * non-jack corpus, the delay shape) files under jack no matter the argmax.
+ * Measured against mapper-named 4K packs (157 speedjack / 1,510 jack / 1,300
+ * chordjack / 380 tech / 1,062 speed / 445 jumpstream / 610 stamina / 1,109
+ * stream charts): the speedjack corpus goes 49% -> 83% on the jack tile and
+ * the jack corpus 76% -> 88%, at under 1% moved from each of tech, speed,
+ * jumpstream and stream and 2.5% of stamina (dense long-jack files that read
+ * both ways); corpus-wide 3.5% of charts move. The override MOVES the clear
+ * out of its argmax tile rather than adding it, so the four buckets stay
+ * disjoint and their clear counts still sum to the side's total.
+ *
  * 6K/7K cannot use it: that calc engine does not rate Technical at all
  * (it returns ~0, so Technical never wins an argmax there) and the distribution
  * collapses onto Handstream. Those keymodes fall back to the in-house chart
@@ -2358,7 +2503,9 @@ function danSkillsetBuckets(keyCount: number, side: "rc" | "ln"): DanSkillsetBuc
   }
   if (keyCount === 4) {
     return [
-      { id: "jack", tags: [], skillsets: ["JackSpeed", "Chordjack"] },
+      // The jack tile's tags are the analyzer override (see bucketsForClear):
+      // a chart wearing either tag files here regardless of the MSD argmax.
+      { id: "jack", tags: ["chordjack", "speedjack"], skillsets: ["JackSpeed", "Chordjack"] },
       { id: "tech", tags: [], skillsets: ["Technical", "Jumpstream"] },
       { id: "speed", tags: [], skillsets: ["Stream"] },
       { id: "stamina", tags: [], skillsets: ["Handstream", "Stamina"] },
@@ -2366,8 +2513,9 @@ function danSkillsetBuckets(keyCount: number, side: "rc" | "ln"): DanSkillsetBuc
   }
   return [
     // Jack and stream read LeoBlack's clusters rather than their tags; `tags`
-    // stays as the fallback for the ~1% of charts with no clusters stored.
-    { id: "jack", tags: ["chordjack"], clusterFamily: "jack" },
+    // stays as the fallback for the ~1% of charts with no clusters stored
+    // (the derived jack tag covers those via its chordjack-score arm).
+    { id: "jack", tags: ["jack"], clusterFamily: "jack" },
     { id: "tech", tags: ["tech"], clusterFamily: "tech" },
     { id: "speed", tags: ["delay"] },
     { id: "stream", tags: ["chordstream", "bracket"], clusterFamily: "stream" },
@@ -2377,6 +2525,29 @@ function danSkillsetBuckets(keyCount: number, side: "rc" | "ln"): DanSkillsetBuc
 /** The bucket ids a keymode/side publishes, in declaration order. */
 export function danSkillsetBucketIds(keyCount: number, side: "rc" | "ln"): string[] {
   return danSkillsetBuckets(keyCount, side).map((bucket) => bucket.id);
+}
+
+/**
+ * The buckets one clear belongs to. MSD-bucketed keymodes (4K) file by the
+ * play's argmax skillset, except that a chart wearing one of a bucket's own
+ * analyzer tags files there outright (the jack tile's speedjack correction;
+ * danSkillsetBuckets has the measurements). The override replaces the argmax
+ * verdict rather than adding to it, so those buckets stay disjoint. Tag
+ * keymodes (6K/7K) file by chartBelongsToTagBucket alone, overlapping by
+ * design.
+ */
+function bucketsForClear(
+  buckets: DanSkillsetBucket[],
+  topSkillset: string | null,
+  chart: ChartSkillInfo | undefined,
+): DanSkillsetBucket[] {
+  const override = buckets.find(
+    (bucket) => bucket.skillsets != null && bucket.tags.length > 0 && chartBelongsToTagBucket(bucket, chart),
+  );
+  if (override != null) return [override];
+  return buckets.filter((bucket) => bucket.skillsets
+    ? topSkillset != null && bucket.skillsets.includes(topSkillset)
+    : chartBelongsToTagBucket(bucket, chart));
 }
 
 /**
@@ -2396,12 +2567,9 @@ function groupDanClearsBySkillset(
   for (const bucket of buckets) bySkillset.set(bucket.id, []);
   for (const clear of clears) {
     const chart = infoByBeatmap.get(clear.play.beatmapId);
-    const topSkillset = bucketingSkillset(clear.play.values);
-    for (const bucket of buckets) {
-      const belongs = bucket.skillsets
-        ? topSkillset != null && bucket.skillsets.includes(topSkillset)
-        : chartBelongsToTagBucket(bucket, chart);
-      if (belongs) bySkillset.get(bucket.id)!.push(clear);
+    const topSkillset = bucketingSkillset(clear.play.values, chart?.lengthSeconds ?? null, clear.play.rate);
+    for (const bucket of bucketsForClear(buckets, topSkillset, chart)) {
+      bySkillset.get(bucket.id)!.push(clear);
     }
   }
   return bySkillset;
@@ -2453,7 +2621,7 @@ export async function getPlayerSkillDanEvidence(
   const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap, rateVerdicts)
     .filter((clear) => clear.side === side)
     .sort((left, right) =>
-      right.chartDan - left.chartDan
+      right.creditedDan - left.creditedDan
       || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
       || left.play.beatmapId - right.play.beatmapId);
   const courseClears = await loadPlayerDanCourseClears(db, userId);
@@ -2483,8 +2651,10 @@ export async function getPlayerSkillDanEvidence(
     play: buildPlayerSkillPlay(clear.play, Number(clear.play.values?.Overall ?? 0), keyCount, metadata),
     chartDan: Math.round(clear.chartDan * 100) / 100,
     chartDanLabel: danLabelFor(clear.chartDan, side, keyCount),
+    creditedDan: Math.round(clear.creditedDan * 100) / 100,
+    creditedDanLabel: danLabelFor(clear.creditedDan, side, keyCount),
     clearAccuracy: clear.accuracy,
-    countsTowardDan: threshold != null && clear.chartDan >= threshold,
+    countsTowardDan: threshold != null && clear.creditedDan >= threshold,
   });
 
   // Emitted in bucket-declaration order; the client ranks them for display.
@@ -2501,11 +2671,13 @@ export async function getPlayerSkillDanEvidence(
     })
     .filter((skillset) => skillset.clears > 0);
 
+  const barAccuracy = danClearBarFor(side, keyCount).accuracy;
   return {
     side,
     keyCount,
     quorum: DAN_CLEAR_QUORUM,
-    minAccuracy: danClearBarFor(side, keyCount).accuracy,
+    minAccuracy: Math.round((barAccuracy - DAN_CREDIT_BELOW_BAR_WINDOW) * 1000) / 1000,
+    barAccuracy,
     dan,
     totalClears: clears.length,
     clears: topClears.map(toEvidencePlay),
@@ -2571,33 +2743,90 @@ function toCourseEvidence(
 // labels this bucketing was built from. At 1.25 every Blastix diff stays tech.
 const SPEED_NEAR_TIE_MSD = 1.25;
 
+// MinaCalc's Stamina is a rider rather than a detector: it tracks the strongest
+// base skillset sustained and the calc clamps it a hair above that base. Over
+// every 4K chart in the corpus with MSD, a Stamina argmax win never exceeds the
+// best base skillset by more than 0.45%, so the win reports length, not
+// identity - Infectious Crying (5066729), a self-described tech dump, files
+// under Stamina 32.81 against Technical 32.66. A clear only demonstrates
+// endurance when the file actually asks for it, so a Stamina win keeps the tile
+// only at 4:00 or longer (the same bar and the same reasoning as
+// STAMINA_PRIMARY_MIN_LENGTH_SECONDS on the /maps shelf, kept as its own
+// constant rather than imported so the player layer does not depend on the map
+// index). Everything shorter files under its best base skillset instead.
+//
+// Measured over 42,836 rated 4K plays: the stamina tile goes from 24.9% of
+// plays to 18.7% (tech 60.8% -> 66.8%, speed and jack unmoved), and 70% of
+// players keep four stamina clears and therefore a rated tile. Handstream-led
+// clears are untouched - they name a pattern, so they hold the tile at any
+// length.
+const STAMINA_TILE_MIN_LENGTH_SECONDS = 240;
+
+// The base skillsets, i.e. everything the stamina rider rides on top of.
+const BASE_MSD_SKILLSETS = SKILL_RATING_SKILLSETS.filter(
+  (skillset) => skillset !== "Overall" && skillset !== "Stamina",
+);
+
 /**
  * The skillset a play is filed under, which is its strongest EXCEPT that Stream
- * wins from within SPEED_NEAR_TIE_MSD of the top. Still single-valued, so the
- * tiles stay disjoint and their clear counts sum to the side's total.
+ * wins from within SPEED_NEAR_TIE_MSD of the top and that Stamina has to earn
+ * it on length. Still single-valued, so the tiles stay disjoint and their clear
+ * counts sum to the side's total.
+ *
+ * `lengthSeconds` is the chart's drain at 1.0x and `rate` the speed it was
+ * played at, so a 1.5x run of a five-minute chart is judged on the 3:20 it
+ * actually lasted. An unknown length leaves the old behaviour rather than
+ * guessing a chart short.
  */
-function bucketingSkillset(values: Record<string, number> | undefined): string | null {
+function bucketingSkillset(
+  values: Record<string, number> | undefined,
+  lengthSeconds: number | null = null,
+  rate = 1,
+): string | null {
   const top = dominantSkillset(values);
   if (top == null || top === "Stream") return top;
   const stream = Number(values?.Stream ?? 0);
   const best = Number(values?.[top] ?? 0);
-  return stream > 0 && stream >= best - SPEED_NEAR_TIE_MSD ? "Stream" : top;
+  const nearTie = stream > 0 && stream >= best - SPEED_NEAR_TIE_MSD ? "Stream" : top;
+  if (nearTie !== "Stamina" || lengthSeconds == null) return nearTie;
+  const playedSeconds = lengthSeconds / (Number.isFinite(rate) && rate > 0 ? rate : 1);
+  if (playedSeconds >= STAMINA_TILE_MIN_LENGTH_SECONDS) return nearTie;
+  return bucketingSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS));
+}
+
+/** A copy of an SSR vector holding only the named skillsets. */
+function pickSkillsets(values: Record<string, number> | undefined, keep: string[]): Record<string, number> {
+  const picked: Record<string, number> = {};
+  for (const skillset of keep) {
+    const value = Number(values?.[skillset] ?? 0);
+    if (Number.isFinite(value) && value > 0) picked[skillset] = value;
+  }
+  return picked;
 }
 
 /**
  * Which dan-evidence skillset tiles a play's SSR vector belongs to. Test seam
  * over the same walk getPlayerSkillDanEvidence does, so the speed/tech split
- * can be checked against real MSD vectors without seeding a whole ratings row.
+ * and the jack override can be checked against real MSD vectors without
+ * seeding a whole ratings row. `chart` carries the stored analysis; omitted,
+ * only the MSD path runs.
  */
 export function danSkillsetBucketsForValues(
   keyCount: number,
   side: "rc" | "ln",
   values: Record<string, number>,
+  lengthSeconds: number | null = null,
+  rate = 1,
+  chart?: ChartSkillInfo,
 ): string[] {
-  const top = bucketingSkillset(values);
-  return danSkillsetBuckets(keyCount, side)
-    .filter((bucket) => bucket.skillsets != null && top != null && bucket.skillsets.includes(top))
-    .map((bucket) => bucket.id);
+  const top = bucketingSkillset(values, lengthSeconds, rate);
+  return bucketsForClear(danSkillsetBuckets(keyCount, side), top, chart).map((bucket) => bucket.id);
+}
+
+/** Drain length in seconds from the beatmap metadata; null when unknown. */
+function readLengthSeconds(value: unknown): number | null {
+  const seconds = Math.round(Number(value));
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 }
 
 /** The highest non-Overall MSD skillset of a play's SSR vector, if any. */
@@ -2985,7 +3214,24 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // v5: a dan became the mean of the best DAN_CLEAR_AVERAGE_WINDOW clears
 // rather than the quorum-th clear alone, so every stored verdict is stale
 // again. Same re-derive from plays_json, no MinaCalc.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v5";
+// v6: the stamina tile now has to earn a Stamina argmax on length
+// (STAMINA_TILE_MIN_LENGTH_SECONDS), which moves clears between skillset
+// tiles and so moves the per-tile dans and the headline they average.
+// v6: a clear's credit now moves with its accuracy (bonus above the ladder's
+// bar, decay down to the credit window under it, dan-credit.ts), so every
+// stored verdict is stale again. Same re-derive from plays_json plus the
+// stored rate verdicts, no MinaCalc. Until the sweep rewrites a row, the
+// badge and leaderboard show the old number while the evidence modal (which
+// recomputes live) already shows the new one; that skew existed for v5 too,
+// it is just wider here.
+// v7: the 4K LN ladder cooled off - its bonus now scores against the decay
+// window rather than its 2.5-3 point headroom, and its near-bar cap deepened
+// to 0.75 (dan-credit.ts has the measurement). Every other ladder's numbers
+// are unchanged, but the stored 4K LN verdicts are stale.
+// v8: a confident analyzer speedjack/chordjack tag now overrides MinaCalc's
+// 4K argmax into the jack tile. That moves clears between skillset verdicts
+// and can move the headline average, so all stored verdicts are stale.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v8";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

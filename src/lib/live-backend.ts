@@ -47,14 +47,18 @@ export interface LivePlayerSkillPlaysPage {
   offset: number;
 }
 
-// One qualifying clear behind a dan estimate: the play, the chart's dan on the
-// side it testifies for, and the accuracy it was judged on in that ladder's
-// own currency (stable's 300-weighted accuracy, or ScoreV2's for 4K LN), which
-// is not always the accuracy the client displayed.
+// One credited clear behind a dan estimate: the play, the chart's own dan on
+// the side it testifies for, the dan the clear actually credited after the
+// accuracy curve (a bonus above the ladder's bar, a decay below it; equal to
+// the chart's for a bare pass at the bar), and the accuracy it was judged on
+// in that ladder's own currency (stable's 300-weighted accuracy, or ScoreV2's
+// for 4K LN), which is not always the accuracy the client displayed.
 export interface LivePlayerDanEvidencePlay {
   play: LivePlayerSkillPlay;
   chartDan: number;
   chartDanLabel: string;
+  creditedDan: number;
+  creditedDanLabel: string;
   clearAccuracy: number;
   countsTowardDan: boolean;
 }
@@ -111,7 +115,10 @@ export interface LivePlayerDanEvidence {
   side: "rc" | "ln";
   keyCount: number;
   quorum: number;
+  /** The lowest accuracy that credits anything: barAccuracy minus the credit window. */
   minAccuracy: number;
+  /** The ladder's own pass bar, where a clear credits the chart's full dan. */
+  barAccuracy: number;
   dan: { rawDan: number; label: string; clears: number; beyondTable?: boolean; courseClear?: LivePlayerDanCourseClear } | null;
   totalClears: number;
   clears: LivePlayerDanEvidencePlay[];

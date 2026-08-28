@@ -27,6 +27,8 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-27", text: "The Chordjack skill on 6K and 7K profiles is now Jack, and it also counts jack maps the old tile missed, so fewer of them land under Tech" },
+  { date: "2026-08-27", text: "New dan bonus and decay system: your accuracy sets what a pass counts for. 96%+ counts at or above the chart's level, and below 96% down to 92% counts as a lower level instead of nothing", to: "/dan-estimates" },
   { date: "2026-08-27", text: "Dan estimates reworked: each skillset dan is now the average of your 5 best passes in it instead of your 4th best pass, your dan is the average of those skillsets, clearing a real dan course sets your dan when the average sits lower, and lazer custom rate plays like 1.15x now count. The page explaining how dan is estimated is updated to match", to: "/dan-estimates" },
   { date: "2026-08-26", text: "Click Key Split on a player page to see how much pp each keymode is worth, 4K, 5K, 6K, 7K and up, so you can track your pp on each. Pick a keymode on the Best Performance tab and the plays this site tracked below your osu! top 200 show up in the list too, so every keymode gets a top of up to 200 plays of its own instead of sharing one" },
   { date: "2026-08-26", text: "Rankings now has MSD and Dan tabs next to Performance: see who is rated highest on each skillset, per keymode, and who holds the highest dan", to: "/rankings" },

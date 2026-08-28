@@ -42,14 +42,15 @@ export const MSD_SKILLSET_META: SkillAxisMeta[] = [
 // Non-4K axes come from the in-house pattern detector instead (MinaCalc's
 // skillset names are 4K vocabulary): each value is the aggregate of the
 // player's Overall SSRs on charts tagged with that pattern. Family ids only;
-// subtypes (speedjack, lnrelease, ...) stay a maps-page concern.
+// subtypes (speedjack, lnrelease, ...) stay a maps-page concern. No chordjack
+// row: the backend's jack tag covers chord jack and single-note jack alike,
+// so the tile is Jack (a still-published chordjack rating stays undisplayed).
 export const PATTERN_RATING_META: SkillAxisMeta[] = [
   { key: "chordstream", label: "Chordstream", labelMsg: msg`Chordstream`, color: "#5ab2f2" },
   { key: "bracket", label: "Bracket", labelMsg: msg`Bracket`, color: "#f3c24a" },
   { key: "delay", label: "Delay", labelMsg: msg`Delay`, color: "#46c7b8" },
   { key: "stream", label: "Stream", labelMsg: msg`Stream`, color: "#8f6bd8" },
   { key: "jack", label: "Jack", labelMsg: msg`Jack`, color: "#ec6a9c" },
-  { key: "chordjack", label: "Chordjack", labelMsg: msg`Chordjack`, color: "#c59a5c" },
   { key: "tech", label: "Tech", labelMsg: msg`Tech`, color: "#83cf6b" },
   { key: "ln", label: "LN", labelMsg: msg`LN`, color: "#f07474" },
 ];

@@ -366,7 +366,7 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
-              Out of that pool, a play counts as a clear if it passed at or above the accuracy the real
+              Out of that pool, a play earns credit by where its accuracy sits against the bar the real
               course asks for. Each ladder sets its own bar:
             </Trans>
           </P>
@@ -381,6 +381,35 @@ function DanEstimatesPage() {
               and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K
               regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same
               play, recomputing is what makes that play count, or not count, the same on either client.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              A pass right at the bar credits the chart's full level, exactly as passing the course
+              would. Accuracy above the bar credits more, and a near miss under it still credits
+              something: from 4 points under the bar, a play counts as a clear of a lower level,
+              bottoming out one full level down. On the 96% ladders that reads:
+            </Trans>
+          </P>
+          <Table
+            head={[t`Accuracy (96% ladder)`, t`Credit`]}
+            rows={[
+              ["100%", t`the chart's level +1.5`],
+              ["99.5%", t`the chart's level +1.1`],
+              ["99%", t`the chart's level +0.7`],
+              ["98%", t`the chart's level +0.35`],
+              [t`96% (the bar)`, t`the chart's full level`],
+              ["95%", t`the chart's level -0.45`],
+              ["94%", t`the chart's level -0.63`],
+              ["92%", t`the chart's level -1`],
+              [t`below 92%`, t`nothing`],
+            ]}
+          />
+          <P>
+            <Trans>
+              The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and
+              stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own
+              level: a near miss never reads as the full clear.
             </Trans>
           </P>
           <P>
@@ -405,9 +434,16 @@ function DanEstimatesPage() {
             <Trans>
               Every qualifying pass lands in one of four skills, and those four are what the estimate is
               built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD
-              skillset ratings and filed under whichever skillset is strongest on that chart: jack
+              skillset ratings and normally filed under whichever skillset is strongest on that chart: jack
               (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina
               (Handstream and Stamina).
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is
+              jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to
+              jack. It replaces the MSD choice instead of counting in two skills.
             </Trans>
           </P>
           <P>
@@ -433,14 +469,14 @@ function DanEstimatesPage() {
         <Section title={t`Step 5: each skill's dan is the average of your 5 best passes in it`}>
           <P>
             <Trans>
-              Take your qualifying passes in one skill, sort them by the chart's dan level, and average
-              the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no
-              single pass can set it on its own.
+              Take your credited passes in one skill, sort them by the level each one credited, and
+              average the top 5. That is your dan in that skill. Nothing is added on top of the
+              evidence, and no single pass can set it on its own.
             </Trans>
           </P>
           <div className="space-y-2 border-l-2 border-osu-b3 pl-4 text-[15px] leading-7 text-osu-f1">
             <p>
-              <Trans>Say your 4K jack passes at 96% or better land on charts rated:</Trans>
+              <Trans>Say the levels your 4K jack passes credit come out as:</Trans>
             </p>
             <p className="font-bold tabular-nums text-white">
               <span className="text-osu-pink-light">gamma, beta+, beta, alpha++, alpha,</span> 10+, 10, 9++ ...

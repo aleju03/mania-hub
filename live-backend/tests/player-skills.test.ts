@@ -528,23 +528,47 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
-  it("vetoes the tech tag on near-certain chordjack charts", async () => {
+  it("vetoes the tech tag on jack charts and derives the whole-jack tag", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
-      // Pure CJ charts carry a mid tech score from chord churn alone; only the
-      // chart below the chordjack-certainty bar keeps its tech tag.
+      // Pure jack charts carry a mid tech score from chord churn alone; only
+      // the chart neither jack arm claims keeps its tech tag. 104 is the KKKC
+      // shape: chordjack below the certainty bar (0.77) but LeoBlack jack
+      // clusters carrying the chart (share 0.405), so the cluster arm both
+      // tags it jack and evicts it from tech. 108 is the inverse: chordjack
+      // certainty with stream-heavy clusters, so it stays a mixed chordjack +
+      // tech chart instead of becoming whole-Jack.
+      const kkkcClusters = [
+        { pattern: "Jacks", importance: 41 },
+        { pattern: "Chordstream", importance: 59 },
+      ];
       const taggings = [
-        [101, [{ id: "chordjack", score: 1 }, { id: "bracket", score: 1 }, { id: "tech", score: 0.6 }]],
-        [102, [{ id: "chordjack", score: 0.85 }, { id: "tech", score: 0.75 }]],
-        [103, [{ id: "chordjack", score: 0.4 }, { id: "tech", score: 0.7 }]],
+        [101, [{ id: "chordjack", score: 1 }, { id: "bracket", score: 1 }, { id: "tech", score: 0.6 }], null],
+        [102, [{ id: "chordjack", score: 0.85 }, { id: "tech", score: 0.75 }], null],
+        [103, [{ id: "chordjack", score: 0.4 }, { id: "tech", score: 0.7 }], null],
+        [104, [{ id: "chordjack", score: 0.77 }, { id: "tech", score: 0.69 }], kkkcClusters],
+        // Ningen shape: single-note jack at certainty vetoes tech on its own.
+        [106, [{ id: "jack", score: 1 }, { id: "tech", score: 0.69 }], null],
+        // EGOISM shape: a jack tag below the veto bar keeps the tech tag too.
+        [107, [{ id: "jack", score: 0.67 }, { id: "tech", score: 0.7 }], null],
+        [108, [
+          { id: "chordjack", score: 0.93 },
+          { id: "tech", score: 0.717 },
+          { id: "jack", score: 0.38 },
+          { id: "chordstream", score: 0.308 },
+        ], [
+          { pattern: "Chordstream", importance: 13_716_729 },
+          { pattern: "Jacks", importance: 4_212_000 },
+          { pattern: "Stream", importance: 875_000 },
+        ]],
       ] as const;
-      for (const [beatmapId, patterns] of taggings) {
+      for (const [beatmapId, patterns, clusters] of taggings) {
         await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
         await exec(
           db,
-          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
-           values (?, ?, 'ready', ?, ?)`,
-          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ patterns }), new Date().toISOString()],
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+           values (?, ?, 'ready', 7, ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ patterns, ...(clusters ? { clusters } : {}) }), new Date().toISOString()],
         );
       }
 
@@ -552,12 +576,20 @@ describe("computePlayerSkillRatings", () => {
         play({ id: 1, beatmap_id: 101, accuracy: 0.99 }),
         play({ id: 2, beatmap_id: 102, accuracy: 0.97 }),
         play({ id: 3, beatmap_id: 103, accuracy: 0.95 }),
+        play({ id: 4, beatmap_id: 104, accuracy: 0.96 }),
+        play({ id: 6, beatmap_id: 106, accuracy: 0.96 }),
+        play({ id: 7, beatmap_id: 107, accuracy: 0.96 }),
+        play({ id: 8, beatmap_id: 108, accuracy: 0.96 }),
       ];
       const result = await computePlayerSkillRatings(db, failingOsu, scores, []);
       const byBeatmap = new Map(result.plays.map((entry) => [entry.beatmapId, entry.patterns]));
-      expect(byBeatmap.get(101)).toEqual(["chordjack", "bracket"]);
-      expect(byBeatmap.get(102)).toEqual(["chordjack"]);
+      expect(byBeatmap.get(101)).toEqual(["chordjack", "bracket", "jack"]);
+      expect(byBeatmap.get(102)).toEqual(["chordjack", "jack"]);
       expect(byBeatmap.get(103)).toEqual(["tech"]);
+      expect(byBeatmap.get(104)).toEqual(["jack"]);
+      expect(byBeatmap.get(106)).toEqual(["jack"]);
+      expect(byBeatmap.get(107)).toEqual(["jack", "tech"]);
+      expect(byBeatmap.get(108)).toEqual(["chordjack", "tech"]);
     });
   });
 
@@ -615,23 +647,31 @@ describe("computePlayerSkillRatings", () => {
         );
       }
 
+      // Every clear sits exactly on its ladder's bar so the accuracy credit
+      // is zero and this test stays about ROUTING (which side each chart
+      // testifies for): 940/60 is exactly 96.00% stable, 3917/183 is exactly
+      // 97.00% in ScoreV2's 305-weighted accuracy.
+      const atRcBar = { perfect: 940, ok: 60 };
+      const atLnBar = { perfect: 3917, ok: 183 };
       const scores = [
-        play({ id: 1, beatmap_id: 101, accuracy: 0.995, statistics: { perfect: 660, great: 20 } }),
-        play({ id: 2, beatmap_id: 105, accuracy: 0.995, statistics: { perfect: 680, great: 10 } }),
+        play({ id: 1, beatmap_id: 101, accuracy: 0.96, statistics: atRcBar }),
+        play({ id: 2, beatmap_id: 105, accuracy: 0.96, statistics: atRcBar }),
         // A DT clear counts only because the DT sweep stored a verdict, and
         // it lands on the verdict's primary side (rc here).
-        play({ id: 3, beatmap_id: 101, mods: [{ acronym: "DT" }], accuracy: 0.96, statistics: { perfect: 350, great: 330 } }),
-        // Below the accuracy bar: analyzed, but never a qualifying clear (if
-        // this 9.9 counted, the rc dan would land higher). Miss-free so its
-        // wife estimate stays above the 0.8 goal floor and it rates at all.
-        play({ id: 4, beatmap_id: 107, accuracy: 0.9, statistics: { perfect: 300, great: 300, ok: 60 } }),
-        play({ id: 5, beatmap_id: 108, accuracy: 0.96, statistics: { perfect: 400, great: 260 } }),
+        play({ id: 3, beatmap_id: 101, mods: [{ acronym: "DT" }], accuracy: 0.96, statistics: atRcBar }),
+        // Below the credit window entirely (91.9%, under the 92% edge):
+        // analyzed, but credits nothing (if this 9.9 counted even decayed,
+        // the rc dan would move). Count-free so the goal falls back to the
+        // displayed accuracy and stays above the 0.8 floor: judgement counts
+        // this bad wife-rate under the floor and would not rate at all.
+        play({ id: 4, beatmap_id: 107, accuracy: 0.919 }),
+        play({ id: 5, beatmap_id: 108, accuracy: 0.97, statistics: atLnBar }),
         // Hybrid below the LN cutoff (lnRatio 0.4): counts as a rice clear
         // only - its ln half (7.0) must never reach the LN ladder.
-        play({ id: 6, beatmap_id: 109, accuracy: 0.96, statistics: { perfect: 380, great: 280 } }),
-        play({ id: 7, beatmap_id: 110, accuracy: 0.995, statistics: { perfect: 650, great: 20 } }),
-        play({ id: 8, beatmap_id: 111, accuracy: 0.995, statistics: { perfect: 640, great: 25 } }),
-        play({ id: 9, beatmap_id: 112, accuracy: 0.96, statistics: { perfect: 390, great: 270 } }),
+        play({ id: 6, beatmap_id: 109, accuracy: 0.96, statistics: atRcBar }),
+        play({ id: 7, beatmap_id: 110, accuracy: 0.97, statistics: atLnBar }),
+        play({ id: 8, beatmap_id: 111, accuracy: 0.97, statistics: atLnBar }),
+        play({ id: 9, beatmap_id: 112, accuracy: 0.97, statistics: atLnBar }),
       ];
       const result = await computePlayerSkillRatings(db, failingOsu, scores, []);
       expect(result.summary.analyzedPlays).toBe(9);
@@ -665,23 +705,23 @@ describe("computePlayerSkillRatings", () => {
         );
       }
 
-      // 956 max / 44 ok is 97.04% in ScoreV2's 305-weighted accuracy; 949/51
-      // is 96.57% and misses the bar. Both would read as ~96.6% and ~96.0% on
-      // stable's 300-weighted display accuracy, so a bar checked in the wrong
-      // currency lets the 9.0 chart in and sets the dan a level and a half high.
+      // 956 max / 44 ok is 97.04% in ScoreV2's 305-weighted accuracy; 880/120
+      // is 91.93%, below even the credit window. The clearing plays would read
+      // as ~97.07% on stable's 300-weighted display accuracy, so a bar checked
+      // in the wrong currency also credits the wrong bonus.
       const clearing = { perfect: 956, ok: 44 };
-      const failing = { perfect: 949, ok: 51 };
+      const failing = { perfect: 880, ok: 120 };
       const scores = [
         play({ id: 1, beatmap_id: 201, accuracy: 0.9704, statistics: clearing }),
         play({ id: 2, beatmap_id: 202, accuracy: 0.9704, statistics: clearing }),
         play({ id: 3, beatmap_id: 203, accuracy: 0.9704, statistics: clearing }),
         play({ id: 4, beatmap_id: 204, accuracy: 0.9704, statistics: clearing }),
-        play({ id: 5, beatmap_id: 205, accuracy: 0.9657, statistics: failing }),
+        play({ id: 5, beatmap_id: 205, accuracy: 0.9193, statistics: failing }),
       ];
       const dan = (await computePlayerSkillRatings(db, failingOsu, scores, [])).summary.modes[0].dan!;
-      // 8.0 / 7.0 / 6.5 / 6.0 qualify and each credits its chart's full dan,
-      // averaging to 6.88; the 9.0 does not. If it had counted, the average
-      // would be 7.3.
+      // 8.0 / 7.0 / 6.5 / 6.0 qualify, each a hair over the bar (+0.01 credit),
+      // averaging to 6.88; the 9.0 sits under the credit window and credits
+      // nothing at all.
       expect(dan.ln?.rawDan).toBe(6.88);
       expect(dan.ln?.clears).toBe(2);
     });
@@ -701,11 +741,51 @@ describe("computePlayerSkillRatings", () => {
       }
 
       // 940 max / 60 ok is exactly 96.00% stable, the 4K rice courses' bar.
+      // This is the anchor regression for the accuracy credit curve too: the
+      // bar is its zero point, so a bare pass credits exactly the chart's dan.
       const scores = [211, 212, 213, 214].map((beatmapId, index) =>
         play({ id: index + 1, beatmap_id: beatmapId, accuracy: 0.96, statistics: { perfect: 940, ok: 60 } }));
       const dan = (await computePlayerSkillRatings(db, failingOsu, scores, [])).summary.modes[0].dan!;
       expect(dan.rc?.rawDan).toBe(8);
       expect(dan.rc?.clears).toBe(4);
+    });
+  });
+
+  it("credits a near-miss a decayed level, and a high-accuracy pass a bonus, from the same curve", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      for (const beatmapId of [261, 262, 263, 264]) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [], rc: { rawDan: 15.15 } }), new Date().toISOString()],
+        );
+      }
+      const { collectDanClearsForTest, danSideFromClearsForTest, loadChartSkillInfo } = await import("../src/features/player-skills.js");
+      const info = await loadChartSkillInfo(db, [261, 262, 263, 264]);
+      const stablePlay = (beatmapId: number, accuracy: number) => ({
+        identity: `official:${beatmapId}:${accuracy}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
+        values: { Overall: 20 }, patterns: [], accuracy, stableAccuracy: accuracy,
+      });
+      // The motivating cases: a 92% on an epsilon+ chart weighs a full level
+      // down (delta+), a 99.5% weighs +1.1 up, and 91.9% is off the window.
+      const spread = collectDanClearsForTest(
+        4,
+        [stablePlay(261, 0.92), stablePlay(262, 0.995), stablePlay(263, 0.919)],
+        info,
+      );
+      expect(spread.map((clear) => clear.play.beatmapId)).toEqual([261, 262]);
+      expect(spread[0].creditedDan).toBeCloseTo(14.15, 6);
+      expect(spread[0].chartDan).toBeCloseTo(15.15, 9);
+      expect(spread[1].creditedDan).toBeCloseTo(16.25, 6);
+
+      // Four sub-bar credits alone still meet the quorum and rate the side:
+      // the decay already priced the misses, so they are clears, just cheaper.
+      const scrapes = [261, 262, 263, 264].map((id) => stablePlay(id, 0.92));
+      const side = danSideFromClearsForTest(4, "rc", scrapes, info)!;
+      expect(side.rawDan).toBe(14.15);
     });
   });
 
@@ -729,12 +809,21 @@ describe("computePlayerSkillRatings", () => {
         identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
         values: { Overall: 20 }, patterns: [], accuracy, stableAccuracy: accuracy,
       });
-      // 97.2% stable converts to below the 97% ScoreV2 bar; 97.6% clears it.
+      // 97.2% stable converts to below the 97.5% stable-equivalent bar, so it
+      // credits a decayed level: the 4K LN near-bar cap (0.75) puts a 7.0
+      // chart at 6.25. This also documents the converted floor arithmetic:
+      // the credit window rides the converted bar, so it ends at 93.5%, not 93%.
       const below = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.972)), infoByBeatmap);
-      expect(below.length).toBe(0);
+      expect(below.length).toBe(4);
+      expect(below.every((clear) => clear.side === "ln" && clear.chartDan === 7)).toBe(true);
+      for (const clear of below) expect(clear.creditedDan).toBeCloseTo(6.25, 9);
+      const under = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.934)), infoByBeatmap);
+      expect(under.length).toBe(0);
       const above = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.976)), infoByBeatmap);
       expect(above.length).toBe(4);
       expect(above.every((clear) => clear.side === "ln" && clear.chartDan === 7)).toBe(true);
+      // 97.6% is over the converted bar, so the credit is a small bonus.
+      for (const clear of above) expect(clear.creditedDan).toBeGreaterThan(7);
     });
   });
 
@@ -764,7 +853,7 @@ describe("computePlayerSkillRatings", () => {
       const values = (top: string, rating: number) => ({ Overall: rating, Stream: 1, [top]: rating });
       const clearPlay = (beatmapId: number, top: string) => ({
         identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
-        values: values(top, 25), patterns: [], accuracy: 0.98, stableAccuracy: 0.98,
+        values: values(top, 25), patterns: [], accuracy: 0.96, stableAccuracy: 0.96,
       });
       const jackPlays = [301, 302, 303, 304].map((id) => clearPlay(id, "Chordjack"));
       const staminaPlays = [305, 306, 307, 308].map((id) => clearPlay(id, "Stamina"));
@@ -809,7 +898,7 @@ describe("computePlayerSkillRatings", () => {
       const values = (top: string, rating: number) => ({ Overall: rating, Stream: 1, [top]: rating });
       const clearPlay = (beatmapId: number, top: string) => ({
         identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
-        values: values(top, 25), patterns: [], accuracy: 0.98, stableAccuracy: 0.98,
+        values: values(top, 25), patterns: [], accuracy: 0.96, stableAccuracy: 0.96,
       });
       const plays = [
         ...[301, 302, 303, 304].map((id) => clearPlay(id, "Chordjack")),
@@ -875,7 +964,7 @@ describe("computePlayerSkillRatings", () => {
       const info = await loadChartSkillInfo(db, [311, 312, 313, 314]);
       const lnPlay = (beatmapId: number) => ({
         identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
-        values: { Overall: 20, Stamina: 20, Stream: 1 }, patterns: [], accuracy: 0.99, stableAccuracy: 0.99,
+        values: { Overall: 20, Stamina: 20, Stream: 1 }, patterns: [], accuracy: 0.97, stableAccuracy: 0.9723, scoreV2Accuracy: 0.97,
       });
       // 4K LN publishes no buckets at all, so the headline is the side-wide
       // average of the best clears: (9 + 8 + 7 + 6) / 4.
@@ -911,8 +1000,10 @@ describe("computePlayerSkillRatings", () => {
       });
       const clears = collectDanClearsForTest(4, [231, 232, 233, 234].map(htPlay), info);
       expect(clears.length).toBe(4);
-      // 8.0 (the 0.75x verdict), never the chart's own 12.0.
+      // 8.0 (the 0.75x verdict), never the chart's own 12.0; the accuracy
+      // credit rides on the rate verdict too (98% stable is +0.35).
       expect(clears.every((clear) => clear.chartDan === 8 && clear.side === "rc")).toBe(true);
+      for (const clear of clears) expect(clear.creditedDan).toBeCloseTo(8.35, 6);
 
       // A rate with no stored verdict still contributes nothing.
       const oddRate = collectDanClearsForTest(4, [231, 232, 233, 234].map((id) => ({ ...htPlay(id), rate: 1.2 })), info);
@@ -979,6 +1070,11 @@ describe("computePlayerSkillRatings", () => {
         [241, 9.5, "rc"],
         [242, 9.5, "ln"],
       ]);
+      // The accuracy credit applies to rate verdicts on the same terms: 98%
+      // stable is +0.35 over the rc bar, and the ln clear is judged on the
+      // converted v2 bar (97.5%) against the window, a much smaller bonus.
+      expect(clears[0].creditedDan).toBeCloseTo(9.85, 6);
+      expect(clears[1].creditedDan).toBeCloseTo(9.5875, 6);
 
       // A 1.5x play on a chart with no dan_dt_json falls back to the stored
       // 150 verdict instead of contributing nothing.
@@ -1326,6 +1422,52 @@ describe("getPlayerSkillBreakdown", () => {
       // The served snapshot is known-superseded: clients get told instead of
       // being left to discover the swap on the next visit.
       expect(afterNewTopPlay.stale).toBe(true);
+      expect(Number((await exec(db, "select count(*) as cnt from jobs where type = 'compute_player_skills'")).rows[0].cnt)).toBe(1);
+    });
+  });
+
+  it("recomputes on a tracked play ingested since the compute, with no new top play", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      const computedAt = new Date(Date.now() - 60_000).toISOString();
+      const summary = {
+        totalPlays: 10,
+        analyzedPlays: 9,
+        pendingPlays: 0,
+        unsupportedPlays: 1,
+        modes: [{ keyCount: 4, analyzedPlays: 9, ratings: { Overall: 21.5, Stream: 18 } }],
+      };
+      await exec(
+        db,
+        `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, computed_at, updated_at)
+         values (?, ?, 'ready', ?, ?, ?)`,
+        [99, PLAYER_SKILLS_VERSION, JSON.stringify(summary), computedAt, computedAt],
+      );
+
+      const insertScoreEvent = async (identity: string, opts: { passed: number; rulesetId: number; receivedAt: string }) => exec(
+        db,
+        `insert into score_events
+           (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json, passed, is_lazer, has_replay, ended_at, received_at, source)
+         values (?, ?, 99, 'CR', 555, ?, '{}', ?, 1, 0, ?, ?, 'test')`,
+        [Math.floor(Math.random() * 1e9), identity, opts.rulesetId, opts.passed, opts.receivedAt, opts.receivedAt],
+      );
+      const afterCompute = new Date().toISOString();
+      // None of these feed the rating: a fail, a non-mania pass, and a mania
+      // pass the compute already read (received before computed_at).
+      await insertScoreEvent("fail", { passed: 0, rulesetId: 3, receivedAt: afterCompute });
+      await insertScoreEvent("std", { passed: 1, rulesetId: 0, receivedAt: afterCompute });
+      await insertScoreEvent("old", { passed: 1, rulesetId: 3, receivedAt: new Date(Date.now() - 120_000).toISOString() });
+
+      const unaffected = await getPlayerSkillBreakdown(db, queue, 99);
+      expect(unaffected.stale).toBeUndefined();
+      expect(Number((await exec(db, "select count(*) as cnt from jobs where type = 'compute_player_skills'")).rows[0].cnt)).toBe(0);
+
+      // A passed mania play ingested since the compute is rating evidence, so
+      // a mid-session view recomputes now instead of waiting out the debounce.
+      await insertScoreEvent("tracked", { passed: 1, rulesetId: 3, receivedAt: afterCompute });
+      const afterTrackedPlay = await getPlayerSkillBreakdown(db, queue, 99);
+      expect(afterTrackedPlay.status).toBe("ready");
+      expect(afterTrackedPlay.stale).toBe(true);
       expect(Number((await exec(db, "select count(*) as cnt from jobs where type = 'compute_player_skills'")).rows[0].cnt)).toBe(1);
     });
   });

@@ -1228,20 +1228,36 @@ msgid "{sideLabel} dan estimate: ~{chip}, set by their clear of {courseName} at 
 msgstr "Estimación de dan {sideLabel}: ~{chip}, fijada por su pase de {courseName} con {courseAccuracy} · haz clic para ver los pases detrás"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy)"
-msgstr "Estimación de dan {sideLabel}: ~{chip}, con {clears} clears de este nivel o superior (96%+ de acc)"
+msgid "{sideLabel} dan estimate: ~{chip}, with {clears} clears credited at or above this level"
+msgstr "Estimación de dan {sideLabel}: ~{chip}, con {clears} clears acreditados en este nivel o superior"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy) · click for the clears behind it"
-msgstr "Estimación de dan {sideLabel}: ~{chip}, con {clears} clears de este nivel o superior (96%+ de acc) · clic para ver los clears detrás"
+msgid "{sideLabel} dan estimate: ~{chip}, with {clears} clears credited at or above this level · click for the clears behind it"
+msgstr "Estimación de dan {sideLabel}: ~{chip}, con {clears} clears acreditados en este nivel o superior · clic para ver los clears detrás"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy)"
-msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala {sideLabel} de {keys}K, con {clears} clears de ese nivel o superior (96%+ de acc)"
+#~ msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy)"
+#~ msgstr "Estimación de dan {sideLabel}: ~{chip}, con {clears} clears de este nivel o superior (96%+ de acc)"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
-msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala {sideLabel} de {keys}K, con {clears} clears de ese nivel o superior (96%+ de acc) · clic para ver los clears detrás"
+#~ msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy) · click for the clears behind it"
+#~ msgstr "Estimación de dan {sideLabel}: ~{chip}, con {clears} clears de este nivel o superior (96%+ de acc) · clic para ver los clears detrás"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} clears credited at or above it"
+msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala {sideLabel} de {keys}K, con {clears} clears acreditados en ese nivel o superior"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} clears credited at or above it · click for the clears behind it"
+msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala {sideLabel} de {keys}K, con {clears} clears acreditados en ese nivel o superior · clic para ver los clears detrás"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy)"
+#~ msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala {sideLabel} de {keys}K, con {clears} clears de ese nivel o superior (96%+ de acc)"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
+#~ msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala {sideLabel} de {keys}K, con {clears} clears de ese nivel o superior (96%+ de acc) · clic para ver los clears detrás"
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{skillsetLabel} dan"
@@ -1682,8 +1698,18 @@ msgid "7K regular"
 msgstr "7K regular"
 
 #: src/routes/dan-estimates.tsx
+msgid "96% (the bar)"
+msgstr "96% (el mínimo)"
+
+#: src/routes/dan-estimates.tsx
 msgid "96%, or 95% in the Normal Kyu band below 1st dan"
 msgstr "96%, o 95% en la banda Normal Kyu por debajo del 1er dan"
+
+#. placeholder {0}: formatDan(clear.chartDanLabel)
+#. placeholder {1}: formatDan(clear.creditedDanLabel)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "A {0} chart, credited as {1} at this accuracy"
+msgstr "Un chart {0}, acreditado como {1} con esta acc"
 
 #. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
 #: src/routes/player/$username.tsx
@@ -1739,6 +1765,10 @@ msgstr "Una maniacard sacada de un pack booster. Abre tus propios packs y arma u
 #: src/lib/goal-format.ts
 msgid "a map"
 msgstr "un mapa"
+
+#: src/routes/dan-estimates.tsx
+msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: from 4 points under the bar, a play counts as a clear of a lower level, bottoming out one full level down. On the 96% ladders that reads:"
+msgstr "Un pase justo en el mínimo acredita el nivel completo del chart, igual que pasar el dan real. Más precisión acredita más, y quedarse un poco corto todavía acredita algo: hasta 4 puntos por debajo del mínimo, la play cuenta como clear de un nivel más bajo, llegando como mucho a un nivel completo menos. En las escalas de 96% queda así:"
 
 #: src/routes/dan-estimates.tsx
 msgid "A quick reminder of what a dan is"
@@ -1817,6 +1847,10 @@ msgstr "Acc"
 #: src/routes/rankings.tsx
 msgid "Accuracy"
 msgstr "Acc"
+
+#: src/routes/dan-estimates.tsx
+msgid "Accuracy (96% ladder)"
+msgstr "Precisión (escala de 96%)"
 
 #. placeholder {0}: formatAccuracy(event.accuracy)
 #: src/routes/snipes.tsx
@@ -2504,6 +2538,10 @@ msgstr "Beatmaps jugados por tu país"
 #: src/routes/maps.tsx
 msgid "Beatmaps played in {countryName}"
 msgstr "Beatmaps jugados en {countryName}"
+
+#: src/routes/dan-estimates.tsx
+msgid "below 92%"
+msgstr "menos de 92%"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Below the credit that sets the estimate"
@@ -3749,7 +3787,7 @@ msgstr "Rankings de mania por país"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so Mania Hub cannot look yours up. It can only work from your plays."
-#~ msgstr ""
+#~ msgstr "Los charts de los danes no están rankeados, y un clear lo verifica la gente que administra esa escala. Nada de eso llega por la API de osu! como un nivel de dan, así que Mania Hub no puede consultar el tuyo. Solo puede trabajar con tus plays."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so the site cannot look yours up. It can only look at your plays."
@@ -3767,6 +3805,10 @@ msgstr "Crear"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Created {0}"
 msgstr "Creado {0}"
+
+#: src/routes/dan-estimates.tsx
+msgid "Credit"
+msgstr "Acredita"
 
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
@@ -4502,8 +4544,12 @@ msgid "Every pack pays {PACK_OPEN_SHARD_REWARD} shards. Recycle duplicates for m
 msgstr "Cada pack paga {PACK_OPEN_SHARD_REWARD} shards. Recicla los duplicados para ganar más."
 
 #: src/routes/dan-estimates.tsx
-msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
-msgstr "Cada pase válido cae en uno de cuatro skills, y con esos cuatro se arma la estimación. En 4K son jack, tech, speed y stamina, sacados de los ratings de skillset MSD de la propia play y agrupados según el skillset más fuerte de ese chart: jack (JackSpeed y Chordjack), tech (Technical y Jumpstream), speed (Stream) y stamina (Handstream y Stamina)."
+#~ msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
+#~ msgstr "Cada pase válido cae en uno de cuatro skills, y con esos cuatro se arma la estimación. En 4K son jack, tech, speed y stamina, sacados de los ratings de skillset MSD de la propia play y agrupados según el skillset más fuerte de ese chart: jack (JackSpeed y Chordjack), tech (Technical y Jumpstream), speed (Stream) y stamina (Handstream y Stamina)."
+
+#: src/routes/dan-estimates.tsx
+msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and normally filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
+msgstr "Cada pase válido cae en uno de cuatro skills, y con esos cuatro se arma la estimación. En 4K son jack, tech, speed y stamina, sacados de los ratings de skillset MSD de la propia play y normalmente agrupados según el skillset más fuerte de ese chart: jack (JackSpeed y Chordjack), tech (Technical y Jumpstream), speed (Stream) y stamina (Handstream y Stamina)."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
@@ -5691,15 +5737,15 @@ msgstr "¿El top play más antiguo de {hidden} es más antiguo o más reciente q
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It can only judge the plays the site has. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
-#~ msgstr ""
+#~ msgstr "Solo puede juzgar las plays que el sitio tiene. Tus top plays de osu! siempre entran, pero todo lo que está por debajo solo existe si el sitio te trackea, es decir, estar en el top 100 de tu país o activar el tracking tú mismo, y solo desde el día en que eso empezó. Alguien que dejó de jugar hace años se juzga solo por su top 200 y por eso lee bajo."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It is not a ranking either. Two players a step apart on the dan leaderboard are not meaningfully apart, and anyone who never farms accuracy will read lower than they play."
-#~ msgstr ""
+#~ msgstr "Tampoco es un ranking. Dos jugadores a un paso de distancia en la tabla de dan no están separados de forma significativa, y quien nunca farmea precisión leerá más bajo de lo que juega."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It is not a title. Those come from clearing a real course on a ladder, and this number has no say in who gets one."
-#~ msgstr ""
+#~ msgstr "No es un título. Esos vienen de pasar un dan real en una escala, y este número no decide quién recibe uno."
 
 #: src/routes/skins_.$id.tsx
 msgid "It may have been removed by its uploader."
@@ -5711,7 +5757,7 @@ msgstr "Puede que lo hayan retirado, o que todavía esté esperando aprobación.
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It moves over time, because the rating engines and the chart analysis keep getting improved, and a recompute that shifts a chart by a step shifts everyone whose evidence sat on that chart."
-#~ msgstr ""
+#~ msgstr "Cambia con el tiempo, porque los motores de rating y el análisis de charts se siguen mejorando, y un recálculo que mueve un chart un paso mueve a todos los que tenían su evidencia en ese chart."
 
 #: src/routes/dan-estimates.tsx
 msgid "It only ever raises the number. Clearing epsilon means you can do epsilon; whether zeta is beyond you is still an open question, so if your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them. A course throws a mix at you, so it cannot tell you which of your skills got you through it."
@@ -6591,7 +6637,7 @@ msgstr "gestor"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Mania Hub downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
-#~ msgstr ""
+#~ msgstr "Mania Hub descarga el archivo del chart, lee las notas y pasa el patrón por un motor de rating. Qué motor depende del keymode, porque ninguno es el mejor en todos:"
 
 #: src/routes/maps.tsx
 msgid "Mania maps"
@@ -7335,7 +7381,7 @@ msgstr "Sin datos de keymodes"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognises this number. Titles come from clearing a real course, and nothing here has a say in who gets one. It makes a poor ranking too, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It also drifts, because the rating engines and the chart analysis keep getting better, so a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
-#~ msgstr ""
+#~ msgstr "Ninguna escala reconoce este número. Los títulos vienen de pasar un dan real, y nada de esto decide quién recibe uno. También es un mal ranking, porque dos jugadores a un paso en la tabla de dan no están separados de forma significativa y quien nunca farmea precisión lee más bajo de lo que juega. Además va cambiando, porque los motores de rating y el análisis de charts siguen mejorando, así que un recálculo que mueve un chart un paso mueve a todos los que tenían su evidencia en ese chart."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognizes this number, and titles still come from clearing a real course. It also makes a poor ranking, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It is not fixed either: the rating engines and the chart analysis keep getting better, and a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
@@ -7778,6 +7824,10 @@ msgstr "notas"
 #: src/routes/skins_.$id.tsx
 msgid "Notes"
 msgstr "Notas"
+
+#: src/routes/dan-estimates.tsx
+msgid "nothing"
+msgstr "nada"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Nothing active right now."
@@ -8246,8 +8296,12 @@ msgstr "de {0}"
 #~ msgstr "De ese conjunto, una play cuenta como clear si pasó con la precisión que pide el dan real o por encima. Cada escala pide su propio mínimo, así que el sitio usa el de cada una:"
 
 #: src/routes/dan-estimates.tsx
-msgid "Out of that pool, a play counts as a clear if it passed at or above the accuracy the real course asks for. Each ladder sets its own bar:"
-msgstr "De ese conjunto, una play cuenta como clear si pasó con la precisión que pide el dan real o por encima. Cada escala pide su propio mínimo:"
+#~ msgid "Out of that pool, a play counts as a clear if it passed at or above the accuracy the real course asks for. Each ladder sets its own bar:"
+#~ msgstr "De ese conjunto, una play cuenta como clear si pasó con la precisión que pide el dan real o por encima. Cada escala pide su propio mínimo:"
+
+#: src/routes/dan-estimates.tsx
+msgid "Out of that pool, a play earns credit by where its accuracy sits against the bar the real course asks for. Each ladder sets its own bar:"
+msgstr "De ese conjunto, lo que acredita una play depende de dónde queda su precisión respecto al mínimo que pide el dan real. Cada escala pide su propio mínimo:"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Out of time."
@@ -9838,8 +9892,12 @@ msgid "Say something to {name}"
 msgstr "Dile algo a {name}"
 
 #: src/routes/dan-estimates.tsx
-msgid "Say your 4K jack passes at 96% or better land on charts rated:"
-msgstr "Digamos que tus pases de jack en 4K con 96% o más caen en charts con estos ratings:"
+msgid "Say the levels your 4K jack passes credit come out as:"
+msgstr "Digamos que los niveles que acreditan tus pases de jack en 4K salen así:"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Say your 4K jack passes at 96% or better land on charts rated:"
+#~ msgstr "Digamos que tus pases de jack en 4K con 96% o más caen en charts con estos ratings:"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Say your 4K regular passes at 96% or better land on charts rated:"
@@ -10848,6 +10906,10 @@ msgstr "Speed"
 msgid "Speedjack"
 msgstr "Speedjack"
 
+#: src/routes/dan-estimates.tsx
+msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice instead of counting in two skills."
+msgstr "Speedjack es la excepción. MinaCalc suele leerlo como Jumpstream aunque speedjack es jack, así que un tag seguro de speedjack o chordjack del análisis del chart mueve esa play a jack. Reemplaza la elección de MSD en vez de contarla en dos skills."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
@@ -11170,8 +11232,12 @@ msgid "Take it down for good?"
 msgstr "¿Retirarlo definitivamente?"
 
 #: src/routes/dan-estimates.tsx
-msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
-msgstr "Tus pases válidos de un skill se ordenan por el nivel de dan del chart y se promedian los 5 mejores. Ese es tu dan en ese skill. No se le suma nada encima de la evidencia, y ningún pase puede fijarlo por sí solo."
+msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+msgstr "Tus pases acreditados de un skill se ordenan por el nivel que acreditó cada uno y se promedian los 5 mejores. Ese es tu dan en ese skill. No se le suma nada encima de la evidencia, y ningún pase puede fijarlo por sí solo."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+#~ msgstr "Tus pases válidos de un skill se ordenan por el nivel de dan del chart y se promedian los 5 mejores. Ese es tu dan en ese skill. No se le suma nada encima de la evidencia, y ningún pase puede fijarlo por sí solo."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and look at the 4th one down. That is your dan in that skill. Nothing is added on top of it, and no single pass above it can raise it."
@@ -11433,7 +11499,7 @@ msgstr "El bloque {selectedKeymode}K no resuelve imágenes de notas, así que es
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The 4K LN courses are meant to be played on ScoreV2. The problem is that osu! does not give you a ScoreV2 accuracy unless you are on lazer, and most people are on stable (I think). So you do not need to play on ScoreV2 at all. Your ScoreV2 accuracy is worked out from your judgements. If a score is old enough that even the judgements are gone, a stable score needs 97.5% instead of 97%, because stable's accuracy is more generous and the same score reads about half a percent higher on it."
-#~ msgstr ""
+#~ msgstr "Los danes de 4K LN están pensados para jugarse en ScoreV2. El problema es que osu! no te da una precisión ScoreV2 salvo que estés en lazer, y la mayoría está en stable (creo). Así que no necesitas jugar en ScoreV2 para nada: tu precisión ScoreV2 se calcula a partir de tus judgements. Si un score es tan viejo que ya ni los judgements existen, un score de stable necesita 97.5% en vez de 97%, porque la precisión de stable es más generosa y el mismo score lee como medio punto más alto ahí."
 
 #: src/routes/dan-estimates.tsx
 msgid "The 4K LN courses are meant to be played on ScoreV2. The problem is that osu!stable does not submit ScoreV2 scores, and most people are on stable (I think). But you do not need to play on ScoreV2 at all. Your ScoreV2 accuracy is worked out from your judgements. If a score is old enough that even the judgements are gone, a stable score needs 97.5% instead of 97%, because stable's accuracy is more generous and the same score reads about half a percent higher on it."
@@ -11496,6 +11562,38 @@ msgid "The chart file isn't available, so only the replay will load."
 msgstr "El archivo del mapa no está disponible, así que solo cargará el replay."
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's full level"
+msgstr "el nivel completo del chart"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.45"
+msgstr "el nivel del chart -0.45"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.63"
+msgstr "el nivel del chart -0.63"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -1"
+msgstr "el nivel del chart -1"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.35"
+msgstr "el nivel del chart +0.35"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.7"
+msgstr "el nivel del chart +0.7"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +1.1"
+msgstr "el nivel del chart +1.1"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +1.5"
+msgstr "el nivel del chart +1.5"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "The courses are the real ones, by beatmap: Dan ~ REFORM ~ on 4K regular, the 4K LN dan courses through 17th, Jinjin's 7K regular and LN phases, Arkman's 6K regular courses and sunnyxxy's 6K LN bands. Re-uploads of those packs by other people are not counted, and nothing about this changes how a chart is rated - it only changes what your own passes are worth."
 #~ msgstr "Los cursos son los de verdad, por beatmap: Dan ~ REFORM ~ en 4K regular, los cursos de dan de 4K LN hasta el 17º, las fases de 7K regular y LN de Jinjin, los cursos de 6K regular de Arkman y las bandas de 6K LN de sunnyxxy. Las resubidas de esos packs por otra gente no cuentan, y nada de esto cambia cómo se califica un chart: solo cambia lo que valen tus propios pases."
 
@@ -11525,8 +11623,12 @@ msgid "The engine gives back a continuous number, and the number is what everyth
 msgstr "El algoritmo devuelve un número continuo, y ese número es lo que usa todo lo demás. La etiqueta que ves es solo ese número escrito en el idioma de cada escala. 4K regular va del 1º al 10º y luego entra en los niveles griegos (alpha, beta, gamma y arriba). 4K LN va de 1 a 17, numerado hasta 10 y con nombre por encima: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K va de 0 a 10º y luego Gamma, Azimuth, Zenith, Stellium. 6K se detiene en 9º, y su escala LN sigue con Terra, Celestial, Mystery, Nihility y Finish."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
-msgstr "La estimación aparece cuando {quorum} clears con {minAccuracyPercent}%+ de acc caen en charts con nivel de dan."
+#~ msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
+#~ msgstr "La estimación aparece cuando {quorum} clears con {minAccuracyPercent}%+ de acc caen en charts con nivel de dan."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts. A {barAccuracyPercent}%+ pass credits the chart's full level; anything under that credits less."
+msgstr "La estimación aparece cuando {quorum} clears con {minAccuracyPercent}%+ de acc caen en charts con nivel de dan. Un pase con {barAccuracyPercent}%+ acredita el nivel completo del chart; por debajo de eso acredita menos."
 
 #: src/routes/dan-estimates.tsx
 msgid "The estimate only sees the recorded pool. Your osu! top plays are always included. Anything below them is included only while you are tracked, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
@@ -11659,6 +11761,10 @@ msgstr "los mismos 96% y 95%"
 msgid "The same goes for any session where you never set a score on a ranked, qualified or loved chart: tracking never notices you are playing, so nothing from that session is recorded either. <0>Why that is</0>. If your estimate reads low, that is usually the reason, and the only fix is to play more."
 msgstr "Lo mismo pasa con cualquier sesión en la que no hayas hecho ningún score en un chart ranked, qualified o loved: el tracking nunca se entera de que estás jugando, así que tampoco se trackea nada de esa sesión. <0>Por qué pasa esto</0>. Si tu estimación sale baja, normalmente es por eso, y lo único que lo arregla es jugar más."
 
+#: src/routes/dan-estimates.tsx
+msgid "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
+msgstr "La misma curva se apoya en el mínimo de cada escala, así que en 4K LN se mide contra 97% y deja de acreditar en 93%. Un crédito por debajo del mínimo siempre queda al menos un paso bajo el nivel del chart: quedarse corto nunca se lee como el clear completo."
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."
 msgstr "No se pudieron guardar los nombres de las capturas. Inténtalo de nuevo."
@@ -11785,7 +11891,7 @@ msgstr "Estos son los packs que se comprueban, identificados por beatmap. Un pas
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "These are the packs we check, matched by beatmap. A pass has to be on one of these exact difficulties, so if you cleared the same courses from a different upload it is still a clear, we just are not looking there. Others can be added."
-#~ msgstr ""
+#~ msgstr "Estos son los packs que revisamos, emparejados por beatmap. Un pase tiene que ser en una de estas dificultades exactas, así que si pasaste los mismos danes desde otra subida sigue siendo un clear, solo que no estamos mirando ahí. Se pueden agregar otros."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "these ask for ScoreV2, read this"
@@ -11797,7 +11903,7 @@ msgstr "Nada de esto es un clear de dan real. A nadie aquí se le ha comprobado 
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
-#~ msgstr ""
+#~ msgstr "Estas estimaciones no son clears de dan reales. Nadie aquí fue verificado contra un dan de verdad. En su lugar, Mania Hub le da a cada chart un nivel de dan propio, mira los charts que ya pasaste y lee un nivel a partir de ellos. Por eso cada dan estimado se escribe con un \"~\" adelante y por eso la tabla se llama a sí misma un orden aproximado."
 
 #: src/routes/tracker.tsx
 msgid "These players finished the same maps within seconds of each other, repeatedly: a multiplayer lobby"
@@ -12406,7 +12512,7 @@ msgstr "Las jugadas en charts unranked solo se registran una vez que el tracking
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Unranked plays only start counting once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
-#~ msgstr ""
+#~ msgstr "Las plays en charts sin rankear solo empiezan a contar cuando el sitio sabe que estás jugando, cosa que aprende con tu primer score en un chart rankeado, calificado o loved. Después revisa tus plays recientes cada par de minutos hasta que pares, y todo lo de esa ventana cuenta, charts sin rankear incluidos. Si empiezas en un mapa graveyard, nada se guarda hasta que cae ese primer score con tabla."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Unranked plays wait until the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. From there it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Before that first leaderboard score, plays on unranked charts are not kept at all."
@@ -12414,7 +12520,7 @@ msgstr "Las jugadas en charts unranked solo se registran una vez que el tracking
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Unranked plays wait until the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. From there it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Start a session on a graveyard map and none of it is kept until that first leaderboard score lands."
-#~ msgstr ""
+#~ msgstr "Las plays en charts sin rankear esperan hasta que el sitio sabe que estás jugando, cosa que aprende con tu primer score en un chart rankeado, calificado o loved. Desde ahí revisa tus plays recientes cada par de minutos hasta que pares, y todo lo de esa ventana cuenta, charts sin rankear incluidos. Si la sesión empieza en un mapa graveyard, nada se guarda hasta que cae ese primer score con tabla."
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx

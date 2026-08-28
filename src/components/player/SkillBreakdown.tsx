@@ -158,11 +158,11 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
             : t`${sideLabel} dan estimate: ~${chip}, set by their clear of ${courseName} at ${courseAccuracy}`
           : beyond
           ? onSelect
-            ? t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, with ${clears} passes at or above it (96%+ accuracy) · click for the clears behind it`
-            : t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, with ${clears} passes at or above it (96%+ accuracy)`
+            ? t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, with ${clears} clears credited at or above it · click for the clears behind it`
+            : t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, with ${clears} clears credited at or above it`
           : onSelect
-            ? t`${sideLabel} dan estimate: ~${chip}, with ${clears} passes at or above this level (96%+ accuracy) · click for the clears behind it`
-            : t`${sideLabel} dan estimate: ~${chip}, with ${clears} passes at or above this level (96%+ accuracy)`;
+            ? t`${sideLabel} dan estimate: ~${chip}, with ${clears} clears credited at or above this level · click for the clears behind it`
+            : t`${sideLabel} dan estimate: ~${chip}, with ${clears} clears credited at or above this level`;
         return onSelect ? (
           <button
             type="button"

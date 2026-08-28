@@ -1237,20 +1237,36 @@ msgid "{sideLabel} dan estimate: ~{chip}, set by their clear of {courseName} at 
 msgstr "{sideLabel} 段位估算：~{chip}，由其在 {courseName} 上 {courseAccuracy} 的通关决定 · 点击查看背后的通过记录"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy)"
-msgstr "{sideLabel} 段位估算：约 {chip}，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上)"
+msgid "{sideLabel} dan estimate: ~{chip}, with {clears} clears credited at or above this level"
+msgstr "{sideLabel} 段位估算：约 {chip}，有 {clears} 次通过计入该段位或以上"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy) · click for the clears behind it"
-msgstr "{sideLabel} 段位估算：约 {chip}，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上) · 点击查看这些通过记录"
+msgid "{sideLabel} dan estimate: ~{chip}, with {clears} clears credited at or above this level · click for the clears behind it"
+msgstr "{sideLabel} 段位估算：约 {chip}，有 {clears} 次通过计入该段位或以上 · 点击查看这些通过记录"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy)"
-msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位的最高级，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上)"
+#~ msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy)"
+#~ msgstr "{sideLabel} 段位估算：约 {chip}，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上)"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
-msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位的最高级，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上) · 点击查看这些通过记录"
+#~ msgid "{sideLabel} dan estimate: ~{chip}, with {clears} passes at or above this level (96%+ accuracy) · click for the clears behind it"
+#~ msgstr "{sideLabel} 段位估算：约 {chip}，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上) · 点击查看这些通过记录"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} clears credited at or above it"
+msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位表的最高级，有 {clears} 次通过计入该段位或以上"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} clears credited at or above it · click for the clears behind it"
+msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位表的最高级，有 {clears} 次通过计入该段位或以上 · 点击查看这些通过记录"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy)"
+#~ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位的最高级，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上)"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
+#~ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位的最高级，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上) · 点击查看这些通过记录"
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{skillsetLabel} dan"
@@ -1691,8 +1707,18 @@ msgid "7K regular"
 msgstr "7K 单点"
 
 #: src/routes/dan-estimates.tsx
+msgid "96% (the bar)"
+msgstr "96%(通过线)"
+
+#: src/routes/dan-estimates.tsx
 msgid "96%, or 95% in the Normal Kyu band below 1st dan"
 msgstr "96%，1 段以下的 Normal Kyu 区间是 95%"
+
+#. placeholder {0}: formatDan(clear.chartDanLabel)
+#. placeholder {1}: formatDan(clear.creditedDanLabel)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "A {0} chart, credited as {1} at this accuracy"
+msgstr "谱面为 {0}，按此准确率计为 {1}"
 
 #. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
 #: src/routes/player/$username.tsx
@@ -1748,6 +1774,10 @@ msgstr "从补充包中抽到的 maniacard。打开你自己的卡包，建立�
 #: src/lib/goal-format.ts
 msgid "a map"
 msgstr "某张谱面"
+
+#: src/routes/dan-estimates.tsx
+msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: from 4 points under the bar, a play counts as a clear of a lower level, bottoming out one full level down. On the 96% ladders that reads:"
+msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样。准确率高于通过线会计入更多；差一点没到也仍有计入：从通过线往下 4 个百分点以内，成绩会按更低的段位计为通过，最低比谱面段位低整整一级。在 96% 的段位表上就是："
 
 #: src/routes/dan-estimates.tsx
 msgid "A quick reminder of what a dan is"
@@ -1826,6 +1856,10 @@ msgstr "准确率"
 #: src/routes/rankings.tsx
 msgid "Accuracy"
 msgstr "准确率"
+
+#: src/routes/dan-estimates.tsx
+msgid "Accuracy (96% ladder)"
+msgstr "准确率(96% 段位表)"
 
 #. placeholder {0}: formatAccuracy(event.accuracy)
 #: src/routes/snipes.tsx
@@ -2513,6 +2547,10 @@ msgstr "你的国家/地区玩过的谱面"
 #: src/routes/maps.tsx
 msgid "Beatmaps played in {countryName}"
 msgstr "{countryName} 玩过的谱面"
+
+#: src/routes/dan-estimates.tsx
+msgid "below 92%"
+msgstr "低于 92%"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Below the credit that sets the estimate"
@@ -3758,7 +3796,7 @@ msgstr "国家/地区 mania 排行榜"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so Mania Hub cannot look yours up. It can only work from your plays."
-#~ msgstr ""
+#~ msgstr "段位课题谱面都是未上架的，通过与否由运营该段位表的人来审核。这些信息都不会以段位的形式通过 osu! API 返回，所以 Mania Hub 查不到你的段位，只能从你的成绩来推算。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so the site cannot look yours up. It can only look at your plays."
@@ -3776,6 +3814,10 @@ msgstr "创建"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Created {0}"
 msgstr "已创建 {0}"
+
+#: src/routes/dan-estimates.tsx
+msgid "Credit"
+msgstr "计入"
 
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
@@ -4511,8 +4553,12 @@ msgid "Every pack pays {PACK_OPEN_SHARD_REWARD} shards. Recycle duplicates for m
 msgstr "每个卡包都给 {PACK_OPEN_SHARD_REWARD} 个碎片。回收重复卡片可以拿到更多。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
-msgstr "每一次达标通过都会落到四个技能中的一个，而整个估算就是用这四个搭起来的。4K 这边是叠、技、速度和耐力，取自成绩本身的 MSD 技能项评分，按谱面上最强的那一项归类：叠(JackSpeed 和 Chordjack)、技(Technical 和 Jumpstream)、速度(Stream)、耐力(Handstream 和 Stamina)。"
+#~ msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
+#~ msgstr "每一次达标通过都会落到四个技能中的一个，而整个估算就是用这四个搭起来的。4K 这边是叠、技、速度和耐力，取自成绩本身的 MSD 技能项评分，按谱面上最强的那一项归类：叠(JackSpeed 和 Chordjack)、技(Technical 和 Jumpstream)、速度(Stream)、耐力(Handstream 和 Stamina)。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and normally filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
+msgstr "每一次达标通过都会落到四个技能中的一个，而整个估算就是用这四个搭起来的。4K 这边是叠、技、速度和耐力，取自成绩本身的 MSD 技能项评分，通常按谱面上最强的那一项归类：叠（JackSpeed 和 Chordjack）、技（Technical 和 Jumpstream）、速度（Stream）、耐力（Handstream 和 Stamina）。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
@@ -5700,15 +5746,15 @@ msgstr "{hidden} 最早的最佳成绩比 {shown} 更早还是更晚？"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It can only judge the plays the site has. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
-#~ msgstr ""
+#~ msgstr "它只能根据本站掌握的成绩来判断。你的 osu! 最佳成绩一定在内，但低于它们的成绩只有在本站追踪你时才存在，也就是要进入你所在国家/地区的前 100，或自己开启追踪，而且只从开启那天算起。几年前就不玩了的人只能按其前 200 个最佳成绩来评，因此读出来会偏低。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It is not a ranking either. Two players a step apart on the dan leaderboard are not meaningfully apart, and anyone who never farms accuracy will read lower than they play."
-#~ msgstr ""
+#~ msgstr "它也不是排名。段位排行榜上相差一级的两名玩家并没有实质差距，而从不刷准确率的玩家读出来会比实际水平低。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It is not a title. Those come from clearing a real course on a ladder, and this number has no say in who gets one."
-#~ msgstr ""
+#~ msgstr "它不是称号。称号来自在段位表上通过真正的课题，这个数字说了不算。"
 
 #: src/routes/skins_.$id.tsx
 msgid "It may have been removed by its uploader."
@@ -5720,7 +5766,7 @@ msgstr "它可能已被下架，或者还在等待审核。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It moves over time, because the rating engines and the chart analysis keep getting improved, and a recompute that shifts a chart by a step shifts everyone whose evidence sat on that chart."
-#~ msgstr ""
+#~ msgstr "它会随时间变动，因为评分算法和谱面分析一直在改进，一次重算把某张谱面挪动一级，靠这张谱面作为依据的所有人也会跟着动。"
 
 #: src/routes/dan-estimates.tsx
 msgid "It only ever raises the number. Clearing epsilon means you can do epsilon; whether zeta is beyond you is still an open question, so if your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them. A course throws a mix at you, so it cannot tell you which of your skills got you through it."
@@ -6600,7 +6646,7 @@ msgstr "管理员"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Mania Hub downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
-#~ msgstr ""
+#~ msgstr "Mania Hub 会下载谱面文件，读取音符，把谱型交给评分引擎来评。用哪个引擎取决于键数，因为没有哪个引擎在所有键数上都最好："
 
 #: src/routes/maps.tsx
 msgid "Mania maps"
@@ -7344,7 +7390,7 @@ msgstr "无键数数据"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognises this number. Titles come from clearing a real course, and nothing here has a say in who gets one. It makes a poor ranking too, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It also drifts, because the rating engines and the chart analysis keep getting better, so a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
-#~ msgstr ""
+#~ msgstr "没有任何段位表承认这个数字。称号来自通过真正的段位课题，这里的一切对谁能获得称号都说了不算。它也当不了排名：段位排行榜上相差一级的两名玩家并没有实质差距，从不刷准确率的玩家读出来也会比实际水平低。它还会漂移，因为评分算法和谱面分析一直在变好，一次重算把某张谱面挪动一级，靠这张谱面作为依据的所有人也会跟着动。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognizes this number, and titles still come from clearing a real course. It also makes a poor ranking, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It is not fixed either: the rating engines and the chart analysis keep getting better, and a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
@@ -7787,6 +7833,10 @@ msgstr "音符"
 #: src/routes/skins_.$id.tsx
 msgid "Notes"
 msgstr "音符"
+
+#: src/routes/dan-estimates.tsx
+msgid "nothing"
+msgstr "不计入"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Nothing active right now."
@@ -8255,8 +8305,12 @@ msgstr "共 {0} 人"
 #~ msgstr "在这个池子里，一个成绩要达到或超过真实课题要求的准确率才算通过。每张段位表自己定这条线，所以本站按各自的来："
 
 #: src/routes/dan-estimates.tsx
-msgid "Out of that pool, a play counts as a clear if it passed at or above the accuracy the real course asks for. Each ladder sets its own bar:"
-msgstr "在这个成绩池里，一次成绩必须通过谱面，并达到或超过真正段位课题要求的准确率，才算有效通过。每个段位表都有自己的通过线："
+#~ msgid "Out of that pool, a play counts as a clear if it passed at or above the accuracy the real course asks for. Each ladder sets its own bar:"
+#~ msgstr "在这个成绩池里，一次成绩必须通过谱面，并达到或超过真正段位课题要求的准确率，才算有效通过。每个段位表都有自己的通过线："
+
+#: src/routes/dan-estimates.tsx
+msgid "Out of that pool, a play earns credit by where its accuracy sits against the bar the real course asks for. Each ladder sets its own bar:"
+msgstr "在这个成绩池里，一次成绩计入多少，取决于它的准确率相对真正段位课题要求的通过线落在哪里。每个段位表都有自己的通过线："
 
 #: src/components/packs/StreakGame.tsx
 msgid "Out of time."
@@ -9847,8 +9901,12 @@ msgid "Say something to {name}"
 msgstr "对 {name} 说点什么"
 
 #: src/routes/dan-estimates.tsx
-msgid "Say your 4K jack passes at 96% or better land on charts rated:"
-msgstr "假设你 96% 以上的 4K 叠类通过，落在这些段位的谱面上："
+msgid "Say the levels your 4K jack passes credit come out as:"
+msgstr "假设你的 4K 叠类通过计入的段位是："
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Say your 4K jack passes at 96% or better land on charts rated:"
+#~ msgstr "假设你 96% 以上的 4K 叠类通过，落在这些段位的谱面上："
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Say your 4K regular passes at 96% or better land on charts rated:"
@@ -10857,6 +10915,10 @@ msgstr "速度"
 msgid "Speedjack"
 msgstr "速叠"
 
+#: src/routes/dan-estimates.tsx
+msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice instead of counting in two skills."
+msgstr "速叠是个例外。尽管速叠属于叠，MinaCalc 却经常把它读成 Jumpstream；因此，谱面分析中可信的 speedjack 或 chordjack 标签会把这次通过归到叠。它会取代 MSD 的归类，而不是让同一次通过计入两个技能。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
@@ -11179,8 +11241,12 @@ msgid "Take it down for good?"
 msgstr "确定要永久下架吗？"
 
 #: src/routes/dan-estimates.tsx
-msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
-msgstr "把你在某一个技能上的达标通过拿出来，按谱面的段位排好，取最好的五个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
+msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+msgstr "把你在某一个技能上计入的通过拿出来，按各自计入的段位排好，取最好的五个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+#~ msgstr "把你在某一个技能上的达标通过拿出来，按谱面的段位排好，取最好的五个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and look at the 4th one down. That is your dan in that skill. Nothing is added on top of it, and no single pass above it can raise it."
@@ -11442,7 +11508,7 @@ msgstr "{selectedKeymode}K 配置没有解析出任何音符图像，所以这�
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The 4K LN courses are meant to be played on ScoreV2. The problem is that osu! does not give you a ScoreV2 accuracy unless you are on lazer, and most people are on stable (I think). So you do not need to play on ScoreV2 at all. Your ScoreV2 accuracy is worked out from your judgements. If a score is old enough that even the judgements are gone, a stable score needs 97.5% instead of 97%, because stable's accuracy is more generous and the same score reads about half a percent higher on it."
-#~ msgstr ""
+#~ msgstr "4K LN 段位课题本应在 ScoreV2 下游玩。问题是除非你用 lazer，osu! 不会给你 ScoreV2 准确率，而大多数人(大概)都在用 stable。所以你完全不需要开 ScoreV2 来玩：你的 ScoreV2 准确率会从判定数算出来。如果成绩太老，连判定数都没了，stable 成绩就需要 97.5% 而不是 97%，因为 stable 的准确率更宽松，同一个成绩在它上面大约会高出半个百分点。"
 
 #: src/routes/dan-estimates.tsx
 msgid "The 4K LN courses are meant to be played on ScoreV2. The problem is that osu!stable does not submit ScoreV2 scores, and most people are on stable (I think). But you do not need to play on ScoreV2 at all. Your ScoreV2 accuracy is worked out from your judgements. If a score is old enough that even the judgements are gone, a stable score needs 97.5% instead of 97%, because stable's accuracy is more generous and the same score reads about half a percent higher on it."
@@ -11505,6 +11571,38 @@ msgid "The chart file isn't available, so only the replay will load."
 msgstr "谱面文件不可用，所以只会加载回放。"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's full level"
+msgstr "谱面的完整段位"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.45"
+msgstr "谱面段位 -0.45"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.63"
+msgstr "谱面段位 -0.63"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -1"
+msgstr "谱面段位 -1"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.35"
+msgstr "谱面段位 +0.35"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.7"
+msgstr "谱面段位 +0.7"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +1.1"
+msgstr "谱面段位 +1.1"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +1.5"
+msgstr "谱面段位 +1.5"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "The courses are the real ones, by beatmap: Dan ~ REFORM ~ on 4K regular, the 4K LN dan courses through 17th, Jinjin's 7K regular and LN phases, Arkman's 6K regular courses and sunnyxxy's 6K LN bands. Re-uploads of those packs by other people are not counted, and nothing about this changes how a chart is rated - it only changes what your own passes are worth."
 #~ msgstr "课题是真正的那些，按谱面认：4K regular 的 Dan ~ REFORM ~、4K LN 到 17 段的 LN 段位课题、Jinjin 的 7K regular 与 LN 各期、Arkman 的 6K regular 课题，以及 sunnyxxy 的 6K LN 各段。别人重新上传的同名图包不算，而且这一切都不会改变谱面本身怎么评级，只会改变你自己的成绩值多少。"
 
@@ -11534,8 +11632,12 @@ msgid "The engine gives back a continuous number, and the number is what everyth
 msgstr "算法给回来的是一个连续的数值，后面所有东西用的都是这个数值。你看到的标签只是把这个数值用各段位表自己的说法印出来而已。4K 单点从 1 段排到 10 段，再进入希腊字母段位(alpha、beta、gamma 往上)。4K LN 从 1 排到 17，10 以内用数字，往上用名字：Yoake、Yuugure、Yoru、Yami、Yume、Yokaze、Yeehee。7K 从 0 段排到 10 段，再是 Gamma、Azimuth、Zenith、Stellium。6K 到 9 段为止，它的 LN 段位表继续往上是 Terra、Celestial、Mystery、Nihility 和 Finish。"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
-msgstr "在已评定段位的谱面上取得 {quorum} 次准确率 {minAccuracyPercent}% 以上的通过后，就会给出估算。"
+#~ msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
+#~ msgstr "在已评定段位的谱面上取得 {quorum} 次准确率 {minAccuracyPercent}% 以上的通过后，就会给出估算。"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts. A {barAccuracyPercent}%+ pass credits the chart's full level; anything under that credits less."
+msgstr "在已评定段位的谱面上取得 {quorum} 次准确率 {minAccuracyPercent}% 以上的通过后，就会给出估算。准确率 {barAccuracyPercent}% 以上的通过按谱面的完整段位计入，低于这条线的计入会更少。"
 
 #: src/routes/dan-estimates.tsx
 msgid "The estimate only sees the recorded pool. Your osu! top plays are always included. Anything below them is included only while you are tracked, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
@@ -11668,6 +11770,10 @@ msgstr "同样是 96% 和 95%"
 msgid "The same goes for any session where you never set a score on a ranked, qualified or loved chart: tracking never notices you are playing, so nothing from that session is recorded either. <0>Why that is</0>. If your estimate reads low, that is usually the reason, and the only fix is to play more."
 msgstr "如果你整场都没有在上架、qualified 或 loved 谱面上打出成绩，也会发生同样的情况：追踪根本不会发现你正在游玩，因此这场里的所有成绩都不会被记录。<0>为什么会这样</0>。估算偏低通常就是因为这个，唯一的解决办法是多打一些。"
 
+#: src/routes/dan-estimates.tsx
+msgid "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
+msgstr "同样的曲线套在每个段位表自己的通过线上，所以在 4K LN 上这套刻度以 97% 为基准，低于 93% 就不再计入。低于通过线的计入永远至少比谱面本身低一档：差一点没到永远不会被当成完整通过。"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."
 msgstr "截图名称保存失败。请重试。"
@@ -11794,7 +11900,7 @@ msgstr "这些是目前会核对的图包，按谱面匹配。通过必须发生
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "These are the packs we check, matched by beatmap. A pass has to be on one of these exact difficulties, so if you cleared the same courses from a different upload it is still a clear, we just are not looking there. Others can be added."
-#~ msgstr ""
+#~ msgstr "这些就是我们核对的课题包，按谱面匹配。通过必须发生在这些确切的难度上，所以如果你在别的上传版本里通过了同样的课题，那依然是通过，只是我们没有在那里查。其它课题包以后可以再加。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "these ask for ScoreV2, read this"
@@ -11806,7 +11912,7 @@ msgstr "这些估算都不是真正的段位通过，这里的玩家都没有接
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
-#~ msgstr ""
+#~ msgstr "这些估算不是真正的段位通过。这里没有人真的被段位课题检验过。Mania Hub 的做法是给每张谱面各自评一个段位，看你已经通过了哪些谱面，再从中读出一个等级。这就是为什么每个估算段位前面都写着「~」，排行榜也自称只是粗略排序。"
 
 #: src/routes/tracker.tsx
 msgid "These players finished the same maps within seconds of each other, repeatedly: a multiplayer lobby"
@@ -12415,7 +12521,7 @@ msgstr "只有当你先在上架、qualified 或 loved 谱面上打出成绩，�
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Unranked plays only start counting once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
-#~ msgstr ""
+#~ msgstr "未上架谱面的成绩要等本站知道你在玩才开始算，它靠你在上架、过审或社区喜爱谱面上的第一个成绩来判断。之后每隔几分钟检查一次你的最近成绩，直到你停下为止，这段时间里的一切都会计入，未上架的谱面也算。如果你从坟场谱面开打，在第一个带排行榜的成绩出现之前，什么都不会保留。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Unranked plays wait until the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. From there it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Before that first leaderboard score, plays on unranked charts are not kept at all."
@@ -12423,7 +12529,7 @@ msgstr "只有当你先在上架、qualified 或 loved 谱面上打出成绩，�
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Unranked plays wait until the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. From there it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Start a session on a graveyard map and none of it is kept until that first leaderboard score lands."
-#~ msgstr ""
+#~ msgstr "未上架谱面的成绩要等到本站知道你在玩，它靠你在上架、过审或社区喜爱谱面上的第一个成绩来判断。从那之后每隔几分钟检查一次你的最近成绩，直到你停下为止，这段时间里的一切都会计入，未上架的谱面也算。如果这一场从坟场谱面开始，在第一个带排行榜的成绩出现之前，什么都不会保留。"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx

@@ -168,6 +168,76 @@ function getRowPatternStats(orderedRows: Array<[number, ManiaNote[]]>, keyCount:
   };
 }
 
+// Single-note jack content for the 6K/7K jack tag, where the chordjack
+// detector is blind: it counts repeated chords, so a chart built on
+// single-note minijacks and trills (Ningen Shikkaku [Zenx's 7K Miscreation],
+// chordjack 0.35) reads as tech/chordstream. Two shapes, both measured as a
+// share of notes:
+//
+// - jack1Share: notes whose column was also hit on the immediately previous
+//   row, within 400ms. Row-relative on purpose: an absolute repeat window
+//   cannot tell jack from dense 7K stream (same-column re-hits under 180ms
+//   sit at p50 0.36 on the jack corpus and 0.39 on the stream corpus), while
+//   "re-hit one row back" is the jack motion itself. The 400ms cap is what
+//   keeps out slow filler jacks between real content, the shape the cluster
+//   share's false positives took (jacks at exactly half the chordstream BPM).
+// - trillRunShare: notes inside strict two-row alternations (the same two
+//   column sets A/B repeating for 6+ rows, each row gap <= 200ms), the
+//   full-trill spam charts are built on. Nearly binary in practice: every
+//   corpus (jack included) sits at p90 <= 0.026 while trill charts carry
+//   0.1+, so the arm fires on almost nothing but its own class.
+function getSingleJackStats(orderedRows: Array<[number, ManiaNote[]]>): { jack1Share: number; trillRunShare: number } {
+  const masks: number[] = [];
+  const times: number[] = [];
+  let noteCount = 0;
+  let jack1 = 0;
+  for (const [time, rowNotes] of orderedRows) {
+    let mask = 0;
+    for (const note of rowNotes) mask |= 1 << note.column;
+    noteCount += rowNotes.length;
+    const last = masks.length - 1;
+    if (last >= 0 && time - times[last] <= 400) {
+      let overlap = mask & masks[last];
+      while (overlap) {
+        jack1 += 1;
+        overlap &= overlap - 1;
+      }
+    }
+    masks.push(mask);
+    times.push(time);
+  }
+  const popcount = (mask: number): number => {
+    let count = 0;
+    while (mask) {
+      count += 1;
+      mask &= mask - 1;
+    }
+    return count;
+  };
+  let trillNotes = 0;
+  let i = 0;
+  while (i < masks.length - 5) {
+    const a = masks[i];
+    const b = masks[i + 1];
+    if (a === 0 || b === 0 || a === b || times[i + 1] - times[i] > 200) {
+      i += 1;
+      continue;
+    }
+    let j = i + 2;
+    while (j < masks.length && masks[j] === ((j - i) % 2 === 0 ? a : b) && times[j] - times[j - 1] <= 200) j += 1;
+    if (j - i >= 6) {
+      for (let m = i; m < j; m += 1) trillNotes += popcount(masks[m]);
+      i = j;
+    } else {
+      i += 1;
+    }
+  }
+  return {
+    jack1Share: noteCount > 0 ? jack1 / noteCount : 0,
+    trillRunShare: noteCount > 0 ? trillNotes / noteCount : 0,
+  };
+}
+
 // Inverse charting joins consecutive notes in a column with LNs, leaving only
 // a small release gap charted as a beat fraction (1/8 to 1/4 beat). A fixed
 // millisecond cutoff misreads slow charts: at 79 BPM a 1/6-beat inverse gap is
@@ -626,8 +696,20 @@ export function analyzeManiaPatterns(
         clamp01((0.4 - metrics.repeatedRowPatternRatio) / 0.4),
       ),
     );
+    // Ramps measured 2026-08 against mapper-named 7K pack corpora (279 jack /
+    // 78 tech / 136 stream / 150 delay charts) plus 700 random 7K charts:
+    // jack1Share sits at p25 0.271 / p50 0.404 on the jack corpus against
+    // p90 0.163 (tech), 0.162 (stream) and 0.129 (delay), so the 0.08-0.28
+    // ramp puts the 0.5 tag line at 0.18, between those populations. The
+    // trill arm's 0.03-0.12 ramp tags from 0.075, three times any corpus p90.
+    const singleJack = getSingleJackStats(orderedRows);
+    const jackScore = nonLnPatternGate * Math.max(
+      pressure(singleJack.jack1Share, 0.08, 0.28),
+      pressure(singleJack.trillRunShare, 0.03, 0.12),
+    );
     candidates.push(
       hit("delay", delayScore, dataConfidence, `${metrics.keyCount}K dense broken-stream flow, entropy ${metrics.rowIntervalEntropy.toFixed(1)}`),
+      hit("jack", jackScore, dataConfidence, `${compactPercent(singleJack.jack1Share)} consecutive-row column re-hits, ${compactPercent(singleJack.trillRunShare)} notes in two-row trill runs`),
       hit("chordjack", chordjackScore, dataConfidence, `${compactPercent(chordRatio)} chord rows, ${compactPercent(repeatedChordRatio)} repeated chord rows`),
       hit("tech", nonLnPatternGate * Math.max(
         techScore,

@@ -162,7 +162,7 @@ describe("Sunny re-pin DT verdict sweep", () => {
         [job] = await queue.claim("test-worker", 1);
       }
 
-      const done = (await exec(db, "select 1 from live_meta where key = ?", ["sunny_repin_dt_recompute_done:v1"])).rows[0];
+      const done = (await exec(db, "select 1 from live_meta where key = ?", ["sunny_repin_dt_recompute_done:v2"])).rows[0];
       expect(done).toBeTruthy();
 
       await ensureSunnyRepinDtRecomputeSeeded(db, queue);

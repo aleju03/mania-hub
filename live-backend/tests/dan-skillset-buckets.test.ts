@@ -35,6 +35,30 @@ const NEAR_TIE_SPEED = [
   { Stream: 27.50, Jumpstream: 25.40, Handstream: 24.00, Stamina: 27.10, JackSpeed: 16.40, Chordjack: 22.60, Technical: 28.00 },
 ];
 
+// Gamma Speedjack Pack 3 [FINAL BOSS], beatmap 4627199 at the reported
+// 96.40% play. MinaCalc reads Jumpstream first and JackSpeed last even though
+// the chart analyzer confidently calls it speedjack.
+const SPEEDJACK_MISREAD = {
+  Stream: 22.26, Jumpstream: 33.95, Handstream: 32.29, Stamina: 33.14,
+  JackSpeed: 17.94, Chordjack: 31.32, Technical: 32.53,
+};
+
+const SPEEDJACK_CHART = {
+  patterns: ["speedjack"],
+  jackShare: null,
+  streamShare: null,
+  techCategory: null,
+  lnRatio: 0,
+  vibro: false,
+  rcRawDan: 10,
+  lnRawDan: null,
+  dtRawDan: null,
+  dtFamily: null,
+  htRawDan: null,
+  htFamily: null,
+  lengthSeconds: null,
+};
+
 describe("danSkillsetBucketsForValues", () => {
   it("puts real 4K speed charts in speed", () => {
     for (const values of REAL_SPEED) {
@@ -78,6 +102,19 @@ describe("danSkillsetBucketsForValues", () => {
     }
   });
 
+  it("moves a speedjack chart MinaCalc misreads as Jumpstream from tech to jack", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", SPEEDJACK_MISREAD)).toEqual(["tech"]);
+    expect(danSkillsetBucketsForValues(4, "rc", SPEEDJACK_MISREAD, null, 1, SPEEDJACK_CHART))
+      .toEqual(["jack"]);
+  });
+
+  it("uses the same override for a confident chordjack tag", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", SPEEDJACK_MISREAD, null, 1, {
+      ...SPEEDJACK_CHART,
+      patterns: ["chordjack"],
+    })).toEqual(["jack"]);
+  });
+
   it("still splits jack and stamina off the other skillsets", () => {
     expect(danSkillsetBucketsForValues(4, "rc", { Chordjack: 30, Stream: 20, Jumpstream: 21, Technical: 22, Stamina: 24, Handstream: 19, JackSpeed: 25 })).toEqual(["jack"]);
     expect(danSkillsetBucketsForValues(4, "rc", { Stamina: 30, Stream: 20, Jumpstream: 21, Technical: 22, Chordjack: 24, Handstream: 26, JackSpeed: 15 })).toEqual(["stamina"]);
@@ -89,6 +126,8 @@ describe("danSkillsetBucketsForValues", () => {
       const values = Object.fromEntries(skillsets.map((key) => [key, key === winner ? 30 : 10]));
       expect(danSkillsetBucketsForValues(4, "rc", values)).toHaveLength(1);
     }
+    expect(danSkillsetBucketsForValues(4, "rc", SPEEDJACK_MISREAD, null, 1, SPEEDJACK_CHART))
+      .toHaveLength(1);
   });
 
   it("leaves the tag-driven keymodes off the MSD path", () => {
@@ -128,6 +167,7 @@ describe("pattern tag thresholds", () => {
     expect(buckets(7, {
       patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, lnRatio: 0, vibro: false,
       rcRawDan: 10, lnRawDan: null, dtRawDan: null, dtFamily: null, htRawDan: null, htFamily: null,
+      lengthSeconds: null,
     })).toContain("speed");
   });
 });
@@ -136,6 +176,7 @@ describe("6K/7K jack bucket (LeoBlack cluster share)", () => {
   const chart = (over: Partial<Parameters<typeof danTagBucketsForTest>[1]>) => ({
     patterns: [], jackShare: null, streamShare: null, techCategory: null, lnRatio: 0, vibro: false,
     rcRawDan: 10, lnRawDan: null, dtRawDan: null, dtFamily: null, htRawDan: null, htFamily: null,
+    lengthSeconds: null,
     ...over,
   });
 
@@ -158,10 +199,46 @@ describe("6K/7K jack bucket (LeoBlack cluster share)", () => {
     expect(danTagBucketsForTest(7, chart({ patterns: [], jackShare: 0.81 }))).toEqual(["jack"]);
   });
 
-  it("falls back to the chordjack tag when a chart has no clusters", async () => {
+  it("falls back to the derived jack tag when a chart has no clusters", async () => {
     const { danTagBucketsForTest } = await import("../src/features/player-skills.js");
-    expect(danTagBucketsForTest(7, chart({ patterns: ["chordjack"], jackShare: null }))).toEqual(["jack"]);
+    // A no-cluster chart earns the jack tag via chartIsJack's chordjack arm.
+    expect(danTagBucketsForTest(7, chart({ patterns: ["jack", "chordjack"], jackShare: null }))).toEqual(["jack"]);
     expect(danTagBucketsForTest(7, chart({ patterns: ["chordstream"], jackShare: null }))).toEqual(["stream"]);
+  });
+
+  // The union rule behind the whole-jack tag: LeoBlack jack clusters carrying
+  // the chart or the single-note jack score, with chordjack as a no-cluster
+  // fallback.
+  // KKKC [7K Extreme] (cj 0.77, share 0.405) missed the chordjack tag by 0.03
+  // and sat on the Tech tile until the share arm; Ningen Shikkaku [Zenx's 7K
+  // Miscreation] (cj 0.35, share 0.26, jack 1.0) is trill jack only the
+  // single-note detector sees.
+  it("tags whole-jack from the chordjack score, the cluster share or the jack score", async () => {
+    const { chartIsJackForTest } = await import("../src/features/player-skills.js");
+    expect(chartIsJackForTest(7, 0.8, 0, null)).toBe(true);
+    expect(chartIsJackForTest(7, 0.77, 0, 0.405)).toBe(true);
+    expect(chartIsJackForTest(7, 0.77, 0, null)).toBe(false);
+    expect(chartIsJackForTest(7, 0.35, 1, 0.26)).toBe(true);
+    expect(chartIsJackForTest(7, 0, 0.5, null)).toBe(true);
+    expect(chartIsJackForTest(7, 0, 0.49, 0.39)).toBe(false);
+    // High chordjack confidence does not overrule contrary cluster evidence:
+    // this shape is 77.6% stream, with only a secondary jack section.
+    expect(chartIsJackForTest(7, 0.93, 0.38, 0.224)).toBe(false);
+    // 4K keeps the old rule: chordjack certainty only.
+    expect(chartIsJackForTest(4, 0.8, 0, null)).toBe(true);
+    expect(chartIsJackForTest(4, 0.77, 1, 0.9)).toBe(false);
+  });
+
+  // The tech veto takes the single-note score only at its own certainty bar:
+  // EGOISM 440 [EGOMANIA] (jack 0.67, in a mapper-named tech dan pack) keeps
+  // its tech tag while wearing the jack one.
+  it("vetoes tech from jack certainty, not from the jack tag line", async () => {
+    const { jackVetoesTechForTest } = await import("../src/features/player-skills.js");
+    expect(jackVetoesTechForTest(7, 0, 0.8, null)).toBe(true);
+    expect(jackVetoesTechForTest(7, 0, 0.67, null)).toBe(false);
+    expect(jackVetoesTechForTest(7, 0.77, 0, 0.405)).toBe(true);
+    expect(jackVetoesTechForTest(7, 0.93, 0.38, 0.224)).toBe(false);
+    expect(jackVetoesTechForTest(4, 0.77, 1, 0.9)).toBe(false);
   });
 
   it("leaves speed on its tag, and tech on its tag when no cluster label is stored", async () => {
@@ -211,5 +288,40 @@ describe("6K/7K jack bucket (LeoBlack cluster share)", () => {
   it("lets a chart carry both tiles, which 6K/7K allows by design", async () => {
     const { danTagBucketsForTest } = await import("../src/features/player-skills.js");
     expect(danTagBucketsForTest(7, chart({ patterns: [], jackShare: 0.45, streamShare: 0.45 }))).toEqual(["jack", "stream"]);
+  });
+});
+
+describe("the stamina tile's length gate", () => {
+  // Infectious Crying [4K] 1.2x (288bpm), beatmap 5066729: a 2:59 tech dump
+  // whose Stamina rider edges Technical by 0.15 (0.4%), which is the whole
+  // margin the rider is ever capable of.
+  const INFECTIOUS_CRYING = {
+    Stream: 30.51, Jumpstream: 27.70, Handstream: 30.08,
+    Stamina: 32.81, JackSpeed: 19.70, Chordjack: 25.70, Technical: 32.66,
+  };
+
+  it("hands a short Stamina-argmax clear to its best base skillset", () => {
+    // Unknown length keeps the old reading rather than guessing it short.
+    expect(danSkillsetBucketsForValues(4, "rc", INFECTIOUS_CRYING)).toEqual(["stamina"]);
+    expect(danSkillsetBucketsForValues(4, "rc", INFECTIOUS_CRYING, 179)).toEqual(["tech"]);
+  });
+
+  it("keeps the tile on a file long enough to demand endurance", () => {
+    // Galaxy Collapse [Cataclysmic Hypernova] is 6:42; the rider is earned.
+    expect(danSkillsetBucketsForValues(4, "rc", INFECTIOUS_CRYING, 402)).toEqual(["stamina"]);
+  });
+
+  it("judges the length the play actually lasted, not the 1.0x drain", () => {
+    // A 5:00 chart at 1.5x is over in 3:20, so it stops being an endurance
+    // clear; the same chart at 1.0x still is.
+    expect(danSkillsetBucketsForValues(4, "rc", INFECTIOUS_CRYING, 300)).toEqual(["stamina"]);
+    expect(danSkillsetBucketsForValues(4, "rc", INFECTIOUS_CRYING, 300, 1.5)).toEqual(["tech"]);
+  });
+
+  it("leaves Handstream-led clears in the tile at any length", () => {
+    // Handstream names a pattern rather than riding on one, so the gate never
+    // touches it.
+    const handstream = { ...INFECTIOUS_CRYING, Handstream: 34.0, Stamina: 33.0 };
+    expect(danSkillsetBucketsForValues(4, "rc", handstream, 60)).toEqual(["stamina"]);
   });
 });

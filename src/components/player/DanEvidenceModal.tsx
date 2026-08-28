@@ -162,7 +162,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   const danLabel = dan ? (beyond ? danBareLabel(dan.label) : dan.label) : "";
   const image = dan ? getDanImageSrc(danBareLabel(danLabel), side === "ln" ? "ln" : undefined, keyCount) : null;
   const suffix = dan && !beyond ? danTierSuffix(dan.label) : "";
-  const minAccuracyPercent = Math.round((evidence?.minAccuracy ?? 0.96) * 100);
+  const minAccuracyPercent = Math.round((evidence?.minAccuracy ?? 0.92) * 100);
+  const barAccuracyPercent = Math.round((evidence?.barAccuracy ?? 0.96) * 100);
   const quorum = evidence?.quorum ?? 4;
 
   // The window opens on the breakdown, never on a wall of plays: every row is
@@ -321,7 +322,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                     {error ? t`Could not load the clears` : t`No qualifying clears yet`}
                   </div>
                   <div className="mt-1 text-xs text-osu-f1">
-                    {error ?? t`The estimate appears once ${quorum} clears at ${minAccuracyPercent}%+ accuracy land on rated charts.`}
+                    {error ?? t`The estimate appears once ${quorum} clears at ${minAccuracyPercent}%+ accuracy land on rated charts. A ${barAccuracyPercent}%+ pass credits the chart's full level; anything under that credits less.`}
                   </div>
                   {error ? (
                     <button
@@ -492,7 +493,11 @@ function ClearRow({
       className={`group flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-osu-b4 ${
         clear.countsTowardDan ? "" : "opacity-60"
       }`}
-      title={`${play.artist} - ${play.title} [${play.version}]${played ? ` · ${played}` : ""} · ${
+      title={`${play.artist} - ${play.title} [${play.version}]${played ? ` · ${played}` : ""}${
+        clear.creditedDanLabel !== clear.chartDanLabel
+          ? ` · ${t`A ${formatDan(clear.chartDanLabel)} chart, credited as ${formatDan(clear.creditedDanLabel)} at this accuracy`}`
+          : ""
+      } · ${
         clear.countsTowardDan
           ? t`This clear backs the estimate`
           : t`Below the credit that sets the estimate`
@@ -510,8 +515,13 @@ function ClearRow({
       >
         {formatAccuracy(clear.clearAccuracy)}
       </span>
+      {clear.creditedDanLabel !== clear.chartDanLabel ? (
+        <span className="shrink-0 text-right text-[10px] tabular-nums text-osu-f1">
+          {formatDan(clear.chartDanLabel)}
+        </span>
+      ) : null}
       <span className="w-16 shrink-0 text-right text-[11px] font-black sm:w-20" style={{ color }}>
-        {formatDan(clear.chartDanLabel)}
+        {formatDan(clear.creditedDanLabel)}
       </span>
     </button>
   );

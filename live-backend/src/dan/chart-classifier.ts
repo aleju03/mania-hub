@@ -209,6 +209,24 @@ export function danTableCeilingFor(side: "rc" | "ln", keyCount: number): number 
   return levels[levels.length - 1].level + 0.5;
 }
 
+/**
+ * The lowest rawDan a credited clear may clamp to. 0.5 on the 4K ladders,
+ * whose labelers clamp the level to 1, so it prints as the first level's
+ * minus band; the leoblack tables open at level 0 (the Normal Kyu band), so
+ * theirs is 0. Never negative: skill surfaces treat a non-positive rawDan as
+ * unrated (skill-leaderboards drops it), so a decayed scrape on a bottom-rung
+ * chart pins here instead of dropping off the scale.
+ */
+export function danTableFloorFor(side: "rc" | "ln", keyCount: number): number {
+  if (keyCount === 4) return 0.5;
+  const tables = DAN_INDEX[keyCount];
+  const table = tables ? (side === "ln" ? tables.LN?.default : tables.RC.default) : undefined;
+  if (!table) return 0.5;
+  const levels = tableLevels(table);
+  if (levels.length === 0) return 0.5;
+  return Math.max(0, levels[0].level - 0.5);
+}
+
 function parseTableHalf(text: string, table: DanIntervalTable): ParsedDanPart | null {
   let boundary: ParsedDanPart["boundary"] = null;
   let body = text.trim();

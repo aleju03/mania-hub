@@ -1,6 +1,8 @@
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { danTableLevelForLabel } from "../dan/chart-classifier.js";
+import { danCreditOffset } from "../dan/dan-credit.js";
+import type { DanCreditAnchors } from "../dan/dan-credit.js";
 import { danLevelForLabel } from "../dan/dan-estimator/labels.js";
 import { LN_LADDER_TOP } from "../dan/dan-estimator/ln.js";
 import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getDisplayedTotalScore, isLazerScore, scoreHasReplay } from "../shared/score.js";
@@ -255,17 +257,29 @@ export function danCourseModsAllowed(mods: OsuMod[] | null | undefined): boolean
 // anchor is exactly -0.5 for the same reason in reverse, which Math.round's
 // half-up puts back on this level's "--" (and 0.5 is exact in binary, so it
 // needs no margin).
-const CREDIT_EDGE_TOLERANCE = 1e-9;
+// A course pass reaches at most 2 points under its bar (the chart-clear curve
+// in dan-credit.ts reaches 4): the course credit is a single-run FLOOR under
+// the headline with no quorum behind it, so it stays tighter on both sides.
+const COURSE_CREDIT_BELOW_BAR_WINDOW = 0.02;
 
-// The sub-bar scale, which never reaches 0: its top anchor is the accuracy an
-// epsilon under the bar, and the bar itself is the first entry of the other.
-const COURSE_CREDIT_BELOW_BAR: Array<[deltaFromBar: number, offset: number]> = [
-  [-0.02, -0.5],
-  [-0.01, -0.44],
+// The sub-bar scale, which never reaches 0, on s = (bar - accuracy) / window:
+// its top anchor is the accuracy an epsilon under the bar, the knee at s = 0.5
+// is one accuracy point under, and the bar itself is the first entry of the
+// other table.
+const COURSE_CREDIT_BELOW_BAR: DanCreditAnchors = [
   [0, -0.26],
+  [0.5, -0.44],
+  [1, -0.5],
 ];
 
-const COURSE_CREDIT_ANCHORS: Array<[deltaFromBar: number, offset: number]> = [
+// In absolute accuracy points over the bar (aboveBarScale "delta"), the scale
+// these tables were tuned in; the chart-clear curve normalizes to headroom
+// instead. The cap stays under +0.5 so a maxed run can never round onto the
+// NEXT level and read as a course the player never touched - the chart-clear
+// bonus does not apply here because that guarantee is the whole point of a
+// course credential (the same play still earns the full bonus as an ordinary
+// rated clear).
+const COURSE_CREDIT_ANCHORS: DanCreditAnchors = [
   [0, 0],
   [0.015, 0.11],
   [0.02, 0.28],
@@ -276,30 +290,18 @@ const COURSE_CREDIT_ANCHORS: Array<[deltaFromBar: number, offset: number]> = [
  * The credited level offset for an accuracy, or null when it is too far under
  * the bar to credit anything. `allowBelowBar` is off for ladders whose labeler
  * has no minus tier to render the result in (4K LN), where a sub-bar credit
- * would round back up and read as a full clear.
+ * would round back up and read as a full clear. The interpolation, the edge
+ * tolerance and the near-bar clamp live in dan-credit.ts; only the anchor
+ * magnitudes are course-specific.
  */
 export function danCourseCreditOffset(accuracy: number, bar: number, allowBelowBar: boolean): number | null {
-  const floor = COURSE_CREDIT_BELOW_BAR[0];
-  const raw = accuracy - bar;
-  // Both sides are decimals, so a pass sitting exactly ON an edge subtracts to
-  // a hair under it: 0.94 - 0.96 is -0.020000000000000018, which would fall off
-  // the bottom anchor and credit nothing. The tolerance is float slack, not a
-  // grace band, so it is a billionth rather than a hundredth.
-  if (!allowBelowBar && raw < -CREDIT_EDGE_TOLERANCE) return null;
-  if (raw < floor[0] - CREDIT_EDGE_TOLERANCE) return null;
-  const delta = Math.max(floor[0], raw);
-  if (delta <= floor[0]) return floor[1];
-  const anchors = delta < -CREDIT_EDGE_TOLERANCE ? COURSE_CREDIT_BELOW_BAR : COURSE_CREDIT_ANCHORS;
-  if (anchors === COURSE_CREDIT_ANCHORS && delta <= 0) return anchors[0][1];
-  for (let i = 1; i < anchors.length; i += 1) {
-    const [upperDelta, upperOffset] = anchors[i];
-    if (delta > upperDelta) continue;
-    const [lowerDelta, lowerOffset] = anchors[i - 1];
-    const span = upperDelta - lowerDelta;
-    const t = span > 0 ? (delta - lowerDelta) / span : 1;
-    return lowerOffset + (upperOffset - lowerOffset) * t;
-  }
-  return anchors[anchors.length - 1][1];
+  return danCreditOffset(accuracy, bar, {
+    aboveBar: COURSE_CREDIT_ANCHORS,
+    aboveBarScale: "delta",
+    belowBar: COURSE_CREDIT_BELOW_BAR,
+    belowBarWindow: COURSE_CREDIT_BELOW_BAR_WINDOW,
+    allowBelowBar,
+  });
 }
 
 /** One verified course run, in the shape the dan headline floors against. */
@@ -393,8 +395,10 @@ function creditPass(pass: CoursePass, options: DanCourseCreditOptions, statusByB
     accuracy = stable ?? displayed;
     threshold += options.stableEquivalentV2BarOffset;
   }
-  // 4K LN labels through parseLnDan, whose only variants are plain and "+";
-  // it has no "--" to render a sub-bar credit as, so that ladder credits from
+  // 4K LN labels through parseLnDan, whose minus tier is unreachable after
+  // rounding (its "-" wants an offset of -0.7 but rounding keeps offsets
+  // inside [-0.5, 0.5]), so a sub-bar course credit in this table's range
+  // would round back up and read as a full clear: that ladder credits from
   // the bar up only.
   const allowBelowBar = !(course.keyCount === 4 && course.side === "ln");
   const offset = danCourseCreditOffset(accuracy, threshold, allowBelowBar);

@@ -1365,6 +1365,120 @@ async function enqueueChordjackTagRecompute(queue: JobQueue, cursor: number): Pr
   );
 }
 
+// One-shot sweep backfilling the 6K/7K single-note jack tag (patterns.ts
+// getSingleJackStats): every stored 6K/7K verdict predates the detector, so
+// minijack/trill charts sit tagged tech/chordstream with no jack entry at
+// all. Same playbook as the chordjack tag sweep above - re-run the analyzer
+// from the cached .osu, and where the visible tags or primary changed,
+// enqueue a full re-analysis so the stored row and its search-index entry
+// re-mint. No LIKE bound is possible (a chart that never carried a jack
+// entry is exactly the one that can gain it), so the scan covers every
+// stored 6K/7K rice-or-hybrid row; measured on the local corpus, ~21% of
+// random 7K charts mint a visible jack entry, so most of the scan is
+// compare-and-skip.
+export const JACK_TAG_RECOMPUTE_JOB = "recompute_jack_tag_sweep";
+const JACK_TAG_META_KEY = "jack_tag_recompute_done:v1";
+const JACK_TAG_CHUNK = 50;
+const JACK_TAG_SWEEP_KEY_COUNTS = [6, 7];
+
+export interface JackTagChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number[];
+  done: boolean;
+}
+
+export async function recomputeJackTagChunk(
+  db: Db,
+  cursor: number,
+  limit = JACK_TAG_CHUNK,
+): Promise<JackTagChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id, classification_json
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and key_count in (${JACK_TAG_SWEEP_KEY_COUNTS.join(", ")})
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const changed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const stored = parseJson<Pick<LeanChartClassification, "category" | "patterns"> | null>(row.classification_json, null);
+    if (!stored) continue;
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText) continue;
+    try {
+      const map = parseManiaBeatmap(osuText);
+      if (!JACK_TAG_SWEEP_KEY_COUNTS.includes(map.keyCount)) continue;
+      // Same analyzer inputs the full analysis job uses, so a matching verdict
+      // here means re-analysis would store the same tags.
+      const analysis = analyzeManiaPatterns(map, {
+        totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+        version: map.version,
+      });
+      const storedTags = [...new Set((stored.patterns ?? []).map((hit) => String(hit?.id ?? "")))].sort();
+      const freshTags = [...new Set(analysis.patterns.map((hit) => hit.id))].sort();
+      const storedCategory = stored.category ?? null;
+      const freshCategory = analysis.primary?.label ?? null;
+      if (storedTags.join(",") !== freshTags.join(",") || storedCategory !== freshCategory) {
+        changed.push(beatmapId);
+      }
+    } catch {
+      // A chart the analyzer rejects keeps its stored verdict; the full
+      // analysis job would fail the same way.
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureJackTagRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [JACK_TAG_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [JACK_TAG_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueJackTagRecompute(queue, 0);
+}
+
+export async function runJackTagRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeJackTagChunk(db, cursor);
+  // Each re-analysis upserts its own search-index row on completion, so the
+  // refreshed tags reach /maps without a full index rebuild.
+  for (const beatmapId of result.changed) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [JACK_TAG_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueJackTagRecompute(queue, result.nextCursor);
+}
+
+async function enqueueJackTagRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    JACK_TAG_RECOMPUTE_JOB,
+    `${JACK_TAG_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
 // One-shot sweep re-checking stored bracket-tagged verdicts against the
 // overlap-gated bracket detector: a chordjack chart's chords are bracket-shaped
 // row by row, so dense CJ files used to mint saturated bracket tags (and
@@ -2294,7 +2408,14 @@ async function enqueueLnSourceRecompute(queue: JobQueue, cursor: number): Promis
 // half and carries plan.lnDifficulty through untouched), so the cheap
 // classifyChart is the same LN answer the analysis job would store.
 export const LN_LEOBLACK_RECOMPUTE_JOB = "recompute_ln_leoblack_sweep";
-const LN_LEOBLACK_META_KEY = "ln_leoblack_recompute_done:v1";
+// v2: the diff now compares rawDan too. Rows minted by the pre-2026-08-25 kNN
+// carry a label clamped at the old ladder top (15) beside a free-running
+// rawDan (up to 22.84 on the measured corpus, 1,271 of 21,395 4K LN halves on
+// 2026-08-27), and the label-only diff read those as unchanged whenever the
+// fresh verdict printed the same bare level, so the stale number survived the
+// v1 pass. The player dan credit reads the rawDan, which is how those charts
+// credited LN clears past the whole ladder.
+const LN_LEOBLACK_META_KEY = "ln_leoblack_recompute_done:v2";
 const LN_LEOBLACK_CHUNK = 40;
 
 export interface LnLeoblackChunkResult {
@@ -2345,7 +2466,18 @@ export async function recomputeLnLeoblackChunk(
         version: map.version,
       };
       const fresh = classifyChart(map, osuText, input).ln;
-      if (fresh && fresh.displayName === storedLn.displayName && fresh.source === storedLn.source) continue;
+      // The label alone cannot tell a repaired verdict from a stale one: the
+      // old kNN clamped labels at the old ladder top while its rawDan ran
+      // free, so the same bare "15" can sit over 15.1 or 22.8. The credit
+      // path reads the rawDan, so it decides too.
+      const storedRawDan = Number(storedLn.rawDan);
+      if (
+        fresh
+        && fresh.displayName === storedLn.displayName
+        && fresh.source === storedLn.source
+        && Number.isFinite(storedRawDan)
+        && Math.abs(fresh.rawDan - storedRawDan) < 0.005
+      ) continue;
 
       // Refresh the DT verdict before the analysis job runs, so its
       // search-index upsert reads current DT columns. The stored DT MSD feeds
@@ -2533,7 +2665,12 @@ async function enqueueSunnyRepinRecompute(queue: JobQueue, cursor: number): Prom
 // chart costs one classifier pass. Consumers: the DT-play dan credit in
 // player-skills and the DT verdict on /maps cards.
 export const SUNNY_REPIN_DT_RECOMPUTE_JOB = "recompute_sunny_repin_dt_sweep";
-const SUNNY_REPIN_DT_META_KEY = "sunny_repin_dt_recompute_done:v1";
+// v2: rows minted by the pre-table-first LN estimator carry a label clamped
+// at the old ladder top (15) beside a free-running rawDan (measured up to
+// 22.84 on 78 of 626 LN-family DT verdicts, 2026-08-27). The credit path
+// reads the rawDan, so those charts credited DT LN clears past the whole
+// ladder; the re-derive rewrites them with the table-first verdict.
+const SUNNY_REPIN_DT_META_KEY = "sunny_repin_dt_recompute_done:v2";
 const SUNNY_REPIN_DT_CHUNK = 40;
 
 export interface SunnyRepinDtChunkResult {
