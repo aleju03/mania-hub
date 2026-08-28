@@ -1729,8 +1729,12 @@ msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, s
 msgstr "Un + significa «al menos»: osu! no entrega más de tus 200 mejores jugadas, así que un modo de teclas con jugadas por debajo de {0}pp solo se cuenta hasta donde alcanzan."
 
 #: src/routes/dan-estimates.tsx
-msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
-msgstr "Un chart cuenta como LN cuando las notas largas son el 45% o más, y como regular por debajo de eso. Es la misma línea que usan las páginas de mapas para etiquetar un chart, así que un chart no puede alimentar tu rating de LN y llevar una insignia regular a la vez."
+msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
+msgstr "Un chart cuenta como LN cuando las notas largas son el 45% o más, y como regular por debajo de eso. En 7K la línea es 37.5%, porque su cultura de mapeo produce charts híbridos que la comunidad lee como LN. Es la misma línea que usan las páginas de mapas para etiquetar un chart, así que un chart no puede contar para tu rating de LN y llevar una insignia regular a la vez."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
+#~ msgstr "Un chart cuenta como LN cuando las notas largas son el 45% o más, y como regular por debajo de eso. Es la misma línea que usan las páginas de mapas para etiquetar un chart, así que un chart no puede contar para tu rating de LN y llevar una insignia regular a la vez."
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "A collection needs at least {USER_COLLECTION_MIN_ITEMS} maps"

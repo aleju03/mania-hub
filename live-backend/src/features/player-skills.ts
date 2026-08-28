@@ -1,11 +1,11 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
-import { LN_PRIMARY_MIN_RATIO } from "../dan/dan-estimator/ln.js";
+import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
 import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, isMsdSupportedKeyCount } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
-import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_TAG_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_TAG_META_KEY, LN7_PRIMARY_REPIN_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { MAX_RATE_PERCENT, MIN_RATE_PERCENT, computeAndStoreRateDanVerdictFromText, enqueueRateDanEstimate, loadStoredRateDanVerdicts, rateDanVerdictKey } from "./dan-estimates.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -230,7 +230,9 @@ function jackVetoesTech(keyCount: number | null, chordjackScore: number, jackSco
 // of the token-hold rice the tag over-admits, which sits under 0.3. The ln
 // pattern score cannot do this job instead: it averages 0.78-0.88 in every
 // lnRatio band.
-const LN_PATTERN_LN_RATIO_MIN = LN_PRIMARY_MIN_RATIO;
+// Keymode-aware since the 7K line moved to 0.375 (its hybrid mapping culture;
+// lnPrimaryMinRatioFor). Still the same line the chart identity uses.
+const lnPatternRatioMinFor = lnPrimaryMinRatioFor;
 // The LN axes the gate covers: the whole-LN tag plus the analyzer's four LN
 // subtypes (patterns.ts LN_SUBTYPE_IDS).
 const LN_PATTERN_IDS = new Set(["ln", "lngeneral", "lnrelease", "lninverse", "lntech"]);
@@ -1047,7 +1049,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       const lnRatio = Number.isFinite(rawLnRatio) ? Math.max(0, Math.min(1, rawLnRatio)) : null;
       // A chart whose analysis carries no lnRatio cannot be verified as LN, so
       // it keeps no LN tag rather than being trusted.
-      const chartIsLn = lnRatio != null && lnRatio >= LN_PATTERN_LN_RATIO_MIN;
+      const chartIsLn = lnRatio != null && lnRatio >= lnPatternRatioMinFor(keyCount);
       const patternIds = [...patternScores.entries()]
         .filter(([id, score]) =>
           score >= patternTagMinScore(id)
@@ -1130,8 +1132,8 @@ function getMissShare(statistics: OsuScoreStatistics | undefined): number | null
 // "You are ~8th dan on 4K rice": per keymode and per verdict side (RC vs LN,
 // matching the classifier's halves), the highest continuous dan level backed
 // by a quorum of qualifying clears. A clear testifies only for the chart's
-// PRIMARY family (LN iff the hold share clears LN_PRIMARY_MIN_RATIO, the same
-// rule as /maps): accuracy
+// PRIMARY family (LN iff the hold share clears the keymode's identity line,
+// lnPrimaryMinRatioFor, the same rule as /maps): accuracy
 // on an LN chart is earned on the holds, so it proves nothing about the rice
 // half's rating, and vice versa. Rate mods count on the same terms: any pass
 // in the estimator's 0.5x-2.0x band credits the chart's stored verdict AT that
@@ -1295,7 +1297,7 @@ function collectDanClears(
       clears.push({ play, side, chartDan: rawDan, creditedDan, accuracy, bar: threshold });
     };
     if (play.rate === 1 && info.lnRatio != null) {
-      const side = info.lnRatio >= LN_PRIMARY_MIN_RATIO ? "ln" : "rc";
+      const side = info.lnRatio >= lnPrimaryMinRatioFor(keyCount) ? "ln" : "rc";
       push(side === "ln" ? info.lnRawDan : info.rcRawDan, side);
     } else if (play.rate === 1.5 && info.dtFamily != null) {
       push(info.dtRawDan, info.dtFamily);
@@ -3273,7 +3275,12 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // stored 4K LN labels move too (a 13.6 average now prints "14-", not "14").
 // Only LN verdicts move, but the sweep rewrites the row's whole dan block as
 // always.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v10";
+// v11: the 7K identity line moved to 0.375 (lnPrimaryMinRatioFor), so 7K
+// clears on 37.5-45% hold charts re-route from the rice side to LN. 1.0x
+// routing reads the live line immediately; DT/HT clears on those charts wait
+// on the chart re-pin sweep, which is why rateVerdictsLandedAfter lists its
+// done key and re-runs this sweep once it lands.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v11";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
@@ -3381,7 +3388,7 @@ export async function ensurePlayerSkillDanSweepSeeded(db: Db, queue: JobQueue): 
 /** True when a rate-verdict producer stamped its done key after this dan pass began. */
 async function rateVerdictsLandedAfter(db: Db, doneJson: string): Promise<boolean> {
   const sweptAt = parseJson<{ finishedAt?: unknown }>(doneJson, {}).finishedAt;
-  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY]) {
+  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, LN7_PRIMARY_REPIN_META_KEY]) {
     const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [key])).rows[0];
     if (!row) continue;
     const landedAt = parseJson<{ finishedAt?: unknown }>(String(row.value_json ?? ""), {}).finishedAt;

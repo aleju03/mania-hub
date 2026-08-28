@@ -3,7 +3,7 @@ import type { Db } from "../db.js";
 import { exec, execBatch, json, parseJson, type DbStatement } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "./activity.js";
 import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
-import { LN_PRIMARY_MIN_RATIO } from "../dan/dan-estimator/ln.js";
+import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
 import { lnAdjustedMsd } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { nowIso } from "../shared/score.js";
@@ -323,14 +323,14 @@ function clusterFamily(classification: { clusterCategory?: unknown } | null): st
 //   endurance-length files, see STAMINA_PRIMARY_MIN_LENGTH_SECONDS), pat_* mix
 //   normalized against it so card tags agree with the modal.
 // - Every keymode with a chart analysis: LN primary iff the hold share clears
-//   LN_PRIMARY_MIN_RATIO, the same threshold the classifier uses to route the
+//   the keymode's identity line (lnPrimaryMinRatioFor), the same threshold the classifier uses to route the
 //   dan verdict.
 // - No analysis yet: the skills_json profile as before.
 function derivePatternProfile(row: Record<string, unknown>): { primary: string; scores: Record<string, number> } {
   const { primary, scores } = readPatternProfile(row.skills_json);
   let result = primary;
 
-  const classification = parseJson<{ lnRatio?: unknown; category?: unknown; clusterCategory?: unknown; patterns?: unknown } | null>(row.ca_classification_json, null);
+  const classification = parseJson<{ lnRatio?: unknown; keyCount?: unknown; category?: unknown; clusterCategory?: unknown; patterns?: unknown } | null>(row.ca_classification_json, null);
   // MinaCalc reads split trills as jacks: each column repeats every second row,
   // which JackSpeed/Chordjack score as same-column speed even though the chart
   // never hits a column twice in a row (gdmem 3814262: 0.2% of row pairs share
@@ -409,7 +409,10 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
   const lnRatio = classification != null && Number.isFinite(Number(classification.lnRatio)) ? Number(classification.lnRatio) : null;
   let lnDerouted = false;
   let lnPromoted = false;
-  if (lnRatio != null && lnRatio >= LN_PRIMARY_MIN_RATIO) {
+  const classificationKeyCount = classification != null && Number.isFinite(Number(classification.keyCount))
+    ? Number(classification.keyCount)
+    : null;
+  if (lnRatio != null && lnRatio >= lnPrimaryMinRatioFor(classificationKeyCount)) {
     result = "ln";
     scores.ln = 1;
     lnPromoted = true;

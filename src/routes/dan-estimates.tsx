@@ -339,8 +339,10 @@ function DanEstimatesPage() {
           <P>
             <Trans>
               A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular
-              chart below that. This is the same line the maps pages use to label a chart, so a chart
-              cannot feed your LN rating and wear a regular badge at the same time.
+              chart below that. On 7K the line is 37.5% instead, because its mapping culture ships
+              hybrid charts the community reads as LN. This is the same line the maps pages use to
+              label a chart, so a chart cannot feed your LN rating and wear a regular badge at the
+              same time.
             </Trans>
           </P>
           <P>

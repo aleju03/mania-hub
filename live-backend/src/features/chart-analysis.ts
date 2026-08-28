@@ -3,7 +3,7 @@ import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
-import { LN_PRIMARY_MIN_RATIO, estimateLnDan } from "../dan/dan-estimator/ln.js";
+import { LN_PRIMARY_7K_MIN_RATIO, LN_PRIMARY_MIN_RATIO, estimateLnDan } from "../dan/dan-estimator/ln.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
 import { classifyChart, detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { classifyChartWithCompanella } from "../dan/companella.js";
@@ -2261,6 +2261,110 @@ async function enqueueLnPrimaryRepin(queue: JobQueue, cursor: number): Promise<v
   await queue.enqueue(
     LN_PRIMARY_REPIN_JOB,
     `${LN_PRIMARY_REPIN_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// ── One-shot 7K LN-primary re-pin sweep ──────────────────────────────────────
+// The 7K identity line moved from the shared 0.45 to 0.375
+// (LN_PRIMARY_7K_MIN_RATIO): 7K mapping culture ships hybrid charts the
+// community reads as LN at hold shares the shared line called rice (1320 of
+// the 2026-08 snapshot's ready 7K rows sit in the band, every one with an LN
+// half to route to). Same playbook as the 0.5 -> 0.45 sweep above: re-enqueue
+// the full analysis job per affected chart, rewrite stored DT and HT verdicts
+// inline since both of those one-shot sweeps are done and will never revisit.
+// The player dan sweep re-runs after this stamps done (rateVerdictsLandedAfter
+// in player-skills.ts lists this key), which re-routes the band's clears from
+// the rice side to LN with the re-derived chart verdicts in place.
+
+export const LN7_PRIMARY_REPIN_JOB = "recompute_ln7_primary_repin_sweep";
+export const LN7_PRIMARY_REPIN_META_KEY = "ln7_primary_repin_done:v1";
+const LN7_PRIMARY_REPIN_CHUNK = 100;
+
+export async function recomputeLn7PrimaryRepinChunk(
+  db: Db,
+  cursor: number,
+  limit = LN7_PRIMARY_REPIN_CHUNK,
+): Promise<LnPrimaryRepinChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id,
+            dan_dt_json is not null as has_dt,
+            dan_ht_json is not null as has_ht,
+            json_extract(classification_json, '$.ln.displayName') as ln_name
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and key_count = 7
+       and primary_family = 'dan'
+       and beatmap_id > ?
+       and json_extract(classification_json, '$.lnRatio') >= ?
+       and json_extract(classification_json, '$.lnRatio') < ?
+     order by beatmap_id
+     limit ?`,
+    [
+      CHART_ANALYSIS_VERSION,
+      Math.max(0, Math.floor(cursor)),
+      LN_PRIMARY_7K_MIN_RATIO,
+      LN_PRIMARY_MIN_RATIO,
+      Math.max(1, Math.floor(limit)),
+    ],
+  )).rows;
+
+  let nextCursor = cursor;
+  const repinned: number[] = [];
+  let dtRewritten = 0;
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    if (row.ln_name == null) continue;
+    repinned.push(beatmapId);
+    if (row.has_dt) {
+      if (await storeDtRateVerdict(db, beatmapId)) dtRewritten += 1;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    if (row.has_ht) {
+      await storeHtRateVerdict(db, beatmapId);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  }
+
+  return { nextCursor, scanned: rows.length, repinned, dtRewritten, done: rows.length < limit };
+}
+
+export async function ensureLn7PrimaryRepinSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [LN7_PRIMARY_REPIN_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [LN7_PRIMARY_REPIN_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueLn7PrimaryRepin(queue, 0);
+}
+
+export async function runLn7PrimaryRepinJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeLn7PrimaryRepinChunk(db, cursor);
+  for (const beatmapId of result.repinned) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [LN7_PRIMARY_REPIN_META_KEY, json({ finishedAt: now }), now],
+    );
+    await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+    return;
+  }
+  await enqueueLn7PrimaryRepin(queue, result.nextCursor);
+}
+
+async function enqueueLn7PrimaryRepin(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    LN7_PRIMARY_REPIN_JOB,
+    `${LN7_PRIMARY_REPIN_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );

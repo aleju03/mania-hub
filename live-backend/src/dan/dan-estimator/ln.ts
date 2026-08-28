@@ -268,6 +268,20 @@ function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: numbe
  */
 export const LN_PRIMARY_MIN_RATIO = 0.45;
 
+/**
+ * 7K's own, lower line. Its mapping culture ships hybrid charts the community
+ * and their own mappers read as LN (King Atlantis [7K] Abyssal Overlord sits
+ * at 37.8% holds), and at 45% those all wore rice badges. 4K and 6K keep the
+ * shared line. Every consumer routes through lnPrimaryMinRatioFor so the one
+ * chart identity still comes from one place.
+ */
+export const LN_PRIMARY_7K_MIN_RATIO = 0.375;
+
+/** The LN identity line for a keymode: what "this chart is LN" means. */
+export function lnPrimaryMinRatioFor(keyCount: number | null | undefined): number {
+  return keyCount === 7 ? LN_PRIMARY_7K_MIN_RATIO : LN_PRIMARY_MIN_RATIO;
+}
+
 export const LN_LADDER_TOP = 17;
 
 // The LN dan ladder is numeric 1-17 with +/- variants; it never extends into
