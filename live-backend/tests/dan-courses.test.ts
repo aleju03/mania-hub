@@ -95,8 +95,7 @@ describe("course accuracy tiers", () => {
     expect(danLabelForTest(14 + offset, "rc", 4)).toBe("delta++");
   });
 
-  it("credits from the bar up only on ladders with no minus tier to render it", () => {
-    // 4K LN labels through parseLnDan, whose variants are plain and "+" only.
+  it("credits from the bar up only when the ladder says so (4K LN)", () => {
     expect(danCourseCreditOffset(0.95, 0.97, false)).toBeNull();
     expect(danCourseCreditOffset(0.97, 0.97, false)).toBe(0);
   });

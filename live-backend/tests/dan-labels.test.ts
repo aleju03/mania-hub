@@ -23,9 +23,16 @@ describe("dan label calibration", () => {
     expect(parseLnDan(17).displayName).toBe("LN 17");
   });
 
-  it("recognizes ratings beyond the 4K LN course ceiling as 17+", () => {
-    expect(parseLnDan(17.44).displayName).toBe("LN 17");
-    expect(parseLnDan(17.45).displayName).toBe("LN 17+");
-    expect(parseLnDan(19).displayName).toBe("LN 17+");
+  it("uses parseDan's variant bands, unlike the earlier plain-and-plus labeler", () => {
+    // 13.62 is a player average under 14, and prints that way now.
+    expect(parseLnDan(13.62).displayName).toBe("LN 14-");
+    expect(parseLnDan(13.52).displayName).toBe("LN 14--");
+    expect(parseLnDan(13.2).displayName).toBe("LN 13+");
+    expect(parseLnDan(13.3).displayName).toBe("LN 13++");
+  });
+
+  it("recognizes ratings beyond the 4K LN course ceiling", () => {
+    expect(parseLnDan(17.44).displayName).toBe("LN 17++");
+    expect(parseLnDan(19).displayName).toBe("LN 17++");
   });
 });

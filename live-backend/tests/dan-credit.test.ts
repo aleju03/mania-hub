@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   DAN_CREDIT_BELOW_BAR_WINDOW,
+  DAN_CREDIT_LN_BELOW_BAR_WINDOW,
   creditedDanFor,
+  danCreditBelowBarWindowFor,
   danCreditNearBarCapFor,
   danCreditOffset,
 } from "../src/dan/dan-credit.js";
@@ -73,12 +75,45 @@ describe("near-bar cap", () => {
   });
 
   it("prices a 4K LN near-miss at least three quarters of a level down", () => {
-    // parseLnDan has no reachable minus tier, so any cap under 0.52 would
-    // print a bare "7" for a non-clear; the cap sits at 0.75 on top of that
-    // because stable accuracy is cheap to hold on long notes.
+    // Accuracy is cheap to hold on long notes, so the cap is deeper than the
+    // 0.26 the other ladders use.
     const offset = danCreditOffset(0.9699, 0.97, { nearBarCap: danCreditNearBarCapFor("ln", 4) });
     expect(offset).toBeCloseTo(-0.75, 9);
-    expect(danLabelForTest(7 + offset!, "ln", 4)).toBe("6");
+    expect(danLabelForTest(7 + offset!, "ln", 4)).toBe("6+");
+  });
+});
+
+describe("LN decay windows", () => {
+  it("is one point on every LN ladder, four on rice", () => {
+    expect(danCreditBelowBarWindowFor("ln", 4)).toBe(DAN_CREDIT_LN_BELOW_BAR_WINDOW);
+    expect(danCreditBelowBarWindowFor("ln", 6)).toBe(DAN_CREDIT_LN_BELOW_BAR_WINDOW);
+    expect(danCreditBelowBarWindowFor("ln", 7)).toBe(DAN_CREDIT_LN_BELOW_BAR_WINDOW);
+    expect(danCreditBelowBarWindowFor("rc", 4)).toBe(DAN_CREDIT_BELOW_BAR_WINDOW);
+    expect(danCreditBelowBarWindowFor("rc", 7)).toBe(DAN_CREDIT_BELOW_BAR_WINDOW);
+  });
+
+  it("stops 6K/7K LN credit one point under the 95% bar", () => {
+    // 94.1% still credits; 93.9% is past the window, where the shared four
+    // points used to keep crediting down to 91%.
+    expect(creditedDanFor(10, 0.941, 0.95, "ln", 7)).toBeCloseTo(10 - 0.926, 3);
+    expect(creditedDanFor(10, 0.939, 0.95, "ln", 7)).toBeNull();
+    expect(creditedDanFor(10, 0.939, 0.95, "ln", 6)).toBeNull();
+    // The bonus half still scores against the standard span: 100% is +1.5.
+    expect(creditedDanFor(10, 1, 0.95, "ln", 7)).toBeCloseTo(11.5, 9);
+  });
+
+  it("stops crediting one point under the 97% bar", () => {
+    // 96.1% is a near-miss and still credits (at least the 0.75 cap down);
+    // 95.9% is past the window and credits nothing, where the shared 4-point
+    // window used to credit it a level down.
+    expect(creditedDanFor(15.15, 0.961, 0.97, "ln", 4)).toBeCloseTo(15.15 - 0.926, 3);
+    expect(creditedDanFor(15.15, 0.959, 0.97, "ln", 4)).toBeNull();
+    expect(creditedDanFor(14.35, 0.9661, 0.97, "ln", 4)).toBeCloseTo(14.35 - 0.75, 6);
+  });
+
+  it("does not re-heat the bonus half: 100% still tops out at +0.7", () => {
+    expect(creditedDanFor(10, 1, 0.97, "ln", 4)).toBeCloseTo(10.7, 6);
+    expect(creditedDanFor(10, 0.985, 0.97, "ln", 4)).toBeCloseTo(10.2625, 6);
   });
 });
 

@@ -273,13 +273,15 @@ export const LN_LADDER_TOP = 17;
 // The LN dan ladder is numeric 1-17 with +/- variants; it never extends into
 // the rice ladder's greek levels.
 // Exported so player-dan positioning labels its LN side on the same scale as
-// chart LN verdicts.
+// chart LN verdicts. The variant bands are parseDan's, deliberately: an
+// earlier revision put "-" at -0.7 (unreachable, since rounding keeps the
+// offset inside [-0.5, 0.5]) and "+" at 0.45 (a sliver under the round-up),
+// which printed a 13.6 player average as a bare "14" while every other
+// ladder called the same offset "14-".
 export function parseLnDan(rawDan: number): { label: string; variant: string | null; displayName: string } {
   const level = Math.max(1, Math.min(LN_LADDER_TOP, Math.round(rawDan)));
   const offset = rawDan - level;
-  const variant = level >= LN_LADDER_TOP
-    ? (offset <= -0.7 ? "-" : rawDan >= LN_LADDER_TOP + 0.45 ? "+" : null)
-    : offset <= -0.7 ? "-" : offset >= 0.45 ? "+" : null;
+  const variant = offset <= -0.45 ? "--" : offset <= -0.25 ? "-" : offset < 0.1 ? null : offset < 0.26 ? "+" : "++";
   return {
     label: String(level),
     variant,

@@ -1669,6 +1669,10 @@ msgstr "6K 单点"
 msgid "6K regular and LN"
 msgstr "6K 单点和 LN"
 
+#: src/routes/dan-estimates.tsx
+msgid "6K/7K LN"
+msgstr "6K/7K LN"
+
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 msgid "7 days"
@@ -1707,12 +1711,20 @@ msgid "7K regular"
 msgstr "7K 单点"
 
 #: src/routes/dan-estimates.tsx
+msgid "95% (the bar)"
+msgstr "95%（通过线）"
+
+#: src/routes/dan-estimates.tsx
 msgid "96% (the bar)"
 msgstr "96%(通过线)"
 
 #: src/routes/dan-estimates.tsx
 msgid "96%, or 95% in the Normal Kyu band below 1st dan"
 msgstr "96%，1 段以下的 Normal Kyu 区间是 95%"
+
+#: src/routes/dan-estimates.tsx
+msgid "97% (the bar)"
+msgstr "97%（通过线）"
 
 #. placeholder {0}: formatDan(clear.chartDanLabel)
 #. placeholder {1}: formatDan(clear.creditedDanLabel)
@@ -1776,8 +1788,12 @@ msgid "a map"
 msgstr "某张谱面"
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: from 4 points under the bar, a play counts as a clear of a lower level, bottoming out one full level down. On the 96% ladders that reads:"
-msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样。准确率高于通过线会计入更多；差一点没到也仍有计入：从通过线往下 4 个百分点以内，成绩会按更低的段位计为通过，最低比谱面段位低整整一级。在 96% 的段位表上就是："
+msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: a play counts as a clear of a lower level, bottoming out one full level down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样。准确率高于通过线会计入更多；差一点没到也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低整整一级。普通段位表在通过线以下 4 个百分点内仍然计入。LN 段位表只到 1 个百分点，因为长条上准确率很容易保持，出于同样的原因 4K LN 的加成也被压平了："
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: from 4 points under the bar, a play counts as a clear of a lower level, bottoming out one full level down. On the 96% ladders that reads:"
+#~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样。准确率高于通过线会计入更多；差一点没到也仍有计入：从通过线往下 4 个百分点以内，成绩会按更低的段位计为通过，最低比谱面段位低整整一级。在 96% 的段位表上就是："
 
 #: src/routes/dan-estimates.tsx
 msgid "A quick reminder of what a dan is"
@@ -1810,6 +1826,10 @@ msgstr "一张可分享的技能等级卡：等级徽章下方是控制、速度
 #: src/routes/snipes.tsx
 msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
 msgstr "狙击是指同一国家/地区的玩家在某个排行榜上反超另一名玩家，所以它只在单个国家/地区内才有意义。选择一个国家/地区查看其狙击记录，或浏览合并的谱面视图。"
+
+#: src/routes/dan-estimates.tsx
+msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
+msgstr "低于通过线的计入永远至少比谱面本身低一档，所以差一点没到永远不会被当成完整通过。在 4K LN 上这一档至少是四分之三级。"
 
 #: src/routes/farm-helper.tsx
 msgid "a while"
@@ -1858,8 +1878,16 @@ msgid "Accuracy"
 msgstr "准确率"
 
 #: src/routes/dan-estimates.tsx
+msgid "Accuracy (95% ladder)"
+msgstr "准确率（95% 段位表）"
+
+#: src/routes/dan-estimates.tsx
 msgid "Accuracy (96% ladder)"
 msgstr "准确率(96% 段位表)"
+
+#: src/routes/dan-estimates.tsx
+msgid "Accuracy (97% ScoreV2 ladder)"
+msgstr "准确率（97% ScoreV2 段位表）"
 
 #. placeholder {0}: formatAccuracy(event.accuracy)
 #: src/routes/snipes.tsx
@@ -2551,6 +2579,14 @@ msgstr "{countryName} 玩过的谱面"
 #: src/routes/dan-estimates.tsx
 msgid "below 92%"
 msgstr "低于 92%"
+
+#: src/routes/dan-estimates.tsx
+msgid "below 94%"
+msgstr "低于 94%"
+
+#: src/routes/dan-estimates.tsx
+msgid "below 96%"
+msgstr "低于 96%"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Below the credit that sets the estimate"
@@ -9426,6 +9462,10 @@ msgstr "单点"
 msgid "Regular and LN"
 msgstr "单点与长条"
 
+#: src/routes/dan-estimates.tsx
+msgid "Regular ladders"
+msgstr "普通段位表"
+
 #: src/lib/skill-axes.ts
 msgid "Release"
 msgstr "放键"
@@ -11575,6 +11615,10 @@ msgid "the chart's full level"
 msgstr "谱面的完整段位"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.33"
+msgstr "谱面段位 -0.33"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.45"
 msgstr "谱面段位 -0.45"
 
@@ -11583,20 +11627,56 @@ msgid "the chart's level -0.63"
 msgstr "谱面段位 -0.63"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.75"
+msgstr "谱面段位 -0.75"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.85"
+msgstr "谱面段位 -0.85"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level -1"
 msgstr "谱面段位 -1"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.14"
+msgstr "谱面段位 +0.14"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.18"
+msgstr "谱面段位 +0.18"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.28"
+msgstr "谱面段位 +0.28"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.35"
 msgstr "谱面段位 +0.35"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.49"
+msgstr "谱面段位 +0.49"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.53"
+msgstr "谱面段位 +0.53"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.7"
 msgstr "谱面段位 +0.7"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.86"
+msgstr "谱面段位 +0.86"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +1.1"
 msgstr "谱面段位 +1.1"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +1.18"
+msgstr "谱面段位 +1.18"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +1.5"
@@ -11771,8 +11851,8 @@ msgid "The same goes for any session where you never set a score on a ranked, qu
 msgstr "如果你整场都没有在上架、qualified 或 loved 谱面上打出成绩，也会发生同样的情况：追踪根本不会发现你正在游玩，因此这场里的所有成绩都不会被记录。<0>为什么会这样</0>。估算偏低通常就是因为这个，唯一的解决办法是多打一些。"
 
 #: src/routes/dan-estimates.tsx
-msgid "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
-msgstr "同样的曲线套在每个段位表自己的通过线上，所以在 4K LN 上这套刻度以 97% 为基准，低于 93% 就不再计入。低于通过线的计入永远至少比谱面本身低一档：差一点没到永远不会被当成完整通过。"
+#~ msgid "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
+#~ msgstr "同样的曲线套在每个段位表自己的通过线上，所以在 4K LN 上这套刻度以 97% 为基准，低于 93% 就不再计入。低于通过线的计入永远至少比谱面本身低一档：差一点没到永远不会被当成完整通过。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."

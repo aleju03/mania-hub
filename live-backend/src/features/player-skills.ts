@@ -14,7 +14,7 @@ import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
 import { danTableCeilingFor, danTableLabelFor, danTableVerdictLabelFor } from "../dan/chart-classifier.js";
-import { DAN_CREDIT_BELOW_BAR_WINDOW, creditedDanFor } from "../dan/dan-credit.js";
+import { creditedDanFor, danCreditBelowBarWindowFor } from "../dan/dan-credit.js";
 import { loadDanCourseClears } from "./dan-courses.js";
 import type { DanCourseClear, DanCourseCreditOptions } from "./dan-courses.js";
 import { parseDan } from "../dan/dan-estimator/labels.js";
@@ -339,8 +339,9 @@ const AGGREGATE_RATING_SCALER = 1.04;
 // A bare pass at the bar credits the chart's full rawDan, exactly as clearing
 // a course awards the whole dan in game: the bar IS the pass, and it is the
 // zero point of the accuracy credit curve (dan-credit.ts). Away from the bar
-// the credit moves with the accuracy in both directions: a pass up to
-// DAN_CREDIT_BELOW_BAR_WINDOW under the bar still credits the chart minus a
+// the credit moves with the accuracy in both directions: a pass up to the
+// ladder's decay window under the bar (danCreditBelowBarWindowFor: four
+// points on rice, one on LN) still credits the chart minus a
 // decay (capped so it can never equal the chart's own dan, and reaching a
 // full level down at the window's edge), and accuracy above the bar credits a
 // bonus that reaches +1.5 levels at 100% in the ladder's own currency. This
@@ -1353,15 +1354,24 @@ export function danSideFromClearEvidenceForTest(
 // quorum-sized pool simply averages everything it has.
 const DAN_CLEAR_AVERAGE_WINDOW = 5;
 
+// 4K LN averages twice the window. It is the one ladder with no skillset
+// buckets, so its headline is this side-wide average alone, and with the
+// best-5 a couple of near-miss credits on charts above the player's level
+// could still carry it (the 2026-08-28 window narrowing helped but left
+// known-13 players printing 14). Ten asks for a body of work instead.
+export function danClearAverageWindowFor(side: "rc" | "ln", keyCount: number): number {
+  return keyCount === 4 && side === "ln" ? DAN_CLEAR_AVERAGE_WINDOW * 2 : DAN_CLEAR_AVERAGE_WINDOW;
+}
+
 function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): PlayerSkillDanVerdict | null {
   if (rawDans.length < DAN_CLEAR_QUORUM) return null;
   const sorted = [...rawDans].sort((a, b) => b - a);
-  // The dan is the mean of the best DAN_CLEAR_AVERAGE_WINDOW credited clears
+  // The dan is the mean of the best danClearAverageWindowFor credited clears
   // (all of them on a quorum-sized pool). One outlier clear cannot set the
   // level on its own, but it is no longer discarded the way the old
   // quorum-th-clear rule discarded everything above the 4th: it pulls the
   // average up in proportion to how far it sits above the rest.
-  const window = sorted.slice(0, DAN_CLEAR_AVERAGE_WINDOW);
+  const window = sorted.slice(0, danClearAverageWindowFor(side, keyCount));
   const rawDan = Math.round((window.reduce((sum, value) => sum + value, 0) / window.length) * 100) / 100;
   return {
     rawDan,
@@ -2696,7 +2706,7 @@ export async function getPlayerSkillDanEvidence(
     side,
     keyCount,
     quorum: DAN_CLEAR_QUORUM,
-    minAccuracy: Math.round((barAccuracy - DAN_CREDIT_BELOW_BAR_WINDOW) * 1000) / 1000,
+    minAccuracy: Math.round((barAccuracy - danCreditBelowBarWindowFor(side, keyCount)) * 1000) / 1000,
     barAccuracy,
     dan,
     totalClears: clears.length,
@@ -3254,7 +3264,16 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // v9: charts with exploit-sized same-column head stacks are structurally
 // ineligible as dan evidence. The chart verdict remains visible, but every
 // stored player dan must be rebuilt without those clears.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v9";
+// v10: the LN decay window narrowed from four accuracy points to one
+// (danCreditBelowBarWindowFor), dropping the routine sub-bar passes that
+// still dominated the LN best-5 windows after the v7 bonus cool-off, and
+// 4K LN now averages its best ten clears rather than five
+// (danClearAverageWindowFor), asking its bucket-less headline for a body of
+// work. parseLnDan also picked up parseDan's variant bands, so
+// stored 4K LN labels move too (a 13.6 average now prints "14-", not "14").
+// Only LN verdicts move, but the sweep rewrites the row's whole dan block as
+// always.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v10";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

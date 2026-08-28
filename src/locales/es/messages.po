@@ -1660,6 +1660,10 @@ msgstr "6K regular"
 msgid "6K regular and LN"
 msgstr "6K regular y LN"
 
+#: src/routes/dan-estimates.tsx
+msgid "6K/7K LN"
+msgstr "6K/7K LN"
+
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 msgid "7 days"
@@ -1698,12 +1702,20 @@ msgid "7K regular"
 msgstr "7K regular"
 
 #: src/routes/dan-estimates.tsx
+msgid "95% (the bar)"
+msgstr "95% (el mínimo)"
+
+#: src/routes/dan-estimates.tsx
 msgid "96% (the bar)"
 msgstr "96% (el mínimo)"
 
 #: src/routes/dan-estimates.tsx
 msgid "96%, or 95% in the Normal Kyu band below 1st dan"
 msgstr "96%, o 95% en la banda Normal Kyu por debajo del 1er dan"
+
+#: src/routes/dan-estimates.tsx
+msgid "97% (the bar)"
+msgstr "97% (el mínimo)"
 
 #. placeholder {0}: formatDan(clear.chartDanLabel)
 #. placeholder {1}: formatDan(clear.creditedDanLabel)
@@ -1767,8 +1779,12 @@ msgid "a map"
 msgstr "un mapa"
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: from 4 points under the bar, a play counts as a clear of a lower level, bottoming out one full level down. On the 96% ladders that reads:"
-msgstr "Un pase justo en el mínimo acredita el nivel completo del chart, igual que pasar el dan real. Más precisión acredita más, y quedarse un poco corto todavía acredita algo: hasta 4 puntos por debajo del mínimo, la play cuenta como clear de un nivel más bajo, llegando como mucho a un nivel completo menos. En las escalas de 96% queda así:"
+msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: a play counts as a clear of a lower level, bottoming out one full level down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+msgstr "Un pase justo en el mínimo acredita el nivel completo del chart, igual que pasar el dan real. Más precisión acredita más, y quedarse un poco corto todavía acredita algo: la play cuenta como clear de un nivel más bajo, llegando como mucho a un nivel completo menos en el corte. Las escalas regulares siguen acreditando hasta 4 puntos por debajo del mínimo. Las escalas LN paran en 1 punto, porque la precisión sale barata en las notas largas, y el bono de 4K LN está aplanado por lo mismo:"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: from 4 points under the bar, a play counts as a clear of a lower level, bottoming out one full level down. On the 96% ladders that reads:"
+#~ msgstr "Un pase justo en el mínimo acredita el nivel completo del chart, igual que pasar el dan real. Más precisión acredita más, y quedarse un poco corto todavía acredita algo: hasta 4 puntos por debajo del mínimo, la play cuenta como clear de un nivel más bajo, llegando como mucho a un nivel completo menos. En las escalas de 96% queda así:"
 
 #: src/routes/dan-estimates.tsx
 msgid "A quick reminder of what a dan is"
@@ -1801,6 +1817,10 @@ msgstr "Una carta de nivel de habilidad para compartir: control, velocidad y acc
 #: src/routes/snipes.tsx
 msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
 msgstr "Un snipe ocurre cuando el jugador de un país le gana el puesto a otro en una tabla, así que solo tiene sentido dentro de un mismo país. Elige un país para ver sus snipes o explora la vista combinada de mapas."
+
+#: src/routes/dan-estimates.tsx
+msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
+msgstr "Un crédito por debajo del mínimo siempre queda al menos un paso bajo el nivel del chart, así que quedarse corto nunca se lee como el clear completo. En 4K LN ese paso es de al menos tres cuartos de nivel."
 
 #: src/routes/farm-helper.tsx
 msgid "a while"
@@ -1849,8 +1869,16 @@ msgid "Accuracy"
 msgstr "Acc"
 
 #: src/routes/dan-estimates.tsx
+msgid "Accuracy (95% ladder)"
+msgstr "Precisión (escala de 95%)"
+
+#: src/routes/dan-estimates.tsx
 msgid "Accuracy (96% ladder)"
 msgstr "Precisión (escala de 96%)"
+
+#: src/routes/dan-estimates.tsx
+msgid "Accuracy (97% ScoreV2 ladder)"
+msgstr "Precisión (escala de 97% ScoreV2)"
 
 #. placeholder {0}: formatAccuracy(event.accuracy)
 #: src/routes/snipes.tsx
@@ -2542,6 +2570,14 @@ msgstr "Beatmaps jugados en {countryName}"
 #: src/routes/dan-estimates.tsx
 msgid "below 92%"
 msgstr "menos de 92%"
+
+#: src/routes/dan-estimates.tsx
+msgid "below 94%"
+msgstr "menos de 94%"
+
+#: src/routes/dan-estimates.tsx
+msgid "below 96%"
+msgstr "menos de 96%"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Below the credit that sets the estimate"
@@ -9417,6 +9453,10 @@ msgstr "Regular"
 msgid "Regular and LN"
 msgstr "Regular y LN"
 
+#: src/routes/dan-estimates.tsx
+msgid "Regular ladders"
+msgstr "Escalas regulares"
+
 #: src/lib/skill-axes.ts
 msgid "Release"
 msgstr "Release"
@@ -11566,6 +11606,10 @@ msgid "the chart's full level"
 msgstr "el nivel completo del chart"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.33"
+msgstr "el nivel del chart -0.33"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.45"
 msgstr "el nivel del chart -0.45"
 
@@ -11574,20 +11618,56 @@ msgid "the chart's level -0.63"
 msgstr "el nivel del chart -0.63"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.75"
+msgstr "el nivel del chart -0.75"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.85"
+msgstr "el nivel del chart -0.85"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level -1"
 msgstr "el nivel del chart -1"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.14"
+msgstr "el nivel del chart +0.14"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.18"
+msgstr "el nivel del chart +0.18"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.28"
+msgstr "el nivel del chart +0.28"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.35"
 msgstr "el nivel del chart +0.35"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.49"
+msgstr "el nivel del chart +0.49"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.53"
+msgstr "el nivel del chart +0.53"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.7"
 msgstr "el nivel del chart +0.7"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.86"
+msgstr "el nivel del chart +0.86"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +1.1"
 msgstr "el nivel del chart +1.1"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +1.18"
+msgstr "el nivel del chart +1.18"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +1.5"
@@ -11762,8 +11842,8 @@ msgid "The same goes for any session where you never set a score on a ranked, qu
 msgstr "Lo mismo pasa con cualquier sesión en la que no hayas hecho ningún score en un chart ranked, qualified o loved: el tracking nunca se entera de que estás jugando, así que tampoco se trackea nada de esa sesión. <0>Por qué pasa esto</0>. Si tu estimación sale baja, normalmente es por eso, y lo único que lo arregla es jugar más."
 
 #: src/routes/dan-estimates.tsx
-msgid "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
-msgstr "La misma curva se apoya en el mínimo de cada escala, así que en 4K LN se mide contra 97% y deja de acreditar en 93%. Un crédito por debajo del mínimo siempre queda al menos un paso bajo el nivel del chart: quedarse corto nunca se lee como el clear completo."
+#~ msgid "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
+#~ msgstr "La misma curva se apoya en el mínimo de cada escala, así que en 4K LN se mide contra 97% y deja de acreditar en 93%. Un crédito por debajo del mínimo siempre queda al menos un paso bajo el nivel del chart: quedarse corto nunca se lee como el clear completo."
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."

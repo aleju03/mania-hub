@@ -387,29 +387,18 @@ function DanEstimatesPage() {
             <Trans>
               A pass right at the bar credits the chart's full level, exactly as passing the course
               would. Accuracy above the bar credits more, and a near miss under it still credits
-              something: from 4 points under the bar, a play counts as a clear of a lower level,
-              bottoming out one full level down. On the 96% ladders that reads:
+              something: a play counts as a clear of a lower level, bottoming out one full level down
+              at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN
+              ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's
+              bonus is flattened for the same reason:
             </Trans>
           </P>
-          <Table
-            head={[t`Accuracy (96% ladder)`, t`Credit`]}
-            rows={[
-              ["100%", t`the chart's level +1.5`],
-              ["99.5%", t`the chart's level +1.1`],
-              ["99%", t`the chart's level +0.7`],
-              ["98%", t`the chart's level +0.35`],
-              [t`96% (the bar)`, t`the chart's full level`],
-              ["95%", t`the chart's level -0.45`],
-              ["94%", t`the chart's level -0.63`],
-              ["92%", t`the chart's level -1`],
-              [t`below 92%`, t`nothing`],
-            ]}
-          />
+          <CreditCurveTabs />
           <P>
             <Trans>
-              The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and
-              stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own
-              level: a near miss never reads as the full clear.
+              A sub-bar credit is always at least a step under the chart's own level, so a near miss
+              never reads as the full clear. On 4K LN that step is at least three quarters of a
+              level.
             </Trans>
           </P>
           <P>
@@ -1148,6 +1137,87 @@ function DanDistribution({ rows }: { rows: Array<{ level: string; players: numbe
         ))}
       </AnimatePresence>
     </motion.div>
+  );
+}
+
+/* One credit table per ladder family, tabbed: the three curves share a shape
+   but not their numbers (the LN cutoff is 1 point, and 4K LN's bonus is
+   damped), and a single table with prose exceptions undersold exactly the
+   ladder people argue about. Values mirror dan-credit.ts. */
+function CreditCurveTabs() {
+  const { t } = useLingui();
+  const [tab, setTab] = useState(0);
+  const tabs = [
+    {
+      label: t`Regular ladders`,
+      head: [t`Accuracy (96% ladder)`, t`Credit`],
+      rows: [
+        ["100%", t`the chart's level +1.5`],
+        ["99.5%", t`the chart's level +1.1`],
+        ["99%", t`the chart's level +0.7`],
+        ["98%", t`the chart's level +0.35`],
+        [t`96% (the bar)`, t`the chart's full level`],
+        ["95%", t`the chart's level -0.45`],
+        ["94%", t`the chart's level -0.63`],
+        ["92%", t`the chart's level -1`],
+        [t`below 92%`, t`nothing`],
+      ],
+    },
+    {
+      label: t`4K LN`,
+      head: [t`Accuracy (97% ScoreV2 ladder)`, t`Credit`],
+      rows: [
+        ["100%", t`the chart's level +0.7`],
+        ["99.5%", t`the chart's level +0.53`],
+        ["99%", t`the chart's level +0.35`],
+        ["98%", t`the chart's level +0.18`],
+        [t`97% (the bar)`, t`the chart's full level`],
+        ["96.9%", t`the chart's level -0.75`],
+        ["96.4%", t`the chart's level -0.75`],
+        ["96.2%", t`the chart's level -0.85`],
+        ["96%", t`the chart's level -1`],
+        [t`below 96%`, t`nothing`],
+      ],
+    },
+    {
+      label: t`6K/7K LN`,
+      head: [t`Accuracy (95% ladder)`, t`Credit`],
+      rows: [
+        ["100%", t`the chart's level +1.5`],
+        ["99.5%", t`the chart's level +1.18`],
+        ["99%", t`the chart's level +0.86`],
+        ["98%", t`the chart's level +0.49`],
+        ["97%", t`the chart's level +0.28`],
+        ["96%", t`the chart's level +0.14`],
+        [t`95% (the bar)`, t`the chart's full level`],
+        ["94.9%", t`the chart's level -0.33`],
+        ["94.5%", t`the chart's level -0.63`],
+        ["94%", t`the chart's level -1`],
+        [t`below 94%`, t`nothing`],
+      ],
+    },
+  ];
+  const active = tabs[tab];
+  return (
+    <div className="space-y-3">
+      <div role="tablist" className="flex gap-1 border-b border-osu-b3/50">
+        {tabs.map((entry, index) => (
+          <button
+            key={entry.label}
+            type="button"
+            role="tab"
+            aria-selected={index === tab}
+            onClick={() => setTab(index)}
+            className={`-mb-px border-b-2 px-3 py-1.5 text-[13px] font-bold transition-colors sm:text-sm ${
+              index === tab ? "border-white text-white" : "border-transparent text-osu-f2 hover:text-osu-f1"
+            }`}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </div>
+      <Table head={active.head} rows={active.rows} />
+    </div>
   );
 }
 

@@ -21,12 +21,30 @@ import { danTableCeilingFor, danTableFloorFor } from "./chart-classifier.js";
  *   2026-08-27: LN drift ran double every other ladder's). Against the fixed
  *   window a 100% there tops out around +0.5 to +0.7 instead;
  *   below the bar, on s = (bar - accuracy) / window, so the credit window
- *   always spans the same number of accuracy points under the bar.
+ *   spans a fixed number of accuracy points under the bar - four on the rice
+ *   ladders, narrower on LN (danCreditBelowBarWindowFor).
  */
 export type DanCreditAnchors = ReadonlyArray<readonly [at: number, offset: number]>;
 
 /** How far under a ladder's bar a pass still credits something, in accuracy points. */
 export const DAN_CREDIT_BELOW_BAR_WINDOW = 0.04;
+
+/**
+ * The LN ladders' own, much narrower decay window. Accuracy is cheap to hold
+ * on long notes (the same argument behind the bonus damping and the 4K
+ * near-bar cap), so four points under an LN bar is a routine accuracy nowhere
+ * near the course requirement, and those credits dominated 4K LN even after
+ * the v7 bonus cool-off (measured 2026-08-28: 96.3% of its best-5 windows
+ * carried a sub-bar credit, mean drift +0.89 vs +0.63 on 4K rice). One point
+ * under the bar keeps only the near-miss band: 96%+ against 4K LN's 97%
+ * ScoreV2 bar, 94%+ against the 6K/7K 95% stable bar.
+ */
+export const DAN_CREDIT_LN_BELOW_BAR_WINDOW = 0.01;
+
+/** The ladder-aware decay window, mirroring danCreditNearBarCapFor's shape. */
+export function danCreditBelowBarWindowFor(side: "rc" | "ln", _keyCount: number): number {
+  return side === "ln" ? DAN_CREDIT_LN_BELOW_BAR_WINDOW : DAN_CREDIT_BELOW_BAR_WINDOW;
+}
 
 /**
  * THE tuning knob for the bonus half. At a 96% bar this reads: 96% -> +0,
@@ -111,7 +129,10 @@ export function danCreditOffset(accuracy: number, bar: number, options: DanCredi
   if ((options.aboveBarScale ?? "headroom") === "delta") {
     return interpolateAnchors(aboveBar, Math.max(0, delta));
   }
-  const headroom = Math.max(1 - bar, window);
+  // The bonus always scores against at least the standard 4-point span, not
+  // the caller's decay window: narrowing a ladder's window (4K LN) tightens
+  // what a near-miss credits without re-heating the bonus v7 cooled.
+  const headroom = Math.max(1 - bar, DAN_CREDIT_BELOW_BAR_WINDOW);
   const t = headroom > 0 ? Math.min(1, Math.max(0, delta) / headroom) : 1;
   return interpolateAnchors(aboveBar, t);
 }
@@ -120,13 +141,12 @@ export function danCreditOffset(accuracy: number, bar: number, options: DanCredi
  * The ladder-aware near-bar cap. 0.26 is one hundredth inside the "-" tier of
  * parseDan and danTableLabelFor (their "-" band opens at -0.25), so a sub-bar
  * credit on those ladders prints as at least the chart's level with a minus.
- * The 4K LN cap is 0.75, and its floor is twofold: parseLnDan has no
- * reachable minus tier at all (its "-" wants an offset of -0.7, but rounding
- * keeps the offset inside [-0.5, 0.5]), so anything under 0.52 would round a
- * near-miss back up to a bare clear; and stable accuracy is cheap to hold on
- * long notes, so an LN near-miss is priced at least three quarters of a level
- * down rather than the 0.52 label minimum (same 2026-08-27 measurement as the
- * bonus damping above).
+ * The 4K LN cap is 0.75 because stable accuracy is cheap to hold on long
+ * notes, so an LN near-miss is priced at least three quarters of a level down
+ * (same 2026-08-27 measurement as the bonus damping above). It used to also
+ * carry a label argument - parseLnDan's minus tier was unreachable, so a
+ * shallower cap would print a near-miss as a bare clear - but parseLnDan uses
+ * parseDan's bands now and the pricing argument stands on its own.
  *
  * For a chart whose rawDan is not an integer this is a floor on the credit
  * rather than a label guarantee (a 15.2 chart credited at -0.26 still prints
@@ -153,7 +173,10 @@ export function creditedDanFor(
   side: "rc" | "ln",
   keyCount: number,
 ): number | null {
-  const offset = danCreditOffset(accuracy, bar, { nearBarCap: danCreditNearBarCapFor(side, keyCount) });
+  const offset = danCreditOffset(accuracy, bar, {
+    nearBarCap: danCreditNearBarCapFor(side, keyCount),
+    belowBarWindow: danCreditBelowBarWindowFor(side, keyCount),
+  });
   if (offset == null) return null;
   let credited = chartDan + offset;
   const ceiling = danTableCeilingFor(side, keyCount);

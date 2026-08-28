@@ -4,6 +4,7 @@ import { loadStoredRateDanVerdicts } from "../features/dan-estimates.js";
 import {
   PLAYER_SKILLS_VERSION,
   collectDanClearsForTest,
+  danClearAverageWindowFor,
   danSideFromClearEvidenceForTest,
   loadChartSkillInfo,
 } from "../features/player-skills.js";
@@ -133,7 +134,8 @@ for (const row of rows) {
 
       if (newSide) {
         stats.windows += 1;
-        const window = [...sideClears].sort((a, b) => b.creditedDan - a.creditedDan).slice(0, 5);
+        const window = [...sideClears].sort((a, b) => b.creditedDan - a.creditedDan)
+          .slice(0, danClearAverageWindowFor(side, keyCount));
         if (window.some((clear) => clear.accuracy < clear.bar - 1e-9)) stats.subBarShareOfWindows += 1;
       }
     }

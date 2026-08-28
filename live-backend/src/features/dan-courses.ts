@@ -395,11 +395,9 @@ function creditPass(pass: CoursePass, options: DanCourseCreditOptions, statusByB
     accuracy = stable ?? displayed;
     threshold += options.stableEquivalentV2BarOffset;
   }
-  // 4K LN labels through parseLnDan, whose minus tier is unreachable after
-  // rounding (its "-" wants an offset of -0.7 but rounding keeps offsets
-  // inside [-0.5, 0.5]), so a sub-bar course credit in this table's range
-  // would round back up and read as a full clear: that ladder credits from
-  // the bar up only.
+  // The 4K LN courses credit from the bar up only: the _Underjoy table is a
+  // 97% ScoreV2 pass bar with nothing under it, so a sub-bar run is a fail
+  // rather than a discounted clear.
   const allowBelowBar = !(course.keyCount === 4 && course.side === "ln");
   const offset = danCourseCreditOffset(accuracy, threshold, allowBelowBar);
   if (offset == null) return null;

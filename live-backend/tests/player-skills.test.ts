@@ -7,6 +7,7 @@ import {
   PLAYER_SKILLS_VERSION,
   aggregateSsrs,
   computePlayerSkillRatings,
+  danClearAverageWindowFor,
   estimateWifeAccuracy,
   getPlayerSkillBreakdown,
   getPlayRate,
@@ -687,7 +688,7 @@ describe("computePlayerSkillRatings", () => {
       // 7.0 / 6.3 / 6.0 / 5.4 average to 6.18. If chart 109's ln half (7.0)
       // leaked in, the average would be 6.34 instead.
       expect(dan.ln?.rawDan).toBe(6.18);
-      expect(dan.ln?.label).toBe("6");
+      expect(dan.ln?.label).toBe("6+");
       expect(dan.ln?.clears).toBe(2);
     });
   });
@@ -1576,9 +1577,9 @@ describe("getPlayerSkillBreakdown", () => {
       expect(byKeyCount.get(6)?.dan?.rc?.label).toBe("9++");
       expect(byKeyCount.get(6)?.dan?.ln?.label).toBe("finish");
       expect(byKeyCount.get(4)?.dan?.rc?.label).toBe("alpha++");
-      // The 4K LN ladder runs to 17 (Yeehee), so a 16.2 is a real LN 16 rather
-      // than something folded onto the old 15 ceiling.
-      expect(byKeyCount.get(4)?.dan?.ln?.label).toBe("16");
+      // The 4K LN ladder runs to 17 (Yeehee), so a 16.2 is a real LN 16+
+      // rather than something folded onto the old 15 ceiling.
+      expect(byKeyCount.get(4)?.dan?.ln?.label).toBe("16+");
     });
   });
 });
@@ -1749,5 +1750,14 @@ describe("danTableLabelFor", () => {
     expect(danTableVerdictLabelFor(12.4, "ln", 6)).toBe("mystery++");
     // Continuous credit labeling deliberately keeps the shared player bands.
     expect(danTableLabelFor(11.6, "ln", 6)).toBe("mystery-");
+  });
+});
+
+describe("danClearAverageWindowFor", () => {
+  it("averages ten clears on 4K LN, five everywhere else", () => {
+    expect(danClearAverageWindowFor("ln", 4)).toBe(10);
+    expect(danClearAverageWindowFor("rc", 4)).toBe(5);
+    expect(danClearAverageWindowFor("ln", 6)).toBe(5);
+    expect(danClearAverageWindowFor("ln", 7)).toBe(5);
   });
 });

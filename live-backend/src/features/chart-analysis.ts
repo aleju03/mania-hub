@@ -1898,7 +1898,7 @@ export async function recomputeDtRateChunk(
  * which keeps its columns as they were. Shared with the LN-primary re-pin
  * sweep, which has to rewrite rows this one-shot sweep already finished.
  */
-async function storeDtRateVerdict(db: Db, beatmapId: number): Promise<boolean> {
+export async function storeDtRateVerdict(db: Db, beatmapId: number): Promise<boolean> {
   const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
   if (!osuText) return false;
   try {
