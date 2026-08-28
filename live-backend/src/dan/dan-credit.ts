@@ -47,11 +47,15 @@ export function danCreditBelowBarWindowFor(side: "rc" | "ln", _keyCount: number)
 }
 
 /**
- * THE tuning knob for the bonus half. At a 96% bar this reads: 96% -> +0,
- * 98% -> +0.35, 99% -> +0.7, 99.5% -> +1.1, 100% -> +1.5.
+ * THE tuning knob for the bonus half. The first quarter of the span is a flat
+ * zone: a pass in the point above the bar is a bare clear, not a bonus, so at
+ * a 96% bar this reads: 96-96.99% -> +0, 98% -> +0.35, 99% -> +0.7,
+ * 99.5% -> +1.1, 100% -> +1.5 (the anchors above the flat zone are unchanged
+ * from before it existed).
  */
 export const DAN_CREDIT_ABOVE_BAR_ANCHORS: DanCreditAnchors = [
   [0, 0],
+  [0.25, 0],
   [0.5, 0.35],
   [0.75, 0.7],
   [0.875, 1.1],
@@ -60,11 +64,15 @@ export const DAN_CREDIT_ABOVE_BAR_ANCHORS: DanCreditAnchors = [
 
 /**
  * The decay half, before the near-bar cap clamps its top. At a 96% bar:
- * 95% -> -0.445, 94% -> -0.63, 92% -> -1.0, and below 92% no credit at all.
+ * 95% -> -0.51, 94% -> -0.76, 92% -> -1.25, and below 92% no credit at all.
+ * The bottom deepened from -1 (2026-08-28): a scrape at the very edge of the
+ * window was still crediting inside the next level's "+" band (92.09% on an
+ * epsilon+ chart printed delta+/delta++), and the owner's read is that a pass
+ * a full window under the bar is worth a bare level down, no more.
  */
 export const DAN_CREDIT_BELOW_BAR_ANCHORS: DanCreditAnchors = [
   [0, -0.26],
-  [1, -1],
+  [1, -1.25],
 ];
 
 // Both sides of the comparison are decimals, so a pass sitting exactly ON an

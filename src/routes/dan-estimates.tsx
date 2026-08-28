@@ -389,11 +389,12 @@ function DanEstimatesPage() {
           <P>
             <Trans>
               A pass right at the bar credits the chart's full level, exactly as passing the course
-              would. Accuracy above the bar credits more, and a near miss under it still credits
-              something: a play counts as a clear of a lower level, bottoming out one full level down
-              at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN
-              ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's
-              bonus is flattened for the same reason:
+              would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare
+              clear, not a bonus. Above that the bonus ramps up, and a near miss under the bar
+              still credits something: a play counts as a clear of a lower level, bottoming out a
+              level and a quarter down at the cutoff. The regular ladders keep crediting to 4
+              points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to
+              hold on long notes, and 4K LN's bonus is flattened for the same reason:
             </Trans>
           </P>
           <CreditCurveTabs />
@@ -1193,10 +1194,10 @@ function CreditCurveTabs() {
         ["99.5%", t`the chart's level +1.1`],
         ["99%", t`the chart's level +0.7`],
         ["98%", t`the chart's level +0.35`],
-        [t`96% (the bar)`, t`the chart's full level`],
-        ["95%", t`the chart's level -0.45`],
-        ["94%", t`the chart's level -0.63`],
-        ["92%", t`the chart's level -1`],
+        [t`96-96.99% (the bar)`, t`the chart's full level`],
+        ["95%", t`the chart's level -0.51`],
+        ["94%", t`the chart's level -0.76`],
+        ["92%", t`the chart's level -1.25`],
         [t`below 92%`, t`nothing`],
       ],
     },
@@ -1207,12 +1208,11 @@ function CreditCurveTabs() {
         ["100%", t`the chart's level +0.7`],
         ["99.5%", t`the chart's level +0.53`],
         ["99%", t`the chart's level +0.35`],
-        ["98%", t`the chart's level +0.18`],
-        [t`97% (the bar)`, t`the chart's full level`],
+        [t`97-98% (the bar)`, t`the chart's full level`],
         ["96.9%", t`the chart's level -0.75`],
-        ["96.4%", t`the chart's level -0.75`],
-        ["96.2%", t`the chart's level -0.85`],
-        ["96%", t`the chart's level -1`],
+        ["96.4%", t`the chart's level -0.85`],
+        ["96.2%", t`the chart's level -1.05`],
+        ["96%", t`the chart's level -1.25`],
         [t`below 96%`, t`nothing`],
       ],
     },
@@ -1224,12 +1224,11 @@ function CreditCurveTabs() {
         ["99.5%", t`the chart's level +1.18`],
         ["99%", t`the chart's level +0.86`],
         ["98%", t`the chart's level +0.49`],
-        ["97%", t`the chart's level +0.28`],
-        ["96%", t`the chart's level +0.14`],
-        [t`95% (the bar)`, t`the chart's full level`],
-        ["94.9%", t`the chart's level -0.33`],
-        ["94.5%", t`the chart's level -0.63`],
-        ["94%", t`the chart's level -1`],
+        ["97%", t`the chart's level +0.21`],
+        [t`95-96.25% (the bar)`, t`the chart's full level`],
+        ["94.9%", t`the chart's level -0.36`],
+        ["94.5%", t`the chart's level -0.76`],
+        ["94%", t`the chart's level -1.25`],
         [t`below 94%`, t`nothing`],
       ],
     },

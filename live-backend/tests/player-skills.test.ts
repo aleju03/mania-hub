@@ -814,15 +814,16 @@ describe("computePlayerSkillRatings", () => {
         identity: `official:${beatmapId}:${accuracy}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
         values: { Overall: 20 }, patterns: [], accuracy, stableAccuracy: accuracy,
       });
-      // The motivating cases: a 92% on an epsilon+ chart weighs a full level
-      // down (delta+), a 99.5% weighs +1.1 up, and 91.9% is off the window.
+      // The motivating cases: a 92% on an epsilon+ chart weighs a level and a
+      // quarter down (plain delta, never delta+), a 99.5% weighs +1.1 up, and
+      // 91.9% is off the window.
       const spread = collectDanClearsForTest(
         4,
         [stablePlay(261, 0.92), stablePlay(262, 0.995), stablePlay(263, 0.919)],
         info,
       );
       expect(spread.map((clear) => clear.play.beatmapId)).toEqual([261, 262]);
-      expect(spread[0].creditedDan).toBeCloseTo(14.15, 6);
+      expect(spread[0].creditedDan).toBeCloseTo(13.9, 6);
       expect(spread[0].chartDan).toBeCloseTo(15.15, 9);
       expect(spread[1].creditedDan).toBeCloseTo(16.25, 6);
 
@@ -830,7 +831,7 @@ describe("computePlayerSkillRatings", () => {
       // the decay already priced the misses, so they are clears, just cheaper.
       const scrapes = [261, 262, 263, 264].map((id) => stablePlay(id, 0.92));
       const side = danSideFromClearsForTest(4, "rc", scrapes, info)!;
-      expect(side.rawDan).toBe(14.15);
+      expect(side.rawDan).toBe(13.9);
     });
   });
 
@@ -867,8 +868,9 @@ describe("computePlayerSkillRatings", () => {
       const above = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.976)), infoByBeatmap);
       expect(above.length).toBe(4);
       expect(above.every((clear) => clear.side === "ln" && clear.chartDan === 7)).toBe(true);
-      // 97.6% is over the converted bar, so the credit is a small bonus.
-      for (const clear of above) expect(clear.creditedDan).toBeGreaterThan(7);
+      // 97.6% is over the converted bar but inside the flat zone, so it is a
+      // bare clear of the chart's level: full credit, no bonus.
+      for (const clear of above) expect(clear.creditedDan).toBeCloseTo(7, 9);
     });
   });
 
@@ -1116,10 +1118,11 @@ describe("computePlayerSkillRatings", () => {
         [242, 9.5, "ln"],
       ]);
       // The accuracy credit applies to rate verdicts on the same terms: 98%
-      // stable is +0.35 over the rc bar, and the ln clear is judged on the
-      // converted v2 bar (97.5%) against the window, a much smaller bonus.
+      // stable is +0.35 over the rc bar, while the ln clear is judged on the
+      // converted v2 bar (97.5%) against the window and sits inside the flat
+      // zone, so it credits the bare level.
       expect(clears[0].creditedDan).toBeCloseTo(9.85, 6);
-      expect(clears[1].creditedDan).toBeCloseTo(9.5875, 6);
+      expect(clears[1].creditedDan).toBeCloseTo(9.5, 6);
 
       // A 1.5x play on a chart with no dan_dt_json falls back to the stored
       // 150 verdict instead of contributing nothing.

@@ -3280,7 +3280,13 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // routing reads the live line immediately; DT/HT clears on those charts wait
 // on the chart re-pin sweep, which is why rateVerdictsLandedAfter lists its
 // done key and re-runs this sweep once it lands.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v11";
+// v12: the credit curve cooled on both halves (dan-credit.ts, 2026-08-28).
+// The first point above a bar is now a flat zone crediting the chart's bare
+// level (a 96.9% on a 96% ladder no longer earns a bonus), and the decay
+// bottom deepened from -1 to -1.25 so a bottom-of-window scrape credits a
+// bare level down (92.09% on epsilon+ prints delta, not delta+). Every
+// ladder's stored verdicts are stale.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v12";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

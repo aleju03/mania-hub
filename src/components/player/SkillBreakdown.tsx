@@ -203,7 +203,7 @@ const SCALE_HINT_SEEN_KEY = "mania-hub-keymode-scale-hint-seen";
 
 // --- Compact card body (My Data) ---
 
-export function SkillBreakdownBody({ skills, mode, own = false }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null; own?: boolean }) {
+export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null; own?: boolean; onSelectDan?: (side: "rc" | "ln") => void }) {
   const { i18n } = useLingui();
   // Surface the scale warning at the moment it matters: right after the
   // viewer flips to another keymode tab and is about to compare numbers.
@@ -277,7 +277,7 @@ export function SkillBreakdownBody({ skills, mode, own = false }: { skills: MyDa
         ) : null}
       </AnimatePresence>
       <div className="mb-3">
-        <DanChips mode={mode!} />
+        <DanChips mode={mode!} onSelect={onSelectDan} />
       </div>
       <div className="space-y-2">
         {entries.map((entry) => (

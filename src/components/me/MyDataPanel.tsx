@@ -27,6 +27,7 @@ import {
 } from "../../lib/my-data";
 import { openLiveEventSource } from "../../lib/live-backend";
 import { SkillBreakdownBody } from "../player/SkillBreakdown";
+import { DanEvidenceModal } from "../player/DanEvidenceModal";
 import { qualifyingSkillModes, skillRatingAccent } from "../../lib/skill-axes";
 import { getScoreTimestamp } from "../../lib/score";
 import { MeScoreRow } from "./MeScoreRow";
@@ -196,6 +197,7 @@ export function MyDataPanel() {
   const [topLimit, setTopLimit] = useState(MY_DATA_PAGE_SIZE);
   const [pageLoading, setPageLoading] = useState<"tracked" | "top" | null>(null);
   const [skills, setSkills] = useState<MyDataSkillBreakdown | null>(null);
+  const [selectedDan, setSelectedDan] = useState<{ side: "rc" | "ln"; keyCount: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const newKeysRef = useRef<Set<string>>(new Set());
   const filterFetchReadyRef = useRef(false);
@@ -596,8 +598,22 @@ export function MyDataPanel() {
                 accent={skillRatingAccent(activeSkillMode)}
                 right={skillModes.length > 1 ? <KeymodeToggle modes={skillModes} active={activeSkillMode?.keyCount ?? null} onChange={setSkillModeKey} /> : undefined}
               >
-                <SkillBreakdownBody skills={skills} mode={activeSkillMode} own />
+                <SkillBreakdownBody
+                  skills={skills}
+                  mode={activeSkillMode}
+                  own
+                  onSelectDan={activeSkillMode ? (side) => setSelectedDan({ side, keyCount: activeSkillMode.keyCount }) : undefined}
+                />
               </InsightCard>
+              {selectedDan ? (
+                <DanEvidenceModal
+                  userId={viewer.id}
+                  username={username}
+                  keyCount={selectedDan.keyCount}
+                  side={selectedDan.side}
+                  onClose={() => setSelectedDan(null)}
+                />
+              ) : null}
 
               {summary && summary.rhythm.sampleSize > 0 ? (
                 <InsightCard title={t`When you play`} accent="#57aeba" right={summary.rhythm.timezone}>

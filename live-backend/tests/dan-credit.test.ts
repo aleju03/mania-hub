@@ -12,6 +12,11 @@ import { danLabelForTest } from "../src/features/player-skills.js";
 describe("danCreditOffset", () => {
   it("hits the above-bar anchors on a 96% bar", () => {
     expect(danCreditOffset(0.96, 0.96)).toBeCloseTo(0, 9);
+    // The first point above the bar is a flat zone: a 96.x% pass is a bare
+    // clear of the chart's level, not a bonus.
+    expect(danCreditOffset(0.965, 0.96)).toBeCloseTo(0, 9);
+    expect(danCreditOffset(0.969, 0.96)).toBeCloseTo(0, 9);
+    expect(danCreditOffset(0.97, 0.96)).toBeCloseTo(0, 9);
     expect(danCreditOffset(0.98, 0.96)).toBeCloseTo(0.35, 6);
     expect(danCreditOffset(0.99, 0.96)).toBeCloseTo(0.7, 6);
     expect(danCreditOffset(0.995, 0.96)).toBeCloseTo(1.1, 6);
@@ -26,17 +31,26 @@ describe("danCreditOffset", () => {
     expect(danCreditOffset(1, 0.95)).toBeCloseTo(1.5, 9);
     // A 97% bar has only 3 points of raw headroom, and accuracy comes cheap
     // on the ladder that uses it (4K LN), so the bonus scores against the
-    // window instead: 98.5% is t = 0.375, and 100% tops out at +0.7.
-    expect(danCreditOffset(0.985, 0.97)).toBeCloseTo(0.2625, 6);
+    // window instead: 98.5% is t = 0.375 (halfway out of the flat zone), and
+    // 100% tops out at +0.7.
+    expect(danCreditOffset(0.985, 0.97)).toBeCloseTo(0.175, 6);
     expect(danCreditOffset(1, 0.97)).toBeCloseTo(0.7, 6);
   });
 
   it("decays below the bar and stops at the credit window", () => {
-    expect(danCreditOffset(0.955, 0.96)).toBeCloseTo(-0.3525, 6);
-    expect(danCreditOffset(0.94, 0.96)).toBeCloseTo(-0.63, 6);
-    expect(danCreditOffset(0.92, 0.96)).toBeCloseTo(-1, 9);
+    expect(danCreditOffset(0.955, 0.96)).toBeCloseTo(-0.38375, 6);
+    expect(danCreditOffset(0.94, 0.96)).toBeCloseTo(-0.755, 6);
+    expect(danCreditOffset(0.92, 0.96)).toBeCloseTo(-1.25, 9);
     expect(danCreditOffset(0.9199, 0.96)).toBeNull();
     expect(danCreditOffset(Number.NaN, 0.96)).toBeNull();
+  });
+
+  it("prices a bottom-of-window scrape a bare level down: 92.09% on epsilon+ is delta", () => {
+    // The old -1 bottom left 92.09% on an epsilon+ chart inside delta's "+"
+    // band; the deepened -1.25 bottom lands the whole epsilon+ band (15.1 to
+    // just under 15.26) on plain delta.
+    expect(danLabelForTest(creditedDanFor(15.1, 0.9209, 0.96, "rc", 4)!, "rc", 4)).toBe("delta");
+    expect(danLabelForTest(creditedDanFor(15.25, 0.9209, 0.96, "rc", 4)!, "rc", 4)).toBe("delta");
   });
 
   it("is monotone non-decreasing across the whole credited range", () => {
@@ -95,7 +109,7 @@ describe("LN decay windows", () => {
   it("stops 6K/7K LN credit one point under the 95% bar", () => {
     // 94.1% still credits; 93.9% is past the window, where the shared four
     // points used to keep crediting down to 91%.
-    expect(creditedDanFor(10, 0.941, 0.95, "ln", 7)).toBeCloseTo(10 - 0.926, 3);
+    expect(creditedDanFor(10, 0.941, 0.95, "ln", 7)).toBeCloseTo(10 - 1.151, 3);
     expect(creditedDanFor(10, 0.939, 0.95, "ln", 7)).toBeNull();
     expect(creditedDanFor(10, 0.939, 0.95, "ln", 6)).toBeNull();
     // The bonus half still scores against the standard span: 100% is +1.5.
@@ -106,20 +120,20 @@ describe("LN decay windows", () => {
     // 96.1% is a near-miss and still credits (at least the 0.75 cap down);
     // 95.9% is past the window and credits nothing, where the shared 4-point
     // window used to credit it a level down.
-    expect(creditedDanFor(15.15, 0.961, 0.97, "ln", 4)).toBeCloseTo(15.15 - 0.926, 3);
+    expect(creditedDanFor(15.15, 0.961, 0.97, "ln", 4)).toBeCloseTo(15.15 - 1.151, 3);
     expect(creditedDanFor(15.15, 0.959, 0.97, "ln", 4)).toBeNull();
     expect(creditedDanFor(14.35, 0.9661, 0.97, "ln", 4)).toBeCloseTo(14.35 - 0.75, 6);
   });
 
   it("does not re-heat the bonus half: 100% still tops out at +0.7", () => {
     expect(creditedDanFor(10, 1, 0.97, "ln", 4)).toBeCloseTo(10.7, 6);
-    expect(creditedDanFor(10, 0.985, 0.97, "ln", 4)).toBeCloseTo(10.2625, 6);
+    expect(creditedDanFor(10, 0.985, 0.97, "ln", 4)).toBeCloseTo(10.175, 6);
   });
 });
 
 describe("creditedDanFor", () => {
   it("applies the offset and window end to end", () => {
-    expect(creditedDanFor(15.15, 0.92, 0.96, "rc", 4)).toBeCloseTo(14.15, 6);
+    expect(creditedDanFor(15.15, 0.92, 0.96, "rc", 4)).toBeCloseTo(13.9, 6);
     expect(creditedDanFor(15.15, 0.96 - DAN_CREDIT_BELOW_BAR_WINDOW - 0.001, 0.96, "rc", 4)).toBeNull();
   });
 
