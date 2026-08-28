@@ -49,6 +49,34 @@ const MONITOR_THREAD_MIN_RANGE_HOURS = 72;
    that scan is legitimately still running buys nothing — the thread is off the
    serving loop, and giving up on it only throws away the work. */
 const MONITOR_THREAD_TIMEOUT_MS = 300_000;
+/* Hourly rollups: every monitor aggregate a long range needs, pre-summed per
+   UTC hour into small side tables, so a 30-day answer reads ~100k rollup rows
+   plus a bounded raw tail instead of scanning the whole multi-hundred-MB
+   events file (the scan that outran the 300s thread timeout in prod). An hour
+   is only rolled once no future capture can still land in it: capture clamps
+   client timestamps to 24h back, so an hour is complete 25h after it ends,
+   and the raw tail a hybrid read pays is at most that plus one advance
+   interval. Rows keyed by distinct_id are kept per visitor per hour because
+   distinct counts (unique visitors, countries, referrers, timeline buckets)
+   cannot be summed from per-hour totals. */
+const ROLLUP_HOUR_MS = 60 * 60_000;
+const ROLLUP_GRACE_MS = 25 * 60 * 60_000;
+const ROLLUP_INTERVAL_MS = 30 * 60_000;
+const ROLLUP_BOOT_DELAY_MS = 10_000;
+/* Backfill (first deploy: every retained hour at once) runs on the serving
+   loop, because the analytics file has exactly one writer and a second one on
+   a thread would contend the WAL lock against the 1s capture flusher, whose
+   losing batch is dropped. So the work is cut into chunks small enough that
+   each synchronous statement holds the loop tens of milliseconds, with pauses
+   between so requests and SSE writes interleave. */
+const ROLLUP_CHUNK_MS = 6 * 60 * 60_000;
+const ROLLUP_STATEMENT_PAUSE_MS = 25;
+const ROLLUP_CHUNK_PAUSE_MS = 250;
+/* Ranges at and above this read rollups + raw tail when the rollups are close
+   enough behind now that the tail stays bounded (grace + one interval + slack). */
+const HYBRID_MIN_RANGE_HOURS = 48;
+const HYBRID_MAX_TAIL_MS = ROLLUP_GRACE_MS + ROLLUP_INTERVAL_MS + ROLLUP_HOUR_MS * 2;
+
 /* Ceiling on one read of the signed-in roster. Not a display limit: the pp and
    rank sorts have to see every viewer to name the best of them. */
 export const MAX_VIEWER_ROWS = 20_000;
@@ -348,6 +376,9 @@ export class AnalyticsStore {
   private readonly recentVisitorIds = new Map<string, number>();
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private pruneTimer: ReturnType<typeof setInterval> | null = null;
+  private rollupTimer: ReturnType<typeof setInterval> | null = null;
+  private rollupKickTimer: ReturnType<typeof setTimeout> | null = null;
+  private rollupAdvanceInFlight = false;
   private flushing: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<(event: AnalyticsEventRecord) => void>();
   private readonly liveTickets = new Map<string, number>();
@@ -411,6 +442,91 @@ export class AnalyticsStore {
       )
     `);
     await exec(this.db, "create index if not exists idx_analytics_viewers_last_seen on analytics_viewers(last_seen desc)");
+
+    // Hourly monitor rollups (see the ROLLUP_* constants). Column meanings
+    // mirror the raw monitor queries exactly, filter for filter, so a range
+    // answered from rollups and one answered from raw events agree:
+    // events_total counts every non-bot event including distinct_id='server'
+    // (the overview's events figure), events excludes 'server' (the timeline's),
+    // pageviews is non-admin $pageview. The per-visitor pageviews/landings pair
+    // is the bounce query's own measure: every $pageview, admin and '/' alike.
+    await exec(this.db, `
+      create table if not exists analytics_rollup_state (
+        key text primary key,
+        value text not null
+      )
+    `);
+    await exec(this.db, `
+      create table if not exists analytics_hourly_totals (
+        hour_ts integer primary key,
+        events_total integer not null default 0,
+        events integer not null default 0,
+        pageviews integer not null default 0,
+        shares integer not null default 0
+      )
+    `);
+    await exec(this.db, `
+      create table if not exists analytics_hourly_visitors (
+        hour_ts integer not null,
+        distinct_id text not null,
+        pageviews integer not null default 0,
+        landings integer not null default 0,
+        primary key (hour_ts, distinct_id)
+      ) without rowid
+    `);
+    // Countries are a separate projection rather than a column on the visitor
+    // row: the raw query counts a visitor once in every country they appeared
+    // from, so a visitor whose geo flips inside one hour needs two rows here.
+    await exec(this.db, `
+      create table if not exists analytics_hourly_countries (
+        hour_ts integer not null,
+        country text not null,
+        distinct_id text not null,
+        primary key (hour_ts, country, distinct_id)
+      ) without rowid
+    `);
+    await exec(this.db, `
+      create table if not exists analytics_hourly_routes (
+        hour_ts integer not null,
+        path text not null,
+        views integer not null default 0,
+        primary key (hour_ts, path)
+      ) without rowid
+    `);
+    await exec(this.db, `
+      create table if not exists analytics_hourly_profiles (
+        hour_ts integer not null,
+        username text not null,
+        views integer not null default 0,
+        last_ts integer not null,
+        last_country text,
+        primary key (hour_ts, username)
+      ) without rowid
+    `);
+    await exec(this.db, `
+      create table if not exists analytics_hourly_replays (
+        hour_ts integer not null,
+        score_id text not null,
+        title text,
+        artist text,
+        difficulty text,
+        player text,
+        cover_url text,
+        views integer not null default 0,
+        last_ts integer not null,
+        last_country text,
+        primary key (hour_ts, score_id)
+      ) without rowid
+    `);
+    await exec(this.db, `
+      create table if not exists analytics_hourly_referrers (
+        hour_ts integer not null,
+        domain text not null,
+        distinct_id text not null,
+        primary key (hour_ts, domain, distinct_id)
+      ) without rowid
+    `);
+
     await this.backfillViewers();
   }
 
@@ -456,13 +572,30 @@ export class AnalyticsStore {
       }, PRUNE_INTERVAL_MS);
       this.pruneTimer.unref();
     }
+    if (!this.rollupTimer) {
+      this.rollupTimer = setInterval(() => {
+        void this.advanceRollups().catch((error) => logWarn("analytics_rollup_failed", errorContext(error)));
+      }, ROLLUP_INTERVAL_MS);
+      this.rollupTimer.unref();
+      // First advance shortly after boot: on the deploy that introduces the
+      // rollups this is the whole backfill, and until it lands long ranges
+      // keep taking the worker-thread path they take today.
+      this.rollupKickTimer = setTimeout(() => {
+        void this.advanceRollups().catch((error) => logWarn("analytics_rollup_failed", errorContext(error)));
+      }, ROLLUP_BOOT_DELAY_MS);
+      this.rollupKickTimer.unref();
+    }
   }
 
   stop(): void {
     if (this.flushTimer) clearInterval(this.flushTimer);
     if (this.pruneTimer) clearInterval(this.pruneTimer);
+    if (this.rollupTimer) clearInterval(this.rollupTimer);
+    if (this.rollupKickTimer) clearTimeout(this.rollupKickTimer);
     this.flushTimer = null;
     this.pruneTimer = null;
+    this.rollupTimer = null;
+    this.rollupKickTimer = null;
   }
 
   /* Accepts one capture body from the proxy: either a single payload or
@@ -856,7 +989,68 @@ export class AnalyticsStore {
     const result = await exec(this.db, "delete from analytics_events where ts < ?", [cutoff]);
     const removed = result.rowsAffected ?? 0;
     if (removed > 0) logInfo("analytics_pruned", { removed, retention_days: this.options.retentionDays });
+    const hourCutoff = Math.floor(cutoff / ROLLUP_HOUR_MS) * ROLLUP_HOUR_MS;
+    for (const table of ROLLUP_TABLES) {
+      await exec(this.db, `delete from ${table} where hour_ts < ?`, [hourCutoff]);
+    }
     return removed;
+  }
+
+  /* Rolls every completed hour (25h old or older, so no clamped client
+     timestamp can still land in it) into the hourly tables, chunked with
+     pauses because it runs on the serving loop (see ROLLUP_CHUNK_MS). Chunks
+     are hour-aligned and each statement replaces its groups whole, so a crash
+     between chunk and state write just redoes that chunk. */
+  async advanceRollups(now = Date.now()): Promise<void> {
+    if (this.rollupAdvanceInFlight) return;
+    this.rollupAdvanceInFlight = true;
+    try {
+      await this.flush();
+      const versionRow = (await exec(this.db, "select value from analytics_rollup_state where key = 'rollup_version'")).rows[0];
+      if (Number(versionRow?.value) !== ROLLUP_VERSION) {
+        for (const table of ROLLUP_TABLES) {
+          await exec(this.db, `delete from ${table}`);
+          await pause(ROLLUP_STATEMENT_PAUSE_MS);
+        }
+        await exec(this.db, "delete from analytics_rollup_state where key = 'rolled_until'");
+        await exec(this.db, "insert or replace into analytics_rollup_state (key, value) values ('rollup_version', ?)", [String(ROLLUP_VERSION)]);
+        logInfo("analytics_rollups_reset", { version: ROLLUP_VERSION });
+      }
+      const target = Math.floor((now - ROLLUP_GRACE_MS) / ROLLUP_HOUR_MS) * ROLLUP_HOUR_MS;
+      let from = await readRollupBound(this.db);
+      if (from == null) {
+        const oldest = Number((await exec(this.db, "select min(ts) as t from analytics_events")).rows[0]?.t);
+        if (!Number.isFinite(oldest) || oldest >= target) {
+          // Nothing old enough to roll yet; record the bound so the next
+          // advance starts here instead of re-probing the events table.
+          await writeRollupBound(this.db, target);
+          return;
+        }
+        const retentionFloor = now - this.options.retentionDays * 24 * 60 * 60_000;
+        from = Math.floor(Math.max(oldest, retentionFloor) / ROLLUP_HOUR_MS) * ROLLUP_HOUR_MS;
+      }
+      if (from >= target) return;
+      const startedFrom = from;
+      const startedAt = Date.now();
+      while (from < target) {
+        const chunkEnd = Math.min(from + ROLLUP_CHUNK_MS, target);
+        for (const statement of rollupStatements(from, chunkEnd)) {
+          await exec(this.db, statement.sql, statement.args);
+          await pause(ROLLUP_STATEMENT_PAUSE_MS);
+        }
+        await writeRollupBound(this.db, chunkEnd);
+        from = chunkEnd;
+        if (from < target) await pause(ROLLUP_CHUNK_PAUSE_MS);
+      }
+      logInfo("analytics_rollups_advanced", {
+        from: startedFrom,
+        to: target,
+        hours: Math.round((target - startedFrom) / ROLLUP_HOUR_MS),
+        took_ms: Date.now() - startedAt,
+      });
+    } finally {
+      this.rollupAdvanceInFlight = false;
+    }
   }
 
   // --- display helpers ---
@@ -934,7 +1128,14 @@ export class AnalyticsStore {
     // on this thread, so it must land before any worker thread reads the file.
     await this.flush();
     const rangeHours = Math.min(720, Math.max(1, Math.round(resolved.rangeHours || 24)));
-    if (rangeHours >= MONITOR_THREAD_MIN_RANGE_HOURS && this.options.databaseUrl?.startsWith("file:") && !import.meta.url.endsWith(".ts")) {
+    // With rollups caught up, a long range is a bounded raw tail plus a few
+    // reads over small hourly tables: the same order of work as the short
+    // ranges that already run inline, so the thread (and its timeout) only
+    // remains for the window where the rollups are still behind (first boot
+    // after the deploy that introduced them, or a backend that was down).
+    const rollupBound = rangeHours >= HYBRID_MIN_RANGE_HOURS ? await readRollupBound(this.db) : null;
+    const rollupsReady = rollupBound != null && rollupBound >= resolved.now - HYBRID_MAX_TAIL_MS;
+    if (!rollupsReady && rangeHours >= MONITOR_THREAD_MIN_RANGE_HOURS && this.options.databaseUrl?.startsWith("file:") && !import.meta.url.endsWith(".ts")) {
       let threadRan = true;
       let data: AnalyticsMonitorResponse | null = null;
       try {
@@ -955,6 +1156,12 @@ export class AnalyticsStore {
         logWarn("analytics_monitor_thread_fell_back_inline", { range_hours: rangeHours });
       }
     }
+    // Deliberately not forwarding the bound read above: after a 300s thread
+    // wait it can be stale, and during the backfill the rollups may have
+    // caught up in the meantime. computeMonitorSnapshot re-reads it (one point
+    // query) and takes the hybrid path if it can, so a timed-out thread never
+    // forces a full raw scan onto the serving loop that the rollups could
+    // already answer.
     return computeMonitorSnapshot(this.db, this.options, resolved);
   }
 
@@ -982,6 +1189,120 @@ export class AnalyticsStore {
       })),
     };
   }
+}
+
+const ROLLUP_TABLES = [
+  "analytics_hourly_totals",
+  "analytics_hourly_visitors",
+  "analytics_hourly_countries",
+  "analytics_hourly_routes",
+  "analytics_hourly_profiles",
+  "analytics_hourly_replays",
+  "analytics_hourly_referrers",
+] as const;
+
+/* Bump when a rollup statement's shape or meaning changes: an advance that
+   finds a different stored version clears every rollup table and re-backfills,
+   so rows built by old code never mix with new reads. (v2: countries moved
+   from a column on the visitor row to their own multi-row projection.) */
+const ROLLUP_VERSION = 2;
+
+// Deliberately not unref'd: with nothing else holding the loop an unref'd
+// timer lets the process exit mid-advance, and these are sub-second waits.
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/* Exclusive hour boundary below which every event is rolled up. Null until the
+   first advance after the deploy that introduced the rollups. */
+async function readRollupBound(db: Db): Promise<number | null> {
+  const row = (await exec(db, "select value from analytics_rollup_state where key = 'rolled_until'")).rows[0];
+  const value = Number(row?.value);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+async function writeRollupBound(db: Db, boundTs: number): Promise<void> {
+  await exec(db, "insert or replace into analytics_rollup_state (key, value) values ('rolled_until', ?)", [String(boundTs)]);
+}
+
+/* One chunk of hours into all six rollup tables. `insert or replace` per whole
+   (hour, key) group keeps a rerun of the same chunk idempotent; the chunk is
+   hour-aligned so no group is ever half-written from a partial hour. Bare
+   columns beside max(ts) follow SQLite's rule: they come from the newest row
+   in the group, which is what last_country/title/etc. mean. */
+function rollupStatements(chunkStart: number, chunkEnd: number): DbStatement[] {
+  const hourExpr = `(ts / ${ROLLUP_HOUR_MS}) * ${ROLLUP_HOUR_MS}`;
+  const args = [chunkStart, chunkEnd];
+  return [
+    {
+      sql: `insert or replace into analytics_hourly_totals (hour_ts, events_total, events, pageviews, shares)
+        select ${hourExpr} as h,
+          count(*),
+          sum(case when distinct_id != 'server' then 1 else 0 end),
+          sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end),
+          sum(case when event = 'page_shared' then 1 else 0 end)
+        from analytics_events where ts >= ? and ts < ? and is_bot = 0
+        group by h`,
+      args,
+    },
+    {
+      sql: `insert or replace into analytics_hourly_visitors (hour_ts, distinct_id, pageviews, landings)
+        select ${hourExpr} as h, distinct_id,
+          sum(case when event = '$pageview' then 1 else 0 end),
+          sum(case when event = '$pageview' and path = '/' then 1 else 0 end)
+        from analytics_events where ts >= ? and ts < ? and is_bot = 0
+        group by h, distinct_id`,
+      args,
+    },
+    {
+      sql: `insert or ignore into analytics_hourly_countries (hour_ts, country, distinct_id)
+        select distinct ${hourExpr} as h, country, distinct_id
+        from analytics_events
+        where ts >= ? and ts < ? and is_bot = 0 and country is not null`,
+      args,
+    },
+    {
+      sql: `insert or replace into analytics_hourly_routes (hour_ts, path, views)
+        select ${hourExpr} as h, path, count(*)
+        from analytics_events
+        where ts >= ? and ts < ? and is_bot = 0 and event = '$pageview'
+          and path is not null and path != '/' and path not like '/admin/%'
+        group by h, path`,
+      args,
+    },
+    {
+      sql: `insert or replace into analytics_hourly_profiles (hour_ts, username, views, last_ts, last_country)
+        select ${hourExpr} as h, json_extract(props, '$.profile_username') as u, count(*), max(ts), country
+        from analytics_events
+        where ts >= ? and ts < ? and is_bot = 0 and event = '$pageview'
+          and json_extract(props, '$.profile_username') is not null
+        group by h, u`,
+      args,
+    },
+    {
+      sql: `insert or replace into analytics_hourly_replays
+        (hour_ts, score_id, title, artist, difficulty, player, cover_url, views, last_ts, last_country)
+        select ${hourExpr} as h, json_extract(props, '$.replay_score_id') as sid,
+          json_extract(props, '$.replay_title'), json_extract(props, '$.replay_artist'),
+          json_extract(props, '$.replay_difficulty'), json_extract(props, '$.replay_player'),
+          json_extract(props, '$.replay_cover_url'),
+          count(*), max(ts), country
+        from analytics_events
+        where ts >= ? and ts < ? and is_bot = 0 and event = 'replay_view'
+          and json_extract(props, '$.replay_score_id') is not null
+        group by h, sid`,
+      args,
+    },
+    {
+      sql: `insert or ignore into analytics_hourly_referrers (hour_ts, domain, distinct_id)
+        select distinct ${hourExpr} as h, referring_domain, distinct_id
+        from analytics_events
+        where ts >= ? and ts < ? and is_bot = 0 and event = '$pageview' and referring_domain is not null`,
+      args,
+    },
+  ];
 }
 
 export function buildMonitorFeedEvent(displayTimeZone: string, record: AnalyticsEventRecord): AnalyticsFeedEvent {
@@ -1052,10 +1373,33 @@ export function buildMonitorFeedEvent(displayTimeZone: string, record: Analytics
   };
 }
 
-export async function computeMonitorSnapshot(db: Db, options: MonitorComputeOptions, params: { rangeHours: number; recentCountry?: string | null; recentLimit?: number; now: number }): Promise<AnalyticsMonitorResponse> {
+export async function computeMonitorSnapshot(
+  db: Db,
+  options: MonitorComputeOptions,
+  /* `rollupBound` overrides the stored rolled-up boundary: a number forces the
+     hybrid split there, null forces the pure raw scan (tests compare the two),
+     undefined reads the real one. */
+  params: { rangeHours: number; recentCountry?: string | null; recentLimit?: number; now: number; rollupBound?: number | null },
+): Promise<AnalyticsMonitorResponse> {
   const now = params.now;
   const rangeHours = Math.min(720, Math.max(1, Math.round(params.rangeHours || 24)));
-  const since = now - rangeHours * 60 * 60_000;
+  const plainSince = now - rangeHours * 60 * 60_000;
+  /* Long ranges read the hourly rollups for everything before `rawSince` (the
+     rolled-up boundary) and raw events only for the bounded tail after it, so
+     the cost of a 30-day answer no longer grows with the events file. Only
+     taken when the rollups are close enough behind now that the tail stays
+     bounded; otherwise (first boot after the deploy, mid-backfill) the full
+     raw scan below still answers. The range start snaps up to the hour so
+     every aggregate splits exactly at hour boundaries; a long range losing up
+     to an hour at its far edge is not a number anyone can see. */
+  let hybrid: { rawSince: number } | null = null;
+  if (rangeHours >= HYBRID_MIN_RANGE_HOURS && params.rollupBound !== null) {
+    const rolledUntil = params.rollupBound ?? await readRollupBound(db);
+    if (rolledUntil != null && rolledUntil >= now - HYBRID_MAX_TAIL_MS && rolledUntil > plainSince + ROLLUP_HOUR_MS) {
+      hybrid = { rawSince: rolledUntil };
+    }
+  }
+  const since = hybrid ? Math.ceil(plainSince / ROLLUP_HOUR_MS) * ROLLUP_HOUR_MS : plainSince;
   const activeSince = now - ACTIVE_VISITOR_WINDOW_MS;
   const recentSince = now - RECENT_VISITOR_WINDOW_MS;
   const recentCountry = normalizeCountryCode(params.recentCountry) ?? null;
@@ -1064,23 +1408,63 @@ export async function computeMonitorSnapshot(db: Db, options: MonitorComputeOpti
   // Queries run sequentially on purpose: local libsql executes synchronously
   // on the event loop, so a Promise.all here would just serialize anyway
   // while pinning the loop; each await gives other requests a turn.
-  const overview = (await exec(db, `
-    select
-      count(distinct case when ts > ? and distinct_id != 'server' then distinct_id end) as active,
-      count(distinct case when ts > ? and distinct_id != 'server' then distinct_id end) as recent_active,
-      sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews,
-      count(distinct case when distinct_id != 'server' then distinct_id end) as visitors,
-      count(*) as events_total,
-      sum(case when event = 'page_shared' then 1 else 0 end) as shares
-    from analytics_events where ts > ? and is_bot = 0
-  `, [activeSince, recentSince, since])).rows[0];
+  const overview = hybrid
+    ? (await exec(db, `
+      select
+        count(distinct case when ts > ? and distinct_id != 'server' then distinct_id end) as active,
+        count(distinct case when ts > ? and distinct_id != 'server' then distinct_id end) as recent_active,
+        sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews,
+        count(*) as events_total,
+        sum(case when event = 'page_shared' then 1 else 0 end) as shares
+      from analytics_events where ts >= ? and is_bot = 0
+    `, [activeSince, recentSince, hybrid.rawSince])).rows[0]
+    : (await exec(db, `
+      select
+        count(distinct case when ts > ? and distinct_id != 'server' then distinct_id end) as active,
+        count(distinct case when ts > ? and distinct_id != 'server' then distinct_id end) as recent_active,
+        sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews,
+        count(distinct case when distinct_id != 'server' then distinct_id end) as visitors,
+        count(*) as events_total,
+        sum(case when event = 'page_shared' then 1 else 0 end) as shares
+      from analytics_events where ts > ? and is_bot = 0
+    `, [activeSince, recentSince, since])).rows[0];
 
-  const topRoutes = (await exec(db, `
-    select path as p, count(*) as c from analytics_events
-    where event = '$pageview' and ts > ? and is_bot = 0
-      and path is not null and path != '/' and path not like '/admin/%'
-    group by p order by c desc limit 10
-  `, [since])).rows;
+  const rollupTotals = hybrid
+    ? (await exec(db, `
+      select sum(events_total) as events_total, sum(pageviews) as pageviews, sum(shares) as shares
+      from analytics_hourly_totals where hour_ts >= ? and hour_ts < ?
+    `, [since, hybrid.rawSince])).rows[0]
+    : null;
+
+  // Unique visitors cannot be summed across the boundary (the same person can
+  // be on both sides), so the hybrid read unions the identities and counts.
+  const hybridVisitors = hybrid
+    ? (await exec(db, `
+      select count(*) as n from (
+        select distinct_id from analytics_hourly_visitors where hour_ts >= ? and hour_ts < ? and distinct_id != 'server'
+        union
+        select distinct distinct_id from analytics_events where ts >= ? and is_bot = 0 and distinct_id != 'server'
+      )
+    `, [since, hybrid.rawSince, hybrid.rawSince])).rows[0]
+    : null;
+
+  const topRoutes = hybrid
+    ? (await exec(db, `
+      select p, sum(c) as c from (
+        select path as p, views as c from analytics_hourly_routes where hour_ts >= ? and hour_ts < ?
+        union all
+        select path as p, count(*) as c from analytics_events
+        where event = '$pageview' and ts >= ? and is_bot = 0
+          and path is not null and path != '/' and path not like '/admin/%'
+        group by p
+      ) group by p order by c desc limit 10
+    `, [since, hybrid.rawSince, hybrid.rawSince])).rows
+    : (await exec(db, `
+      select path as p, count(*) as c from analytics_events
+      where event = '$pageview' and ts > ? and is_bot = 0
+        and path is not null and path != '/' and path not like '/admin/%'
+      group by p order by c desc limit 10
+    `, [since])).rows;
 
   const feedHostClause = options.feedHosts
     ? ` and host in (${options.feedHosts.map(() => "?").join(", ")})`
@@ -1102,41 +1486,95 @@ export async function computeMonitorSnapshot(db: Db, options: MonitorComputeOpti
     order by ts desc limit ?
   `, recentArgs)).rows;
 
-  const topCountries = (await exec(db, `
-    select country as c, count(distinct distinct_id) as n from analytics_events
-    where ts > ? and is_bot = 0 and country is not null
-    group by c order by n desc limit 20
-  `, [since])).rows;
+  const topCountries = hybrid
+    ? (await exec(db, `
+      select c, count(distinct d) as n from (
+        select country as c, distinct_id as d from analytics_hourly_countries
+        where hour_ts >= ? and hour_ts < ?
+        union
+        select country as c, distinct_id as d from analytics_events
+        where ts >= ? and is_bot = 0 and country is not null
+      ) group by c order by n desc limit 20
+    `, [since, hybrid.rawSince, hybrid.rawSince])).rows
+    : (await exec(db, `
+      select country as c, count(distinct distinct_id) as n from analytics_events
+      where ts > ? and is_bot = 0 and country is not null
+      group by c order by n desc limit 20
+    `, [since])).rows;
 
   // SQLite's bare-columns-with-max() rule makes `country` come from the
-  // max(ts) row — the argMax(country, timestamp) these replace.
-  const topProfiles = (await exec(db, `
-    select json_extract(props, '$.profile_username') as u, count(*) as n, max(ts) as last_ts, country as last_country
-    from analytics_events
-    where event = '$pageview' and ts > ? and is_bot = 0 and json_extract(props, '$.profile_username') is not null
-    group by u order by n desc, last_ts desc limit 10
-  `, [since])).rows;
+  // max(ts) row — the argMax(country, timestamp) these replace. The hybrid
+  // reads lean on it twice: the inner raw aggregate and the outer merge both
+  // carry the newest side's bare columns.
+  const topProfiles = hybrid
+    ? (await exec(db, `
+      select u, sum(n) as n, max(last_ts) as last_ts, last_country from (
+        select username as u, views as n, last_ts, last_country from analytics_hourly_profiles
+        where hour_ts >= ? and hour_ts < ?
+        union all
+        select json_extract(props, '$.profile_username') as u, count(*) as n, max(ts) as last_ts, country as last_country
+        from analytics_events
+        where event = '$pageview' and ts >= ? and is_bot = 0 and json_extract(props, '$.profile_username') is not null
+        group by u
+      ) group by u order by n desc, last_ts desc limit 10
+    `, [since, hybrid.rawSince, hybrid.rawSince])).rows
+    : (await exec(db, `
+      select json_extract(props, '$.profile_username') as u, count(*) as n, max(ts) as last_ts, country as last_country
+      from analytics_events
+      where event = '$pageview' and ts > ? and is_bot = 0 and json_extract(props, '$.profile_username') is not null
+      group by u order by n desc, last_ts desc limit 10
+    `, [since])).rows;
 
-  const topReplays = (await exec(db, `
-    select json_extract(props, '$.replay_score_id') as score_id,
-      json_extract(props, '$.replay_title') as title,
-      json_extract(props, '$.replay_artist') as artist,
-      json_extract(props, '$.replay_difficulty') as difficulty,
-      json_extract(props, '$.replay_player') as player,
-      json_extract(props, '$.replay_cover_url') as cover_url,
-      count(*) as n, max(ts) as last_ts, country as last_country
-    from analytics_events
-    where event = 'replay_view' and ts > ? and is_bot = 0 and json_extract(props, '$.replay_score_id') is not null
-    group by score_id order by n desc, last_ts desc limit 10
-  `, [since])).rows;
+  const topReplays = hybrid
+    ? (await exec(db, `
+      select score_id, title, artist, difficulty, player, cover_url,
+        sum(n) as n, max(last_ts) as last_ts, last_country from (
+        select score_id, title, artist, difficulty, player, cover_url, views as n, last_ts, last_country
+        from analytics_hourly_replays where hour_ts >= ? and hour_ts < ?
+        union all
+        select json_extract(props, '$.replay_score_id') as score_id,
+          json_extract(props, '$.replay_title') as title,
+          json_extract(props, '$.replay_artist') as artist,
+          json_extract(props, '$.replay_difficulty') as difficulty,
+          json_extract(props, '$.replay_player') as player,
+          json_extract(props, '$.replay_cover_url') as cover_url,
+          count(*) as n, max(ts) as last_ts, country as last_country
+        from analytics_events
+        where event = 'replay_view' and ts >= ? and is_bot = 0 and json_extract(props, '$.replay_score_id') is not null
+        group by score_id
+      ) group by score_id order by n desc, last_ts desc limit 10
+    `, [since, hybrid.rawSince, hybrid.rawSince])).rows
+    : (await exec(db, `
+      select json_extract(props, '$.replay_score_id') as score_id,
+        json_extract(props, '$.replay_title') as title,
+        json_extract(props, '$.replay_artist') as artist,
+        json_extract(props, '$.replay_difficulty') as difficulty,
+        json_extract(props, '$.replay_player') as player,
+        json_extract(props, '$.replay_cover_url') as cover_url,
+        count(*) as n, max(ts) as last_ts, country as last_country
+      from analytics_events
+      where event = 'replay_view' and ts > ? and is_bot = 0 and json_extract(props, '$.replay_score_id') is not null
+      group by score_id order by n desc, last_ts desc limit 10
+    `, [since])).rows;
 
-  const topReferrers = (await exec(db, `
-    select referring_domain as d, count(distinct distinct_id) as n from analytics_events
-    where event = '$pageview' and ts > ? and is_bot = 0 and referring_domain is not null
-      and referring_domain not in ('localhost', '127.0.0.1', '::1')
-      and referring_domain not like '%-aleju03s-projects.vercel.app'
-    group by d order by n desc limit 10
-  `, [since])).rows;
+  const topReferrers = hybrid
+    ? (await exec(db, `
+      select d, count(distinct v) as n from (
+        select domain as d, distinct_id as v from analytics_hourly_referrers where hour_ts >= ? and hour_ts < ?
+        union
+        select referring_domain as d, distinct_id as v from analytics_events
+        where event = '$pageview' and ts >= ? and is_bot = 0 and referring_domain is not null
+      )
+      where d not in ('localhost', '127.0.0.1', '::1') and d not like '%-aleju03s-projects.vercel.app'
+      group by d order by n desc limit 10
+    `, [since, hybrid.rawSince, hybrid.rawSince])).rows
+    : (await exec(db, `
+      select referring_domain as d, count(distinct distinct_id) as n from analytics_events
+      where event = '$pageview' and ts > ? and is_bot = 0 and referring_domain is not null
+        and referring_domain not in ('localhost', '127.0.0.1', '::1')
+        and referring_domain not like '%-aleju03s-projects.vercel.app'
+      group by d order by n desc limit 10
+    `, [since])).rows;
 
   const serverErrors = (await exec(db, `
     select json_extract(props, '$.caller') as c, json_extract(props, '$.path') as p, json_extract(props, '$.status') as s, count(*) as n
@@ -1151,14 +1589,31 @@ export async function computeMonitorSnapshot(db: Db, options: MonitorComputeOpti
     order by ts desc limit 15
   `, [since])).rows;
 
-  const bounce = (await exec(db, `
-    select sum(case when pv = 1 then 1 else 0 end) as bounced, count(*) as landers from (
-      select distinct_id, count(*) as pv, sum(case when path = '/' then 1 else 0 end) as landings
-      from analytics_events
-      where event = '$pageview' and ts > ? and is_bot = 0
-      group by distinct_id having landings > 0
-    )
-  `, [since])).rows[0];
+  const bounce = hybrid
+    ? (await exec(db, `
+      select sum(case when pv = 1 then 1 else 0 end) as bounced, count(*) as landers from (
+        select distinct_id, sum(pv) as pv from (
+          select distinct_id, pageviews as pv, landings from analytics_hourly_visitors where hour_ts >= ? and hour_ts < ?
+          union all
+          select distinct_id, count(*) as pv, sum(case when path = '/' then 1 else 0 end) as landings
+          from analytics_events
+          where event = '$pageview' and ts >= ? and is_bot = 0
+          group by distinct_id
+        )
+        -- Aggregate spelled out: a bare "landings" in HAVING would bind to the
+        -- union's column of that name, an arbitrary row of the group, and drop
+        -- every visitor whose landing sits in a different hour than that row.
+        group by distinct_id having sum(landings) > 0
+      )
+    `, [since, hybrid.rawSince, hybrid.rawSince])).rows[0]
+    : (await exec(db, `
+      select sum(case when pv = 1 then 1 else 0 end) as bounced, count(*) as landers from (
+        select distinct_id, count(*) as pv, sum(case when path = '/' then 1 else 0 end) as landings
+        from analytics_events
+        where event = '$pageview' and ts > ? and is_bot = 0
+        group by distinct_id having landings > 0
+      )
+    `, [since])).rows[0];
 
   const sharePlatforms = (await exec(db, `
     select json_extract(props, '$.crawler') as c, count(*) as n from analytics_events
@@ -1168,29 +1623,63 @@ export async function computeMonitorSnapshot(db: Db, options: MonitorComputeOpti
 
   // Traffic shape over the range, bucketed so the admin chart is a fixed
   // width regardless of range. Buckets are aligned to `since` (not to wall
-  // clock) so the newest bucket always ends at "now".
-  const bucketMs = Math.max(60_000, Math.ceil((rangeHours * 60 * 60_000) / TIMELINE_BUCKETS));
-  const timelineRows = (await exec(db, `
-    select cast((ts - ?) / ? as integer) as b,
-      count(*) as events,
-      sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews,
-      count(distinct distinct_id) as visitors
-    from analytics_events
-    where ts > ? and is_bot = 0 and distinct_id != 'server'
-    group by b order by b
-  `, [since, bucketMs, since])).rows;
+  // clock) so the newest bucket always ends at "now". The hybrid read widens
+  // buckets to whole hours (since is hour-aligned there, so every rolled-up
+  // hour falls in exactly one bucket) and lets the count come out at or just
+  // under the fixed width; the last bucket then runs slightly past "now",
+  // which the chart renders as a partially filled newest column.
+  const bucketMs = hybrid
+    ? Math.ceil(rangeHours / TIMELINE_BUCKETS) * ROLLUP_HOUR_MS
+    : Math.max(60_000, Math.ceil((rangeHours * 60 * 60_000) / TIMELINE_BUCKETS));
+  const bucketCount = hybrid ? Math.max(1, Math.floor((now - since) / bucketMs) + 1) : TIMELINE_BUCKETS;
   const timelineByBucket = new Map<number, AnalyticsTimelineBucket>();
-  for (const row of timelineRows) {
+  const foldTimelineRow = (row: Record<string, unknown>): void => {
     const bucket = Number(row.b);
-    if (!Number.isFinite(bucket) || bucket < 0 || bucket >= TIMELINE_BUCKETS) continue;
-    timelineByBucket.set(bucket, {
-      ts: since + bucket * bucketMs,
-      events: Number(row.events ?? 0),
-      pageviews: Number(row.pageviews ?? 0),
-      visitors: Number(row.visitors ?? 0),
-    });
+    if (!Number.isFinite(bucket) || bucket < 0 || bucket >= bucketCount) return;
+    const entry = timelineByBucket.get(bucket) ?? { ts: since + bucket * bucketMs, events: 0, pageviews: 0, visitors: 0 };
+    entry.events += Number(row.events ?? 0);
+    entry.pageviews += Number(row.pageviews ?? 0);
+    entry.visitors += Number(row.visitors ?? 0);
+    timelineByBucket.set(bucket, entry);
+  };
+  if (hybrid) {
+    // Events and pageviews are additive across the boundary; the two sides
+    // fold into disjoint (bucket, source) contributions.
+    for (const row of (await exec(db, `
+      select cast((hour_ts - ?) / ? as integer) as b, sum(events) as events, sum(pageviews) as pageviews
+      from analytics_hourly_totals where hour_ts >= ? and hour_ts < ? group by b
+    `, [since, bucketMs, since, hybrid.rawSince])).rows) foldTimelineRow(row);
+    for (const row of (await exec(db, `
+      select cast((ts - ?) / ? as integer) as b,
+        count(*) as events,
+        sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews
+      from analytics_events
+      where ts >= ? and is_bot = 0 and distinct_id != 'server'
+      group by b
+    `, [since, bucketMs, hybrid.rawSince])).rows) foldTimelineRow(row);
+    // Per-bucket visitors are distinct counts, so the boundary bucket has to
+    // union identities across the two sides rather than add them.
+    for (const row of (await exec(db, `
+      select b, count(distinct d) as visitors from (
+        select cast((hour_ts - ?) / ? as integer) as b, distinct_id as d
+        from analytics_hourly_visitors where hour_ts >= ? and hour_ts < ? and distinct_id != 'server'
+        union
+        select cast((ts - ?) / ? as integer) as b, distinct_id as d
+        from analytics_events where ts >= ? and is_bot = 0 and distinct_id != 'server'
+      ) group by b
+    `, [since, bucketMs, since, hybrid.rawSince, since, bucketMs, hybrid.rawSince])).rows) foldTimelineRow(row);
+  } else {
+    for (const row of (await exec(db, `
+      select cast((ts - ?) / ? as integer) as b,
+        count(*) as events,
+        sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews,
+        count(distinct distinct_id) as visitors
+      from analytics_events
+      where ts > ? and is_bot = 0 and distinct_id != 'server'
+      group by b order by b
+    `, [since, bucketMs, since])).rows) foldTimelineRow(row);
   }
-  const timeline: AnalyticsTimelineBucket[] = Array.from({ length: TIMELINE_BUCKETS }, (_, index) => (
+  const timeline: AnalyticsTimelineBucket[] = Array.from({ length: bucketCount }, (_, index) => (
     timelineByBucket.get(index) ?? { ts: since + index * bucketMs, events: 0, pageviews: 0, visitors: 0 }
   ));
 
@@ -1209,9 +1698,9 @@ export async function computeMonitorSnapshot(db: Db, options: MonitorComputeOpti
     timeline,
     activeVisitors: Number(overview?.active ?? 0),
     recentVisitors: Number(overview?.recent_active ?? 0),
-    pageviewsInRange: Number(overview?.pageviews ?? 0),
-    uniqueVisitorsInRange: Number(overview?.visitors ?? 0),
-    eventsInRange: Number(overview?.events_total ?? 0),
+    pageviewsInRange: Number(overview?.pageviews ?? 0) + Number(rollupTotals?.pageviews ?? 0),
+    uniqueVisitorsInRange: hybrid ? Number(hybridVisitors?.n ?? 0) : Number(overview?.visitors ?? 0),
+    eventsInRange: Number(overview?.events_total ?? 0) + Number(rollupTotals?.events_total ?? 0),
     bounce: {
       bounced: Number(bounce?.bounced ?? 0),
       landers: Number(bounce?.landers ?? 0),
@@ -1251,7 +1740,7 @@ export async function computeMonitorSnapshot(db: Db, options: MonitorComputeOpti
       lastVisitorCountry: row.last_country == null ? null : String(row.last_country),
     })),
     topReferrers: topReferrers.map((row) => ({ domain: String(row.d ?? ""), count: Number(row.n ?? 0) })),
-    shareEvents: Number(overview?.shares ?? 0),
+    shareEvents: Number(overview?.shares ?? 0) + Number(rollupTotals?.shares ?? 0),
     sharesByPlatform: sharePlatforms.map((row) => ({ platform: String(row.c ?? ""), count: Number(row.n ?? 0) })),
     topSharedPages: sharePages.map((row) => ({
       path: String(row.p ?? ""),

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, type Db } from "../src/db.js";
-import { AnalyticsStore, deviceKindFor, monitorCacheTtlMs, normalizeAnalyticsEvent } from "../src/features/analytics.js";
+import { AnalyticsStore, computeMonitorSnapshot, deviceKindFor, monitorCacheTtlMs, normalizeAnalyticsEvent, type MonitorComputeOptions } from "../src/features/analytics.js";
 
 let dir = "";
 let db: Db;
@@ -576,6 +576,159 @@ describe("AnalyticsStore realtime", () => {
       store.capture(pageview({ distinctId: "no-key-1", path: "/maps" }), {});
       store.capture(pageview({ distinctId: "no-key-2", path: "/skins" }), {});
       expect(new Set(await feedIds())).toEqual(new Set(["no-key-1", "no-key-2"]));
+    });
+  });
+
+  describe("hourly rollups", () => {
+    const HOUR = 60 * 60_000;
+    const options: MonitorComputeOptions = { feedHosts: null, feedExcludedViewer: null, displayTimeZone: "America/Costa_Rica" };
+
+    const insertEvent = async (opts: {
+      ts: number;
+      event?: string;
+      distinctId?: string;
+      path?: string | null;
+      country?: string | null;
+      referringDomain?: string | null;
+      isBot?: boolean;
+      props?: Record<string, unknown>;
+    }) => {
+      await exec(db, `insert into analytics_events
+        (ts, event, distinct_id, host, path, country, selected_country, viewer_username, referring_domain, screen_width, viewport_width, is_bot, props)
+        values (?, ?, ?, ?, ?, ?, null, null, ?, 1920, 1920, ?, ?)`, [
+        opts.ts,
+        opts.event ?? "$pageview",
+        opts.distinctId ?? "v1",
+        LIVE_HOST,
+        opts.path === undefined ? "/tracker" : opts.path,
+        opts.country ?? null,
+        opts.referringDomain ?? null,
+        opts.isBot ? 1 : 0,
+        JSON.stringify(opts.props ?? {}),
+      ]);
+    };
+
+    /* Traffic on both sides of the rolled-up boundary (25h back), including a
+       visitor that spans it, so every distinct count has to dedupe across it. */
+    const seedAcrossBoundary = async () => {
+      const OLD = NOW - 30 * HOUR;
+      const RECENT = NOW - 2 * HOUR;
+      await insertEvent({ ts: OLD, distinctId: "both", path: "/", country: "CR" });
+      await insertEvent({ ts: OLD + 5 * 60_000, distinctId: "both", path: "/tracker", country: "CR", referringDomain: "osu.ppy.sh" });
+      await insertEvent({ ts: OLD + 6 * 60_000, distinctId: "both", path: "/admin/live-backend" });
+      await insertEvent({ ts: OLD + 10 * 60_000, distinctId: "old-only", path: "/", country: "DE" });
+      await insertEvent({ ts: OLD + 15 * 60_000, distinctId: "old-profile", path: "/player/alice", country: "US", props: { profile_username: "Alice" } });
+      await insertEvent({ ts: OLD + 20 * 60_000, distinctId: "old-only", event: "replay_view", path: "/replay", country: "DE", props: { replay_score_id: "111", replay_title: "Song", replay_player: "Alice" } });
+      await insertEvent({ ts: OLD + 25 * 60_000, distinctId: "server", event: "page_shared", path: null, props: { crawler: "twitter", pathname: "/replay/1", subject: "Song", subject_type: "replay" } });
+      await insertEvent({ ts: OLD + 30 * 60_000, distinctId: "bot", isBot: true });
+      // Lands in one rolled hour, browses on in another: the bounce merge must
+      // sum landings across the visitor's hour rows, not read one of them.
+      await insertEvent({ ts: OLD - 3 * HOUR, distinctId: "multi-hour", path: "/", country: "FR" });
+      await insertEvent({ ts: OLD - 2 * HOUR, distinctId: "multi-hour", path: "/skins", country: "FR" });
+      // Geo flips inside one rolled hour: the country projection must keep the
+      // visitor in both countries, the way the raw query counts them.
+      await insertEvent({ ts: OLD + 40 * 60_000, distinctId: "geo-flip", path: "/tracker", country: "CN" });
+      await insertEvent({ ts: OLD + 45 * 60_000, distinctId: "geo-flip", path: "/rankings", country: "HK" });
+      await insertEvent({ ts: RECENT, distinctId: "both", path: "/maps", country: "CR" });
+      await insertEvent({ ts: RECENT + 30_000, distinctId: "multi-hour", path: "/rankings", country: "FR" });
+      await insertEvent({ ts: RECENT + 60_000, distinctId: "new-only", path: "/", country: "CR", referringDomain: "osu.ppy.sh" });
+      await insertEvent({ ts: RECENT + 2 * 60_000, distinctId: "server", event: "osu_api_error", path: null, props: { caller: "rankings", path: "/x", status: 500 } });
+    };
+
+    it("advances the rolled-up boundary and answers long ranges from the rollups", async () => {
+      await seedAcrossBoundary();
+      await store.advanceRollups(NOW);
+
+      const bound = Number((await exec(db, "select value from analytics_rollup_state where key = 'rolled_until'")).rows[0]?.value);
+      expect(bound).toBe(Math.floor((NOW - 25 * HOUR) / HOUR) * HOUR);
+      const rolledHours = Number((await exec(db, "select count(*) as n from analytics_hourly_totals")).rows[0]?.n);
+      expect(rolledHours).toBeGreaterThan(0);
+
+      const raw = await computeMonitorSnapshot(db, options, { rangeHours: 720, now: NOW, rollupBound: null });
+      const hybrid = await computeMonitorSnapshot(db, options, { rangeHours: 720, now: NOW });
+
+      expect(hybrid.eventsInRange).toBe(raw.eventsInRange);
+      expect(hybrid.pageviewsInRange).toBe(raw.pageviewsInRange);
+      expect(hybrid.uniqueVisitorsInRange).toBe(raw.uniqueVisitorsInRange);
+      expect(hybrid.uniqueVisitorsInRange).toBe(6);
+      expect(hybrid.shareEvents).toBe(raw.shareEvents);
+      expect(hybrid.bounce).toEqual(raw.bounce);
+      // "both" landed on the old side and browsed on again the new side, so
+      // only the two single-page visitors bounce; the grouping crossed the seam.
+      expect(hybrid.bounce).toEqual({ bounced: 2, landers: 4 });
+      expect(hybrid.topRoutes).toEqual(raw.topRoutes);
+      expect(hybrid.topPhysicalCountries).toEqual(raw.topPhysicalCountries);
+      expect(hybrid.topPhysicalCountries).toEqual(expect.arrayContaining([
+        { country: "CN", count: 1 },
+        { country: "HK", count: 1 },
+      ]));
+      expect(hybrid.topProfiles).toEqual(raw.topProfiles);
+      expect(hybrid.topReplays).toEqual(raw.topReplays);
+      expect(hybrid.topReferrers).toEqual(raw.topReferrers);
+      expect(hybrid.topReferrers).toEqual([{ domain: "osu.ppy.sh", count: 2 }]);
+      expect(hybrid.sharesByPlatform).toEqual(raw.sharesByPlatform);
+      expect(hybrid.topSharedPages).toEqual(raw.topSharedPages);
+      expect(hybrid.serverErrors).toEqual(raw.serverErrors);
+      const timelineTotal = (timeline: Array<{ events: number; visitors: number }>) => timeline.reduce((sum, bucket) => sum + bucket.events, 0);
+      expect(timelineTotal(hybrid.timeline)).toBe(timelineTotal(raw.timeline));
+    });
+
+    it("really reads the rolled side from the rollups, and re-rolling replaces instead of double counting", async () => {
+      await seedAcrossBoundary();
+      await store.advanceRollups(NOW);
+      const before = await computeMonitorSnapshot(db, options, { rangeHours: 720, now: NOW });
+
+      // Re-rolling the populated hours must be a replace, not an accumulation:
+      // rewind the boundary past every seeded rolled event (the oldest sits at
+      // NOW - 33h) and advance again over real data.
+      const bound = Number((await exec(db, "select value from analytics_rollup_state where key = 'rolled_until'")).rows[0]?.value);
+      const rollupTables = ["analytics_hourly_totals", "analytics_hourly_visitors", "analytics_hourly_countries", "analytics_hourly_routes", "analytics_hourly_profiles", "analytics_hourly_replays", "analytics_hourly_referrers"];
+      const tableCounts = async () => {
+        const counts: Record<string, number> = {};
+        for (const table of rollupTables) {
+          counts[table] = Number((await exec(db, `select count(*) as n from ${table}`)).rows[0]?.n);
+        }
+        return counts;
+      };
+      const countsBefore = await tableCounts();
+      expect(countsBefore.analytics_hourly_visitors).toBeGreaterThan(0);
+      await exec(db, "update analytics_rollup_state set value = ? where key = 'rolled_until'", [String(Math.floor((NOW - 35 * HOUR) / HOUR) * HOUR)]);
+      await store.advanceRollups(NOW);
+      expect(Number((await exec(db, "select value from analytics_rollup_state where key = 'rolled_until'")).rows[0]?.value)).toBe(bound);
+      expect(await tableCounts()).toEqual(countsBefore);
+      const rerolled = await computeMonitorSnapshot(db, options, { rangeHours: 720, now: NOW });
+      expect(rerolled.eventsInRange).toBe(before.eventsInRange);
+      expect(rerolled.uniqueVisitorsInRange).toBe(before.uniqueVisitorsInRange);
+      expect(rerolled.topPhysicalCountries).toEqual(before.topPhysicalCountries);
+      expect(rerolled.bounce).toEqual(before.bounce);
+
+      // Deleting the rolled raw rows changes nothing: the hybrid read was
+      // never touching them. (Retention will really do this eventually.)
+      await exec(db, "delete from analytics_events where ts < ?", [bound]);
+      const after = await computeMonitorSnapshot(db, options, { rangeHours: 720, now: NOW });
+      expect(after.eventsInRange).toBe(before.eventsInRange);
+      expect(after.uniqueVisitorsInRange).toBe(before.uniqueVisitorsInRange);
+      expect(after.bounce).toEqual(before.bounce);
+      expect(after.topRoutes).toEqual(before.topRoutes);
+      expect(after.topProfiles).toEqual(before.topProfiles);
+
+      // The store path takes the same hybrid read inline.
+      const viaStore = await store.getMonitorData({ rangeHours: 720, now: NOW });
+      expect(viaStore.eventsInRange).toBe(before.eventsInRange);
+    });
+
+    it("short ranges ignore the rollups and prune drops expired rollup rows", async () => {
+      await seedAcrossBoundary();
+      await store.advanceRollups(NOW);
+      // 24h stays a pure raw read: its window is entirely inside the tail.
+      const day = await computeMonitorSnapshot(db, options, { rangeHours: 24, now: NOW });
+      expect(day.uniqueVisitorsInRange).toBe(3);
+
+      const staleHour = Math.floor((NOW - 91 * 24 * HOUR) / HOUR) * HOUR;
+      await exec(db, "insert into analytics_hourly_totals (hour_ts, events_total, events, pageviews, shares) values (?, 5, 5, 5, 0)", [staleHour]);
+      await store.prune(NOW);
+      const left = Number((await exec(db, "select count(*) as n from analytics_hourly_totals where hour_ts = ?", [staleHour])).rows[0]?.n);
+      expect(left).toBe(0);
     });
   });
 
