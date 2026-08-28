@@ -10,7 +10,7 @@ import {
   recomputePlayerSkillDanChunk,
   runPlayerSkillDanSweepJob,
 } from "../src/features/player-skills.js";
-import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY } from "../src/features/chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY } from "../src/features/chart-analysis.js";
 import { JobQueue } from "../src/jobs/queue.js";
 
 let dir = "";
@@ -282,6 +282,29 @@ describe("recomputePlayerSkillDanChunk", () => {
 
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const queued = (await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
+    expect(Number(queued.c)).toBe(1);
+    db.close();
+  });
+
+  it("automatically re-runs when the Sunny DT repair finished midway through a pass", async () => {
+    const db = await makeDb();
+    const queue = new JobQueue(db);
+    for (const beatmapId of [451, 452, 453, 454]) await seedChart(db, beatmapId, 8);
+    await seedRow(db, 36, [451, 452, 453, 454]);
+
+    const startedAt = "2026-08-27T00:00:00.000Z";
+    await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [SUNNY_REPIN_DT_META_KEY, json({ finishedAt: "2026-08-27T00:00:30.000Z" }), "2026-08-27T00:00:30.000Z"]);
+    // Model the production worker accurately: the cursor-0 job is still
+    // running while its handler tries to schedule the required second pass.
+    await queue.enqueue(PLAYER_SKILL_DAN_SWEEP_JOB, `${PLAYER_SKILL_DAN_SWEEP_JOB}:0`, { cursor: 0, startedAt });
+    const [running] = await queue.claim("test-worker", 1, { types: [PLAYER_SKILL_DAN_SWEEP_JOB] });
+    expect(running?.dedupeKey).toBe(`${PLAYER_SKILL_DAN_SWEEP_JOB}:0`);
+    await runPlayerSkillDanSweepJob(db, queue, running.payload as { cursor?: number; startedAt?: string });
+
+    // No boot or external seeder call is needed: the finishing player pass
+    // notices that its chart inputs moved after it began and starts over.
+    const queued = (await exec(db, "select count(*) c from jobs where type = ? and status = 'queued'", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
     expect(Number(queued.c)).toBe(1);
     db.close();
   });

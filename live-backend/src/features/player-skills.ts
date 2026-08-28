@@ -5,7 +5,7 @@ import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, compute
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
-import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { MAX_RATE_PERCENT, MIN_RATE_PERCENT, computeAndStoreRateDanVerdictFromText, enqueueRateDanEstimate, loadStoredRateDanVerdicts, rateDanVerdictKey } from "./dan-estimates.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -13,7 +13,7 @@ import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, per
 import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getModAcronyms, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
-import { danTableCeilingFor, danTableLabelFor } from "../dan/chart-classifier.js";
+import { danTableCeilingFor, danTableLabelFor, danTableVerdictLabelFor } from "../dan/chart-classifier.js";
 import { DAN_CREDIT_BELOW_BAR_WINDOW, creditedDanFor } from "../dan/dan-credit.js";
 import { loadDanCourseClears } from "./dan-courses.js";
 import type { DanCourseClear, DanCourseCreditOptions } from "./dan-courses.js";
@@ -1554,6 +1554,18 @@ function danLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): strin
   return `${parsed.label}${parsed.variant ?? ""}`;
 }
 
+// A chart verdict sits on one of the source table's five named tiers, whose
+// raw offsets differ from the continuous suffix bands used for player credits
+// and averages. Preserve that source tier in evidence so opening the same
+// chart cannot change "Mystery low" from mystery-- to mystery-.
+function chartDanLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): string {
+  if (keyCount !== 4) {
+    const tableLabel = danTableVerdictLabelFor(rawDan, side, keyCount);
+    if (tableLabel != null) return tableLabel;
+  }
+  return danLabelFor(rawDan, side, keyCount);
+}
+
 /** Test seam over the ladder labeler, so the course registry can assert its
  *  levels relabel to the names it declares them under. */
 export function danLabelForTest(rawDan: number, side: "rc" | "ln", keyCount: number): string {
@@ -2650,7 +2662,7 @@ export async function getPlayerSkillDanEvidence(
   const toEvidencePlay = (clear: DanClearEvidence): PlayerSkillDanEvidencePlay => ({
     play: buildPlayerSkillPlay(clear.play, Number(clear.play.values?.Overall ?? 0), keyCount, metadata),
     chartDan: Math.round(clear.chartDan * 100) / 100,
-    chartDanLabel: danLabelFor(clear.chartDan, side, keyCount),
+    chartDanLabel: chartDanLabelFor(clear.chartDan, side, keyCount),
     creditedDan: Math.round(clear.creditedDan * 100) / 100,
     creditedDanLabel: danLabelFor(clear.creditedDan, side, keyCount),
     clearAccuracy: clear.accuracy,
@@ -3323,10 +3335,10 @@ export async function recomputePlayerSkillDanChunk(
 
 export async function ensurePlayerSkillDanSweepSeeded(db: Db, queue: JobQueue): Promise<void> {
   const done = (await exec(db, "select value_json from live_meta where key = ? limit 1", [PLAYER_SKILL_DAN_SWEEP_META_KEY])).rows[0];
-  // A finished sweep still has to run again if the HT verdicts landed after it:
-  // those dans were computed with nothing to credit an HT clear against, so
-  // they are stale in exactly the rows this sweep exists to fix.
-  if (done && !(await htVerdictsLandedAfter(db, String(done.value_json ?? "")))) return;
+  // A finished sweep still has to run again if a rate-verdict repair landed
+  // after it: those stored dans either had nothing to credit an HT clear
+  // against or read the stale DT rawDan the Sunny v2 sweep replaced.
+  if (done && !(await rateVerdictsLandedAfter(db, String(done.value_json ?? "")))) return;
   const pending = (await exec(
     db,
     "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
@@ -3336,13 +3348,16 @@ export async function ensurePlayerSkillDanSweepSeeded(db: Db, queue: JobQueue): 
   await enqueuePlayerSkillDanSweep(queue, 0);
 }
 
-/** True when the HT rate sweep stamped its done key after `doneJson`'s sweep. */
-async function htVerdictsLandedAfter(db: Db, doneJson: string): Promise<boolean> {
+/** True when a rate-verdict producer stamped its done key after this dan pass began. */
+async function rateVerdictsLandedAfter(db: Db, doneJson: string): Promise<boolean> {
   const sweptAt = parseJson<{ finishedAt?: unknown }>(doneJson, {}).finishedAt;
-  const ht = (await exec(db, "select value_json from live_meta where key = ? limit 1", [HT_RATE_ANALYSIS_META_KEY])).rows[0];
-  if (!ht) return false;
-  const htAt = parseJson<{ finishedAt?: unknown }>(String(ht.value_json ?? ""), {}).finishedAt;
-  return typeof htAt === "string" && (typeof sweptAt !== "string" || htAt > sweptAt);
+  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY]) {
+    const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [key])).rows[0];
+    if (!row) continue;
+    const landedAt = parseJson<{ finishedAt?: unknown }>(String(row.value_json ?? ""), {}).finishedAt;
+    if (typeof landedAt === "string" && (typeof sweptAt !== "string" || landedAt > sweptAt)) return true;
+  }
+  return false;
 }
 
 export async function runPlayerSkillDanSweepJob(
@@ -3359,28 +3374,41 @@ export async function runPlayerSkillDanSweepJob(
     logInfo("player_skill_dan_sweep_chunk", { users: result.rewritten, cursor: result.nextCursor });
   }
   if (result.done) {
-    // The done key records the START of the pass, because htVerdictsLandedAfter
-    // compares against it to decide whether a finished sweep is stale. Both
-    // sweeps share one claimLimit:1 lane and self-chain a chunk at a time, so
-    // they interleave: the HT sweep can stamp its own done key while this one
-    // is midway through, and the rows this pass already wrote would then have
-    // been computed with no 0.75x verdict to credit. Stamping the finish time
-    // would call those rows current and strand them; stamping the start time
-    // means any HT completion during the pass re-runs it from cursor 0.
+    // The done key records the START of the pass, because
+    // rateVerdictsLandedAfter compares against it to decide whether a finished
+    // sweep is stale. These sweeps share one claimLimit:1 lane and self-chain
+    // a chunk at a time, so they interleave: HT or the Sunny DT repair can
+    // stamp its done key while this pass is midway through. Stamping the finish
+    // time would call the already-written rows current and strand them.
     await exec(
       db,
       "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
       [PLAYER_SKILL_DAN_SWEEP_META_KEY, json({ finishedAt: startedAt }), nowIso()],
     );
+    // A producer that finished while this pass was in flight may have called
+    // the public seeder while one of our continuation jobs was still queued.
+    // That correctly no-ops to avoid duplicate passes, so close the race here:
+    // enqueue directly after the final chunk, using a fresh startedAt for the
+    // follow-up pass. The restart gets its own stable dedupe key because a
+    // small corpus can finish on the still-running cursor-0 job, which the
+    // queue deliberately refuses to replace from inside itself.
+    if (await rateVerdictsLandedAfter(db, json({ finishedAt: startedAt }))) {
+      await enqueuePlayerSkillDanSweep(queue, 0, undefined, true);
+    }
     return;
   }
   await enqueuePlayerSkillDanSweep(queue, result.nextCursor, startedAt);
 }
 
-async function enqueuePlayerSkillDanSweep(queue: JobQueue, cursor: number, startedAt?: string): Promise<void> {
+async function enqueuePlayerSkillDanSweep(
+  queue: JobQueue,
+  cursor: number,
+  startedAt?: string,
+  rateVerdictRestart = false,
+): Promise<void> {
   await queue.enqueue(
     PLAYER_SKILL_DAN_SWEEP_JOB,
-    `${PLAYER_SKILL_DAN_SWEEP_JOB}:${cursor}`,
+    rateVerdictRestart ? `${PLAYER_SKILL_DAN_SWEEP_JOB}:rate-verdict-restart` : `${PLAYER_SKILL_DAN_SWEEP_JOB}:${cursor}`,
     { cursor, startedAt: startedAt ?? nowIso() },
     { priority: -10, replaceDone: true },
   );

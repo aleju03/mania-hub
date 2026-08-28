@@ -739,7 +739,12 @@ export class WorkerRunner {
       return;
     }
     if (job.type === SUNNY_REPIN_DT_RECOMPUTE_JOB) {
-      await runSunnyRepinDtRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
+      // DT verdict repairs can lower stale LN rawDan values that stored player
+      // summaries already credited. Re-seed after the final chunk; if a dan
+      // pass is already in flight, its completion check schedules a clean pass.
+      if (await runSunnyRepinDtRecomputeJob(this.db, this.queue, job.payload as { cursor?: number })) {
+        await ensurePlayerSkillDanSweepSeeded(this.db, this.queue);
+      }
       return;
     }
     if (job.type === MSD_POISON_RECOVERY_JOB) {

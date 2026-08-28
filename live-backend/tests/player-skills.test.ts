@@ -1693,4 +1693,17 @@ describe("danTableLabelFor", () => {
     // No table for keymodes outside the index.
     expect(danTableLabelFor(5, "rc", 5)).toBeNull();
   });
+
+  it("preserves the source table tiers when labeling chart verdicts", async () => {
+    const { danTableLabelFor, danTableVerdictLabelFor } = await import("../src/dan/chart-classifier.js");
+    // 6K LN Mystery is level 12: low/mid-low/mid/mid-high/high sit at these
+    // exact raw offsets in the Sunny table and must round-trip to its suffixes.
+    expect(danTableVerdictLabelFor(11.6, "ln", 6)).toBe("mystery--");
+    expect(danTableVerdictLabelFor(11.8, "ln", 6)).toBe("mystery-");
+    expect(danTableVerdictLabelFor(12, "ln", 6)).toBe("mystery");
+    expect(danTableVerdictLabelFor(12.2, "ln", 6)).toBe("mystery+");
+    expect(danTableVerdictLabelFor(12.4, "ln", 6)).toBe("mystery++");
+    // Continuous credit labeling deliberately keeps the shared player bands.
+    expect(danTableLabelFor(11.6, "ln", 6)).toBe("mystery-");
+  });
 });

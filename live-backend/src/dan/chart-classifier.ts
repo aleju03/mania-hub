@@ -154,7 +154,12 @@ function tableLabelForBase(base: string): string {
  * applies outside 4K, so labeling these from parseDan misnames everything
  * past 10th. Returns null when no table covers the keymode/side.
  */
-export function danTableLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): string | null {
+function formatDanTableLabel(
+  rawDan: number,
+  side: "rc" | "ln",
+  keyCount: number,
+  scale: "credit" | "verdict",
+): string | null {
   const tables = DAN_INDEX[keyCount];
   const table = tables ? (side === "ln" ? tables.LN?.default : tables.RC.default) : undefined;
   if (!table) return null;
@@ -164,9 +169,24 @@ export function danTableLabelFor(rawDan: number, side: "rc" | "ln", keyCount: nu
   const entry = levels.find((candidate) => candidate.level === level);
   if (!entry) return null;
   const offset = Math.max(-0.5, Math.min(0.5, rawDan - level));
-  // parseDan's variant thresholds, so 4K and 6K/7K dan chips read alike.
-  const variant = offset <= -0.45 ? "--" : offset <= -0.25 ? "-" : offset < 0.1 ? null : offset < 0.26 ? "+" : "++";
+  // Player credits and averages are continuous, so their suffixes use
+  // parseDan's bands and read like the 4K chips. A classifier verdict is one
+  // of the table's five named tiers at offsets -.4/-.2/0/.2/.4; use the
+  // midpoints between those anchors so "LN Mystery low" round-trips to
+  // mystery-- instead of being relabeled mystery- on the evidence surface.
+  const variant = scale === "verdict"
+    ? offset < -0.3 ? "--" : offset < -0.1 ? "-" : offset < 0.1 ? null : offset < 0.3 ? "+" : "++"
+    : offset <= -0.45 ? "--" : offset <= -0.25 ? "-" : offset < 0.1 ? null : offset < 0.26 ? "+" : "++";
   return `${tableLabelForBase(entry.base)}${variant ?? ""}`;
+}
+
+export function danTableLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): string | null {
+  return formatDanTableLabel(rawDan, side, keyCount, "credit");
+}
+
+/** The label of an analyzer verdict, preserving the source table's tier bands. */
+export function danTableVerdictLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): string | null {
+  return formatDanTableLabel(rawDan, side, keyCount, "verdict");
 }
 
 /**

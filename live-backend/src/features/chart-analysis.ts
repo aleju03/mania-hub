@@ -2670,7 +2670,7 @@ export const SUNNY_REPIN_DT_RECOMPUTE_JOB = "recompute_sunny_repin_dt_sweep";
 // 22.84 on 78 of 626 LN-family DT verdicts, 2026-08-27). The credit path
 // reads the rawDan, so those charts credited DT LN clears past the whole
 // ladder; the re-derive rewrites them with the table-first verdict.
-const SUNNY_REPIN_DT_META_KEY = "sunny_repin_dt_recompute_done:v2";
+export const SUNNY_REPIN_DT_META_KEY = "sunny_repin_dt_recompute_done:v2";
 const SUNNY_REPIN_DT_CHUNK = 40;
 
 export interface SunnyRepinDtChunkResult {
@@ -2769,7 +2769,7 @@ export async function runSunnyRepinDtRecomputeJob(
   db: Db,
   queue: JobQueue,
   payload: { cursor?: number } | undefined,
-): Promise<void> {
+): Promise<boolean> {
   const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
   const result = await recomputeSunnyRepinDtChunk(db, cursor);
   if (result.done) {
@@ -2779,9 +2779,10 @@ export async function runSunnyRepinDtRecomputeJob(
       "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
       [SUNNY_REPIN_DT_META_KEY, json({ finishedAt: now }), now],
     );
-    return;
+    return true;
   }
   await enqueueSunnyRepinDtRecompute(queue, result.nextCursor);
+  return false;
 }
 
 async function enqueueSunnyRepinDtRecompute(queue: JobQueue, cursor: number): Promise<void> {
