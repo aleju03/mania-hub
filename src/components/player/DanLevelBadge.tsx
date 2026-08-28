@@ -18,7 +18,8 @@ import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "../..
 // evidence window could say that the badge could not: a 20-clear average over
 // six clears is a real reading of thin evidence, and a reader deserves to know
 // which before opening anything. A full window draws nothing at all, so the
-// mark only ever appears where it means something.
+// mark only ever appears where it means something, and an incomplete one never
+// closes the ring (RING_MAX_SWEEP).
 
 export type DanBadgeSize = "sm" | "md";
 
@@ -53,59 +54,31 @@ export interface DanClearWindow {
 // r=5 in a 14 box leaves room for the 2.5 stroke.
 const RING_RADIUS = 5;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-// Arc units, not pixels: enough of a break that four segments read as four.
-const RING_GAP = 2.4;
+/* The whole window is drawn onto 85% of the circle rather than all of it, so
+   an incomplete estimate can never close the ring. Left at true scale, a side
+   missing one skill entirely still stands at 75 of 80 clears, and a 94% arc is
+   a solid circle to the eye - the one reading the mark exists to prevent. The
+   squeeze keeps the fill continuous and in order; only the gap is fixed. */
+const RING_MAX_SWEEP = 0.85;
 
-/**
- * A side's estimate is drawn as one segment per skill, filled for each skill
- * that has its whole window, because the clear sum alone cannot be read: a
- * player missing one skill entirely still stands at 75 of 80 clears, and an
- * arc that long is a full circle to the eye. Segments make the missing skill
- * the shape of the mark. A single pool (one skillset's own dan, or a keymode
- * that publishes none) has nothing to segment and fills smoothly instead.
- */
 function ClearWindowRing({ clearWindow, size, title }: { clearWindow: DanClearWindow; size: DanBadgeSize; title: string }) {
-  const skills = clearWindow.skills && clearWindow.skills.total > 1 ? clearWindow.skills : null;
-  const segments = skills
-    ? Array.from({ length: skills.total }, (_, index) => ({ index, filled: index < skills.full }))
-    : null;
-  const segmentArc = skills ? RING_CIRCUMFERENCE / skills.total : 0;
   const ratio = Math.max(0, Math.min(1, clearWindow.have / clearWindow.need));
   return (
     <span className={`absolute -bottom-0.5 -right-0.5 ${RING_CLASS[size]}`} title={title}>
       <svg viewBox="0 0 14 14" className="h-full w-full" role="img" aria-label={title}>
         <circle cx="7" cy="7" r="7" className="fill-osu-b6/85" />
-        {segments ? (
-          segments.map(({ index, filled }) => (
-            <circle
-              key={index}
-              cx="7"
-              cy="7"
-              r={RING_RADIUS}
-              fill="none"
-              strokeWidth="2.5"
-              strokeDasharray={`${segmentArc - RING_GAP} ${RING_CIRCUMFERENCE - segmentArc + RING_GAP}`}
-              strokeDashoffset={-(index * segmentArc + RING_GAP / 2)}
-              transform="rotate(-90 7 7)"
-              className={filled ? "stroke-osu-l1" : "stroke-osu-b2"}
-            />
-          ))
-        ) : (
-          <>
-            <circle cx="7" cy="7" r={RING_RADIUS} fill="none" strokeWidth="2.5" className="stroke-osu-b2" />
-            <circle
-              cx="7"
-              cy="7"
-              r={RING_RADIUS}
-              fill="none"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeDasharray={`${RING_CIRCUMFERENCE * ratio} ${RING_CIRCUMFERENCE}`}
-              transform="rotate(-90 7 7)"
-              className="stroke-osu-l1"
-            />
-          </>
-        )}
+        <circle cx="7" cy="7" r={RING_RADIUS} fill="none" strokeWidth="2.5" className="stroke-osu-b2" />
+        <circle
+          cx="7"
+          cy="7"
+          r={RING_RADIUS}
+          fill="none"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeDasharray={`${RING_CIRCUMFERENCE * ratio * RING_MAX_SWEEP} ${RING_CIRCUMFERENCE}`}
+          transform="rotate(-90 7 7)"
+          className="stroke-osu-l1"
+        />
       </svg>
     </span>
   );

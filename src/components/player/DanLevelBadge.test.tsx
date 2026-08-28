@@ -34,12 +34,12 @@ describe("DanLevelBadge", () => {
 
   it("marks an estimate whose averaging window is not full", () => {
     render(badge({ have: 65, need: 80, skills: { full: 3, total: 4 } }));
-    // A side counts skills, not clears: 75 of 80 is a full circle to the eye,
-    // and the one skill it is missing is the whole point of the mark.
+    // A side says it in skills: the clear sum reads as nearly done even when a
+    // whole skill is missing, which is the reading the mark exists to prevent.
     expect(screen.getByRole("img", { name: /3 of 4 skills have their full 20 clears/ })).toBeTruthy();
   });
 
-  it("fills a single pool smoothly, since there is nothing to segment", () => {
+  it("counts clears on a single pool, which has no skills to count", () => {
     render(badge({ have: 12, need: 20 }));
     expect(screen.getByRole("img", { name: /12 of 20 clears/ })).toBeTruthy();
   });

@@ -27,8 +27,9 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-28", text: "Player profiles have a new Add a missing score button: paste an osu! score link and, if the score really belongs to that player, the site tracks it like any other. Old ranked and loved plays can finally count toward skill ratings and dan without replaying them, and you can add scores to anyone" },
   { date: "2026-08-28", text: "The All clears tab on the dan window no longer stops at 20: click Load more at the bottom to see the next 50" },
-  { date: "2026-08-28", text: "Dan badges now show a small ring when the estimate is incomplete, so you can tell before opening it. It fills a segment for each skillset that has its 20 clears, on player pages, My Stats and the dan rankings", to: "/dan-estimates" },
+  { date: "2026-08-28", text: "Dan badges now show a small ring when the estimate is incomplete, so you can tell before opening it. It fills as your skillsets get closer to their 20 clears, on player pages, My Stats and the dan rankings", to: "/dan-estimates" },
   { date: "2026-08-27", text: "The Chordjack skill on 6K and 7K profiles has been renamed to Jack, and it also counts jack maps the old version missed, so fewer of them land under Tech" },
   { date: "2026-08-27", text: "New dan bonus and decay system: passes with high accuracy are now worth more dan, and passes that barely miss the accuracy requirement still count for a bit less instead of not counting at all", to: "/dan-estimates" },
   { date: "2026-08-27", text: "Dan estimates reworked: each skillset dan is now the average of your 20 best passes in it instead of your 4th best pass, your dan is the average of those skillsets, clearing a real dan course sets your dan when the average sits lower, and lazer custom rate plays like 1.15x now count. The page explaining how dan is estimated is updated to match", to: "/dan-estimates" },
