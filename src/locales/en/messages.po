@@ -13341,8 +13341,12 @@ msgstr "Your estimate for a side is the plain arithmetic average of the skill da
 #~ msgstr "Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
 
 #: src/routes/dan-estimates.tsx
-msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
-msgstr "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+msgstr "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+#~ msgstr "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"

@@ -13337,8 +13337,12 @@ msgstr "Tu estimación de un lado es el promedio simple de los dan que tengas en
 #~ msgstr "Tu dan de jack es alpha++, el cuarto. El pase de gamma no te hace gamma: un chart puede ser una racha con suerte, un chart que te viene bien, o el intento entre cincuenta que se quedó por encima del mínimo de precisión. Pedir cuatro es lo que evita que un solo buen día fije tu nivel."
 
 #: src/routes/dan-estimates.tsx
-msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
-msgstr "Tu dan de jack es el promedio de los cinco pases resaltados. El pase de gamma no te hace gamma por sí solo: un chart puede ser una racha con suerte, un chart que te viene bien, o el intento entre cincuenta que se quedó por encima del mínimo de precisión. Promediado con los cuatro de abajo, puede subir tu dan una fracción de nivel, pero no puede fijarlo."
+msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+msgstr "Tu dan de jack es el promedio de los cinco pases resaltados. El pase de gamma no te hace gamma por sí solo: promediado con los cuatro de abajo, puede subir tu dan una fracción de nivel, pero no puede fijarlo."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+#~ msgstr "Tu dan de jack es el promedio de los cinco pases resaltados. El pase de gamma no te hace gamma por sí solo: un chart puede ser una racha con suerte, un chart que te viene bien, o el intento entre cincuenta que se quedó por encima del mínimo de precisión. Promediado con los cuatro de abajo, puede subir tu dan una fracción de nivel, pero no puede fijarlo."
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"

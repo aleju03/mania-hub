@@ -484,9 +484,8 @@ function DanEstimatesPage() {
             <p>
               <Trans>
                 Your jack dan is the average of the five highlighted passes. The gamma pass does not make
-                you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or
-                the one attempt out of fifty that stayed above the accuracy bar. Averaged against the
-                four below it, it can pull your dan up a fraction of a level, but it cannot set it.
+                you gamma on its own: averaged against the four below it, it can pull your dan up a
+                fraction of a level, but it cannot set it.
               </Trans>
             </p>
           </div>

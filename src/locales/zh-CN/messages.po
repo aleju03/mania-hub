@@ -13346,8 +13346,12 @@ msgstr "你在某一侧的估算，就是你已有的那些技能段位的算术
 #~ msgstr "你的叠段位是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
-msgstr "你的叠段位是高亮那五次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。和它下面那四次放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
+msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+msgstr "你的叠段位是高亮那五次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：和它下面那四次放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+#~ msgstr "你的叠段位是高亮那五次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。和它下面那四次放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"
