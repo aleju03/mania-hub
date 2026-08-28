@@ -224,9 +224,10 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
-              Course charts are unranked, and a clear is checked by the people who run that ladder. None
-              of that comes back through the osu! API as a dan level, so yours cannot be looked up. It
-              can only be inferred from your plays.
+              Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either
+              way, a clear is checked by the people who run that ladder, and none of that comes back
+              through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred
+              from your plays.
             </Trans>
           </P>
         </Section>
@@ -848,11 +849,45 @@ function DanShareRing({ rows }: { rows: Array<{ level: string; players: number }
   );
 }
 
+/* Sections below the fold arrive with a short rise as they come into view.
+   SSR-safe on purpose: the server renders everything visible, and the hide is
+   only applied after mount to sections still off screen, so crawlers and no-JS
+   readers get the plain article and nothing above the fold ever flashes. */
+function useScrollReveal<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || typeof IntersectionObserver === "undefined") return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (element.getBoundingClientRect().top < window.innerHeight) return;
+    setHidden(true);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        setHidden(false);
+      },
+      { rootMargin: "0px 0px -10% 0px" },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return { ref, hidden };
+}
+
 // A section only takes an id when something on the page links down to it, and
 // the scroll margin is there so the heading does not land under the sticky nav.
 function Section({ id, title, children }: { id?: string; title: string; children: ReactNode }) {
+  const { ref, hidden } = useScrollReveal<HTMLElement>();
   return (
-    <section id={id} className={`space-y-3${id ? " scroll-mt-20" : ""}`}>
+    <section
+      ref={ref}
+      id={id}
+      className={`space-y-3 transition-[opacity,transform] duration-500 ease-out ${
+        hidden ? "translate-y-5 opacity-0" : "translate-y-0 opacity-100"
+      }${id ? " scroll-mt-20" : ""}`}
+    >
       <h2 className="text-lg font-bold text-white sm:text-xl">{title}</h2>
       {children}
     </section>

@@ -3834,8 +3834,8 @@ msgstr "Rankings de mania por país"
 #~ msgstr "Los charts de los dans son unranked, y un clear lo verifica la gente que lleva esa escala. Nada de eso vuelve por la API de osu! como un nivel de dan, así que el sitio no puede consultar el tuyo. Solo puede mirar tus plays."
 
 #: src/routes/dan-estimates.tsx
-msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
-msgstr "Los charts de los dans son unranked, y un clear lo verifica la gente que lleva esa escala. Nada de eso vuelve por la API de osu! como un nivel de dan, así que no se puede consultar el tuyo. Solo se pueden mirar tus plays."
+#~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+#~ msgstr "Los charts de los dans son unranked, y un clear lo verifica la gente que lleva esa escala. Nada de eso vuelve por la API de osu! como un nivel de dan, así que no se puede consultar el tuyo. Solo se pueden mirar tus plays."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Create"
@@ -7030,6 +7030,10 @@ msgstr "cartas más coleccionadas"
 msgid "most complete collections"
 msgstr "colecciones más completas"
 
+#: src/routes/dan-estimates.tsx
+msgid "Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+msgstr "La mayoría de los charts de los dans son unranked; los de JinJin son la excepción, loved hasta la Phase III. En cualquier caso, un clear lo verifica la gente que lleva esa escala, y nada de eso vuelve por la API de osu! como un nivel de dan, así que no se puede consultar el tuyo. Solo se pueden mirar tus plays."
+
 #: src/routes/maps.tsx
 msgid "Most farmed globally"
 msgstr "Los más farmeados globalmente"
@@ -9268,6 +9272,10 @@ msgstr "Alcanzar pp"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Reading {0}"
 msgstr "Leyendo {0}"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Reading progress"
+#~ msgstr ""
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Reading the archive..."

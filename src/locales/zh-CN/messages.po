@@ -3843,8 +3843,8 @@ msgstr "国家/地区 mania 排行榜"
 #~ msgstr "课题谱面都没有上架，通过与否由维护那张段位表的人来认定。这些都不会以段位的形式从 osu! API 回来，所以本站查不到你的段位，只能看你打过的成绩。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
-msgstr "段位课题谱面都未上架，通过与否由维护对应段位表的人认定。这些结果都不会以段位形式从 osu! API 返回，因此无法直接查询你的段位，只能根据你的成绩推算。"
+#~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+#~ msgstr "段位课题谱面都未上架，通过与否由维护对应段位表的人认定。这些结果都不会以段位形式从 osu! API 返回，因此无法直接查询你的段位，只能根据你的成绩推算。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Create"
@@ -7039,6 +7039,10 @@ msgstr "被收集最多的卡片"
 msgid "most complete collections"
 msgstr "最完整的收藏册"
 
+#: src/routes/dan-estimates.tsx
+msgid "Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+msgstr "段位课题谱面大多未上架；JinJin 的课题是例外，到 Phase III 为止都是 loved。无论哪种，通过与否都由维护对应段位表的人认定，这些结果都不会以段位形式从 osu! API 返回，因此无法直接查询你的段位，只能根据你的成绩推算。"
+
 #: src/routes/maps.tsx
 msgid "Most farmed globally"
 msgstr "全球刷分最多"
@@ -9277,6 +9281,10 @@ msgstr "总 pp"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Reading {0}"
 msgstr "正在读取 {0}"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Reading progress"
+#~ msgstr ""
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Reading the archive..."

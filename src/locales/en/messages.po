@@ -3834,8 +3834,8 @@ msgstr "Country mania rankings"
 #~ msgstr "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so the site cannot look yours up. It can only look at your plays."
 
 #: src/routes/dan-estimates.tsx
-msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
-msgstr "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+#~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+#~ msgstr "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Create"
@@ -7034,6 +7034,10 @@ msgstr "most collected cards"
 msgid "most complete collections"
 msgstr "most complete collections"
 
+#: src/routes/dan-estimates.tsx
+msgid "Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+msgstr "Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+
 #: src/routes/maps.tsx
 msgid "Most farmed globally"
 msgstr "Most farmed globally"
@@ -9272,6 +9276,10 @@ msgstr "Reach pp"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Reading {0}"
 msgstr "Reading {0}"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Reading progress"
+#~ msgstr "Reading progress"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Reading the archive..."
