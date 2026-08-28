@@ -638,17 +638,17 @@ describe("computePlayerSkillRatings", () => {
       const dan = result.summary.modes[0].dan!;
       // rc evidence uses stable-formula accuracy from the judgement counts,
       // rice-primary charts only: 8.0, 9.0 (DT), 9.0 (hybrid counts rice),
-      // 7.4. The quorum-th (4th) best clear IS the dan.
-      expect(dan.rc?.rawDan).toBe(7.4);
-      expect(dan.rc?.clears).toBe(4);
+      // 7.4. The dan is their average; the two 9.0s are the clears that reach it.
+      expect(dan.rc?.rawDan).toBe(8.35);
+      expect(dan.rc?.clears).toBe(2);
       expect(dan.rc?.label).toBeTruthy();
       // The LN side labels on the numeric LN ladder (never the rice greek
       // levels), LN-primary charts only, each crediting its chart's full dan:
-      // 7.0 / 6.3 / 6.0 / 5.4, position 5.4 -> "5". If chart 109's ln half
-      // leaked in, the 4th-best would be 6.0 instead.
-      expect(dan.ln?.rawDan).toBe(5.4);
-      expect(dan.ln?.label).toBe("5");
-      expect(dan.ln?.clears).toBe(4);
+      // 7.0 / 6.3 / 6.0 / 5.4 average to 6.18. If chart 109's ln half (7.0)
+      // leaked in, the average would be 6.34 instead.
+      expect(dan.ln?.rawDan).toBe(6.18);
+      expect(dan.ln?.label).toBe("6");
+      expect(dan.ln?.clears).toBe(2);
     });
   });
 
@@ -679,10 +679,11 @@ describe("computePlayerSkillRatings", () => {
         play({ id: 5, beatmap_id: 205, accuracy: 0.9657, statistics: failing }),
       ];
       const dan = (await computePlayerSkillRatings(db, failingOsu, scores, [])).summary.modes[0].dan!;
-      // 8.0 / 7.0 / 6.5 / 6.0 qualify and each credits its chart's full dan;
-      // the 9.0 does not. If it had counted, the 4th-best would be 6.5.
-      expect(dan.ln?.rawDan).toBe(6);
-      expect(dan.ln?.clears).toBe(4);
+      // 8.0 / 7.0 / 6.5 / 6.0 qualify and each credits its chart's full dan,
+      // averaging to 6.88; the 9.0 does not. If it had counted, the average
+      // would be 7.3.
+      expect(dan.ln?.rawDan).toBe(6.88);
+      expect(dan.ln?.clears).toBe(2);
     });
   });
 
@@ -858,7 +859,7 @@ describe("computePlayerSkillRatings", () => {
     expect(side.courseClear?.courseName).toContain("EXTRA-DELTA");
   });
 
-  it("keeps the quorum-th clear on a side whose keymode publishes no skillsets", async () => {
+  it("keeps the side-wide best-clears average on a side whose keymode publishes no skillsets", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
       for (const [beatmapId, lnRawDan] of [[311, 9.0], [312, 8.0], [313, 7.0], [314, 6.0]] as const) {
@@ -876,10 +877,11 @@ describe("computePlayerSkillRatings", () => {
         identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
         values: { Overall: 20, Stamina: 20, Stream: 1 }, patterns: [], accuracy: 0.99, stableAccuracy: 0.99,
       });
-      // 4K LN publishes no buckets at all, so there is nothing to average.
+      // 4K LN publishes no buckets at all, so the headline is the side-wide
+      // average of the best clears: (9 + 8 + 7 + 6) / 4.
       const side = danSideFromClearsForTest(4, "ln", [311, 312, 313, 314].map(lnPlay), info)!;
       expect(side.skillsets).toBeUndefined();
-      expect(side.rawDan).toBe(6);
+      expect(side.rawDan).toBe(7.5);
     });
   });
 
@@ -915,6 +917,116 @@ describe("computePlayerSkillRatings", () => {
       // A rate with no stored verdict still contributes nothing.
       const oddRate = collectDanClearsForTest(4, [231, 232, 233, 234].map((id) => ({ ...htPlay(id), rate: 1.2 })), info);
       expect(oddRate.length).toBe(0);
+    });
+  });
+
+  it("credits a custom-rate clear the dan_estimates verdict at that rate", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const { DAN_ESTIMATE_CACHE_VERSION } = await import("../src/dan/dan-estimator/cache-version.js");
+      const { loadStoredRateDanVerdicts, rateDanVerdictKey } = await import("../src/features/dan-estimates.js");
+      const now = new Date().toISOString();
+      for (const beatmapId of [241, 242, 243, 244]) {
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [], rc: { rawDan: 12.0 } }), now],
+        );
+      }
+      const storeVerdict = (beatmapId: number, ratePercent: number, status: string, rawDan: number | null, family: string | null) => exec(
+        db,
+        `insert into dan_estimates (
+           estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, computed_at, updated_at
+         ) values (?, ?, ?, ?, 'x', 'x', ?, ?, 0.9, ?, ?)`,
+        [DAN_ESTIMATE_CACHE_VERSION, beatmapId, ratePercent, status, rawDan, family, now, now],
+      );
+      await storeVerdict(241, 120, "ready", 9.5, "dan");
+      await storeVerdict(242, 120, "ready", 9.5, "ln");
+      await storeVerdict(243, 120, "unavailable", null, null);
+      // 244 has no row at all. 241 also holds a 1.5x verdict, standing in for
+      // a chart the DT sweep never covered (no dan_dt_json column).
+      await storeVerdict(241, 150, "ready", 13.2, "dan");
+
+      const stored = await loadStoredRateDanVerdicts(db, [
+        { beatmapId: 241, ratePercent: 120 },
+        { beatmapId: 242, ratePercent: 120 },
+        { beatmapId: 243, ratePercent: 120 },
+        { beatmapId: 244, ratePercent: 120 },
+        { beatmapId: 241, ratePercent: 150 },
+      ]);
+      expect(stored.get(rateDanVerdictKey(241, 120))).toEqual({ rawDan: 9.5, family: "dan" });
+      expect(stored.get(rateDanVerdictKey(243, 120))).toBeNull();
+      expect(stored.has(rateDanVerdictKey(244, 120))).toBe(false);
+
+      const { collectDanClearsForTest, loadChartSkillInfo } = await import("../src/features/player-skills.js");
+      const info = await loadChartSkillInfo(db, [241, 242, 243, 244]);
+      const verdicts = new Map(
+        [...stored].map(([key, verdict]) => [
+          key,
+          verdict ? { rawDan: verdict.rawDan, side: verdict.family === "ln" ? "ln" as const : "rc" as const } : null,
+        ]),
+      );
+      const ratePlay = (beatmapId: number, rate: number) => ({
+        identity: `official:${beatmapId}:${rate}`, beatmapId, keyCount: 4, rate, goal: 0.95, pp: 100,
+        values: { Overall: 20 }, patterns: [], accuracy: 0.98, stableAccuracy: 0.98,
+      });
+      const clears = collectDanClearsForTest(4, [241, 242, 243, 244].map((id) => ratePlay(id, 1.2)), info, verdicts);
+      // 9.5 at the played rate, never the chart's own 12.0; the terminal row
+      // and the missing row contribute nothing; the ln-family verdict lands on
+      // the ln side.
+      expect(clears.map((clear) => [clear.play.beatmapId, clear.chartDan, clear.side])).toEqual([
+        [241, 9.5, "rc"],
+        [242, 9.5, "ln"],
+      ]);
+
+      // A 1.5x play on a chart with no dan_dt_json falls back to the stored
+      // 150 verdict instead of contributing nothing.
+      const dtClears = collectDanClearsForTest(4, [ratePlay(241, 1.5)], info, verdicts);
+      expect(dtClears.map((clear) => [clear.play.beatmapId, clear.chartDan, clear.side])).toEqual([[241, 13.2, "rc"]]);
+    });
+  });
+
+  it("computes and stores a missing rate verdict during the skill compute, then credits it", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const { DAN_ESTIMATE_CACHE_VERSION } = await import("../src/dan/dan-estimator/cache-version.js");
+      const now = new Date().toISOString();
+      const beatmapIds = [251, 252, 253, 254];
+      for (const beatmapId of beatmapIds) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [], rc: { rawDan: 3 } }), now],
+        );
+      }
+      const trackedScores = beatmapIds.map((beatmapId, index) => play({
+        id: 9100 + index,
+        beatmap_id: beatmapId,
+        pp: undefined,
+        mods: [{ acronym: "DT", settings: { speed_change: 1.2 } }],
+        accuracy: 0.976,
+        statistics: { perfect: 400, great: 250, good: 50 },
+      }));
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores });
+      expect(result.plays.map((entry) => entry.rate)).toEqual([1.2, 1.2, 1.2, 1.2]);
+
+      const rows = (await exec(
+        db,
+        "select beatmap_id, rate_percent, status, raw_dan from dan_estimates where estimator_version = ? order by beatmap_id",
+        [DAN_ESTIMATE_CACHE_VERSION],
+      )).rows;
+      expect(rows.map((row) => [Number(row.beatmap_id), Number(row.rate_percent), String(row.status)])).toEqual(
+        beatmapIds.map((beatmapId) => [beatmapId, 120, "ready"]),
+      );
+      expect(rows.every((row) => Number(row.raw_dan) > 0)).toBe(true);
+
+      // The dan block written by this same pass already credits the four
+      // clears the verdicts unlocked.
+      const mode = result.summary.modes.find((entry) => entry.keyCount === 4)!;
+      expect(mode.dan?.rc?.rawDan).toBeGreaterThan(0);
     });
   });
 

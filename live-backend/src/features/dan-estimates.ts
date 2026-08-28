@@ -14,8 +14,8 @@ import { nowIso } from "../shared/score.js";
 const MAX_DAN_ESTIMATE_BATCH = 32;
 const INLINE_DAN_ESTIMATE_LIMIT = 6;
 const INLINE_DAN_ESTIMATE_CONCURRENCY = 2;
-const MIN_RATE_PERCENT = 50;
-const MAX_RATE_PERCENT = 200;
+export const MIN_RATE_PERCENT = 50;
+export const MAX_RATE_PERCENT = 200;
 const MAX_PARSED_DAN_BEATMAPS = 100;
 
 interface ParsedDanBeatmap {
@@ -38,13 +38,18 @@ export interface LeanDanEstimate {
 
 export interface DanEstimateRequest {
   beatmapId: number;
+  // Accepted on the wire for compatibility but IGNORED: the estimator's star
+  // rating always comes from the beatmaps row. The batch endpoint is public
+  // and the row it writes is keyed only by (beatmap, rate), so a
+  // client-supplied rating was a cache-poisoning vector - and since the dan
+  // clear rules started crediting these rows toward player dans, a poisoned
+  // verdict would rank players, not just mislabel a card.
   starRating?: number;
   rate?: number;
 }
 
 export interface NormalizedDanEstimateRequest {
   beatmapId: number;
-  starRating?: number;
   rate: number;
   ratePercent: number;
   key: string;
@@ -81,13 +86,11 @@ export function normalizeDanEstimateItems(items: unknown[]): NormalizedDanEstima
     const rawRate = raw.rate == null ? 1 : Number(raw.rate);
     const safeRate = Number.isFinite(rawRate) && rawRate > 0 ? rawRate : 1;
     const ratePercent = Math.max(MIN_RATE_PERCENT, Math.min(MAX_RATE_PERCENT, Math.round(safeRate * 100)));
-    const starRating = raw.starRating == null ? undefined : Number(raw.starRating);
     const key = responseKey(beatmapId, ratePercent);
     if (seen.has(key)) continue;
     seen.add(key);
     normalized.push({
       beatmapId,
-      starRating: starRating != null && Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
       rate: ratePercent / 100,
       ratePercent,
       key,
@@ -238,7 +241,6 @@ export async function enqueueDanEstimate(queue: JobQueue, request: NormalizedDan
     danEstimateJobKey(request.beatmapId, request.ratePercent),
     {
       beatmapId: request.beatmapId,
-      starRating: request.starRating,
       rate: request.rate,
     },
     { priority: 45 },
@@ -261,7 +263,7 @@ async function computeAndStoreDanEstimate(
   const cached = await readCachedDanEstimate(db, request);
   if (cached.found) return { status: cached.status, value: cached.value, msd: cached.msd };
 
-  const starRating = request.starRating ?? await readBeatmapStarRating(db, request.beatmapId);
+  const starRating = await readBeatmapStarRating(db, request.beatmapId);
   let parsed: ParsedDanBeatmap;
   try {
     parsed = await getParsedDanBeatmap(db, osu, request.beatmapId, caller);
@@ -275,6 +277,16 @@ async function computeAndStoreDanEstimate(
     }
     throw error;
   }
+  return classifyAndStoreDanEstimate(db, request, parsed, starRating, options);
+}
+
+async function classifyAndStoreDanEstimate(
+  db: Db,
+  request: NormalizedDanEstimateRequest,
+  parsed: ParsedDanBeatmap,
+  starRating: number | undefined,
+  options: { withMsd?: boolean } = {},
+): Promise<ComputedDanEstimate> {
   const { map, osuText } = parsed;
   // Only the rate-analysis path asks for MSD; the batch endpoint and its job
   // want the dan verdict alone and must not pay a MinaCalc run for it. When it
@@ -344,6 +356,128 @@ async function computeAndStoreDanEstimate(
   return { status: "ready", value: lean, msd: msd?.values ?? null };
 }
 
+/** Key a (chart, rate) verdict is filed under in the maps the dan clear rules read. */
+export function rateDanVerdictKey(beatmapId: number, ratePercent: number): string {
+  return `${beatmapId}:${ratePercent}`;
+}
+
+export interface StoredRateDanVerdict {
+  rawDan: number;
+  // "ln" or "dan", the estimator's primary-family split (companella.ts).
+  family: string;
+}
+
+// The verdict lookup loads by beatmap id and filters to the asked pairs in JS:
+// a chart holds only a handful of rate rows, so the over-fetch is cheaper than
+// a tuple-IN SQLite cannot index. Chunked and yielded like loadChartSkillInfo,
+// for the same corpus-sweep caller.
+const RATE_VERDICT_QUERY_CHUNK = 400;
+
+/**
+ * The stored dan verdicts for a set of (chart, rate) pairs, keyed by
+ * rateDanVerdictKey. A null value is a stored terminal row (unsupported
+ * keymode or a permanently missing .osu): resolved, nothing to credit, not
+ * worth recomputing. An absent key is a verdict nobody has computed yet.
+ */
+export async function loadStoredRateDanVerdicts(
+  db: Db,
+  pairs: Iterable<{ beatmapId: number; ratePercent: number }>,
+): Promise<Map<string, StoredRateDanVerdict | null>> {
+  const wanted = new Set<string>();
+  const beatmapIds = new Set<number>();
+  for (const pair of pairs) {
+    if (!Number.isInteger(pair.beatmapId) || pair.beatmapId <= 0) continue;
+    if (!Number.isInteger(pair.ratePercent)) continue;
+    wanted.add(rateDanVerdictKey(pair.beatmapId, pair.ratePercent));
+    beatmapIds.add(pair.beatmapId);
+  }
+  const verdicts = new Map<string, StoredRateDanVerdict | null>();
+  if (wanted.size === 0) return verdicts;
+  const ids = [...beatmapIds];
+  for (let offset = 0; offset < ids.length; offset += RATE_VERDICT_QUERY_CHUNK) {
+    const chunk = ids.slice(offset, offset + RATE_VERDICT_QUERY_CHUNK);
+    const placeholders = chunk.map(() => "?").join(", ");
+    const rows = (await exec(
+      db,
+      `select beatmap_id, rate_percent, status, raw_dan, family, star_rating from dan_estimates
+       where estimator_version = ? and beatmap_id in (${placeholders})`,
+      [DAN_ESTIMATE_CACHE_VERSION, ...chunk],
+    )).rows;
+    // Current star ratings for the chunk, so stale or poisoned rows read as
+    // absent (recomputable with the canonical rating) instead of crediting.
+    const currentStarRatings = new Map<number, number>();
+    for (const row of (await exec(
+      db,
+      `select beatmap_id, difficulty_rating from beatmaps where beatmap_id in (${placeholders})`,
+      chunk,
+    )).rows) {
+      const value = Number(row.difficulty_rating);
+      if (Number.isFinite(value) && value > 0) currentStarRatings.set(Number(row.beatmap_id), value);
+    }
+    for (const row of rows) {
+      const key = rateDanVerdictKey(Number(row.beatmap_id), Number(row.rate_percent));
+      if (!wanted.has(key)) continue;
+      const status = String(row.status ?? "");
+      if (status === "unsupported" || status === "unavailable") {
+        verdicts.set(key, null);
+        continue;
+      }
+      // A malformed or out-of-date ready row stays absent, matching
+      // readCachedDanEstimate: recomputable, not resolved.
+      const rawDan = Number(row.raw_dan);
+      const family = row.family == null ? "" : String(row.family);
+      if (status !== "ready" || !Number.isFinite(rawDan) || rawDan <= 0 || !family) continue;
+      const storedStarRating = row.star_rating == null ? null : Number(row.star_rating);
+      if (storedStarRatingInvalidatesRow(storedStarRating, currentStarRatings.get(Number(row.beatmap_id)))) continue;
+      verdicts.set(key, { rawDan, family });
+    }
+    if (offset + chunk.length < ids.length) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  }
+  return verdicts;
+}
+
+/**
+ * One (chart, rate) dan verdict computed from an already-loaded .osu (the
+ * caller owns the fetch policy) and stored in dan_estimates on the same terms
+ * as the batch path, so every reader shares one cache. Returns the ready
+ * verdict, or null for anything uncreditable: an already-stored terminal row,
+ * an unsupported keymode (stored, so it will not recompute), or a chart the
+ * parser rejects (not stored; the caller retries on a later pass).
+ */
+export async function computeAndStoreRateDanVerdictFromText(
+  db: Db,
+  beatmapId: number,
+  ratePercent: number,
+  osuText: string,
+): Promise<LeanDanEstimate | null> {
+  const [request] = normalizeDanEstimateItems([{ beatmapId, rate: ratePercent / 100 }]);
+  if (!request || request.ratePercent !== ratePercent) return null;
+  const cached = await readCachedDanEstimate(db, request);
+  if (cached.found) return cached.status === "ready" ? cached.value : null;
+  let map: ManiaBeatmap;
+  try {
+    map = parseManiaBeatmap(osuText);
+  } catch {
+    return null;
+  }
+  const starRating = await readBeatmapStarRating(db, request.beatmapId);
+  const computed = await classifyAndStoreDanEstimate(db, request, { map, osuText }, starRating);
+  return computed.value;
+}
+
+/** Queue the (chart, rate) verdict compute; the job key dedupes repeat asks. */
+export async function enqueueRateDanEstimate(
+  queue: JobQueue,
+  beatmapId: number,
+  ratePercent: number,
+): Promise<void> {
+  const [request] = normalizeDanEstimateItems([{ beatmapId, rate: ratePercent / 100 }]);
+  if (!request || request.ratePercent !== ratePercent) return;
+  await enqueueDanEstimate(queue, request);
+}
+
 async function getParsedDanBeatmap(db: Db, osu: OsuApiClient, beatmapId: number, caller: string): Promise<ParsedDanBeatmap> {
   const cached = parsedDanBeatmapCache.get(beatmapId);
   if (cached) {
@@ -393,7 +527,10 @@ async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateReque
     return { found: true, status, value: null, msd };
   }
   if (status !== "ready") return { found: false };
-  if (row.star_rating == null && request.starRating != null) return { found: false };
+  const storedStarRating = row.star_rating == null ? null : Number(row.star_rating);
+  if (storedStarRatingInvalidatesRow(storedStarRating, await readBeatmapStarRating(db, request.beatmapId))) {
+    return { found: false };
+  }
 
   const label = row.label == null ? "" : String(row.label);
   const displayName = row.display_name == null ? "" : String(row.display_name);
@@ -424,6 +561,21 @@ function readStoredMsd(raw: unknown): Record<string, number> | null {
   if (raw == null) return null;
   const parsed = parseJson<{ values?: Record<string, number> } | null>(String(raw), null);
   return parsed && parsed.values && typeof parsed.values === "object" ? parsed.values : null;
+}
+
+// A stored ready row is only current while the star rating it was computed
+// under matches the beatmaps row today. Beyond this band the row recomputes:
+// either it predates enrichment (null stored, rating known now), osu! recalced
+// the chart (a refresh is wanted anyway), or it was poisoned back when the
+// batch endpoint still trusted a client-supplied rating. Within the band tiny
+// float drift is not worth a MinaCalc run. A chart whose beatmaps row is
+// missing cannot be validated and keeps its stored verdict.
+const STORED_STAR_RATING_TOLERANCE = 0.05;
+
+function storedStarRatingInvalidatesRow(stored: number | null, current: number | undefined): boolean {
+  if (current == null) return false;
+  if (stored == null || !Number.isFinite(stored)) return true;
+  return Math.abs(stored - current) > STORED_STAR_RATING_TOLERANCE;
 }
 
 async function storeUnsupportedDanEstimate(
@@ -475,7 +627,10 @@ async function storeTerminalDanEstimate(
       request.beatmapId,
       request.ratePercent,
       status,
-      request.starRating ?? null,
+      // Terminal rows are resolved regardless of star rating (an unsupported
+      // keymode or a gone .osu does not change with it), so none is recorded
+      // and the freshness check above never re-opens them over it.
+      null,
       error,
       msd ? JSON.stringify({ values: msd }) : null,
       now,

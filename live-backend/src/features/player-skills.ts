@@ -6,6 +6,7 @@ import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
 import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { MAX_RATE_PERCENT, MIN_RATE_PERCENT, computeAndStoreRateDanVerdictFromText, enqueueRateDanEstimate, loadStoredRateDanVerdicts, rateDanVerdictKey } from "./dan-estimates.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, persistSessionProfileSnapshot } from "./player-profiles.js";
@@ -289,10 +290,11 @@ const AGGREGATE_RATING_SCALER = 1.04;
 // sat below what the community tables actually require.)
 //
 // The quorum rates a SKILLSET now, not the headline: the side's estimate is
-// the mean of its skillset dans (averageSkillsetDans), each of which is its
-// own bucket's quorum-th clear. It still gates the side as a whole - four
-// qualifying clears or no estimate - and it is still the headline on a side
-// with too few rated skillsets to average.
+// the mean of its skillset dans (averageSkillsetDans), each of which is the
+// mean of its own bucket's best DAN_CLEAR_AVERAGE_WINDOW clears
+// (danFromClears). It still gates the side as a whole - four qualifying
+// clears or no estimate - and the same best-clears average over the whole
+// side is the headline when there are too few rated skillsets to average.
 //
 // The bars come from the courses themselves rather than a single site-wide
 // number, because each ladder sets its own:
@@ -360,8 +362,8 @@ export interface PlayerSkillPatternRating {
 
 // The community-legible axis: "4K RC ~ 8th dan". rawDan is continuous on the
 // chart-dan scale (labels via parseDan); clears counts the qualifying plays
-// at or above it. On a skillset that is the quorum rule's near-constant 4; on
-// an averaged side estimate it is a real count of the clears that reach it.
+// at or above it - a real count everywhere now that every estimate is an
+// average rather than the quorum-th clear itself.
 export interface PlayerSkillDanVerdict {
   rawDan: number;
   label: string;
@@ -377,8 +379,8 @@ export interface PlayerSkillDanVerdict {
 
 export interface PlayerSkillDanSide extends PlayerSkillDanVerdict {
   /**
-   * The same quorum rule run over one skillset bucket's clears ("your jack
-   * dan"), keyed by danSkillsetBuckets id. These are the terms the side's own
+   * The same best-clears average run over one skillset bucket's clears ("your
+   * jack dan"), keyed by danSkillsetBuckets id. These are the terms the side's own
    * rawDan is the mean of, so they are the estimate rather than a breakdown of
    * it. Stored rather than derived on read because the dan leaderboards rank a
    * whole roster by it and re-deriving would mean reading every player's
@@ -1039,21 +1041,25 @@ function getMissShare(statistics: OsuScoreStatistics | undefined): number | null
 // PRIMARY family (LN iff the hold share clears LN_PRIMARY_MIN_RATIO, the same
 // rule as /maps): accuracy
 // on an LN chart is earned on the holds, so it proves nothing about the rice
-// half's rating, and vice versa. Rate mods count on the same terms: a 1.5x or
-// 0.75x pass credits the verdict its own sweep stored, on that verdict's
-// primary side, so it is worth what the chart is worth at the rate it was
-// played rather than what it is worth at 1.0x. Rates with no stored verdict
-// (0.9x, 1.2x and the rest of the custom band) still contribute nothing,
-// having nothing to be credited against.
+// half's rating, and vice versa. Rate mods count on the same terms: any pass
+// in the estimator's 0.5x-2.0x band credits the chart's stored verdict AT that
+// rate, on that verdict's primary side, so it is worth what the chart is worth
+// at the rate it was played rather than what it is worth at 1.0x. The 1.5x and
+// 0.75x sweeps' chart-analysis columns stay the first read; every other rate
+// (and a 1.5x/0.75x chart those sweeps never covered) reads the dan_estimates
+// verdict at the play's own rate_percent, which the skill compute fills in on
+// demand. A rate verdict nobody has computed yet still contributes nothing -
+// until the next compute lands it.
 function computeModeDan(
   keyCount: number,
   plays: StoredPlaySsr[],
   scoresByIdentity: Map<string, OscScore>,
   infoByBeatmap: Map<number, ChartSkillInfo>,
   courseClears: DanCourseClear[] = [],
+  rateVerdicts: RateVerdictMap = new Map(),
 ): PlayerSkillModeDan {
   const clears: Record<"rc" | "ln", DanClearEvidence[]> = { rc: [], ln: [] };
-  for (const clear of collectDanClears(keyCount, plays, scoresByIdentity, infoByBeatmap)) {
+  for (const clear of collectDanClears(keyCount, plays, scoresByIdentity, infoByBeatmap, rateVerdicts)) {
     clears[clear.side].push(clear);
   }
   const forSide = (side: "rc" | "ln"): PlayerSkillDanSide | null =>
@@ -1075,11 +1081,76 @@ interface DanClearEvidence {
   accuracy: number;
 }
 
+/**
+ * The dan credit for plays at rates the chart-analysis columns do not cover,
+ * keyed by rateDanVerdictKey. A null value is a stored terminal row (nothing
+ * to credit and nothing to recompute); an absent key is a verdict nobody has
+ * computed yet, which the skill compute fills in and the evidence read
+ * enqueues.
+ */
+type RateVerdictMap = Map<string, { rawDan: number; side: "rc" | "ln" } | null>;
+
+/**
+ * The rate a clear at this play would be credited at, or null when the play is
+ * 1.0x (the chart's own verdict covers it) or outside the estimator's 50-200%
+ * band. Wind up/down and adaptive speed never get here: getPlayRate already
+ * returned null for them, so such plays were never rated at all.
+ */
+function clearRatePercent(rate: number): number | null {
+  if (!Number.isFinite(rate) || rate <= 0 || rate === 1) return null;
+  const percent = Math.round(rate * 100);
+  if (percent === 100 || percent < MIN_RATE_PERCENT || percent > MAX_RATE_PERCENT) return null;
+  return percent;
+}
+
+/** The stored rate verdicts these plays' clears read, in clear-rule terms. */
+async function loadRateVerdictCredits(db: Db, plays: StoredPlaySsr[]): Promise<RateVerdictMap> {
+  const pairs: Array<{ beatmapId: number; ratePercent: number }> = [];
+  for (const play of plays) {
+    const ratePercent = clearRatePercent(play.rate);
+    if (ratePercent != null && Number.isInteger(play.beatmapId) && play.beatmapId > 0) {
+      pairs.push({ beatmapId: play.beatmapId, ratePercent });
+    }
+  }
+  const stored = await loadStoredRateDanVerdicts(db, pairs);
+  const credits: RateVerdictMap = new Map();
+  for (const [key, verdict] of stored) {
+    credits.set(key, verdict ? { rawDan: verdict.rawDan, side: verdict.family === "ln" ? "ln" : "rc" } : null);
+  }
+  return credits;
+}
+
+/**
+ * The (chart, rate) verdicts these plays would be credited against but nobody
+ * has computed yet. Charts without a ready analysis row are not listed: they
+ * are not clear-eligible at any rate, and the untagged-chart queue owns them.
+ */
+function missingRateVerdictPairs(
+  plays: StoredPlaySsr[],
+  infoByBeatmap: Map<number, ChartSkillInfo>,
+  rateVerdicts: RateVerdictMap,
+): Array<{ beatmapId: number; ratePercent: number }> {
+  const missing = new Map<string, { beatmapId: number; ratePercent: number }>();
+  for (const play of plays) {
+    const ratePercent = clearRatePercent(play.rate);
+    if (ratePercent == null) continue;
+    const info = infoByBeatmap.get(play.beatmapId);
+    if (!info) continue;
+    if (ratePercent === 150 && info.dtFamily != null) continue;
+    if (ratePercent === 75 && info.htFamily != null) continue;
+    const key = rateDanVerdictKey(play.beatmapId, ratePercent);
+    if (rateVerdicts.has(key)) continue;
+    missing.set(key, { beatmapId: play.beatmapId, ratePercent });
+  }
+  return [...missing.values()];
+}
+
 function collectDanClears(
   keyCount: number,
   plays: StoredPlaySsr[],
   scoresByIdentity: Map<string, OscScore>,
   infoByBeatmap: Map<number, ChartSkillInfo>,
+  rateVerdicts: RateVerdictMap = new Map(),
 ): DanClearEvidence[] {
   const clears: DanClearEvidence[] = [];
   for (const play of plays) {
@@ -1127,6 +1198,14 @@ function collectDanClears(
       // Credited what the chart is worth AT 0.75x, which is well under its 1.0x
       // dan: slowing a chart down does not clear the chart it used to be.
       push(info.htRawDan, info.htFamily);
+    } else {
+      // Every other rate in the 0.5x-2.0x band - a lazer speed_change, or a
+      // 1.5x/0.75x chart the sweeps never stored columns for - credits the
+      // dan_estimates verdict at the play's own rate, on the same terms.
+      const ratePercent = clearRatePercent(play.rate);
+      if (ratePercent == null) continue;
+      const verdict = rateVerdicts.get(rateDanVerdictKey(play.beatmapId, ratePercent));
+      if (verdict) push(verdict.rawDan, verdict.side);
     }
   }
   return clears;
@@ -1137,8 +1216,9 @@ export function collectDanClearsForTest(
   keyCount: number,
   plays: StoredPlaySsr[],
   infoByBeatmap: Map<number, ChartSkillInfo>,
+  rateVerdicts: RateVerdictMap = new Map(),
 ): DanClearEvidence[] {
-  return collectDanClears(keyCount, plays, new Map(), infoByBeatmap);
+  return collectDanClears(keyCount, plays, new Map(), infoByBeatmap, rateVerdicts);
 }
 
 /** Test seam over one side's whole verdict, skillset dans and averaged headline. */
@@ -1148,21 +1228,30 @@ export function danSideFromClearsForTest(
   plays: StoredPlaySsr[],
   infoByBeatmap: Map<number, ChartSkillInfo>,
   courseClears: DanCourseClear[] = [],
+  rateVerdicts: RateVerdictMap = new Map(),
 ): PlayerSkillDanSide | null {
-  const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap).filter((clear) => clear.side === side);
+  const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap, rateVerdicts).filter((clear) => clear.side === side);
   return danSideFromClears(keyCount, side, clears, infoByBeatmap, courseClears);
 }
+
+// How many best clears the dan averages over. One more than the quorum, so a
+// quorum-sized pool simply averages everything it has.
+const DAN_CLEAR_AVERAGE_WINDOW = 5;
 
 function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): PlayerSkillDanVerdict | null {
   if (rawDans.length < DAN_CLEAR_QUORUM) return null;
   const sorted = [...rawDans].sort((a, b) => b - a);
-  // The quorum-th best credited clear IS the dan: outlier clears above it
-  // cannot set it, and nothing gets added on top of the evidence.
-  const rawDan = Math.round(sorted[DAN_CLEAR_QUORUM - 1] * 100) / 100;
+  // The dan is the mean of the best DAN_CLEAR_AVERAGE_WINDOW credited clears
+  // (all of them on a quorum-sized pool). One outlier clear cannot set the
+  // level on its own, but it is no longer discarded the way the old
+  // quorum-th-clear rule discarded everything above the 4th: it pulls the
+  // average up in proportion to how far it sits above the rest.
+  const window = sorted.slice(0, DAN_CLEAR_AVERAGE_WINDOW);
+  const rawDan = Math.round((window.reduce((sum, value) => sum + value, 0) / window.length) * 100) / 100;
   return {
     rawDan,
     label: danLabelFor(rawDan, side, keyCount),
-    clears: sorted.filter((value) => value >= sorted[DAN_CLEAR_QUORUM - 1]).length,
+    clears: sorted.filter((value) => value >= rawDan - DAN_ROUNDING_EPSILON).length,
     ...(isBeyondDanTable(rawDan, side, keyCount) ? { beyondTable: true } : {}),
   };
 }
@@ -1174,7 +1263,8 @@ function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): 
 const DAN_ROUNDING_EPSILON = 0.005;
 
 // How many skillsets have to carry a dan of their own before the average is
-// the headline. Under this the side falls back to the quorum-th clear.
+// the headline. Under this the side falls back to the side-wide best-clears
+// average (danFromClears over every clear on the side).
 //
 // Two rather than all four because bucket coverage is play depth, not
 // specialisation: measured over the 11,652 rated 4K rice players, everyone
@@ -1219,8 +1309,7 @@ function averageSkillsetDans(
   return {
     rawDan,
     label: danLabelFor(rawDan, side, keyCount),
-    // The clears that reach the estimate, which for an average is a real count
-    // instead of the quorum rule's near-constant 4.
+    // The clears that reach the estimate.
     clears: clearDans.filter((value) => value >= rawDan - DAN_ROUNDING_EPSILON).length,
     ...(isBeyondDanTable(rawDan, side, keyCount) ? { beyondTable: true } : {}),
   };
@@ -1234,8 +1323,8 @@ function averageSkillsetDans(
  * The side still needs a full quorum of clears to be rated at all - fewer than
  * four qualifying passes is no estimate rather than a shaky one - and a side
  * with fewer than DAN_SKILLSET_AVERAGE_MIN_BUCKETS rated skillsets keeps the
- * quorum-th clear as its headline. Keymodes that publish no buckets at all
- * (4K and 6K LN) therefore keep the old rule everywhere.
+ * side-wide best-clears average as its headline. Keymodes that publish no
+ * buckets at all (4K and 6K LN) therefore keep that side-wide rule everywhere.
  */
 function danSideFromClears(
   keyCount: number,
@@ -1373,6 +1462,11 @@ function parseOsuKeyCount(osuText: string): number | null {
 // finish well under the lane watchdog. Overflow lands in pendingPlays, whose
 // 30-minute retry chains follow-up computes until the backlog drains.
 const MAX_CALC_RUNS_PER_COMPUTE = 150;
+
+// Bound on missing (chart, rate) dan verdicts computed per invocation, on top
+// of the shared calc-run budget: each is one MinaCalc-plus-estimator burst and
+// the result is corpus-shared, so a backlog drains across computes quickly.
+const MAX_RATE_VERDICT_COMPUTES = 24;
 
 interface PlayCandidate {
   score: OscScore;
@@ -1575,6 +1669,29 @@ export async function computePlayerSkillRatings(
     else untaggedBeatmapIds.push(play.beatmapId);
   }
 
+  // Rate verdicts for the custom-rate clears: read what is stored, then
+  // compute the missing ones right here, where MinaCalc already runs - so the
+  // dan block written below credits them in the same pass instead of racing a
+  // job in another lane. Bounded like the SSR loop; leftovers wait for the
+  // next compute exactly as pending plays do.
+  const rateVerdicts = await loadRateVerdictCredits(db, analyzed);
+  let verdictComputes = 0;
+  for (const pair of missingRateVerdictPairs(analyzed, infoByBeatmap, rateVerdicts)) {
+    if (verdictComputes >= MAX_RATE_VERDICT_COMPUTES || calcRunsTotal >= MAX_CALC_RUNS_PER_COMPUTE) break;
+    const osuText = await loadOsuText(db, osu, pair.beatmapId);
+    if (osuText == null) continue;
+    verdictComputes += 1;
+    calcRunsTotal += 1;
+    const lean = await computeAndStoreRateDanVerdictFromText(db, pair.beatmapId, pair.ratePercent, osuText);
+    if (lean) {
+      rateVerdicts.set(
+        rateDanVerdictKey(pair.beatmapId, pair.ratePercent),
+        { rawDan: lean.rawDan, side: lean.family === "ln" ? "ln" : "rc" },
+      );
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
   const byKeyCount = new Map<number, StoredPlaySsr[]>();
   for (const play of analyzed) {
     const list = byKeyCount.get(play.keyCount);
@@ -1587,7 +1704,7 @@ export async function computePlayerSkillRatings(
       analyzedPlays: list.length,
       ratings: aggregateModeRatings(list),
       patterns: aggregateModePatternRatings(list),
-      dan: computeModeDan(keyCount, list, scoresByIdentity, infoByBeatmap, options.courseClears),
+      dan: computeModeDan(keyCount, list, scoresByIdentity, infoByBeatmap, options.courseClears, rateVerdicts),
     }))
     .sort((a, b) => b.analyzedPlays - a.analyzedPlays);
 
@@ -2096,8 +2213,8 @@ export interface PlayerSkillDanSkillsetEvidence {
   // "ln*" subtypes on the LN side. Not a raw analyzer pattern tag.
   id: string;
   clears: number;
-  // This skillset's own quorum-th clear, one of the terms the headline dan
-  // averages; null while the skillset has fewer than quorum clears.
+  // This skillset's own best-clears average, one of the terms the headline
+  // dan averages; null while the skillset has fewer than quorum clears.
   dan: { rawDan: number; label: string } | null;
   plays: PlayerSkillDanEvidencePlay[];
 }
@@ -2300,11 +2417,17 @@ function groupDanClearsBySkillset(
  * than shipping a second one; chart-analysis rows refreshed since the last
  * compute can drift it slightly until the next recompute picks them up.
  */
+// How many missing rate verdicts one evidence read may queue: enough to cover
+// a session's worth of custom-rate clears, few enough that a modal open stays
+// a handful of dedupe-keyed inserts.
+const DAN_EVIDENCE_VERDICT_ENQUEUES = 16;
+
 export async function getPlayerSkillDanEvidence(
   db: Db,
   userId: number,
   keyCount: number,
   side: "rc" | "ln",
+  queue: JobQueue | null = null,
 ): Promise<PlayerSkillDanEvidence | null> {
   if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(keyCount) || keyCount <= 0) return null;
   const row = (await exec(
@@ -2318,7 +2441,16 @@ export async function getPlayerSkillDanEvidence(
   const plays = (Array.isArray(stored?.plays) ? stored.plays : [])
     .filter((play) => play && play.keyCount === keyCount && Number.isInteger(play.beatmapId) && play.beatmapId > 0);
   const infoByBeatmap = await loadChartSkillInfo(db, plays.map((play) => play.beatmapId));
-  const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap)
+  const rateVerdicts = await loadRateVerdictCredits(db, plays);
+  // Verdicts missing for stored plays heal on view: the compute job fills its
+  // own, but a player nobody recomputes (or plays rated before the credit
+  // existed) would otherwise wait forever. The job key dedupes repeat opens.
+  if (queue) {
+    for (const pair of missingRateVerdictPairs(plays, infoByBeatmap, rateVerdicts).slice(0, DAN_EVIDENCE_VERDICT_ENQUEUES)) {
+      await enqueueRateDanEstimate(queue, pair.beatmapId, pair.ratePercent).catch(() => {});
+    }
+  }
+  const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap, rateVerdicts)
     .filter((clear) => clear.side === side)
     .sort((left, right) =>
       right.chartDan - left.chartDan
@@ -2327,8 +2459,7 @@ export async function getPlayerSkillDanEvidence(
   const courseClears = await loadPlayerDanCourseClears(db, userId);
   const dan = danSideFromClears(keyCount, side, clears, infoByBeatmap, courseClears);
   // Everything at or above the estimate "backs" it, matching the stored
-  // verdict's clears count. Under the averaged headline that is a real subset
-  // of the clears rather than the four that tie the quorum-th.
+  // verdict's clears count.
   const threshold = dan ? dan.rawDan - DAN_ROUNDING_EPSILON : null;
 
   // Skillset grouping, by bucket rather than by raw analyzer tag: the tag
@@ -2846,7 +2977,15 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // v3: a verified dan course clear now floors the headline, which no stored row
 // has ever been asked about. It re-derives from plays_json plus the two course
 // lookups without re-rating, so this costs no MinaCalc.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v3";
+// v4: custom-rate clears now credit the dan_estimates verdict at the play's
+// own rate, and stored rows hold plays at rates no stored verdict ever
+// covered. The sweep reads whatever verdicts exist (months of map-page rate
+// lookups) and computes none; the rest fill in on demand and land on each
+// player's next recompute.
+// v5: a dan became the mean of the best DAN_CLEAR_AVERAGE_WINDOW clears
+// rather than the quorum-th clear alone, so every stored verdict is stale
+// again. Same re-derive from plays_json, no MinaCalc.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v5";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
@@ -2896,6 +3035,7 @@ export async function recomputePlayerSkillDanChunk(
   // One chart lookup for the whole chunk: the corpus reuses charts heavily, so
   // per-user queries would re-read the same rows a few hundred times over.
   const infoByBeatmap = await loadChartSkillInfo(db, beatmapIds);
+  const rateVerdicts = await loadRateVerdictCredits(db, parsed.flatMap((entry) => entry.plays));
 
   for (const { userId, summary, plays, readAt } of parsed) {
     // Course clears do not live in plays_json (that pool is deduped, capped
@@ -2913,7 +3053,7 @@ export async function recomputePlayerSkillDanChunk(
     }
     const modes = summary.modes.map((mode) => ({
       ...mode,
-      dan: computeModeDan(mode.keyCount, playsByKeyCount.get(mode.keyCount) ?? [], new Map(), infoByBeatmap, courseClears),
+      dan: computeModeDan(mode.keyCount, playsByKeyCount.get(mode.keyCount) ?? [], new Map(), infoByBeatmap, courseClears, rateVerdicts),
     }));
     // The chart lookup above sits between the read and this write, and a
     // normal skill computation runs in another lane - so the row can have been

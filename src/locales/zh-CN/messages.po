@@ -95,8 +95,8 @@ msgid "? replay views"
 msgstr "? 次回放观看"
 
 #: src/routes/dan-estimates.tsx
-msgid "(extra) Step 7: clearing a real course overrides all of it"
-msgstr "（附加）第七步：通过真正的课题会盖过以上一切"
+#~ msgid "(extra) Step 7: clearing a real course overrides all of it"
+#~ msgstr "（附加）第七步：通过真正的课题会盖过以上一切"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "(optional, up to {SKIN_MAX_SCREENSHOTS})"
@@ -728,6 +728,11 @@ msgstr "{0} 的卡片，被撕成两半"
 msgid "{0}'s card, recycled for {recycledFor} shards"
 msgstr "{0} 的卡片，回收得到 {recycledFor} 个碎片"
 
+#. placeholder {0}: packCollectorLabel(collector)
+#: src/routes/packs_.collections.tsx
+msgid "{0}'s collection"
+msgstr "{0} 的收藏册"
+
 #. placeholder {0}: loadStatus.name
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "{0}'s me! page is empty."
@@ -814,8 +819,8 @@ msgid "{collectedShown}/{0} collected"
 msgstr "已收集 {collectedShown}/{0}"
 
 #: src/routes/packs_.collections.tsx
-msgid "{collector}'s collection"
-msgstr "{collector} 的收藏册"
+#~ msgid "{collector}'s collection"
+#~ msgstr "{collector} 的收藏册"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "{count, plural, one {# card} other {# cards}}"
@@ -1434,8 +1439,12 @@ msgid "<0>{0}K has its own rating scale.</0> A lower number than another keymode
 msgstr "<0>{0}K 有自己的评分标准。</0>数值比其他键数低，并不代表你在这个键数上更差。"
 
 #: src/components/packs/collections/CollectorShelf.tsx
-msgid "<0>{collector}</0> has not opened a pack."
-msgstr "<0>{collector}</0> 还没有开过卡包。"
+#~ msgid "<0>{collector}</0> has not opened a pack."
+#~ msgstr "<0>{collector}</0> 还没有开过卡包。"
+
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "<0>{collectorLabel}</0> has not opened a pack."
+msgstr "<0>{collectorLabel}</0> 还没有开过卡包。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "<0>{percent}%</0> of the rated plays are LN charts ({lnPlays} of {total})"
@@ -1964,8 +1973,8 @@ msgid "Adding you…"
 msgstr "正在加入…"
 
 #: src/routes/report.tsx
-msgid "Additional information you sent"
-msgstr "你发送的补充信息"
+#~ msgid "Additional information you sent"
+#~ msgstr "你发送的补充信息"
 
 #: src/components/packs/PackPulse.tsx
 msgid "Admin: flood the rail with fake pulls to preview the animation"
@@ -3903,8 +3912,8 @@ msgid "Dan estimate: {0} ({1})"
 msgstr "段位估计：{0}（{1}）"
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
-msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
-msgstr "这里的段位是根据玩家通过的谱面估算的，并非真实的段位通过记录。请当作大致排序看待，而不是正式排名。"
+#~ msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
+#~ msgstr "这里的段位是根据玩家通过的谱面估算的，并非真实的段位通过记录。请当作大致排序看待，而不是正式排名。"
 
 #: src/lib/signature-shared.ts
 msgid "Dan rating"
@@ -4549,6 +4558,10 @@ msgstr "退出全屏"
 msgid "Explore Global maps"
 msgstr "浏览全球谱面"
 
+#: src/routes/dan-estimates.tsx
+msgid "Extra: clearing a real course overrides all of it"
+msgstr "附加：通过真正的课题会盖过以上一切"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Failed"
 msgstr "失败"
@@ -4876,6 +4889,10 @@ msgstr "最先找到卡片"
 msgid "Fit"
 msgstr "适应宽度"
 
+#: src/routes/dan-estimates.tsx
+msgid "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+msgstr "五大致对应一个真实课题的长度。达标通过正好四次时，就取那四次的平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
+
 #: src/routes/report.tsx
 msgid "fixed"
 msgstr "已修复"
@@ -4939,8 +4956,8 @@ msgid "Found something broken? Describe what happened."
 msgstr "发现了什么问题？请描述一下发生了什么。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Four is standing in for the length of a real course. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
-msgstr "四这个数字对应的是一个真实课题的长度。某个技能上的达标通过不到四次，它就没有自己的段位；某一侧的达标通过不到四次，就干脆不给估算，而不是给一个站不住的。"
+#~ msgid "Four is standing in for the length of a real course. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgstr "四这个数字对应的是一个真实课题的长度。某个技能上的达标通过不到四次，它就没有自己的段位；某一侧的达标通过不到四次，就干脆不给估算，而不是给一个站不住的。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
@@ -5437,7 +5454,7 @@ msgid "how many players near you have it"
 msgstr "有多少与你水平相近的玩家打过它"
 
 #: src/routes/dan-estimates.tsx
-msgid "How much this moves you depends on how lopsided you are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
+msgid "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
 msgstr "这个改动对你影响多大，取决于你有多偏科，而这正是重点所在。典型的 4K 玩家会掉一级左右。玩家最强与最弱技能之间的差距，中位数是 1.7 级，到 90 分位则达到 4.3 级，而这个差距过去是完全看不见的。"
 
 #: src/routes/maps.tsx
@@ -8142,8 +8159,8 @@ msgid "optional"
 msgstr "选填"
 
 #: src/routes/report.tsx
-msgid "Optional follow-up"
-msgstr "可选补充说明"
+#~ msgid "Optional follow-up"
+#~ msgstr "可选补充说明"
 
 #: src/routes/farm-helper.tsx
 msgid "or pick someone else"
@@ -9090,8 +9107,12 @@ msgstr "速率"
 #~ msgstr "变速 Mod 算数，而且按谱面在那个速度下值多少来算。1.0x、<0/> 或 <1/>(1.5x)、<2/> 或 <3/>(0.75x) 下的通过，都会按谱面在那个速度下的段位计入，而这个段位是本站单独评的。Runengon [4K Hard] 在 1.0x 是 4 段谱面，在 <4/> 下大约是 9 段，所以一次 <5/> 的通过按 9 段计入，而不是 4 段。ANiMA [Starry's 4K Lv.15] 同理，从 3 段变到大约 7 段。降速则反过来：0.75x 的通过只值这张谱面在 0.75x 下的水平，远低于它原速的段位。lazer 的自定义倍速比如 1.15x 不会计入你的段位。本站可以按需给任意速度评一个段位，你打开一个自定义倍速的成绩时谱面页就是这么做的，但只有 0.75x、1.0x 和 1.5x 会存下来，而段位只读存下来的那些。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x) and at <2/> or <3/> (0.75x) are all credited against the chart's dan at that exact rate, with each speed rated separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. Custom lazer rates like 1.15x do not count toward your dan. The estimator can rate a chart at any speed on demand, and the map page does exactly that when you open a play set at one, but only 0.75x, 1.0x and 1.5x are stored, and the dan only reads stored ones."
-msgstr "倍速 Mod 会被计算，而且按谱面在对应速度下的价值计算。1.0x 下的通过、使用 <0/> 或 <1/>（1.5x）的通过，以及使用 <2/> 或 <3/>（0.75x）的通过，都会按谱面在该速度下的段位记入，每个速度单独评级。Runengon [4K Hard] 在 1.0x 下是 4 段，开 <4/> 后约为 9 段，所以开 <5/> 的通过按 9 段算，而不是 4 段。ANiMA [Starry's 4K Lv.15] 同样会从 3 段升到约 7 段。减速则相反：0.75x 下的通过只值谱面在 0.75x 下的段位，远低于原速段位。1.15x 这类 lazer 自定义倍速不计入段位。估算器可以按需评估任意速度，打开某个倍速成绩时，谱面页面正会这样做；但只会存储 0.75x、1.0x 和 1.5x 的结果，段位估算也只读取这些已存结果。"
+#~ msgid "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x) and at <2/> or <3/> (0.75x) are all credited against the chart's dan at that exact rate, with each speed rated separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. Custom lazer rates like 1.15x do not count toward your dan. The estimator can rate a chart at any speed on demand, and the map page does exactly that when you open a play set at one, but only 0.75x, 1.0x and 1.5x are stored, and the dan only reads stored ones."
+#~ msgstr "倍速 Mod 会被计算，而且按谱面在对应速度下的价值计算。1.0x 下的通过、使用 <0/> 或 <1/>（1.5x）的通过，以及使用 <2/> 或 <3/>（0.75x）的通过，都会按谱面在该速度下的段位记入，每个速度单独评级。Runengon [4K Hard] 在 1.0x 下是 4 段，开 <4/> 后约为 9 段，所以开 <5/> 的通过按 9 段算，而不是 4 段。ANiMA [Starry's 4K Lv.15] 同样会从 3 段升到约 7 段。减速则相反：0.75x 下的通过只值谱面在 0.75x 下的段位，远低于原速段位。1.15x 这类 lazer 自定义倍速不计入段位。估算器可以按需评估任意速度，打开某个倍速成绩时，谱面页面正会这样做；但只会存储 0.75x、1.0x 和 1.5x 的结果，段位估算也只读取这些已存结果。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x), at <2/> or <3/> (0.75x), or at any custom lazer rate from 0.5x to 2.0x is credited against the chart's dan at that exact rate, with each speed rated separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. A speed nobody has rated that chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to start counting."
+msgstr "变速 Mod 算数，而且按谱面在那个速度下值多少来算。1.0x、<0/> 或 <1/>(1.5x)、<2/> 或 <3/>(0.75x)，以及 0.5x 到 2.0x 之间任意的 lazer 自定义倍速下的通过，都会按谱面在那个速度下的段位计入，每个速度单独评。Runengon [4K Hard] 在 1.0x 是 4 段谱面，在 <4/> 下大约是 9 段，所以一次 <5/> 的通过按 9 段计入，而不是 4 段。ANiMA [Starry's 4K Lv.15] 同理，从 3 段变到大约 7 段。降速则反过来：0.75x 的通过只值这张谱面在 0.75x 下的水平，远低于它原速的段位。如果某个速度还没有人评过这张谱面，你的估算第一次用到它时就会现算，所以冷门倍速的成绩可能要过一小会儿才开始计入。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -9629,8 +9650,8 @@ msgstr "正在缩放图片…"
 
 #. placeholder {0}: REPLY_AUTHOR.username
 #: src/routes/report.tsx
-msgid "Response from {0}"
-msgstr "来自 {0} 的回复"
+#~ msgid "Response from {0}"
+#~ msgstr "来自 {0} 的回复"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Restored an unsaved draft from this browser."
@@ -10141,6 +10162,10 @@ msgstr "选择本页"
 msgid "select text or type it here"
 msgstr "选中文字，或直接在这里输入"
 
+#: src/routes/report.tsx
+msgid "Send"
+msgstr "发送"
+
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
@@ -10148,8 +10173,8 @@ msgid "Send report"
 msgstr "提交反馈"
 
 #: src/routes/report.tsx
-msgid "Send update"
-msgstr "发送更新"
+#~ msgid "Send update"
+#~ msgstr "发送更新"
 
 #: src/routes/report.tsx
 msgid "Sending..."
@@ -10369,8 +10394,12 @@ msgid "Show {0}K plays"
 msgstr "查看 {0}K 成绩"
 
 #: src/routes/report.tsx
-msgid "Show {hiddenCount} earlier updates"
-msgstr "显示之前的 {hiddenCount} 条更新"
+msgid "Show {hiddenCount} earlier"
+msgstr "查看更早的 {hiddenCount} 条"
+
+#: src/routes/report.tsx
+#~ msgid "Show {hiddenCount} earlier updates"
+#~ msgstr "显示之前的 {hiddenCount} 条更新"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "Show {totalLabel} maps"
@@ -10396,6 +10425,7 @@ msgid "show fewer"
 msgstr "收起"
 
 #: src/routes/player/$username.tsx
+#: src/routes/report.tsx
 msgid "Show fewer"
 msgstr "收起"
 
@@ -10414,8 +10444,8 @@ msgid "Show my name under spectators when watching a replay"
 msgstr "观看回放时在观众列表中显示我的名字"
 
 #: src/routes/report.tsx
-msgid "Show newest {REPORTER_THREAD_PREVIEW_COUNT}"
-msgstr "显示最新的 {REPORTER_THREAD_PREVIEW_COUNT} 条"
+#~ msgid "Show newest {REPORTER_THREAD_PREVIEW_COUNT}"
+#~ msgstr "显示最新的 {REPORTER_THREAD_PREVIEW_COUNT} 条"
 
 #: src/routes/top-plays.tsx
 msgid "Show non-4K plays"
@@ -10626,8 +10656,12 @@ msgid "Skills"
 msgstr "技能"
 
 #: src/routes/dan-estimates.tsx
-msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - keep the old rule and are read off their 4th best pass overall."
-msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。已分析成绩不到 25 个时，只有 18% 的 4K 玩家能评出两个技能；超过 200 个之后，每一个玩家都能。评出的技能不到两个的玩家占 4K 单点估算的 7.6%，他们的已分析成绩中位数是 23 个，这部分人仍按旧规则来，取全部通过里第四好的那次。"
+msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 5 best passes overall."
+msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。已分析成绩不到 25 个时，只有 18% 的 4K 玩家能评出两个技能；超过 200 个之后，每一个玩家都能。评出的技能不到两个的玩家占 4K 单点估算的 7.6%，他们的已分析成绩中位数是 23 个，这部分人按同样的平均来读，取全部通过里最好的五次。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - keep the old rule and are read off their 4th best pass overall."
+#~ msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。已分析成绩不到 25 个时，只有 18% 的 4K 玩家能评出两个技能；超过 200 个之后，每一个玩家都能。评出的技能不到两个的玩家占 4K 单点估算的 7.6%，他们的已分析成绩中位数是 23 个，这部分人仍按旧规则来，取全部通过里第四好的那次。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -10740,7 +10774,7 @@ msgstr "纯色"
 
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Someone reported your server and it got taken down for the following reason{said}"
-msgstr ""
+msgstr "有人举报了你的服务器，它已因以下原因被下架{said}"
 
 #: src/routes/__root.tsx
 msgid "Something broke"
@@ -10941,8 +10975,12 @@ msgid "Step 4: your passes are sorted into four skills"
 msgstr "第四步：你的通过会被分进四个技能"
 
 #: src/routes/dan-estimates.tsx
-msgid "Step 5: each skill's dan is your 4th best pass in it"
-msgstr "第五步：每个技能的段位，是你在它上面第四好的那次通过"
+msgid "Step 5: each skill's dan is the average of your 5 best passes in it"
+msgstr "第五步：每个技能的段位，是你在它上面最好五次通过的平均"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Step 5: each skill's dan is your 4th best pass in it"
+#~ msgstr "第五步：每个技能的段位，是你在它上面第四好的那次通过"
 
 #: src/routes/dan-estimates.tsx
 msgid "Step 6: your dan is the average of your skills"
@@ -11141,8 +11179,12 @@ msgid "Take it down for good?"
 msgstr "确定要永久下架吗？"
 
 #: src/routes/dan-estimates.tsx
-msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and look at the 4th one down. That is your dan in that skill. Nothing is added on top of it, and no single pass above it can raise it."
-msgstr "把你在某一个技能上的达标通过拿出来，按谱面的段位排好，然后看第四个。那就是你在这个技能上的段位。上面不会再加任何东西，排在它之上的任何一次通过也拉不高它。"
+msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+msgstr "把你在某一个技能上的达标通过拿出来，按谱面的段位排好，取最好的五个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and look at the 4th one down. That is your dan in that skill. Nothing is added on top of it, and no single pass above it can raise it."
+#~ msgstr "把你在某一个技能上的达标通过拿出来，按谱面的段位排好，然后看第四个。那就是你在这个技能上的段位。上面不会再加任何东西，排在它之上的任何一次通过也拉不高它。"
 
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
@@ -11403,8 +11445,12 @@ msgstr "{selectedKeymode}K 配置没有解析出任何音符图像，所以这�
 #~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
-msgid "The 4K LN courses are meant to be played on ScoreV2. The problem is that osu!stable does not submit ScoreV2 scores, and most people are on stable (I think). So you do not need to play on ScoreV2 at all. Your ScoreV2 accuracy is worked out from your judgements. If a score is old enough that even the judgements are gone, a stable score needs 97.5% instead of 97%, because stable's accuracy is more generous and the same score reads about half a percent higher on it."
-msgstr "4K LN 课题本来就是要在 ScoreV2 下打的。问题是 osu!stable 不会提交 ScoreV2 成绩，而大多数人玩的是 stable（我觉得是）。所以你并不需要用 ScoreV2 打，你的 ScoreV2 准度会从你的判定里算出来。如果一个成绩老到连判定都没留下，那么 stable 的成绩需要 97.5% 而不是 97%，因为 stable 的准度更宽松，同一个成绩在它上面会高出大约半个百分点。"
+msgid "The 4K LN courses are meant to be played on ScoreV2. The problem is that osu!stable does not submit ScoreV2 scores, and most people are on stable (I think). But you do not need to play on ScoreV2 at all. Your ScoreV2 accuracy is worked out from your judgements. If a score is old enough that even the judgements are gone, a stable score needs 97.5% instead of 97%, because stable's accuracy is more generous and the same score reads about half a percent higher on it."
+msgstr "4K LN 课题本来就是要在 ScoreV2 下打的。问题是 osu!stable 不会提交 ScoreV2 成绩，而大多数人玩的是 stable（我觉得是）。但你并不需要用 ScoreV2 打，你的 ScoreV2 准度会从你的判定里算出来。如果一个成绩老到连判定都没留下，那么 stable 的成绩需要 97.5% 而不是 97%，因为 stable 的准度更宽松，同一个成绩在它上面会高出大约半个百分点。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The 4K LN courses are meant to be played on ScoreV2. The problem is that osu!stable does not submit ScoreV2 scores, and most people are on stable (I think). So you do not need to play on ScoreV2 at all. Your ScoreV2 accuracy is worked out from your judgements. If a score is old enough that even the judgements are gone, a stable score needs 97.5% instead of 97%, because stable's accuracy is more generous and the same score reads about half a percent higher on it."
+#~ msgstr "4K LN 课题本来就是要在 ScoreV2 下打的。问题是 osu!stable 不会提交 ScoreV2 成绩，而大多数人玩的是 stable（我觉得是）。所以你并不需要用 ScoreV2 打，你的 ScoreV2 准度会从你的判定里算出来。如果一个成绩老到连判定都没留下，那么 stable 的成绩需要 97.5% 而不是 97%，因为 stable 的准度更宽松，同一个成绩在它上面会高出大约半个百分点。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The 4K LN courses are written for the ScoreV2 mod, and osu! only files a play under that formula if you are on lazer. Most people are on stable (I think), so the site works ScoreV2 accuracy out from your judgements rather than asking for a ScoreV2 play at all. On an old archived pass with nothing left but its accuracy, a stable play has to reach 97.5% instead of 97%, because the same hands read about half a point higher on the stable formula."
@@ -12419,8 +12465,8 @@ msgid "Updated just now"
 msgstr "刚刚更新过"
 
 #: src/routes/report.tsx
-msgid "Updates"
-msgstr "更新"
+#~ msgid "Updates"
+#~ msgstr "更新"
 
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -12958,6 +13004,10 @@ msgstr "不使用 Mod"
 msgid "Won on score, not pp"
 msgstr "以分数取胜，而非 pp"
 
+#: src/routes/report.tsx
+msgid "Write a reply"
+msgstr "写回复"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/communities/field-options.tsx
 msgid "Write a short description of the server."
@@ -13186,8 +13236,12 @@ msgstr "你在某一侧的估算，就是你已有的那些技能段位的算术
 #~ msgstr "你的估算是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
-msgstr "你的叠段位是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
+#~ msgid "Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
+#~ msgstr "你的叠段位是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+msgstr "你的叠段位是高亮那五次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。和它下面那四次放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"

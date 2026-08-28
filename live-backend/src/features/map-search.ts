@@ -25,9 +25,12 @@ export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // activity scorer's force-cap was minting phantom chordjack rows, 819 of 2204
 // 7K chordjack primaries were really LN or bracket/jumpstream files; r9: a 4K
 // Technical primary that both other engines call a chordjack is re-labelled,
-// MinaCalc buries its own Chordjack rating on chord-wall files).
+// MinaCalc buries its own Chordjack rating on chord-wall files; r10: a 4K
+// Stamina argmax win no longer takes the primary unless the chart is
+// endurance-length - the rider is capped ~0.45% above the best base skillset,
+// so the win measured length, not identity).
 // The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 9;
+const BUILD_REVISION = 10;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -283,6 +286,20 @@ const TECH_RESIDUAL_JACK_CLUSTERS = new Set(["chordjacks", "longjacks", "jacks",
 // carry no quad rows at all).
 const TECH_RESIDUAL_PURE_CHORDJACK_MIN = 0.9;
 
+// MinaCalc's Stamina is a rider, not a detector: it tracks the strongest base
+// skillset sustained, and the calc clamps its final value a hair above that
+// base. Measured over the local corpus (every 4K chart with MSD): across all
+// 20,119 charts where Stamina tops the argmax, it never exceeds the best base
+// skillset by more than 0.45%. A Stamina win therefore never identifies a
+// chart, it only says the file is long enough to saturate the rider, and the
+// real identity sits in second place (Infectious Crying 5066729, a
+// self-described tech dump, indexed as stamina off Stamina 32.81 vs Technical
+// 32.66). So the primary comes from the base skillsets, and Stamina keeps the
+// top label only on true endurance files, at 4:00 or longer. Of the 20,119:
+// 9,691 endurance files stay stamina; the rest follow their base (5,519 tech,
+// 2,326 jumpstream, 1,582 handstream, 525 chordjack, 476 stream).
+const STAMINA_PRIMARY_MIN_LENGTH_SECONDS = 240;
+
 // The analyzer's top-line chart category ("Quadstream", "Jumpstream", ...).
 function classificationCategory(classification: { category?: unknown } | null): string {
   return classification && typeof classification.category === "string" ? classification.category.toLowerCase() : "";
@@ -302,8 +319,9 @@ function clusterFamily(classification: { clusterCategory?: unknown } | null): st
 // with MinaCalc saying Stamina 23.2 / Handstream 18.5), and it promotes any
 // holds-heavy hybrid to LN off a soft composite even when the classifier
 // routed the chart RC. So:
-// - 4K with MSD: primary = top MinaCalc skillset (Etterna's own labeling),
-//   pat_* mix normalized against it so card tags agree with the modal.
+// - 4K with MSD: primary = top MinaCalc base skillset (Stamina only wins on
+//   endurance-length files, see STAMINA_PRIMARY_MIN_LENGTH_SECONDS), pat_* mix
+//   normalized against it so card tags agree with the modal.
 // - Every keymode with a chart analysis: LN primary iff the hold share clears
 //   LN_PRIMARY_MIN_RATIO, the same threshold the classifier uses to route the
 //   dan verdict.
@@ -331,7 +349,14 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
         const value = Number(msd[msdKey]);
         return { family, value: Number.isFinite(value) && value > 0 ? value : 0 };
       }).filter((entry) => !splitTrill || (entry.family !== "jack" && entry.family !== "chordjack"));
-      const top = values.reduce((best, entry) => (entry.value > best.value ? entry : best), values[0]);
+      const bases = values.filter((entry) => entry.family !== "stamina");
+      const topBase = bases.reduce((best, entry) => (entry.value > best.value ? entry : best), bases[0]);
+      const stamina = values.find((entry) => entry.family === "stamina");
+      const top = stamina != null
+        && stamina.value > topBase.value
+        && intOr(row.total_length) >= STAMINA_PRIMARY_MIN_LENGTH_SECONDS
+        ? stamina
+        : topBase;
       if (top.value > 0) {
         for (const entry of values) scores[entry.family] = clamp01(entry.value / top.value);
         result = top.family;

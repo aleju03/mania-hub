@@ -19,8 +19,8 @@ import {
 } from "../../lib/skill-leaderboards";
 
 // The dan boards. Unlike the skill boards these are not shrunk: a player's dan
-// is already the 4th-best credited clear, so the evidence floor is baked into
-// the estimate rather than applied afterwards.
+// is already an average of credited clears behind a quorum, so the evidence
+// floor is baked into the estimate rather than applied afterwards.
 
 export function DanLeaderboardBoard({
   country,

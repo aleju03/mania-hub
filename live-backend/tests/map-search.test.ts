@@ -844,8 +844,9 @@ describe("map search primary derivation", () => {
   it("prefers MinaCalc skillsets over the in-house profile on 4K", async () => {
     const db = await makeDb();
     // Planet Shaper shape: the in-house scorer called it handstream (capped to
-    // 1.0), MinaCalc says stamina; the index must side with MinaCalc.
-    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "handstream", patterns: { handstream: 1, chordjack: 0.86, tech: 0.92 } });
+    // 1.0), MinaCalc says stamina; the index must side with MinaCalc. A 7:22
+    // marathon, so the stamina primary survives the endurance gate.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "handstream", totalLength: 442, patterns: { handstream: 1, chordjack: 0.86, tech: 0.92 } });
     await seedAnalysis(db, 1, {
       msdValues: { Overall: 23.86, Stream: 16.18, Jumpstream: 23.0, Handstream: 18.5, Stamina: 23.16, JackSpeed: 12.34, Chordjack: 18.66, Technical: 23.06 },
       lnRatio: 0.11,
@@ -861,6 +862,30 @@ describe("map search primary derivation", () => {
     expect(handstream.total).toBe(0);
     const stamina = await getMapSearchPage(db, { ...baseQuery(), patterns: ["stamina"] });
     expect(stamina.total).toBe(1);
+  });
+
+  it("hands a non-marathon Stamina argmax win to the best base skillset", async () => {
+    const db = await makeDb();
+    // Infectious Crying shape (beatmap 5066729): a 3-minute self-described
+    // tech dump where the stamina rider saturates and edges Technical by 0.4%.
+    // The rider's win measured length, not identity; the chart is tech.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stamina", totalLength: 179, patterns: { stamina: 1, tech: 0.9, stream: 0.8 } });
+    await seedAnalysis(db, 1, {
+      msdValues: { Overall: 33.36, Stream: 30.51, Jumpstream: 27.7, Handstream: 30.08, Stamina: 32.81, JackSpeed: 19.7, Chordjack: 25.7, Technical: 32.66 },
+      lnRatio: 0.05,
+    });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    expect(all.items[0].primaryPattern).toBe("tech");
+    // The rider stays an honest chip: the chart is sustained, just not stamina-first.
+    expect(all.items[0].patterns.stamina).toBe(1);
+    expect(all.items[0].patterns.stream).toBeCloseTo(30.51 / 32.66, 3);
+
+    const stamina = await getMapSearchPage(db, { ...baseQuery(), patterns: ["stamina"] });
+    expect(stamina.total).toBe(0);
+    const tech = await getMapSearchPage(db, { ...baseQuery(), patterns: ["tech"] });
+    expect(tech.total).toBe(1);
   });
 
   it("drops MinaCalc's artifact jack primaries on split-trill charts", async () => {

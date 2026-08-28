@@ -104,7 +104,7 @@ describe("HT rate analysis", () => {
     await exec(
       db,
       "insert or replace into live_meta (key, value_json, updated_at) values (?, json(?), ?)",
-      ["player_skill_dan_sweep_done:v3", json({ finishedAt: "2026-08-20T00:00:00.000Z" }), "2026-08-20T00:00:00.000Z"],
+      ["player_skill_dan_sweep_done:v5", json({ finishedAt: "2026-08-20T00:00:00.000Z" }), "2026-08-20T00:00:00.000Z"],
     );
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     expect(Number((await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0].c)).toBe(0);

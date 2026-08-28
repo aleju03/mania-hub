@@ -196,7 +196,7 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
         sendJson(req, res, ctx, 400, { error: "invalid_key_count" });
         return true;
       }
-      const evidence = await getPlayerSkillDanEvidence(ctx.db, userId, keyCount, side);
+      const evidence = await getPlayerSkillDanEvidence(ctx.db, userId, keyCount, side, ctx.serveWriteQueue ?? ctx.queue);
       if (!evidence) {
         sendJson(req, res, ctx, 404, { error: "dan_evidence_not_ready" });
         return true;

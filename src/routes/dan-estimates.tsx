@@ -386,17 +386,16 @@ function DanEstimatesPage() {
           <P>
             <Trans>
               Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x,
-              at <ModPill mod="DT" /> or <ModPill mod="NC" /> (1.5x) and at <ModPill mod="HT" /> or{' '}
-              <ModPill mod="DC" /> (0.75x) are all credited against the chart's dan at that exact rate,
-              with each speed rated separately. Runengon [4K Hard] is a 4th dan chart at
-              1.0x and around 9th dan under <ModPill mod="DT" />, so a <ModPill mod="DT" /> pass on it
-              is credited as 9th, not as 4th. ANiMA
+              at <ModPill mod="DT" /> or <ModPill mod="NC" /> (1.5x), at <ModPill mod="HT" /> or{' '}
+              <ModPill mod="DC" /> (0.75x), or at any custom lazer rate from 0.5x to 2.0x is credited
+              against the chart's dan at that exact rate, with each speed rated separately. Runengon
+              [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <ModPill mod="DT" />, so a{' '}
+              <ModPill mod="DT" /> pass on it is credited as 9th, not as 4th. ANiMA
               [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works
               in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its
-              normal level. Custom lazer rates like 1.15x do not count toward your dan. The estimator can
-              rate a chart at any speed on demand, and the map page does exactly that when you open a
-              play set at one, but only 0.75x, 1.0x and 1.5x are stored, and the dan only reads stored
-              ones.
+              normal level. A speed nobody has rated that chart at yet is worked out the first time
+              your estimate needs it, so a play at an unusual rate can take a little while to start
+              counting.
             </Trans>
           </P>
         </Section>
@@ -431,12 +430,12 @@ function DanEstimatesPage() {
           </P>
         </Section>
 
-        <Section title={t`Step 5: each skill's dan is your 4th best pass in it`}>
+        <Section title={t`Step 5: each skill's dan is the average of your 5 best passes in it`}>
           <P>
             <Trans>
-              Take your qualifying passes in one skill, sort them by the chart's dan level, and look at
-              the 4th one down. That is your dan in that skill. Nothing is added on top of it, and no
-              single pass above it can raise it.
+              Take your qualifying passes in one skill, sort them by the chart's dan level, and average
+              the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no
+              single pass can set it on its own.
             </Trans>
           </P>
           <div className="space-y-2 border-l-2 border-osu-b3 pl-4 text-[15px] leading-7 text-osu-f1">
@@ -444,22 +443,22 @@ function DanEstimatesPage() {
               <Trans>Say your 4K jack passes at 96% or better land on charts rated:</Trans>
             </p>
             <p className="font-bold tabular-nums text-white">
-              gamma, beta+, beta, <span className="text-osu-pink-light">alpha++</span>, alpha, 10+, 10, 9++ ...
+              <span className="text-osu-pink-light">gamma, beta+, beta, alpha++, alpha,</span> 10+, 10, 9++ ...
             </p>
             <p>
               <Trans>
-                Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart
-                can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty
-                that stayed above the accuracy bar. Asking for four of them is what keeps a single good
-                day from setting your level.
+                Your jack dan is the average of the five highlighted passes. The gamma pass does not make
+                you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or
+                the one attempt out of fifty that stayed above the accuracy bar. Averaged against the
+                four below it, it can pull your dan up a fraction of a level, but it cannot set it.
               </Trans>
             </p>
           </div>
           <P>
             <Trans>
-              Four is standing in for the length of a real course. A skill you have fewer than four
-              qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no
-              estimate at all rather than a shaky one.
+              Five is roughly the length of a real course. With exactly four qualifying passes the
+              average is over those four; a skill you have fewer than four in gets no dan of its own,
+              and a side you have fewer than four on gets no estimate at all rather than a shaky one.
             </Trans>
           </P>
         </Section>
@@ -489,13 +488,13 @@ function DanEstimatesPage() {
               zero, because a missing skill is nearly always a short play history rather than a hole in
               your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past
               200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K
-              regular estimates, at a median of 23 analysed plays - keep the old rule and are read off
-              their 4th best pass overall.
+              regular estimates, at a median of 23 analysed plays - are read off the same average over
+              their 5 best passes overall.
             </Trans>
           </P>
           <P>
             <Trans>
-              How much this moves you depends on how lopsided you are, which is the point. The typical
+              How much this moves you depends on how uneven your skills are, which is the point. The typical
               4K player drops about a level, and the gap between a player's best and worst skill runs a
               median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be
               invisible.
@@ -503,7 +502,7 @@ function DanEstimatesPage() {
           </P>
         </Section>
 
-        <Section title={t`(extra) Step 7: clearing a real course overrides all of it`}>
+        <Section title={t`Extra: clearing a real course overrides all of it`}>
           <P>
             <Trans>
               If your recorded plays show that you passed a dan course, your estimate for that side{' '}
@@ -957,7 +956,7 @@ function CourseList() {
             <p className="mt-1 text-[14px] leading-6 text-osu-f2">
               <Trans>
                 The 4K LN courses are meant to be played on ScoreV2. The problem is that osu!stable does
-                not submit ScoreV2 scores, and most people are on stable (I think). So you do not need to
+                not submit ScoreV2 scores, and most people are on stable (I think). But you do not need to
                 play on ScoreV2 at all. Your ScoreV2 accuracy is worked out from your judgements. If a
                 score is old enough that even the judgements are gone, a stable score needs 97.5% instead
                 of 97%, because stable's accuracy is more generous and the same score reads about half a
