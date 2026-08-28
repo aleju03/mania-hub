@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ImagePlus, Loader2, MessageSquare, X } from "lucide-react";
+import { Check, ChevronRight, ImagePlus, Loader2, MessageSquare, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 
 import { Avatar } from "../components/ui/Avatar";
@@ -19,7 +19,6 @@ import {
   type BugReportContext,
   type BugReportFailReason,
   type BugReportStatus,
-  type BugReportMessage,
   type MyBugReport,
 } from "../lib/bug-reports";
 import {
@@ -420,10 +419,9 @@ function ReportPage() {
           </>
         )}
 
-        {signedIn && viewer ? (
+        {signedIn ? (
           <MyReports
             reports={mine}
-            viewer={viewer}
             locale={locale}
             onOpenImage={(urls, index) => setLightbox({ urls, index })}
             onReportUpdated={updateMine}
@@ -535,9 +533,11 @@ function ScreenshotThumb({ url }: { url: string | undefined }) {
 function ReporterScreenshots({
   report,
   onOpen,
+  align,
 }: {
   report: MyBugReport;
   onOpen: (urls: string[], index: number) => void;
+  align: "start" | "end";
 }) {
   const { t } = useLingui();
   const [urls, setUrls] = useState<string[] | null>(null);
@@ -558,7 +558,7 @@ function ReporterScreenshots({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-1.5 inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-osu-f1 transition-colors duration-[120ms] hover:text-osu-pink-light"
+        className="inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] text-osu-f1 transition-colors duration-[120ms] hover:text-osu-pink-light"
       >
         <ImagePlus className="h-3.5 w-3.5" />
         {report.screenshotCount === 1
@@ -567,12 +567,12 @@ function ReporterScreenshots({
       </button>
     );
   }
-  if (!urls) return <Loader2 className="mt-1.5 h-3.5 w-3.5 animate-spin text-osu-f1" />;
+  if (!urls) return <Loader2 className="h-3.5 w-3.5 animate-spin text-osu-f1" />;
   if (!urls.length) {
-    return <p className="mt-1.5 text-[11px] text-osu-f1"><Trans>Those images are no longer available.</Trans></p>;
+    return <p className="text-[11.5px] text-osu-f1"><Trans>Those images are no longer available.</Trans></p>;
   }
   return (
-    <div className="mt-2 flex flex-wrap gap-2">
+    <div className={`flex flex-wrap gap-2 ${align === "end" ? "justify-end" : ""}`}>
       {urls.map((url, index) => (
         <button
           key={url}
@@ -581,46 +581,52 @@ function ReporterScreenshots({
           aria-label={t`Open image`}
           className="cursor-zoom-in"
         >
-          <img src={url} alt="" className="h-20 rounded-md border border-osu-b3/30 object-cover transition-opacity duration-[120ms] hover:opacity-80" />
+          <img src={url} alt="" className="h-20 rounded-xl border border-osu-b3/30 object-cover transition-opacity duration-[120ms] hover:opacity-80" />
         </button>
       ))}
     </div>
   );
 }
 
-function ReporterUpdateItem({
-  message,
-  locale,
+/*
+ * A bubble, not a timeline entry. Yours sit on the right and the owner's on the
+ * left, which is the one layout everybody already reads without a legend, so
+ * neither side needs a label saying whose turn it was.
+ */
+function MessageBubble({
+  children,
+  mine,
+  time,
+  className = "",
 }: {
-  message: BugReportMessage;
-  locale: ReturnType<typeof useLocale>;
+  children: React.ReactNode;
+  mine: boolean;
+  time: string | null;
+  className?: string;
 }) {
-  const admin = message.author === "admin";
+  const bubble = (
+    <div className={`max-w-[min(88%,34rem)] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-[13.5px] leading-relaxed ${
+      mine
+        ? "rounded-br-md bg-osu-pink/12 text-osu-c1"
+        : "rounded-bl-md bg-osu-b4/50 text-osu-l1"
+    }`}
+    >
+      {children}
+    </div>
+  );
+  const stamp = time
+    ? <span className="flex-shrink-0 pb-1 text-[10.5px] text-osu-f1">{time}</span>
+    : null;
   return (
-    <div className="relative pl-5">
-      <span className={`absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-osu-b6 ${
-        admin ? "bg-osu-pink" : "bg-osu-b3"
-      }`} />
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className={`text-[10.5px] font-semibold ${admin ? "text-osu-pink-light" : "text-osu-l2"}`}>
-          {admin
-            ? <Trans>Response from {REPLY_AUTHOR.username}</Trans>
-            : <Trans>Additional information you sent</Trans>}
-        </span>
-        {message.createdAt ? (
-          <span className="text-[10px] text-osu-f1">
-            {formatTimeAgo(new Date(message.createdAt).toISOString(), locale)}
-          </span>
-        ) : null}
-      </div>
-      <p className="mt-1 whitespace-pre-wrap break-words text-[12.5px] leading-relaxed text-osu-l1">
-        {message.body}
-      </p>
+    <div className={`flex items-end gap-2 ${mine ? "justify-end" : ""} ${className}`}>
+      {mine ? stamp : null}
+      {bubble}
+      {mine ? null : stamp}
     </div>
   );
 }
 
-function ReporterUpdates({
+function ReporterThread({
   report,
   locale,
 }: {
@@ -629,56 +635,56 @@ function ReporterUpdates({
 }) {
   const messages = bugReportThreadMessages(report);
   const [expanded, setExpanded] = useState(false);
-  const viewportRef = useRef<HTMLDivElement | null>(null);
   const hiddenCount = Math.max(0, messages.length - REPORTER_THREAD_PREVIEW_COUNT);
-  const visibleMessages = expanded ? messages : messages.slice(-REPORTER_THREAD_PREVIEW_COUNT);
-
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    viewport.scrollTop = expanded ? 0 : viewport.scrollHeight;
-  }, [expanded]);
-
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (viewport) viewport.scrollTop = viewport.scrollHeight;
-  }, [messages.length]);
+  const visible = expanded || !hiddenCount
+    ? messages
+    : messages.slice(-REPORTER_THREAD_PREVIEW_COUNT);
 
   if (!messages.length) return null;
   return (
-    <section className="ml-[44px] mt-3 overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b6/20" aria-label="Bug report updates">
-      <div className="flex items-center gap-2 border-b border-osu-b3/15 px-3 py-1.5">
-        <MessageSquare className="h-3 w-3 text-osu-f1" />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-osu-f1">
-          <Trans>Updates</Trans>
-        </span>
-        <span className="rounded-full bg-osu-b4/60 px-1.5 py-0.5 text-[9.5px] tabular-nums text-osu-l2">
-          {messages.length}
-        </span>
-        {hiddenCount > 0 || expanded ? (
-          <button
-            type="button"
-            onClick={() => setExpanded((value) => !value)}
-            className="ml-auto cursor-pointer text-[10.5px] text-osu-f1 transition-colors hover:text-white"
-          >
-            {expanded
-              ? <Trans>Show newest {REPORTER_THREAD_PREVIEW_COUNT}</Trans>
-              : <Trans>Show {hiddenCount} earlier updates</Trans>}
-          </button>
-        ) : null}
-      </div>
-      <div ref={viewportRef} className="max-h-[320px] overflow-y-auto px-4 py-3">
-        <div className="space-y-4 border-l border-osu-b3/25">
-          {visibleMessages.map((message) => (
-            <ReporterUpdateItem key={message.id} message={message} locale={locale} />
-          ))}
-        </div>
-      </div>
-    </section>
+    <div className="mt-3 space-y-1.5">
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="mx-auto mb-2 block cursor-pointer text-[11px] text-osu-f1 transition-colors duration-[120ms] hover:text-osu-l2"
+        >
+          {expanded
+            ? <Trans>Show fewer</Trans>
+            : <Trans>Show {hiddenCount} earlier</Trans>}
+        </button>
+      ) : null}
+      {visible.map((message, index) => {
+        const admin = message.author === "admin";
+        const opensRun = visible[index - 1]?.author !== message.author;
+        const time = message.createdAt
+          ? formatTimeAgo(new Date(message.createdAt).toISOString(), locale)
+          : null;
+        const spacing = opensRun && index > 0 ? "pt-2.5" : "";
+        if (!admin) {
+          return <MessageBubble key={message.id} mine time={time} className={spacing}>{message.body}</MessageBubble>;
+        }
+        return (
+          <div key={message.id} className={`flex items-end gap-2 ${spacing}`}>
+            {opensRun
+              ? <Avatar userId={REPLY_AUTHOR.userId} size={26} />
+              : <span className="w-[26px] flex-shrink-0" aria-hidden />}
+            <div className="min-w-0 flex-1">
+              {opensRun ? (
+                <span className="mb-1 block pl-1 text-[11px] font-semibold text-osu-pink-light">
+                  {REPLY_AUTHOR.username}
+                </span>
+              ) : null}
+              <MessageBubble mine={false} time={time}>{message.body}</MessageBubble>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
-function ReporterFollowUpComposer({
+function ReporterReplyComposer({
   report,
   onSent,
   onCancel,
@@ -717,94 +723,172 @@ function ReporterFollowUpComposer({
   };
 
   return (
-    <div className="ml-[44px] mt-2.5 rounded-lg border border-osu-b3/30 bg-osu-b6/35 p-2.5">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-osu-f1">
-          <Trans>Optional follow-up</Trans>
-        </span>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="ml-auto cursor-pointer text-[10.5px] text-osu-f1 transition-colors hover:text-white"
-        >
-          <Trans>Cancel</Trans>
-        </button>
+    <div className="mt-2.5 flex justify-end">
+      <div className="w-full max-w-[min(88%,34rem)] rounded-2xl rounded-br-md bg-osu-pink/10 px-3.5 py-2.5 ring-1 ring-osu-pink/20">
+        <textarea
+          autoFocus
+          value={draft}
+          disabled={busy}
+          maxLength={BUG_REPORT_MESSAGE_MAX}
+          rows={2}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !draft.trim()) onCancel();
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              void send();
+            }
+          }}
+          placeholder={t`Anything else that might help?`}
+          className="block w-full resize-y bg-transparent text-[13.5px] leading-relaxed text-osu-c1 outline-none placeholder:text-osu-f1/55 disabled:opacity-60"
+        />
+        <div className="mt-2 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="cursor-pointer text-[11px] text-osu-f1 transition-colors duration-[120ms] hover:text-osu-l2"
+          >
+            <Trans>Cancel</Trans>
+          </button>
+          <button
+            type="button"
+            disabled={busy || !draft.trim()}
+            onClick={() => void send()}
+            className="ml-auto inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full bg-osu-pink px-3.5 text-[11.5px] font-semibold text-white transition-[filter] duration-[120ms] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            {busy ? t`Sending...` : t`Send`}
+          </button>
+        </div>
+        {error ? <p className="mt-1.5 text-[11.5px] text-osu-pink-light">{error}</p> : null}
       </div>
-      <textarea
-        value={draft}
-        disabled={busy}
-        maxLength={BUG_REPORT_MESSAGE_MAX}
-        rows={2}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault();
-            void send();
-          }
-        }}
-        placeholder={t`Anything else that might help?`}
-        className="block w-full resize-y bg-transparent text-[13px] leading-relaxed text-osu-l1 outline-none placeholder:text-osu-f1/55 disabled:opacity-60"
-      />
-      <div className="mt-2 flex items-center gap-2">
-        <button
-          type="button"
-          disabled={busy || !draft.trim()}
-          onClick={() => void send()}
-          className="ml-auto inline-flex h-7 cursor-pointer items-center rounded-md bg-osu-pink px-3 text-[11.5px] font-semibold text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {busy ? t`Sending...` : t`Send update`}
-        </button>
-      </div>
-      {error ? <p className="mt-1.5 text-[11px] text-osu-pink-light">{error}</p> : null}
     </div>
   );
 }
 
-function ReporterFollowUp({
+/** Always on screen, shaped like the box you type in, so replying is obviously allowed. */
+function ReporterReply({
   report,
   onSent,
+  conversation,
 }: {
   report: MyBugReport;
   onSent: (report: MyBugReport) => void;
+  conversation: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  if (!open) {
+  if (open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="ml-[44px] mt-2 inline-flex cursor-pointer items-center gap-1.5 text-[10.5px] text-osu-f1 transition-colors hover:text-osu-l2"
-      >
-        <MessageSquare className="h-3 w-3" />
-        <Trans>Add more details</Trans>
-      </button>
+      <ReporterReplyComposer
+        report={report}
+        onCancel={() => setOpen(false)}
+        onSent={(updated) => {
+          setOpen(false);
+          onSent(updated);
+        }}
+      />
     );
   }
   return (
-    <ReporterFollowUpComposer
-      report={report}
-      onCancel={() => setOpen(false)}
-      onSent={(updated) => {
-        setOpen(false);
-        onSent(updated);
-      }}
-    />
+    <div className={`mt-3 flex ${conversation ? "justify-end" : ""}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-osu-b5/40 px-4 py-2 text-[12.5px] text-osu-f1 ring-1 ring-osu-b3/25 transition-colors duration-[120ms] hover:bg-osu-b4/50 hover:text-osu-l2"
+      >
+        <MessageSquare className="h-3.5 w-3.5" />
+        {conversation ? <Trans>Write a reply</Trans> : <Trans>Add more details</Trans>}
+      </button>
+    </div>
   );
 }
 
 /*
- * The reporter's receipt. Responses and later details are framed as optional
- * updates rather than a chat the act of reporting enrolled them in.
+ * The reporter's receipt. A report is one closed line until it is opened,
+ * because the reason to come back is usually one particular report, not all of
+ * them at once. Open it and it reads as a conversation: what you said, what
+ * came back, and a reply box at the end.
  */
+function ReportRow({
+  report,
+  locale,
+  onOpenImage,
+  onReportUpdated,
+}: {
+  report: MyBugReport;
+  locale: ReturnType<typeof useLocale>;
+  onOpenImage: (urls: string[], index: number) => void;
+  onReportUpdated: (report: MyBugReport) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const messages = bugReportThreadMessages(report);
+  const waitingOnYou = messages[messages.length - 1]?.author === "admin";
+
+  return (
+    <li className="overflow-hidden rounded-2xl bg-osu-b6/45 ring-1 ring-osu-b3/20">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-3 text-left transition-colors duration-[120ms] hover:bg-osu-b5/30"
+      >
+        <ChevronRight
+          className={`h-3.5 w-3.5 flex-shrink-0 text-osu-f1 transition-transform duration-150 ${open ? "rotate-90" : ""}`}
+        />
+        <span className={`min-w-0 flex-1 truncate text-[13.5px] ${open ? "text-osu-f1" : "text-osu-l1"}`}>
+          {open ? report.pagePath ?? "" : report.body}
+        </span>
+        {messages.length ? (
+          <span className={`inline-flex flex-shrink-0 items-center gap-1 text-[11.5px] tabular-nums ${
+            waitingOnYou ? "text-osu-pink-light" : "text-osu-f1"
+          }`}
+          >
+            <MessageSquare className="h-3 w-3" />
+            {messages.length}
+          </span>
+        ) : null}
+        <span className="flex-shrink-0 text-[11px] text-osu-f1">
+          {formatTimeAgo(new Date(report.createdAt).toISOString(), locale)}
+        </span>
+        <StatusChip status={report.status} />
+      </button>
+
+      {open ? (
+        <div className="px-3.5 pb-3.5">
+          {messages.length ? (
+            <>
+              <MessageBubble mine time={null}>{report.body}</MessageBubble>
+              <div className="mt-1.5 flex justify-end">
+                <ReporterScreenshots report={report} onOpen={onOpenImage} align="end" />
+              </div>
+              <ReporterThread report={report} locale={locale} />
+            </>
+          ) : (
+            <div className="pl-6">
+              <p className="whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-osu-l1">
+                {report.body}
+              </p>
+              <div className="mt-2">
+                <ReporterScreenshots report={report} onOpen={onOpenImage} align="start" />
+              </div>
+            </div>
+          )}
+          <div className={messages.length ? "" : "pl-6"}>
+            <ReporterReply report={report} onSent={onReportUpdated} conversation={messages.length > 0} />
+          </div>
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
 function MyReports({
   reports,
-  viewer,
   locale,
   onOpenImage,
   onReportUpdated,
 }: {
   reports: MyBugReport[] | null;
-  viewer: NonNullable<ReturnType<typeof useAuth>["viewer"]>;
   locale: ReturnType<typeof useLocale>;
   onOpenImage: (urls: string[], index: number) => void;
   onReportUpdated: (report: MyBugReport) => void;
@@ -815,30 +899,15 @@ function MyReports({
       <h2 className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
         <Trans>Your reports</Trans>
       </h2>
-      <ul className="mt-3.5 space-y-6">
+      <ul className="mt-3.5 space-y-2">
         {reports.map((report) => (
-          <li key={report.id}>
-            <div className="flex gap-3">
-              <Avatar url={viewer.avatarUrl} userId={viewer.id} size={32} />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="text-[13px] font-semibold text-white">{viewer.username}</span>
-                  <span className="text-[11px] text-osu-f1">
-                    {formatTimeAgo(new Date(report.createdAt).toISOString(), locale)}
-                  </span>
-                  {report.pagePath ? <span className="text-[11px] text-osu-f1">{report.pagePath}</span> : null}
-                  <StatusChip status={report.status} />
-                </div>
-                <p className="mt-0.5 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-osu-l1">
-                  {report.body}
-                </p>
-                <ReporterScreenshots report={report} onOpen={onOpenImage} />
-              </div>
-            </div>
-
-            <ReporterUpdates report={report} locale={locale} />
-            <ReporterFollowUp report={report} onSent={onReportUpdated} />
-          </li>
+          <ReportRow
+            key={report.id}
+            report={report}
+            locale={locale}
+            onOpenImage={onOpenImage}
+            onReportUpdated={onReportUpdated}
+          />
         ))}
       </ul>
     </section>
@@ -855,11 +924,16 @@ function StatusChip({ status }: { status: BugReportStatus }) {
     duplicate: t`already reported`,
   };
   const tone = status === "fixed"
-    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+    ? "bg-emerald-400/10 text-emerald-200"
     : status === "new" || status === "investigating"
-      ? "border-osu-pink/30 bg-osu-pink/10 text-osu-pink-light"
-      : "border-osu-b3/40 bg-osu-b4/60 text-osu-l2";
-  return <span className={`rounded-md border px-1.5 py-0.5 text-[10.5px] ${tone}`}>{label[status]}</span>;
+      ? "bg-osu-pink/10 text-osu-pink-light"
+      : "bg-osu-b4/60 text-osu-l2";
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] ${tone}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {label[status]}
+    </span>
+  );
 }
 
 /**
