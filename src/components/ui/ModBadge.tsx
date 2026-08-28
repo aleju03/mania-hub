@@ -75,10 +75,12 @@ export function ModBadge({ mod, size = 1, rate, color }: { mod: string; size?: n
   // Format matches osu-web: 2 decimals + "×" (U+00D7). E.g. 0.9 → "0.90×".
   const rateText = rate != null ? `${rate.toFixed(2)}×` : null;
   const title = rateText != null ? `${mod} ${rateText}` : mod;
+  // Spans, not divs: the badge also renders inside <p> prose (dan-estimates
+  // explainer), where a div would make the SSR HTML invalid and break hydration.
   const iconPill = file ? (
-    <div className="relative flex-shrink-0" style={{ width, height }} title={title}>
-      <div className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
-      <div
+    <span className="relative inline-block flex-shrink-0 align-middle" style={{ width, height }} title={title}>
+      <span className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
+      <span
         className="absolute"
         style={{
           inset,
@@ -86,21 +88,21 @@ export function ModBadge({ mod, size = 1, rate, color }: { mod: string; size?: n
           backgroundColor: `color-mix(in srgb-linear, black, ${bg} 10%)`,
         }}
       />
-    </div>
+    </span>
   ) : (
-    <div
-      className="relative flex-shrink-0 flex items-center justify-center"
+    <span
+      className="relative flex-shrink-0 inline-flex items-center justify-center align-middle"
       style={{ width, height }}
       title={title}
     >
-      <div className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
+      <span className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
       <span
         className="relative font-bold leading-none"
         style={{ fontSize: `${12 * size}px`, color: `color-mix(in srgb-linear, black, ${bg} 10%)` }}
       >
         {mod}
       </span>
-    </div>
+    </span>
   );
 
   if (rateText != null) {
@@ -113,10 +115,10 @@ export function ModBadge({ mod, size = 1, rate, color }: { mod: string; size?: n
     const fontSize = Math.round(height * 0.5);
     const darkerBg = `color-mix(in srgb, black, ${bg} 26.3%)`;
     return (
-      <div className="flex items-center flex-shrink-0" title={title}>
+      <span className="inline-flex items-center flex-shrink-0 align-middle" title={title}>
         {iconPill}
-        <div
-          className="flex items-center justify-center"
+        <span
+          className="inline-flex items-center justify-center"
           style={{
             width: extenderWidth,
             height,
@@ -138,8 +140,8 @@ export function ModBadge({ mod, size = 1, rate, color }: { mod: string; size?: n
           <span className="font-bold leading-none" style={{ fontSize, color: bg }}>
             {rateText}
           </span>
-        </div>
-      </div>
+        </span>
+      </span>
     );
   }
 
