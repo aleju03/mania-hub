@@ -734,6 +734,11 @@ msgstr "{0}'s me! page is empty."
 msgid "{0}'s play"
 msgstr "{0}'s play"
 
+#. placeholder {0}: section.clears
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{0}/{averageWindow} clears"
+msgstr "{0}/{averageWindow} clears"
+
 #. placeholder {0}: (odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")
 #. placeholder {1}: HONORARY_PACK_POOL.length
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -1552,8 +1557,8 @@ msgid "0h"
 msgstr "0h"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "1 clear"
-msgstr "1 clear"
+#~ msgid "1 clear"
+#~ msgstr "1 clear"
 
 #: src/components/packs/PackPulse.tsx
 msgid "1 person has your card"
@@ -1702,20 +1707,32 @@ msgid "7K regular"
 msgstr "7K regular"
 
 #: src/routes/dan-estimates.tsx
-msgid "95% (the bar)"
-msgstr "95% (the bar)"
+msgid "95-96.25% (the bar)"
+msgstr "95-96.25% (the bar)"
 
 #: src/routes/dan-estimates.tsx
-msgid "96% (the bar)"
-msgstr "96% (the bar)"
+#~ msgid "95% (the bar)"
+#~ msgstr "95% (the bar)"
+
+#: src/routes/dan-estimates.tsx
+msgid "96-96.99% (the bar)"
+msgstr "96-96.99% (the bar)"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "96% (the bar)"
+#~ msgstr "96% (the bar)"
 
 #: src/routes/dan-estimates.tsx
 msgid "96%, or 95% in the Normal Kyu band below 1st dan"
 msgstr "96%, or 95% in the Normal Kyu band below 1st dan"
 
 #: src/routes/dan-estimates.tsx
-msgid "97% (the bar)"
-msgstr "97% (the bar)"
+msgid "97-98% (the bar)"
+msgstr "97-98% (the bar)"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "97% (the bar)"
+#~ msgstr "97% (the bar)"
 
 #. placeholder {0}: formatDan(clear.chartDanLabel)
 #. placeholder {1}: formatDan(clear.creditedDanLabel)
@@ -1783,8 +1800,12 @@ msgid "a map"
 msgstr "a map"
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: a play counts as a clear of a lower level, bottoming out one full level down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
-msgstr "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: a play counts as a clear of a lower level, bottoming out one full level down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+msgstr "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: a play counts as a clear of a lower level, bottoming out one full level down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+#~ msgstr "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: a play counts as a clear of a lower level, bottoming out one full level down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: from 4 points under the bar, a play counts as a clear of a lower level, bottoming out one full level down. On the 96% ladders that reads:"
@@ -4385,6 +4406,10 @@ msgstr "dynamic renders"
 msgid "Dynamic Renders"
 msgstr "Dynamic Renders"
 
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Each dan is the average of the best {averageWindow} clears behind it. A column under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
+#~ msgstr "Each dan is the average of the best {averageWindow} clears behind it. A column under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
+
 #: src/routes/player/$username.tsx
 msgid "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
 msgstr "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
@@ -4392,6 +4417,14 @@ msgstr "each keymode weighted against its own plays, the way osu! totals 4K and 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
 msgstr "Each player is equally likely, no matter how many favourites they have."
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Each skillset is the average of the best {averageWindow} clears behind it. A skillset under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
+#~ msgstr "Each skillset is the average of the best {averageWindow} clears behind it. A skillset under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Each skillset is the average of your {averageWindow} best clears in it. With fewer than {averageWindow} it averages what you have, so the number is less accurate until you reach {averageWindow}."
+msgstr "Each skillset is the average of your {averageWindow} best clears in it. With fewer than {averageWindow} it averages what you have, so the number is less accurate until you reach {averageWindow}."
 
 #: src/lib/streak-game.ts
 msgid "Earlier"
@@ -4967,8 +5000,8 @@ msgid "Fit"
 msgstr "Fit"
 
 #: src/routes/dan-estimates.tsx
-msgid "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
-msgstr "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgid "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgstr "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 
 #: src/routes/report.tsx
 msgid "fixed"
@@ -10761,8 +10794,12 @@ msgid "Skills"
 msgstr "Skills"
 
 #: src/routes/dan-estimates.tsx
-msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 5 best passes overall."
-msgstr "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 5 best passes overall."
+msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 20 best passes overall."
+msgstr "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 20 best passes overall."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 5 best passes overall."
+#~ msgstr "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 5 best passes overall."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - keep the old rule and are read off their 4th best pass overall."
@@ -11084,8 +11121,12 @@ msgid "Step 4: your passes are sorted into four skills"
 msgstr "Step 4: your passes are sorted into four skills"
 
 #: src/routes/dan-estimates.tsx
-msgid "Step 5: each skill's dan is the average of your 5 best passes in it"
-msgstr "Step 5: each skill's dan is the average of your 5 best passes in it"
+msgid "Step 5: each skill's dan is the average of your 20 best passes in it"
+msgstr "Step 5: each skill's dan is the average of your 20 best passes in it"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Step 5: each skill's dan is the average of your 5 best passes in it"
+#~ msgstr "Step 5: each skill's dan is the average of your 5 best passes in it"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 5: each skill's dan is your 4th best pass in it"
@@ -11288,8 +11329,12 @@ msgid "Take it down for good?"
 msgstr "Take it down for good?"
 
 #: src/routes/dan-estimates.tsx
-msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
-msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+#~ msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
@@ -11622,48 +11667,84 @@ msgid "the chart's full level"
 msgstr "the chart's full level"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.33"
-msgstr "the chart's level -0.33"
+#~ msgid "the chart's level -0.33"
+#~ msgstr "the chart's level -0.33"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.45"
-msgstr "the chart's level -0.45"
+msgid "the chart's level -0.36"
+msgstr "the chart's level -0.36"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.63"
-msgstr "the chart's level -0.63"
+#~ msgid "the chart's level -0.45"
+#~ msgstr "the chart's level -0.45"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.51"
+msgstr "the chart's level -0.51"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.63"
+#~ msgstr "the chart's level -0.63"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.75"
 msgstr "the chart's level -0.75"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.76"
+msgstr "the chart's level -0.76"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.85"
 msgstr "the chart's level -0.85"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -1"
-msgstr "the chart's level -1"
+#~ msgid "the chart's level -1"
+#~ msgstr "the chart's level -1"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.14"
-msgstr "the chart's level +0.14"
+msgid "the chart's level -1.05"
+msgstr "the chart's level -1.05"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.18"
-msgstr "the chart's level +0.18"
+msgid "the chart's level -1.25"
+msgstr "the chart's level -1.25"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.28"
-msgstr "the chart's level +0.28"
+msgid "the chart's level +0.07"
+msgstr "the chart's level +0.07"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.35"
-msgstr "the chart's level +0.35"
+msgid "the chart's level +0.12"
+msgstr "the chart's level +0.12"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.49"
-msgstr "the chart's level +0.49"
+#~ msgid "the chart's level +0.14"
+#~ msgstr "the chart's level +0.14"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.16"
+msgstr "the chart's level +0.16"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level +0.18"
+#~ msgstr "the chart's level +0.18"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.2"
+msgstr "the chart's level +0.2"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level +0.28"
+#~ msgstr "the chart's level +0.28"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level +0.35"
+#~ msgstr "the chart's level +0.35"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level +0.49"
+#~ msgstr "the chart's level +0.49"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.53"
@@ -11829,6 +11910,14 @@ msgstr "The rankings lookup is taking a moment"
 msgid "The rating may be waiting for a fresh chart-analysis pass."
 msgstr "The rating may be waiting for a fresh chart-analysis pass."
 
+#: src/routes/dan-estimates.tsx
+#~ msgid "The reason is the osu! API. The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
+#~ msgstr "The reason is the osu! API. The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The reason is the osu! API. The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
+#~ msgstr "The reason is the osu! API. The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "The replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
 msgstr "The replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
@@ -11884,6 +11973,14 @@ msgstr "The side-by-side playfields failed to mount."
 #: src/routes/dan-estimates.tsx
 #~ msgid "The site downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
 #~ msgstr "The site downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
+
+#: src/routes/dan-estimates.tsx
+msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop, meaning 30 minutes pass without a new play. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
+msgstr "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop, meaning 30 minutes pass without a new play. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
+#~ msgstr "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The site only started recording plays on June 9, 2026. Anything you played before that date counts only if it is still in your osu! top plays, and everything else from back then is invisible to the estimate."
@@ -12491,6 +12588,18 @@ msgstr "Turn your phone sideways to watch."
 msgid "Turned down{said} Editing it sends it back for approval."
 msgstr "Turned down{said} Editing it sends it back for approval."
 
+#: src/routes/dan-estimates.tsx
+#~ msgid "Twenty is enough that a few lucky passes cannot carry it. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgstr "Twenty is enough that a few lucky passes cannot carry it. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+
+#: src/routes/dan-estimates.tsx
+msgid "Twenty is enough that a few of your best passes cannot carry it on their own. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+msgstr "Twenty is enough that a few of your best passes cannot carry it on their own. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Twenty passes are a body of work, not a lucky handful. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgstr "Twenty passes are a body of work, not a lucky handful. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
 msgstr "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
@@ -12595,8 +12704,8 @@ msgid "unranked"
 msgstr "unranked"
 
 #: src/routes/dan-estimates.tsx
-msgid "Unranked plays are only recorded after tracking picks up your session from your first score on a ranked, qualified or loved chart. It then checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
-msgstr "Unranked plays are only recorded after tracking picks up your session from your first score on a ranked, qualified or loved chart. It then checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
+#~ msgid "Unranked plays are only recorded after tracking picks up your session from your first score on a ranked, qualified or loved chart. It then checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
+#~ msgstr "Unranked plays are only recorded after tracking picks up your session from your first score on a ranked, qualified or loved chart. It then checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Unranked plays are only recorded once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
@@ -13433,12 +13542,16 @@ msgstr "Your estimate for a side is the plain arithmetic average of the skill da
 #~ msgstr "Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
 
 #: src/routes/dan-estimates.tsx
-msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
-msgstr "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+#~ msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+#~ msgstr "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
 #~ msgstr "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+
+#: src/routes/dan-estimates.tsx
+msgid "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
+msgstr "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"

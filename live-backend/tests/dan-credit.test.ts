@@ -17,23 +17,25 @@ describe("danCreditOffset", () => {
     expect(danCreditOffset(0.965, 0.96)).toBeCloseTo(0, 9);
     expect(danCreditOffset(0.969, 0.96)).toBeCloseTo(0, 9);
     expect(danCreditOffset(0.97, 0.96)).toBeCloseTo(0, 9);
-    expect(danCreditOffset(0.98, 0.96)).toBeCloseTo(0.35, 6);
+    // The real bonus opens at 99%: the 98s only crawl toward +0.2.
+    expect(danCreditOffset(0.98, 0.96)).toBeCloseTo(0.117647, 6);
+    expect(danCreditOffset(0.987, 0.96)).toBeCloseTo(0.2, 6);
     expect(danCreditOffset(0.99, 0.96)).toBeCloseTo(0.7, 6);
     expect(danCreditOffset(0.995, 0.96)).toBeCloseTo(1.1, 6);
     expect(danCreditOffset(1, 0.96)).toBeCloseTo(1.5, 9);
   });
 
   it("normalizes the bonus to headroom, but never a span narrower than the window", () => {
-    // Half the headroom earns the same +0.35 on the 95% and 96% bars, whose
+    // Half the headroom earns the same +0.12 on the 95% and 96% bars, whose
     // headroom is at least the 4-point window, and 100% earns the full top
     // credit there.
-    expect(danCreditOffset(0.975, 0.95)).toBeCloseTo(0.35, 6);
+    expect(danCreditOffset(0.975, 0.95)).toBeCloseTo(0.117647, 6);
     expect(danCreditOffset(1, 0.95)).toBeCloseTo(1.5, 9);
     // A 97% bar has only 3 points of raw headroom, and accuracy comes cheap
     // on the ladder that uses it (4K LN), so the bonus scores against the
     // window instead: 98.5% is t = 0.375 (halfway out of the flat zone), and
     // 100% tops out at +0.7.
-    expect(danCreditOffset(0.985, 0.97)).toBeCloseTo(0.175, 6);
+    expect(danCreditOffset(0.985, 0.97)).toBeCloseTo(0.058824, 6);
     expect(danCreditOffset(1, 0.97)).toBeCloseTo(0.7, 6);
   });
 
@@ -51,6 +53,13 @@ describe("danCreditOffset", () => {
     // just under 15.26) on plain delta.
     expect(danLabelForTest(creditedDanFor(15.1, 0.9209, 0.96, "rc", 4)!, "rc", 4)).toBe("delta");
     expect(danLabelForTest(creditedDanFor(15.25, 0.9209, 0.96, "rc", 4)!, "rc", 4)).toBe("delta");
+  });
+
+  it("prices a 98.3% on a beta++ chart at gamma--, not bare gamma", () => {
+    // The second bonus cool-off (2026-08-28): under 99% the curve crawls to
+    // +0.2, so the 98s stop buying the next bare level. A 99% still does.
+    expect(danLabelForTest(creditedDanFor(12.375, 0.983, 0.96, "rc", 4)!, "rc", 4)).toBe("gamma--");
+    expect(danLabelForTest(creditedDanFor(12.375, 0.99, 0.96, "rc", 4)!, "rc", 4)).toBe("gamma");
   });
 
   it("is monotone non-decreasing across the whole credited range", () => {
@@ -127,7 +136,7 @@ describe("LN decay windows", () => {
 
   it("does not re-heat the bonus half: 100% still tops out at +0.7", () => {
     expect(creditedDanFor(10, 1, 0.97, "ln", 4)).toBeCloseTo(10.7, 6);
-    expect(creditedDanFor(10, 0.985, 0.97, "ln", 4)).toBeCloseTo(10.175, 6);
+    expect(creditedDanFor(10, 0.985, 0.97, "ln", 4)).toBeCloseTo(10.058824, 6);
   });
 });
 

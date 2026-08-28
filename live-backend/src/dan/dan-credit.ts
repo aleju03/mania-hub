@@ -48,15 +48,18 @@ export function danCreditBelowBarWindowFor(side: "rc" | "ln", _keyCount: number)
 
 /**
  * THE tuning knob for the bonus half. The first quarter of the span is a flat
- * zone: a pass in the point above the bar is a bare clear, not a bonus, so at
- * a 96% bar this reads: 96-96.99% -> +0, 98% -> +0.35, 99% -> +0.7,
- * 99.5% -> +1.1, 100% -> +1.5 (the anchors above the flat zone are unchanged
- * from before it existed).
+ * zone: a pass in the point above the bar is a bare clear, not a bonus. The
+ * real bonus opens at 99% (2026-08-28, second cool-off): under it the curve
+ * only crawls to +0.2, because the 98s were still buying a full level (a
+ * 98.3% on a beta++ chart credited bare gamma; the owner prices that run at
+ * gamma--, and +0.14 there is what prints it). At a 96% bar this reads:
+ * 96-96.99% -> +0, 98% -> +0.12, 98.7% -> +0.2, 99% -> +0.7, 99.5% -> +1.1,
+ * 100% -> +1.5 (the 99%-and-up anchors are unchanged).
  */
 export const DAN_CREDIT_ABOVE_BAR_ANCHORS: DanCreditAnchors = [
   [0, 0],
   [0.25, 0],
-  [0.5, 0.35],
+  [0.675, 0.2],
   [0.75, 0.7],
   [0.875, 1.1],
   [1, 1.5],

@@ -1352,17 +1352,17 @@ export function danSideFromClearEvidenceForTest(
   return danSideFromClears(keyCount, side, clears, infoByBeatmap, courseClears);
 }
 
-// How many best clears the dan averages over. One more than the quorum, so a
-// quorum-sized pool simply averages everything it has.
-const DAN_CLEAR_AVERAGE_WINDOW = 5;
+// How many best clears the dan averages over (2026-08-28, widened from 5).
+// With five, a few strong credits could still set a skillset on their
+// own; twenty asks every ladder for a body of work, the same argument that
+// had already doubled 4K LN's bucket-less headline to ten. A pool smaller
+// than the window simply averages everything it has, down to the quorum.
+const DAN_CLEAR_AVERAGE_WINDOW = 20;
 
-// 4K LN averages twice the window. It is the one ladder with no skillset
-// buckets, so its headline is this side-wide average alone, and with the
-// best-5 a couple of near-miss credits on charts above the player's level
-// could still carry it (the 2026-08-28 window narrowing helped but left
-// known-13 players printing 14). Ten asks for a body of work instead.
-export function danClearAverageWindowFor(side: "rc" | "ln", keyCount: number): number {
-  return keyCount === 4 && side === "ln" ? DAN_CLEAR_AVERAGE_WINDOW * 2 : DAN_CLEAR_AVERAGE_WINDOW;
+// One window for every ladder now: twenty is past the ten 4K LN used to
+// demand over the shared five, so that special case dissolved into the base.
+export function danClearAverageWindowFor(_side: "rc" | "ln", _keyCount: number): number {
+  return DAN_CLEAR_AVERAGE_WINDOW;
 }
 
 function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): PlayerSkillDanVerdict | null {
@@ -2418,6 +2418,8 @@ export interface PlayerSkillDanEvidence {
   minAccuracy: number;
   /** The ladder's own pass bar, where a clear credits the chart's full dan. */
   barAccuracy: number;
+  /** How many best clears each dan averages over (danClearAverageWindowFor). */
+  averageWindow: number;
   dan: PlayerSkillDanSide | null;
   totalClears: number;
   clears: PlayerSkillDanEvidencePlay[];
@@ -2710,6 +2712,7 @@ export async function getPlayerSkillDanEvidence(
     quorum: DAN_CLEAR_QUORUM,
     minAccuracy: Math.round((barAccuracy - danCreditBelowBarWindowFor(side, keyCount)) * 1000) / 1000,
     barAccuracy,
+    averageWindow: danClearAverageWindowFor(side, keyCount),
     dan,
     totalClears: clears.length,
     clears: topClears.map(toEvidencePlay),
@@ -3286,7 +3289,14 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // bottom deepened from -1 to -1.25 so a bottom-of-window scrape credits a
 // bare level down (92.09% on epsilon+ prints delta, not delta+). Every
 // ladder's stored verdicts are stale.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v12";
+// v13: second bonus cool-off (dan-credit.ts, 2026-08-28). The real bonus now
+// opens at 99%: below it the curve crawls to +0.2 instead of climbing through
+// +0.35 at 98%, so a 98.3% on a beta++ chart credits ~gamma-- rather than
+// bare gamma. In the same pass the clear average widened from the best 5 to
+// the best 20 (danClearAverageWindowFor, one window for every ladder now), so
+// a skillset takes a body of work rather than a few best plays. Every stored
+// verdict is stale.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v13";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

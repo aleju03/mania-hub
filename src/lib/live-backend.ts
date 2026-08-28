@@ -119,6 +119,9 @@ export interface LivePlayerDanEvidence {
   minAccuracy: number;
   /** The ladder's own pass bar, where a clear credits the chart's full dan. */
   barAccuracy: number;
+  /** How many best clears each dan averages over. Optional until the backend
+   *  that ships it is deployed; readers default to 20. */
+  averageWindow?: number;
   dan: { rawDan: number; label: string; clears: number; beyondTable?: boolean; courseClear?: LivePlayerDanCourseClear } | null;
   totalClears: number;
   clears: LivePlayerDanEvidencePlay[];

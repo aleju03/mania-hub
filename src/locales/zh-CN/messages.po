@@ -743,6 +743,11 @@ msgstr "{0} 的 me! 页面是空的。"
 msgid "{0}'s play"
 msgstr "{0} 的成绩"
 
+#. placeholder {0}: section.clears
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{0}/{averageWindow} clears"
+msgstr "{0}/{averageWindow} 次通过"
+
 #. placeholder {0}: (odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")
 #. placeholder {1}: HONORARY_PACK_POOL.length
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -1561,8 +1566,8 @@ msgid "0h"
 msgstr "0 小时"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "1 clear"
-msgstr "1 次通过"
+#~ msgid "1 clear"
+#~ msgstr "1 次通过"
 
 #: src/components/packs/PackPulse.tsx
 msgid "1 person has your card"
@@ -1711,20 +1716,32 @@ msgid "7K regular"
 msgstr "7K 单点"
 
 #: src/routes/dan-estimates.tsx
-msgid "95% (the bar)"
-msgstr "95%（通过线）"
+msgid "95-96.25% (the bar)"
+msgstr "95-96.25%（通过线）"
 
 #: src/routes/dan-estimates.tsx
-msgid "96% (the bar)"
-msgstr "96%(通过线)"
+#~ msgid "95% (the bar)"
+#~ msgstr "95%（通过线）"
+
+#: src/routes/dan-estimates.tsx
+msgid "96-96.99% (the bar)"
+msgstr "96-96.99%（通过线）"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "96% (the bar)"
+#~ msgstr "96%(通过线)"
 
 #: src/routes/dan-estimates.tsx
 msgid "96%, or 95% in the Normal Kyu band below 1st dan"
 msgstr "96%，1 段以下的 Normal Kyu 区间是 95%"
 
 #: src/routes/dan-estimates.tsx
-msgid "97% (the bar)"
-msgstr "97%（通过线）"
+msgid "97-98% (the bar)"
+msgstr "97-98%（通过线）"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "97% (the bar)"
+#~ msgstr "97%（通过线）"
 
 #. placeholder {0}: formatDan(clear.chartDanLabel)
 #. placeholder {1}: formatDan(clear.creditedDanLabel)
@@ -1792,8 +1809,12 @@ msgid "a map"
 msgstr "某张谱面"
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: a play counts as a clear of a lower level, bottoming out one full level down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
-msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样。准确率高于通过线会计入更多；差一点没到也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低整整一级。普通段位表在通过线以下 4 个百分点内仍然计入。LN 段位表只到 1 个百分点，因为长条上准确率很容易保持，出于同样的原因 4K LN 的加成也被压平了："
+msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样；通过线上方的第一小段也是如此：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成也一直很小，到 99% 才真正开始上升。差一点没到通过线也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表在通过线以下 4 个百分点内仍然计入。LN 段位表只到 1 个百分点，因为长条上准确率很容易保持，出于同样的原因 4K LN 的加成也被压平了："
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: a play counts as a clear of a lower level, bottoming out one full level down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+#~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样。准确率高于通过线会计入更多；差一点没到也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低整整一级。普通段位表在通过线以下 4 个百分点内仍然计入。LN 段位表只到 1 个百分点，因为长条上准确率很容易保持，出于同样的原因 4K LN 的加成也被压平了："
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: from 4 points under the bar, a play counts as a clear of a lower level, bottoming out one full level down. On the 96% ladders that reads:"
@@ -4394,6 +4415,10 @@ msgstr "动态渲染图"
 msgid "Dynamic Renders"
 msgstr "动态渲染"
 
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Each dan is the average of the best {averageWindow} clears behind it. A column under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
+#~ msgstr "每个段位都是其背后最好 {averageWindow} 次通过的平均。不足 {averageWindow} 次的列会按现有的通过来平均，所以随着通过增多它会越来越准。"
+
 #: src/routes/player/$username.tsx
 msgid "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
 msgstr "每个键数按自己的成绩加权，与 osu! 统计 4K 和 7K 的方式一致"
@@ -4401,6 +4426,14 @@ msgstr "每个键数按自己的成绩加权，与 osu! 统计 4K 和 7K 的方�
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
 msgstr "每位玩家被抽中的概率相同，与其收藏数量无关。"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Each skillset is the average of the best {averageWindow} clears behind it. A skillset under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
+#~ msgstr "每个技能都是其背后最好 {averageWindow} 次通过的平均。不足 {averageWindow} 次的技能会按现有的通过来平均，所以随着通过增多它会越来越准。"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Each skillset is the average of your {averageWindow} best clears in it. With fewer than {averageWindow} it averages what you have, so the number is less accurate until you reach {averageWindow}."
+msgstr "每个技能是你在它上面最好 {averageWindow} 次通过的平均。不足 {averageWindow} 次时就取你现有的求平均，所以在凑够 {averageWindow} 次之前这个数字没那么准。"
 
 #: src/lib/streak-game.ts
 msgid "Earlier"
@@ -4976,8 +5009,8 @@ msgid "Fit"
 msgstr "适应宽度"
 
 #: src/routes/dan-estimates.tsx
-msgid "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
-msgstr "五大致对应一个真实课题的长度。达标通过正好四次时，就取那四次的平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
+#~ msgid "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgstr "五大致对应一个真实课题的长度。达标通过正好四次时，就取那四次的平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
 
 #: src/routes/report.tsx
 msgid "fixed"
@@ -10766,8 +10799,12 @@ msgid "Skills"
 msgstr "技能"
 
 #: src/routes/dan-estimates.tsx
-msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 5 best passes overall."
-msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。已分析成绩不到 25 个时，只有 18% 的 4K 玩家能评出两个技能；超过 200 个之后，每一个玩家都能。评出的技能不到两个的玩家占 4K 单点估算的 7.6%，他们的已分析成绩中位数是 23 个，这部分人按同样的平均来读，取全部通过里最好的五次。"
+msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 20 best passes overall."
+msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。已分析成绩不到 25 个时，只有 18% 的 4K 玩家能评出两个技能；超过 200 个之后，每一个玩家都能。评出的技能不到两个的玩家占 4K 单点估算的 7.6%，他们的已分析成绩中位数是 23 个，这部分人按同样的平均来读，取全部通过里最好的 20 次。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 5 best passes overall."
+#~ msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。已分析成绩不到 25 个时，只有 18% 的 4K 玩家能评出两个技能；超过 200 个之后，每一个玩家都能。评出的技能不到两个的玩家占 4K 单点估算的 7.6%，他们的已分析成绩中位数是 23 个，这部分人按同样的平均来读，取全部通过里最好的五次。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - keep the old rule and are read off their 4th best pass overall."
@@ -11089,8 +11126,12 @@ msgid "Step 4: your passes are sorted into four skills"
 msgstr "第四步：你的通过会被分进四个技能"
 
 #: src/routes/dan-estimates.tsx
-msgid "Step 5: each skill's dan is the average of your 5 best passes in it"
-msgstr "第五步：每个技能的段位，是你在它上面最好五次通过的平均"
+msgid "Step 5: each skill's dan is the average of your 20 best passes in it"
+msgstr "第五步：每个技能的段位，是你在它上面最好 20 次通过的平均"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Step 5: each skill's dan is the average of your 5 best passes in it"
+#~ msgstr "第五步：每个技能的段位，是你在它上面最好五次通过的平均"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 5: each skill's dan is your 4th best pass in it"
@@ -11293,8 +11334,12 @@ msgid "Take it down for good?"
 msgstr "确定要永久下架吗？"
 
 #: src/routes/dan-estimates.tsx
-msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
-msgstr "把你在某一个技能上计入的通过拿出来，按各自计入的段位排好，取最好的五个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
+msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+msgstr "把你在某一个技能上计入的通过拿出来，按各自计入的段位排好，取最好的 20 个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+#~ msgstr "把你在某一个技能上计入的通过拿出来，按各自计入的段位排好，取最好的五个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
@@ -11627,48 +11672,84 @@ msgid "the chart's full level"
 msgstr "谱面的完整段位"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.33"
-msgstr "谱面段位 -0.33"
+#~ msgid "the chart's level -0.33"
+#~ msgstr "谱面段位 -0.33"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.45"
-msgstr "谱面段位 -0.45"
+msgid "the chart's level -0.36"
+msgstr "谱面段位 -0.36"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.63"
-msgstr "谱面段位 -0.63"
+#~ msgid "the chart's level -0.45"
+#~ msgstr "谱面段位 -0.45"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.51"
+msgstr "谱面段位 -0.51"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.63"
+#~ msgstr "谱面段位 -0.63"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.75"
 msgstr "谱面段位 -0.75"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.76"
+msgstr "谱面段位 -0.76"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.85"
 msgstr "谱面段位 -0.85"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -1"
-msgstr "谱面段位 -1"
+#~ msgid "the chart's level -1"
+#~ msgstr "谱面段位 -1"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.14"
-msgstr "谱面段位 +0.14"
+msgid "the chart's level -1.05"
+msgstr "谱面段位 -1.05"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.18"
-msgstr "谱面段位 +0.18"
+msgid "the chart's level -1.25"
+msgstr "谱面段位 -1.25"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.28"
-msgstr "谱面段位 +0.28"
+msgid "the chart's level +0.07"
+msgstr "谱面段位 +0.07"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.35"
-msgstr "谱面段位 +0.35"
+msgid "the chart's level +0.12"
+msgstr "谱面段位 +0.12"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.49"
-msgstr "谱面段位 +0.49"
+#~ msgid "the chart's level +0.14"
+#~ msgstr "谱面段位 +0.14"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.16"
+msgstr "谱面段位 +0.16"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level +0.18"
+#~ msgstr "谱面段位 +0.18"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.2"
+msgstr "谱面段位 +0.2"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level +0.28"
+#~ msgstr "谱面段位 +0.28"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level +0.35"
+#~ msgstr "谱面段位 +0.35"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level +0.49"
+#~ msgstr "谱面段位 +0.49"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.53"
@@ -11834,6 +11915,14 @@ msgstr "排行榜查询需要一点时间"
 msgid "The rating may be waiting for a fresh chart-analysis pass."
 msgstr "评分可能在等待新一轮谱面分析。"
 
+#: src/routes/dan-estimates.tsx
+#~ msgid "The reason is the osu! API. The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
+#~ msgstr "原因在 osu! API。本站是通过 osu! 的新成绩信息流知道你在打的，而那个信息流只列出有排行榜谱面上的成绩，所以坟场谱面上的成绩根本不会出现在里面。你的最近成绩是另一个查询，坟场谱面的成绩它是包含的，但它只能按玩家逐个去查，所以只有当一个有排行榜的成绩表明你在打时，本站才开始查，并每隔几分钟查一次，直到你停下来。这段时间里查到的都算，包括未上架谱面。<0>如果你只打未上架谱面，那么在有排行榜的谱面上打出成绩之前，什么都不会被记录。</0>"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The reason is the osu! API. The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
+#~ msgstr "原因在 osu! API。本站是通过 osu! 的新成绩信息流知道你在打的，而那个信息流只列出有排行榜谱面上的成绩，所以坟场谱面上的成绩根本不会出现在里面。你的最近成绩是另一个查询，坟场谱面的成绩它是包含的，但它只能按玩家逐个去查，所以只有当一个有排行榜的成绩表明你在打时，本站才开始查，并每隔几分钟查一次，直到你停下来。这段时间里查到的都算，包括未上架谱面。<0>如果你只打未上架谱面，什么都不会被记录。</0>"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "The replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
 msgstr "回放已加载，但对应谱面不在 osu! 上(未提交或已删除)，因此无法下载谱面。"
@@ -11889,6 +11978,14 @@ msgstr "并排游玩区域加载失败。"
 #: src/routes/dan-estimates.tsx
 #~ msgid "The site downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
 #~ msgstr "本站会下载谱面文件，读出音符，再把谱型交给一个评分算法。用哪个算法取决于键数，因为没有哪一个在所有键数上都是最好的："
+
+#: src/routes/dan-estimates.tsx
+msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop, meaning 30 minutes pass without a new play. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
+msgstr "本站是通过 osu! 的新成绩信息流知道你在打的，而那个信息流只列出有排行榜谱面上的成绩，所以坟场谱面上的成绩根本不会出现在里面。你的最近成绩是另一个查询，坟场谱面的成绩它是包含的，但它只能按玩家逐个去查，所以只有当一个有排行榜的成绩表明你在打时，本站才开始查，并每隔几分钟查一次，直到你停下来，也就是 30 分钟没有新成绩。这段时间里查到的都算，包括未上架谱面。<0>如果你只打未上架谱面，什么都不会被记录。</0>"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
+#~ msgstr "本站是通过 osu! 的新成绩信息流知道你在打的，而那个信息流只列出有排行榜谱面上的成绩，所以坟场谱面上的成绩根本不会出现在里面。你的最近成绩是另一个查询，坟场谱面的成绩它是包含的，但它只能按玩家逐个去查，所以只有当一个有排行榜的成绩表明你在打时，本站才开始查，并每隔几分钟查一次，直到你停下来。这段时间里查到的都算，包括未上架谱面。<0>如果你只打未上架谱面，什么都不会被记录。</0>"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The site only started recording plays on June 9, 2026. Anything you played before that date counts only if it is still in your osu! top plays, and everything else from back then is invisible to the estimate."
@@ -12496,6 +12593,18 @@ msgstr "把手机横过来观看。"
 msgid "Turned down{said} Editing it sends it back for approval."
 msgstr "已被拒绝{said}修改后会重新提交审核。"
 
+#: src/routes/dan-estimates.tsx
+#~ msgid "Twenty is enough that a few lucky passes cannot carry it. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgstr "20 次足够多，几次运气好的通过撑不起来。达标通过不足 20 次时，就取你现有的求平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Twenty is enough that a few of your best passes cannot carry it on their own. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+msgstr "20 次足够多，光靠你最好的那几次通过撑不起来。达标通过不足 20 次时，就取你现有的求平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Twenty passes are a body of work, not a lucky handful. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgstr "20 次通过是一份扎实的积累，而不是运气好的那几次。达标通过不足 20 次时，就取你现有的求平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
 msgstr "两名玩家并排对比：pp 与排名、最好成绩以及 4K/7K 构成，最后是 pp 差距。省略第一个用户名就用你关联的账号来对比。"
@@ -12600,8 +12709,8 @@ msgid "unranked"
 msgstr "未 ranked"
 
 #: src/routes/dan-estimates.tsx
-msgid "Unranked plays are only recorded after tracking picks up your session from your first score on a ranked, qualified or loved chart. It then checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
-msgstr "只有当你先在上架、qualified 或 loved 谱面上打出成绩，追踪检测到这场游玩后，未上架谱面的成绩才会开始记录。之后会每隔几分钟检查一次最近成绩，直到你停止游玩；这段时间里的所有成绩都会计入，包括未上架谱面。<0>如果你只打未上架谱面，那么在有排行榜的谱面上打出成绩之前，什么都不会被记录。</0>"
+#~ msgid "Unranked plays are only recorded after tracking picks up your session from your first score on a ranked, qualified or loved chart. It then checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
+#~ msgstr "只有当你先在上架、qualified 或 loved 谱面上打出成绩，追踪检测到这场游玩后，未上架谱面的成绩才会开始记录。之后会每隔几分钟检查一次最近成绩，直到你停止游玩；这段时间里的所有成绩都会计入，包括未上架谱面。<0>如果你只打未上架谱面，那么在有排行榜的谱面上打出成绩之前，什么都不会被记录。</0>"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Unranked plays are only recorded once the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every few minutes until you stop, and everything you play during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded until you set a score on a chart with a leaderboard.</0>"
@@ -13438,12 +13547,16 @@ msgstr "你在某一侧的估算，就是你已有的那些技能段位的算术
 #~ msgstr "你的叠段位是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
-msgstr "你的叠段位是高亮那五次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：和它下面那四次放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
+#~ msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
+#~ msgstr "你的叠段位是高亮那五次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：和它下面那四次放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
 #~ msgstr "你的叠段位是高亮那五次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。和它下面那四次放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
+msgstr "你的叠段位是其中最好 20 次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：和它下面的那些放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"

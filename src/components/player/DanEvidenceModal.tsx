@@ -165,6 +165,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   const minAccuracyPercent = Math.round((evidence?.minAccuracy ?? 0.92) * 100);
   const barAccuracyPercent = Math.round((evidence?.barAccuracy ?? 0.96) * 100);
   const quorum = evidence?.quorum ?? 4;
+  const averageWindow = evidence?.averageWindow ?? 20;
 
   // The window opens on the breakdown, never on a wall of plays: every row is
   // one dan number, and the clears behind it unfold on the click. The headline
@@ -388,7 +389,12 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                             </span>
                           )}
                           <span className="text-[10px] tabular-nums text-osu-f1">
-                            {section.clears === 1 ? t`1 clear` : t`${section.clears} clears`}
+                            {/* Under the averaging window the count reads as
+                                progress toward it: this dan is averaged from
+                                fewer clears than it wants. */}
+                            {section.clears < averageWindow
+                              ? t`${section.clears}/${averageWindow} clears`
+                              : t`${section.clears} clears`}
                           </span>
                           {open ? (
                             <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: section.color }} />
@@ -397,6 +403,17 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                       );
                     })}
                   </div>
+                  {/* Shown only while some column is short of the window, so a
+                      filled-out breakdown carries no caveat at all. */}
+                  {sections.some((section) => section.clears < averageWindow) ? (
+                    <div className="px-2 pt-2 text-[11px] text-osu-f1">
+                      <Trans>
+                        Each skillset is the average of your {averageWindow} best clears in it. With
+                        fewer than {averageWindow} it averages what you have, so the number is less
+                        accurate until you reach {averageWindow}.
+                      </Trans>
+                    </div>
+                  ) : null}
                   <AnimatePresence initial={false}>
                     {openedSection ? (
                       <motion.div

@@ -390,7 +390,8 @@ function DanEstimatesPage() {
             <Trans>
               A pass right at the bar credits the chart's full level, exactly as passing the course
               would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare
-              clear, not a bonus. Above that the bonus ramps up, and a near miss under the bar
+              clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp
+              opens. A near miss under the bar
               still credits something: a play counts as a clear of a lower level, bottoming out a
               level and a quarter down at the cutoff. The regular ladders keep crediting to 4
               points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to
@@ -459,11 +460,11 @@ function DanEstimatesPage() {
           </P>
         </Section>
 
-        <Section title={t`Step 5: each skill's dan is the average of your 5 best passes in it`}>
+        <Section title={t`Step 5: each skill's dan is the average of your 20 best passes in it`}>
           <P>
             <Trans>
               Take your credited passes in one skill, sort them by the level each one credited, and
-              average the top 5. That is your dan in that skill. Nothing is added on top of the
+              average the top 20. That is your dan in that skill. Nothing is added on top of the
               evidence, and no single pass can set it on its own.
             </Trans>
           </P>
@@ -472,21 +473,22 @@ function DanEstimatesPage() {
               <Trans>Say the levels your 4K jack passes credit come out as:</Trans>
             </p>
             <p className="font-bold tabular-nums text-white">
-              <span className="text-osu-pink-light">gamma, beta+, beta, alpha++, alpha,</span> 10+, 10, 9++ ...
+              <span className="text-osu-pink-light">gamma, beta+, beta, alpha++, alpha, 10+, 10, 9++ ...</span>
             </p>
             <p>
               <Trans>
-                Your jack dan is the average of the five highlighted passes. The gamma pass does not make
-                you gamma on its own: averaged against the four below it, it can pull your dan up a
+                Your jack dan is the average of your 20 best of these. The gamma pass does not make
+                you gamma on its own: averaged against everything below it, it can pull your dan up a
                 fraction of a level, but it cannot set it.
               </Trans>
             </p>
           </div>
           <P>
             <Trans>
-              Five is roughly the length of a real course. With exactly four qualifying passes the
-              average is over those four; a skill you have fewer than four in gets no dan of its own,
-              and a side you have fewer than four on gets no estimate at all rather than a shaky one.
+              Twenty is enough that a few of your best passes cannot carry it on their own. With fewer than 20 qualifying
+              passes the average is over what you have; a skill you have fewer than four in gets no
+              dan of its own, and a side you have fewer than four on gets no estimate at all rather
+              than a shaky one.
             </Trans>
           </P>
         </Section>
@@ -517,7 +519,7 @@ function DanEstimatesPage() {
               your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past
               200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K
               regular estimates, at a median of 23 analysed plays - are read off the same average over
-              their 5 best passes overall.
+              their 20 best passes overall.
             </Trans>
           </P>
           <P>
@@ -611,13 +613,15 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
-              Unranked plays are only recorded after tracking picks up your session from your first
-              score on a ranked, qualified or loved chart. It then checks your recent plays every few
-              minutes until you stop, and everything you play during that time counts, including
-              unranked charts.{' '}
+              The site notices you are playing through osu!'s feed of new
+              scores, and that feed only lists scores on charts with a leaderboard, so a play on a
+              graveyarded chart never shows up in it. Your recent plays are a separate lookup that does
+              include graveyarded charts, but it has to be asked per player, so the site only starts
+              asking once a leaderboard score shows you are playing, and keeps asking every few minutes
+              until you stop, meaning 30 minutes pass without a new play. Everything it finds during
+              that time counts, including unranked charts.{' '}
               <strong className="text-[17px] font-bold text-white">
-                If you only play unranked charts, nothing is recorded until you set a score on a chart
-                with a leaderboard.
+                If you only play unranked charts, nothing is recorded.
               </strong>
             </Trans>
           </P>
@@ -1193,7 +1197,8 @@ function CreditCurveTabs() {
         ["100%", t`the chart's level +1.5`],
         ["99.5%", t`the chart's level +1.1`],
         ["99%", t`the chart's level +0.7`],
-        ["98%", t`the chart's level +0.35`],
+        ["98.7%", t`the chart's level +0.2`],
+        ["98%", t`the chart's level +0.12`],
         [t`96-96.99% (the bar)`, t`the chart's full level`],
         ["95%", t`the chart's level -0.51`],
         ["94%", t`the chart's level -0.76`],
@@ -1206,8 +1211,9 @@ function CreditCurveTabs() {
       head: [t`Accuracy (97% ScoreV2 ladder)`, t`Credit`],
       rows: [
         ["100%", t`the chart's level +0.7`],
-        ["99.5%", t`the chart's level +0.53`],
-        ["99%", t`the chart's level +0.35`],
+        ["99.9%", t`the chart's level +0.53`],
+        ["99.7%", t`the chart's level +0.2`],
+        ["99%", t`the chart's level +0.12`],
         [t`97-98% (the bar)`, t`the chart's full level`],
         ["96.9%", t`the chart's level -0.75`],
         ["96.4%", t`the chart's level -0.85`],
@@ -1223,8 +1229,8 @@ function CreditCurveTabs() {
         ["100%", t`the chart's level +1.5`],
         ["99.5%", t`the chart's level +1.18`],
         ["99%", t`the chart's level +0.86`],
-        ["98%", t`the chart's level +0.49`],
-        ["97%", t`the chart's level +0.21`],
+        ["98%", t`the chart's level +0.16`],
+        ["97%", t`the chart's level +0.07`],
         [t`95-96.25% (the bar)`, t`the chart's full level`],
         ["94.9%", t`the chart's level -0.36`],
         ["94.5%", t`the chart's level -0.76`],

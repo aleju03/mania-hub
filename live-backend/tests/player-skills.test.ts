@@ -1048,9 +1048,9 @@ describe("computePlayerSkillRatings", () => {
       const clears = collectDanClearsForTest(4, [231, 232, 233, 234].map(htPlay), info);
       expect(clears.length).toBe(4);
       // 8.0 (the 0.75x verdict), never the chart's own 12.0; the accuracy
-      // credit rides on the rate verdict too (98% stable is +0.35).
+      // credit rides on the rate verdict too (98% stable is +0.117647).
       expect(clears.every((clear) => clear.chartDan === 8 && clear.side === "rc")).toBe(true);
-      for (const clear of clears) expect(clear.creditedDan).toBeCloseTo(8.35, 6);
+      for (const clear of clears) expect(clear.creditedDan).toBeCloseTo(8.117647, 6);
 
       // A rate with no stored verdict still contributes nothing.
       const oddRate = collectDanClearsForTest(4, [231, 232, 233, 234].map((id) => ({ ...htPlay(id), rate: 1.2 })), info);
@@ -1118,10 +1118,10 @@ describe("computePlayerSkillRatings", () => {
         [242, 9.5, "ln"],
       ]);
       // The accuracy credit applies to rate verdicts on the same terms: 98%
-      // stable is +0.35 over the rc bar, while the ln clear is judged on the
-      // converted v2 bar (97.5%) against the window and sits inside the flat
-      // zone, so it credits the bare level.
-      expect(clears[0].creditedDan).toBeCloseTo(9.85, 6);
+      // stable is +0.117647 over the rc bar, while the ln clear is judged on
+      // the converted v2 bar (97.5%) against the window and sits inside the
+      // flat zone, so it credits the bare level.
+      expect(clears[0].creditedDan).toBeCloseTo(9.617647, 6);
       expect(clears[1].creditedDan).toBeCloseTo(9.5, 6);
 
       // A 1.5x play on a chart with no dan_dt_json falls back to the stored
@@ -1757,10 +1757,10 @@ describe("danTableLabelFor", () => {
 });
 
 describe("danClearAverageWindowFor", () => {
-  it("averages ten clears on 4K LN, five everywhere else", () => {
-    expect(danClearAverageWindowFor("ln", 4)).toBe(10);
-    expect(danClearAverageWindowFor("rc", 4)).toBe(5);
-    expect(danClearAverageWindowFor("ln", 6)).toBe(5);
-    expect(danClearAverageWindowFor("ln", 7)).toBe(5);
+  it("averages the best twenty clears on every ladder", () => {
+    expect(danClearAverageWindowFor("ln", 4)).toBe(20);
+    expect(danClearAverageWindowFor("rc", 4)).toBe(20);
+    expect(danClearAverageWindowFor("ln", 6)).toBe(20);
+    expect(danClearAverageWindowFor("ln", 7)).toBe(20);
   });
 });
