@@ -1268,6 +1268,10 @@ msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} co
 msgid "{skillsetLabel} dan"
 msgstr "{skillsetLabel} dan"
 
+#: src/components/player/DanLevelBadge.tsx
+msgid "{skillsFull} of {skillsTotal} skills have their full {perSkill} clears, so the estimate is still filling in."
+msgstr "{skillsFull} of {skillsTotal} skills have their full {perSkill} clears, so the estimate is still filling in."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
 msgstr "{speedLabel} speed"
@@ -2408,6 +2412,10 @@ msgstr "Auto packs"
 #: src/components/ui/Avatar.tsx
 msgid "avatar"
 msgstr "avatar"
+
+#: src/components/player/DanLevelBadge.tsx
+msgid "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
+msgstr "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
 
 #: src/routes/player/$username.tsx
 msgid "Avg active day"

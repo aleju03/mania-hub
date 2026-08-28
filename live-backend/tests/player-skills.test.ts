@@ -912,6 +912,11 @@ describe("computePlayerSkillRatings", () => {
       expect(side.rawDan).toBe(9);
       // Only the four jack clears reach the estimate.
       expect(side.clears).toBe(4);
+      // Every published skillset wants a window of its own, so four clears in
+      // two of the four buckets leave the side 8 of 80 filled in. That is what
+      // the badge's ring reads: this estimate is still thin, whatever it says.
+      expect(side.clearWindow).toEqual({ have: 8, need: 80, skills: { full: 0, total: 4 } });
+      expect(side.skillsets?.jack?.clearWindow).toEqual({ have: 4, need: 20 });
 
       // One rated skillset is not an average, so the side keeps the quorum-th
       // clear: this is the thin-evidence player, not a measured specialist.
@@ -961,6 +966,7 @@ describe("computePlayerSkillRatings", () => {
       const plain = danSideFromClearsForTest(4, "rc", plays, info)!;
       expect(plain.rawDan).toBe(9);
       expect(plain.courseClear).toBeUndefined();
+      expect(plain.clearWindow).toEqual({ have: 8, need: 80, skills: { full: 0, total: 4 } });
 
       const floored = danSideFromClearsForTest(4, "rc", plays, info, epsilon)!;
       expect(floored.label).toBe("epsilon");
@@ -968,6 +974,9 @@ describe("computePlayerSkillRatings", () => {
       expect(floored.courseClear?.level).toBe("epsilon");
       // The override is a headline rule; the skill rows still measure the mix.
       expect(floored.skillsets).toEqual(plain.skillsets);
+      // A pass is not an average, so a floored headline has no window to fill
+      // and the badge marks nothing.
+      expect(floored.clearWindow).toBeUndefined();
 
       // A course under the averaged estimate changes nothing: a clear is a
       // floor, never a ceiling.
@@ -1018,6 +1027,8 @@ describe("computePlayerSkillRatings", () => {
       const side = danSideFromClearsForTest(4, "ln", [311, 312, 313, 314].map(lnPlay), info)!;
       expect(side.skillsets).toBeUndefined();
       expect(side.rawDan).toBe(7.5);
+      // One pool rather than four, so the window is the side's own.
+      expect(side.clearWindow).toEqual({ have: 4, need: 20 });
     });
   });
 

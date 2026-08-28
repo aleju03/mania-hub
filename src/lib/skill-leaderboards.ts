@@ -84,6 +84,10 @@ export interface DanLeaderboardEntry {
   label: string;
   analyzedPlays: number;
   beyondTable?: boolean;
+  // How full the averaging window behind this dan is: `have` of the `need`
+  // clears a complete estimate averages over, plus, on a side headline, how
+  // many of its skills have their whole window (what the badge's ring draws).
+  clearWindow?: { have: number; need: number; skills?: { full: number; total: number } };
 }
 
 export interface LeaderboardAxisInfo {

@@ -444,6 +444,28 @@ export interface PlayerSkillDanVerdict {
    * label measures the estimate.
    */
   beyondTable?: boolean;
+  /**
+   * How full the averaging window behind this dan is: `have` clears out of the
+   * `need` a complete estimate averages over. On a skillset verdict that is
+   * its own window (min(clears, danClearAverageWindowFor)) out of the window;
+   * on a side headline it is every published skillset's window summed, so a
+   * side with one thin skill reads as short even when the others are full.
+   *
+   * `skills` carries that headline as skills rather than clears: how many of
+   * the published skillsets have their whole window. The sum alone cannot be
+   * shown honestly - a side missing one skill entirely still reads 75 of 80,
+   * which draws as a full ring - so the badge counts skills and the sum stays
+   * for the sentence under it. Absent on a single-pool verdict (a skillset of
+   * its own, or a side whose keymode publishes none).
+   *
+   * Stored so the badge can say the estimate is still filling in without
+   * re-deriving a player's clears - the surfaces that show a dan outside the
+   * evidence window (profile chips, My Stats, the dan leaderboard) only ever
+   * read the stored verdict. Absent on rows written before this shipped and
+   * on a headline a course clear set, where the number is a pass rather than
+   * an average.
+   */
+  clearWindow?: { have: number; need: number; skills?: { full: number; total: number } };
 }
 
 export interface PlayerSkillDanSide extends PlayerSkillDanVerdict {
@@ -1373,12 +1395,14 @@ function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): 
   // level on its own, but it is no longer discarded the way the old
   // quorum-th-clear rule discarded everything above the 4th: it pulls the
   // average up in proportion to how far it sits above the rest.
-  const window = sorted.slice(0, danClearAverageWindowFor(side, keyCount));
+  const needed = danClearAverageWindowFor(side, keyCount);
+  const window = sorted.slice(0, needed);
   const rawDan = Math.round((window.reduce((sum, value) => sum + value, 0) / window.length) * 100) / 100;
   return {
     rawDan,
     label: danLabelFor(rawDan, side, keyCount),
     clears: sorted.filter((value) => value >= rawDan - DAN_ROUNDING_EPSILON).length,
+    clearWindow: { have: window.length, need: needed },
     ...(isBeyondDanTable(rawDan, side, keyCount) ? { beyondTable: true } : {}),
   };
 }
@@ -1467,13 +1491,49 @@ function danSideFromClears(
   // Buckets are a subset of the side's clears, so a side under the quorum can
   // never have one: no verdict here means no skillset verdicts either.
   const skillsets: Record<string, PlayerSkillDanVerdict> = {};
-  for (const [id, bucketClears] of groupDanClearsBySkillset(keyCount, side, list, infoByBeatmap)) {
+  const grouped = groupDanClearsBySkillset(keyCount, side, list, infoByBeatmap);
+  for (const [id, bucketClears] of grouped) {
     const bucketDan = danFromClears(bucketClears.map((clear) => clear.creditedDan), side, keyCount);
     if (bucketDan) skillsets[id] = bucketDan;
   }
   const headline = averageSkillsetDans(skillsets, clearDans, side, keyCount) ?? quorumDan;
   const withCourse = applyDanCourseFloor(headline, best, side, keyCount, clearDans);
-  return Object.keys(skillsets).length > 0 ? { ...withCourse, skillsets } : withCourse;
+  // A course clear hands the player the level outright, so a floored headline
+  // has no window left to fill and carries none.
+  const windowed = withCourse.courseClear
+    ? withCourse
+    : { ...withCourse, clearWindow: danHeadlineClearWindow(keyCount, side, grouped, clearDans.length) };
+  return Object.keys(skillsets).length > 0 ? { ...windowed, skillsets } : windowed;
+}
+
+/**
+ * How full the clear pools behind a side's headline are.
+ *
+ * Every published skillset wants its own full window, so the headline's is
+ * their windows summed: a player with four skills but only three clears of one
+ * of them is not done filling the estimate in, however deep the other three
+ * are. Buckets under the quorum have no verdict of their own but their clears
+ * still count here, because what the marker answers is "how much of this
+ * estimate is still missing", not "how many skills are rated".
+ *
+ * Sides that publish no skillsets (4K and 6K LN) have one pool, so their
+ * window is the side's own, which is what the evidence window shows them.
+ */
+function danHeadlineClearWindow(
+  keyCount: number,
+  side: "rc" | "ln",
+  grouped: Map<string, DanClearEvidence[]>,
+  sideClears: number,
+): NonNullable<PlayerSkillDanVerdict["clearWindow"]> {
+  const need = danClearAverageWindowFor(side, keyCount);
+  if (grouped.size === 0) return { have: Math.min(sideClears, need), need };
+  let have = 0;
+  let full = 0;
+  for (const bucketClears of grouped.values()) {
+    have += Math.min(bucketClears.length, need);
+    if (bucketClears.length >= need) full += 1;
+  }
+  return { have, need: need * grouped.size, skills: { full, total: grouped.size } };
 }
 
 /** The strongest credited course run on one side of one keymode's ladder. */
@@ -3299,7 +3359,11 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // the best 20 (danClearAverageWindowFor, one window for every ladder now), so
 // a skillset takes a body of work rather than a few best plays. Every stored
 // verdict is stale.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v13";
+// v14: no number moves. Verdicts now carry how full their averaging window is
+// (clearWindow), which the dan badges read to mark an estimate that is still
+// filling in. A stored row without it reads as "unknown" rather than complete,
+// so the boards would mark players unevenly until every row has one.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v14";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

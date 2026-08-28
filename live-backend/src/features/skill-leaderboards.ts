@@ -140,6 +140,12 @@ export interface DanLeaderboardEntry {
   // The estimate sits at or above the top of this keymode's ladder, so the
   // label is a floor rather than a measurement.
   beyondTable?: boolean;
+  /* How full the averaging window behind this dan is (player-skills'
+     clearWindow): `have` of the `need` clears a complete estimate averages
+     over, plus, on a side headline, how many of its skills have their whole
+     window. Absent on a row whose stored verdict predates it and on a headline
+     a course clear set, where there is no window to fill. */
+  clearWindow?: { have: number; need: number; skills?: { full: number; total: number } };
 }
 
 export interface SkillLeaderboardAxisInfo {
@@ -197,6 +203,14 @@ interface DanColumn {
   raw: Float32Array;
   labels: string[];
   beyond: Uint8Array;
+  /* The averaging window's fill, dense over the same slots. All four fit a
+     byte: a window is 20 clears and a headline sums at most four of them.
+     Zero in `need` means the stored verdict carried none, and zero in
+     `windowSkills` means it counted one pool rather than skills. */
+  windowHave: Uint8Array;
+  windowNeed: Uint8Array;
+  windowFull: Uint8Array;
+  windowSkills: Uint8Array;
   order: Int32Array;
 }
 
@@ -260,6 +274,10 @@ interface DraftDan {
   raw: number[];
   labels: string[];
   beyond: number[];
+  windowHave: number[];
+  windowNeed: number[];
+  windowFull: number[];
+  windowSkills: number[];
 }
 
 interface DraftKeymode {
@@ -401,17 +419,37 @@ async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
           column.plays.push(plays);
         }
 
-        const pushDan = (key: string, verdict: { rawDan?: unknown; label?: unknown; beyondTable?: unknown }) => {
+        const pushDan = (
+          key: string,
+          verdict: {
+            rawDan?: unknown;
+            label?: unknown;
+            beyondTable?: unknown;
+            clearWindow?: { have?: unknown; need?: unknown; skills?: { full?: unknown; total?: unknown } | null } | null;
+          },
+        ) => {
           const rawDan = Number(verdict?.rawDan);
           if (!(rawDan > 0)) return;
           let column = draft.dan.get(key);
-          if (!column) draft.dan.set(key, (column = { raw: [], labels: [], beyond: [] }));
+          if (!column) {
+            draft.dan.set(key, (column = { raw: [], labels: [], beyond: [], windowHave: [], windowNeed: [], windowFull: [], windowSkills: [] }));
+          }
           padTo(column.raw, slot, 0);
           padLabels(column.labels, slot);
           padTo(column.beyond, slot, 0);
+          padTo(column.windowHave, slot, 0);
+          padTo(column.windowNeed, slot, 0);
+          padTo(column.windowFull, slot, 0);
+          padTo(column.windowSkills, slot, 0);
           column.raw.push(rawDan);
           column.labels.push(String(verdict.label ?? ""));
           column.beyond.push(verdict.beyondTable === true ? 1 : 0);
+          const need = Math.max(0, Math.min(255, Math.floor(Number(verdict.clearWindow?.need) || 0)));
+          const skills = need > 0 ? Math.max(0, Math.min(255, Math.floor(Number(verdict.clearWindow?.skills?.total) || 0))) : 0;
+          column.windowHave.push(need > 0 ? Math.max(0, Math.min(need, Math.floor(Number(verdict.clearWindow?.have) || 0))) : 0);
+          column.windowNeed.push(need);
+          column.windowFull.push(skills > 0 ? Math.max(0, Math.min(skills, Math.floor(Number(verdict.clearWindow?.skills?.full) || 0))) : 0);
+          column.windowSkills.push(skills);
         };
         for (const side of ["rc", "ln"] as const) {
           const dan = mode?.dan?.[side];
@@ -450,10 +488,18 @@ async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
       padTo(column.raw, size, 0);
       padLabels(column.labels, size);
       padTo(column.beyond, size, 0);
+      padTo(column.windowHave, size, 0);
+      padTo(column.windowNeed, size, 0);
+      padTo(column.windowFull, size, 0);
+      padTo(column.windowSkills, size, 0);
       dan.set(key, {
         raw: Float32Array.from(column.raw),
         labels: column.labels,
         beyond: Uint8Array.from(column.beyond),
+        windowHave: Uint8Array.from(column.windowHave),
+        windowNeed: Uint8Array.from(column.windowNeed),
+        windowFull: Uint8Array.from(column.windowFull),
+        windowSkills: Uint8Array.from(column.windowSkills),
         order: sortedOrder(column.raw),
       });
     }
@@ -776,6 +822,15 @@ export async function getDanLeaderboard(db: Db, query: DanLeaderboardQuery): Pro
       analyzedPlays: keymode.analyzedPlays[slot],
     };
     if (column.beyond[slot] === 1) entry.beyondTable = true;
+    if (column.windowNeed[slot] > 0) {
+      entry.clearWindow = {
+        have: column.windowHave[slot],
+        need: column.windowNeed[slot],
+        ...(column.windowSkills[slot] > 0
+          ? { skills: { full: column.windowFull[slot], total: column.windowSkills[slot] } }
+          : {}),
+      };
+    }
     ranking.push(entry);
   }
 

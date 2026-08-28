@@ -1268,6 +1268,10 @@ msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la e
 msgid "{skillsetLabel} dan"
 msgstr "Dan de {skillsetLabel}"
 
+#: src/components/player/DanLevelBadge.tsx
+msgid "{skillsFull} of {skillsTotal} skills have their full {perSkill} clears, so the estimate is still filling in."
+msgstr "{skillsFull} de {skillsTotal} skills tienen sus {perSkill} clears completos, así que la estimación aún se está completando."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
 msgstr "velocidad {speedLabel}"
@@ -2408,6 +2412,10 @@ msgstr "Packs automáticos"
 #: src/components/ui/Avatar.tsx
 msgid "avatar"
 msgstr "avatar"
+
+#: src/components/player/DanLevelBadge.tsx
+msgid "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
+msgstr "Promediado sobre {windowHave} de {windowNeed} clears, así que la estimación aún se está completando."
 
 #: src/routes/player/$username.tsx
 msgid "Avg active day"

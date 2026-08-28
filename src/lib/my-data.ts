@@ -59,6 +59,11 @@ export interface MyDataSkillDanSide {
   // Set when a verified clear of a real dan course raised this headline above
   // the averaged estimate; names the course that did it.
   courseClear?: MyDataSkillDanCourseClear;
+  // How full the clear pools behind the estimate are: `have` of the `need` a
+  // complete one averages over (every published skillset's window summed, so a
+  // side with one thin skill is short even when the others are deep). Absent
+  // on a verdict stored before it shipped and on one a course clear set.
+  clearWindow?: { have: number; need: number; skills?: { full: number; total: number } };
 }
 
 export interface MyDataSkillDanCourseClear {

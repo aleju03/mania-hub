@@ -108,6 +108,7 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
       clears: number;
       beyondTable?: boolean;
       courseClear?: { courseName: string; accuracy: number };
+      clearWindow?: { have: number; need: number; skills?: { full: number; total: number } };
     } | null;
   }> = [
     { id: "rc", label: msg`Regular`, side: dan.rc },
@@ -141,6 +142,7 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
               keyCount={mode.keyCount}
               side={entry.id}
               beyondTable={beyond}
+              clearWindow={entry.side!.clearWindow}
               formatLabel={formatDanChip}
             />
           </>

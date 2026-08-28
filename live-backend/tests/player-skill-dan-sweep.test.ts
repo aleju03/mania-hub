@@ -254,7 +254,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     for (const userId of [21, 22, 23]) await seedRow(db, userId, [301, 302, 303, 304]);
 
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v13'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v14'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.

@@ -111,6 +111,7 @@ export function DanLeaderboardBoard({
               keyCount={servedKeys}
               side={servedSide}
               beyondTable={entry.beyondTable === true}
+              clearWindow={entry.clearWindow}
               size="sm"
               formatLabel={formatDanLabel}
             />

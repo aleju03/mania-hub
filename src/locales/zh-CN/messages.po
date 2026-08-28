@@ -1277,6 +1277,10 @@ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段�
 msgid "{skillsetLabel} dan"
 msgstr "{skillsetLabel} 段位"
 
+#: src/components/player/DanLevelBadge.tsx
+msgid "{skillsFull} of {skillsTotal} skills have their full {perSkill} clears, so the estimate is still filling in."
+msgstr "{skillsTotal} 项技能中有 {skillsFull} 项已满 {perSkill} 次通过，估算仍在完善中。"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
 msgstr "{speedLabel} 速度"
@@ -2417,6 +2421,10 @@ msgstr "自动谱包"
 #: src/components/ui/Avatar.tsx
 msgid "avatar"
 msgstr "头像"
+
+#: src/components/player/DanLevelBadge.tsx
+msgid "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
+msgstr "基于 {windowHave}/{windowNeed} 次通过取平均，估算仍在完善中。"
 
 #: src/routes/player/$username.tsx
 msgid "Avg active day"
