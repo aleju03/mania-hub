@@ -751,6 +751,50 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
+  it("does not credit a structurally dan-ineligible chart", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      await exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+         values (?, ?, 'ready', ?, ?)`,
+        [
+          215,
+          CHART_ANALYSIS_VERSION,
+          JSON.stringify({
+            lnRatio: 0,
+            patterns: [],
+            rc: { rawDan: 14.5 },
+            danEligibility: {
+              eligible: false,
+              reason: "stacked_same_column_heads",
+              maxSameColumnHeadStack: 190,
+              redundantSameColumnHeads: 189,
+            },
+          }),
+          new Date().toISOString(),
+        ],
+      );
+      const { collectDanClearsForTest, loadChartSkillInfo } = await import("../src/features/player-skills.js");
+      const info = await loadChartSkillInfo(db, [215]);
+      const eligibleLookingPlay = {
+        identity: "official:215",
+        beatmapId: 215,
+        keyCount: 7,
+        rate: 1,
+        goal: 0.99,
+        pp: 100,
+        values: { Overall: 30 },
+        patterns: [],
+        accuracy: 0.999,
+        stableAccuracy: 0.999,
+      };
+
+      expect(info.get(215)?.danEligible).toBe(false);
+      expect(collectDanClearsForTest(7, [eligibleLookingPlay], info)).toEqual([]);
+    });
+  });
+
   it("credits a near-miss a decayed level, and a high-accuracy pass a bonus, from the same curve", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");

@@ -11,6 +11,7 @@ import {
   computeBeatmapChartAnalysis,
   enqueueChartAnalysisBackfill,
   getChartAnalysisBackfillStatus,
+  recomputeDanEligibilityChunk,
   runChartAnalysisBackfillJob,
   startChartAnalysisBackfill,
 } from "../src/features/chart-analysis.js";
@@ -106,6 +107,7 @@ describe("chart analysis", () => {
       expect(Array.isArray(classification.patterns)).toBe(true);
       expect(Array.isArray(classification.clusters)).toBe(true);
       expect(classification.lnRatio).toBeLessThan(0.05);
+      expect(classification.danEligibility).toMatchObject({ eligible: true, reason: null });
       // beatLength 352.94 = 170 BPM under every note.
       expect(classification.noteBpm).toBe(170);
 
@@ -129,6 +131,45 @@ describe("chart analysis", () => {
       )).rows[0];
       expect(String(row.status)).toBe("unavailable");
       expect(String(row.error)).toContain("Not a mania beatmap");
+    });
+  });
+
+  it("backfills structural player-dan eligibility without changing the stored chart verdict", async () => {
+    await withDb(async (db) => {
+      const stacked = buildStreamBeatmapFile().replace(
+        "[HitObjects]\n",
+        `[HitObjects]\n${Array.from({ length: 8 }, () => "64,192,15,128,0,47:0:0:0:0:").join("\n")}\n`,
+      );
+      await storeCachedBeatmapFile(db, 557, stacked, { source: "test" });
+      const before = {
+        keyCount: 4,
+        sunnySr: 99,
+        warnings: ["Pattern clustering failed: Stacked LN at 15, column 1, head coincides with 2."],
+        primary: { rawDan: 17.5 },
+      };
+      await exec(
+        db,
+        `insert into beatmap_chart_analysis
+           (beatmap_id, analysis_version, status, key_count, primary_label, primary_family, raw_dan, classification_json, updated_at)
+         values (557, ?, 'ready', 4, '17++', 'ln', 17.5, json(?), ?)`,
+        [CHART_ANALYSIS_VERSION, JSON.stringify(before), new Date().toISOString()],
+      );
+
+      const result = await recomputeDanEligibilityChunk(db, 0);
+      expect(result.ineligible).toEqual([557]);
+
+      const row = (await exec(
+        db,
+        "select primary_label, raw_dan, classification_json from beatmap_chart_analysis where beatmap_id = 557",
+      )).rows[0];
+      expect(String(row.primary_label)).toBe("17++");
+      expect(Number(row.raw_dan)).toBe(17.5);
+      const classification = JSON.parse(String(row.classification_json));
+      expect(classification.danEligibility).toMatchObject({
+        eligible: false,
+        reason: "stacked_same_column_heads",
+        maxSameColumnHeadStack: 8,
+      });
     });
   });
 

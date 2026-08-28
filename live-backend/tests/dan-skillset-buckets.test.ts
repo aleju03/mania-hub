@@ -50,6 +50,7 @@ const SPEEDJACK_CHART = {
   techCategory: null,
   lnRatio: 0,
   vibro: false,
+  danEligible: true,
   rcRawDan: 10,
   lnRawDan: null,
   dtRawDan: null,
@@ -166,6 +167,7 @@ describe("pattern tag thresholds", () => {
     expect(0.334).toBeGreaterThanOrEqual(patternTagMinScoreForTest("delay"));
     expect(buckets(7, {
       patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, lnRatio: 0, vibro: false,
+      danEligible: true,
       rcRawDan: 10, lnRawDan: null, dtRawDan: null, dtFamily: null, htRawDan: null, htFamily: null,
       lengthSeconds: null,
     })).toContain("speed");
@@ -175,6 +177,7 @@ describe("pattern tag thresholds", () => {
 describe("6K/7K jack bucket (LeoBlack cluster share)", () => {
   const chart = (over: Partial<Parameters<typeof danTagBucketsForTest>[1]>) => ({
     patterns: [], jackShare: null, streamShare: null, techCategory: null, lnRatio: 0, vibro: false,
+    danEligible: true,
     rcRawDan: 10, lnRawDan: null, dtRawDan: null, dtFamily: null, htRawDan: null, htFamily: null,
     lengthSeconds: null,
     ...over,

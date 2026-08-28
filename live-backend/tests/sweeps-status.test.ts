@@ -60,6 +60,7 @@ describe("sweeps status registry", () => {
       "skill-vector-backfill-v5",
       "dt-rate-analysis",
       "vibro-recompute",
+      "dan-eligibility-recompute",
       "note-bpm-recompute",
       "dan-floor-pin-recompute",
       "ln-subtype-recompute",

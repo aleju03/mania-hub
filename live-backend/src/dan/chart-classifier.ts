@@ -24,6 +24,7 @@ import { PATTERNS_CONFIG } from "../../vendor/leoblack/patterns/config.js";
 import { detectVibroFromLongjackPattern } from "../../vendor/leoblack/vibro.js";
 import { applyCompanellaToMixedResult, type LeoBlackReworkResult } from "../../vendor/leoblack/estimator/mixedEstimator.js";
 import type { CompanellaEstimate } from "../../vendor/leoblack/estimator/companellaEstimator.js";
+import { inspectChartDanEligibility, type ChartDanEligibility } from "./dan-eligibility.js";
 
 // The single chart classifier. Routes each chart to the best-performing engine
 // per the benchmark in live-backend/vendor/leoblack/PORT_NOTES.md:
@@ -66,6 +67,10 @@ export interface ChartClassification {
   patterns: ManiaPatternAnalysis;
   clusters: { report: LeoBlackPatternReport; topFiveClusters: LeoBlackPatternCluster[] } | null;
   vibro: boolean;
+  /** Whether this chart may testify toward a player's dan. The displayed
+   * chart verdict remains available even when structural abuse makes clears
+   * unsafe to credit. */
+  danEligibility: ChartDanEligibility;
   /**
    * True when Mixed wanted Companella for the RC half but none was supplied,
    * so the verdict is still the Sunny fallback. Re-running through
@@ -606,6 +611,12 @@ export function sunnyLowEndReroute(
 export function classifyChart(map: ManiaBeatmap, osuText: string, input: ClassifyChartInput = {}): ChartClassification {
   const rate = getInputRate(input);
   const warnings: string[] = [];
+  const danEligibility = inspectChartDanEligibility(map);
+  if (!danEligibility.eligible) {
+    warnings.push(
+      `Player dan disabled: ${danEligibility.maxSameColumnHeadStack} objects share one column and head time.`,
+    );
+  }
 
   const features = extractDanFeatures(map, input, rate);
   const patterns = analyzeManiaPatterns(map, input, features);
@@ -780,6 +791,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     patterns,
     clusters,
     vibro,
+    danEligibility,
     companellaPending: mixed?.mixedCompanellaPlan != null,
     warnings,
   };

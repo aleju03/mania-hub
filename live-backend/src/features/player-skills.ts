@@ -904,6 +904,9 @@ export interface ChartSkillInfo {
   techCategory: boolean | null;
   lnRatio: number | null;
   vibro: boolean;
+  /** False when the chart's raw object structure makes its dan verdict unsafe
+   * as player evidence. The chart may still display that verdict on /maps. */
+  danEligible: boolean;
   rcRawDan: number | null;
   lnRawDan: number | null;
   dtRawDan: number | null;
@@ -921,6 +924,7 @@ interface LeanHalfJson {
 interface LeanClassificationJson {
   lnRatio?: unknown;
   vibro?: unknown;
+  danEligibility?: { eligible?: unknown } | null;
   rc?: LeanHalfJson | null;
   ln?: LeanHalfJson | null;
   patterns?: Array<{ id?: unknown; score?: unknown }>;
@@ -1066,6 +1070,9 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
           : null,
         lnRatio,
         vibro: parsed?.vibro === true,
+        // Legacy rows have no field and stay eligible until the targeted
+        // cached-.osu sweep inspects them. Fresh analyses always store it.
+        danEligible: parsed?.danEligibility?.eligible !== false,
         rcRawDan: readRawDan(parsed?.rc),
         lnRawDan: readRawDan(parsed?.ln),
         dtRawDan,
@@ -1248,6 +1255,7 @@ function collectDanClears(
   for (const play of plays) {
     const info = infoByBeatmap.get(play.beatmapId);
     if (!info) continue;
+    if (!info.danEligible) continue;
     // Clear evidence rides on the stored play (retained plays outlive their
     // score payload); the live score object is the fallback for cache entries
     // written before the fields existed.
@@ -3243,7 +3251,10 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // v8: a confident analyzer speedjack/chordjack tag now overrides MinaCalc's
 // 4K argmax into the jack tile. That moves clears between skillset verdicts
 // and can move the headline average, so all stored verdicts are stale.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v8";
+// v9: charts with exploit-sized same-column head stacks are structurally
+// ineligible as dan evidence. The chart verdict remains visible, but every
+// stored player dan must be rebuilt without those clears.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v9";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

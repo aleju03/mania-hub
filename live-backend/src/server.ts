@@ -13,7 +13,7 @@ import { enqueueGlobalFarmedBoardRepack, enqueueGlobalMapsRefreshIfDue, enqueueM
 import { cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
-import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureHtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureJackTagRecomputeSeeded, ensureLnMsdSweepSeeded, ensureLnLeoblackRecomputeSeeded, ensureLnPrimaryRepinSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
+import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanEligibilityRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureHtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureJackTagRecomputeSeeded, ensureLnMsdSweepSeeded, ensureLnLeoblackRecomputeSeeded, ensureLnPrimaryRepinSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-feedback.js";
@@ -477,6 +477,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // the one-shot vibro recompute sweep over stored chart analyses.
       void ensureMapSearchIndexSeeded(app.db, app.queue).catch((error) => console.warn("[map-search] seed failed", error));
       void ensureVibroRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[vibro-recompute] seed failed", error));
+      // Structural chart integrity: patch suspicious legacy analyses before
+      // the v9 player-dan sweep rebuilds stored verdicts without abusive
+      // same-column head stacks. Pure cached-.osu work, no API budget.
+      void ensureDanEligibilityRecomputeSeeded(app.db, app.queue).catch((error) => {
+        logWarn("dan_eligibility_seed_failed", errorContext(error));
+      });
       void ensureDanFloorPinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[dan-floor-pin] seed failed", error));
       void ensureLnSubtypeRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-subtype] seed failed", error));
       void ensureJackTagRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[jack-tag] seed failed", error));

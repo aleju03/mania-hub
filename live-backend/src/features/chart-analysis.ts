@@ -18,6 +18,7 @@ import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
 import { logInfo } from "../logger.js";
 import { MSD_SKILLSETS } from "./farm-helper-shape.js";
+import { inspectChartDanEligibility, type ChartDanEligibility } from "../dan/dan-eligibility.js";
 
 // Per-beatmap chart analysis at 1.0x: the unified classifier verdict (dan
 // estimate, pattern clusters, in-house pattern hits) plus the Etterna MSD
@@ -49,6 +50,7 @@ interface LeanChartClassification {
   lnRatio: number;
   sunnySr: number | null;
   vibro: boolean;
+  danEligibility: ChartDanEligibility;
   verdictText: string | null;
   rc: LeanVerdictHalf | null;
   ln: LeanVerdictHalf | null;
@@ -86,6 +88,7 @@ function leanClassification(classification: ChartClassification, noteBpm: number
     lnRatio: classification.lnRatio,
     sunnySr: classification.sunnySr,
     vibro: classification.vibro,
+    danEligibility: classification.danEligibility,
     verdictText: classification.verdictText,
     rc: leanHalf(classification.rc),
     ln: leanHalf(classification.ln),
@@ -109,6 +112,139 @@ function leanClassification(classification: ChartClassification, noteBpm: number
     modeTag: classification.clusters?.report.ModeTag ?? null,
     warnings: classification.warnings,
   };
+}
+
+// ── Player-dan eligibility backfill ─────────────────────────────────────────
+// Fresh chart analyses persist the structural verdict in leanClassification.
+// Existing rows predate it, but re-running MinaCalc over the full corpus just
+// to inspect note heads would be wasteful. This one-shot sweep reads cached
+// .osu text and patches only suspicious legacy rows: pattern parsing already
+// complained about a stack, a 6K/7K result hit the shared table ceiling, or
+// osu!'s native SR is itself extreme. The motivating maps all match at least
+// two of those signals; future charts need none because the ordinary compute
+// path writes the eligibility object on their first analysis.
+
+export const DAN_ELIGIBILITY_RECOMPUTE_JOB = "recompute_dan_eligibility_sweep";
+export const DAN_ELIGIBILITY_RECOMPUTE_META_KEY = "dan_eligibility_recompute_done:v1";
+const DAN_ELIGIBILITY_RECOMPUTE_CHUNK = 50;
+
+export interface DanEligibilityRecomputeChunkResult {
+  nextCursor: number;
+  scanned: number;
+  ineligible: number[];
+  done: boolean;
+}
+
+export async function recomputeDanEligibilityChunk(
+  db: Db,
+  cursor: number,
+  limit = DAN_ELIGIBILITY_RECOMPUTE_CHUNK,
+): Promise<DanEligibilityRecomputeChunkResult> {
+  const rows = (await exec(
+    db,
+    `select a.beatmap_id
+     from beatmap_chart_analysis a
+     where a.analysis_version = ? and a.status = 'ready'
+       and a.beatmap_id > ?
+       and json_extract(a.classification_json, '$.danEligibility.eligible') is null
+       and (
+         a.classification_json like '%Pattern clustering failed: Stacked%'
+         or (a.key_count in (6, 7) and a.raw_dan >= 14.5)
+         or exists (
+           select 1 from map_search_index m
+           where m.beatmap_id = a.beatmap_id and m.stars >= 15
+         )
+       )
+     order by a.beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const ineligible: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText) continue;
+    try {
+      const eligibility = inspectChartDanEligibility(parseManiaBeatmap(osuText));
+      if (!eligibility.eligible) ineligible.push(beatmapId);
+      await exec(
+        db,
+        `update beatmap_chart_analysis
+         set classification_json = json_set(classification_json, '$.danEligibility', json(?))
+         where beatmap_id = ? and analysis_version = ?`,
+        [json(eligibility), beatmapId, CHART_ANALYSIS_VERSION],
+      );
+    } catch {
+      // A row whose cached file became unreadable keeps no eligibility flag;
+      // the ordinary chart-analysis retry remains its owner.
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, ineligible, done: rows.length < limit };
+}
+
+export async function ensureDanEligibilityRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(
+    db,
+    "select 1 from live_meta where key = ? limit 1",
+    [DAN_ELIGIBILITY_RECOMPUTE_META_KEY],
+  )).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [DAN_ELIGIBILITY_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueDanEligibilityRecompute(queue, 0);
+}
+
+export async function runDanEligibilityRecomputeJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeDanEligibilityChunk(db, cursor);
+  if (result.ineligible.length > 0) {
+    logInfo("dan_eligibility_sweep_chunk", {
+      charts: result.ineligible.length,
+      cursor: result.nextCursor,
+    });
+  }
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [DAN_ELIGIBILITY_RECOMPUTE_META_KEY, json({ finishedAt: now }), now],
+    );
+    // The chart flags are now authoritative. Re-derive every stored dan block
+    // from its existing plays so abusive clears disappear without re-running
+    // MinaCalc or waiting for somebody to open each profile.
+    await queue.enqueue(
+      "recompute_player_skill_dan_sweep",
+      "recompute_player_skill_dan_sweep:0",
+      { cursor: 0, startedAt: now },
+      { priority: -10, replaceDone: true },
+    );
+    return;
+  }
+  await enqueueDanEligibilityRecompute(queue, result.nextCursor);
+}
+
+async function enqueueDanEligibilityRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    DAN_ELIGIBILITY_RECOMPUTE_JOB,
+    `${DAN_ELIGIBILITY_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    // Finish the small local integrity pass before the player-dan sweep.
+    { priority: 0, replaceDone: true },
+  );
 }
 
 export async function computeBeatmapChartAnalysis(

@@ -360,6 +360,13 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     jobType: "recompute_vibro_sweep",
   }),
   chartAnalysisSweep({
+    id: "dan-eligibility-recompute",
+    label: "Player-dan eligibility sweep",
+    description: "Inspects suspicious legacy chart files for exploit-sized same-column head stacks and excludes them from player dan evidence without changing their displayed chart verdict.",
+    doneKey: "dan_eligibility_recompute_done:v1",
+    jobType: "recompute_dan_eligibility_sweep",
+  }),
+  chartAnalysisSweep({
     id: "note-bpm-recompute",
     label: "Note-BPM recompute sweep",
     description: "Re-derives note-density BPM for stored chart analyses.",
