@@ -48,6 +48,7 @@ const SPEEDJACK_CHART = {
   jackShare: null,
   streamShare: null,
   techCategory: null,
+  techScore: 0,
   lnRatio: 0,
   vibro: false,
   danEligible: true,
@@ -59,6 +60,20 @@ const SPEEDJACK_CHART = {
   htFamily: null,
   lengthSeconds: null,
 };
+
+// Crescent Moon Island [Kuro 1.05x (181bpm)], beatmap 3090568 at 1.0x: the
+// measured case behind the tech tiebreak. Stream edges Technical by 0.33,
+// argmax noise on a chart the analyzer calls tech at 0.825.
+const CRESCENT_MOON = {
+  Stream: 32.67, Jumpstream: 29.66, Handstream: 28.02, Stamina: 31.58,
+  JackSpeed: 17.86, Chordjack: 22.90, Technical: 32.34,
+};
+
+const techTaggedChart = (techScore: number) => ({
+  ...SPEEDJACK_CHART,
+  patterns: ["tech"],
+  techScore,
+});
 
 describe("danSkillsetBucketsForValues", () => {
   it("puts real 4K speed charts in speed", () => {
@@ -95,6 +110,45 @@ describe("danSkillsetBucketsForValues", () => {
       Stream: 22.26, Jumpstream: 20.0, Handstream: 18.0, Stamina: 21.0,
       JackSpeed: 14.0, Chordjack: 18.0, Technical: 23.86,
     })).toEqual(["tech"]);
+  });
+
+  it("lets a confident tech tag reclaim a near-tie the argmax handed to speed", () => {
+    // Without stored analysis the argmax stands and the clear files speed.
+    expect(danSkillsetBucketsForValues(4, "rc", CRESCENT_MOON)).toEqual(["speed"]);
+    expect(danSkillsetBucketsForValues(4, "rc", CRESCENT_MOON, null, 1, techTaggedChart(0.825))).toEqual(["tech"]);
+    // The bar is inclusive at 0.8.
+    expect(danSkillsetBucketsForValues(4, "rc", CRESCENT_MOON, null, 1, techTaggedChart(0.8))).toEqual(["tech"]);
+  });
+
+  it("keeps speed when the tech score sits under the tiebreak bar", () => {
+    // 0.79 is over the 0.5 tag line but under the 0.8 the tiebreak demands:
+    // at the tag line the stamina corpus goes 40.5% -> 92.5% tech-tiled.
+    expect(danSkillsetBucketsForValues(4, "rc", CRESCENT_MOON, null, 1, techTaggedChart(0.79))).toEqual(["speed"]);
+  });
+
+  it("does not let the tiebreak reach past the near-tie band", () => {
+    // Technical 2.0 under Stream: not a near-tie, so even a maxed tech score
+    // leaves the clear in speed.
+    expect(danSkillsetBucketsForValues(4, "rc", {
+      Stream: 30.0, Jumpstream: 24.0, Handstream: 22.0, Stamina: 27.0, JackSpeed: 15.0, Chordjack: 20.0, Technical: 28.0,
+    }, null, 1, techTaggedChart(1))).toEqual(["speed"]);
+  });
+
+  it("lets the jack override outrank the tech tiebreak", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", CRESCENT_MOON, null, 1, {
+      ...techTaggedChart(0.9),
+      patterns: ["speedjack", "tech"],
+    })).toEqual(["jack"]);
+  });
+
+  it("keeps the real speed packs in speed under the tiebreak", () => {
+    // Most of these vectors put Technical inside the near-tie band (the dense
+    // ones rate every skillset alike), so the sub-bar tech score is the only
+    // thing keeping them in speed. That is the tiebreak's whole trade: the
+    // measured speed corpus loses 6 of 940 charts at the 0.8 bar.
+    for (const values of [...REAL_SPEED, ...NEAR_TIE_SPEED]) {
+      expect(danSkillsetBucketsForValues(4, "rc", values, null, 1, techTaggedChart(0.79))).toEqual(["speed"]);
+    }
   });
 
   it("keeps jumptrill out of speed and files it as tech", () => {
@@ -166,7 +220,7 @@ describe("pattern tag thresholds", () => {
     const { danTagBucketsForTest: buckets, patternTagMinScoreForTest } = await import("../src/features/player-skills.js");
     expect(0.334).toBeGreaterThanOrEqual(patternTagMinScoreForTest("delay"));
     expect(buckets(7, {
-      patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, lnRatio: 0, vibro: false,
+      patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, techScore: 0, lnRatio: 0, vibro: false,
       danEligible: true,
       rcRawDan: 10, lnRawDan: null, dtRawDan: null, dtFamily: null, htRawDan: null, htFamily: null,
       lengthSeconds: null,
@@ -176,7 +230,7 @@ describe("pattern tag thresholds", () => {
 
 describe("6K/7K jack bucket (LeoBlack cluster share)", () => {
   const chart = (over: Partial<Parameters<typeof danTagBucketsForTest>[1]>) => ({
-    patterns: [], jackShare: null, streamShare: null, techCategory: null, lnRatio: 0, vibro: false,
+    patterns: [], jackShare: null, streamShare: null, techCategory: null, techScore: 0, lnRatio: 0, vibro: false,
     danEligible: true,
     rcRawDan: 10, lnRawDan: null, dtRawDan: null, dtFamily: null, htRawDan: null, htFamily: null,
     lengthSeconds: null,

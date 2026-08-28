@@ -927,6 +927,10 @@ export interface ChartSkillInfo {
   // Whether LeoBlack's headline label for the whole chart carries "Tech".
   // Null when it stored no label. See TECH_CLUSTER_CATEGORY.
   techCategory: boolean | null;
+  // The analyzer's raw tech score at 1.0x, zeroed when the jack veto strips
+  // the tech tag. Read by the 4K speed tile's tech tiebreak
+  // (TECH_NEAR_TIE_MIN_SCORE), which needs the score rather than the 0.5 tag.
+  techScore: number;
   lnRatio: number | null;
   vibro: boolean;
   /** False when the chart's raw object structure makes its dan verdict unsafe
@@ -1093,6 +1097,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         techCategory: typeof parsed?.clusterCategory === "string"
           ? TECH_CLUSTER_CATEGORY.test(parsed.clusterCategory)
           : null,
+        techScore: vetoesTech ? 0 : (patternScores.get("tech") ?? 0),
         lnRatio,
         vibro: parsed?.vibro === true,
         // Legacy rows have no field and stay eligible until the targeted
@@ -2553,7 +2558,9 @@ interface DanSkillsetBucket {
  * still rejects the jumptrill charts by a mile (they miss by 6.8 and 8.5).
  * Corpus-wide it moves speed from 1.5% of rated plays to 9.2%, and pulls in
  * only 4.2% of Jumpstream-argmax plays. Re-measure against both packs and a
- * jumptrill set before touching the constant.
+ * jumptrill set before touching the constant. The one exception inside that
+ * band is a chart the analyzer confidently calls tech: it files tech instead
+ * (TECH_NEAR_TIE_MIN_SCORE has the measurements).
  *
  * Jack is the one 4K tile that also reads the analyzer, because MinaCalc
  * cannot see speedjack: it rates those charts Jumpstream-argmax with JackSpeed
@@ -2664,7 +2671,7 @@ function groupDanClearsBySkillset(
   for (const bucket of buckets) bySkillset.set(bucket.id, []);
   for (const clear of clears) {
     const chart = infoByBeatmap.get(clear.play.beatmapId);
-    const topSkillset = bucketingSkillset(clear.play.values, chart?.lengthSeconds ?? null, clear.play.rate);
+    const topSkillset = bucketingSkillset(clear.play.values, chart?.lengthSeconds ?? null, clear.play.rate, chart?.techScore ?? 0);
     for (const bucket of bucketsForClear(buckets, topSkillset, chart)) {
       bySkillset.get(bucket.id)!.push(clear);
     }
@@ -2841,6 +2848,27 @@ function toCourseEvidence(
 // labels this bucketing was built from. At 1.25 every Blastix diff stays tech.
 const SPEED_NEAR_TIE_MSD = 1.25;
 
+// The analyzer arbitrates the same band the other way when it is confident: a
+// clear that would file speed moves to tech when Technical also sits within
+// SPEED_NEAR_TIE_MSD of Stream AND the chart's raw tech score clears this bar.
+// Crescent Moon Island [Kuro 1.05x (181bpm)] (3090568) is the measured case:
+// Stream 32.67 over Technical 32.34, a 0.33 gap that is argmax noise, on a
+// chart the analyzer calls tech at 0.825 - it filed speed while the maps page
+// called it tech.
+//
+// The bar is the raw score at 0.8, not the 0.5 tech tag, because the tech
+// detector fires broadly: filing every tech-tagged chart under tech would take
+// the mapper-named stamina corpus (519 charts) from 40.5% to 92.5% tech-tiled
+// and the random corpus from 36.6% to 57.8%. Confined to the near-tie band at
+// 0.8, measured over mapper-named 4K pack corpora (287 tech / 940 speed / 629
+// stream / 519 stamina / 280 jumpstream): the tech corpus goes 41.8% -> 44.9%
+// tech-tiled, the speed corpus loses 6 charts (81.6% -> 81.0%), every other
+// corpus moves 0-2 charts, and corpus-wide 0.8% of charts change tile. 0.7
+// doubles the tech recovery (-> 49.5%) but costs 17 speed-pack charts (1.8%);
+// kept at 0.8 to stay under the same 1%-per-corpus line the jack override
+// held itself to. Re-measure both corpora before lowering it.
+const TECH_NEAR_TIE_MIN_SCORE = 0.8;
+
 // MinaCalc's Stamina is a rider rather than a detector: it tracks the strongest
 // base skillset sustained and the calc clamps it a hair above that base. Over
 // every 4K chart in the corpus with MSD, a Stamina argmax win never exceeds the
@@ -2867,29 +2895,42 @@ const BASE_MSD_SKILLSETS = SKILL_RATING_SKILLSETS.filter(
 
 /**
  * The skillset a play is filed under, which is its strongest EXCEPT that Stream
- * wins from within SPEED_NEAR_TIE_MSD of the top and that Stamina has to earn
- * it on length. Still single-valued, so the tiles stay disjoint and their clear
+ * wins from within SPEED_NEAR_TIE_MSD of the top, a speed verdict yields to
+ * tech when Technical is in the same band and the analyzer confidently calls
+ * the chart tech (TECH_NEAR_TIE_MIN_SCORE), and Stamina has to earn it on
+ * length. Still single-valued, so the tiles stay disjoint and their clear
  * counts sum to the side's total.
  *
  * `lengthSeconds` is the chart's drain at 1.0x and `rate` the speed it was
  * played at, so a 1.5x run of a five-minute chart is judged on the 3:20 it
  * actually lasted. An unknown length leaves the old behaviour rather than
- * guessing a chart short.
+ * guessing a chart short. `chartTechScore` is the chart's stored analyzer
+ * tech score (ChartSkillInfo.techScore), 0 when no analysis is stored.
  */
 function bucketingSkillset(
   values: Record<string, number> | undefined,
   lengthSeconds: number | null = null,
   rate = 1,
+  chartTechScore = 0,
 ): string | null {
   const top = dominantSkillset(values);
-  if (top == null || top === "Stream") return top;
+  if (top == null) return top;
   const stream = Number(values?.Stream ?? 0);
   const best = Number(values?.[top] ?? 0);
-  const nearTie = stream > 0 && stream >= best - SPEED_NEAR_TIE_MSD ? "Stream" : top;
+  const nearTie = top === "Stream" || (stream > 0 && stream >= best - SPEED_NEAR_TIE_MSD)
+    ? "Stream"
+    : top;
+  if (nearTie === "Stream") {
+    const technical = Number(values?.Technical ?? 0);
+    const techBacked = chartTechScore >= TECH_NEAR_TIE_MIN_SCORE
+      && technical > 0
+      && technical >= stream - SPEED_NEAR_TIE_MSD;
+    return techBacked ? "Technical" : "Stream";
+  }
   if (nearTie !== "Stamina" || lengthSeconds == null) return nearTie;
   const playedSeconds = lengthSeconds / (Number.isFinite(rate) && rate > 0 ? rate : 1);
   if (playedSeconds >= STAMINA_TILE_MIN_LENGTH_SECONDS) return nearTie;
-  return bucketingSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS));
+  return bucketingSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS), null, 1, chartTechScore);
 }
 
 /** A copy of an SSR vector holding only the named skillsets. */
@@ -2917,7 +2958,7 @@ export function danSkillsetBucketsForValues(
   rate = 1,
   chart?: ChartSkillInfo,
 ): string[] {
-  const top = bucketingSkillset(values, lengthSeconds, rate);
+  const top = bucketingSkillset(values, lengthSeconds, rate, chart?.techScore ?? 0);
   return bucketsForClear(danSkillsetBuckets(keyCount, side), top, chart).map((bucket) => bucket.id);
 }
 
