@@ -2498,6 +2498,10 @@ export interface PlayerSkillDanEvidence {
 // the number the window exists to explain.
 const DAN_EVIDENCE_MAX_CLEARS = DAN_CLEAR_AVERAGE_WINDOW;
 const DAN_EVIDENCE_SKILLSET_PLAYS = DAN_CLEAR_AVERAGE_WINDOW;
+// Per-request ceiling for a read that pages the "all clears" list. Bounds the
+// payload and the metadata read, not the average: nothing past the window
+// participates in any number.
+export const DAN_EVIDENCE_PAGE_MAX_CLEARS = 200;
 
 interface DanSkillsetBucket {
   id: string;
@@ -2700,6 +2704,11 @@ export async function getPlayerSkillDanEvidence(
   keyCount: number,
   side: "rc" | "ln",
   queue: JobQueue | null = null,
+  // The modal's "load more" paging over the "all clears" list. `maxClears`
+  // under the default is ignored so a read can only widen the page the average
+  // already ships; `clearsOffset` starts the page partway down the same
+  // ordering, leaving every other field of the payload as the full read.
+  options: { maxClears?: number; clearsOffset?: number } = {},
 ): Promise<PlayerSkillDanEvidence | null> {
   if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(keyCount) || keyCount <= 0) return null;
   const row = (await exec(
@@ -2743,7 +2752,12 @@ export async function getPlayerSkillDanEvidence(
   const buckets = danSkillsetBuckets(keyCount, side);
   const bySkillset = groupDanClearsBySkillset(keyCount, side, clears, infoByBeatmap);
 
-  const topClears = clears.slice(0, DAN_EVIDENCE_MAX_CLEARS);
+  const maxClears = Math.min(
+    Math.max(Math.floor(options.maxClears ?? DAN_EVIDENCE_MAX_CLEARS), DAN_EVIDENCE_MAX_CLEARS),
+    DAN_EVIDENCE_PAGE_MAX_CLEARS,
+  );
+  const clearsOffset = Math.max(Math.floor(options.clearsOffset ?? 0), 0);
+  const topClears = clears.slice(clearsOffset, clearsOffset + maxClears);
   const courseSource = dan?.courseClear ? bestDanCourseClear(courseClears, keyCount, side) : null;
   const evidenceBeatmapIds = [
     ...(courseSource ? [courseSource.beatmapId] : []),

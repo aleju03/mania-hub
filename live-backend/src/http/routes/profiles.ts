@@ -5,7 +5,7 @@ import { enrichPayloadAvatarAccents } from "../../features/avatar-accents.js";
 import { getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, getPlayerReplayScores, ProfileUserSuppressedError } from "../../features/player-profiles.js";
 import { getPlayerKeymodePpKeyCounts, getPlayerKeymodePpTail } from "../../features/keymode-pp.js";
 import { enqueueMissingPlayDetails } from "../../features/activity-detail-on-demand.js";
-import { getPlayerSkillBreakdown, getPlayerSkillDanEvidence, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
+import { DAN_EVIDENCE_PAGE_MAX_CLEARS, getPlayerSkillBreakdown, getPlayerSkillDanEvidence, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import { OsuApiError } from "../../osu/client.js";
@@ -196,7 +196,18 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
         sendJson(req, res, ctx, 400, { error: "invalid_key_count" });
         return true;
       }
-      const evidence = await getPlayerSkillDanEvidence(ctx.db, userId, keyCount, side, ctx.serveWriteQueue ?? ctx.queue);
+      // `limit`/`offset` page the "all clears" list past the default window
+      // (the modal's "load more"); the feature clamps both to its own ceilings.
+      const limit = clampInteger(url.searchParams.get("limit"), 1, DAN_EVIDENCE_PAGE_MAX_CLEARS, 0);
+      const offset = clampInteger(url.searchParams.get("offset"), 0, 1_000_000, 0);
+      const evidence = await getPlayerSkillDanEvidence(
+        ctx.db,
+        userId,
+        keyCount,
+        side,
+        ctx.serveWriteQueue ?? ctx.queue,
+        { ...(limit > 0 ? { maxClears: limit } : {}), clearsOffset: offset },
+      );
       if (!evidence) {
         sendJson(req, res, ctx, 404, { error: "dan_evidence_not_ready" });
         return true;

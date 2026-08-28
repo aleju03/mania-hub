@@ -6410,6 +6410,7 @@ msgstr "Cargar la página me! de un jugador"
 msgid "Load into editor"
 msgstr "Cargar en el editor"
 
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Load more"
 msgstr "Cargar más"
@@ -6515,8 +6516,8 @@ msgid "Loading skins…"
 msgstr "Cargando skins…"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Loading the rest..."
-msgstr "Cargando el resto…"
+#~ msgid "Loading the rest..."
+#~ msgstr "Cargando el resto…"
 
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 msgid "Loading the skin…"
@@ -10570,8 +10571,8 @@ msgstr "Mostrar los {0}"
 
 #. placeholder {0}: openedSection.clears
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Show all {0} clears"
-msgstr "Mostrar los {0} clears"
+#~ msgid "Show all {0} clears"
+#~ msgstr "Mostrar los {0} clears"
 
 #. placeholder {0}: play.title || t`score`
 #. placeholder {0}: score.beatmapset?.title || scoreFallbackLabel

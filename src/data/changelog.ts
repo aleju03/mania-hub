@@ -27,6 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-28", text: "The All clears tab on the dan window no longer stops at 20: click Load more at the bottom to see the next 50" },
   { date: "2026-08-28", text: "Dan badges now show a small ring when the estimate is incomplete, so you can tell before opening it. It fills a segment for each skillset that has its 20 clears, on player pages, My Stats and the dan rankings", to: "/dan-estimates" },
   { date: "2026-08-27", text: "The Chordjack skill on 6K and 7K profiles has been renamed to Jack, and it also counts jack maps the old version missed, so fewer of them land under Tech" },
   { date: "2026-08-27", text: "New dan bonus and decay system: passes with high accuracy are now worth more dan, and passes that barely miss the accuracy requirement still count for a bit less instead of not counting at all", to: "/dan-estimates" },

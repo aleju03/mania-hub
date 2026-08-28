@@ -1550,11 +1550,14 @@ export async function fetchLivePlayerDanEvidenceDirect(
   userId: number,
   keyCount: number,
   side: "rc" | "ln",
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; limit?: number; offset?: number } = {},
 ): Promise<LivePlayerDanEvidence> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   if (!Number.isInteger(keyCount) || keyCount <= 0) throw new Error("Invalid key count.");
   const query = new URLSearchParams({ keys: String(keyCount), side });
+  // Pages the "all clears" list past the default window (server-clamped).
+  if (Number.isInteger(options.limit) && options.limit! > 0) query.set("limit", String(options.limit));
+  if (Number.isInteger(options.offset) && options.offset! > 0) query.set("offset", String(options.offset));
   return fetchLiveJson(`/api/profiles/${userId}/dan-evidence?${query.toString()}`, options.signal ? { signal: options.signal } : undefined);
 }
 

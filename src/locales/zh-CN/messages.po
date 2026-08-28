@@ -6419,6 +6419,7 @@ msgstr "加载某位玩家的 me! 页面"
 msgid "Load into editor"
 msgstr "载入编辑器"
 
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Load more"
 msgstr "加载更多"
@@ -6524,8 +6525,8 @@ msgid "Loading skins…"
 msgstr "正在加载皮肤…"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Loading the rest..."
-msgstr "正在加载其余通过…"
+#~ msgid "Loading the rest..."
+#~ msgstr "正在加载其余通过…"
 
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 msgid "Loading the skin…"
@@ -10579,8 +10580,8 @@ msgstr "显示全部 {0} 个"
 
 #. placeholder {0}: openedSection.clears
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Show all {0} clears"
-msgstr "显示全部 {0} 次通过"
+#~ msgid "Show all {0} clears"
+#~ msgstr "显示全部 {0} 次通过"
 
 #. placeholder {0}: play.title || t`score`
 #. placeholder {0}: score.beatmapset?.title || scoreFallbackLabel

@@ -26,6 +26,9 @@ import { useLocale } from "../../lib/locale-context";
 // The dan chip's accent per side; decorative only, identity stays on the text.
 const SIDE_COLOR: Record<"rc" | "ln", string> = { rc: "#e0b04c", ln: "#f07474" };
 
+// How many more clears one "Load more" click appends to the "all" list.
+const MORE_CLEARS_PAGE = 50;
+
 interface DanEvidenceModalProps {
   userId: number;
   username: string;
@@ -54,6 +57,9 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   const [detail, setDetail] = useState<
     { clear: LivePlayerDanEvidencePlay; entry: LiveMapSearchEntry; status: "ready" | "pending" | "missing" | "error" } | null
   >(null);
+  // The "all clears" list opens on the window the average reads; the rest
+  // pages in a batch at a time, appended under the first twenty.
+  const [moreClears, setMoreClears] = useState<{ loading: boolean; plays: LivePlayerDanEvidencePlay[] }>({ loading: false, plays: [] });
   const mountedRef = useRef(true);
 
   useBodyScrollLock(true);
@@ -78,6 +84,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
     const controller = new AbortController();
     setEvidence(null);
     setOpenSection(null);
+    setMoreClears({ loading: false, plays: [] });
     setLoading(true);
     setError(null);
     fetchLivePlayerDanEvidenceDirect(userId, keyCount, side, { signal: controller.signal })
@@ -118,6 +125,24 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
             ? { ...current, status: "error" }
             : current
         ));
+      });
+  };
+
+  // The same evidence read, offset past what is already on screen. Only the
+  // "all" list pages, so only its slice is kept; a failure re-enables the
+  // button and the next click asks for the same page again.
+  const loadMoreClears = () => {
+    if (!evidence || moreClears.loading) return;
+    const offset = evidence.clears.length + moreClears.plays.length;
+    setMoreClears((current) => ({ ...current, loading: true }));
+    fetchLivePlayerDanEvidenceDirect(userId, keyCount, side, { limit: MORE_CLEARS_PAGE, offset })
+      .then((payload) => {
+        if (!mountedRef.current) return;
+        setMoreClears((current) => ({ loading: false, plays: [...current.plays, ...payload.clears] }));
+      })
+      .catch(() => {
+        if (!mountedRef.current) return;
+        setMoreClears((current) => ({ ...current, loading: false }));
       });
   };
 
@@ -174,7 +199,14 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   // of two different-looking surfaces.
   const sections = evidence
     ? [
-      { id: "all", label: t`All clears`, color, dan: evidence.dan, clears: evidence.totalClears, plays: evidence.clears },
+      {
+        id: "all",
+        label: t`All clears`,
+        color,
+        dan: evidence.dan,
+        clears: evidence.totalClears,
+        plays: moreClears.plays.length > 0 ? [...evidence.clears, ...moreClears.plays] : evidence.clears,
+      },
       ...evidence.skillsets.map((skillset) => {
         const meta = DAN_SKILLSET_META[skillset.id];
         return {
@@ -437,11 +469,32 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                             />
                           ))}
                           {openedSection.clears > openedSection.plays.length ? (
-                            <div className="px-2 pt-1.5 text-[10px] text-osu-f1">
-                              <Trans>
-                                and {openedSection.clears - openedSection.plays.length} more below these
-                              </Trans>
-                            </div>
+                            openedSection.id === "all" ? (
+                              /* Only the "all" list can grow: the skillset
+                                 lists already ship every clear their average
+                                 reads, and past those the note says so. */
+                              <div className="flex items-baseline gap-2 px-2 pt-1.5 text-[10px]">
+                                <button
+                                  type="button"
+                                  onClick={loadMoreClears}
+                                  disabled={moreClears.loading}
+                                  className="font-semibold text-osu-pink-light transition-colors hover:text-white disabled:text-osu-f1"
+                                >
+                                  <Trans>Load more</Trans>
+                                </button>
+                                <span className="text-osu-f1">
+                                  <Trans>
+                                    and {openedSection.clears - openedSection.plays.length} more below these
+                                  </Trans>
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="px-2 pt-1.5 text-[10px] text-osu-f1">
+                                <Trans>
+                                  and {openedSection.clears - openedSection.plays.length} more below these
+                                </Trans>
+                              </div>
+                            )
                           ) : null}
                         </div>
                       </motion.div>
