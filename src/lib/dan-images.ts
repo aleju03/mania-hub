@@ -2,9 +2,11 @@
 // search surfaces. Assets: /images/dans/reform (4K RC, svg 1-10 + webp greeks
 // through eta), /images/dans/ln (4K LN 1-17), /images/dans/7k (JinJin 7K, RC
 // circles + ln- diamonds, 0-10 + gamma/azimuth/zenith/stellium),
-// /images/dans/6k (Arkman regular + sunnyxxy LN, RC hexagons 0-9 + ln- upright
-// hexagons 0-9 plus terra/celestial/mystery/nihility/finish). The 6K glyphs are
-// traced from the course backgrounds, so a badge carries the course's own mark.
+// /images/dans/6k (Arkman regular + sunnyxxy LN, RC hexagons + ln- upright
+// hexagons, each 0-9 plus terra/celestial/mystery/nihility/finish). The 6K
+// glyphs are traced from the course backgrounds, so a badge carries the
+// course's own mark; the RC mystery/nihility/finish courses don't exist yet,
+// so those three borrow the LN course marks until Arkman ships them.
 
 const DAN_IMAGE_EXTENSIONS: Record<string, "webp" | "svg"> = {
   "1": "svg",
@@ -34,11 +36,9 @@ const SEVENK_DAN_LABELS = new Set([
   "gamma", "azimuth", "zenith", "stellium",
 ]);
 
-// The 6K courses are two separate ladders: the regular course stops at 9th,
-// the LN course carries on into named bands past 9th.
-const SIXK_DAN_LABELS = new Set(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
-const SIXK_LN_DAN_LABELS = new Set([
-  ...SIXK_DAN_LABELS,
+// The 6K regular and LN ladders both run 0-9 and then the same named bands.
+const SIXK_DAN_LABELS = new Set([
+  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
   "terra", "celestial", "mystery", "nihility", "finish",
 ]);
 
@@ -48,10 +48,8 @@ export function getDanImageSrc(label: string, family?: string, keyCount?: number
     return family === "ln" ? `/images/dans/7k/ln-${label}.svg` : `/images/dans/7k/${label}.svg`;
   }
   if (keyCount === 6) {
-    if (family === "ln") {
-      return SIXK_LN_DAN_LABELS.has(label) ? `/images/dans/6k/ln-${label}.svg` : null;
-    }
-    return SIXK_DAN_LABELS.has(label) ? `/images/dans/6k/${label}.svg` : null;
+    if (!SIXK_DAN_LABELS.has(label)) return null;
+    return family === "ln" ? `/images/dans/6k/ln-${label}.svg` : `/images/dans/6k/${label}.svg`;
   }
   if (keyCount != null && keyCount !== 4) {
     // other keymodes have their own dan courses; the 4K logos would be wrong
@@ -93,7 +91,7 @@ export function danTierColor(suffix: string): string | null {
 // The picker filters the classifier's numeric rawDan, which every family maps
 // onto its own course ladder: 4K reform 1..10 then alpha(11)..kappa(20), 4K LN
 // 1..17, 7K 0..10 then gamma(11)/azimuth(12)/zenith(13)/stellium(14) with the
-// same levels for the 7K LN courses (diamond badges), 6K regular 0..9 and 6K LN
+// same levels for the 7K LN courses (diamond badges), 6K regular and LN both
 // 0..9 then terra(10)/celestial(11)/mystery(12)/nihility(13)/finish(14). The
 // scale context picks which ladder names/logos annotate a level.
 
@@ -101,7 +99,7 @@ export type DanScaleContext = "reform" | "ln" | "7k" | "7k-ln" | "6k" | "6k-ln";
 
 const REFORM_GREEK = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa"];
 const SEVENK_BOSSES = ["gamma", "azimuth", "zenith", "stellium"];
-const SIXK_LN_BANDS = ["terra", "celestial", "mystery", "nihility", "finish"];
+const SIXK_BANDS = ["terra", "celestial", "mystery", "nihility", "finish"];
 
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -114,10 +112,9 @@ export function danScaleLabel(value: number, context: DanScaleContext): string {
     if (level <= 10) return String(Math.max(0, level));
     return capitalize(SEVENK_BOSSES[Math.min(level, 14) - 11]);
   }
-  if (context === "6k") return String(Math.min(Math.max(0, level), 9));
-  if (context === "6k-ln") {
+  if (context === "6k" || context === "6k-ln") {
     if (level <= 9) return String(Math.max(0, level));
-    return capitalize(SIXK_LN_BANDS[Math.min(level, 14) - 10]);
+    return capitalize(SIXK_BANDS[Math.min(level, 14) - 10]);
   }
   if (context === "ln") {
     // The LN ladder ends at 17, Yeehee (see LN_LADDER_TOP in dan-estimator/ln.ts).

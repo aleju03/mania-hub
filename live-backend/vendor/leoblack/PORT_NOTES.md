@@ -59,6 +59,17 @@ and must NOT be overwritten on a re-copy:
   ("20000BPM Coordination", "15000BPM Jacks"). The floor caps any computable
   cluster BPM at 60000/40 = 1500; the sweep's v2 pass re-analyzes stored rows
   at or above that ceiling.
+- `estimator/intervals/6k-rc.js`: extended past upstream's "Regular 9 high" end
+  with 10th-14th (Terra, Celestial, Mystery, Nihility, Finish - the 6K
+  community ladder the LN table already speaks). Terra/Celestial are anchored
+  on Arkman's official course files (Sunny stars 8.0101 / 8.3777 at the
+  2026-08-28 calibration) using upstream's own construction, reverse-engineered
+  from the shipped rows against the official Start-9th courses: each level
+  boundary is the midpoint of adjacent course SRs and each half-interval around
+  a course splits uniformly into 2.5 bands, so every course lands in its "mid"
+  band. Mystery/Nihility/Finish have no course files yet and extrapolate the
+  Terra->Celestial level width; recalibrate when those courses exist. Covered by
+  `live-backend/tests/dan-6k-rc-extension.test.ts`.
 - The `ett/versions/minaclac-*.js` glue stays at the old pin `0b27cc8` bytes: our
   calc.js hands over `wasmBinary` and defines the CommonJS globals, so upstream's
   newer locateFile-based glue offers nothing and re-copying it would re-open the

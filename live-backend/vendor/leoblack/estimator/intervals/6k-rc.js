@@ -49,4 +49,36 @@ export const rc6K = [
     [7.767, 7.833, "Regular 9 mid"],
     [7.833, 7.899, "Regular 9 mid/high"],
     [7.899, 7.965, "Regular 9 high"],
+    // Ours (mania-hub): 10th-14th, past the upstream table's end. Terra and
+    // Celestial are anchored on Arkman's official course files with upstream's
+    // own construction (level boundary = midpoint of adjacent course SRs, each
+    // half-interval split uniformly into 2.5 bands, so the course lands in its
+    // "mid" band like every course below it); Mystery/Nihility/Finish have no
+    // course files yet and extrapolate the Terra->Celestial level width.
+    // See PORT_NOTES.md before re-copying from upstream.
+    [7.9650, 7.9830, "Regular Terra low"],
+    [7.9830, 8.0011, "Regular Terra mid/low"],
+    [8.0011, 8.0469, "Regular Terra mid"],
+    [8.0469, 8.1204, "Regular Terra mid/high"],
+    [8.1204, 8.1939, "Regular Terra high"],
+    [8.1939, 8.2674, "Regular Celestial low"],
+    [8.2674, 8.3409, "Regular Celestial mid/low"],
+    [8.3409, 8.4144, "Regular Celestial mid"],
+    [8.4144, 8.4880, "Regular Celestial mid/high"],
+    [8.4880, 8.5615, "Regular Celestial high"],
+    [8.5615, 8.6350, "Regular Mystery low"],
+    [8.6350, 8.7085, "Regular Mystery mid/low"],
+    [8.7085, 8.7820, "Regular Mystery mid"],
+    [8.7820, 8.8555, "Regular Mystery mid/high"],
+    [8.8555, 8.9291, "Regular Mystery high"],
+    [8.9291, 9.0026, "Regular Nihility low"],
+    [9.0026, 9.0761, "Regular Nihility mid/low"],
+    [9.0761, 9.1496, "Regular Nihility mid"],
+    [9.1496, 9.2232, "Regular Nihility mid/high"],
+    [9.2232, 9.2967, "Regular Nihility high"],
+    [9.2967, 9.3702, "Regular Finish low"],
+    [9.3702, 9.4437, "Regular Finish mid/low"],
+    [9.4437, 9.5172, "Regular Finish mid"],
+    [9.5172, 9.5908, "Regular Finish mid/high"],
+    [9.5908, 9.6643, "Regular Finish high"],
 ];
