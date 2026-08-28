@@ -1,13 +1,13 @@
 import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
 import { canSeedSnipesForCountry, isCountryRosterConfirmedEmpty, retireCountry } from "./countries.js";
-import { exec, json, parseJson, writeVariantPps } from "./db.js";
+import { exec, json, parseJson } from "./db.js";
 import { AVATAR_ACCENT_JOB, computeAvatarAccentJob } from "./features/avatar-accents.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
 import { BRACKET_CONTENT_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, DAN_ELIGIBILITY_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, INVERSE_CLUSTER_BPM_JOB, JACK_TAG_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LN_MSD_SWEEP_JOB, LN_LEOBLACK_RECOMPUTE_JOB, LN_PRIMARY_REPIN_JOB, LN7_PRIMARY_REPIN_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, NOTE_BPM_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runBracketContentRecomputeJob, runBracketTagRecomputeJob, runChartAnalysisBackfillJob, runChordjackTagRecomputeJob, runCompanellaRecomputeJob, runDanEligibilityRecomputeJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runHtRateAnalysisJob, runInverseClusterBpmRecoveryJob, runJackTagRecomputeJob, runLeoblackRepinDtRecomputeJob, runLeoblackRepinRecomputeJob, runLnLeoblackRecomputeJob, runLnMsdSweepJob, runLn7PrimaryRepinJob, runLnPrimaryRepinJob, runLnSourceRecomputeJob, runLnSubtypeRecomputeJob, runMsdPoisonRecoveryJob, runNoteBpmRecomputeJob, runSunnyRepinDtRecomputeJob, runSunnyRepinRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
-import { reconcileStatGoalsForCountry } from "./features/goals.js";
+import { reconcileGoalsForUser, reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
 import { GLOBAL_FARMED_BOARD_REPACK_JOB, MapsEmptyResultError, MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, runGlobalFarmedBoardRepackJob } from "./features/maps.js";
@@ -18,7 +18,7 @@ import { PLAYER_SKILLS_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_FLOOR_SWEEP
 import { SKILL_VECTOR_BACKFILL_JOB, runSkillVectorBackfillJob } from "./features/skill-vector-backfill.js";
 import { SKILL_BASELINE_JOB, enqueueSkillBaselineIfDue, runSkillBaselineJob } from "./features/skill-baseline.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
-import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB, runProfileSnapshotRefreshJob, runProfileUserRefreshJob } from "./features/player-profiles.js";
+import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB, runProfileSnapshotRefreshJob, runProfileUserRefreshJob, upsertDisplayUser } from "./features/player-profiles.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { TOP_SCORES_BACKFILL_JOB, runTopScoresBackfillJob } from "./features/top-scores-backfill.js";
 import { ACTIVITY_MODS_BACKFILL_JOB_TYPE, runActivityModsBackfillJob } from "./features/activity-mods-backfill.js";
@@ -535,11 +535,19 @@ export class WorkerRunner {
       return;
     }
     if (job.type === PROFILE_USER_REFRESH_JOB) {
-      await runProfileUserRefreshJob(this.db, this.osu, (job.payload as { userId: number }).userId);
+      const userId = (job.payload as { userId: number }).userId;
+      await runProfileUserRefreshJob(this.db, this.osu, userId);
+      await reconcileGoalsForUser(this.db, this.events, userId, ["reach_pp", "reach_rank"]).catch((error) => {
+        logWarn("profile_stat_goal_reconcile_failed", { user_id: userId, ...errorContext(error) });
+      });
       return;
     }
     if (job.type === PROFILE_SNAPSHOT_REFRESH_JOB) {
-      await runProfileSnapshotRefreshJob(this.db, this.osu, (job.payload as { userId: number }).userId);
+      const userId = (job.payload as { userId: number }).userId;
+      await runProfileSnapshotRefreshJob(this.db, this.osu, userId);
+      await reconcileGoalsForUser(this.db, this.events, userId, ["reach_pp", "reach_rank"]).catch((error) => {
+        logWarn("profile_stat_goal_reconcile_failed", { user_id: userId, ...errorContext(error) });
+      });
       return;
     }
     if (job.type === ACTIVITY_MODS_BACKFILL_JOB_TYPE) {
@@ -839,14 +847,13 @@ export class WorkerRunner {
       // start-of-job guard above cannot cover that race, so re-check at the
       // last point before this job can recreate identity or snipe metadata.
       if (await isUserKnownInactive(this.db, payload.userId)) return;
-      await exec(
+      await upsertDisplayUser(
         this.db,
-        `insert into users (user_id, username, avatar_url, country_code, profile_json, updated_at)
-         values (?, ?, ?, ?, ?, ?)
-         on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, profile_json = excluded.profile_json, updated_at = excluded.updated_at`,
-        [payload.userId, String(user.username ?? `User ${payload.userId}`), String(user.avatar_url ?? ""), String(user.country_code ?? ""), json(user), nowIso()],
+        payload.userId,
+        String(user.username ?? `User ${payload.userId}`),
+        user,
+        nowIso(),
       );
-      await writeVariantPps(this.db, payload.userId, user.statistics);
       await this.processHydratedScores({ userId: payload.userId });
       return;
     }

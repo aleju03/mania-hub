@@ -3,6 +3,7 @@ import { parseJson } from "../../db.js";
 import {
   clearSignatureImages,
   disableUserSignature,
+  enqueueSignatureProfileRefreshIfDue,
   enableUserSignature,
   getUserSignature,
   getSignaturePurgeTarget,
@@ -14,7 +15,7 @@ import {
   setSignatureBlocked,
   setUserSignatureTimeZone,
 } from "../../features/signatures.js";
-import { logInfo } from "../../logger.js";
+import { errorContext, logInfo, logWarn } from "../../logger.js";
 import type { HttpContext } from "../context.js";
 import { isAdmin, isBridge, readBody } from "../request.js";
 import { sendJson } from "../respond.js";
@@ -160,6 +161,20 @@ export async function handleSignatureRoutes(
       sendJson(req, res, ctx, 404, { error: "not_found" });
       return true;
     }
+    // A signature somebody actually loads is the demand signal for keeping a
+    // tracked rank-null owner's private profile projection warm. Detached so
+    // the image resolve remains a read-latency path; the existing per-user job
+    // keys and the six-hour freshness check bound traffic from multiple edges.
+    void enqueueSignatureProfileRefreshIfDue(
+      ctx.db,
+      ctx.serveWriteQueue ?? ctx.queue,
+      resolved,
+      { maxAgeMs: ctx.config.rosterRefreshIntervalMs },
+    ).then((refresh) => {
+      if (refresh) logInfo("signature_profile_refresh_enqueued", { user_id: resolved.userId, refresh });
+    }).catch((error) => {
+      logWarn("signature_profile_refresh_enqueue_failed", { user_id: resolved.userId, ...errorContext(error) });
+    });
     sendJson(req, res, ctx, 200, resolved);
     return true;
   }

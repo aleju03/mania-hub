@@ -38,8 +38,8 @@ export const PROFILE_BEST_SCORES_LIMIT = 200;
 export const PROFILE_USER_REFRESH_JOB = "refresh_profile_user";
 export const PROFILE_SNAPSHOT_REFRESH_JOB = "refresh_profile_snapshot";
 // Above ingest enrichment (100): a viewer is on the page right now.
-const PROFILE_USER_REFRESH_PRIORITY = 120;
-const PROFILE_SNAPSHOT_REFRESH_PRIORITY = 80;
+export const PROFILE_USER_REFRESH_PRIORITY = 120;
+export const PROFILE_SNAPSHOT_REFRESH_PRIORITY = 80;
 // Floor between full snapshot refreshes for one player, so a profile being
 // hammered (or a projection that keeps asking to be baked in) can't turn views
 // into a stream of best-200 fetches.
@@ -1225,7 +1225,7 @@ async function getProfileUserTtlMs(db: Db, userId: number): Promise<number> {
   return PROFILE_USER_TTL_MS;
 }
 
-async function upsertDisplayUser(
+export async function upsertDisplayUser(
   db: Db,
   userId: number,
   username: string,

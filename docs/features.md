@@ -76,7 +76,7 @@ The LeoBlack engines and MinaCalc wasm live in `live-backend/vendor/leoblack`, a
 
 ## Profiles and rankings
 
-`player-profiles.ts` caches a best-200 snapshot for 24h (projected forward by top-play events) and profile sections (about, recent) for ~2 minutes. Opening a profile serves the stored snapshot and queues its osu! work (`refresh_profile_user`, `refresh_profile_snapshot`); the only osu! call left on the request path is minting a player never stored at all, which is what a search for an untracked player does.
+`player-profiles.ts` caches a best-200 snapshot for 24h (projected forward by top-play events) and profile sections (about, recent) for ~2 minutes. Opening a profile serves the stored snapshot and queues its osu! work (`refresh_profile_user`, `refresh_profile_snapshot`); the only osu! call left on the request path is minting a player never stored at all, which is what a search for an untracked player does. A valid dynamic-signature resolve is also a bounded demand signal for a tracked rank-null owner: at the roster refresh cadence it queues the existing full-snapshot job for Insights/Maniacard, or the one-call user job for an open PP/rank goal. Ranked members are skipped because their roster/top-play paths already maintain the same projections, and Skills/Dan need no extra profile call because tracked sessions recompute them directly.
 
 Presence follows from that: the green dot means a tracked play inside the 10-minute session window and nothing else (osu!'s own `is_online` is ignored here since it also counts idling and browsing; the rankings list still shows it, from a live call, on purpose). Last seen is the newest of the last tracked play and the payload's `last_visit` while that payload is inside its refresh TTL; neither available means no last-seen line at all.
 
@@ -90,7 +90,7 @@ A tracked row draws only from what the day-best row stored, and never asks osu! 
 
 ## Goals
 
-Logged-in players set targets stored in `user_goals` (kinds `reach_pp`, `play_pp`, `play_pp_count`, `accuracy`, `pass`, `grade`, `fc`, `reach_rank`), always owned by the osu!-verified viewer id. Play-shaped goals auto-complete the moment ingest sees a matching play (`evaluateScoreGoals`, guarded so a goals bug cannot drop a score); total-pp goals settle on top-play confirmation (`evaluatePpGoals`) and reconcile lazily on read. A `live_meta` marker (`user_goals_changed_at`) plus a negative cache keep the ingest hot path cheap. Completion emits SSE `goal_completed`. Served by `/api/goals`, `/api/goals/create`, `/api/goals/delete`; frontend route `/goals`.
+Logged-in players set targets stored in `user_goals` (kinds `reach_pp`, `play_pp`, `play_pp_count`, `accuracy`, `pass`, `grade`, `fc`, `reach_rank`), always owned by the osu!-verified viewer id. Play-shaped goals auto-complete the moment ingest sees a matching play (`evaluateScoreGoals`, guarded so a goals bug cannot drop a score); total-pp goals settle on top-play confirmation (`evaluatePpGoals`) and reconcile lazily on read. Profile user/full-snapshot jobs also reconcile PP/rank goals after writing fresh stats, which is what lets a dynamic signature keep an opted-in player outside the ranked roster honest without a site visit. A `live_meta` marker (`user_goals_changed_at`) plus a negative cache keep the ingest hot path cheap. Completion emits SSE `goal_completed`. Served by `/api/goals`, `/api/goals/create`, `/api/goals/delete`; frontend route `/goals`.
 
 ## My Data
 

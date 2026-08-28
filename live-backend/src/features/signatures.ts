@@ -16,6 +16,13 @@ import { randomBytes, createHash } from "node:crypto";
 
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
+import type { JobQueue } from "../jobs/queue.js";
+import {
+  PROFILE_SNAPSHOT_REFRESH_JOB,
+  PROFILE_SNAPSHOT_REFRESH_PRIORITY,
+  PROFILE_USER_REFRESH_JOB,
+  PROFILE_USER_REFRESH_PRIORITY,
+} from "./player-profiles.js";
 
 export const SIGNATURE_TYPES = ["insights", "goals", "skills", "dan", "maniacard"] as const;
 export type SignatureType = (typeof SIGNATURE_TYPES)[number];
@@ -64,6 +71,13 @@ export interface ResolvedSignature {
   timeZone: string | null;
   versions: Record<SignatureType, string>;
 }
+
+export type SignatureProfileRefreshKind = "snapshot" | "user";
+
+// Match the normal country-roster cadence: a signature owner outside the
+// ranked roster gets the same worst-case PP/rank freshness as a top-N member,
+// without letting anonymous image traffic turn into an unbounded osu! poller.
+export const SIGNATURE_PROFILE_REFRESH_MAX_AGE_MS = 6 * 60 * 60_000;
 
 function nowMs(): number {
   return Date.now();
@@ -495,4 +509,101 @@ export async function resolveSignatureToken(db: Db, token: string): Promise<Reso
     timeZone,
     versions: await buildVersions(db, userId, styles, timeZone),
   };
+}
+
+/**
+ * Dynamic-render freshness for tracked players outside the ranked roster.
+ *
+ * A valid signature resolve is the cheapest demand signal available: if no
+ * browser or embed asks for the image, stale pixels cost nothing and neither
+ * should osu! calls. The read only enqueues existing profile jobs, and the
+ * per-user job key collapses requests from multiple variants/edges.
+ *
+ * Insights and maniacards need the authoritative best-200 as well as the user
+ * payload, so they receive a full snapshot refresh. A goals-only signature
+ * needs one cheap /users call, and only while a stat-shaped goal is open.
+ * Skills and dan already refresh from the tracked session pipeline.
+ */
+export async function enqueueSignatureProfileRefreshIfDue(
+  db: Db,
+  queue: Pick<JobQueue, "enqueue">,
+  signature: Pick<ResolvedSignature, "userId" | "enabledTypes">,
+  options: { maxAgeMs?: number; nowMs?: number } = {},
+): Promise<SignatureProfileRefreshKind | null> {
+  const userId = Math.floor(Number(signature.userId));
+  if (!Number.isSafeInteger(userId) || userId <= 0) return null;
+
+  const row = (await exec(
+    db,
+    `select
+       ps.fetched_at,
+       ps.user_fetched_at,
+       exists(
+         select 1 from country_rosters tracked
+         where tracked.user_id = subject.user_id
+           and tracked.is_tracked = 1
+           and tracked.rank is null
+       ) as is_tracked_unranked,
+       exists(
+         select 1 from country_rosters ranked
+         where ranked.user_id = subject.user_id
+           and ranked.is_tracked = 1
+           and ranked.rank is not null
+       ) as is_ranked,
+       exists(
+         select 1 from user_goals goal
+         where goal.user_id = subject.user_id
+           and goal.status = 'open'
+           and goal.kind in ('reach_pp', 'reach_rank')
+       ) as has_open_stat_goal
+     from (select ? as user_id) subject
+     left join profile_snapshots ps on ps.user_id = subject.user_id`,
+    [userId],
+  )).rows[0];
+
+  // Ranked members already get roster and top-play refreshes. A rank-null row
+  // is the deliberate personal-tracking scope (manual opt-in or score-sourced).
+  if (!Number(row?.is_tracked_unranked) || Number(row?.is_ranked)) return null;
+
+  const maxAgeInput = Number(options.maxAgeMs ?? SIGNATURE_PROFILE_REFRESH_MAX_AGE_MS);
+  const maxAgeMs = Number.isFinite(maxAgeInput)
+    ? Math.max(60_000, Math.floor(maxAgeInput))
+    : SIGNATURE_PROFILE_REFRESH_MAX_AGE_MS;
+  const nowMs = Number.isFinite(options.nowMs) ? Number(options.nowMs) : Date.now();
+  const isDue = (stamp: unknown): boolean => {
+    if (typeof stamp !== "string" || !stamp) return true;
+    const at = Date.parse(stamp);
+    return !Number.isFinite(at) || nowMs - at >= maxAgeMs;
+  };
+
+  const needsFullSnapshot = signature.enabledTypes.includes("insights")
+    || signature.enabledTypes.includes("maniacard");
+  const hasSnapshot = typeof row?.fetched_at === "string" && row.fetched_at.length > 0;
+  if (needsFullSnapshot && (!hasSnapshot || isDue(row.fetched_at) || isDue(row.user_fetched_at))) {
+    await queue.enqueue(
+      PROFILE_SNAPSHOT_REFRESH_JOB,
+      `${PROFILE_SNAPSHOT_REFRESH_JOB}:${userId}`,
+      { userId },
+      { priority: PROFILE_SNAPSHOT_REFRESH_PRIORITY, replaceDone: true },
+    );
+    return "snapshot";
+  }
+
+  const needsStatGoalRefresh = signature.enabledTypes.includes("goals")
+    && Number(row?.has_open_stat_goal) === 1;
+  if (needsStatGoalRefresh && (!hasSnapshot || isDue(row.user_fetched_at))) {
+    // The user-only worker requires a stored snapshot row. A cold owner needs
+    // the full mint once; subsequent stat refreshes stay on the one-call path.
+    const type = hasSnapshot ? PROFILE_USER_REFRESH_JOB : PROFILE_SNAPSHOT_REFRESH_JOB;
+    const priority = hasSnapshot ? PROFILE_USER_REFRESH_PRIORITY : PROFILE_SNAPSHOT_REFRESH_PRIORITY;
+    await queue.enqueue(
+      type,
+      `${type}:${userId}`,
+      { userId },
+      { priority, replaceDone: true },
+    );
+    return hasSnapshot ? "user" : "snapshot";
+  }
+
+  return null;
 }

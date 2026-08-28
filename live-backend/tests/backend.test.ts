@@ -1536,6 +1536,52 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from jobs where type in ('enrich_user', 'refresh_user_top_scores', 'reconcile_user_recent_scores', 'refresh_user_maps_farmed_scores')")).rows[0].count)).toBe(0);
   });
 
+  it("persists the authoritative PP and ranks fetched by enrich_user", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const userId = 404;
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, pp, global_rank, country_rank, updated_at)
+       values (?, 'Old', '', 'CR', 1000, 5000, 50, ?)`,
+      [userId, "2026-01-01T00:00:00Z"],
+    );
+    await queue.enqueue("enrich_user", `user:${userId}`, { userId }, { priority: 100 });
+    const osu = {
+      getUser: vi.fn(async () => ({
+        id: userId,
+        username: "Fresh",
+        avatar_url: "https://a.ppy.sh/404",
+        country_code: "CR",
+        statistics: {
+          pp: 1234.5,
+          global_rank: 4321,
+          country_rank: 43,
+          variants: [
+            { mode: "mania", variant: "4k", pp: 900 },
+            { mode: "mania", variant: "7k", pp: 300 },
+          ],
+        },
+      })),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    const user = (await exec(
+      db,
+      "select username, pp, global_rank, country_rank, pp_4k, pp_7k from users where user_id = ?",
+      [userId],
+    )).rows[0];
+    expect(user).toMatchObject({
+      username: "Fresh",
+      pp: 1234.5,
+      global_rank: 4321,
+      country_rank: 43,
+      pp_4k: 900,
+      pp_7k: 300,
+    });
+  });
+
   it("treats missing user enrichment as terminal and clears pending user jobs", async () => {
     const { db, queue, events, ingestor } = await setup();
     const userId = 39_887_489;
@@ -3386,6 +3432,49 @@ describe("live backend", () => {
     expect(getUser).toHaveBeenCalledTimes(1);
     expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
     expect(refreshed?.fetchedAt).not.toBe(refreshed?.userFetchedAt);
+  });
+
+  it("settles stat goals after a queued profile refresh writes fresh PP", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const getUserByKey = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: { pp: 1000, global_rank: 100, country_rank: 1 },
+      page: null,
+    }));
+    const getUserBestScoresWindow = vi.fn(async () => best);
+    await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
+    await exec(db, "update profile_snapshots set user_fetched_at = ? where user_id = 101", [
+      new Date(Date.now() - 11 * 60_000).toISOString(),
+    ]);
+    await exec(
+      db,
+      `insert into user_goals (id, user_id, country, kind, target_value, start_value, status, created_at, updated_at)
+       values ('signature-pp-goal', 101, 'CR', 'reach_pp', 1100, 1000, 'open', 1, 1)`,
+    );
+    await queue.enqueue(PROFILE_USER_REFRESH_JOB, `${PROFILE_USER_REFRESH_JOB}:101`, { userId: 101 }, { priority: 120 });
+    const osu = {
+      getUser: vi.fn(async () => ({
+        id: 101,
+        username: "Sniper",
+        avatar_url: "https://assets.example/sniper.png",
+        country_code: "CR",
+        statistics: { pp: 1200, global_rank: 90, country_rank: 1 },
+        page: null,
+      })),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    const goal = (await exec(
+      db,
+      "select status, completed_value from user_goals where id = 'signature-pp-goal'",
+    )).rows[0];
+    expect(goal).toMatchObject({ status: "completed", completed_value: 1200 });
   });
 
   it("queues only the full re-mint when the whole snapshot expired", async () => {

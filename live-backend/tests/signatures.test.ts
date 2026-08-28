@@ -6,6 +6,7 @@ import { createDb, exec, migrate, type Db } from "../src/db.js";
 import {
   clearSignatureImages,
   disableUserSignature,
+  enqueueSignatureProfileRefreshIfDue,
   enableUserSignature,
   getSignaturePurgeTarget,
   getUserSignature,
@@ -17,6 +18,8 @@ import {
   setSignatureBlocked,
   setUserSignatureTimeZone,
 } from "../src/features/signatures.js";
+import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB } from "../src/features/player-profiles.js";
+import { JobQueue } from "../src/jobs/queue.js";
 
 /* Dynamic renders live behind a URL a player pasted into an osu! profile and
    will never edit again. Two things therefore have to hold: the token is the
@@ -51,6 +54,29 @@ async function versions(userId = USER) {
   const record = await getUserSignature(db, userId);
   const resolved = await resolveSignatureToken(db, record!.token);
   return resolved!.versions;
+}
+
+async function addRankNullTracking(userId = USER): Promise<void> {
+  await exec(
+    db,
+    `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+     values ('CR', ?, null, 'manual', 1, ?)`,
+    [userId, "2026-01-01T00:00:00Z"],
+  );
+}
+
+async function addProfileSnapshot(
+  fetchedAt: string,
+  userFetchedAt = fetchedAt,
+  userId = USER,
+): Promise<void> {
+  await exec(
+    db,
+    `insert into profile_snapshots
+       (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+     values (?, ?, '{}', '[]', 200, ?, ?, ?)`,
+    [userId, `user-${userId}`, fetchedAt, userFetchedAt, fetchedAt],
+  );
 }
 
 describe("signature opt-in", () => {
@@ -108,6 +134,133 @@ describe("signature opt-in", () => {
       .toEqual(["goals", "maniacard"]);
     expect(normalizeSignatureTypes("not an array")).toEqual([]);
     expect(normalizeSignatureTypes([])).toEqual([]);
+  });
+});
+
+describe("signature profile freshness", () => {
+  const nowMs = Date.parse("2026-01-02T12:00:00Z");
+  const stale = "2026-01-02T05:00:00Z";
+  const fresh = "2026-01-02T10:00:00Z";
+
+  it("queues one full snapshot for a stale rank-null Insights or Maniacard owner", async () => {
+    await addRankNullTracking();
+    await addProfileSnapshot(stale);
+    const queue = new JobQueue(db);
+
+    const refresh = await enqueueSignatureProfileRefreshIfDue(
+      db,
+      queue,
+      { userId: USER, enabledTypes: ["insights", "maniacard"] },
+      { nowMs },
+    );
+
+    expect(refresh).toBe("snapshot");
+    const jobs = (await exec(db, "select type, dedupe_key, priority from jobs")).rows;
+    expect(jobs).toEqual([expect.objectContaining({
+      type: PROFILE_SNAPSHOT_REFRESH_JOB,
+      dedupe_key: `${PROFILE_SNAPSHOT_REFRESH_JOB}:${USER}`,
+      priority: 80,
+    })]);
+  });
+
+  it("uses the one-call user refresh for a stale goals-only owner with an open stat goal", async () => {
+    await addRankNullTracking();
+    await addProfileSnapshot(stale);
+    await exec(
+      db,
+      `insert into user_goals (id, user_id, country, kind, target_value, status, created_at, updated_at)
+       values ('pp-goal', ?, 'CR', 'reach_pp', 5000, 'open', 1, 1)`,
+      [USER],
+    );
+    const queue = new JobQueue(db);
+
+    const refresh = await enqueueSignatureProfileRefreshIfDue(
+      db,
+      queue,
+      { userId: USER, enabledTypes: ["goals"] },
+      { nowMs },
+    );
+
+    expect(refresh).toBe("user");
+    const jobs = (await exec(db, "select type, dedupe_key, priority from jobs")).rows;
+    expect(jobs).toEqual([expect.objectContaining({
+      type: PROFILE_USER_REFRESH_JOB,
+      dedupe_key: `${PROFILE_USER_REFRESH_JOB}:${USER}`,
+      priority: 120,
+    })]);
+  });
+
+  it("does no osu work while a projection is inside the refresh window", async () => {
+    await addRankNullTracking();
+    await addProfileSnapshot(fresh);
+    const queue = new JobQueue(db);
+
+    expect(await enqueueSignatureProfileRefreshIfDue(
+      db,
+      queue,
+      { userId: USER, enabledTypes: ["insights", "goals"] },
+      { nowMs },
+    )).toBeNull();
+    expect((await exec(db, "select 1 from jobs")).rows).toHaveLength(0);
+  });
+
+  it("does no profile refresh for score-only goals, Skills, or Dan even when stale", async () => {
+    await addRankNullTracking();
+    await addProfileSnapshot(stale);
+    await exec(
+      db,
+      `insert into user_goals (id, user_id, country, kind, target_value, status, created_at, updated_at)
+       values ('play-goal', ?, 'CR', 'play_pp', 500, 'open', 1, 1)`,
+      [USER],
+    );
+    const queue = new JobQueue(db);
+
+    expect(await enqueueSignatureProfileRefreshIfDue(
+      db,
+      queue,
+      { userId: USER, enabledTypes: ["goals", "skills", "dan"] },
+      { nowMs },
+    )).toBeNull();
+    expect((await exec(db, "select 1 from jobs")).rows).toHaveLength(0);
+  });
+
+  it("leaves ranked owners on the existing roster/top-play refresh paths", async () => {
+    await addRankNullTracking();
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('US', ?, 50, 'osu_rankings', 1, ?)`,
+      [USER, "2026-01-01T00:00:00Z"],
+    );
+    await addProfileSnapshot(stale);
+    const queue = new JobQueue(db);
+
+    expect(await enqueueSignatureProfileRefreshIfDue(
+      db,
+      queue,
+      { userId: USER, enabledTypes: ["maniacard"] },
+      { nowMs },
+    )).toBeNull();
+    expect((await exec(db, "select 1 from jobs")).rows).toHaveLength(0);
+  });
+
+  it("cold-mints a goals-only owner because the user refresh needs a snapshot row", async () => {
+    await addRankNullTracking();
+    await exec(
+      db,
+      `insert into user_goals (id, user_id, country, kind, target_value, status, created_at, updated_at)
+       values ('rank-goal', ?, 'CR', 'reach_rank', 10000, 'open', 1, 1)`,
+      [USER],
+    );
+    const queue = new JobQueue(db);
+
+    expect(await enqueueSignatureProfileRefreshIfDue(
+      db,
+      queue,
+      { userId: USER, enabledTypes: ["goals"] },
+      { nowMs },
+    )).toBe("snapshot");
+    expect((await exec(db, "select type from jobs")).rows[0]?.type).toBe(PROFILE_SNAPSHOT_REFRESH_JOB);
   });
 });
 
