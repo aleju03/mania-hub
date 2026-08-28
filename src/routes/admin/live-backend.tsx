@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { Activity, ArrowLeft, Ban, ChevronDown, ChevronRight, Crosshair, Database, History, Radio, RefreshCw, RotateCcw, Search, Server, Signal, Table2, Trash2, Wifi, WifiOff, X } from "lucide-react";
+import { Activity, ArrowLeft, Ban, ChevronDown, ChevronRight, Crosshair, Database, History, RefreshCw, RotateCcw, Search, Server, Signal, Table2, Trash2, Wifi, WifiOff, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import {
@@ -38,7 +38,6 @@ import { AnalyticsMonitorPanel } from "../../components/admin/analytics/Analytic
 type ConnectionState = "idle" | "connecting" | "open" | "error";
 type StatusTone = "good" | "warn" | "bad" | "neutral";
 
-const OSC_FEED_STALE_MS = 30 * 1000;
 
 interface LiveBackendStatus {
   ok: boolean;
@@ -559,7 +558,6 @@ function LiveBackendPage() {
     };
   }, [activeTab, countryCode]);
 
-  const oscFeed = getOscFeedStatus(status);
   const fallbackFeed = getScoresFallbackStatus(status);
   const osuRateTarget = status?.rate.targetPerMinute ?? status?.rate.hardPerMinute ?? 0;
   const statusLoaded = status !== null;
@@ -601,7 +599,7 @@ function LiveBackendPage() {
           {error ? <ErrorBanner message={error} /> : null}
 
           <Section title="Health" subtitle="Is the server up and ingesting?">
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <KpiCard
                 label="Backend"
                 value={statusLoaded ? status.ok ? "online" : "offline" : "loading"}
@@ -618,14 +616,7 @@ function LiveBackendPage() {
                 onClick={() => setStorageOpen(true)}
               />
               <KpiCard
-                label="oSC feed"
-                value={oscFeed.value}
-                hint={oscFeed.hint}
-                tone={oscFeed.tone}
-                icon={<Radio className="h-4 w-4" />}
-              />
-              <KpiCard
-                label="Fallback"
+                label="Ingest"
                 value={fallbackFeed.value}
                 hint={fallbackFeed.hint}
                 tone={fallbackFeed.tone}
@@ -789,7 +780,7 @@ function LiveBackendHeader({
 
 function MonitoringTabs({ activeTab, onChange }: { activeTab: MonitoringTab; onChange: (tab: MonitoringTab) => void }) {
   const tabs: Array<{ value: MonitoringTab; label: string; hint: string }> = [
-    { value: "backend", label: "Server", hint: "oSC, SSE, jobs, countries" },
+    { value: "backend", label: "Server", hint: "ingest, SSE, jobs, countries" },
     { value: "analytics", label: "Analytics", hint: "who is here and what they are doing" },
   ];
   return (
@@ -1827,25 +1818,6 @@ function formatStorageHint(status: LiveBackendStatus | null): string {
   return `${formatBytes(total)} / ${formatBytes(storage.maxBytes)}`;
 }
 
-function getOscFeedStatus(status: LiveBackendStatus | null): { value: string; hint: string; tone: StatusTone; batchTone: StatusTone } {
-  if (!status) return { value: "unknown", hint: "status not loaded", tone: "neutral", batchTone: "neutral" };
-
-  if (status.osc.lastBatchAt) {
-    const lastBatchMs = Date.parse(status.osc.lastBatchAt);
-    const batchHint = `batch ${formatTimeAgo(status.osc.lastBatchAt)}`;
-    if (!status.osc.stale && Number.isFinite(lastBatchMs) && Date.now() - lastBatchMs <= OSC_FEED_STALE_MS) {
-      return { value: "receiving", hint: batchHint, tone: "good", batchTone: "good" };
-    }
-    return { value: "stale", hint: batchHint, tone: "bad", batchTone: "bad" };
-  }
-
-  if (status.osc.connected) {
-    return { value: "no batches", hint: "socket connected; feed idle", tone: "bad", batchTone: "bad" };
-  }
-
-  return { value: "closed", hint: "socket transport closed", tone: "bad", batchTone: "bad" };
-}
-
 // The fallback poller runs on its own osu! client with a dedicated rate limiter
 // (separate bucket from the main `rate`), polling at most once per `intervalMs`
 // (floored at 10s, so 6/min by default) and only while the oSC feed is stale.
@@ -1876,13 +1848,13 @@ function getScoresFallbackStatus(status: LiveBackendStatus | null): ScoresFallba
     return { value: bucket, hint: `polls up to ${formatNumber(target)}/min`, tone: "neutral", used, target, enabled: true, polling: false };
   }
   if (!result.ran) {
-    const reason = result.reason === "osc_fresh" ? "oSC fresh, on standby" : `${result.reason ?? "idle"}, on standby`;
+    const reason = result.reason === "osc_fresh" ? "socket feed fresh, on standby" : `${result.reason ?? "idle"}, on standby`;
     return { value: bucket, hint: reason, tone: "neutral", used, target, enabled: true, polling: false };
   }
   return {
     value: bucket,
     hint: `polling, ${formatNumber(result.inserted)} new ${formatTimeAgo(fallback.updatedAt)}`,
-    tone: "warn",
+    tone: "good",
     used,
     target,
     enabled: true,
@@ -2035,18 +2007,14 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
   const [openKey, setOpenKey] = useState<string | null>(null);
   const roster = status?.roster?.find((entry) => entry.country === country);
   const analysis = status?.analysis;
-  const oscFeed = getOscFeedStatus(status);
   const fallback = getScoresFallbackStatus(status);
   const fallbackResult = status?.scoresFallback?.result;
   const fallbackRanResult = fallbackResult?.ran ? fallbackResult : null;
 
   const sseTone: StatusTone = connectionState === "open" ? "good" : "warn";
   const workersTone: StatusTone = status?.worker?.paused ? "warn" : "good";
-  const transportTone: StatusTone = status?.osc.connected ? "good" : "warn";
-  const errorTone: StatusTone = status?.osc.lastError ? "bad" : "good";
   const rosterTone: StatusTone = roster ? "good" : "warn";
 
-  const batchAgo = status?.osc.lastBatchAt ? formatTimeAgo(status.osc.lastBatchAt) : "no batch";
   const fallbackUpdated = status?.scoresFallback?.updatedAt ? formatTimeAgo(status.scoresFallback.updatedAt) : "never";
 
   const memory = getMemoryView(status);
@@ -2082,27 +2050,11 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
       ),
     },
     {
-      key: "osc",
-      title: "oSC feed",
-      tone: oscFeed.tone,
-      stats: [
-        { label: "Status", value: oscFeed.value, tone: oscFeed.tone },
-        { label: "Last batch", value: batchAgo, tone: oscFeed.batchTone },
-      ],
-      detail: (
-        <>
-          <DetailRow label="Transport" value={status?.osc.connected ? "connected" : "closed"} tone={transportTone} />
-          <DetailRow label="Last batch" value={status?.osc.lastBatchAt ? formatTimeAgo(status.osc.lastBatchAt) : "none"} tone={oscFeed.batchTone} />
-          <DetailRow label="Error" value={status?.osc.lastError ?? "none"} tone={errorTone} />
-        </>
-      ),
-    },
-    {
       key: "fallback",
-      title: "Fallback poller",
+      title: "Ingest",
       tone: fallback.tone,
       stats: [
-        { label: "Budget", value: fallback.enabled ? `${fallback.value} per min` : "off", tone: fallback.polling ? "warn" : "neutral" },
+        { label: "Budget", value: fallback.enabled ? `${fallback.value} per min` : "off", tone: fallback.polling ? "good" : "neutral" },
         fallback.polling
           ? { label: "New saved", value: formatNumber(fallbackRanResult?.inserted ?? 0), tone: (fallbackRanResult?.inserted ?? 0) > 0 ? "good" : "neutral" }
           : { label: "State", value: fallback.enabled ? "standby" : "disabled" },
@@ -2110,9 +2062,9 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
       detail: (
         <>
           <div className="rounded-md bg-osu-b4/30 px-3 py-2 text-[10px] leading-relaxed text-osu-f1">
-            Backup score poller. Runs only while the oSC feed is stale: each poll pulls the latest osu! mania scores, keeps the ones from tracked countries, then saves any that are new.
+            Score ingest poller. Each poll pulls the latest osu! mania scores, keeps the ones from tracked countries, then saves any that are new.
           </div>
-          <DetailRow label="Poll budget" value={`${formatNumber(fallback.used)} / ${formatNumber(fallback.target)} per min`} tone={fallback.polling ? "warn" : "neutral"} />
+          <DetailRow label="Poll budget" value={`${formatNumber(fallback.used)} / ${formatNumber(fallback.target)} per min`} tone={fallback.polling ? "good" : "neutral"} />
           <DetailRow label="Last run" value={fallbackUpdated} />
           {fallbackRanResult ? (
             <>
@@ -2121,7 +2073,7 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
               <DetailRow label="New, saved to DB" value={formatNumber(fallbackRanResult.inserted)} tone={fallbackRanResult.inserted > 0 ? "good" : "neutral"} />
             </>
           ) : (
-            <DetailRow label="State" value={fallback.enabled ? "on standby (oSC feed is fresh)" : "disabled by config"} />
+            <DetailRow label="State" value={fallback.enabled ? "on standby (socket feed is fresh)" : "disabled by config"} />
           )}
         </>
       ),
