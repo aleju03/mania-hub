@@ -77,6 +77,16 @@ export interface MapDetailPlayContext {
   rating: number;
   ratingLabel: string;
   ratingColor: string;
+  // Dan evidence has two distinct values: the chart's base rating and the
+  // level this particular accuracy credits. Ordinary skill evidence only has
+  // the first value, so both display names and the credit stay optional.
+  ratingDisplayName?: string;
+  credit?: {
+    rating: number;
+    displayName: string;
+    label: string;
+    color: string;
+  };
 }
 
 function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
@@ -103,11 +113,23 @@ function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
           </div>
         )}
         <div className="flex flex-col">
-          <span className="text-[16px] font-bold tabular-nums leading-none" style={{ color: play.ratingColor }}>
-            {play.rating.toFixed(2)}
+          <span className="flex items-baseline gap-1.5 leading-none" style={{ color: play.ratingColor }}>
+            <span className="text-[16px] font-bold tabular-nums">{play.rating.toFixed(2)}</span>
+            {play.ratingDisplayName ? (
+              <span className="text-[10px] font-bold">{play.ratingDisplayName}</span>
+            ) : null}
           </span>
           <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{play.ratingLabel} rating</span>
         </div>
+        {play.credit ? (
+          <div className="flex flex-col">
+            <span className="flex items-baseline gap-1.5 leading-none" style={{ color: play.credit.color }}>
+              <span className="text-[16px] font-bold tabular-nums">{play.credit.rating.toFixed(2)}</span>
+              <span className="text-[10px] font-bold">{play.credit.displayName}</span>
+            </span>
+            <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">{play.credit.label}</span>
+          </div>
+        ) : null}
       </div>
     </div>
   );

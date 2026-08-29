@@ -72,7 +72,11 @@ const LADDERS: Array<{ key: LadderKey; keyCount?: number; family?: "ln"; levels:
     family: "ln",
     levels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "gamma", "azimuth", "zenith", "stellium"],
   },
-  { key: "6k-regular", keyCount: 6, levels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] },
+  {
+    key: "6k-regular",
+    keyCount: 6,
+    levels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "terra", "celestial", "mystery", "nihility", "finish"],
+  },
   {
     key: "6k-ln",
     keyCount: 6,
@@ -183,15 +187,14 @@ function DanEstimatesPage() {
 
         {/* The first thing on the page, because it is the answer to the question
             that brings most people here: why the estimate is lower than they
-            expect. Both halves are the same rule seen twice - the estimator can only
-            read plays it recorded, and it only records plays from the day
-            tracking started, in sessions it noticed. */}
+            expect. Automatic history still has limits, but a missing score with
+            an osu! score page can now be added from the player's Skills tab. */}
         <div className="space-y-2 border-l-2 border-osu-pink-light pl-4 text-[15px] font-bold leading-7 text-white">
           <p>
             <Trans>
-              Tracking only began on June 9, 2026. Anything you played before that date counts only if
-              it is still in your osu! top plays, and everything else from back then is invisible to the
-              estimate.
+              Automatic tracking only began on June 9, 2026. Older scores are included when they are
+              still in your osu! top plays, and any missing passed mania score with an osu! score link
+              can be added from your profile's Skills tab.
             </Trans>
           </p>
           <p>
@@ -205,7 +208,8 @@ function DanEstimatesPage() {
               >
                 Why that is
               </a>
-              . If your estimate reads low, that is usually the reason, and the only fix is to play more.
+              . If your estimate reads low, add the important missing scores from the Skills tab or keep
+              playing to let new scores fill it in.
             </Trans>
           </p>
         </div>
@@ -223,8 +227,8 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
-              Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either
-              way, a clear is checked by the people who run that ladder, and none of that comes back
+              Most dan courses are unranked, except JinJin's, loved up to Phase III. Either way, a clear
+              is checked by the people who run that ladder, and none of that comes back
               through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred
               from your plays.
             </Trans>
@@ -275,8 +279,8 @@ function DanEstimatesPage() {
               The label you see is just that number printed in the ladder's own language. 4K regular
               runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1
               to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze,
-              Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. 6K stops at 9th, and
-              its LN ladder carries on through Terra, Celestial, Mystery, Nihility and Finish.
+              Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. Both 6K ladders run
+              0 to 9th and then Terra, Celestial, Mystery, Nihility and Finish.
             </Trans>
           </P>
           <div className="space-y-3 py-1">
@@ -358,12 +362,12 @@ function DanEstimatesPage() {
         <Section title={t`Step 3: which of your plays count`}>
           <P>
             <Trans>
-              The pool is your osu! top plays plus everything recorded while you were tracked,
-              deduplicated down to your best play on each chart at each speed. That tracked half only
-              exists if you are on your country's roster, which is its top 100 plus anyone who turned
-              tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are
-              thrown out everywhere, because the rating engines read a mash wall as enormous density
-              and rate it absurdly.
+              The pool is your osu! top plays, everything recorded while you were tracked, and any score
+              links added manually, deduplicated down to your best play on each chart at each speed.
+              Automatic history below your top plays only exists if you are on your country's roster,
+              which is its top 100 plus anyone who turned tracking on themselves, and it starts the day
+              tracking does. Charts flagged as vibro are thrown out everywhere, because the rating
+              engines read a mash wall as enormous density and rate it absurdly.
             </Trans>
           </P>
           <P>
@@ -610,11 +614,11 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
-              The estimate only sees the recorded pool. Your osu! top plays are always included. Anything
-              below them is included only while you are tracked, which happens if you are in
-              your country's top 100 or if you turn tracking on yourself, and only from that day onward.
-              A player who quit years ago is judged on their top 200 alone, so their estimate comes out
-              low.
+              The estimate only sees scores it has. Your osu! top plays are always included, and history
+              below them is recorded automatically while you are tracked. Missing older scores are not
+              permanently lost: open the Skills tab on your profile, choose <B>Add a missing score</B>,
+              and paste the osu! score link. A player who quit years ago may start with a low estimate
+              from their top 200 alone, but qualifying old clears can be added instead of replayed.
             </Trans>
           </P>
           <P>
@@ -627,7 +631,7 @@ function DanEstimatesPage() {
               until you stop, meaning 30 minutes pass without a new play. Everything it finds during
               that time counts, including unranked charts.{' '}
               <strong className="text-[17px] font-bold text-white">
-                If you only play unranked charts, nothing is recorded.
+                If you only play unranked charts, nothing is recorded automatically.
               </strong>
             </Trans>
           </P>
@@ -1195,17 +1199,18 @@ function DanDistribution({ rows }: { rows: Array<{ level: string; players: numbe
 function CreditCurveTabs() {
   const { t } = useLingui();
   const [tab, setTab] = useState(0);
+  const accuracyLabel = t`Accuracy`;
   const tabs = [
     {
-      label: t`Regular ladders`,
-      head: [t`Accuracy (96% ladder)`, t`Credit`],
+      label: t`Regular`,
+      head: [`${accuracyLabel} (96%)`, t`Credit`],
       rows: [
         ["100%", t`the chart's level +1.5`],
         ["99.5%", t`the chart's level +1.1`],
         ["99%", t`the chart's level +0.7`],
         ["98.7%", t`the chart's level +0.2`],
         ["98%", t`the chart's level +0.12`],
-        [t`96-96.99% (the bar)`, t`the chart's full level`],
+        ["96-96.99%", t`the chart's full level`],
         ["95%", t`the chart's level -0.51`],
         ["94%", t`the chart's level -0.76`],
         ["92%", t`the chart's level -1.25`],
@@ -1214,13 +1219,13 @@ function CreditCurveTabs() {
     },
     {
       label: t`4K LN`,
-      head: [t`Accuracy (97% ScoreV2 ladder)`, t`Credit`],
+      head: [`${accuracyLabel} (97% ScoreV2)`, t`Credit`],
       rows: [
         ["100%", t`the chart's level +0.7`],
         ["99.9%", t`the chart's level +0.53`],
         ["99.7%", t`the chart's level +0.2`],
         ["99%", t`the chart's level +0.12`],
-        [t`97-98% (the bar)`, t`the chart's full level`],
+        ["97-98%", t`the chart's full level`],
         ["96.9%", t`the chart's level -0.75`],
         ["96.4%", t`the chart's level -0.85`],
         ["96.2%", t`the chart's level -1.05`],
@@ -1230,14 +1235,14 @@ function CreditCurveTabs() {
     },
     {
       label: t`6K/7K LN`,
-      head: [t`Accuracy (95% ladder)`, t`Credit`],
+      head: [`${accuracyLabel} (95%)`, t`Credit`],
       rows: [
         ["100%", t`the chart's level +1.5`],
         ["99.5%", t`the chart's level +1.18`],
         ["99%", t`the chart's level +0.86`],
         ["98%", t`the chart's level +0.16`],
         ["97%", t`the chart's level +0.07`],
-        [t`95-96.25% (the bar)`, t`the chart's full level`],
+        ["95-96.25%", t`the chart's full level`],
         ["94.9%", t`the chart's level -0.36`],
         ["94.5%", t`the chart's level -0.76`],
         ["94%", t`the chart's level -1.25`],

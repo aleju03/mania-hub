@@ -89,10 +89,12 @@ export function DanSkillsetPicker({
   skillsets,
   value,
   onChange,
+  disabled = false,
 }: {
   skillsets: Array<{ skillset: string; players: number }>;
   value: string;
   onChange: (skillset: string) => void;
+  disabled?: boolean;
 }) {
   const { t, i18n } = useLingui();
   if (skillsets.length < 2) return null;
@@ -109,9 +111,12 @@ export function DanSkillsetPicker({
             key={info.skillset}
             type="button"
             aria-pressed={active}
+            disabled={disabled}
             onClick={() => onChange(info.skillset)}
             title={t`${formatNumber(info.players)} rated players`}
-            className={`flex-shrink-0 rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+            className={`flex-shrink-0 rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+              disabled ? "cursor-wait" : "cursor-pointer"
+            } ${
               active ? "text-white" : "bg-osu-b4/60 text-osu-f1 hover:bg-osu-b4"
             }`}
             style={active && color ? { backgroundColor: `${color}33`, color } : undefined}

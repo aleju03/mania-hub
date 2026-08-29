@@ -151,13 +151,17 @@ export function DanLeaderboardBoard({
       {/* A skillset belongs to one keymode and side (stamina is 4K's, the LN
           subtypes are 7K's), so changing either drops back to every clear
           rather than asking for a column that ladder does not have - and the
-          chips go away until the new ladder's list arrives, rather than
-          offering the old one's. */}
-      <DanSkillsetPicker
-        skillsets={staleLadder ? [] : snapshot?.skillsets ?? []}
-        value={requestedSkillset}
-        onChange={(next) => onNavigate({ skillset: next, page: 1 })}
-      />
+          previous ladder's chips stay visible but inert until the new list
+          arrives. Keeping the slot occupied avoids both a visual flash and a
+          full-page reflow on every keymode change. */}
+      <div className="min-h-6" aria-busy={staleLadder}>
+        <DanSkillsetPicker
+          skillsets={snapshot?.skillsets ?? []}
+          value={requestedSkillset}
+          onChange={(next) => onNavigate({ skillset: next, page: 1 })}
+          disabled={staleLadder}
+        />
+      </div>
 
       <p className="text-[11px] text-osu-f1">
         <Link to="/dan-estimates" className="text-osu-pink-light transition-colors hover:text-white">

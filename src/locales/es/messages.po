@@ -1722,16 +1722,16 @@ msgid "7K regular"
 msgstr "7K regular"
 
 #: src/routes/dan-estimates.tsx
-msgid "95-96.25% (the bar)"
-msgstr "95-96.25% (el mínimo)"
+#~ msgid "95-96.25% (the bar)"
+#~ msgstr "95-96.25% (el mínimo)"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "95% (the bar)"
 #~ msgstr "95% (el mínimo)"
 
 #: src/routes/dan-estimates.tsx
-msgid "96-96.99% (the bar)"
-msgstr "96-96.99% (el mínimo)"
+#~ msgid "96-96.99% (the bar)"
+#~ msgstr "96-96.99% (el mínimo)"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "96% (the bar)"
@@ -1742,8 +1742,8 @@ msgid "96%, or 95% in the Normal Kyu band below 1st dan"
 msgstr "96%, o 95% en la banda Normal Kyu por debajo del 1er dan"
 
 #: src/routes/dan-estimates.tsx
-msgid "97-98% (the bar)"
-msgstr "97-98% (el mínimo)"
+#~ msgid "97-98% (the bar)"
+#~ msgstr "97-98% (el mínimo)"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "97% (the bar)"
@@ -1903,22 +1903,23 @@ msgstr "Acc"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/lib/replay-overlays.ts
+#: src/routes/dan-estimates.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "Accuracy"
 msgstr "Acc"
 
 #: src/routes/dan-estimates.tsx
-msgid "Accuracy (95% ladder)"
-msgstr "Precisión (escala de 95%)"
+#~ msgid "Accuracy (95% ladder)"
+#~ msgstr "Precisión (escala de 95%)"
 
 #: src/routes/dan-estimates.tsx
-msgid "Accuracy (96% ladder)"
-msgstr "Precisión (escala de 96%)"
+#~ msgid "Accuracy (96% ladder)"
+#~ msgstr "Precisión (escala de 96%)"
 
 #: src/routes/dan-estimates.tsx
-msgid "Accuracy (97% ScoreV2 ladder)"
-msgstr "Precisión (escala de 97% ScoreV2)"
+#~ msgid "Accuracy (97% ScoreV2 ladder)"
+#~ msgstr "Precisión (escala de 97% ScoreV2)"
 
 #. placeholder {0}: formatAccuracy(event.accuracy)
 #: src/routes/snipes.tsx
@@ -2444,6 +2445,10 @@ msgstr "Auto"
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Auto packs"
 msgstr "Packs automáticos"
+
+#: src/routes/dan-estimates.tsx
+msgid "Automatic tracking only began on June 9, 2026. Older scores are included when they are still in your osu! top plays, and any missing passed mania score with an osu! score link can be added from your profile's Skills tab."
+msgstr "El tracking automático no comenzó hasta el 9 de junio de 2026. Los scores anteriores se incluyen si todavía están entre tus top plays de osu!, y cualquier score aprobado de mania que falte y tenga un enlace de score de osu! se puede agregar desde la pestaña Skills de tu perfil."
 
 #: src/components/ui/Avatar.tsx
 msgid "avatar"
@@ -7127,8 +7132,12 @@ msgid "most complete collections"
 msgstr "colecciones más completas"
 
 #: src/routes/dan-estimates.tsx
-msgid "Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
-msgstr "La mayoría de los charts de los dans son unranked; los de JinJin son la excepción, loved hasta la Phase III. En cualquier caso, un clear lo verifica la gente que lleva esa escala, y nada de eso vuelve por la API de osu! como un nivel de dan, así que no se puede consultar el tuyo. Solo se pueden mirar tus plays."
+#~ msgid "Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+#~ msgstr "La mayoría de los charts de los dans son unranked; los de JinJin son la excepción, loved hasta la Phase III. En cualquier caso, un clear lo verifica la gente que lleva esa escala, y nada de eso vuelve por la API de osu! como un nivel de dan, así que no se puede consultar el tuyo. Solo se pueden mirar tus plays."
+
+#: src/routes/dan-estimates.tsx
+msgid "Most dan courses are unranked, except JinJin's, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+msgstr "La mayoría de los cursos de dan son unranked, excepto los de JinJin, loved hasta la Phase III. En cualquier caso, un clear lo verifica la gente que lleva esa escala, y nada de eso vuelve por la API de osu! como un nivel de dan, así que no se puede consultar el tuyo. Solo se puede inferir a partir de tus plays."
 
 #: src/routes/maps.tsx
 msgid "Most farmed globally"
@@ -9590,6 +9599,7 @@ msgstr "Regiones"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/routes/dan-estimates.tsx
 msgid "Regular"
 msgstr "Regular"
 
@@ -9598,8 +9608,8 @@ msgid "Regular and LN"
 msgstr "Regular y LN"
 
 #: src/routes/dan-estimates.tsx
-msgid "Regular ladders"
-msgstr "Escalas regulares"
+#~ msgid "Regular ladders"
+#~ msgstr "Escalas regulares"
 
 #: src/lib/skill-axes.ts
 msgid "Release"
@@ -11928,8 +11938,12 @@ msgid "The editor already holds {0}"
 msgstr "El editor ya contiene {0}"
 
 #: src/routes/dan-estimates.tsx
-msgid "The engine gives back a continuous number, and the number is what everything else uses. The label you see is just that number printed in the ladder's own language. 4K regular runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1 to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. 6K stops at 9th, and its LN ladder carries on through Terra, Celestial, Mystery, Nihility and Finish."
-msgstr "El algoritmo devuelve un número continuo, y ese número es lo que usa todo lo demás. La etiqueta que ves es solo ese número escrito en el idioma de cada escala. 4K regular va del 1º al 10º y luego entra en los niveles griegos (alpha, beta, gamma y arriba). 4K LN va de 1 a 17, numerado hasta 10 y con nombre por encima: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K va de 0 a 10º y luego Gamma, Azimuth, Zenith, Stellium. 6K se detiene en 9º, y su escala LN sigue con Terra, Celestial, Mystery, Nihility y Finish."
+#~ msgid "The engine gives back a continuous number, and the number is what everything else uses. The label you see is just that number printed in the ladder's own language. 4K regular runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1 to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. 6K stops at 9th, and its LN ladder carries on through Terra, Celestial, Mystery, Nihility and Finish."
+#~ msgstr "El algoritmo devuelve un número continuo, y ese número es lo que usa todo lo demás. La etiqueta que ves es solo ese número escrito en el idioma de cada escala. 4K regular va del 1º al 10º y luego entra en los niveles griegos (alpha, beta, gamma y arriba). 4K LN va de 1 a 17, numerado hasta 10 y con nombre por encima: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K va de 0 a 10º y luego Gamma, Azimuth, Zenith, Stellium. 6K se detiene en 9º, y su escala LN sigue con Terra, Celestial, Mystery, Nihility y Finish."
+
+#: src/routes/dan-estimates.tsx
+msgid "The engine gives back a continuous number, and the number is what everything else uses. The label you see is just that number printed in the ladder's own language. 4K regular runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1 to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. Both 6K ladders run 0 to 9th and then Terra, Celestial, Mystery, Nihility and Finish."
+msgstr "El algoritmo devuelve un número continuo, y ese número es lo que usa todo lo demás. La etiqueta que ves es solo ese número escrito en el idioma de cada escala. 4K regular va del 1º al 10º y luego entra en los niveles griegos (alpha, beta, gamma y arriba). 4K LN va de 1 a 17, numerado hasta 10 y con nombre por encima: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K va de 0 a 10º y luego Gamma, Azimuth, Zenith, Stellium. Ambas escalas 6K van de 0 a 9º y luego Terra, Celestial, Mystery, Nihility y Finish."
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
@@ -11940,8 +11954,12 @@ msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accur
 msgstr "La estimación aparece cuando {quorum} clears con {minAccuracyPercent}%+ de acc caen en charts con nivel de dan. Un pase con {barAccuracyPercent}%+ acredita el nivel completo del chart; por debajo de eso acredita menos."
 
 #: src/routes/dan-estimates.tsx
-msgid "The estimate only sees the recorded pool. Your osu! top plays are always included. Anything below them is included only while you are tracked, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
-msgstr "Además solo ve las jugadas registradas. Tus top plays de osu! siempre están incluidas. Lo que está por debajo se incluye solo mientras tienes el tracking activo, cosa que pasa si estás en el top 100 de tu país o si activas el seguimiento tú mismo, y solo a partir de ese día. A un jugador que dejó de jugar hace años se le juzga solo por su top 200, así que su estimación sale baja."
+msgid "The estimate only sees scores it has. Your osu! top plays are always included, and history below them is recorded automatically while you are tracked. Missing older scores are not permanently lost: open the Skills tab on your profile, choose <0>Add a missing score</0>, and paste the osu! score link. A player who quit years ago may start with a low estimate from their top 200 alone, but qualifying old clears can be added instead of replayed."
+msgstr "La estimación solo ve los scores que tiene. Tus top plays de osu! siempre se incluyen, y el historial por debajo de ellos se registra automáticamente mientras tienes tracking. Los scores antiguos que falten no están perdidos para siempre: abre la pestaña Skills de tu perfil, elige <0>Agregar un score faltante</0> y pega el enlace del score de osu!. La estimación de un jugador que dejó de jugar hace años puede empezar baja al usar solo sus top 200, pero los clears antiguos que cumplan los requisitos se pueden agregar en lugar de volver a jugarlos."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The estimate only sees the recorded pool. Your osu! top plays are always included. Anything below them is included only while you are tracked, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
+#~ msgstr "Además solo ve las jugadas registradas. Tus top plays de osu! siempre están incluidas. Lo que está por debajo se incluye solo mientras tienes el tracking activo, cosa que pasa si estás en el top 100 de tu país o si activas el seguimiento tú mismo, y solo a partir de ese día. A un jugador que dejó de jugar hace años se le juzga solo por su top 200, así que su estimación sale baja."
 
 #: src/routes/dan-estimates.tsx
 msgid "The estimator downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
@@ -12001,8 +12019,12 @@ msgstr "del jugador"
 #~ msgstr "El conjunto son tus top plays de osu! más cada play que el sitio trackeó para ti, reducido a tu mejor play en cada chart a cada velocidad. Esa mitad trackeada solo existe si estás en el roster de tu país, que es su top 100 más quien haya activado el tracking por su cuenta, y empieza el día en que empezó el tracking. Los charts marcados como vibro se descartan en todas partes, porque los algoritmos de rating leen un muro de mash como densidad enorme y lo puntúan de forma absurda."
 
 #: src/routes/dan-estimates.tsx
-msgid "The pool is your osu! top plays plus everything recorded while you were tracked, deduplicated down to your best play on each chart at each speed. That tracked half only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
-msgstr "El conjunto son tus top plays de osu! más cada play trackeada para ti, reducido a tu mejor play en cada chart a cada velocidad. Esa mitad trackeada solo existe si estás en el roster de tu país, que es su top 100 más quien haya activado el tracking por su cuenta, y empieza el día en que empezó el tracking. Los charts marcados como vibro se descartan en todas partes, porque los algoritmos de rating leen un muro de mash como densidad enorme y lo puntúan de forma absurda."
+#~ msgid "The pool is your osu! top plays plus everything recorded while you were tracked, deduplicated down to your best play on each chart at each speed. That tracked half only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+#~ msgstr "El conjunto son tus top plays de osu! más cada play trackeada para ti, reducido a tu mejor play en cada chart a cada velocidad. Esa mitad trackeada solo existe si estás en el roster de tu país, que es su top 100 más quien haya activado el tracking por su cuenta, y empieza el día en que empezó el tracking. Los charts marcados como vibro se descartan en todas partes, porque los algoritmos de rating leen un muro de mash como densidad enorme y lo puntúan de forma absurda."
+
+#: src/routes/dan-estimates.tsx
+msgid "The pool is your osu! top plays, everything recorded while you were tracked, and any score links added manually, deduplicated down to your best play on each chart at each speed. Automatic history below your top plays only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+msgstr "El conjunto son tus top plays de osu!, todo lo registrado mientras tenías tracking y cualquier enlace de score agregado manualmente, reducido a tu mejor play en cada chart a cada velocidad. El historial automático por debajo de tus top plays solo existe si estás en el roster de tu país, que incluye su top 100 y a cualquiera que haya activado el tracking por su cuenta, y empieza el día en que se activa el tracking. Los charts marcados como vibro se descartan en todas partes, porque los algoritmos de rating leen un muro de mash como densidad enorme y lo puntúan de forma absurda."
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
@@ -12075,8 +12097,12 @@ msgstr "los mismos 96% y 95%"
 #~ msgstr "Lo mismo pasa con cualquier sesión en la que no hayas hecho ningún score en un chart ranked, qualified o loved: el sitio nunca se entera de que estás jugando, así que tampoco se trackea nada de esa sesión. <0>Por qué pasa esto</0>. Si tu estimación sale baja, normalmente es por eso, y lo único que lo arregla es jugar más."
 
 #: src/routes/dan-estimates.tsx
-msgid "The same goes for any session where you never set a score on a ranked, qualified or loved chart: tracking never notices you are playing, so nothing from that session is recorded either. <0>Why that is</0>. If your estimate reads low, that is usually the reason, and the only fix is to play more."
-msgstr "Lo mismo pasa con cualquier sesión en la que no hayas hecho ningún score en un chart ranked, qualified o loved: el tracking nunca se entera de que estás jugando, así que tampoco se trackea nada de esa sesión. <0>Por qué pasa esto</0>. Si tu estimación sale baja, normalmente es por eso, y lo único que lo arregla es jugar más."
+msgid "The same goes for any session where you never set a score on a ranked, qualified or loved chart: tracking never notices you are playing, so nothing from that session is recorded either. <0>Why that is</0>. If your estimate reads low, add the important missing scores from the Skills tab or keep playing to let new scores fill it in."
+msgstr "Lo mismo pasa con cualquier sesión en la que no hayas hecho ningún score en un chart ranked, qualified o loved: el tracking nunca se entera de que estás jugando, así que tampoco se registra nada de esa sesión. <0>Por qué pasa esto</0>. Si tu estimación sale baja, agrega los scores importantes que falten desde Skills o sigue jugando para que los scores nuevos la completen."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The same goes for any session where you never set a score on a ranked, qualified or loved chart: tracking never notices you are playing, so nothing from that session is recorded either. <0>Why that is</0>. If your estimate reads low, that is usually the reason, and the only fix is to play more."
+#~ msgstr "Lo mismo pasa con cualquier sesión en la que no hayas hecho ningún score en un chart ranked, qualified o loved: el tracking nunca se entera de que estás jugando, así que tampoco se trackea nada de esa sesión. <0>Por qué pasa esto</0>. Si tu estimación sale baja, normalmente es por eso, y lo único que lo arregla es jugar más."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
@@ -12107,8 +12133,12 @@ msgstr "No se pudieron montar los playfields lado a lado."
 #~ msgstr "El sitio descarga el archivo del chart, lee las notas y pasa el patrón por un algoritmo de rating. Cuál depende del modo de teclas, porque ninguno es el mejor en todos:"
 
 #: src/routes/dan-estimates.tsx
-msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop, meaning 30 minutes pass without a new play. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
-msgstr "El sitio se entera de que estás jugando por el feed de scores nuevos de osu!, y ese feed solo lista scores en charts con tabla de clasificación, así que una jugada en un chart graveyarded nunca aparece ahí. Tus jugadas recientes son una consulta aparte que sí incluye charts graveyarded, pero hay que pedirla por jugador, así que el sitio solo empieza a pedirla cuando un score con tabla muestra que estás jugando, y la sigue pidiendo cada pocos minutos hasta que paras, es decir, hasta que pasan 30 minutos sin una jugada nueva. Todo lo que encuentra en ese tiempo cuenta, charts unranked incluidos. <0>Si solo juegas charts unranked, no se registra nada.</0>"
+msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop, meaning 30 minutes pass without a new play. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded automatically.</0>"
+msgstr "El sitio se entera de que estás jugando por el feed de scores nuevos de osu!, y ese feed solo lista scores en charts con tabla de clasificación, así que una jugada en un chart graveyarded nunca aparece ahí. Tus jugadas recientes son una consulta aparte que sí incluye charts graveyarded, pero hay que pedirla por jugador, así que el sitio solo empieza a pedirla cuando un score con tabla muestra que estás jugando, y la sigue pidiendo cada pocos minutos hasta que paras, es decir, hasta que pasan 30 minutos sin una jugada nueva. Todo lo que encuentra en ese tiempo cuenta, charts unranked incluidos. <0>Si solo juegas charts unranked, no se registra nada automáticamente.</0>"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop, meaning 30 minutes pass without a new play. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
+#~ msgstr "El sitio se entera de que estás jugando por el feed de scores nuevos de osu!, y ese feed solo lista scores en charts con tabla de clasificación, así que una jugada en un chart graveyarded nunca aparece ahí. Tus jugadas recientes son una consulta aparte que sí incluye charts graveyarded, pero hay que pedirla por jugador, así que el sitio solo empieza a pedirla cuando un score con tabla muestra que estás jugando, y la sigue pidiendo cada pocos minutos hasta que paras, es decir, hasta que pasan 30 minutos sin una jugada nueva. Todo lo que encuentra en ese tiempo cuenta, charts unranked incluidos. <0>Si solo juegas charts unranked, no se registra nada.</0>"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
@@ -12646,8 +12676,8 @@ msgid "tracking on"
 msgstr "seguimiento activado"
 
 #: src/routes/dan-estimates.tsx
-msgid "Tracking only began on June 9, 2026. Anything you played before that date counts only if it is still in your osu! top plays, and everything else from back then is invisible to the estimate."
-msgstr "Solo se empezaron a trackear jugadas el 9 de junio de 2026. Todo lo que jugaste antes de esa fecha cuenta solo si sigue estando en tus top plays de osu!, y el resto de aquella época es invisible para la estimación."
+#~ msgid "Tracking only began on June 9, 2026. Anything you played before that date counts only if it is still in your osu! top plays, and everything else from back then is invisible to the estimate."
+#~ msgstr "Solo se empezaron a trackear jugadas el 9 de junio de 2026. Todo lo que jugaste antes de esa fecha cuenta solo si sigue estando en tus top plays de osu!, y el resto de aquella época es invisible para la estimación."
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Tracking your plays"

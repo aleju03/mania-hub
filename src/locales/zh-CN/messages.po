@@ -1731,16 +1731,16 @@ msgid "7K regular"
 msgstr "7K 单点"
 
 #: src/routes/dan-estimates.tsx
-msgid "95-96.25% (the bar)"
-msgstr "95-96.25%（通过线）"
+#~ msgid "95-96.25% (the bar)"
+#~ msgstr "95-96.25%（通过线）"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "95% (the bar)"
 #~ msgstr "95%（通过线）"
 
 #: src/routes/dan-estimates.tsx
-msgid "96-96.99% (the bar)"
-msgstr "96-96.99%（通过线）"
+#~ msgid "96-96.99% (the bar)"
+#~ msgstr "96-96.99%（通过线）"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "96% (the bar)"
@@ -1751,8 +1751,8 @@ msgid "96%, or 95% in the Normal Kyu band below 1st dan"
 msgstr "96%，1 段以下的 Normal Kyu 区间是 95%"
 
 #: src/routes/dan-estimates.tsx
-msgid "97-98% (the bar)"
-msgstr "97-98%（通过线）"
+#~ msgid "97-98% (the bar)"
+#~ msgstr "97-98%（通过线）"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "97% (the bar)"
@@ -1912,22 +1912,23 @@ msgstr "准确率"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/lib/replay-overlays.ts
+#: src/routes/dan-estimates.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "Accuracy"
 msgstr "准确率"
 
 #: src/routes/dan-estimates.tsx
-msgid "Accuracy (95% ladder)"
-msgstr "准确率（95% 段位表）"
+#~ msgid "Accuracy (95% ladder)"
+#~ msgstr "准确率（95% 段位表）"
 
 #: src/routes/dan-estimates.tsx
-msgid "Accuracy (96% ladder)"
-msgstr "准确率(96% 段位表)"
+#~ msgid "Accuracy (96% ladder)"
+#~ msgstr "准确率(96% 段位表)"
 
 #: src/routes/dan-estimates.tsx
-msgid "Accuracy (97% ScoreV2 ladder)"
-msgstr "准确率（97% ScoreV2 段位表）"
+#~ msgid "Accuracy (97% ScoreV2 ladder)"
+#~ msgstr "准确率（97% ScoreV2 段位表）"
 
 #. placeholder {0}: formatAccuracy(event.accuracy)
 #: src/routes/snipes.tsx
@@ -2453,6 +2454,10 @@ msgstr "自动"
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Auto packs"
 msgstr "自动谱包"
+
+#: src/routes/dan-estimates.tsx
+msgid "Automatic tracking only began on June 9, 2026. Older scores are included when they are still in your osu! top plays, and any missing passed mania score with an osu! score link can be added from your profile's Skills tab."
+msgstr "自动追踪直到 2026 年 6 月 9 日才开始。更早的成绩如果仍在你的 osu! 最佳成绩中就会被计入；任何缺失且有 osu! 成绩链接的 mania 通过成绩，都可以在个人主页的“技能”标签页中添加。"
 
 #: src/components/ui/Avatar.tsx
 msgid "avatar"
@@ -7136,8 +7141,12 @@ msgid "most complete collections"
 msgstr "最完整的收藏册"
 
 #: src/routes/dan-estimates.tsx
-msgid "Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
-msgstr "段位课题谱面大多未上架；JinJin 的课题是例外，到 Phase III 为止都是 loved。无论哪种，通过与否都由维护对应段位表的人认定，这些结果都不会以段位形式从 osu! API 返回，因此无法直接查询你的段位，只能根据你的成绩推算。"
+#~ msgid "Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+#~ msgstr "段位课题谱面大多未上架；JinJin 的课题是例外，到 Phase III 为止都是 loved。无论哪种，通过与否都由维护对应段位表的人认定，这些结果都不会以段位形式从 osu! API 返回，因此无法直接查询你的段位，只能根据你的成绩推算。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Most dan courses are unranked, except JinJin's, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+msgstr "大多数段位课题都未上架，只有 JinJin 的例外，到 Phase III 为止都是 loved。无论哪种，通过与否都由维护对应段位表的人认定，这些结果都不会以段位形式从 osu! API 返回，因此无法直接查询你的段位，只能根据你的成绩推算。"
 
 #: src/routes/maps.tsx
 msgid "Most farmed globally"
@@ -9599,6 +9608,7 @@ msgstr "区域"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/routes/dan-estimates.tsx
 msgid "Regular"
 msgstr "常规"
 
@@ -9607,8 +9617,8 @@ msgid "Regular and LN"
 msgstr "单点与长条"
 
 #: src/routes/dan-estimates.tsx
-msgid "Regular ladders"
-msgstr "普通段位表"
+#~ msgid "Regular ladders"
+#~ msgstr "普通段位表"
 
 #: src/lib/skill-axes.ts
 msgid "Release"
@@ -11937,8 +11947,12 @@ msgid "The editor already holds {0}"
 msgstr "编辑器里已经是 {0} 了"
 
 #: src/routes/dan-estimates.tsx
-msgid "The engine gives back a continuous number, and the number is what everything else uses. The label you see is just that number printed in the ladder's own language. 4K regular runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1 to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. 6K stops at 9th, and its LN ladder carries on through Terra, Celestial, Mystery, Nihility and Finish."
-msgstr "算法给回来的是一个连续的数值，后面所有东西用的都是这个数值。你看到的标签只是把这个数值用各段位表自己的说法印出来而已。4K 单点从 1 段排到 10 段，再进入希腊字母段位(alpha、beta、gamma 往上)。4K LN 从 1 排到 17，10 以内用数字，往上用名字：Yoake、Yuugure、Yoru、Yami、Yume、Yokaze、Yeehee。7K 从 0 段排到 10 段，再是 Gamma、Azimuth、Zenith、Stellium。6K 到 9 段为止，它的 LN 段位表继续往上是 Terra、Celestial、Mystery、Nihility 和 Finish。"
+#~ msgid "The engine gives back a continuous number, and the number is what everything else uses. The label you see is just that number printed in the ladder's own language. 4K regular runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1 to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. 6K stops at 9th, and its LN ladder carries on through Terra, Celestial, Mystery, Nihility and Finish."
+#~ msgstr "算法给回来的是一个连续的数值，后面所有东西用的都是这个数值。你看到的标签只是把这个数值用各段位表自己的说法印出来而已。4K 单点从 1 段排到 10 段，再进入希腊字母段位(alpha、beta、gamma 往上)。4K LN 从 1 排到 17，10 以内用数字，往上用名字：Yoake、Yuugure、Yoru、Yami、Yume、Yokaze、Yeehee。7K 从 0 段排到 10 段，再是 Gamma、Azimuth、Zenith、Stellium。6K 到 9 段为止，它的 LN 段位表继续往上是 Terra、Celestial、Mystery、Nihility 和 Finish。"
+
+#: src/routes/dan-estimates.tsx
+msgid "The engine gives back a continuous number, and the number is what everything else uses. The label you see is just that number printed in the ladder's own language. 4K regular runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1 to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. Both 6K ladders run 0 to 9th and then Terra, Celestial, Mystery, Nihility and Finish."
+msgstr "算法给回来的是一个连续的数值，后面所有东西用的都是这个数值。你看到的标签只是把这个数值用各段位表自己的说法印出来而已。4K 单点从 1 段排到 10 段，再进入希腊字母段位(alpha、beta、gamma 往上)。4K LN 从 1 排到 17，10 以内用数字，往上用名字：Yoake、Yuugure、Yoru、Yami、Yume、Yokaze、Yeehee。7K 从 0 段排到 10 段，再是 Gamma、Azimuth、Zenith、Stellium。6K 两套段位表都从 0 段排到 9 段，再是 Terra、Celestial、Mystery、Nihility 和 Finish。"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
@@ -11949,8 +11963,12 @@ msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accur
 msgstr "在已评定段位的谱面上取得 {quorum} 次准确率 {minAccuracyPercent}% 以上的通过后，就会给出估算。准确率 {barAccuracyPercent}% 以上的通过按谱面的完整段位计入，低于这条线的计入会更少。"
 
 #: src/routes/dan-estimates.tsx
-msgid "The estimate only sees the recorded pool. Your osu! top plays are always included. Anything below them is included only while you are tracked, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
-msgstr "估算只能读取已记录的成绩池。你的 osu! 最佳成绩始终会被计入，更低的成绩只有在你被追踪期间才会计入：你进入所在国家/地区前 100 名或自行开启追踪后才会被追踪，而且只从当天开始。已经退坑多年的玩家只能按其前 200 个最佳成绩估算，因此结果会偏低。"
+msgid "The estimate only sees scores it has. Your osu! top plays are always included, and history below them is recorded automatically while you are tracked. Missing older scores are not permanently lost: open the Skills tab on your profile, choose <0>Add a missing score</0>, and paste the osu! score link. A player who quit years ago may start with a low estimate from their top 200 alone, but qualifying old clears can be added instead of replayed."
+msgstr "估算只能看到本站已有的成绩。你的 osu! 最佳成绩一定会计入；低于它们的历史成绩，会在你被追踪期间自动记录。缺失的旧成绩并非永远丢失：打开个人主页的“技能”标签页，选择 <0>添加缺失的成绩</0>，再粘贴 osu! 成绩链接。退坑多年的玩家一开始可能只靠 top 200 而估算偏低，但符合条件的旧通过可以直接补上，不必重打。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The estimate only sees the recorded pool. Your osu! top plays are always included. Anything below them is included only while you are tracked, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
+#~ msgstr "估算只能读取已记录的成绩池。你的 osu! 最佳成绩始终会被计入，更低的成绩只有在你被追踪期间才会计入：你进入所在国家/地区前 100 名或自行开启追踪后才会被追踪，而且只从当天开始。已经退坑多年的玩家只能按其前 200 个最佳成绩估算，因此结果会偏低。"
 
 #: src/routes/dan-estimates.tsx
 msgid "The estimator downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
@@ -12010,8 +12028,12 @@ msgstr "该玩家的"
 #~ msgstr "池子是你的 osu! 最佳成绩，加上本站为你追踪到的所有成绩，再按每张谱面每个速度只保留你最好的一次去重。追踪的那一半只有在你进了所在国家/地区的名单时才有，名单是该地区前 100 名，再加上自己开了追踪的人，而且从开始追踪那天才算起。被标为 Vibro 的谱面在任何地方都会被丢掉，因为评分算法会把一堵乱搓的音符墙读成极高的密度，评出离谱的数值。"
 
 #: src/routes/dan-estimates.tsx
-msgid "The pool is your osu! top plays plus everything recorded while you were tracked, deduplicated down to your best play on each chart at each speed. That tracked half only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
-msgstr "成绩池由你的 osu! 最佳成绩和追踪期间记录的所有成绩组成，并按每张谱面、每个速度只保留最好的一次。只有进入所在国家/地区的名单后才有追踪得到的那部分数据；名单包括该国家/地区前 100 名和自行开启追踪的人，而且从开始追踪当天才计入。标为 Vibro 的谱面一律排除，因为评级引擎会把一堵乱搓音符墙识别为极高密度，给出离谱的评级。"
+#~ msgid "The pool is your osu! top plays plus everything recorded while you were tracked, deduplicated down to your best play on each chart at each speed. That tracked half only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+#~ msgstr "成绩池由你的 osu! 最佳成绩和追踪期间记录的所有成绩组成，并按每张谱面、每个速度只保留最好的一次。只有进入所在国家/地区的名单后才有追踪得到的那部分数据；名单包括该国家/地区前 100 名和自行开启追踪的人，而且从开始追踪当天才计入。标为 Vibro 的谱面一律排除，因为评级引擎会把一堵乱搓音符墙识别为极高密度，给出离谱的评级。"
+
+#: src/routes/dan-estimates.tsx
+msgid "The pool is your osu! top plays, everything recorded while you were tracked, and any score links added manually, deduplicated down to your best play on each chart at each speed. Automatic history below your top plays only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+msgstr "成绩池由你的 osu! 最佳成绩、追踪期间记录的所有成绩，以及手动添加的成绩链接组成，并按每张谱面、每个速度只保留最好的一次。只有进入所在国家/地区的名单后，最佳成绩以下的历史成绩才会被自动记录；名单包括该国家/地区前 100 名和自行开启追踪的人，而且从开始追踪当天才计入。标为 Vibro 的谱面一律排除，因为评级引擎会把一堵乱搓音符墙识别为极高密度，给出离谱的评级。"
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
@@ -12084,8 +12106,12 @@ msgstr "同样是 96% 和 95%"
 #~ msgstr "任何一次你都没有在 ranked、qualified 或 loved 谱面上打出成绩的游玩过程也一样：本站根本不会发现你在打，所以那段时间里的成绩同样不会被记录。<0>为什么会这样</0>。如果你的估算偏低，通常就是这个原因，唯一的办法就是多打一些。"
 
 #: src/routes/dan-estimates.tsx
-msgid "The same goes for any session where you never set a score on a ranked, qualified or loved chart: tracking never notices you are playing, so nothing from that session is recorded either. <0>Why that is</0>. If your estimate reads low, that is usually the reason, and the only fix is to play more."
-msgstr "如果你整场都没有在上架、qualified 或 loved 谱面上打出成绩，也会发生同样的情况：追踪根本不会发现你正在游玩，因此这场里的所有成绩都不会被记录。<0>为什么会这样</0>。估算偏低通常就是因为这个，唯一的解决办法是多打一些。"
+msgid "The same goes for any session where you never set a score on a ranked, qualified or loved chart: tracking never notices you are playing, so nothing from that session is recorded either. <0>Why that is</0>. If your estimate reads low, add the important missing scores from the Skills tab or keep playing to let new scores fill it in."
+msgstr "如果你整场都没有在上架、qualified 或 loved 谱面上打出成绩，也会发生同样的情况：追踪根本不会发现你正在游玩，因此这场里的所有成绩都不会被记录。<0>为什么会这样</0>。如果估算偏低，可以在“技能”标签页补上重要的缺失成绩，也可以继续游玩，让新成绩逐步补全估算。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The same goes for any session where you never set a score on a ranked, qualified or loved chart: tracking never notices you are playing, so nothing from that session is recorded either. <0>Why that is</0>. If your estimate reads low, that is usually the reason, and the only fix is to play more."
+#~ msgstr "如果你整场都没有在上架、qualified 或 loved 谱面上打出成绩，也会发生同样的情况：追踪根本不会发现你正在游玩，因此这场里的所有成绩都不会被记录。<0>为什么会这样</0>。估算偏低通常就是因为这个，唯一的解决办法是多打一些。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
@@ -12116,8 +12142,12 @@ msgstr "并排游玩区域加载失败。"
 #~ msgstr "本站会下载谱面文件，读出音符，再把谱型交给一个评分算法。用哪个算法取决于键数，因为没有哪一个在所有键数上都是最好的："
 
 #: src/routes/dan-estimates.tsx
-msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop, meaning 30 minutes pass without a new play. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
-msgstr "本站是通过 osu! 的新成绩信息流知道你在打的，而那个信息流只列出有排行榜谱面上的成绩，所以坟场谱面上的成绩根本不会出现在里面。你的最近成绩是另一个查询，坟场谱面的成绩它是包含的，但它只能按玩家逐个去查，所以只有当一个有排行榜的成绩表明你在打时，本站才开始查，并每隔几分钟查一次，直到你停下来，也就是 30 分钟没有新成绩。这段时间里查到的都算，包括未上架谱面。<0>如果你只打未上架谱面，什么都不会被记录。</0>"
+msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop, meaning 30 minutes pass without a new play. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded automatically.</0>"
+msgstr "本站是通过 osu! 的新成绩信息流知道你在打的，而那个信息流只列出有排行榜谱面上的成绩，所以坟场谱面上的成绩根本不会出现在里面。你的最近成绩是另一个查询，坟场谱面的成绩它是包含的，但它只能按玩家逐个去查，所以只有当一个有排行榜的成绩表明你在打时，本站才开始查，并每隔几分钟查一次，直到你停下来，也就是 30 分钟没有新成绩。这段时间里查到的都算，包括未上架谱面。<0>如果你只打未上架谱面，什么都不会被自动记录。</0>"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop, meaning 30 minutes pass without a new play. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
+#~ msgstr "本站是通过 osu! 的新成绩信息流知道你在打的，而那个信息流只列出有排行榜谱面上的成绩，所以坟场谱面上的成绩根本不会出现在里面。你的最近成绩是另一个查询，坟场谱面的成绩它是包含的，但它只能按玩家逐个去查，所以只有当一个有排行榜的成绩表明你在打时，本站才开始查，并每隔几分钟查一次，直到你停下来，也就是 30 分钟没有新成绩。这段时间里查到的都算，包括未上架谱面。<0>如果你只打未上架谱面，什么都不会被记录。</0>"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded.</0>"
@@ -12655,8 +12685,8 @@ msgid "tracking on"
 msgstr "追踪已开启"
 
 #: src/routes/dan-estimates.tsx
-msgid "Tracking only began on June 9, 2026. Anything you played before that date counts only if it is still in your osu! top plays, and everything else from back then is invisible to the estimate."
-msgstr "追踪从 2026 年 6 月 9 日才开始。在此之前打过的成绩，只有仍留在 osu! 最佳成绩中的才会计入；其余旧成绩对估算完全不可见。"
+#~ msgid "Tracking only began on June 9, 2026. Anything you played before that date counts only if it is still in your osu! top plays, and everything else from back then is invisible to the estimate."
+#~ msgstr "追踪从 2026 年 6 月 9 日才开始。在此之前打过的成绩，只有仍留在 osu! 最佳成绩中的才会计入；其余旧成绩对估算完全不可见。"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Tracking your plays"
