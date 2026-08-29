@@ -1810,6 +1810,58 @@ async function migratePlayerActivity(db: Db): Promise<void> {
     create index if not exists idx_player_activity_maps_day
       on player_activity_maps(day)
   `);
+  await repairActivityDaysLostToRetention(db);
+}
+
+// One-time repair for the days retention deleted out from under a manual score
+// submission. Until the `created_at` guard landed in retention.ts, submitting a
+// years-old play wrote its heatmap day and the next hourly sweep deleted it for
+// being an old day, so the year never appeared on the player's Activity tab.
+// The scores themselves are still in score_events, and re-recording them is
+// what backfillPlayerActivityFromRetainedScores already does, so this only has
+// to move the per-player cursor back behind the oldest submission whose day is
+// missing; the next Activity view replays it through the ordinary path. Rows
+// whose score_events have since been pruned are past recovering, and a cursor
+// that is already behind the submission is left alone.
+async function repairActivityDaysLostToRetention(db: Db): Promise<void> {
+  const sentinelKey = "activity_submitted_day_repair:v1";
+  if (await hasMigrationSentinel(db, sentinelKey)) return;
+  const missingSubmission = `
+    select 1 from score_events e
+    where e.country = player_activity_backfill_cursors.country
+      and e.user_id = player_activity_backfill_cursors.user_id
+      and e.source = 'manual_submit'
+      and e.id <= player_activity_backfill_cursors.last_event_id
+      and not exists (
+        select 1 from player_activity_days d
+        where d.country = e.country
+          and d.user_id = e.user_id
+          and d.day = substr(e.ended_at, 1, 10)
+      )
+  `;
+  const result = await db.execute({
+    sql: `
+    update player_activity_backfill_cursors
+    set last_event_id = coalesce((
+          select min(e.id) - 1 from score_events e
+          where e.country = player_activity_backfill_cursors.country
+            and e.user_id = player_activity_backfill_cursors.user_id
+            and e.source = 'manual_submit'
+            and e.id <= player_activity_backfill_cursors.last_event_id
+            and not exists (
+              select 1 from player_activity_days d
+              where d.country = e.country
+                and d.user_id = e.user_id
+                and d.day = substr(e.ended_at, 1, 10)
+            )
+        ), last_event_id),
+        updated_at = ?
+    where exists (${missingSubmission})
+  `,
+    args: [new Date().toISOString()],
+  });
+  await setMigrationSentinel(db, sentinelKey, { rewound: Number(result.rowsAffected ?? 0) });
+  logInfo("activity_submitted_day_repair_done", { rewound: Number(result.rowsAffected ?? 0) });
 }
 
 async function migratePackCollectionCards(db: Db): Promise<void> {

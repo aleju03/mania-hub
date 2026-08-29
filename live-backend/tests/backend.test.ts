@@ -898,6 +898,59 @@ describe("live backend", () => {
     }
   });
 
+  it("keeps an old activity day that was recorded inside the window", async () => {
+    vi.setSystemTime(new Date("2026-06-10T12:00:00.000Z"));
+    const { db } = await setup(["CR"]);
+    // A manually submitted 2019 play: old day, recorded today.
+    const day = "2019-11-23";
+    const playedAt = `${day}T12:00:00.000Z`;
+    const recordedAt = "2026-06-10T11:00:00.000Z";
+    await exec(
+      db,
+      `insert into player_activity_score_refs
+         (country, score_identity, user_id, day, beatmap_id, passed, ended_at, created_at)
+       values ('CR', 'submitted', 101, ?, 7001, 1, ?, ?)`,
+      [day, playedAt, recordedAt],
+    );
+    await exec(
+      db,
+      `insert into player_activity_days
+         (country, user_id, day, score_count, passed_count, session_count, first_score_at, last_score_at, updated_at)
+       values ('CR', 101, ?, 1, 1, 1, ?, ?, ?)`,
+      [day, playedAt, playedAt, recordedAt],
+    );
+    await exec(
+      db,
+      `insert into player_activity_maps
+         (country, user_id, day, beatmap_id, play_count, first_played_at, last_played_at, updated_at)
+       values ('CR', 101, ?, 7001, 1, ?, ?, ?)`,
+      [day, playedAt, playedAt, recordedAt],
+    );
+
+    const deleted = await runRetention(db, {
+      databaseUrl: `file:${join(dir, "test.db")}`,
+      scoreEventRetentionDays: 14,
+      liveEventRetentionDays: 7,
+      doneJobRetentionDays: 2,
+      apiCallLogRetentionDays: 7,
+      replayVideoJobRetentionDays: 2,
+      rankSnapshotRetentionDays: 14,
+      activityRetentionYears: 2,
+      replayVideoWorkDir: join(dir, "replay-video-jobs"),
+      maxLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      targetLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      nodeEnv: "test",
+      livePublicOrigin: "http://localhost:7227",
+    });
+
+    expect(deleted.activityScoreRefs).toBe(0);
+    expect(deleted.activityMaps).toBe(0);
+    expect(deleted.activityDays).toBe(0);
+    for (const table of ["player_activity_score_refs", "player_activity_days", "player_activity_maps"]) {
+      expect(Number((await exec(db, `select count(*) as count from ${table}`)).rows[0].count)).toBe(1);
+    }
+  });
+
   it("expires parked profile refreshes but keeps fresh ones and other parked types", async () => {
     const { db } = await setup();
     const now = new Date();
@@ -7164,6 +7217,14 @@ describe("live backend", () => {
       if (previous === undefined) delete process.env.ENABLE_REPLAY_VIDEO;
       else process.env.ENABLE_REPLAY_VIDEO = previous;
     }
+  });
+
+  it("keeps the archived combo sweep separate from view-driven detail jobs", () => {
+    const lanes = defaultWorkerLanes();
+    expect(lanes.find((lane) => lane.name === "activity-combo-backfill")?.jobTypes)
+      .toEqual(["backfill_activity_combo_sweep"]);
+    expect(lanes.find((lane) => lane.name === "activity-detail-on-demand")?.jobTypes)
+      .toEqual(["backfill_activity_detail_on_demand"]);
   });
 
   it("fails leftover replay-video jobs instead of running them when the feature is disabled", async () => {
