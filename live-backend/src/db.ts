@@ -696,7 +696,9 @@ const writeTurnContext = new AsyncLocalStorage<object>();
 // queue so a stale EWMA after a burst cannot shed on an idle gate.
 const WRITE_GATE_SHED_DEPTH = 8;
 const WRITE_GATE_SHED_EWMA_MS = 2_000;
-const WRITE_GATE_SHED_RETRY_AFTER_MS = 3_000;
+// At or under the pack-draw client's PACK_DRAW_RETRY_MAX_WAIT_MS (1500ms in
+// src/lib/packs.ts), so a shed draw auto-retries invisibly instead of erroring.
+const WRITE_GATE_SHED_RETRY_AFTER_MS = 1_500;
 const WRITE_GATE_EWMA_ALPHA = 0.2;
 
 function writeGateState(db: Db): WriteGateState | null {
