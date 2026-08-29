@@ -373,8 +373,12 @@ export function readConfig(): Config {
     // the screenshots go through the frontend rather than here, so the hourly
     // budget only has to cover honest re-tries.
     bugReportRatePerHour: readInt("BUG_REPORT_RATE_PER_HOUR", 5),
-    scoreSubmitPerHour: readInt("SCORE_SUBMIT_PER_HOUR", 20),
-    scoreSubmitGlobalRatePerMinute: readInt("SCORE_SUBMIT_GLOBAL_RATE_PER_MINUTE", 6),
+    // Sized for a real import session ("add all my missing scores"): one
+    // person pasting ~20 links a minute for a few minutes must fit inside
+    // both windows. The osu! client's own token bucket is what actually
+    // bounds API spend; these only keep the feature from starving it.
+    scoreSubmitPerHour: readInt("SCORE_SUBMIT_PER_HOUR", 120),
+    scoreSubmitGlobalRatePerMinute: readInt("SCORE_SUBMIT_GLOBAL_RATE_PER_MINUTE", 20),
     bridgeRatePerMinute: readInt("BRIDGE_RATE_PER_MINUTE", 6000),
     osuApiTargetPerMinute: readInt("OSU_API_TARGET_PER_MINUTE", 45),
     osuApiHardPerMinute: readInt("OSU_API_HARD_PER_MINUTE", 60),

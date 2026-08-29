@@ -183,9 +183,9 @@ function limitForBucket(config: Config, bucket: AbuseBucket): number {
     case "bugReport":
       return Math.max(1, config.bugReportRatePerHour ?? 5);
     case "scoreSubmit":
-      return Math.max(1, config.scoreSubmitPerHour ?? 20);
+      return Math.max(1, config.scoreSubmitPerHour ?? 120);
     case "scoreSubmitGlobal":
-      return Math.max(1, config.scoreSubmitGlobalRatePerMinute ?? 6);
+      return Math.max(1, config.scoreSubmitGlobalRatePerMinute ?? 20);
     case "bridge":
       return Math.max(1, config.bridgeRatePerMinute ?? 6000);
   }
