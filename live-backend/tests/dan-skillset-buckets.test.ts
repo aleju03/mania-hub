@@ -423,6 +423,45 @@ describe("the 4K Jumpstream arbitration", () => {
   });
 });
 
+describe("the stamina tile's jack veto", () => {
+  // AiAe [4K] Wafles' SHD (421066) with DT. LeoBlack reads 62% chordstream
+  // against 31% jack and finds no handstream cluster, but DT lifts MinaCalc's
+  // Handstream from fourth at 1.0x to first, which used to file it stamina.
+  const AIAE_DT = {
+    Handstream: 35.50, Stamina: 35.00, Chordjack: 34.43, Jumpstream: 34.31,
+    JackSpeed: 34.02, Technical: 33.36, Stream: 24.58,
+  };
+  const jacky = (jackShare: number | null) => ({
+    ...SPEEDJACK_CHART, patterns: [], techScore: 0.943, jsClusterTech: false,
+    lengthSeconds: 237, jackShare,
+  });
+
+  it("keeps a jack-contaminated chart off the tile even when Handstream wins", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", AIAE_DT, 237, 1.5, jacky(0.313))).not.toEqual(["stamina"]);
+    // Without the share stored, the old Handstream exemption stands.
+    expect(danSkillsetBucketsForValues(4, "rc", AIAE_DT, 237, 1.5, jacky(null))).toEqual(["stamina"]);
+  });
+
+  it("sets the bar off the corpora rather than off one chart", () => {
+    // Handstream packs run p95 0.280, so 0.30 is past them.
+    expect(danSkillsetBucketsForValues(4, "rc", AIAE_DT, 237, 1.5, jacky(0.30))).not.toEqual(["stamina"]);
+    expect(danSkillsetBucketsForValues(4, "rc", AIAE_DT, 237, 1.5, jacky(0.29))).toEqual(["stamina"]);
+  });
+
+  it("leaves a genuine handstream chart on the tile at any length", () => {
+    // The shape the exemption exists for: little jack, so nothing vetoes it.
+    expect(danSkillsetBucketsForValues(4, "rc", AIAE_DT, 30, 1, jacky(0.06))).toEqual(["stamina"]);
+  });
+
+  it("stops a vetoed chart falling through the arbitration back onto stamina", () => {
+    // Jumpstream argmax with a non-tech label is exactly what the arbitration
+    // files under stamina, so the veto has to reach it too.
+    const values = { ...AIAE_DT, Handstream: 20, Stamina: 20, Chordjack: 20, JackSpeed: 20 };
+    expect(danSkillsetBucketsForValues(4, "rc", values, 237, 1, jacky(0.35))).toEqual(["tech"]);
+    expect(danSkillsetBucketsForValues(4, "rc", values, 237, 1, jacky(0.05))).toEqual(["stamina"]);
+  });
+});
+
 describe("the stamina tile's length gate", () => {
   // Infectious Crying [4K] 1.2x (288bpm), beatmap 5066729: a 2:59 tech dump
   // whose Stamina rider edges Technical by 0.15 (0.4%), which is the whole

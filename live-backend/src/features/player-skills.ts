@@ -1130,6 +1130,33 @@ const JS_TECH_CLUSTER_CATEGORY = /tech|trill/i;
 // it would file 24-second cuts from named handstream packs under tech instead.
 const STAMINA_ARBITRATION_MIN_LENGTH_SECONDS = 90;
 
+// Jack contamination keeps a chart off the stamina tile whatever MinaCalc's
+// argmax says. AiAe [4K] Wafles' SHD (421066) is the measured case: LeoBlack
+// reads it as 62% chordstream against 31% jack (180BPM minijacks, 90BPM
+// chordjacks) and never finds a handstream cluster at all, yet DT lifts
+// MinaCalc's Handstream from fourth at 1.0x to first, so the chart filed tech
+// unrated and stamina with DT. The same chart cannot be two things because a
+// mod made it faster.
+//
+// The share, not the analyzer: this chart scores tech 0.943 and the dense
+// chordstream cuts the arbitration exists for score 0.94 to 1.00, so the tech
+// detector separates nothing here either. Cluster importance does, because it
+// weighs how much of the DIFFICULTY is jack rather than how much jack exists.
+//
+// 0.30 is set off the corpora the exemptions protect rather than off this
+// chart: mapper-named handstream packs run p90 0.224 and p95 0.280, jumpstream
+// p90 0.182 and p95 0.284, so 0.30 is past the 95th percentile of both. It sits
+// under CLUSTER_SHARE_MIN (0.40, where a chart becomes a jack chart outright),
+// which is the band this names: too jack to be endurance, not enough to be jack.
+//
+// Measured over the mapper-named 4K corpora, applied only where the Handstream
+// argmax carries the tile: the handstream corpus goes 90.3% to 88.0%
+// stamina-tiled, stamina 65.1% to 64.6%, and every other corpus moves under a
+// point. Vetoing every stamina verdict rather than the Handstream one costs
+// three times that (handstream to 87.0%, stamina to 62.9%) for charts a
+// Stamina argmax already earned on length.
+const STAMINA_TILE_JACK_VETO_SHARE = 0.30;
+
 function readRawDan(half: LeanHalfJson | null | undefined): number | null {
   const rawDan = Number(half?.rawDan);
   return Number.isFinite(rawDan) && rawDan > 0 ? rawDan : null;
@@ -2886,9 +2913,13 @@ function bucketsForClear(
   const arbitrationLength = enduranceSeconds(chart?.lengthSeconds ?? null, rate);
   const longEnoughToArbitrate = arbitrationLength == null
     || arbitrationLength >= STAMINA_ARBITRATION_MIN_LENGTH_SECONDS;
-  const effectiveTop = topSkillset === "Jumpstream" && chart?.jsClusterTech === false && longEnoughToArbitrate
-    ? "Stamina"
-    : topSkillset;
+  // The jack veto applies here too. Without it a chart it pushed off Handstream
+  // would fall into Jumpstream and the label would file it back on stamina.
+  const arbitrates = topSkillset === "Jumpstream"
+    && chart?.jsClusterTech === false
+    && longEnoughToArbitrate
+    && !jackContaminated(chart?.jackShare ?? null);
+  const effectiveTop = arbitrates ? "Stamina" : topSkillset;
   return buckets.filter((bucket) => bucket.skillsets
     ? effectiveTop != null && bucket.skillsets.includes(effectiveTop)
     : chartBelongsToTagBucket(bucket, chart));
@@ -2911,7 +2942,7 @@ function groupDanClearsBySkillset(
   for (const bucket of buckets) bySkillset.set(bucket.id, []);
   for (const clear of clears) {
     const chart = infoByBeatmap.get(clear.play.beatmapId);
-    const topSkillset = bucketingSkillset(clear.play.values, chart?.lengthSeconds ?? null, clear.play.rate, chart?.techScore ?? 0);
+    const topSkillset = bucketingSkillset(clear.play.values, chart?.lengthSeconds ?? null, clear.play.rate, chart?.techScore ?? 0, chart?.jackShare ?? null);
     for (const bucket of bucketsForClear(buckets, topSkillset, chart, clear.play.rate)) {
       bySkillset.get(bucket.id)!.push(clear);
     }
@@ -3151,6 +3182,17 @@ const TECH_NEAR_TIE_MIN_SCORE = 0.8;
 // length.
 const STAMINA_TILE_MIN_LENGTH_SECONDS = 240;
 
+/** Whether LeoBlack's jack clusters carry too much of a chart to call it endurance. */
+function jackContaminated(jackShare: number | null): boolean {
+  return jackShare != null && jackShare >= STAMINA_TILE_JACK_VETO_SHARE;
+}
+
+// Everything that is not one of the two endurance readings, for a chart whose
+// jack share disqualifies both.
+const RICE_MSD_SKILLSETS = SKILL_RATING_SKILLSETS.filter(
+  (skillset) => skillset !== "Overall" && skillset !== "Stamina" && skillset !== "Handstream",
+);
+
 // The base skillsets, i.e. everything the stamina rider rides on top of.
 const BASE_MSD_SKILLSETS = SKILL_RATING_SKILLSETS.filter(
   (skillset) => skillset !== "Overall" && skillset !== "Stamina",
@@ -3180,6 +3222,7 @@ function bucketingSkillset(
   lengthSeconds: number | null = null,
   rate = 1,
   chartTechScore = 0,
+  chartJackShare: number | null = null,
 ): string | null {
   const top = dominantSkillset(values);
   if (top == null) return top;
@@ -3215,9 +3258,16 @@ function bucketingSkillset(
       && technical >= stream - SPEED_NEAR_TIE_MSD;
     return techBacked ? "Technical" : "Stream";
   }
+  // Handstream normally holds the tile at any length because it names a
+  // pattern rather than riding on one, but a jack-contaminated chart is not
+  // the pattern it claims (STAMINA_TILE_JACK_VETO_SHARE), so it re-files
+  // without either endurance skillset.
+  if (nearTie === "Handstream" && jackContaminated(chartJackShare)) {
+    return bucketingSkillset(pickSkillsets(values, RICE_MSD_SKILLSETS), null, 1, chartTechScore, chartJackShare);
+  }
   if (nearTie !== "Stamina" || lengthSeconds == null) return nearTie;
-  if (demandsEndurance) return nearTie;
-  return bucketingSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS), null, 1, chartTechScore);
+  if (demandsEndurance && !jackContaminated(chartJackShare)) return nearTie;
+  return bucketingSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS), null, 1, chartTechScore, chartJackShare);
 }
 
 /**
@@ -3257,7 +3307,7 @@ export function danSkillsetBucketsForValues(
   rate = 1,
   chart?: ChartSkillInfo,
 ): string[] {
-  const top = bucketingSkillset(values, lengthSeconds, rate, chart?.techScore ?? 0);
+  const top = bucketingSkillset(values, lengthSeconds, rate, chart?.techScore ?? 0, chart?.jackShare ?? null);
   return bucketsForClear(danSkillsetBuckets(keyCount, side), top, chart, rate).map((bucket) => bucket.id);
 }
 
