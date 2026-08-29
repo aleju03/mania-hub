@@ -1815,8 +1815,12 @@ msgid "a map"
 msgstr "un mapa"
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
-msgstr "Un pase justo en el mínimo acredita el nivel completo del chart, igual que pasar el dan real, y el primer tramo por encima también: un 96.9% en una escala de 96% es un clear normal, sin bono. Por encima de eso el bono se mantiene pequeño hasta el 99%, donde empieza la subida de verdad. Quedarse un poco corto todavía acredita algo: la play cuenta como clear de un nivel más bajo, llegando como mucho a un nivel y cuarto menos en el corte. Las escalas regulares siguen acreditando hasta 4 puntos por debajo del mínimo. Las escalas LN paran en 1 punto, porque la precisión sale barata en las notas largas, y el bono de 4K LN está aplanado por lo mismo:"
+msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, and 4K LN's bonus is flattened:"
+msgstr "Un pase justo en el mínimo acredita el nivel completo del chart, igual que pasar el dan real, y el primer tramo por encima también: un 96.9% en una escala de 96% es un clear normal, sin bono. Por encima de eso el bono se mantiene pequeño hasta el 99%, donde empieza la subida de verdad. Quedarse un poco corto todavía acredita algo: la play cuenta como clear de un nivel más bajo, llegando como mucho a un nivel y cuarto menos en el corte. Las escalas regulares siguen acreditando hasta 4 puntos por debajo del mínimo. Las escalas LN paran en 1 punto, y el bono de 4K LN está aplanado:"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+#~ msgstr "Un pase justo en el mínimo acredita el nivel completo del chart, igual que pasar el dan real, y el primer tramo por encima también: un 96.9% en una escala de 96% es un clear normal, sin bono. Por encima de eso el bono se mantiene pequeño hasta el 99%, donde empieza la subida de verdad. Quedarse un poco corto todavía acredita algo: la play cuenta como clear de un nivel más bajo, llegando como mucho a un nivel y cuarto menos en el corte. Las escalas regulares siguen acreditando hasta 4 puntos por debajo del mínimo. Las escalas LN paran en 1 punto, porque la precisión sale barata en las notas largas, y el bono de 4K LN está aplanado por lo mismo:"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: a play counts as a clear of a lower level, bottoming out one full level down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
@@ -1903,6 +1907,7 @@ msgstr "Acc"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/lib/replay-overlays.ts
+#: src/routes/dan-estimates.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "Accuracy"
@@ -2842,10 +2847,6 @@ msgstr "Explorar skins"
 #: src/routes/privacy.tsx
 msgid "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
 msgstr "Las preferencias del navegador y las cachés locales permanecen en tu dispositivo hasta que caducan, se reemplazan o borras localStorage. Las sesiones de inicio de sesión de osu! pueden durar hasta 30 días, salvo que cierres sesión antes."
-
-#: src/routes/replay.tsx
-msgid "Watch osu!mania replays in your browser."
-msgstr "Mira replays de osu!mania en tu navegador."
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Buffering audio"
@@ -8297,6 +8298,12 @@ msgstr "Top play más antiguo"
 msgid "on {0}"
 msgstr "el {0}"
 
+#. placeholder {0}: example.map
+#. placeholder {1}: example.dan
+#: src/routes/dan-estimates.tsx
+msgid "On {0}, rated {1}"
+msgstr "En {0}, nivel {1}"
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "On /skins for anyone to download"
 msgstr "En /skins para que cualquiera la descargue"
@@ -12064,6 +12071,15 @@ msgstr "el nivel del chart -1.05"
 msgid "the chart's level -1.25"
 msgstr "el nivel del chart -1.25"
 
+#. placeholder {0}: formatCreditOffset(held)
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level {0}"
+msgstr "el nivel del chart {0}"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.06"
+msgstr "el nivel del chart +0.06"
+
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.07"
 msgstr "el nivel del chart +0.07"
@@ -12131,6 +12147,10 @@ msgstr "el nivel del chart +1.5"
 #: src/routes/dan-estimates.tsx
 #~ msgid "The courses are the real ones, matched by beatmap. These are all of them, and only these: a re-upload of the same pack by somebody else does not count, and neither does a practice pack that borrows a course's name."
 #~ msgstr "Los cursos son los de verdad, identificados por beatmap. Estos son todos, y solo estos: una resubida del mismo pack por otra persona no cuenta, y un pack de práctica que toma prestado el nombre de un curso tampoco."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The curve is still being tuned, so these numbers can change."
+#~ msgstr "La curva todavía se está ajustando, así que estos números pueden cambiar."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The customized settings are too large to store"
@@ -12483,6 +12503,10 @@ msgstr "Estos son los packs que se comprueban, identificados por beatmap. Un pas
 #: src/routes/dan-estimates.tsx
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 #~ msgstr "Estas estimaciones no son clears de dan reales. Nadie aquí fue verificado contra un dan de verdad. En su lugar, Mania Hub le da a cada chart un nivel de dan propio, mira los charts que ya pasaste y lee un nivel a partir de ellos. Por eso cada dan estimado se escribe con un \"~\" adelante y por eso la tabla se llama a sí misma un orden aproximado."
+
+#: src/routes/dan-estimates.tsx
+msgid "These numbers are subject to change."
+msgstr "Estos números pueden cambiar."
 
 #: src/routes/tracker.tsx
 msgid "These players finished the same maps within seconds of each other, repeatedly: a multiplayer lobby"
@@ -13541,6 +13565,10 @@ msgstr "Calentando a este jugador... las primeras sacadas pueden tardar un poco"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Watch"
 msgstr "Ver"
+
+#: src/routes/replay.tsx
+msgid "Watch osu!mania replays in your browser."
+msgstr "Mira replays de osu!mania en tu navegador."
 
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx

@@ -1824,8 +1824,12 @@ msgid "a map"
 msgstr "某张谱面"
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
-msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样；通过线上方的第一小段也是如此：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成也一直很小，到 99% 才真正开始上升。差一点没到通过线也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表在通过线以下 4 个百分点内仍然计入。LN 段位表只到 1 个百分点，因为长条上准确率很容易保持，出于同样的原因 4K LN 的加成也被压平了："
+msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, and 4K LN's bonus is flattened:"
+msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样；通过线上方的第一小段也是如此：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成也一直很小，到 99% 才真正开始上升。差一点没到通过线也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表在通过线以下 4 个百分点内仍然计入。LN 段位表只到 1 个百分点，4K LN 的加成也被压平了："
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+#~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样；通过线上方的第一小段也是如此：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成也一直很小，到 99% 才真正开始上升。差一点没到通过线也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表在通过线以下 4 个百分点内仍然计入。LN 段位表只到 1 个百分点，因为长条上准确率很容易保持，出于同样的原因 4K LN 的加成也被压平了："
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: a play counts as a clear of a lower level, bottoming out one full level down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
@@ -1912,6 +1916,7 @@ msgstr "准确率"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/lib/replay-overlays.ts
+#: src/routes/dan-estimates.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "Accuracy"
@@ -2851,10 +2856,6 @@ msgstr "浏览皮肤"
 #: src/routes/privacy.tsx
 msgid "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
 msgstr "浏览器偏好和本地缓存会一直留在你的设备上，直到它们过期、被替换，或你清除 localStorage。osu! 登录会话最长可保持 30 天，除非你提前登出。"
-
-#: src/routes/replay.tsx
-msgid "Watch osu!mania replays in your browser."
-msgstr "在浏览器中观看 osu!mania 回放。"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Buffering audio"
@@ -8306,6 +8307,12 @@ msgstr "最早的最佳成绩"
 msgid "on {0}"
 msgstr "于 {0}"
 
+#. placeholder {0}: example.map
+#. placeholder {1}: example.dan
+#: src/routes/dan-estimates.tsx
+msgid "On {0}, rated {1}"
+msgstr "在 {0} 上，段位 {1}"
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "On /skins for anyone to download"
 msgstr "出现在 /skins，任何人都可以下载"
@@ -12073,6 +12080,15 @@ msgstr "谱面段位 -1.05"
 msgid "the chart's level -1.25"
 msgstr "谱面段位 -1.25"
 
+#. placeholder {0}: formatCreditOffset(held)
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level {0}"
+msgstr "谱面段位 {0}"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.06"
+msgstr "谱面段位 +0.06"
+
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.07"
 msgstr "谱面段位 +0.07"
@@ -12140,6 +12156,10 @@ msgstr "谱面段位 +1.5"
 #: src/routes/dan-estimates.tsx
 #~ msgid "The courses are the real ones, matched by beatmap. These are all of them, and only these: a re-upload of the same pack by somebody else does not count, and neither does a practice pack that borrows a course's name."
 #~ msgstr "课题是真正的那些，按谱面来认。就是这些，也只有这些：别人重新上传的同一个图包不算，借用课题名字的练习图包也不算。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The curve is still being tuned, so these numbers can change."
+#~ msgstr "这条曲线仍在调整中，这些数字可能会变化。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The customized settings are too large to store"
@@ -12492,6 +12512,10 @@ msgstr "这些是目前会核对的图包，按谱面匹配。通过必须发生
 #: src/routes/dan-estimates.tsx
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 #~ msgstr "这些估算不是真正的段位通过。这里没有人真的被段位课题检验过。Mania Hub 的做法是给每张谱面各自评一个段位，看你已经通过了哪些谱面，再从中读出一个等级。这就是为什么每个估算段位前面都写着「~」，排行榜也自称只是粗略排序。"
+
+#: src/routes/dan-estimates.tsx
+msgid "These numbers are subject to change."
+msgstr "这些数字可能会变化。"
 
 #: src/routes/tracker.tsx
 msgid "These players finished the same maps within seconds of each other, repeatedly: a multiplayer lobby"
@@ -13550,6 +13574,10 @@ msgstr "正在准备这名玩家…第一次抽卡可能要等一会儿"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Watch"
 msgstr "观看"
+
+#: src/routes/replay.tsx
+msgid "Watch osu!mania replays in your browser."
+msgstr "在浏览器中观看 osu!mania 回放。"
 
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx

@@ -1815,8 +1815,12 @@ msgid "a map"
 msgstr "a map"
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
-msgstr "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, and 4K LN's bonus is flattened:"
+msgstr "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, and 4K LN's bonus is flattened:"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
+#~ msgstr "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: a play counts as a clear of a lower level, bottoming out one full level down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
@@ -1903,6 +1907,7 @@ msgstr "accuracy"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/lib/replay-overlays.ts
+#: src/routes/dan-estimates.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "Accuracy"
@@ -2842,10 +2847,6 @@ msgstr "Browse skins"
 #: src/routes/privacy.tsx
 msgid "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
 msgstr "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
-
-#: src/routes/replay.tsx
-msgid "Watch osu!mania replays in your browser."
-msgstr "Watch osu!mania replays in your browser."
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Buffering audio"
@@ -8305,6 +8306,12 @@ msgstr "Oldest Top Play"
 msgid "on {0}"
 msgstr "on {0}"
 
+#. placeholder {0}: example.map
+#. placeholder {1}: example.dan
+#: src/routes/dan-estimates.tsx
+msgid "On {0}, rated {1}"
+msgstr "On {0}, rated {1}"
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "On /skins for anyone to download"
 msgstr "On /skins for anyone to download"
@@ -12072,6 +12079,15 @@ msgstr "the chart's level -1.05"
 msgid "the chart's level -1.25"
 msgstr "the chart's level -1.25"
 
+#. placeholder {0}: formatCreditOffset(held)
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level {0}"
+msgstr "the chart's level {0}"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.06"
+msgstr "the chart's level +0.06"
+
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.07"
 msgstr "the chart's level +0.07"
@@ -12139,6 +12155,10 @@ msgstr "the chart's level +1.5"
 #: src/routes/dan-estimates.tsx
 #~ msgid "The courses are the real ones, matched by beatmap. These are all of them, and only these: a re-upload of the same pack by somebody else does not count, and neither does a practice pack that borrows a course's name."
 #~ msgstr "The courses are the real ones, matched by beatmap. These are all of them, and only these: a re-upload of the same pack by somebody else does not count, and neither does a practice pack that borrows a course's name."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The curve is still being tuned, so these numbers can change."
+#~ msgstr "The curve is still being tuned, so these numbers can change."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The customized settings are too large to store"
@@ -12491,6 +12511,10 @@ msgstr "These are the packs checked, matched by beatmap. A pass has to be on one
 #: src/routes/dan-estimates.tsx
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 #~ msgstr "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
+
+#: src/routes/dan-estimates.tsx
+msgid "These numbers are subject to change."
+msgstr "These numbers are subject to change."
 
 #: src/routes/tracker.tsx
 msgid "These players finished the same maps within seconds of each other, repeatedly: a multiplayer lobby"
@@ -13549,6 +13573,10 @@ msgstr "Warming this player up... first draws can take a moment"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Watch"
 msgstr "Watch"
+
+#: src/routes/replay.tsx
+msgid "Watch osu!mania replays in your browser."
+msgstr "Watch osu!mania replays in your browser."
 
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx

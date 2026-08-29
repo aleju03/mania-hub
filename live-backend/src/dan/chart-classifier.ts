@@ -5,8 +5,8 @@ import type { DanEstimate, DanEstimateInput, DanSkillFamily } from "./dan-estima
 import { analyzeManiaPatterns } from "./dan-estimator/patterns.js";
 import type { ManiaPatternAnalysis } from "./dan-estimator/types.js";
 import { extractDanFeatures } from "./dan-estimator/features.js";
-import { getInputRate } from "./dan-estimator/labels.js";
-import { LN_LADDER_TOP, estimateLnDan, lnPrimaryMinRatioFor } from "./dan-estimator/ln.js";
+import { getInputRate, parseDan } from "./dan-estimator/labels.js";
+import { LN_LADDER_TOP, estimateLnDan, lnPrimaryMinRatioFor, parseLnDan } from "./dan-estimator/ln.js";
 import {
   parseLeoBlackLnHalf,
   parseLeoBlackRcHalf,
@@ -187,6 +187,21 @@ function formatDanTableLabel(
 
 export function danTableLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): string | null {
   return formatDanTableLabel(rawDan, side, keyCount, "credit");
+}
+
+// Each ladder speaks its own community's language. 4K rice runs 1-10 then the
+// Reform greek levels (parseDan), 4K LN is numeric 1-17 and never goes greek
+// (parseLnDan). 6K/7K rawDans arrive on their leoblack table scale, whose
+// level names are the real Sunny/Jinjin ladders (7K past 10th = Gamma,
+// Azimuth, Zenith, Stellium; 6K LN = Terra..Finish) - the 4K greek ladder
+// ("alpha") does not exist there, so those keymodes label from their table.
+export function danLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): string {
+  if (keyCount !== 4) {
+    const tableLabel = danTableLabelFor(rawDan, side, keyCount);
+    if (tableLabel != null) return tableLabel;
+  }
+  const parsed = side === "ln" && keyCount === 4 ? parseLnDan(rawDan) : parseDan(rawDan);
+  return `${parsed.label}${parsed.variant ?? ""}`;
 }
 
 /** The label of an analyzer verdict, preserving the source table's tier bands. */

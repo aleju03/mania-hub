@@ -13,12 +13,10 @@ import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, per
 import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getModAcronyms, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
-import { danTableCeilingFor, danTableLabelFor, danTableVerdictLabelFor } from "../dan/chart-classifier.js";
+import { danLabelFor, danTableCeilingFor, danTableVerdictLabelFor } from "../dan/chart-classifier.js";
 import { creditedDanFor, danCreditBelowBarWindowFor } from "../dan/dan-credit.js";
 import { loadDanCourseClears } from "./dan-courses.js";
 import type { DanCourseClear, DanCourseCreditOptions } from "./dan-courses.js";
-import { parseDan } from "../dan/dan-estimator/labels.js";
-import { parseLnDan } from "../dan/dan-estimator/ln.js";
 import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 
 // Etterna-style player skill ratings from the player's plays: each play gets
@@ -1812,21 +1810,6 @@ function danVerdictAt(rawDan: number, side: "rc" | "ln", keyCount: number, clear
 function isBeyondDanTable(rawDan: number, side: "rc" | "ln", keyCount: number): boolean {
   const ceiling = danTableCeilingFor(side, keyCount);
   return ceiling != null && rawDan >= ceiling;
-}
-
-// Each ladder speaks its own community's language. 4K rice runs 1-10 then the
-// Reform greek levels (parseDan), 4K LN is numeric 1-15 and never goes greek
-// (parseLnDan). 6K/7K rawDans arrive on their leoblack table scale, whose
-// level names are the real Sunny/Jinjin ladders (7K past 10th = Gamma,
-// Azimuth, Zenith, Stellium; 6K LN = Terra..Finish) - the 4K greek ladder
-// ("alpha") does not exist there, so those keymodes label from their table.
-function danLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): string {
-  if (keyCount !== 4) {
-    const tableLabel = danTableLabelFor(rawDan, side, keyCount);
-    if (tableLabel != null) return tableLabel;
-  }
-  const parsed = side === "ln" && keyCount === 4 ? parseLnDan(rawDan) : parseDan(rawDan);
-  return `${parsed.label}${parsed.variant ?? ""}`;
 }
 
 // A chart verdict sits on one of the source table's five named tiers, whose

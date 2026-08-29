@@ -1,10 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
 import { getDanImageSrc } from "../lib/dan-images";
+import { DanLevelBadge } from "../components/player/DanLevelBadge";
+import { creditedDanFor, danCreditBelowBarWindowFor, danCreditNearBarCapFor, danCreditOffset } from "#dan/dan-credit";
+import { danLabelFor } from "#dan/chart-classifier";
 import { formatNumber } from "../lib/format";
 import { ModBadge } from "../components/ui/ModBadge";
 import { pageSeo } from "../lib/seo";
@@ -90,14 +93,19 @@ type LadderKey = "4k-regular" | "4k-ln" | "7k-regular" | "7k-ln" | "6k-regular" 
 // Deliberately unranked picks (loved and graveyard), because the ladders are
 // read on charts the ranked section never got. Every dan here is the estimate
 // the site itself stores for that chart, not a hand-written guess.
-const CHART_EXAMPLES: Array<{ id: number; map: string; ladder: LadderKey; dan: string }> = [
-  { id: 2675345, map: "Sewerslvt - Cyberia lyr3 [4K Scalpels]", ladder: "4k-regular", dan: "4" },
-  { id: 1561270, map: "Laur - A Lasting Promise [4K EXHAUST]", ladder: "4k-regular", dan: "7" },
-  { id: 1887434, map: "CROOVE - Aquaris [4K Wanderer]", ladder: "4k-regular", dan: "10" },
-  { id: 2793593, map: "saikoro - far in the blue sky... [4K 42]", ladder: "4k-regular", dan: "delta+" },
-  { id: 3629313, map: "youman - R.I.P. [4K cacophony 1.1x (297bpm)]", ladder: "4k-ln", dan: "10" },
-  { id: 4596114, map: "-45 - G e n g a o z o [7K N G]", ladder: "7k-regular", dan: "gamma+" },
-  { id: 1325722, map: "Kobaryo - Cartoon Candy [CS' 6K Milk Chocolate]", ladder: "6k-regular", dan: "terra+" },
+// rawDan is the number behind the label, kept because the credit curve scores
+// a real accuracy against it: rounding "alpha++" back to a bare alpha would
+// have the badge under-read the chart it names.
+const CHART_EXAMPLES: Array<{ id: number; map: string; ladder: LadderKey; dan: string; rawDan: number }> = [
+  { id: 2675345, map: "Sewerslvt - Cyberia lyr3 [4K Scalpels]", ladder: "4k-regular", dan: "4", rawDan: 4.04 },
+  { id: 1561270, map: "Laur - A Lasting Promise [4K EXHAUST]", ladder: "4k-regular", dan: "7", rawDan: 6.93 },
+  { id: 1887434, map: "CROOVE - Aquaris [4K Wanderer]", ladder: "4k-regular", dan: "10", rawDan: 10.05 },
+  { id: 3729620, map: "jea - Makiba [4K Extra]", ladder: "4k-regular", dan: "alpha++", rawDan: 11.44 },
+  { id: 2793593, map: "saikoro - far in the blue sky... [4K 42]", ladder: "4k-regular", dan: "delta+", rawDan: 14.25 },
+  { id: 3629313, map: "youman - R.I.P. [4K cacophony 1.1x (297bpm)]", ladder: "4k-ln", dan: "10", rawDan: 10 },
+  { id: 538161, map: "Team Grimoire - C18H27NO3 [Arvie's 7K GRAVITY]", ladder: "7k-ln", dan: "9", rawDan: 9 },
+  { id: 4596114, map: "-45 - G e n g a o z o [7K N G]", ladder: "7k-regular", dan: "gamma+", rawDan: 11.2 },
+  { id: 1325722, map: "Kobaryo - Cartoon Candy [CS' 6K Milk Chocolate]", ladder: "6k-regular", dan: "terra+", rawDan: 9.5 },
 ];
 
 // Measured against the production DB in August 2026 (read-only). The article
@@ -397,8 +405,8 @@ function DanEstimatesPage() {
               opens. A near miss under the bar
               still credits something: a play counts as a clear of a lower level, bottoming out a
               level and a quarter down at the cutoff. The regular ladders keep crediting to 4
-              points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to
-              hold on long notes, and 4K LN's bonus is flattened for the same reason:
+              points under the bar. The LN ladders stop at 1 point, and 4K LN's bonus is
+              flattened:
             </Trans>
           </P>
           <CreditCurveTabs />
@@ -1210,6 +1218,7 @@ function CreditCurveTabs() {
   const tabs = [
     {
       label: t`Regular`,
+      ladder: { key: "4k-regular", bar: 0.96, side: "rc" as const, keyCount: 4, example: 3729620 },
       head: [t`Stable-formula acc (96%)`, t`Credit`],
       note: stableFormulaNote,
       rows: [
@@ -1218,7 +1227,8 @@ function CreditCurveTabs() {
         ["99%", t`the chart's level +0.7`],
         ["98.7%", t`the chart's level +0.2`],
         ["98%", t`the chart's level +0.12`],
-        ["96-96.99%", t`the chart's full level`],
+        ["97.5%", t`the chart's level +0.06`],
+        ["96-97%", t`the chart's full level`],
         ["95%", t`the chart's level -0.51`],
         ["94%", t`the chart's level -0.76`],
         ["92%", t`the chart's level -1.25`],
@@ -1227,6 +1237,7 @@ function CreditCurveTabs() {
     },
     {
       label: t`4K LN`,
+      ladder: { key: "4k-ln", bar: 0.97, side: "ln" as const, keyCount: 4, example: 3629313 },
       head: [t`ScoreV2 acc (97%)`, t`Credit`],
       note: t`Stable scores are recalculated with ScoreV2 from their judgements, so the accuracy used here may be lower than the displayed value.`,
       rows: [
@@ -1244,6 +1255,7 @@ function CreditCurveTabs() {
     },
     {
       label: t`6K/7K LN`,
+      ladder: { key: "6k7k-ln", bar: 0.95, side: "ln" as const, keyCount: 7, example: 538161 },
       head: [t`Stable-formula acc (95%)`, t`Credit`],
       note: stableFormulaNote,
       rows: [
@@ -1279,8 +1291,227 @@ function CreditCurveTabs() {
           </button>
         ))}
       </div>
+      <CreditCurvePlot
+        key={active.ladder.key}
+        ladder={active.ladder.key}
+        bar={active.ladder.bar}
+        side={active.ladder.side}
+        keyCount={active.ladder.keyCount}
+        example={CHART_EXAMPLES.find((chart) => chart.id === active.ladder.example)}
+        belowWindow={danCreditBelowBarWindowFor(active.ladder.side, active.ladder.keyCount)}
+        nearBarCap={danCreditNearBarCapFor(active.ladder.side, active.ladder.keyCount)}
+      />
       <Table head={active.head} rows={active.rows} />
       <p className="text-[12px] leading-5 text-osu-f2">{active.note}</p>
+      <p className="text-[12px] leading-5 text-osu-f2">
+        <Trans>These numbers are subject to change.</Trans>
+      </p>
+    </div>
+  );
+}
+
+/* The credit curve, scrubbable. The table under it lists the anchor points the
+   curve is built from, which reads as a set of thresholds: people kept asking
+   whether an accuracy that falls between two rows credits nothing. Every point
+   here is danCreditOffset itself rather than a redrawn approximation, so the
+   ramp out of the flat zone is visibly continuous and the cliffs (the near-bar
+   cap under the bar, no credit at all past the window) sit where they really
+   are. */
+const CURVE_HEIGHT = 190;
+const CURVE_PAD = { top: 16, right: 16, bottom: 26, left: 46 };
+const CURVE_SAMPLES = 180;
+// A short strip left of the credit window, so "nothing at all" is a place on
+// the plot rather than something implied by where the line stops.
+const CURVE_DEAD_STRIP = 0.08;
+
+function formatAccuracy(accuracy: number): string {
+  return `${(accuracy * 100).toFixed(2)}%`;
+}
+
+/* Two decimals everywhere except the first tenth of a level, where they would
+   print a real bonus as +0.00 - which is the exact misreading this plot is
+   here to clear up. */
+function formatCreditOffset(offset: number): string {
+  const magnitude = Math.abs(offset);
+  const body = magnitude < 0.1 ? magnitude.toFixed(3).replace(/0$/, "") : magnitude.toFixed(2);
+  return `${offset < 0 ? "-" : "+"}${body}`;
+}
+
+function CreditCurvePlot({ ladder, bar, side, keyCount, example, belowWindow, nearBarCap }: {
+  ladder: string;
+  bar: number;
+  side: "rc" | "ln";
+  keyCount: number;
+  example?: (typeof CHART_EXAMPLES)[number];
+  belowWindow: number;
+  nearBarCap: number;
+}) {
+  const { t } = useLingui();
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(640);
+  const [accuracy, setAccuracy] = useState(bar);
+  const draggingRef = useRef(false);
+  /* Once per visit, like the page's other events: the question is how many
+     readers scrub the curve at all, not how far they drag it. The ladder rides
+     along because the tab someone reaches for is the interesting half. */
+  const scrubCounted = useRef(false);
+  const scrub = (next: number) => {
+    if (!scrubCounted.current) {
+      scrubCounted.current = true;
+      track("dan_estimates_curve", { ladder });
+    }
+    setAccuracy(next);
+  };
+
+  useEffect(() => setAccuracy(bar), [bar]);
+
+  useLayoutEffect(() => {
+    const el = hostRef.current;
+    if (!el) return;
+    const update = () => setWidth(el.getBoundingClientRect().width || 640);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const options = { belowBarWindow: belowWindow, nearBarCap };
+  const offsetAt = (value: number) => danCreditOffset(value, bar, options);
+  const lo = bar - belowWindow;
+  const xLo = lo - (1 - lo) * CURVE_DEAD_STRIP;
+  const yHi = offsetAt(1) ?? 1.5;
+  const yLo = offsetAt(lo) ?? -1.25;
+
+  const plotW = Math.max(160, width - CURVE_PAD.left - CURVE_PAD.right);
+  const plotH = CURVE_HEIGHT - CURVE_PAD.top - CURVE_PAD.bottom;
+  const x = (value: number) => CURVE_PAD.left + ((value - xLo) / (1 - xLo)) * plotW;
+  const y = (offset: number) => CURVE_PAD.top + ((yHi - offset) / (yHi - yLo || 1)) * plotH;
+
+  // Split at the bar: the near-bar cap makes the credit jump there, and one
+  // polyline would draw that cliff as a slope through values nothing scores.
+  const sample = (from: number, to: number) => {
+    const points: string[] = [];
+    for (let i = 0; i <= CURVE_SAMPLES; i += 1) {
+      const at = from + ((to - from) * i) / CURVE_SAMPLES;
+      const offset = offsetAt(at);
+      if (offset == null) continue;
+      points.push(`${x(at).toFixed(2)},${y(offset).toFixed(2)}`);
+    }
+    return points.join(" ");
+  };
+  const belowBarPoints = sample(lo, bar - 1e-6);
+  const aboveBarPoints = sample(bar, 1);
+  // The near-bar cap makes the credit jump at the bar rather than meet it, so
+  // the two halves end at different heights. Left as a bare gap it reads as a
+  // drawing bug; the open/closed pair with a dashed riser between them is how
+  // a step discontinuity is written, and says which side the bar belongs to.
+  const barEdgeOffset = offsetAt(bar - 1e-6);
+
+  const held = offsetAt(accuracy);
+  /* The offset alone is an abstraction. Run it through one chart the page has
+     already put a level on, and the badge is the answer in the units people
+     actually argue in: the same accuracy that reads "+0.7" moves this chart's
+     badge up a level in front of them. */
+  const creditedDan = example == null ? null : creditedDanFor(example.rawDan, accuracy, bar, side, keyCount);
+  const creditedLabel = creditedDan == null ? null : danLabelFor(creditedDan, side, keyCount);
+  const creditLabel = held == null
+    ? t`nothing`
+    : held === 0
+      ? t`the chart's full level`
+      : t`the chart's level ${formatCreditOffset(held)}`;
+
+  const accuracyFor = (clientX: number) => {
+    const rect = hostRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return accuracy;
+    const withinPlot = (clientX - rect.left - CURVE_PAD.left) / plotW;
+    return xLo + Math.max(0, Math.min(1, withinPlot)) * (1 - xLo);
+  };
+  const nudge = (points: number) => {
+    scrub(Math.max(xLo, Math.min(1, accuracy + points / 100)));
+  };
+  const onKeyDown = (event: ReactKeyboardEvent<SVGSVGElement>) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowDown") nudge(event.shiftKey ? -0.01 : -0.1);
+    else if (event.key === "ArrowRight" || event.key === "ArrowUp") nudge(event.shiftKey ? 0.01 : 0.1);
+    else if (event.key === "Home") scrub(xLo);
+    else if (event.key === "End") scrub(1);
+    else return;
+    event.preventDefault();
+  };
+
+  return (
+    <div ref={hostRef} className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="text-2xl font-bold tabular-nums text-white">{formatAccuracy(accuracy)}</span>
+        <span className="text-base font-bold text-osu-f1 sm:text-lg">{creditLabel}</span>
+        {example && (
+          <span className="ml-auto flex items-center">
+            {creditedLabel == null
+              ? <span className="text-lg font-bold text-osu-f1">{t`nothing`}</span>
+              : <DanLevelBadge label={creditedLabel} keyCount={keyCount} side={side} formatLabel={(value) => value} />}
+          </span>
+        )}
+      </div>
+      {example && (
+        <p className="text-[12px] leading-5 text-osu-f1">
+          <Trans>On {example.map}, rated {example.dan}</Trans>
+        </p>
+      )}
+      <svg
+        width={width}
+        height={CURVE_HEIGHT}
+        className="touch-none select-none outline-none"
+        role="slider"
+        tabIndex={0}
+        aria-label={t`Accuracy`}
+        aria-valuemin={Number((xLo * 100).toFixed(2))}
+        aria-valuemax={100}
+        aria-valuenow={Number((accuracy * 100).toFixed(2))}
+        aria-valuetext={`${formatAccuracy(accuracy)}, ${creditLabel}`}
+        onKeyDown={onKeyDown}
+        onPointerDown={(event) => {
+          draggingRef.current = true;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          scrub(accuracyFor(event.clientX));
+        }}
+        onPointerMove={(event) => {
+          if (event.pointerType !== "mouse" && !draggingRef.current) return;
+          scrub(accuracyFor(event.clientX));
+        }}
+        onPointerUp={() => { draggingRef.current = false; }}
+        onPointerCancel={() => { draggingRef.current = false; }}
+      >
+        <line x1={CURVE_PAD.left} x2={CURVE_PAD.left + plotW} y1={y(0)} y2={y(0)} className="stroke-osu-b3" strokeDasharray="3 4" />
+        <line x1={x(bar)} x2={x(bar)} y1={CURVE_PAD.top} y2={CURVE_PAD.top + plotH} className="stroke-osu-b3" strokeDasharray="3 4" />
+        {[yHi, 0, yLo].map((offset) => (
+          <text key={offset} x={CURVE_PAD.left - 8} y={y(offset) + 4} textAnchor="end" className="fill-osu-f1 text-[11px] tabular-nums">
+            {offset === 0 ? "0" : formatCreditOffset(offset)}
+          </text>
+        ))}
+        <text x={x(xLo)} y={CURVE_HEIGHT - 8} textAnchor="start" className="fill-osu-f1 text-[11px]">{t`nothing`}</text>
+        <text x={x(bar)} y={CURVE_HEIGHT - 8} textAnchor="middle" className="fill-osu-f1 text-[11px] tabular-nums">{`${(bar * 100).toFixed(0)}%`}</text>
+        <text x={x(1)} y={CURVE_HEIGHT - 8} textAnchor="end" className="fill-osu-f1 text-[11px] tabular-nums">100%</text>
+        <polyline points={belowBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" className="stroke-osu-blue" />
+        <polyline points={aboveBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" className="stroke-osu-blue" />
+        {barEdgeOffset != null && (
+          <>
+            <line
+              x1={x(bar)}
+              x2={x(bar)}
+              y1={y(barEdgeOffset)}
+              y2={y(0)}
+              strokeWidth={2}
+              strokeDasharray="2 4"
+              className="stroke-osu-blue/45"
+            />
+            <circle cx={x(bar)} cy={y(barEdgeOffset)} r={4} strokeWidth={2} className="fill-osu-b6 stroke-osu-blue" />
+            <circle cx={x(bar)} cy={y(0)} r={3.5} className="fill-osu-blue" />
+          </>
+        )}
+        <line x1={x(accuracy)} x2={x(accuracy)} y1={CURVE_PAD.top} y2={CURVE_PAD.top + plotH} className="stroke-osu-f1/60" />
+        {held != null && (
+          <circle cx={x(accuracy)} cy={y(held)} r={5} strokeWidth={2} className="fill-osu-blue stroke-osu-b6" />
+        )}
+      </svg>
     </div>
   );
 }
