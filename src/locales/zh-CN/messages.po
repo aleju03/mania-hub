@@ -348,8 +348,8 @@ msgstr "{0} 个字符"
 
 #. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
-msgid "{0} clears"
-msgstr "{0} 次通过"
+#~ msgid "{0} clears"
+#~ msgstr "{0} 次通过"
 
 #. placeholder {0}: formatNumber(card.owners)
 #: src/components/packs/collections/RecordBoards.tsx
@@ -582,6 +582,7 @@ msgstr "{0} 名玩家"
 #. placeholder {0}: formatNumber(entry.playCount)
 #: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/player/$username.tsx
@@ -750,8 +751,13 @@ msgstr "{0} 的成绩"
 
 #. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
-msgid "{0}/{averageWindow} clears"
-msgstr "{0}/{averageWindow} 次通过"
+#~ msgid "{0}/{averageWindow} clears"
+#~ msgstr "{0}/{averageWindow} 次通过"
+
+#. placeholder {0}: section.clears
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{0}/{averageWindow} plays"
+msgstr "{0}/{averageWindow} 次游玩"
 
 #. placeholder {0}: (odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")
 #. placeholder {1}: HONORARY_PACK_POOL.length

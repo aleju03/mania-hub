@@ -339,8 +339,8 @@ msgstr "{0} caracteres"
 
 #. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
-msgid "{0} clears"
-msgstr "{0} clears"
+#~ msgid "{0} clears"
+#~ msgstr "{0} clears"
 
 #. placeholder {0}: formatNumber(card.owners)
 #: src/components/packs/collections/RecordBoards.tsx
@@ -573,6 +573,7 @@ msgstr "{0} jugadores"
 #. placeholder {0}: formatNumber(entry.playCount)
 #: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/player/$username.tsx
@@ -741,8 +742,13 @@ msgstr "Play de {0}"
 
 #. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
-msgid "{0}/{averageWindow} clears"
-msgstr "{0}/{averageWindow} clears"
+#~ msgid "{0}/{averageWindow} clears"
+#~ msgstr "{0}/{averageWindow} clears"
+
+#. placeholder {0}: section.clears
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{0}/{averageWindow} plays"
+msgstr "{0}/{averageWindow} plays"
 
 #. placeholder {0}: (odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")
 #. placeholder {1}: HONORARY_PACK_POOL.length

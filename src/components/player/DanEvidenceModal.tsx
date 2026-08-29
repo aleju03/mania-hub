@@ -423,10 +423,10 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                           <span className="text-[10px] tabular-nums text-osu-f1">
                             {/* Under the averaging window the count reads as
                                 progress toward it: this dan is averaged from
-                                fewer clears than it wants. */}
+                                fewer plays than it wants. */}
                             {section.clears < averageWindow
-                              ? t`${section.clears}/${averageWindow} clears`
-                              : t`${section.clears} clears`}
+                              ? t`${section.clears}/${averageWindow} plays`
+                              : t`${section.clears} plays`}
                           </span>
                           {open ? (
                             <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: section.color }} />
@@ -522,6 +522,13 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
             rating: detail.clear.chartDan,
             ratingLabel: t`chart dan`,
             ratingColor: color,
+            ratingDisplayName: formatDan(detail.clear.chartDanLabel),
+            credit: {
+              rating: detail.clear.creditedDan,
+              displayName: formatDan(detail.clear.creditedDanLabel),
+              label: t`Credit`,
+              color,
+            },
           }}
         />
       ) : null}
