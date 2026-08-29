@@ -3730,7 +3730,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
   const auth = useAuth();
   const { t, i18n } = useLingui();
   const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [requestedYear, setRequestedYear] = useState(currentYear);
   const [activityRefreshKey, setActivityRefreshKey] = useState(0);
   const [selectedDay, setSelectedDay] = useState<ActivityDay | null>(null);
   // Dev-only simulated day; kept out of selectedDay so the day-sync and
@@ -3742,11 +3742,16 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
   const [snapshot, setSnapshot] = useState<LivePlayerActivitySnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Draw the year the loaded snapshot actually holds: picking a new year starts a
+  // fetch, and building the grid from the old snapshot against the new year gives
+  // an empty range, so the heatmap would blank out until the new one lands.
+  const selectedYear = snapshot?.year ?? requestedYear;
+  const yearPending = loading && selectedYear !== requestedYear;
   const activity = useMemo(() => buildActivityFromSnapshot(snapshot, selectedYear), [selectedYear, snapshot]);
   const yearOptions = useMemo(() => {
-    const years = new Set([currentYear, selectedYear, ...activity.availableYears]);
+    const years = new Set([currentYear, requestedYear, selectedYear, ...activity.availableYears]);
     return [...years].sort((a, b) => b - a);
-  }, [activity.availableYears, currentYear, selectedYear]);
+  }, [activity.availableYears, currentYear, requestedYear, selectedYear]);
   const averageActiveDay = activity.activeDays > 0 ? Math.round(activity.totalScores / activity.activeDays) : 0;
   const selectedDayDate = selectedDay?.date;
   const modalDay = devDay ?? (selectedDayDetail?.date === selectedDayDate ? selectedDayDetail : selectedDay);
@@ -3772,7 +3777,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
     setLoading(true);
     setError(null);
 
-    fetchLivePlayerActivityDirect(user.id, PLAYER_ACTIVITY_COUNTRY_SCOPE, selectedYear)
+    fetchLivePlayerActivityDirect(user.id, PLAYER_ACTIVITY_COUNTRY_SCOPE, requestedYear)
       .then((nextSnapshot) => {
         if (cancelled) return;
         setSnapshot(nextSnapshot);
@@ -3790,7 +3795,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
     return () => {
       cancelled = true;
     };
-  }, [activityRefreshKey, selectedYear, user.id]);
+  }, [activityRefreshKey, requestedYear, user.id]);
 
   useEffect(() => {
     if (!selectedDayDate) return;
@@ -3871,82 +3876,91 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
     <>
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_130px]">
         <section className="min-w-0 px-1 py-2 sm:px-0">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-white">
-                <Trans>{formatNumber(activity.totalScores)} plays in {selectedYear}</Trans>
-              </h2>
-            </div>
-            <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-              <ActivityInlineMetric label={t`Avg active day`} value={formatNumber(averageActiveDay)} detail={t`plays`} />
-              <ActivityInlineMetric label={t`Streak`} value={t`${activity.currentStreak}d`} detail={t`now`} />
-            </div>
-          </div>
-
-          <div className="mt-6 sm:mt-7">
-            <div className="flex gap-2">
-              {/* Row pitch must match the cells: fixed 12px rows on mobile (cells are
-                  12px), 1fr rows on sm+ where pt-5 equals the month-label row (h-3 +
-                  mt-2) so the stretched height equals the heatmap grid exactly. */}
-              <div className="grid w-8 shrink-0 grid-rows-[repeat(7,12px)] gap-1 pt-5 text-[10px] leading-none text-osu-f1 sm:grid-rows-7">
-                {ACTIVITY_WEEKDAY_LABELS.map((day, index) => (
-                  <span key={index} className="flex items-center">{i18n._(day)}</span>
-                ))}
+          {/* Year switches crossfade instead of snapping: the old year dims while
+              its replacement loads, and the new grid fades up once it is here. */}
+          <motion.div
+            key={selectedYear}
+            initial={{ opacity: 0.35 }}
+            animate={{ opacity: yearPending ? 0.55 : 1 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-white">
+                  <Trans>{formatNumber(activity.totalScores)} plays in {selectedYear}</Trans>
+                </h2>
               </div>
-              <div className="min-w-0 max-w-full flex-1 overflow-x-auto pb-2 scrollbar-hide sm:overflow-visible sm:pb-0">
-                <div className="w-max sm:w-full">
-                  <ActivityMonthLabels weeks={activity.weeks} gridStyle={activityGridStyle} />
-                  <div
-                    className="activity-heatmap-grid mt-2 grid gap-1"
-                    style={activityGridStyle}
-                  >
-                    {activity.weeks.map((week) => (
-                      <div key={week.key} className="grid min-w-0 grid-rows-7 gap-1">
-                        {week.days.map((day, index) => (
-                          day ? (
-                            day.scoreCount > 0 ? (
-                              <button
-                                key={day.date}
-                                type="button"
-                                title={t`${formatFullActivityDate(day.date)}: ${day.scoreCount} plays, ${day.sessionCount} sessions`}
-                                onClick={() => setSelectedDay(day)}
-                                className="aspect-square w-full min-w-0 rounded-[3px] border transition-transform hover:scale-125 hover:ring-2 hover:ring-osu-pink/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/90"
-                                style={getActivityCellStyle(day, activity.typicalSession)}
-                              />
+              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+                <ActivityInlineMetric label={t`Avg active day`} value={formatNumber(averageActiveDay)} detail={t`plays`} />
+                <ActivityInlineMetric label={t`Streak`} value={t`${activity.currentStreak}d`} detail={t`now`} />
+              </div>
+            </div>
+
+            <div className="mt-6 sm:mt-7">
+              <div className="flex gap-2">
+                {/* Row pitch must match the cells: fixed 12px rows on mobile (cells are
+                    12px), 1fr rows on sm+ where pt-5 equals the month-label row (h-3 +
+                    mt-2) so the stretched height equals the heatmap grid exactly. */}
+                <div className="grid w-8 shrink-0 grid-rows-[repeat(7,12px)] gap-1 pt-5 text-[10px] leading-none text-osu-f1 sm:grid-rows-7">
+                  {ACTIVITY_WEEKDAY_LABELS.map((day, index) => (
+                    <span key={index} className="flex items-center">{i18n._(day)}</span>
+                  ))}
+                </div>
+                <div className="min-w-0 max-w-full flex-1 overflow-x-auto pb-2 scrollbar-hide sm:overflow-visible sm:pb-0">
+                  <div className="w-max sm:w-full">
+                    <ActivityMonthLabels weeks={activity.weeks} gridStyle={activityGridStyle} />
+                    <div
+                      className="activity-heatmap-grid mt-2 grid gap-1"
+                      style={activityGridStyle}
+                    >
+                      {activity.weeks.map((week) => (
+                        <div key={week.key} className="grid min-w-0 grid-rows-7 gap-1">
+                          {week.days.map((day, index) => (
+                            day ? (
+                              day.scoreCount > 0 ? (
+                                <button
+                                  key={day.date}
+                                  type="button"
+                                  title={t`${formatFullActivityDate(day.date)}: ${day.scoreCount} plays, ${day.sessionCount} sessions`}
+                                  onClick={() => setSelectedDay(day)}
+                                  className="aspect-square w-full min-w-0 rounded-[3px] border transition-transform hover:scale-125 hover:ring-2 hover:ring-osu-pink/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/90"
+                                  style={getActivityCellStyle(day, activity.typicalSession)}
+                                />
+                              ) : (
+                                <span
+                                  key={day.date}
+                                  title={t`${formatFullActivityDate(day.date)}: no tracked plays`}
+                                  className={`aspect-square w-full min-w-0 rounded-[3px] border ${ACTIVITY_EMPTY_CELL_CLASS}`}
+                                />
+                              )
                             ) : (
-                              <span
-                                key={day.date}
-                                title={t`${formatFullActivityDate(day.date)}: no tracked plays`}
-                                className={`aspect-square w-full min-w-0 rounded-[3px] border ${ACTIVITY_EMPTY_CELL_CLASS}`}
-                              />
+                              <span key={`empty-${index}`} className="aspect-square w-full min-w-0" />
                             )
-                          ) : (
-                            <span key={`empty-${index}`} className="aspect-square w-full min-w-0" />
-                          )
-                        ))}
-                      </div>
-                    ))}
+                          ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-            <span className="text-[11px] text-osu-f1">
-              <Trans>Typical session <span className="font-semibold text-osu-l2">{activity.typicalSession} plays</span></Trans>
-            </span>
-            {import.meta.env.DEV && (
-              <button
-                type="button"
-                onClick={() => setDevDay(createDevActivityDay(activity.timezone))}
-                className="rounded-lg border border-osu-pink/25 bg-osu-pink/10 px-2 py-1 text-[10px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/20"
-                title={t`Open the day modal with simulated busy-day data`}
-              >
-                {t`Sim busy day`}
-              </button>
-            )}
-          </div>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+              <span className="text-[11px] text-osu-f1">
+                <Trans>Typical session <span className="font-semibold text-osu-l2">{activity.typicalSession} plays</span></Trans>
+              </span>
+              {import.meta.env.DEV && (
+                <button
+                  type="button"
+                  onClick={() => setDevDay(createDevActivityDay(activity.timezone))}
+                  className="rounded-lg border border-osu-pink/25 bg-osu-pink/10 px-2 py-1 text-[10px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/20"
+                  title={t`Open the day modal with simulated busy-day data`}
+                >
+                  {t`Sim busy day`}
+                </button>
+              )}
+            </div>
+          </motion.div>
         </section>
 
         <div className="flex gap-2 overflow-x-auto scrollbar-hide lg:block lg:space-y-2 lg:overflow-visible">
@@ -3955,10 +3969,10 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
               key={year}
               type="button"
               onClick={() => {
-                setSelectedYear(year);
+                setRequestedYear(year);
                 setSelectedDay(null);
               }}
-              className={`min-w-24 rounded-lg px-4 py-2 text-left text-sm font-semibold transition-colors lg:w-full ${selectedYear === year
+              className={`min-w-24 rounded-lg px-4 py-2 text-left text-sm font-semibold transition-colors duration-200 ease-out lg:w-full ${requestedYear === year
                   ? "bg-osu-pink text-white"
                   : "bg-osu-b4/60 text-osu-f1 hover:bg-osu-b3/55 hover:text-osu-l2"
                 }`}
