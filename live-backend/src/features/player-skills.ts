@@ -67,8 +67,10 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // under the OD8 assumption purge.
 // v18: Difficulty Adjust plays are not evidence (their windows are not the
 // chart's); stored DA plays purge while their score is still visible, and
-// dan clears gain the stored-OD floor (DAN_MIN_OD). The bump exists so the
-// version-stale drip walks the whole roster instead of waiting on views.
+// dan clears gain the stored-OD floor (DAN_MIN_OD) plus the stable-EZ
+// exclusion (widened windows stay rated, derated, but credit no dan). The
+// bump exists so the version-stale drip walks the whole roster instead of
+// waiting on views.
 export const PLAYER_SKILLS_VERSION = 18;
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
@@ -649,6 +651,13 @@ export interface StoredPlaySsr {
   // of the clear evidence; retained plays cached before the field existed stay
   // undefined and their consumers fall back to the rate's sign.
   rateMod?: string | null;
+  // True when the play was stable-judged with EZ widening every hit window
+  // 1.4x (stableWindowScale > 1). The wife goal already prices that in for
+  // the skill rating, but a dan clear is accuracy against the bar, so these
+  // plays credit no dan. Lazer's mania EZ leaves windows alone and stays
+  // eligible. Retained plays cached before the field existed stay undefined
+  // and fall back to the live score when one is around.
+  stableEzWindows?: boolean;
 }
 
 interface StoredModesSummary {
@@ -1348,6 +1357,10 @@ function collectDanClears(
     // score payload); the live score object is the fallback for cache entries
     // written before the fields existed.
     const score = scoresByIdentity.get(play.identity);
+    // Stable EZ widened every hit window 1.4x, so the accuracy was not earned
+    // against the windows the bar assumes; no dan credit. The play itself
+    // stays rated: the wife goal already derates it for the skill rating.
+    if (play.stableEzWindows ?? (score != null && stableWindowScale(score) > 1)) continue;
     const displayed = play.accuracy ?? (score ? getDisplayedAccuracy(score) : null);
     if (typeof displayed !== "number") continue;
     // Both currencies come off the judgement counts, so a bar written in one
@@ -1850,6 +1863,7 @@ export async function computePlayerSkillRatings(
       missShare: getMissShare(score.statistics),
       endedAt: score.ended_at ?? score.created_at ?? null,
       rateMod: getRateModAcronym(score.mods),
+      stableEzWindows: stableWindowScale(score) > 1,
     };
     const previous = previousByIdentity.get(identity);
     if (previous && previous.beatmapId === beatmapId && previous.rate === rate && previous.goal === goal) {

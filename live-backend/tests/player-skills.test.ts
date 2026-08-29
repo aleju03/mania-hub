@@ -891,6 +891,11 @@ describe("computePlayerSkillRatings", () => {
       // while the chart's own verdict stays visible, like danEligible.
       expect(collectDanClearsForTest(4, [playOn(281)], info)).toEqual([]);
       expect(collectDanClearsForTest(4, [playOn(282)], info)).toHaveLength(1);
+
+      // Stable EZ earned its accuracy on 1.4x windows, so it credits no dan;
+      // lazer EZ leaves the windows alone and stays eligible.
+      expect(collectDanClearsForTest(4, [{ ...playOn(282), stableEzWindows: true }], info)).toEqual([]);
+      expect(collectDanClearsForTest(4, [{ ...playOn(282), stableEzWindows: false }], info)).toHaveLength(1);
     });
   });
 
