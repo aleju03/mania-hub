@@ -65,6 +65,10 @@ export interface AnalyticsRecentEventRow {
   collectionsPage: string | null;
   collectionsCard: string | null;
   collectionsCards: string | null;
+  addScorePlayer: string | null;
+  addScoreMap: string | null;
+  addScoreRepeat: string | null;
+  addScoreReason: string | null;
   viewerUsername: string | null;
   referrer: string | null;
 }
@@ -349,6 +353,21 @@ function describeCollectionsCard(row: AnalyticsRecentEventRow): AnalyticsActivit
   };
 }
 
+/* Why a paste was turned down, in the words the feed can read at a glance.
+   The keys are the backend's own failure reasons. */
+const ADD_SCORE_FAILURE_LABELS: Record<string, string> = {
+  invalid_link: "not a score link",
+  score_not_found: "no score at that link",
+  not_mania: "not a mania score",
+  not_owned: "someone else's score",
+  not_passed: "a fail",
+  player_untracked: "country not tracked",
+  player_not_found: "player can't receive scores",
+  osu_unavailable: "osu! didn't answer",
+  rate_limited: "rate limited",
+  failed: "request failed",
+};
+
 /* What an event says about itself, before its page is consulted. Null for an
    event this file has never been taught, which the caller can either describe
    by page (the feed) or name outright (the event lookup, where describing a
@@ -426,6 +445,37 @@ function describeNamedAnalyticsEvent(
       };
     case "packs_collections_card":
       return describeCollectionsCard(row);
+    /* Adding a missing score to a profile: the bar being opened, whatever a
+       paste resolved to, and the ones the backend turned down. The turn-downs
+       are the reason the reason is carried - a run of "someone else's score"
+       is people misreading the bar, a run of "country not tracked" is not. */
+    case "add_score_open":
+      return {
+        kind: "profile",
+        verb: "opened",
+        subject: "the add-a-score bar",
+        detail: row.addScorePlayer ? `on ${row.addScorePlayer}'s profile` : null,
+      };
+    case "add_score_submitted":
+      return {
+        kind: "profile",
+        verb: row.addScoreRepeat === "1" ? "re-sent" : "added",
+        subject: row.addScoreMap || "a score",
+        detail: joinDetail([
+          row.addScorePlayer ? `to ${row.addScorePlayer}` : null,
+          row.addScoreRepeat === "1" ? "already tracked" : null,
+        ]),
+      };
+    case "add_score_failed":
+      return {
+        kind: "profile",
+        verb: "could not add",
+        subject: "a score",
+        detail: joinDetail([
+          row.addScorePlayer ? `to ${row.addScorePlayer}` : null,
+          row.addScoreReason ? ADD_SCORE_FAILURE_LABELS[row.addScoreReason] ?? row.addScoreReason : null,
+        ]),
+      };
     case "packs_showcase_edit":
       return { kind: "pack", verb: "opened", subject: "their showcase picker", detail: null };
     case "packs_showcase_saved":

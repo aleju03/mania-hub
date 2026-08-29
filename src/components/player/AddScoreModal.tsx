@@ -9,6 +9,7 @@ import {
   type LiveScoreSubmissionFailure,
   type LiveScoreSubmissionPlay,
 } from "../../lib/live-backend";
+import { track } from "../../lib/analytics";
 import { formatAccuracy, formatPP, formatTimeAgo } from "../../lib/format";
 import { getModDisplayList } from "../../lib/score";
 import { ModBadge } from "../ui/ModBadge";
@@ -41,6 +42,15 @@ function focusOnDesktop(input: HTMLInputElement | null): void {
   if (!input || typeof window === "undefined") return;
   if (window.matchMedia?.("(pointer: coarse)").matches) return;
   input.focus();
+}
+
+/* What the analytics feed shows for a submitted play, in the same shape the
+   dialog's own panel reads: the chart, not the score id. */
+function scoreMapLabel(play: LiveScoreSubmissionPlay): string | null {
+  const title = play.title?.trim() || null;
+  const version = play.version?.trim() || null;
+  if (title && version) return `${title} [${version}]`;
+  return title ?? version;
 }
 
 interface AcceptedPlay {
@@ -86,6 +96,18 @@ export function AddScoreModal({
     focusOnDesktop(inputRef.current);
   }, []);
 
+  /* The dialog is worth counting on its own: a pageview on a profile says
+     nothing about whether anyone found this bar, and the outcome of a paste
+     (stored, already tracked, or turned down and why) is the only way to see
+     whether the feature works for people who are not us. The target player is
+     carried on every one of them, since "who gets scores added" is half the
+     question. */
+  useEffect(() => {
+    track("add_score_open", { add_score_player: username });
+    // Opening the dialog is the event; a rename mid-dialog is not a new one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -128,6 +150,20 @@ export function AddScoreModal({
     setError(null);
     try {
       const result = await submitLiveMissingScore(userId, value);
+      /* Counted before the mounted check: the paste's outcome is a fact on the
+         backend whether or not the dialog is still open to show it. */
+      if (result.ok) {
+        track("add_score_submitted", {
+          add_score_player: username,
+          add_score_map: scoreMapLabel(result.play),
+          // The paste landed on a score the backend already had, so nothing
+          // new was stored - a different outcome from a first submission, and
+          // the one that says how often people re-add what is tracked already.
+          add_score_repeat: result.alreadyTracked ? "1" : "0",
+        });
+      } else {
+        track("add_score_failed", { add_score_player: username, add_score_reason: result.reason });
+      }
       if (!mountedRef.current) return;
       if (!result.ok) {
         setError(failureMessage(result.reason, result.owner));
@@ -142,6 +178,7 @@ export function AddScoreModal({
       if (!result.alreadyTracked) onSubmitted?.();
       if (result.play.beatmapId != null) void fillEntry(key, result.play.beatmapId);
     } catch {
+      track("add_score_failed", { add_score_player: username, add_score_reason: "failed" });
       if (mountedRef.current) setError(t`Could not send that. Try again.`);
     } finally {
       if (mountedRef.current) {

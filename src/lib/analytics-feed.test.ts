@@ -67,6 +67,10 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     collectionsPage: null,
     collectionsCard: null,
     collectionsCards: null,
+    addScorePlayer: null,
+    addScoreMap: null,
+    addScoreRepeat: null,
+    addScoreReason: null,
     viewerUsername: null,
     referrer: null,
     ...overrides,
@@ -416,6 +420,34 @@ describe("describeAnalyticsEvent", () => {
       kind: "community",
       verb: "submitted",
       subject: "7K GLOBAL",
+    });
+  });
+
+  it("reads the add-a-score funnel", () => {
+    expect(describeAnalyticsEvent(row({ event: "add_score_open", addScorePlayer: "Aleju03" }))).toMatchObject({
+      kind: "profile",
+      verb: "opened",
+      subject: "the add-a-score bar",
+      detail: "on Aleju03's profile",
+    });
+    expect(
+      describeAnalyticsEvent(row({ event: "add_score_submitted", addScorePlayer: "Aleju03", addScoreMap: "Promise [4K]", addScoreRepeat: "0" })),
+    ).toMatchObject({
+      kind: "profile",
+      verb: "added",
+      subject: "Promise [4K]",
+      detail: "to Aleju03",
+    });
+    expect(
+      describeAnalyticsEvent(row({ event: "add_score_submitted", addScorePlayer: "Aleju03", addScoreMap: "Promise [4K]", addScoreRepeat: "1" })),
+    ).toMatchObject({ verb: "re-sent", detail: "to Aleju03 · already tracked" });
+    expect(
+      describeAnalyticsEvent(row({ event: "add_score_failed", addScorePlayer: "Aleju03", addScoreReason: "not_owned" })),
+    ).toMatchObject({
+      kind: "profile",
+      verb: "could not add",
+      subject: "a score",
+      detail: "to Aleju03 · someone else's score",
     });
   });
 

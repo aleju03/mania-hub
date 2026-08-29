@@ -191,6 +191,10 @@ export interface AnalyticsFeedEvent {
   collectionsPage: string | null;
   collectionsCard: string | null;
   collectionsCards: string | null;
+  addScorePlayer: string | null;
+  addScoreMap: string | null;
+  addScoreRepeat: string | null;
+  addScoreReason: string | null;
   viewerUsername: string | null;
   referrer: string | null;
 }
@@ -1368,6 +1372,10 @@ export function buildMonitorFeedEvent(displayTimeZone: string, record: Analytics
     collectionsPage: str("collections_page"),
     collectionsCard: str("collections_card"),
     collectionsCards: str("collections_cards"),
+    addScorePlayer: str("add_score_player"),
+    addScoreMap: str("add_score_map"),
+    addScoreRepeat: str("add_score_repeat"),
+    addScoreReason: str("add_score_reason"),
     viewerUsername: record.viewerUsername,
     referrer: record.referringDomain,
   };
