@@ -8,10 +8,10 @@
  * queued for one osu! call, quietly, after the response has already gone out.
  *
  * So the profiles that get looked at complete themselves, and the ones nobody
- * opens cost nothing. The queue is the pacing: these jobs sit in the same lane
- * as the blind sweep (one at a time, ever) at a priority just above it, and
- * every request goes through the shared limiter's job lane, which yields to
- * page loads.
+ * opens cost nothing. The queue is the pacing: these jobs run one at a time in
+ * their own worker lane, separate from the blind sweep so a stream of profile
+ * views cannot starve that finite pass. Every request still goes through the
+ * shared limiter's job lane, which yields to page loads.
  *
  * Rows the sweep has already queued are skipped, so the two never spend two
  * calls on one row, and a score osu! cannot serve is remembered rather than

@@ -210,14 +210,20 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 5_000,
   },
   {
-    // Own lane for the same reason, and separate from the mods chain so
-    // neither can starve the other out of its first claim.
-    // Both archived-detail paths share this lane on purpose: one claim slot
-    // means the blind sweep and the view-driven completion can never double
-    // the osu! pressure between them, and the on-demand job's higher priority
-    // lets a profile somebody is reading go first.
+    // The blind sweep needs a lane containing only its chain. View-driven
+    // detail jobs have higher priority and can arrive continuously, so sharing
+    // their lane left this one-time pass parked after its first chunk.
     name: "activity-combo-backfill",
-    jobTypes: [ACTIVITY_COMBO_BACKFILL_JOB_TYPE, ACTIVITY_DETAIL_ON_DEMAND_JOB],
+    jobTypes: [ACTIVITY_COMBO_BACKFILL_JOB_TYPE],
+    claimLimit: 1,
+    intervalMs: 5_000,
+  },
+  {
+    // Profile-driven completion stays serialized in its own lane. Both lanes
+    // still pass every request through the shared osu! limiter, which owns the
+    // total request budget and lets interactive traffic preempt them.
+    name: "activity-detail-on-demand",
+    jobTypes: [ACTIVITY_DETAIL_ON_DEMAND_JOB],
     claimLimit: 1,
     intervalMs: 5_000,
   },
