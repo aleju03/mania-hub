@@ -118,7 +118,7 @@ describe("normalizeDanEstimateItems", () => {
         { beatmapId: 321, ratePercent: 130 },
       ]);
       expect(verdicts.has(rateDanVerdictKey(321, 120))).toBe(false);
-      expect(verdicts.get(rateDanVerdictKey(321, 130))).toEqual({ rawDan: 8.1, family: "dan" });
+      expect(verdicts.get(rateDanVerdictKey(321, 130))).toEqual({ rawDan: 8.1, family: "dan", displayName: "x" });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

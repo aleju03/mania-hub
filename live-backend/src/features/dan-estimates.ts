@@ -365,6 +365,9 @@ export interface StoredRateDanVerdict {
   rawDan: number;
   // "ln" or "dan", the estimator's primary-family split (companella.ts).
   family: string;
+  // The verdict's own printed label ("beta+"), so evidence surfaces can show
+  // the words the verdict was stored under instead of re-banding rawDan.
+  displayName: string | null;
 }
 
 // The verdict lookup loads by beatmap id and filters to the asked pairs in JS:
@@ -399,7 +402,7 @@ export async function loadStoredRateDanVerdicts(
     const placeholders = chunk.map(() => "?").join(", ");
     const rows = (await exec(
       db,
-      `select beatmap_id, rate_percent, status, raw_dan, family, star_rating from dan_estimates
+      `select beatmap_id, rate_percent, status, raw_dan, family, star_rating, display_name from dan_estimates
        where estimator_version = ? and beatmap_id in (${placeholders})`,
       [DAN_ESTIMATE_CACHE_VERSION, ...chunk],
     )).rows;
@@ -429,7 +432,8 @@ export async function loadStoredRateDanVerdicts(
       if (status !== "ready" || !Number.isFinite(rawDan) || rawDan <= 0 || !family) continue;
       const storedStarRating = row.star_rating == null ? null : Number(row.star_rating);
       if (storedStarRatingInvalidatesRow(storedStarRating, currentStarRatings.get(Number(row.beatmap_id)))) continue;
-      verdicts.set(key, { rawDan, family });
+      const displayName = typeof row.display_name === "string" && row.display_name.trim() ? row.display_name.trim() : null;
+      verdicts.set(key, { rawDan, family, displayName });
     }
     if (offset + chunk.length < ids.length) {
       await new Promise<void>((resolve) => setImmediate(resolve));

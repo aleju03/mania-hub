@@ -938,16 +938,25 @@ export interface ChartSkillInfo {
   danEligible: boolean;
   rcRawDan: number | null;
   lnRawDan: number | null;
+  // The stored verdict's own printed label per half ("alpha+"), the same words
+  // the maps surfaces show. A verdict's tier and its rawDan are decided
+  // independently (LeoBlack names the tier, the numeric hint refines rawDan),
+  // so re-banding rawDan can print a different suffix than the verdict wears.
+  rcDanLabel: string | null;
+  lnDanLabel: string | null;
   dtRawDan: number | null;
   dtFamily: "rc" | "ln" | null;
+  dtDanLabel: string | null;
   htRawDan: number | null;
   htFamily: "rc" | "ln" | null;
+  htDanLabel: string | null;
   /** Drain length at 1.0x, for the stamina gate in bucketingSkillset. */
   lengthSeconds: number | null;
 }
 
 interface LeanHalfJson {
   rawDan?: unknown;
+  displayName?: unknown;
 }
 
 interface LeanClassificationJson {
@@ -1028,6 +1037,10 @@ function readRawDan(half: LeanHalfJson | null | undefined): number | null {
   return Number.isFinite(rawDan) && rawDan > 0 ? rawDan : null;
 }
 
+function readDanLabel(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 // Local libSQL materializes query results synchronously on the calling thread.
 // Keep a corpus sweep's chart lookup below one frame-sized burst, while a normal
 // one-player compute still needs only one statement. Measured on the live 12k-id
@@ -1086,9 +1099,9 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       // beside it for the consumers that mean chord jack specifically; 4K
       // keeps its native analyzer tags untouched.
       if ((keyCount === 6 || keyCount === 7) && isJack && !patternIds.includes("jack")) patternIds.push("jack");
-      const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
+      const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
       const dtRawDan = readRawDan(danDt ?? undefined);
-      const danHt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown } | null>(String(row.dan_ht_json ?? ""), null);
+      const danHt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown } | null>(String(row.dan_ht_json ?? ""), null);
       const htRawDan = readRawDan(danHt ?? undefined);
       info.set(Number(row.beatmap_id), {
         patterns: patternIds,
@@ -1105,10 +1118,14 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         danEligible: parsed?.danEligibility?.eligible !== false,
         rcRawDan: readRawDan(parsed?.rc),
         lnRawDan: readRawDan(parsed?.ln),
+        rcDanLabel: readDanLabel(parsed?.rc?.displayName),
+        lnDanLabel: readDanLabel(parsed?.ln?.displayName),
         dtRawDan,
         dtFamily: dtRawDan == null ? null : danDt?.primaryFamily === "ln" ? "ln" : "rc",
+        dtDanLabel: readDanLabel(danDt?.primaryLabel),
         htRawDan,
         htFamily: htRawDan == null ? null : danHt?.primaryFamily === "ln" ? "ln" : "rc",
+        htDanLabel: readDanLabel(danHt?.primaryLabel),
         lengthSeconds: readLengthSeconds(row.total_length),
       });
     }
@@ -1198,6 +1215,10 @@ export interface DanClearEvidence {
   side: "rc" | "ln";
   // The chart's own dan at the played rate, before the accuracy credit.
   chartDan: number;
+  // The stored verdict's printed label for that dan, when the source kept one;
+  // the evidence surface prefers it over re-banding chartDan so the modal
+  // agrees with the maps page in the slivers where the two band scales differ.
+  chartDanLabel: string | null;
   // chartDan plus the accuracy offset, clamped to the ladder (creditedDanFor):
   // the number every aggregation below reads. Equal to chartDan for a bare
   // pass at the bar.
@@ -1217,7 +1238,7 @@ export interface DanClearEvidence {
  * computed yet, which the skill compute fills in and the evidence read
  * enqueues.
  */
-type RateVerdictMap = Map<string, { rawDan: number; side: "rc" | "ln" } | null>;
+type RateVerdictMap = Map<string, { rawDan: number; side: "rc" | "ln"; displayName?: string | null } | null>;
 
 /**
  * The rate a clear at this play would be credited at, or null when the play is
@@ -1244,7 +1265,7 @@ async function loadRateVerdictCredits(db: Db, plays: StoredPlaySsr[]): Promise<R
   const stored = await loadStoredRateDanVerdicts(db, pairs);
   const credits: RateVerdictMap = new Map();
   for (const [key, verdict] of stored) {
-    credits.set(key, verdict ? { rawDan: verdict.rawDan, side: verdict.family === "ln" ? "ln" : "rc" } : null);
+    credits.set(key, verdict ? { rawDan: verdict.rawDan, side: verdict.family === "ln" ? "ln" : "rc", displayName: verdict.displayName } : null);
   }
   return credits;
 }
@@ -1301,7 +1322,7 @@ function collectDanClears(
     // A lazer submission displays the ScoreV2 formula already, so its own
     // accuracy is that currency even with no counts to recompute from.
     const isLazerPlay = stable != null && Math.abs(displayed - stable) > 1e-9;
-    const push = (rawDan: number | null, side: "rc" | "ln") => {
+    const push = (rawDan: number | null, side: "rc" | "ln", chartDanLabel: string | null) => {
       if (rawDan == null) return;
       const bar = danClearBarFor(side, keyCount, rawDan);
       let threshold = bar.accuracy;
@@ -1321,17 +1342,17 @@ function collectDanClears(
       // shift with it: the whole scale rides the converted bar, deliberately.
       const creditedDan = creditedDanFor(rawDan, accuracy, threshold, side, keyCount);
       if (creditedDan == null) return;
-      clears.push({ play, side, chartDan: rawDan, creditedDan, accuracy, bar: threshold });
+      clears.push({ play, side, chartDan: rawDan, chartDanLabel, creditedDan, accuracy, bar: threshold });
     };
     if (play.rate === 1 && info.lnRatio != null) {
       const side = info.lnRatio >= lnPrimaryMinRatioFor(keyCount) ? "ln" : "rc";
-      push(side === "ln" ? info.lnRawDan : info.rcRawDan, side);
+      push(side === "ln" ? info.lnRawDan : info.rcRawDan, side, side === "ln" ? info.lnDanLabel : info.rcDanLabel);
     } else if (play.rate === 1.5 && info.dtFamily != null) {
-      push(info.dtRawDan, info.dtFamily);
+      push(info.dtRawDan, info.dtFamily, info.dtDanLabel);
     } else if (play.rate === 0.75 && info.htFamily != null) {
       // Credited what the chart is worth AT 0.75x, which is well under its 1.0x
       // dan: slowing a chart down does not clear the chart it used to be.
-      push(info.htRawDan, info.htFamily);
+      push(info.htRawDan, info.htFamily, info.htDanLabel);
     } else {
       // Every other rate in the 0.5x-2.0x band - a lazer speed_change, or a
       // 1.5x/0.75x chart the sweeps never stored columns for - credits the
@@ -1339,7 +1360,7 @@ function collectDanClears(
       const ratePercent = clearRatePercent(play.rate);
       if (ratePercent == null) continue;
       const verdict = rateVerdicts.get(rateDanVerdictKey(play.beatmapId, ratePercent));
-      if (verdict) push(verdict.rawDan, verdict.side);
+      if (verdict) push(verdict.rawDan, verdict.side, verdict.displayName ?? null);
     }
   }
   return clears;
@@ -2765,15 +2786,24 @@ export async function getPlayerSkillDanEvidence(
     ...[...bySkillset.values()].flatMap((list) => list.slice(0, DAN_EVIDENCE_SKILLSET_PLAYS).map((clear) => clear.play.beatmapId)),
   ];
   const metadata = await readPlayerSkillPlayMetadata(db, evidenceBeatmapIds);
-  const toEvidencePlay = (clear: DanClearEvidence): PlayerSkillDanEvidencePlay => ({
-    play: buildPlayerSkillPlay(clear.play, Number(clear.play.values?.Overall ?? 0), keyCount, metadata),
-    chartDan: Math.round(clear.chartDan * 100) / 100,
-    chartDanLabel: chartDanLabelFor(clear.chartDan, side, keyCount),
-    creditedDan: Math.round(clear.creditedDan * 100) / 100,
-    creditedDanLabel: danLabelFor(clear.creditedDan, side, keyCount),
-    clearAccuracy: clear.accuracy,
-    countsTowardDan: threshold != null && clear.creditedDan >= threshold,
-  });
+  const toEvidencePlay = (clear: DanClearEvidence): PlayerSkillDanEvidencePlay => {
+    // Prefer the verdict's own stored label, so the modal names the chart the
+    // same way the maps page does; the verdict's tier and its rawDan are set
+    // independently, and re-banding the number disagrees in the slivers
+    // between the two band scales (an 11.29 stored as alpha+ prints alpha++).
+    const chartDanLabel = clear.chartDanLabel ?? chartDanLabelFor(clear.chartDan, side, keyCount);
+    return {
+      play: buildPlayerSkillPlay(clear.play, Number(clear.play.values?.Overall ?? 0), keyCount, metadata),
+      chartDan: Math.round(clear.chartDan * 100) / 100,
+      chartDanLabel,
+      creditedDan: Math.round(clear.creditedDan * 100) / 100,
+      // A zero-offset clear credits the chart's exact number, so it keeps the
+      // chart's exact words too; only a real credit shift re-bands.
+      creditedDanLabel: clear.creditedDan === clear.chartDan ? chartDanLabel : danLabelFor(clear.creditedDan, side, keyCount),
+      clearAccuracy: clear.accuracy,
+      countsTowardDan: threshold != null && clear.creditedDan >= threshold,
+    };
+  };
 
   // Emitted in bucket-declaration order; the client ranks them for display.
   const skillsets = buckets

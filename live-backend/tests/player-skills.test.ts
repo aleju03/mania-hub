@@ -752,6 +752,43 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
+  it("carries the stored verdict label onto the clear instead of re-banding rawDan", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      // The Odoru case: LeoBlack names the tier ("alpha mid/high" -> alpha+)
+      // and the numeric hint sets rawDan independently, so 11.29 wears alpha+
+      // in the stored verdict while parseDan's credit bands would print
+      // alpha++. The clear must keep the verdict's own words.
+      await storeCachedBeatmapFile(db, 271, buildStreamBeatmapFile(), { source: "test" });
+      await exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+         values (?, ?, 'ready', ?, ?)`,
+        [271, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [], rc: { rawDan: 11.29, displayName: "alpha+" } }), new Date().toISOString()],
+      );
+      const { collectDanClearsForTest, loadChartSkillInfo } = await import("../src/features/player-skills.js");
+      const info = await loadChartSkillInfo(db, [271]);
+      expect(info.get(271)?.rcDanLabel).toBe("alpha+");
+      const clears = collectDanClearsForTest(4, [{
+        identity: "official:271",
+        beatmapId: 271,
+        keyCount: 4,
+        rate: 1,
+        goal: 0.95,
+        pp: 100,
+        values: { Overall: 26 },
+        patterns: [],
+        accuracy: 0.961,
+        stableAccuracy: 0.961,
+      }], info);
+      expect(clears).toHaveLength(1);
+      expect(clears[0].chartDanLabel).toBe("alpha+");
+      // A hair over the bar is a bare clear: same number, so the evidence
+      // surface will print the same words for chart and credit.
+      expect(clears[0].creditedDan).toBe(clears[0].chartDan);
+    });
+  });
+
   it("does not credit a structurally dan-ineligible chart", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
@@ -1104,7 +1141,7 @@ describe("computePlayerSkillRatings", () => {
         { beatmapId: 244, ratePercent: 120 },
         { beatmapId: 241, ratePercent: 150 },
       ]);
-      expect(stored.get(rateDanVerdictKey(241, 120))).toEqual({ rawDan: 9.5, family: "dan" });
+      expect(stored.get(rateDanVerdictKey(241, 120))).toEqual({ rawDan: 9.5, family: "dan", displayName: "x" });
       expect(stored.get(rateDanVerdictKey(243, 120))).toBeNull();
       expect(stored.has(rateDanVerdictKey(244, 120))).toBe(false);
 
