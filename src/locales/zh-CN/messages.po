@@ -2142,7 +2142,7 @@ msgstr "全部 10 名"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "All clears"
-msgstr "全部通过"
+msgstr "整体"
 
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/UserCollectionDetail.tsx
@@ -5934,7 +5934,7 @@ msgstr "叠"
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Jackspeed"
-msgstr "叠键速度"
+msgstr "速叠"
 
 #: src/components/communities/field-options.tsx
 msgid "Japanese"
@@ -9594,7 +9594,7 @@ msgstr "区域"
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Regular"
-msgstr "单点"
+msgstr "常规"
 
 #: src/lib/signature-shared.ts
 msgid "Regular and LN"
@@ -9606,7 +9606,7 @@ msgstr "普通段位表"
 
 #: src/lib/skill-axes.ts
 msgid "Release"
-msgstr "放键"
+msgstr "放手"
 
 #: src/routes/__root.tsx
 msgid "Reload page"
