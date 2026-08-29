@@ -1440,11 +1440,19 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, example, belowWindow, ne
 
   return (
     <div ref={hostRef} className="space-y-2">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <span className="text-2xl font-bold tabular-nums text-white">{formatAccuracy(accuracy)}</span>
-        <span className="text-base font-bold text-osu-f1 sm:text-lg">{creditLabel}</span>
+      {/* A grid rather than a wrapping flex row, and every cell placed: the
+          readout's text changes length as the curve is scrubbed, and on a
+          360px phone that flipped the row between one line and two, moving the
+          plot 44px down mid-drag - under the finger holding it. Two fixed rows
+          on a phone, one on a wider screen, and the credit label is a single
+          truncating line so its own length can never add a third. */}
+      <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-0.5 sm:grid-cols-[auto_1fr_auto] sm:gap-x-4">
+        <span className="col-start-1 row-start-1 text-2xl font-bold tabular-nums text-white">{formatAccuracy(accuracy)}</span>
+        <span className="col-start-1 row-start-2 min-w-0 truncate text-[15px] font-bold text-osu-f1 sm:col-start-2 sm:row-start-1 sm:text-lg">
+          {creditLabel}
+        </span>
         {example && (
-          <span className="ml-auto flex items-center">
+          <span className="col-start-2 row-start-1 row-span-2 flex min-h-9 items-center justify-end sm:col-start-3 sm:row-span-1">
             {creditedLabel == null
               ? <span className="text-lg font-bold text-osu-f1">{t`nothing`}</span>
               : <DanLevelBadge label={creditedLabel} keyCount={keyCount} side={side} formatLabel={(value) => value} />}
@@ -1459,7 +1467,7 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, example, belowWindow, ne
       <svg
         width={width}
         height={CURVE_HEIGHT}
-        className="touch-none select-none outline-none"
+        className="block w-full touch-none select-none outline-none"
         role="slider"
         tabIndex={0}
         aria-label={t`Accuracy`}
