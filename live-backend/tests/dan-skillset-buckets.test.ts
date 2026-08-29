@@ -380,6 +380,40 @@ describe("the 4K Jumpstream arbitration", () => {
     expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES)).toEqual(["tech"]);
   });
 
+  // goreshit - daddy can change [4K] men (4766898), 54 seconds: jack-heavy
+  // chordstream LeoBlack labels "Jumpstream", played with DT so it lasts 36.
+  const DADDY_CAN_CHANGE_DT = {
+    Stream: 25.11, Jumpstream: 35.75, Handstream: 30.33, Stamina: 34.38,
+    JackSpeed: 24.97, Chordjack: 29.12, Technical: 28.90,
+  };
+
+  it("keeps the tech pairing on a file too short to read as endurance", () => {
+    const chart = { ...SPEEDJACK_CHART, patterns: [], techScore: 1, jsClusterTech: false, lengthSeconds: 54 };
+    // Its tech score is a maxed 1.00 and cannot arbitrate (the dense
+    // chordstream cuts the rule exists for score the same), so length does.
+    expect(danSkillsetBucketsForValues(4, "rc", DADDY_CAN_CHANGE_DT, 54, 1.5, chart)).toEqual(["tech"]);
+    expect(danSkillsetBucketsForValues(4, "rc", DADDY_CAN_CHANGE_DT, 54, 1, chart)).toEqual(["tech"]);
+  });
+
+  it("still arbitrates the practice cuts the rule was built on", () => {
+    // 112s and 116s clear the 90s floor, so the label still moves them.
+    const amber = { ...SPEEDJACK_CHART, patterns: [], techScore: 0.94, jsClusterTech: false, lengthSeconds: 112 };
+    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 112, 1, amber)).toEqual(["stamina"]);
+    // Right at the line, and just under it.
+    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 90, 1, { ...amber, lengthSeconds: 90 })).toEqual(["stamina"]);
+    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 89, 1, { ...amber, lengthSeconds: 89 })).toEqual(["tech"]);
+  });
+
+  it("measures the floor on the longer of the drain and the played time", () => {
+    // A 100s file at 1.5x lasts 67s but is still a 100s file, so it arbitrates;
+    // a 60s file stays short at any rate.
+    const chart = { ...SPEEDJACK_CHART, patterns: [], jsClusterTech: false, lengthSeconds: 100 };
+    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 100, 1.5, chart)).toEqual(["stamina"]);
+    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 60, 1.5, { ...chart, lengthSeconds: 60 })).toEqual(["tech"]);
+    // A downrate that stretches a short file past the floor earns it.
+    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 60, 0.6, { ...chart, lengthSeconds: 60 })).toEqual(["stamina"]);
+  });
+
   it("does not touch other argmaxes or the jack override", () => {
     const chart = { ...SPEEDJACK_CHART, patterns: [], techScore: 0, jsClusterTech: false };
     const technical = { ...AMBER_WISHES, Technical: 28.0 };

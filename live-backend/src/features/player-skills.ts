@@ -1108,6 +1108,28 @@ const TECH_CLUSTER_CATEGORY = /tech/i;
 // pairing rather than guessing (99.5% of ready 4K analyses store one).
 const JS_TECH_CLUSTER_CATEGORY = /tech|trill/i;
 
+// The arbitration above only applies to a file long enough for endurance to be
+// a plausible reading of it. goreshit - daddy can change [4K] men (4766898) is
+// the measured case: 54 seconds of jack-heavy chordstream labelled "Jumpstream",
+// so the label sent it to stamina, and a DT play of it lasts 36. No 54-second
+// file drains anyone, whatever its shape, and the analyzer cannot save this one
+// either - it scores the chart tech 1.00, the same score the dense chordstream
+// cuts the arbitration exists for carry, so the tech detector separates
+// nothing here and length is the only honest signal.
+//
+// 90 seconds rather than the tile's own 4:00 bar because this is not the
+// endurance question: it only asks whether the file is long enough to be read
+// as a chordstream body of work at all. The two charts the arbitration was
+// built on sit at 112 and 116 seconds (Amber Wishes, Oyasumi), so the floor has
+// to clear 54 without reaching them.
+//
+// Measured over the mapper-named 4K pack corpora: 105 charts move back to the
+// tech pairing, 65 of them unlabelled, and no labelled corpus loses more than
+// 16. A genuine Handstream or Stamina argmax is untouched at any length, which
+// is deliberate: the stamina tile is the only home Handstream has, so flooring
+// it would file 24-second cuts from named handstream packs under tech instead.
+const STAMINA_ARBITRATION_MIN_LENGTH_SECONDS = 90;
+
 function readRawDan(half: LeanHalfJson | null | undefined): number | null {
   const rawDan = Number(half?.rawDan);
   return Number.isFinite(rawDan) && rawDan > 0 ? rawDan : null;
@@ -2847,6 +2869,7 @@ function bucketsForClear(
   buckets: DanSkillsetBucket[],
   topSkillset: string | null,
   chart: ChartSkillInfo | undefined,
+  rate = 1,
 ): DanSkillsetBucket[] {
   const override = buckets.find(
     (bucket) => bucket.skillsets != null && bucket.tags.length > 0 && chartBelongsToTagBucket(bucket, chart),
@@ -2856,7 +2879,14 @@ function bucketsForClear(
   // clear files with stamina unless LeoBlack reads the chart as tech or trill,
   // in which case the tech pairing in the bucket lists keeps it. Filed as
   // Stamina rather than through its own list so the tiles stay disjoint.
-  const effectiveTop = topSkillset === "Jumpstream" && chart?.jsClusterTech === false
+  //
+  // A file under STAMINA_ARBITRATION_MIN_LENGTH_SECONDS keeps the tech pairing
+  // whatever the label says: too short to read as chordstream endurance. An
+  // unknown length arbitrates as before rather than guessing a chart short.
+  const arbitrationLength = enduranceSeconds(chart?.lengthSeconds ?? null, rate);
+  const longEnoughToArbitrate = arbitrationLength == null
+    || arbitrationLength >= STAMINA_ARBITRATION_MIN_LENGTH_SECONDS;
+  const effectiveTop = topSkillset === "Jumpstream" && chart?.jsClusterTech === false && longEnoughToArbitrate
     ? "Stamina"
     : topSkillset;
   return buckets.filter((bucket) => bucket.skillsets
@@ -2882,7 +2912,7 @@ function groupDanClearsBySkillset(
   for (const clear of clears) {
     const chart = infoByBeatmap.get(clear.play.beatmapId);
     const topSkillset = bucketingSkillset(clear.play.values, chart?.lengthSeconds ?? null, clear.play.rate, chart?.techScore ?? 0);
-    for (const bucket of bucketsForClear(buckets, topSkillset, chart)) {
+    for (const bucket of bucketsForClear(buckets, topSkillset, chart, clear.play.rate)) {
       bySkillset.get(bucket.id)!.push(clear);
     }
   }
@@ -3156,11 +3186,8 @@ function bucketingSkillset(
   const stream = Number(values?.Stream ?? 0);
   // Whether the play demanded endurance, the same reading the length gate at
   // the bottom uses: the LONGER of the 1.0x drain and the played time.
-  const playedSeconds = lengthSeconds == null
-    ? null
-    : lengthSeconds / (Number.isFinite(rate) && rate > 0 ? rate : 1);
-  const demandsEndurance = lengthSeconds != null && playedSeconds != null
-    && Math.max(lengthSeconds, playedSeconds) >= STAMINA_TILE_MIN_LENGTH_SECONDS;
+  const endurance = enduranceSeconds(lengthSeconds, rate);
+  const demandsEndurance = endurance != null && endurance >= STAMINA_TILE_MIN_LENGTH_SECONDS;
   // A length-qualified Stamina argmax holds the tile before the speed near-tie
   // can reach it, but only when Technical ALSO outranks Stream: Stream sitting
   // third on a marathon is not the hundredths-level argmax noise the near-tie
@@ -3193,6 +3220,18 @@ function bucketingSkillset(
   return bucketingSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS), null, 1, chartTechScore);
 }
 
+/**
+ * How long a play asks for, in seconds: the LONGER of the chart's 1.0x drain
+ * and the time the play actually lasted at its rate. Null when the length is
+ * unknown. Both length rules read this, so an uprated marathon and a downrated
+ * short file are judged the same way wherever the question comes up.
+ */
+function enduranceSeconds(lengthSeconds: number | null, rate: number): number | null {
+  if (lengthSeconds == null) return null;
+  const played = lengthSeconds / (Number.isFinite(rate) && rate > 0 ? rate : 1);
+  return Math.max(lengthSeconds, played);
+}
+
 /** A copy of an SSR vector holding only the named skillsets. */
 function pickSkillsets(values: Record<string, number> | undefined, keep: string[]): Record<string, number> {
   const picked: Record<string, number> = {};
@@ -3219,7 +3258,7 @@ export function danSkillsetBucketsForValues(
   chart?: ChartSkillInfo,
 ): string[] {
   const top = bucketingSkillset(values, lengthSeconds, rate, chart?.techScore ?? 0);
-  return bucketsForClear(danSkillsetBuckets(keyCount, side), top, chart).map((bucket) => bucket.id);
+  return bucketsForClear(danSkillsetBuckets(keyCount, side), top, chart, rate).map((bucket) => bucket.id);
 }
 
 // A pre-rated upload bakes its rate into the notes, so its stored length IS the
