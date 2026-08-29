@@ -428,6 +428,29 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
+  it("skips Difficulty Adjust plays and evicts stored ones whose score still carries DA", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
+
+      // DA rewrites the chart's own windows (OD -15 under Extended Limits),
+      // so the play never becomes a candidate, tracked or top.
+      const daPlay = play({ id: 21, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: -15 } }] });
+      const top = await computePlayerSkillRatings(db, failingOsu, [daPlay], []);
+      expect(top.summary.analyzedPlays).toBe(0);
+      expect(top.summary.unsupportedPlays).toBe(1);
+      const tracked = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores: [{ ...daPlay, pp: null }] });
+      expect(tracked.summary.totalPlays).toBe(0);
+
+      // A DA play rated before the exclusion existed evicts on the next
+      // compute while its score is still around to testify to the mods.
+      const healthy = await computePlayerSkillRatings(db, failingOsu, [play({ id: 22, beatmap_id: 101 })], []);
+      expect(healthy.summary.analyzedPlays).toBe(1);
+      const sameScoreWithDa = play({ id: 22, beatmap_id: 101, mods: [{ acronym: "DA" }] });
+      const purged = await computePlayerSkillRatings(db, failingOsu, [sameScoreWithDa], [{ ...healthy.plays[0] }]);
+      expect(purged.summary.analyzedPlays).toBe(0);
+    });
+  });
+
   it("rates DT plays at their real rate: 1.5x above 1.2x above 1x", async () => {
     await withDb(async (db) => {
       await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
@@ -830,6 +853,44 @@ describe("computePlayerSkillRatings", () => {
 
       expect(info.get(215)?.danEligible).toBe(false);
       expect(collectDanClearsForTest(7, [eligibleLookingPlay], info)).toEqual([]);
+    });
+  });
+
+  it("credits no dan on a chart below the OD floor", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const insertBeatmap = "insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at) values (?, ?, 'mania', 'x', ?, ?)";
+      const now = new Date().toISOString();
+      await exec(db, insertBeatmap, [281, 1, JSON.stringify({ accuracy: 5.4 }), now]);
+      await exec(db, insertBeatmap, [282, 1, JSON.stringify({ accuracy: 5.5 }), now]);
+      for (const beatmapId of [281, 282]) {
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [], rc: { rawDan: 11 } }), now],
+        );
+      }
+      const { collectDanClearsForTest, loadChartSkillInfo } = await import("../src/features/player-skills.js");
+      const info = await loadChartSkillInfo(db, [281, 282]);
+      expect(info.get(281)?.od).toBe(5.4);
+      expect(info.get(282)?.od).toBe(5.5);
+      const playOn = (beatmapId: number) => ({
+        identity: `official:${beatmapId}`,
+        beatmapId,
+        keyCount: 4,
+        rate: 1,
+        goal: 0.95,
+        pp: 100,
+        values: { Overall: 26 },
+        patterns: [],
+        accuracy: 0.97,
+        stableAccuracy: 0.97,
+      });
+      // The floor value itself still credits; below it the clear is out
+      // while the chart's own verdict stays visible, like danEligible.
+      expect(collectDanClearsForTest(4, [playOn(281)], info)).toEqual([]);
+      expect(collectDanClearsForTest(4, [playOn(282)], info)).toHaveLength(1);
     });
   });
 

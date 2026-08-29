@@ -63,6 +63,7 @@ const SPEEDJACK_CHART = {
   htFamily: null,
   htDanLabel: null,
   lengthSeconds: null,
+  od: null,
 };
 
 // Crescent Moon Island [Kuro 1.05x (181bpm)], beatmap 3090568 at 1.0x: the
@@ -227,7 +228,7 @@ describe("pattern tag thresholds", () => {
       patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, techScore: 0, lnRatio: 0, vibro: false,
       danEligible: true,
       rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
-      lengthSeconds: null,
+      lengthSeconds: null, od: null,
     })).toContain("speed");
   });
 });
@@ -237,7 +238,7 @@ describe("6K/7K jack bucket (LeoBlack cluster share)", () => {
     patterns: [], jackShare: null, streamShare: null, techCategory: null, techScore: 0, lnRatio: 0, vibro: false,
     danEligible: true,
     rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
-    lengthSeconds: null,
+    lengthSeconds: null, od: null,
     ...over,
   });
 

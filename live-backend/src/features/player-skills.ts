@@ -65,7 +65,11 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // (plus stable EZ/HR window scaling) instead of assumed OD8, so low-OD
 // charts stop reading easy 300s as near-MAX precision; stored plays rated
 // under the OD8 assumption purge.
-export const PLAYER_SKILLS_VERSION = 17;
+// v18: Difficulty Adjust plays are not evidence (their windows are not the
+// chart's); stored DA plays purge while their score is still visible, and
+// dan clears gain the stored-OD floor (DAN_MIN_OD). The bump exists so the
+// version-stale drip walks the whole roster instead of waiting on views.
+export const PLAYER_SKILLS_VERSION = 18;
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -681,6 +685,21 @@ export function getPlayRate(mods: OsuMod[] | string[] | undefined): number | nul
 }
 
 /**
+ * Whether a play carries Difficulty Adjust. DA rewrites the chart's own
+ * settings (with Extended Limits the OD slider reaches -15), so the
+ * judgements testify about windows the stored chart never had, in either
+ * direction. Such a play is skipped rather than mis-rated, like the
+ * no-single-rate mods.
+ */
+export function scoreHasDifficultyAdjust(mods: OsuMod[] | string[] | undefined): boolean {
+  for (const mod of mods ?? []) {
+    const acronym = typeof mod === "string" ? mod : String(mod?.acronym ?? "");
+    if (acronym === "DA") return true;
+  }
+  return false;
+}
+
+/**
  * The rate mod a play carries, by acronym. NC and DC are the pitch-shifting
  * variants of DT and HT, which the numeric rate alone cannot tell apart, so
  * anything showing a play at its own speed (the mod badge, the chart preview's
@@ -952,6 +971,9 @@ export interface ChartSkillInfo {
   htDanLabel: string | null;
   /** Drain length at 1.0x, for the stamina gate in bucketingSkillset. */
   lengthSeconds: number | null;
+  /** Stored overall difficulty from the beatmaps row; null when the chart is
+   * not yet enriched. Read by the dan-evidence OD floor (DAN_MIN_OD). */
+  od: number | null;
 }
 
 interface LeanHalfJson {
@@ -1063,7 +1085,8 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
     const rows = (await exec(
       db,
       `select a.beatmap_id, a.status, a.key_count, a.classification_json, a.dan_dt_json, a.dan_ht_json,
-              json_extract(b.metadata_json, '$.total_length') as total_length
+              json_extract(b.metadata_json, '$.total_length') as total_length,
+              json_extract(b.metadata_json, '$.accuracy') as od
          from beatmap_chart_analysis a
          left join beatmaps b on b.beatmap_id = a.beatmap_id
         where a.analysis_version = ? and a.beatmap_id in (${placeholders})`,
@@ -1127,6 +1150,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         htFamily: htRawDan == null ? null : danHt?.primaryFamily === "ln" ? "ln" : "rc",
         htDanLabel: readDanLabel(danHt?.primaryLabel),
         lengthSeconds: readLengthSeconds(row.total_length),
+        od: readStoredOd(row.od),
       });
     }
     if (offset + chunk.length < ids.length) {
@@ -1151,12 +1175,17 @@ export async function loadBeatmapOds(db: Db, beatmapIds: number[]): Promise<Map<
     beatmapIds,
   );
   for (const row of rows) {
-    // json_extract yields NULL for charts without a stored OD; Number(null)
-    // would read as a real OD 0.
-    const od = row.od == null ? Number.NaN : Number(row.od);
-    if (Number.isFinite(od) && od >= 0 && od <= 10) map.set(Number(row.beatmap_id), od);
+    const od = readStoredOd(row.od);
+    if (od != null) map.set(Number(row.beatmap_id), od);
   }
   return map;
+}
+
+// json_extract yields NULL for charts without a stored OD; Number(null)
+// would read as a real OD 0.
+function readStoredOd(value: unknown): number | null {
+  const od = value == null ? Number.NaN : Number(value);
+  return Number.isFinite(od) && od >= 0 && od <= 10 ? od : null;
 }
 
 function getMissShare(statistics: OsuScoreStatistics | undefined): number | null {
@@ -1295,6 +1324,13 @@ function missingRateVerdictPairs(
   return [...missing.values()];
 }
 
+// The lowest stored OD a chart may have for its plays to credit dan. Below
+// it the chart's own windows are too forgiving for a clear to testify at the
+// verdict's level; the verdict itself stays visible on /maps, exactly like
+// the danEligible structural gate. A chart with no stored OD yet passes, on
+// the same terms as the wife goal's OD8 assumption.
+const DAN_MIN_OD = 5.5;
+
 function collectDanClears(
   keyCount: number,
   plays: StoredPlaySsr[],
@@ -1307,6 +1343,7 @@ function collectDanClears(
     const info = infoByBeatmap.get(play.beatmapId);
     if (!info) continue;
     if (!info.danEligible) continue;
+    if (info.od != null && info.od < DAN_MIN_OD) continue;
     // Clear evidence rides on the stored play (retained plays outlive their
     // score payload); the live score object is the fallback for cache entries
     // written before the fields existed.
@@ -1758,9 +1795,17 @@ export async function computePlayerSkillRatings(
   // the same slot. Tracked plays that fail validation are best-effort extras
   // and skip silently; only top plays count toward unsupportedPlays.
   const candidates = new Map<string, PlayCandidate>();
+  // Score identities seen carrying Difficulty Adjust: never candidates, and
+  // grounds for evicting a stored play rated before the DA exclusion existed.
+  const daIdentities = new Set<string>();
   const consider = (score: OscScore, source: "top" | "tracked") => {
     const beatmapId = beatmapIdOf(score);
     if (!Number.isInteger(beatmapId) || beatmapId <= 0) {
+      if (source === "top") unsupportedPlays += 1;
+      return;
+    }
+    if (scoreHasDifficultyAdjust(score.mods)) {
+      daIdentities.add(getScoreIdentity(score));
       if (source === "top") unsupportedPlays += 1;
       return;
     }
@@ -1862,6 +1907,11 @@ export async function computePlayerSkillRatings(
     // floor's, not the play's. Rated before the sub-floor exclusion existed;
     // evict instead of retaining.
     if (!(previous.goal > SSR_GOAL_MIN)) continue;
+    // A stored play whose still-visible score turns out to carry Difficulty
+    // Adjust was rated on windows the chart never had (rated before the DA
+    // exclusion existed); evict instead of retaining. Applies to any source:
+    // top trust is about the rate, and DA disqualifies regardless of rate.
+    if (daIdentities.has(previous.identity)) continue;
     if (
       infoByBeatmap.get(previous.beatmapId)?.vibro &&
       previous.source !== "top" &&

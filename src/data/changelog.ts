@@ -27,6 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-29", text: "Fixed plays with the lazer Difficulty Adjust mod counting toward skill ratings. DA changes the map's own accuracy windows (down to OD -15), so those plays no longer count", to: "/my-stats" },
   { date: "2026-08-28", text: "Player profiles have a new Add a missing score button: paste an osu! score link and, if the score really belongs to that player, the site tracks it like any other. Old ranked and loved plays can finally count toward skill ratings and dan without replaying them, and you can add scores to anyone" },
   { date: "2026-08-28", text: "The All clears tab on the dan window no longer stops at 20: click Load more at the bottom to see the next 50" },
   { date: "2026-08-28", text: "Dan badges now show a small ring when the estimate is incomplete, so you can tell before opening it. It fills as your skillsets get closer to their 20 clears, on player pages, My Stats and the dan rankings", to: "/dan-estimates" },

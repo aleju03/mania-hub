@@ -103,7 +103,7 @@ describe("course accuracy tiers", () => {
 
 describe("course mods", () => {
   it("rejects the mods that make the run a different exam", () => {
-    for (const acronym of ["EZ", "NF", "HT", "DC", "RD", "AT", "CN", "SO", "RX", "WU", "WD", "AS", "DP", "7K"]) {
+    for (const acronym of ["EZ", "NF", "HT", "DC", "DA", "RD", "AT", "CN", "SO", "RX", "WU", "WD", "AS", "DP", "7K"]) {
       expect(danCourseModsAllowed([{ acronym }]), acronym).toBe(false);
     }
     expect(danCourseModsAllowed([{ acronym: "DT", settings: { speed_change: 0.95 } }])).toBe(false);
