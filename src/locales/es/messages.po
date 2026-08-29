@@ -6229,8 +6229,8 @@ msgstr "lazer edits"
 #~ msgstr "Los scores de lazer se recalculan a partir de sus judgements, con o sin el mod Classic, así que la acc usada aquí puede ser mayor que la mostrada. Por ejemplo, una play de 95.5% podría contar como un clear de 96%."
 
 #: src/routes/dan-estimates.tsx
-msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. But the Classic mod makes no difference."
-msgstr "Los scores de lazer se recalculan a partir de sus judgements, así que la acc usada aquí puede ser mayor que la mostrada. Por ejemplo, una play de 95.5% podría contar como un clear de 96%, que es lo que los mismos hits muestran en stable. Pero el mod Classic no hace ninguna diferencia."
+#~ msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. But the Classic mod makes no difference."
+#~ msgstr "Los scores de lazer se recalculan a partir de sus judgements, así que la acc usada aquí puede ser mayor que la mostrada. Por ejemplo, una play de 95.5% podría contar como un clear de 96%, que es lo que los mismos hits muestran en stable. Pero el mod Classic no hace ninguna diferencia."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. The Classic mod makes no difference."
@@ -6239,6 +6239,10 @@ msgstr "Los scores de lazer se recalculan a partir de sus judgements, así que l
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear."
 #~ msgstr "Los scores de lazer se recalculan a partir de sus judgements, así que la acc usada aquí puede ser mayor que la mostrada. Por ejemplo, una play de 95.5% podría contar como un clear de 96%."
+
+#: src/routes/dan-estimates.tsx
+msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear. On charts with a lot of long notes the recalculation is only close to what stable would show, because the two clients judge holds differently. The Classic mod makes no difference."
+msgstr "Los scores de lazer se recalculan a partir de sus judgements, así que la acc usada aquí puede ser mayor que la mostrada. Por ejemplo, una play de 95.5% podría contar como un clear de 96%. En mapas con muchas long notes el recálculo solo se acerca a lo que mostraría stable, porque los dos clientes juzgan las holds de forma distinta. El mod Classic no hace ninguna diferencia."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer shows slightly lower accuracy than stable for the same hits, so lazer plays are converted to stable accuracy here. A lazer 95.5% can count as a 96% clear because a stable player with the same hits would have 96%. This is not a bonus, and the Classic mod does not change it."

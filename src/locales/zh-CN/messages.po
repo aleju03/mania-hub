@@ -6238,8 +6238,8 @@ msgstr "lazer 改动"
 #~ msgstr "无论是否开启 Classic mod，lazer 成绩都会根据判定数重新计算，所以这里使用的准确率可能高于游戏显示的数值。例如，一次 95.5% 的成绩可能会按 96% 的通过计入。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. But the Classic mod makes no difference."
-msgstr "lazer 成绩会根据判定数重新计算，所以这里使用的准确率可能高于游戏显示的数值。例如，一次 95.5% 的成绩可能会按 96% 的通过计入，也就是同样的判定在 stable 上显示的数值。不过 Classic mod 没有任何影响。"
+#~ msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. But the Classic mod makes no difference."
+#~ msgstr "lazer 成绩会根据判定数重新计算，所以这里使用的准确率可能高于游戏显示的数值。例如，一次 95.5% 的成绩可能会按 96% 的通过计入，也就是同样的判定在 stable 上显示的数值。不过 Classic mod 没有任何影响。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. The Classic mod makes no difference."
@@ -6248,6 +6248,10 @@ msgstr "lazer 成绩会根据判定数重新计算，所以这里使用的准确
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear."
 #~ msgstr "lazer 成绩会根据判定数重新计算，所以这里使用的准确率可能高于游戏显示的数值。例如，一次 95.5% 的成绩可能会按 96% 的通过计入。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear. On charts with a lot of long notes the recalculation is only close to what stable would show, because the two clients judge holds differently. The Classic mod makes no difference."
+msgstr "lazer 成绩会根据判定数重新计算，所以这里使用的准确率可能高于游戏显示的数值。例如，一次 95.5% 的成绩可能会按 96% 的通过计入。在长条较多的谱面上，重新计算的结果只是接近 stable 会显示的数值，因为两个客户端对长条的判定方式不同。Classic mod 没有任何影响。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer shows slightly lower accuracy than stable for the same hits, so lazer plays are converted to stable accuracy here. A lazer 95.5% can count as a 96% clear because a stable player with the same hits would have 96%. This is not a bonus, and the Classic mod does not change it."

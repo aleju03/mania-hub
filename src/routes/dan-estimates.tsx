@@ -1199,7 +1199,14 @@ function DanDistribution({ rows }: { rows: Array<{ level: string; players: numbe
 function CreditCurveTabs() {
   const { t } = useLingui();
   const [tab, setTab] = useState(0);
-  const stableFormulaNote = t`Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. But the Classic mod makes no difference.`;
+  /* The old wording promised the recalculated number was what the same hits
+     show on stable. That only holds on rice: stable gives a hold one judgement
+     covering the press and the release, lazer gives it two, so on charts with
+     long notes the two clients are not scoring the same objects and no formula
+     over the judgement counts can bridge that. Measured on replays judged both
+     ways, the recalculated accuracy runs a few hundredths of a point above
+     stable's below 35% LN and about 0.3 points above it beyond that. */
+  const stableFormulaNote = t`Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear. On charts with a lot of long notes the recalculation is only close to what stable would show, because the two clients judge holds differently. The Classic mod makes no difference.`;
   const tabs = [
     {
       label: t`Regular`,
