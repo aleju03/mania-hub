@@ -18,6 +18,11 @@ export interface Config {
   workerHttpPort: number | null;
   // SQLite/libsql pragmas applied per connection at boot.
   sqliteBusyTimeoutMs: number;
+  // busy_timeout for the serving process's dedicated write connection. Local
+  // libsql blocks the event loop for the whole busy wait, so this one is kept
+  // small: the connection fails fast and does its real waiting in the async
+  // retry loop (and the write gate's queue) instead of freezing the process.
+  sqliteServeWriteBusyTimeoutMs: number;
   // busy_timeout for the throwaway connection that runs migrate(). Much larger
   // than the serving default because schema DDL on a deploy always races the
   // still-running previous process, and blocking inside SQLite is far cheaper
@@ -314,6 +319,7 @@ export function readConfig(): Config {
     eventLogTailIntervalMs: readBoundedInt("EVENT_LOG_TAIL_INTERVAL_MS", 250, 50, 5_000),
     workerHttpPort: readOptionalInt("WORKER_HTTP_PORT"),
     sqliteBusyTimeoutMs: readBoundedInt("SQLITE_BUSY_TIMEOUT_MS", 2_000, 0, 60_000),
+    sqliteServeWriteBusyTimeoutMs: readBoundedInt("SQLITE_SERVE_WRITE_BUSY_TIMEOUT_MS", 250, 25, 60_000),
     sqliteMigrationBusyTimeoutMs: readBoundedInt("SQLITE_MIGRATION_BUSY_TIMEOUT_MS", 10_000, 0, 60_000),
     sqliteSynchronous: (process.env.SQLITE_SYNCHRONOUS || "NORMAL").toUpperCase(),
     sqliteCacheMb: readBoundedInt("SQLITE_CACHE_MB", 64, 0, 2_048),

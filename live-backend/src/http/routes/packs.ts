@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { parseJson } from "../../db.js";
+import { checkWriteGateOverloaded, parseJson } from "../../db.js";
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
 import { getPackCardCollectors, getPackCardKeyStats, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
@@ -11,7 +11,7 @@ import { getPackPoolMembership, getPackPoolRoster } from "../../features/global-
 import { fetchAndStoreProfileSnapshotShared, getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, selectReadyPackCardUserIds, warmProfileSnapshots } from "../../features/player-profiles.js";
 import type { HttpContext } from "../context.js";
 import { DEFAULT_BODY_LIMIT_BYTES, isBridge, readBody, readBodyBuffer } from "../request.js";
-import { checkRate, sendAccentEnrichedJson, sendJson } from "../respond.js";
+import { checkRate, sendAccentEnrichedJson, sendJson, sendWritePressureShed } from "../respond.js";
 
 // A wallet holding the full ~6k tracked-player pool serializes to ~1.5MB,
 // so pack wallet pushes get more headroom than the default body limit.
@@ -198,6 +198,14 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     if (packDrawRateLimited(ownerUserId)) {
       res.setHeader("retry-after", "60");
       sendJson(req, res, ctx, 429, { error: "rate_limited" });
+      return true;
+    }
+    // A draw is entertainment: under write pressure it waits a few seconds
+    // (the client's existing 429 retry) instead of feeding the saturation
+    // that froze the site on 2026-08-07 and 2026-08-29.
+    const shed = checkWriteGateOverloaded(ctx.serveWriteDb);
+    if (shed) {
+      sendWritePressureShed(req, res, ctx, "packs-draw", shed.retryAfterMs);
       return true;
     }
     /* Compat hint from clients built before the draw wrote the collection

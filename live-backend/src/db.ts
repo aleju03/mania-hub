@@ -1,4 +1,5 @@
 import { createClient, type Client, type InValue, type ResultSet, type TransactionMode } from "@libsql/client";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Config } from "./config.js";
@@ -648,6 +649,165 @@ export async function writeVariantPps(db: Db, userId: number, statistics: unknow
   const statement = variantPpUpdateStatement(userId, statistics);
   if (!statement) return;
   await exec(db, statement.sql, statement.args ?? []);
+}
+
+/* ------------------------------------------------------------------------
+ * The serve-write gate.
+ *
+ * Local libsql executes every statement synchronously on the calling thread,
+ * so a request-path write that loses the cross-process lock race blocks the
+ * whole event loop for the connection's busy_timeout — during the 2026-08-29
+ * write-saturation freeze (pack pulls + a manual score import) that meant
+ * every read, SSE tick and health check froze in 2s slices for ~5 minutes.
+ *
+ * The gate turns that around: statements on a gated connection line up in an
+ * in-process FIFO (waiting is async and free), at most one is inside SQLite
+ * at a time, and the connection itself runs a much smaller busy_timeout so a
+ * contended attempt blocks the loop briefly and does its real waiting in
+ * withSqliteBusyRetry's async sleeps. Queue depth and wait time become the
+ * saturation signal the shed check below reads, instead of the site freezing.
+ * ---------------------------------------------------------------------- */
+
+const WRITE_GATE = Symbol("mania.writeGate");
+
+export interface WriteGateStats {
+  /** Calls queued or executing right now. */
+  depth: number;
+  peakDepth: number;
+  gatedCalls: number;
+  /** Requests refused by isWriteGateOverloaded since boot. */
+  sheds: number;
+  lastWaitMs: number;
+  /** Exponential moving average of gate wait, the shed check's signal. */
+  ewmaWaitMs: number;
+}
+
+interface WriteGateState extends WriteGateStats {
+  tail: Promise<void>;
+  turnToken: object | null;
+}
+
+// A write turn (withWriteTurn) marks its async context so the statements it
+// issues bypass the queue they already hold the head of.
+const writeTurnContext = new AsyncLocalStorage<object>();
+
+// Shed thresholds: refuse discretionary writes when the queue is deep or a
+// write has been waiting seconds for its turn. Both require a non-trivial
+// queue so a stale EWMA after a burst cannot shed on an idle gate.
+const WRITE_GATE_SHED_DEPTH = 8;
+const WRITE_GATE_SHED_EWMA_MS = 2_000;
+const WRITE_GATE_SHED_RETRY_AFTER_MS = 3_000;
+const WRITE_GATE_EWMA_ALPHA = 0.2;
+
+function writeGateState(db: Db): WriteGateState | null {
+  return ((db as unknown as Record<symbol, unknown>)[WRITE_GATE] as WriteGateState | undefined) ?? null;
+}
+
+async function acquireWriteGate(state: WriteGateState): Promise<() => void> {
+  const queuedAt = Date.now();
+  state.depth += 1;
+  if (state.depth > state.peakDepth) state.peakDepth = state.depth;
+  const previous = state.tail;
+  let release!: () => void;
+  state.tail = new Promise<void>((r) => { release = r; });
+  await previous;
+  const waited = Date.now() - queuedAt;
+  state.gatedCalls += 1;
+  state.lastWaitMs = waited;
+  state.ewmaWaitMs = state.ewmaWaitMs * (1 - WRITE_GATE_EWMA_ALPHA) + waited * WRITE_GATE_EWMA_ALPHA;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    state.depth -= 1;
+    release();
+  };
+}
+
+/**
+ * Wrap a connection so its execute/batch calls serialize through the gate.
+ * Everything else (the RECONNECT hook included) passes through, so the busy
+ * retry and wedge recovery machinery keep working; a retry re-enters the gate,
+ * which is deliberate — between attempts, queued writers get their turn.
+ */
+export function withWriteGate(db: Db): Db {
+  const state: WriteGateState = {
+    depth: 0,
+    peakDepth: 0,
+    gatedCalls: 0,
+    sheds: 0,
+    lastWaitMs: 0,
+    ewmaWaitMs: 0,
+    tail: Promise.resolve(),
+    turnToken: null,
+  };
+  const gated = async <T>(run: () => Promise<T>): Promise<T> => {
+    const turn = writeTurnContext.getStore();
+    if (turn != null && turn === state.turnToken) return run();
+    const releaseGate = await acquireWriteGate(state);
+    try {
+      return await run();
+    } finally {
+      releaseGate();
+    }
+  };
+  return new Proxy(db, {
+    get(_target, prop) {
+      if (prop === WRITE_GATE) return state;
+      if (prop === "execute") {
+        return (...args: unknown[]) => gated(() => (db.execute as (...a: unknown[]) => Promise<ResultSet>)(...args));
+      }
+      if (prop === "batch") {
+        return (...args: unknown[]) => gated(() => (db.batch as (...a: unknown[]) => Promise<ResultSet[]>)(...args));
+      }
+      const value = (db as unknown as Record<string | symbol, unknown>)[prop];
+      return typeof value === "function" ? (value as (...a: unknown[]) => unknown).bind(db) : value;
+    },
+  }) as Db;
+}
+
+/**
+ * Hold one gate turn across a multi-statement action (a score ingest), so its
+ * writes go down contiguously instead of interleaving with every other
+ * writer's. Reads on other connections are unaffected. On an ungated db this
+ * is a plain call, so tests and the worker role need no special casing;
+ * nested turns on the held gate just run.
+ */
+export async function withWriteTurn<T>(db: Db, fn: () => Promise<T>): Promise<T> {
+  const state = writeGateState(db);
+  if (!state) return fn();
+  const current = writeTurnContext.getStore();
+  if (current != null && current === state.turnToken) return fn();
+  const releaseGate = await acquireWriteGate(state);
+  const token = {};
+  state.turnToken = token;
+  try {
+    return await writeTurnContext.run(token, fn);
+  } finally {
+    state.turnToken = null;
+    releaseGate();
+  }
+}
+
+export function getWriteGateStats(db: Db | null | undefined): WriteGateStats | null {
+  const state = db ? writeGateState(db) : null;
+  if (!state) return null;
+  const { depth, peakDepth, gatedCalls, sheds, lastWaitMs, ewmaWaitMs } = state;
+  return { depth, peakDepth, gatedCalls, sheds, lastWaitMs, ewmaWaitMs: Math.round(ewmaWaitMs) };
+}
+
+/**
+ * The shed check for discretionary write endpoints (pack draws, manual score
+ * submissions): under write pressure they get a 429 with retry-after instead
+ * of joining the pile-up. Null means "not overloaded" (including an ungated
+ * db, where there is no signal to read).
+ */
+export function checkWriteGateOverloaded(db: Db | null | undefined): { retryAfterMs: number } | null {
+  const state = db ? writeGateState(db) : null;
+  if (!state || state.depth < 2) return null;
+  if (state.depth < WRITE_GATE_SHED_DEPTH && state.ewmaWaitMs <= WRITE_GATE_SHED_EWMA_MS) return null;
+  state.sheds += 1;
+  return { retryAfterMs: WRITE_GATE_SHED_RETRY_AFTER_MS };
 }
 
 export function isSqliteBusyError(error: unknown): boolean {

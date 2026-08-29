@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readConfig } from "./config.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
 import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes } from "./countries.js";
-import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate, SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS } from "./db.js";
+import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate, SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS, withWriteGate } from "./db.js";
 import { AnalyticsStore } from "./features/analytics.js";
 import { routeHttp, sendNotFound, warmGlobalMapsFarmedBoard, warmStatusBodyCache } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
@@ -274,7 +274,12 @@ export async function createApp() {
   // a stuck write here can never queue in front of a read. Small cache/mmap — it
   // only runs a handful of one-row writes. The pure worker role never serves
   // HTTP, so it does not need one.
-  const serveWriteDb = config.role === "worker" ? null : await createDb({ ...config, sqliteCacheMb: 2, sqliteMmapMb: 0 });
+  // Gated and on a short busy_timeout: request-path writes queue in JS (async,
+  // shed-able) instead of each blocking the event loop inside SQLite's busy
+  // wait — the 2026-08-29 saturation freeze mechanism. See withWriteGate.
+  const serveWriteDb = config.role === "worker"
+    ? null
+    : withWriteGate(await createDb({ ...config, sqliteBusyTimeoutMs: config.sqliteServeWriteBusyTimeoutMs, sqliteCacheMb: 2, sqliteMmapMb: 0 }));
   const serveWriteQueue = serveWriteDb ? new JobQueue(serveWriteDb) : null;
   // Two-process split only: the serving process never runs the ~1.4GB full
   // GLOBAL board pack itself — it asks the worker process (via the dedicated

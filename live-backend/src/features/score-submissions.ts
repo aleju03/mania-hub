@@ -1,6 +1,6 @@
 import type { Config } from "../config.js";
 import type { Db } from "../db.js";
-import { exec, parseJson } from "../db.js";
+import { exec, parseJson, withWriteTurn } from "../db.js";
 import { ScoreIngestor } from "../ingest/score-ingestor.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
@@ -192,13 +192,18 @@ export async function submitMissingScore(
   // confirmation - besides fabricating a "new top play" feed entry, that
   // loop would treat a score absent from today's best-200 as not-yet-
   // published and retry full best-200 fetches for half an hour.
-  const result = await ingestor.ingestBatch([score], "manual_submit", {
+  // One write turn for the whole ingest: its dozen-plus statements go down
+  // contiguously on the gated serve-write connection instead of interleaving
+  // with every pack draw's, which is what multiplied lock acquisitions during
+  // the 2026-08-29 saturation freeze. Reads are on other connections and
+  // unaffected; on an ungated db (tests) this is a plain call.
+  const result = await withWriteTurn(db, () => ingestor.ingestBatch([score], "manual_submit", {
     enqueueRecentReconcile: false,
     processGoalFeatures: false,
     processTopPlayFeatures: false,
     suppressSnipeEvents: true,
     suppressTrackerEvents: true,
-  });
+  }));
   if (result.inserted === 0) {
     // The only gate left between the verified score and a row is the tracked-
     // country resolution (roster membership or an active user country).

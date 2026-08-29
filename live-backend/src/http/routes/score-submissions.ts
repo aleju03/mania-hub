@@ -1,11 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { parseJson } from "../../db.js";
+import { checkWriteGateOverloaded, parseJson } from "../../db.js";
 import { parseScoreLink, submitMissingScore } from "../../features/score-submissions.js";
 import { errorContext, logWarn } from "../../logger.js";
 import { OsuApiError } from "../../osu/client.js";
 import type { HttpContext } from "../context.js";
 import { isAdmin, readBody } from "../request.js";
-import { checkRate, sendJson, sendRateLimited } from "../respond.js";
+import { checkRate, sendJson, sendRateLimited, sendWritePressureShed } from "../respond.js";
 
 /**
  * The open write behind the profile page's "Add a missing score" dialog.
@@ -41,6 +41,14 @@ export async function handleScoreSubmissionRoutes(req: IncomingMessage, res: Ser
   const queue = ctx.serveWriteQueue ?? ctx.queue;
   if (!ctx.serveWriteDb || !queue) {
     sendJson(req, res, ctx, 503, { error: "submissions_unavailable" });
+    return true;
+  }
+  // Under write pressure an import waits its turn instead of joining the
+  // pile-up that saturated the lock on 2026-08-29; the dialog already knows
+  // how to wait on a 429 and retry.
+  const shed = checkWriteGateOverloaded(ctx.serveWriteDb);
+  if (shed) {
+    sendWritePressureShed(req, res, ctx, "score-submissions", shed.retryAfterMs);
     return true;
   }
   // The submission buckets exist to bound osu! API spend (a per-IP hourly cap

@@ -1,4 +1,4 @@
-import { dbHealth, exec, getSqliteBusyRetryStats, parseJson, type Db } from "../db.js";
+import { dbHealth, exec, getSqliteBusyRetryStats, getWriteGateStats, parseJson, type Db } from "../db.js";
 import { getCountryRegistry, isGlobalCountry } from "../countries.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../features/activity.js";
 import { getBeatmapOsuFileBackfillStatus } from "../features/beatmap-osu-file-backfill.js";
@@ -170,6 +170,9 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     server: getSqliteBusyRetryStats(),
     worker: mirror?.sqliteBusy ?? (ctx.config.role === "server" ? null : getSqliteBusyRetryStats()),
   };
+  // The serve-write gate: queue depth / wait EWMA is the write-saturation
+  // signal (see withWriteGate), and sheds counts the 429s it handed out.
+  const writeGate = getWriteGateStats(ctx.serveWriteDb);
   // Same server/worker shape as sqliteBusy. The worker's copy rides the
   // live_meta mirror; a worker still running code that does not write it leaves
   // the field undefined, which must read as "unknown", not as a crash. In the
@@ -204,6 +207,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     osuFileBackfill,
     rate,
     sqliteBusy,
+    writeGate,
     scoresFallback,
     abuse: ctx.abuse?.state() ?? null,
     apiCallHistory: apiCallNames ? { ...apiCalls, names: apiCallNames } : apiCalls,
