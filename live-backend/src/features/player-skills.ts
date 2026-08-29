@@ -67,9 +67,10 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // under the OD8 assumption purge.
 // v18: Difficulty Adjust plays are not evidence (their windows are not the
 // chart's); stored DA plays purge while their score is still visible, and
-// dan clears gain the stored-OD floor (DAN_MIN_OD) plus the stable-EZ
-// exclusion (widened windows stay rated, derated, but credit no dan). The
-// bump exists so the version-stale drip walks the whole roster instead of
+// dan clears gain the stored-OD floor (DAN_MIN_OD) plus the EZ exclusion
+// (widened windows stay rated, derated, but credit no dan; lazer EZ scales
+// windows too, so the wife goal now derates it same as stable). The bump
+// exists so the version-stale drip walks the whole roster instead of
 // waiting on views.
 export const PLAYER_SKILLS_VERSION = 18;
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
@@ -651,13 +652,12 @@ export interface StoredPlaySsr {
   // of the clear evidence; retained plays cached before the field existed stay
   // undefined and their consumers fall back to the rate's sign.
   rateMod?: string | null;
-  // True when the play was stable-judged with EZ widening every hit window
-  // 1.4x (stableWindowScale > 1). The wife goal already prices that in for
-  // the skill rating, but a dan clear is accuracy against the bar, so these
-  // plays credit no dan. Lazer's mania EZ leaves windows alone and stays
-  // eligible. Retained plays cached before the field existed stay undefined
-  // and fall back to the live score when one is around.
-  stableEzWindows?: boolean;
+  // True when EZ widened the play's hit windows (ezWindowScale > 1, both
+  // clients). The wife goal already prices that in for the skill rating, but
+  // a dan clear is accuracy against the bar, so these plays credit no dan.
+  // Retained plays cached before the field existed stay undefined and fall
+  // back to the live score when one is around.
+  ezWindows?: boolean;
 }
 
 interface StoredModesSummary {
@@ -779,18 +779,20 @@ type SsrGoalScore = Pick<OscScore, "accuracy" | "statistics" | "type" | "legacy_
   mods?: OscScore["mods"] | string[];
 };
 
-// Stable multiplies every mania hit window by 1.4 under EZ and divides it by
-// 1.4 under HR; lazer's mania EZ/HR leave timing windows alone, so only
-// legacy-judged plays scale.
-const STABLE_EZ_WINDOW_SCALE = 1.4;
+// Both clients scale every mania hit window by 1.4 under EZ and by 1/1.4
+// under HR. Stable always did; lazer matched it exactly in July 2025
+// (ppy/osu 8e53f47, a per-note window multiplier), and before that its EZ/HR
+// still widened/narrowed the windows by shifting effective OD, just not by
+// this exact factor. 1.4 is exact for stable and current lazer and the close
+// approximation for the older lazer plays.
+const EZ_WINDOW_SCALE = 1.4;
 
-function stableWindowScale(score: SsrGoalScore): number {
-  if (isLazerScore(score as OscScore)) return 1;
+function ezWindowScale(score: SsrGoalScore): number {
   let scale = 1;
   for (const mod of score.mods ?? []) {
     const acronym = typeof mod === "string" ? mod : String(mod?.acronym ?? "");
-    if (acronym === "EZ") scale *= STABLE_EZ_WINDOW_SCALE;
-    else if (acronym === "HR") scale /= STABLE_EZ_WINDOW_SCALE;
+    if (acronym === "EZ") scale *= EZ_WINDOW_SCALE;
+    else if (acronym === "HR") scale /= EZ_WINDOW_SCALE;
   }
   return scale;
 }
@@ -819,7 +821,7 @@ export function ssrGoalForScore(score: SsrGoalScore, lnRatio?: number | null, od
 }
 
 function ssrGoalForScoreUnchecked(score: SsrGoalScore, lnRatio?: number | null, od?: number | null): number {
-  const wife = estimateWifeAccuracy(score.statistics, { od, windowScale: stableWindowScale(score) });
+  const wife = estimateWifeAccuracy(score.statistics, { od, windowScale: ezWindowScale(score) });
   if (wife == null) return ssrGoalForAccuracy(score.accuracy);
   const wifeGoal = Math.max(SSR_GOAL_MIN, Math.min(SSR_GOAL_CAP, wife));
   if (isLazerScore(score as OscScore)) {
@@ -1357,10 +1359,11 @@ function collectDanClears(
     // score payload); the live score object is the fallback for cache entries
     // written before the fields existed.
     const score = scoresByIdentity.get(play.identity);
-    // Stable EZ widened every hit window 1.4x, so the accuracy was not earned
-    // against the windows the bar assumes; no dan credit. The play itself
-    // stays rated: the wife goal already derates it for the skill rating.
-    if (play.stableEzWindows ?? (score != null && stableWindowScale(score) > 1)) continue;
+    // EZ widened every hit window 1.4x (both clients), so the accuracy was
+    // not earned against the windows the bar assumes; no dan credit. The play
+    // itself stays rated: the wife goal already derates it for the skill
+    // rating.
+    if (play.ezWindows ?? (score != null && ezWindowScale(score) > 1)) continue;
     const displayed = play.accuracy ?? (score ? getDisplayedAccuracy(score) : null);
     if (typeof displayed !== "number") continue;
     // Both currencies come off the judgement counts, so a bar written in one
@@ -1863,7 +1866,7 @@ export async function computePlayerSkillRatings(
       missShare: getMissShare(score.statistics),
       endedAt: score.ended_at ?? score.created_at ?? null,
       rateMod: getRateModAcronym(score.mods),
-      stableEzWindows: stableWindowScale(score) > 1,
+      ezWindows: ezWindowScale(score) > 1,
     };
     const previous = previousByIdentity.get(identity);
     if (previous && previous.beatmapId === beatmapId && previous.rate === rate && previous.goal === goal) {

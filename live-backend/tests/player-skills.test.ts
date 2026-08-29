@@ -324,7 +324,10 @@ describe("ssrGoalForScore", () => {
     expect(ssrGoalForScore(score, 0, null)).toBe(od8);
   });
 
-  it("scales windows for stable EZ/HR but leaves lazer mods alone", () => {
+  it("scales windows for EZ/HR on both clients", () => {
+    // Lazer scales too: its mania EZ/HR matched stable's 1.4x window factor
+    // in July 2025 (ppy/osu 8e53f47) and widened windows via effective OD
+    // before that. It never left them alone.
     const statistics = { count_geki: 300, count_300: 700 };
     const stableEz = { accuracy: 0.997, legacy_score_id: 12345, statistics, mods: ["EZ"] };
     const stablePlain = { accuracy: 0.997, legacy_score_id: 12345, statistics, mods: [] };
@@ -332,7 +335,8 @@ describe("ssrGoalForScore", () => {
     const lazerStats = { perfect: 300, great: 700 };
     const lazerEz = { accuracy: 0.997, statistics: lazerStats, mods: ["EZ"] };
     const lazerPlain = { accuracy: 0.997, statistics: lazerStats, mods: [] };
-    expect(ssrGoalForScore(lazerEz, 0, 8)).toBe(ssrGoalForScore(lazerPlain, 0, 8));
+    expect(ssrGoalForScore(lazerEz, 0, 8)).toBeLessThan(ssrGoalForScore(lazerPlain, 0, 8)!);
+    expect(ssrGoalForScore(lazerEz, 0, 8)).toBe(ssrGoalForScore(stableEz, 0, 8));
   });
 });
 
@@ -892,10 +896,10 @@ describe("computePlayerSkillRatings", () => {
       expect(collectDanClearsForTest(4, [playOn(281)], info)).toEqual([]);
       expect(collectDanClearsForTest(4, [playOn(282)], info)).toHaveLength(1);
 
-      // Stable EZ earned its accuracy on 1.4x windows, so it credits no dan;
-      // lazer EZ leaves the windows alone and stays eligible.
-      expect(collectDanClearsForTest(4, [{ ...playOn(282), stableEzWindows: true }], info)).toEqual([]);
-      expect(collectDanClearsForTest(4, [{ ...playOn(282), stableEzWindows: false }], info)).toHaveLength(1);
+      // An EZ play earned its accuracy on 1.4x windows (both clients), so it
+      // credits no dan; without EZ the same play stays eligible.
+      expect(collectDanClearsForTest(4, [{ ...playOn(282), ezWindows: true }], info)).toEqual([]);
+      expect(collectDanClearsForTest(4, [{ ...playOn(282), ezWindows: false }], info)).toHaveLength(1);
     });
   });
 
