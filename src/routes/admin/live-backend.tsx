@@ -59,6 +59,16 @@ interface LiveBackendStatus {
   };
   lastEventAt: string | null;
   queueDepth: number;
+  // The serving process's write gate (db.ts withWriteGate): queue depth and
+  // wait EWMA are the write-saturation signal, sheds the 429s it handed out.
+  writeGate?: {
+    depth: number;
+    peakDepth: number;
+    gatedCalls: number;
+    sheds: number;
+    lastWaitMs: number;
+    ewmaWaitMs: number;
+  } | null;
   queuePressure?: {
     depth: number;
     deferred?: number;
@@ -599,7 +609,7 @@ function LiveBackendPage() {
           {error ? <ErrorBanner message={error} /> : null}
 
           <Section title="Health" subtitle="Is the server up and ingesting?">
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
               <KpiCard
                 label="Backend"
                 value={statusLoaded ? status.ok ? "online" : "offline" : "loading"}
@@ -635,6 +645,13 @@ function LiveBackendPage() {
                 hint={status ? `${status.rate.hardPerMinute} hard ceiling${status.rate.pending ? `, ${status.rate.pending} pending` : ""}` : "calls in last minute"}
                 tone={status && osuRateTarget > 0 && status.rate.usedLastMinute >= osuRateTarget ? "warn" : "neutral"}
                 icon={<Signal className="h-4 w-4" />}
+              />
+              <KpiCard
+                label="Write gate"
+                value={status?.writeGate ? `${formatNumber(status.writeGate.ewmaWaitMs)}ms` : "—"}
+                hint={status?.writeGate ? `depth ${formatNumber(status.writeGate.depth)} (peak ${formatNumber(status.writeGate.peakDepth)}), ${formatNumber(status.writeGate.sheds)} shed` : "avg wait for the write lock queue"}
+                tone={status?.writeGate && (status.writeGate.sheds > 0 || status.writeGate.ewmaWaitMs > 2000) ? "warn" : "neutral"}
+                icon={<Database className="h-4 w-4" />}
               />
             </div>
           </Section>
