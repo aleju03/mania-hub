@@ -34,7 +34,7 @@ import { clearSupersededPlayDetails } from "./activity.js";
  * ~6.6e8, solo ids ~6.8e9+), so the guess below is right nearly always and the
  * other space is only tried when verification rejects the first answer.
  */
-const SOLO_SCORE_ID_FLOOR = 4_000_000_000;
+export const SOLO_SCORE_ID_FLOOR = 4_000_000_000;
 
 export const ACTIVITY_MODS_BACKFILL_PROGRESS_META_KEY = "activity_mods_backfill_progress:v1";
 export const ACTIVITY_MODS_BACKFILL_DONE_META_KEY = "activity_mods_backfill_done:v1";

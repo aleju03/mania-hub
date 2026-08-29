@@ -26,6 +26,15 @@ export interface ScoreIngestOptions {
   processTopPlayFeatures?: boolean;
   processMapsFarmedFeatures?: boolean;
   processSnipeFeatures?: boolean;
+  // The "this just happened" surfaces, separable from the projections for
+  // historical backfills (manual score submissions): a years-old score may
+  // correct boards and feed ratings, but it must not complete a goal someone
+  // set after it was played, an old overtake is not a live snipe, and the
+  // play is not tracker news - no tracker_score SSE card, and no
+  // country-liveness touch, which would make the ingest heartbeat look fresh.
+  processGoalFeatures?: boolean;
+  suppressSnipeEvents?: boolean;
+  suppressTrackerEvents?: boolean;
   countryAllowlist?: string[];
 }
 
@@ -158,27 +167,34 @@ export class ScoreIngestor {
       if (scoreId > 0) {
         await this.deleteMatchingIdZeroRecentScore(country, score, beatmapId, totalScore, receivedAt);
       }
-      await markCountryScoreSeen(this.db, country);
+      if (options.suppressTrackerEvents !== true) await markCountryScoreSeen(this.db, country);
+      // Hydration stays even when tracker events are suppressed: the snipe
+      // fanout below falls back to the hydrated copy for scores that arrived
+      // without embedded metadata.
       const hydratedScore = await getHydratedScoreByIdentity(this.db, country, scoreIdentity);
       if (hydratedScore) {
         hydratedScoresByCountry.set(country, hydratedScore.score);
-        const leanScore = toLeanTrackerScore(hydratedScore.score);
-        // SSE cards render the same colored names as snapshots, so the event
-        // carries the accent too. One PK read; a miss queues extraction and the
-        // name just stays theme-colored until the next payload.
-        if (leanScore.user?.avatar_url) {
-          leanScore.user.avatar_accent = await getAvatarAccentForUrl(this.db, this.queue, leanScore.user.avatar_url);
+        if (options.suppressTrackerEvents !== true) {
+          const leanScore = toLeanTrackerScore(hydratedScore.score);
+          // SSE cards render the same colored names as snapshots, so the event
+          // carries the accent too. One PK read; a miss queues extraction and the
+          // name just stays theme-colored until the next payload.
+          if (leanScore.user?.avatar_url) {
+            leanScore.user.avatar_accent = await getAvatarAccentForUrl(this.db, this.queue, leanScore.user.avatar_url);
+          }
+          await this.events.append("tracker_score", hydratedScore.country, leanScore, `tracker_score:${hydratedScore.country}:${scoreIdentity}`);
         }
-        await this.events.append("tracker_score", hydratedScore.country, leanScore, `tracker_score:${hydratedScore.country}:${scoreIdentity}`);
       }
     }
     if (inserted === 0) return false;
     // Auto-complete play-shaped goals (pass / accuracy / grade / "land an X pp play"). Guarded so
     // a goals bug can never drop a score: ingest is the hot path and must keep flowing.
-    try {
-      await evaluateScoreGoals(this.db, this.events, score, countries);
-    } catch (error) {
-      logWarn("goal_eval_failed", { user_id: score.user_id, error: error instanceof Error ? error.message : String(error) });
+    if (options.processGoalFeatures ?? true) {
+      try {
+        await evaluateScoreGoals(this.db, this.events, score, countries);
+      } catch (error) {
+        logWarn("goal_eval_failed", { user_id: score.user_id, error: error instanceof Error ? error.message : String(error) });
+      }
     }
     // Session-end skill refresh: debounced per player, so the recompute runs
     // once ~30min after their last pass instead of once per play. Guarded like
@@ -219,7 +235,9 @@ export class ScoreIngestor {
         if (!snipeScore) continue;
         if (!await canSeedSnipesForCountry(this.db, this.config, country)) continue;
         if (canUseOsuApi && await this.enqueueSnipeSeedIfNeeded(country, snipeScore)) continue;
-        await updateSnipeProjection(this.db, this.events, country, snipeScore, this.snipeSelfHistory);
+        await updateSnipeProjection(this.db, this.events, country, snipeScore, this.snipeSelfHistory, {
+          emitEvents: options.suppressSnipeEvents !== true,
+        });
       }
     }
     return true;

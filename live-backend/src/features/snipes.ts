@@ -25,7 +25,18 @@ interface BoardScoreWrite {
   endedAt: string;
 }
 
-export async function updateSnipeProjection(db: Db, events: LiveEventLog, country: string, score: OscScore, selfHistory?: SnipeSelfHistoryProvider): Promise<SnipeEvent | null> {
+export async function updateSnipeProjection(
+  db: Db,
+  events: LiveEventLog,
+  country: string,
+  score: OscScore,
+  selfHistory?: SnipeSelfHistoryProvider,
+  // emitEvents: false is the historical-backfill mode (manual score
+  // submissions): the board upsert below still applies, because boards are
+  // all-time and the score legitimately holds its spot, but an overtake that
+  // happened years ago is not news - no snipe_events row, no SSE.
+  options: { emitEvents?: boolean } = {},
+): Promise<SnipeEvent | null> {
   if (!score.beatmap || !score.beatmapset || !score.user) return null;
   if (!scoreHasPublicLeaderboard(score)) return null;
   // Country snipe boards are a ranking surface: only ranked roster members (top N) write to them.
@@ -90,6 +101,7 @@ export async function updateSnipeProjection(db: Db, events: LiveEventLog, countr
     : currentBoardScore;
   await upsertBoardScore(db, country, score.beatmap.id, laneKey, boardScore);
   if (victim == null || historicalSelfAlreadyAhead) return null;
+  if (options.emitEvents === false) return null;
   const event: SnipeEvent = {
     beatmap_id: score.beatmap.id,
     beatmapset_id: score.beatmapset.id,

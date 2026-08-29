@@ -1,7 +1,7 @@
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ExternalLink, Pencil, RefreshCw, X } from "lucide-react";
+import { Check, ExternalLink, Pencil, Plus, RefreshCw, X } from "lucide-react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { I18n, MessageDescriptor } from "@lingui/core";
@@ -73,6 +73,7 @@ import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../
 import { SkillBreakdownBody, SkillModePanel } from "../../components/player/SkillBreakdown";
 import { qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "../../lib/skill-axes";
 import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
+import { AddScoreModal } from "../../components/player/AddScoreModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpCumulativeDistribution, buildPpDistribution, calculateUserProfileInsights, KEY_PP_LIST_LIMIT } from "../../lib/profile-insights";
@@ -3543,7 +3544,33 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
      opens. Built here rather than in the window because the card belongs to the
      profile and the play is by the profile's owner. */
   const [courseScore, setCourseScore] = useState<OsuScore | null>(null);
+  const [addScoreOpen, setAddScoreOpen] = useState(false);
+  // Bumped when a manual submission stores a score, so an already-ready panel
+  // refetches (which also re-arms the pending poll) instead of staying stale
+  // until a remount.
+  const [skillsRefreshKey, setSkillsRefreshKey] = useState(0);
   const liveConfigured = isLiveBackendConfigured();
+
+  const addScoreButton = (
+    <button
+      type="button"
+      onClick={() => setAddScoreOpen(true)}
+      className="inline-flex items-center gap-1.5 rounded-full bg-osu-b4 px-3 py-1 text-[11.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3/60 hover:text-white"
+    >
+      <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+      <Trans>Add a missing score</Trans>
+    </button>
+  );
+  const addScoreModal = addScoreOpen
+    ? (
+      <AddScoreModal
+        userId={user.id}
+        username={user.username}
+        onClose={() => setAddScoreOpen(false)}
+        onSubmitted={() => setSkillsRefreshKey((key) => key + 1)}
+      />
+    )
+    : null;
 
   useEffect(() => {
     if (!liveConfigured) return;
@@ -3556,7 +3583,14 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
         if (cancelled) return;
         setSkills(data);
         setSkillsError(false);
-        if (data.status === "pending" && attempts < 40) {
+        // Poll while pending, and after a manual score submission also while
+        // ready-but-stale: the recompute the submission queued lands minutes
+        // later, and a ready answer would otherwise stop the refresh here.
+        // Ordinary views ignore the stale flag on purpose - most active
+        // players' rows are mildly stale, and 40 polls per profile open is a
+        // real cost.
+        const awaitingRecompute = data.status === "pending" || (skillsRefreshKey > 0 && data.status === "ready" && data.stale === true);
+        if (awaitingRecompute && attempts < 40) {
           // Fast polls while the compute is imminent, then back off; deploy-day
           // version bumps can park a profile deep in the analyzer queue.
           attempts += 1;
@@ -3571,7 +3605,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [user.id, liveConfigured]);
+  }, [user.id, liveConfigured, skillsRefreshKey]);
 
   useEffect(() => {
     setSelectedSkill(null);
@@ -3606,6 +3640,10 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
         <PlayerSkillCard title={t`Skill rating`} accent={skillRatingAccent(null)}>
           <SkillBreakdownBody skills={skills} mode={null} />
         </PlayerSkillCard>
+        {/* A profile with nothing rated yet is exactly who has scores to
+            backfill, so the button rides this state too. */}
+        <div className="mt-3 flex justify-center">{addScoreButton}</div>
+        {addScoreModal}
       </div>
     );
   }
@@ -3628,6 +3666,8 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           />
         ))}
       </div>
+      <div className="mt-3 flex justify-end">{addScoreButton}</div>
+      {addScoreModal}
       {selectedSkill ? (
         <SkillPlaysModal
           userId={user.id}

@@ -15,12 +15,16 @@ const INGEST_FRESHNESS_CACHE_MS = 15_000;
 // cached across all SSE connections.
 let ingestFreshness: { checkedAt: number; ingestAtMs: number | null } = { checkedAt: 0, ingestAtMs: null };
 
-async function getLastIngestAtMs(db: Db): Promise<number | null> {
+// Exported for tests; production reads it only through the heartbeat.
+export async function getLastIngestAtMs(db: Db): Promise<number | null> {
   const now = Date.now();
   if (now - ingestFreshness.checkedAt < INGEST_FRESHNESS_CACHE_MS) return ingestFreshness.ingestAtMs;
   ingestFreshness.checkedAt = now;
   try {
-    const row = (await exec(db, "select received_at from score_events order by id desc limit 1")).rows[0];
+    // Manual submissions are excluded: their rows are written with a current
+    // received_at, and this readout exists to expose a stalled pipeline - a
+    // hand-pasted historical score must not make a wedged feed look healthy.
+    const row = (await exec(db, "select received_at from score_events where source <> 'manual_submit' order by id desc limit 1")).rows[0];
     const parsed = row?.received_at == null ? NaN : Date.parse(String(row.received_at));
     ingestFreshness.ingestAtMs = Number.isFinite(parsed) ? parsed : null;
   } catch {

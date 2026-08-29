@@ -2594,6 +2594,82 @@ export async function fetchLiveDanEstimates(items: LiveDanEstimateRequest[], est
   });
 }
 
+/* Manual score submission from a profile page: the backend fetches the pasted
+   score from the osu! API, verifies it belongs to the target player, and feeds
+   it through the same ingest a live score takes. Open to anyone - the score
+   itself is the proof of ownership - so the error side is a labelled reason
+   rather than a thrown status: the dialog owes the submitter a real answer. */
+export type LiveScoreSubmissionFailure =
+  | "invalid_link"
+  | "score_not_found"
+  | "not_mania"
+  | "not_owned"
+  | "not_passed"
+  | "player_untracked"
+  | "player_not_found"
+  | "osu_unavailable"
+  | "rate_limited"
+  | "failed";
+
+const SCORE_SUBMISSION_FAILURES = new Set<LiveScoreSubmissionFailure>([
+  "invalid_link", "score_not_found", "not_mania", "not_owned", "not_passed",
+  "player_untracked", "player_not_found", "osu_unavailable",
+]);
+
+export interface LiveScoreSubmissionPlay {
+  scoreId: number;
+  beatmapId: number | null;
+  title: string | null;
+  version: string | null;
+  accuracy: number | null;
+  rank: string | null;
+  pp: number | null;
+  endedAt: string | null;
+  /* The verified osu! page for this score, in the id space that actually
+     resolves to it. Never rebuild it from scoreId: the solo and legacy id
+     spaces overlap, so /scores/{legacyId} can open a stranger's play. */
+  scoreUrl: string | null;
+}
+
+export type LiveScoreSubmissionResult =
+  | { ok: true; alreadyTracked: boolean; countries: string[]; play: LiveScoreSubmissionPlay }
+  /* owner: who the score actually belongs to, on a "not_owned" answer. */
+  | { ok: false; reason: LiveScoreSubmissionFailure; owner?: string | null; retryAfterMs?: number | null };
+
+export async function submitLiveMissingScore(userId: number, link: string): Promise<LiveScoreSubmissionResult> {
+  const base = getLiveBackendUrl();
+  if (!base) return { ok: false, reason: "failed" };
+  let response: Response;
+  try {
+    response = await fetch(`${base}/api/score-submissions`, {
+      method: "POST",
+      credentials: "omit",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, link }),
+    });
+  } catch {
+    return { ok: false, reason: "failed" };
+  }
+  if (response.status === 429) return { ok: false, reason: "rate_limited", retryAfterMs: retryAfterMs(response) };
+  let payload: Record<string, unknown> | null = null;
+  try {
+    payload = await response.json() as Record<string, unknown>;
+  } catch {
+    payload = null;
+  }
+  if (!response.ok || payload?.ok !== true) {
+    const reason = typeof payload?.error === "string" ? payload.error : "failed";
+    return {
+      ok: false,
+      reason: SCORE_SUBMISSION_FAILURES.has(reason as LiveScoreSubmissionFailure)
+        ? reason as LiveScoreSubmissionFailure
+        : "failed",
+      owner: typeof payload?.owner === "string" ? payload.owner : null,
+    };
+  }
+  return payload as unknown as LiveScoreSubmissionResult;
+}
+
 /* Tells the backend which players a freshly dealt pack drew, so cold
    players' profile snapshots start fetching before their card is flipped.
    Fire-and-forget: the response only reports how many fetches started. */

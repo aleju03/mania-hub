@@ -15,6 +15,7 @@ import { handleOsuProxyRoutes } from "./routes/osu-proxy.js";
 import { handlePacksRoutes } from "./routes/packs.js";
 import { handleProfileRoutes } from "./routes/profiles.js";
 import { handleReplayVideoRoutes } from "./routes/replay-video.js";
+import { handleScoreSubmissionRoutes } from "./routes/score-submissions.js";
 import { handleSkinsRoutes } from "./routes/skins.js";
 import { handleUploadedReplayRoutes } from "./routes/uploaded-replays.js";
 import { handleCommunitiesRoutes } from "./routes/communities.js";
@@ -170,6 +171,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (await handleSignatureRoutes(req, res, ctx, url)) return true;
   if (await handleSnapshotRoutes(req, res, ctx, url, country)) return true;
   if (await handleAnalysisRoutes(req, res, ctx, url)) return true;
+  if (await handleScoreSubmissionRoutes(req, res, ctx, url)) return true;
   if (await handleOsuProxyRoutes(req, res, ctx, url)) return true;
   if (await handlePacksRoutes(req, res, ctx, url)) return true;
   if (await handleGoatPollRoutes(req, res, ctx, url)) return true;

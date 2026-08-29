@@ -589,6 +589,11 @@ msgstr "{0} 名玩家"
 msgid "{0} plays"
 msgstr "{0} 次游玩"
 
+#. placeholder {0}: accepted.length
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "{0} plays added"
+#~ msgstr "已添加 {0} 个成绩"
+
 #. placeholder {0}: formatNumber(activity.totalScores)
 #: src/routes/player/$username.tsx
 msgid "{0} plays in {selectedYear}"
@@ -1989,9 +1994,22 @@ msgstr "活跃度只记录每个已追踪国家/地区的前 100 名。如果这
 msgid "Actual size"
 msgstr "实际大小"
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Add"
+#~ msgstr "添加"
+
 #: src/components/packs/collections/ShowcaseCards.tsx
 msgid "Add a card to your showcase"
 msgstr "把一张卡片加入展示柜"
+
+#: src/components/player/AddScoreModal.tsx
+#: src/routes/player/$username.tsx
+msgid "Add a missing score"
+msgstr "添加缺失的成绩"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Add a play for {username}"
+#~ msgstr "为 {username} 添加成绩"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "Add a screenshot"
@@ -2046,6 +2064,10 @@ msgstr "添加更多详情"
 msgid "Add overlay"
 msgstr "添加覆盖层"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Add score"
+msgstr "添加成绩"
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Add the {label} run"
 msgstr "添加{label}的成绩"
@@ -2057,6 +2079,10 @@ msgstr "请填写有问题的文本。"
 #: src/routes/discord.tsx
 msgid "Add to Discord"
 msgstr "添加到 Discord"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "added"
+msgstr "已添加"
 
 #: src/components/me/RosterOptInCard.tsx
 #: src/routes/player/$username.tsx
@@ -2192,6 +2218,10 @@ msgstr "已有人反馈"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Already set"
 msgstr "已设置"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "already tracked"
+msgstr "已记录"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Alt = from center"
@@ -3004,6 +3034,10 @@ msgstr "正在检查成绩…"
 msgid "Checking the difficulties"
 msgstr "正在检查难度"
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Checking the link with osu!…"
+#~ msgstr "正在向 osu! 核对链接…"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Checking with Discord"
 msgstr "正在向 Discord 核对"
@@ -3233,6 +3267,7 @@ msgstr "客户端"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/GoatPollVoters.tsx
+#: src/components/player/AddScoreModal.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
@@ -3615,6 +3650,7 @@ msgid "Could not send that update. Try again."
 msgstr "无法发送该更新。请重试。"
 
 #: src/components/communities/CommunityReportModal.tsx
+#: src/components/player/AddScoreModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
 msgid "Could not send that. Try again."
@@ -6981,6 +7017,10 @@ msgstr "未打过"
 msgid "Missing from your collection."
 msgstr "你的收藏册里还没有。"
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Missing score"
+#~ msgstr "缺失的成绩"
+
 #: src/routes/player/$username.tsx
 msgid "mixed keys"
 msgstr "混合键数"
@@ -7648,6 +7688,10 @@ msgstr "这名玩家没有可用的回放"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No replays available from {countryCode} players on this difficulty"
 msgstr "这个难度上没有来自 {countryCode} 玩家的可用回放"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "No score found at that link."
+msgstr "该链接下没有找到成绩。"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "No score found for #{queryScoreId}."
@@ -8326,6 +8370,10 @@ msgstr "或其他玩家"
 msgid "orange"
 msgstr "橙"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "osu! didn't answer. Try again in a minute."
+msgstr "osu! 没有响应，请一分钟后再试。"
+
 #: src/routes/player/$username.tsx
 msgid "osu! profile"
 msgstr "osu! 主页"
@@ -8342,6 +8390,10 @@ msgstr "osu! 最近成绩"
 #: src/routes/player/$username.tsx
 msgid "osu! recents are loaded. Refresh available in {0}."
 msgstr "osu! 最近成绩已加载。{0} 后可以再次刷新。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "osu! score link"
+msgstr "osu! 成绩链接"
 
 #: src/routes/player/$username.tsx
 msgid "osu! Supporter"
@@ -8517,9 +8569,21 @@ msgstr "通过线"
 msgid "Paste"
 msgstr "粘贴"
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Paste a link to one of {username}'s scores on the osu! website."
+#~ msgstr "粘贴 {username} 在 osu! 网站上的成绩链接。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "paste a score link for {username}"
+msgstr "粘贴 {username} 的成绩链接"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste formatting"
 msgstr "粘贴格式"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Paste from clipboard"
+#~ msgstr "从剪贴板粘贴"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Paste it once. It redraws when your stats change."
@@ -8692,6 +8756,10 @@ msgstr "已置顶"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "play"
 msgstr "播放"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Play added"
+#~ msgstr "成绩已添加"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Play again"
@@ -10047,6 +10115,10 @@ msgstr "分数"
 msgid "Score #{scoreId}"
 msgstr "成绩 #{scoreId}"
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Score added. If it qualifies, skill ratings and dan update in a few minutes."
+#~ msgstr "成绩已添加。如果符合条件，技能评分和段位会在几分钟内更新。"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "score, combo and ranking fonts, health bar"
 msgstr "分数、连击和评级字体，血条"
@@ -10804,6 +10876,10 @@ msgstr "技能雷达图"
 msgid "Skill rating"
 msgstr "技能评分"
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Skill ratings and dan update in a few minutes, if the play qualifies."
+#~ msgstr "如果该成绩符合条件，技能评分和段位会在几分钟内更新。"
+
 #: src/routes/player/$username.tsx
 msgid "Skill ratings are unavailable right now."
 msgstr "技能评分暂时不可用。"
@@ -11510,6 +11586,10 @@ msgstr "这个谱面 ID 不是 mania 难度。"
 msgid "That does not look like a Discord invite link."
 msgstr "这看起来不像是 Discord 邀请链接。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "That doesn't look like an osu! score link."
+msgstr "这看起来不像 osu! 成绩链接。"
+
 #: src/routes/report.tsx
 msgid "That file is not an image."
 msgstr "该文件不是图片。"
@@ -11567,6 +11647,14 @@ msgstr "这个条目已经不存在了。"
 msgid "That replay file is too large to open in the browser."
 msgstr "这个回放文件太大，浏览器打不开。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "That score belongs to a different player ({owner})."
+msgstr "这个成绩属于其他玩家（{owner}）。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That score belongs to a different player."
+msgstr "这个成绩属于其他玩家。"
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "That score couldn't be loaded."
 msgstr "这个成绩无法加载。"
@@ -11574,6 +11662,18 @@ msgstr "这个成绩无法加载。"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "That score couldn't be loaded. Check the link and try again."
 msgstr "这个成绩无法加载。检查一下链接再试。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That score is a fail, so it can't count."
+msgstr "这个成绩未通关，无法计入。"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "That score is already tracked."
+#~ msgstr "这个成绩已被追踪。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That score isn't an osu!mania score."
+msgstr "这个成绩不是 osu!mania 成绩。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "That selection has no colors to copy."
@@ -12254,9 +12354,17 @@ msgstr "{name} 就绪后，此页面会自动加载。"
 msgid "This play's strongest skillset"
 msgstr "这个成绩最强的技能组"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "This player can't receive scores."
+msgstr "无法为这名玩家添加成绩。"
+
 #: src/components/packs/RevealStage.tsx
 msgid "This player's card refused to mint. Not enough ranked play data."
 msgstr "这名玩家的卡片无法生成。ranked 成绩数据不足。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "This player's country isn't tracked yet."
+msgstr "这名玩家的国家/地区尚未被追踪。"
 
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "This pull is gone"
@@ -12398,6 +12506,10 @@ msgstr "提交太频繁了，请稍后再试。"
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Too many requests right now, so the skin file did not come down."
 msgstr "当前请求过多，皮肤文件没能下载下来。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Too many submissions right now. Try again later."
+msgstr "当前提交过多，请稍后再试。"
 
 #: src/routes/report.tsx
 msgid "Too many updates today. Try again tomorrow."
@@ -12714,6 +12826,10 @@ msgstr "未知艺术家"
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/routes/replay.tsx
 msgid "Unknown beatmap"
+msgstr "未知谱面"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Unknown chart"
 msgstr "未知谱面"
 
 #: src/components/ui/CountryFlag.tsx

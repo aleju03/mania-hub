@@ -580,6 +580,11 @@ msgstr "{0} players"
 msgid "{0} plays"
 msgstr "{0} plays"
 
+#. placeholder {0}: accepted.length
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "{0} plays added"
+#~ msgstr "{0} plays added"
+
 #. placeholder {0}: formatNumber(activity.totalScores)
 #: src/routes/player/$username.tsx
 msgid "{0} plays in {selectedYear}"
@@ -1980,9 +1985,22 @@ msgstr "Activity is recorded for the top 100 of each tracked country. If this is
 msgid "Actual size"
 msgstr "Actual size"
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Add"
+#~ msgstr "Add"
+
 #: src/components/packs/collections/ShowcaseCards.tsx
 msgid "Add a card to your showcase"
 msgstr "Add a card to your showcase"
+
+#: src/components/player/AddScoreModal.tsx
+#: src/routes/player/$username.tsx
+msgid "Add a missing score"
+msgstr "Add a missing score"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Add a play for {username}"
+#~ msgstr "Add a play for {username}"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "Add a screenshot"
@@ -2037,6 +2055,10 @@ msgstr "Add more details"
 msgid "Add overlay"
 msgstr "Add overlay"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Add score"
+msgstr "Add score"
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Add the {label} run"
 msgstr "Add the {label} run"
@@ -2048,6 +2070,10 @@ msgstr "Add the text that reads wrong."
 #: src/routes/discord.tsx
 msgid "Add to Discord"
 msgstr "Add to Discord"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "added"
+msgstr "added"
 
 #: src/components/me/RosterOptInCard.tsx
 #: src/routes/player/$username.tsx
@@ -2183,6 +2209,10 @@ msgstr "already reported"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Already set"
 msgstr "Already set"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "already tracked"
+msgstr "already tracked"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Alt = from center"
@@ -2995,6 +3025,10 @@ msgstr "Checking scores..."
 msgid "Checking the difficulties"
 msgstr "Checking the difficulties"
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Checking the link with osu!…"
+#~ msgstr "Checking the link with osu!…"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Checking with Discord"
 msgstr "Checking with Discord"
@@ -3224,6 +3258,7 @@ msgstr "Client"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/GoatPollVoters.tsx
+#: src/components/player/AddScoreModal.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
@@ -3606,6 +3641,7 @@ msgid "Could not send that update. Try again."
 msgstr "Could not send that update. Try again."
 
 #: src/components/communities/CommunityReportModal.tsx
+#: src/components/player/AddScoreModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
 msgid "Could not send that. Try again."
@@ -6980,6 +7016,10 @@ msgstr "missing"
 msgid "Missing from your collection."
 msgstr "Missing from your collection."
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Missing score"
+#~ msgstr "Missing score"
+
 #: src/routes/player/$username.tsx
 msgid "mixed keys"
 msgstr "mixed keys"
@@ -7647,6 +7687,10 @@ msgstr "No replays available for this player"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No replays available from {countryCode} players on this difficulty"
 msgstr "No replays available from {countryCode} players on this difficulty"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "No score found at that link."
+msgstr "No score found at that link."
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "No score found for #{queryScoreId}."
@@ -8325,6 +8369,10 @@ msgstr "or someone else"
 msgid "orange"
 msgstr "orange"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "osu! didn't answer. Try again in a minute."
+msgstr "osu! didn't answer. Try again in a minute."
+
 #: src/routes/player/$username.tsx
 msgid "osu! profile"
 msgstr "osu! profile"
@@ -8341,6 +8389,10 @@ msgstr "osu! recents"
 #: src/routes/player/$username.tsx
 msgid "osu! recents are loaded. Refresh available in {0}."
 msgstr "osu! recents are loaded. Refresh available in {0}."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "osu! score link"
+msgstr "osu! score link"
 
 #: src/routes/player/$username.tsx
 msgid "osu! Supporter"
@@ -8516,9 +8568,21 @@ msgstr "Pass bar"
 msgid "Paste"
 msgstr "Paste"
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Paste a link to one of {username}'s scores on the osu! website."
+#~ msgstr "Paste a link to one of {username}'s scores on the osu! website."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "paste a score link for {username}"
+msgstr "paste a score link for {username}"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste formatting"
 msgstr "Paste formatting"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Paste from clipboard"
+#~ msgstr "Paste from clipboard"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Paste it once. It redraws when your stats change."
@@ -8691,6 +8755,10 @@ msgstr "Pinned"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "play"
 msgstr "play"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Play added"
+#~ msgstr "Play added"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Play again"
@@ -10046,6 +10114,10 @@ msgstr "Score"
 msgid "Score #{scoreId}"
 msgstr "Score #{scoreId}"
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Score added. If it qualifies, skill ratings and dan update in a few minutes."
+#~ msgstr "Score added. If it qualifies, skill ratings and dan update in a few minutes."
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "score, combo and ranking fonts, health bar"
 msgstr "score, combo and ranking fonts, health bar"
@@ -10803,6 +10875,10 @@ msgstr "Skill radar"
 msgid "Skill rating"
 msgstr "Skill rating"
 
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Skill ratings and dan update in a few minutes, if the play qualifies."
+#~ msgstr "Skill ratings and dan update in a few minutes, if the play qualifies."
+
 #: src/routes/player/$username.tsx
 msgid "Skill ratings are unavailable right now."
 msgstr "Skill ratings are unavailable right now."
@@ -11509,6 +11585,10 @@ msgstr "That beatmap ID is not a mania difficulty."
 msgid "That does not look like a Discord invite link."
 msgstr "That does not look like a Discord invite link."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "That doesn't look like an osu! score link."
+msgstr "That doesn't look like an osu! score link."
+
 #: src/routes/report.tsx
 msgid "That file is not an image."
 msgstr "That file is not an image."
@@ -11566,6 +11646,14 @@ msgstr "That listing no longer exists."
 msgid "That replay file is too large to open in the browser."
 msgstr "That replay file is too large to open in the browser."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "That score belongs to a different player ({owner})."
+msgstr "That score belongs to a different player ({owner})."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That score belongs to a different player."
+msgstr "That score belongs to a different player."
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "That score couldn't be loaded."
 msgstr "That score couldn't be loaded."
@@ -11573,6 +11661,18 @@ msgstr "That score couldn't be loaded."
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "That score couldn't be loaded. Check the link and try again."
 msgstr "That score couldn't be loaded. Check the link and try again."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That score is a fail, so it can't count."
+msgstr "That score is a fail, so it can't count."
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "That score is already tracked."
+#~ msgstr "That score is already tracked."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That score isn't an osu!mania score."
+msgstr "That score isn't an osu!mania score."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "That selection has no colors to copy."
@@ -12253,9 +12353,17 @@ msgstr "This page will load automatically once {name} is ready."
 msgid "This play's strongest skillset"
 msgstr "This play's strongest skillset"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "This player can't receive scores."
+msgstr "This player can't receive scores."
+
 #: src/components/packs/RevealStage.tsx
 msgid "This player's card refused to mint. Not enough ranked play data."
 msgstr "This player's card refused to mint. Not enough ranked play data."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "This player's country isn't tracked yet."
+msgstr "This player's country isn't tracked yet."
 
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "This pull is gone"
@@ -12397,6 +12505,10 @@ msgstr "Too many reports just now. Try again in a bit."
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Too many requests right now, so the skin file did not come down."
 msgstr "Too many requests right now, so the skin file did not come down."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Too many submissions right now. Try again later."
+msgstr "Too many submissions right now. Try again later."
 
 #: src/routes/report.tsx
 msgid "Too many updates today. Try again tomorrow."
@@ -12714,6 +12826,10 @@ msgstr "unknown artist"
 #: src/routes/replay.tsx
 msgid "Unknown beatmap"
 msgstr "Unknown beatmap"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Unknown chart"
+msgstr "Unknown chart"
 
 #: src/components/ui/CountryFlag.tsx
 msgid "Unknown country"

@@ -22,6 +22,11 @@ export type AbuseBucket =
   // Bug reports from /report. Same open-write shape as translationReport, so
   // it is checked against the visitor's forwarded address directly too.
   | "bugReport"
+  // Manual score submissions from a profile page. Browser-direct like the
+  // dan-estimate batch, but each accepted one costs osu! API calls, so it
+  // gets an hourly per-IP cap plus a site-wide backstop.
+  | "scoreSubmit"
+  | "scoreSubmitGlobal"
   // Server-to-server calls from the frontend (see isBridge). Deliberately far
   // above any public bucket: one address carries every signed-in visitor here,
   // so this is a backstop against a leaked bridge token, not a user throttle.
@@ -177,13 +182,17 @@ function limitForBucket(config: Config, bucket: AbuseBucket): number {
       return Math.max(1, config.translationReportRatePerHour ?? 10);
     case "bugReport":
       return Math.max(1, config.bugReportRatePerHour ?? 5);
+    case "scoreSubmit":
+      return Math.max(1, config.scoreSubmitPerHour ?? 20);
+    case "scoreSubmitGlobal":
+      return Math.max(1, config.scoreSubmitGlobalRatePerMinute ?? 6);
     case "bridge":
       return Math.max(1, config.bridgeRatePerMinute ?? 6000);
   }
 }
 
 function windowMsForBucket(bucket: AbuseBucket): number {
-  return bucket === "countryActivateNew" || bucket === "translationReport" || bucket === "bugReport"
+  return bucket === "countryActivateNew" || bucket === "translationReport" || bucket === "bugReport" || bucket === "scoreSubmit"
     ? 60 * 60_000
     : 60_000;
 }

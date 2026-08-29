@@ -76,6 +76,8 @@ export interface Config {
   skinUploadRatePerMinute: number;
   translationReportRatePerHour: number;
   bugReportRatePerHour: number;
+  scoreSubmitPerHour: number;
+  scoreSubmitGlobalRatePerMinute: number;
   bridgeRatePerMinute: number;
   osuApiTargetPerMinute: number;
   osuApiHardPerMinute: number;
@@ -371,6 +373,8 @@ export function readConfig(): Config {
     // the screenshots go through the frontend rather than here, so the hourly
     // budget only has to cover honest re-tries.
     bugReportRatePerHour: readInt("BUG_REPORT_RATE_PER_HOUR", 5),
+    scoreSubmitPerHour: readInt("SCORE_SUBMIT_PER_HOUR", 20),
+    scoreSubmitGlobalRatePerMinute: readInt("SCORE_SUBMIT_GLOBAL_RATE_PER_MINUTE", 6),
     bridgeRatePerMinute: readInt("BRIDGE_RATE_PER_MINUTE", 6000),
     osuApiTargetPerMinute: readInt("OSU_API_TARGET_PER_MINUTE", 45),
     osuApiHardPerMinute: readInt("OSU_API_HARD_PER_MINUTE", 60),
