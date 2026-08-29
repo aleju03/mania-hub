@@ -549,8 +549,26 @@ describe("the stamina tile's length gate", () => {
     expect(danSkillsetBucketsForValues(4, "rc", FINAL_PUNISHMENT, 179)).toEqual(["speed"]);
     // An unknown length cannot verify a marathon, so the near-tie stands.
     expect(danSkillsetBucketsForValues(4, "rc", FINAL_PUNISHMENT)).toEqual(["speed"]);
-    // Stream second rather than third keeps the hold out: still speed.
-    expect(danSkillsetBucketsForValues(4, "rc", { ...FINAL_PUNISHMENT, Technical: 30.0 }, 291)).toEqual(["speed"]);
+    // Technical inside STAMINA_HOLD_TECH_BAND of Stream is the same pile-up
+    // whichever of the two is ahead, so the hold still fires.
+    expect(danSkillsetBucketsForValues(4, "rc", { ...FINAL_PUNISHMENT, Technical: 30.0 }, 291)).toEqual(["stamina"]);
+    // Technical further than the band under Stream reads as a real speed
+    // file, and the near-tie takes it back.
+    expect(danSkillsetBucketsForValues(4, "rc", { ...FINAL_PUNISHMENT, Technical: 29.4 }, 291)).toEqual(["speed"]);
+  });
+
+  // Demiourgos [4K], beatmap 3264851: 6:27 at 274 BPM with Stamina 29.18,
+  // Stream 29.05 and Technical 28.71. Technical sits third, a third of a point
+  // under Stream, which used to hand a seven-minute marathon to the speed tile.
+  const DEMIOURGOS = {
+    Stream: 29.05, Jumpstream: 28.39, Handstream: 20.58,
+    Stamina: 29.18, JackSpeed: 16.58, Chordjack: 20.58, Technical: 28.71,
+  };
+
+  it("holds the tile when Technical trails Stream by less than the band", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", DEMIOURGOS, 387)).toEqual(["stamina"]);
+    // The length gate still rules: the same vector on a 3:00 file is speed.
+    expect(danSkillsetBucketsForValues(4, "rc", DEMIOURGOS, 180)).toEqual(["speed"]);
   });
 
   it("leaves Handstream-led clears in the tile at any length", () => {

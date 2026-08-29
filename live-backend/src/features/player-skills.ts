@@ -3199,6 +3199,29 @@ const TECH_NEAR_TIE_MSD_LEAD = 0.6;
 // length.
 const STAMINA_TILE_MIN_LENGTH_SECONDS = 240;
 
+// How far Technical may sit UNDER Stream and still let a length-qualified
+// Stamina argmax hold the tile. The hold first shipped demanding Technical
+// outrank Stream outright, which read Stream in third place as proof the chart
+// was a speed file - but on a marathon it is just as often the argmax noise
+// the near-tie exists to absorb, only ordered the other way. Demiourgos [4K]
+// (3264851) is the measured case: 6:27 at 274 BPM of Stamina 29.18 / Stream
+// 29.05 / Technical 28.71, a chart nobody calls a speed file, filed under
+// speed because Technical missed Stream by a third of a point.
+//
+// 0.5 of MSD is the line for the same reason TECH_NEAR_TIE_MSD_LEAD is 0.6:
+// it covers argmax noise without reaching charts where Stream genuinely leads.
+// Measured 2026-08-29 over the mapper-named 4K pack corpora
+// (scripts/dev/tile-variant-sweep.ts): the stamina corpus (1,036) goes 68.2%
+// -> 68.5% stamina-tiled and the speed corpus (1,088) loses 5 charts (77.0%
+// -> 76.6%), all of them 4:00+ speed-training files with a Stamina argmax;
+// stream (623) and tech (418) lose one each, and handstream, jumpstream and
+// jack do not move at all. Widening to the full near-tie band (1.25) or
+// dropping the demand entirely costs the speed corpus 14 and 28 charts, and
+// holding unconditionally past a longer gate is worse at every length tried
+// (5:00 costs 15, 6:00 costs 9) because it reaches charts where Stream leads
+// by more than noise. Re-measure the speed corpus before widening this.
+const STAMINA_HOLD_TECH_BAND = 0.5;
+
 /** Whether LeoBlack's jack clusters carry too much of a chart to call it endurance. */
 function jackContaminated(jackShare: number | null): boolean {
   return jackShare != null && jackShare >= STAMINA_TILE_JACK_VETO_SHARE;
@@ -3250,21 +3273,22 @@ function bucketingSkillset(
   const endurance = enduranceSeconds(lengthSeconds, rate);
   const demandsEndurance = endurance != null && endurance >= STAMINA_TILE_MIN_LENGTH_SECONDS;
   // A length-qualified Stamina argmax holds the tile before the speed near-tie
-  // can reach it, but only when Technical ALSO outranks Stream: Stream sitting
-  // third on a marathon is not the hundredths-level argmax noise the near-tie
-  // exists to absorb. PEACE BREAKER [4K] FINAL PUNISHMENT (777348) is the
-  // measured case: 4:51 of Stamina 30.15 / Technical 30.03 / Stream 30.02, a
-  // three-way pile-up the near-tie filed under speed on a chart players place
-  // between tech and stamina.
+  // can reach it, as long as Technical is not more than STAMINA_HOLD_TECH_BAND
+  // behind Stream: a three-way pile-up at the top of a marathon is the
+  // argmax noise the near-tie exists to absorb, not evidence of a speed file.
+  // PEACE BREAKER [4K] FINAL PUNISHMENT (777348) is the measured case: 4:51 of
+  // Stamina 30.15 / Technical 30.03 / Stream 30.02, which the near-tie filed
+  // under speed on a chart players place between tech and stamina.
   //
   // Measured 2026-08-29 over the mapper-named 4K pack corpora
   // (scripts/dev/tile-variant-sweep.ts): the stamina corpus (1,036 charts)
-  // goes 67.1% -> 68.2% stamina-tiled while the speed (1,088), stream (623)
-  // and tech (418) corpora each lose 3-5 marathon-length charts (0.5-0.7%),
-  // inside the 1%-per-corpus line the other overrides hold to. Dropping the
-  // Technical demand costs the speed corpus 33 charts (3.1%), mostly
-  // pure-stream training marathons, so the hold stays this narrow.
-  if (top === "Stamina" && demandsEndurance && Number(values?.Technical ?? 0) >= stream
+  // goes 67.1% -> 68.5% stamina-tiled while the speed (1,088), stream (623)
+  // and tech (418) corpora each lose a handful of marathon-length charts
+  // (0.5-1.1%), inside the 1%-per-corpus line the other overrides hold to.
+  // Dropping the Technical demand entirely costs the speed corpus 33 charts
+  // (3.1%), mostly pure-stream training marathons, so the band stays narrow.
+  if (top === "Stamina" && demandsEndurance
+    && Number(values?.Technical ?? 0) >= stream - STAMINA_HOLD_TECH_BAND
     && !jackContaminated(chartJackShare)) return top;
   const best = Number(values?.[top] ?? 0);
   const nearTie = top === "Stream" || (stream > 0 && stream >= best - SPEED_NEAR_TIE_MSD)

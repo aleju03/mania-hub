@@ -62,6 +62,8 @@ interface Variant {
   staminaHolds: boolean;
   /** The hold also demands Technical within this of Stream (0 = Technical must outrank Stream; Infinity = no demand). */
   staminaHoldsTechBand: number;
+  /** Past this length the hold fires with no Technical demand at all (Infinity = never). */
+  staminaHoldsFreeLength: number;
   /** Technical takes a would-be speed verdict when it leads Stream by at least this (Infinity = arm off). */
   techLeadMin: number;
   /** Minimum analyzer tech score the lead arm also demands (0 = none). */
@@ -79,6 +81,7 @@ const SHIPPED = {
   staminaHoldsTechBand: 0,
   techLeadMin: TECH_NEAR_TIE_MSD_LEAD,
   techLeadMinScore: PATTERN_TAG_MIN_SCORE,
+  staminaHoldsFreeLength: Infinity,
 };
 
 const VARIANTS: Variant[] = [
@@ -89,6 +92,15 @@ const VARIANTS: Variant[] = [
   { id: "T4 lead.75", ...SHIPPED, techLeadMin: 0.75 },
   { id: "T6 lead.25", ...SHIPPED, techLeadMin: 0.25 },
   { id: "T5 lead.50 ts0", ...SHIPPED, techLeadMinScore: 0 },
+  // Widening the hold's Technical demand, and length-scaled arms that drop it
+  // entirely past a longer gate (Demiourgos 3264851 is 6:27 with Technical
+  // 0.34 under Stream, so it needs band >= 0.35 or a free length <= 387).
+  { id: "H1 band.50", ...SHIPPED, staminaHoldsTechBand: 0.5 },
+  { id: "H2 band1.25", ...SHIPPED, staminaHoldsTechBand: SPEED_NEAR_TIE_MSD },
+  { id: "H3 no-techdem", ...SHIPPED, staminaHoldsTechBand: Infinity },
+  { id: "H4 free@300", ...SHIPPED, staminaHoldsFreeLength: 300 },
+  { id: "H5 free@360", ...SHIPPED, staminaHoldsFreeLength: 360 },
+  { id: "H6 free@420", ...SHIPPED, staminaHoldsFreeLength: 420 },
 ];
 
 function dominant(values: Record<string, number>, keep: readonly string[]): string | null {
@@ -107,7 +119,8 @@ function bucketingSkillset(chart: ChartRow, variant: Variant, keep: readonly str
   if (top == null) return top;
   if (variant.staminaHolds && top === "Stamina" && chart.lengthSeconds != null
     && chart.lengthSeconds >= STAMINA_TILE_MIN_LENGTH_SECONDS && keep.includes("Stamina")
-    && Number(values.Technical ?? 0) >= Number(values.Stream ?? 0) - variant.staminaHoldsTechBand) return top;
+    && (chart.lengthSeconds >= variant.staminaHoldsFreeLength
+      || Number(values.Technical ?? 0) >= Number(values.Stream ?? 0) - variant.staminaHoldsTechBand)) return top;
   const stream = Number(values.Stream ?? 0);
   const best = Number(values[top] ?? 0);
   const nearTie = top === "Stream" || (stream > 0 && keep.includes("Stream") && stream >= best - SPEED_NEAR_TIE_MSD) ? "Stream" : top;
@@ -211,7 +224,7 @@ async function main() {
     });
   }
 
-  const SPOT_IDS = [4670645, 3208141, 3208148, 3090568, 3148376, 777348, 4189256];
+  const SPOT_IDS = [4670645, 3208141, 3208148, 3090568, 3148376, 777348, 4189256, 3264851];
   const ids = [...new Set([...corpusById.keys(), ...SPOT_IDS])];
   const chartById = new Map<number, ChartRow>();
   for (let offset = 0; offset < ids.length; offset += 500) {
