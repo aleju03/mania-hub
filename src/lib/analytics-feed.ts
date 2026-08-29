@@ -5,6 +5,8 @@
 
 import { getCountryName, isGlobalScope, isSupportedCountryCode } from "./country";
 import { REGION_DEFS } from "./regions.generated";
+import { DAN_SKILLSET_META, skillAxisMeta } from "./skill-axes";
+import { DEFAULT_DAN_SKILLSET } from "./skill-leaderboards";
 
 export type AnalyticsDeviceKind = "mobile" | "desktop" | "unknown";
 
@@ -28,6 +30,11 @@ export interface AnalyticsRecentEventRow {
   mapsPage: string | null;
   mapsBeatmapId: string | null;
   rankingsPage: string | null;
+  rankingsTab: string | null;
+  rankingsKeys: string | null;
+  rankingsAxis: string | null;
+  rankingsSide: string | null;
+  rankingsSkillset: string | null;
   profileUsername: string | null;
   replayPlayer: string | null;
   replayScoreId: string | null;
@@ -80,6 +87,7 @@ export type AnalyticsActivityKind =
   | "search"
   | "replay"
   | "profile"
+  | "ranking"
   | "farm"
   | "pack"
   | "skin"
@@ -91,6 +99,7 @@ export const ANALYTICS_ACTIVITY_KINDS: AnalyticsActivityKind[] = [
   "search",
   "replay",
   "profile",
+  "ranking",
   "farm",
   "pack",
   "skin",
@@ -135,7 +144,6 @@ const SIMPLE_PAGE_LABELS: Record<string, string> = {
   "/top-plays": "top plays",
   "/snipes": "snipes",
   "/packs": "card packs",
-  "/rankings": "the rankings",
   "/settings": "settings",
   "/bbcode": "the BBCode editor",
   "/discord": "the Discord page",
@@ -251,6 +259,45 @@ function describeMaps(row: AnalyticsRecentEventRow): AnalyticsActivity {
       row.mapsPage ? `page ${row.mapsPage}` : null,
       scope,
     ]),
+  };
+}
+
+/* The dan board's two ladders, named the way its own control names them. */
+const RANKINGS_SIDE_LABELS: Record<string, string> = { rc: "Regular", ln: "LN" };
+
+/* Three boards sit behind /rankings - the pp table, the MSD skill leaderboard
+   and the dan one - so the path alone cannot say which one a visitor is on.
+   The tab and its facets ride in the pageview; a row captured before they were
+   recorded has none of them, and keeps the old undifferentiated line. */
+function describeRankings(row: AnalyticsRecentEventRow, scope: string | null): AnalyticsActivity {
+  const page = row.rankingsPage ? `page ${row.rankingsPage}` : null;
+  const keys = row.rankingsKeys ? `${row.rankingsKeys}K` : null;
+  if (row.rankingsTab === "skills") {
+    const axis = row.rankingsAxis ? skillAxisMeta(row.rankingsAxis)?.label ?? row.rankingsAxis : null;
+    return {
+      kind: "ranking",
+      verb: "browsed",
+      subject: "the MSD leaderboard",
+      detail: joinDetail([keys, axis, scope, page]),
+    };
+  }
+  if (row.rankingsTab === "dan") {
+    const side = row.rankingsSide ? RANKINGS_SIDE_LABELS[row.rankingsSide] ?? row.rankingsSide : null;
+    const skillset = !row.rankingsSkillset || row.rankingsSkillset === DEFAULT_DAN_SKILLSET
+      ? null
+      : DAN_SKILLSET_META[row.rankingsSkillset]?.label ?? row.rankingsSkillset;
+    return {
+      kind: "ranking",
+      verb: "browsed",
+      subject: "the dan leaderboard",
+      detail: joinDetail([[keys, side].filter(Boolean).join(" "), skillset, scope, page]),
+    };
+  }
+  return {
+    kind: "ranking",
+    verb: "browsed",
+    subject: row.rankingsTab === "pp" ? "the pp rankings" : "the rankings",
+    detail: joinDetail([scope, page]),
   };
 }
 
@@ -597,14 +644,7 @@ export function describeAnalyticsEvent(
       detail: row.farmMapUser ? `for ${row.farmMapUser}` : null,
     };
   }
-  if (path === "/rankings") {
-    return {
-      kind: "visit",
-      verb: "browsed",
-      subject: "the rankings",
-      detail: joinDetail([scope, row.rankingsPage ? `page ${row.rankingsPage}` : null]),
-    };
-  }
+  if (path === "/rankings") return describeRankings(row, scope);
   if (path === "/my-stats" || path === "/my-data") {
     return { kind: "profile", verb: "opened", subject: "their own stats", detail: row.viewerUsername ? `as ${row.viewerUsername}` : null };
   }

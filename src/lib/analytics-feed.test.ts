@@ -30,6 +30,11 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     mapsPage: null,
     mapsBeatmapId: null,
     rankingsPage: null,
+    rankingsTab: null,
+    rankingsKeys: null,
+    rankingsAxis: null,
+    rankingsSide: null,
+    rankingsSkillset: null,
     profileUsername: null,
     replayPlayer: null,
     replayScoreId: null,
@@ -234,6 +239,26 @@ describe("describeAnalyticsEvent", () => {
       subject: "settings",
       detail: null,
     });
+  });
+
+  it("tells the three rankings boards apart", () => {
+    expect(describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "pp", selectedCountry: "CR", rankingsPage: "3" }))).toMatchObject({
+      kind: "ranking",
+      verb: "browsed",
+      subject: "the pp rankings",
+      detail: "Costa Rica · page 3",
+    });
+    expect(
+      describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "skills", rankingsKeys: "7", rankingsAxis: "pattern:jack" })),
+    ).toMatchObject({ kind: "ranking", subject: "the MSD leaderboard", detail: "7K · Jack" });
+    expect(
+      describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "dan", rankingsKeys: "4", rankingsSide: "ln", rankingsSkillset: "lnrelease" })),
+    ).toMatchObject({ kind: "ranking", subject: "the dan leaderboard", detail: "4K LN · Release" });
+    // The dan board's default column ranks every clear, so it is not a facet
+    // worth naming.
+    expect(
+      describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "dan", rankingsKeys: "6", rankingsSide: "rc", rankingsSkillset: "overall" })),
+    ).toMatchObject({ subject: "the dan leaderboard", detail: "6K Regular" });
   });
 
   it("calls a typed maps query a search and keeps the facets as context", () => {

@@ -59,18 +59,20 @@ export const PATTERN_RATING_META: SkillAxisMeta[] = [
 // four skills each keymode's scene actually names, not the analyzer's 18-id
 // pattern vocabulary. Label and color only - which pattern tags fold into
 // which bucket is the backend's call, so the two never disagree by drifting
-// apart here.
-export const DAN_SKILLSET_META: Record<string, { labelMsg: MessageDescriptor; color: string }> = {
-  jack: { labelMsg: msg`Jack`, color: "#ec6a9c" },
-  tech: { labelMsg: msg`Tech`, color: "#83cf6b" },
-  speed: { labelMsg: msg`Speed`, color: "#5ab2f2" },
-  stamina: { labelMsg: msg`Stamina`, color: "#ad6b5d" },
-  stream: { labelMsg: msg`Stream`, color: "#8f6bd8" },
-  ln: { labelMsg: msg`LN`, color: "#f07474" },
-  lngeneral: { labelMsg: msg`General`, color: "#f07474" },
-  lntech: { labelMsg: msg`Tech`, color: "#83cf6b" },
-  lninverse: { labelMsg: msg`Inverse`, color: "#c59a5c" },
-  lnrelease: { labelMsg: msg`Release`, color: "#46c7b8" },
+// apart here. Both name forms for the same reason SkillAxisMeta carries them:
+// `label` is what English-only readers (the dynamic renders, the admin
+// analytics feed) draw, `labelMsg` is what the site resolves per visitor.
+export const DAN_SKILLSET_META: Record<string, { label: string; labelMsg: MessageDescriptor; color: string }> = {
+  jack: { label: "Jack", labelMsg: msg`Jack`, color: "#ec6a9c" },
+  tech: { label: "Tech", labelMsg: msg`Tech`, color: "#83cf6b" },
+  speed: { label: "Speed", labelMsg: msg`Speed`, color: "#5ab2f2" },
+  stamina: { label: "Stamina", labelMsg: msg`Stamina`, color: "#ad6b5d" },
+  stream: { label: "Stream", labelMsg: msg`Stream`, color: "#8f6bd8" },
+  ln: { label: "LN", labelMsg: msg`LN`, color: "#f07474" },
+  lngeneral: { label: "General", labelMsg: msg`General`, color: "#f07474" },
+  lntech: { label: "Tech", labelMsg: msg`Tech`, color: "#83cf6b" },
+  lninverse: { label: "Inverse", labelMsg: msg`Inverse`, color: "#c59a5c" },
+  lnrelease: { label: "Release", labelMsg: msg`Release`, color: "#46c7b8" },
 };
 
 // The aggregate rating, kept out of MSD_SKILLSET_META on purpose: it is not a

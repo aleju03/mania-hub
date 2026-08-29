@@ -5,6 +5,15 @@ import {
 } from "./analytics-communities";
 import { getMapsPageviewProperties } from "./analytics-maps";
 import { getSkinDetailPageviewProperties, getSkinsPageviewProperties } from "./analytics-skins";
+import {
+  DEFAULT_DAN_SKILLSET,
+  DEFAULT_LEADERBOARD_AXIS,
+  parseDanSide,
+  parseDanSkillset,
+  parseLeaderboardAxis,
+  parseLeaderboardKeys,
+  parseLeaderboardTab,
+} from "./skill-leaderboards";
 
 const ENDPOINT = "/api/sync";
 const VISITOR_ID_KEY = "mh_vid";
@@ -221,8 +230,24 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
     // the path alone cannot tell a shelf from the showcase wall.
     Object.assign(props, getCollectionsPageviewProperties(params));
   } else if (pathname === "/rankings") {
+    // Three boards share the path - the pp table, the MSD skill leaderboard
+    // and the dan one - so without the tab the feed cannot tell them apart.
+    // Every one of these params gets stripped from the URL at its default, so
+    // they are normalized rather than read raw: an absent tab is the
+    // Performance board, not an unknown one.
     const page = params.get("page");
     if (page) props.rankings_page = page;
+    const tab = parseLeaderboardTab(params.get("tab"));
+    props.rankings_tab = tab;
+    if (tab !== "pp") {
+      props.rankings_keys = String(parseLeaderboardKeys(params.get("keys")));
+    }
+    if (tab === "skills") {
+      props.rankings_axis = parseLeaderboardAxis(params.get("axis")) ?? DEFAULT_LEADERBOARD_AXIS;
+    } else if (tab === "dan") {
+      props.rankings_side = parseDanSide(params.get("side"));
+      props.rankings_skillset = parseDanSkillset(params.get("skillset")) ?? DEFAULT_DAN_SKILLSET;
+    }
   } else if (pathname === "/farm-helper") {
     const user = params.get("user");
     if (user) props.farm_helper_user = user;

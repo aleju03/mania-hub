@@ -154,6 +154,11 @@ export interface AnalyticsFeedEvent {
   mapsPage: string | null;
   mapsBeatmapId: string | null;
   rankingsPage: string | null;
+  rankingsTab: string | null;
+  rankingsKeys: string | null;
+  rankingsAxis: string | null;
+  rankingsSide: string | null;
+  rankingsSkillset: string | null;
   profileUsername: string | null;
   replayPlayer: string | null;
   replayScoreId: string | null;
@@ -1335,6 +1340,11 @@ export function buildMonitorFeedEvent(displayTimeZone: string, record: Analytics
     mapsPage: str("maps_page"),
     mapsBeatmapId: str("maps_beatmap_id"),
     rankingsPage: str("rankings_page"),
+    rankingsTab: str("rankings_tab"),
+    rankingsKeys: str("rankings_keys"),
+    rankingsAxis: str("rankings_axis"),
+    rankingsSide: str("rankings_side"),
+    rankingsSkillset: str("rankings_skillset"),
     profileUsername: str("profile_username"),
     replayPlayer: str("replay_player"),
     replayScoreId: str("replay_score_id"),

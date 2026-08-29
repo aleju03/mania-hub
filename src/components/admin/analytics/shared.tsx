@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Eye, MessagesSquare, Monitor, Package, Palette, Play, Search, Smartphone, Sprout, TriangleAlert, User, type LucideIcon } from "lucide-react";
+import { Check, ChevronDown, Eye, MessagesSquare, Monitor, Package, Palette, Play, Search, Smartphone, Sprout, Trophy, TriangleAlert, User, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CountryFlag } from "../../ui/CountryFlag";
 import { getCountryName } from "../../../lib/country";
@@ -20,6 +20,11 @@ export const ACTIVITY_KIND_STYLES: Record<AnalyticsActivityKind, {
   search: { label: "Searches", icon: Search, text: "text-osu-yellow", bg: "bg-osu-yellow/12", ring: "ring-osu-yellow/30", bar: "bg-osu-yellow" },
   replay: { label: "Replays", icon: Play, text: "text-osu-pink", bg: "bg-osu-pink/12", ring: "ring-osu-pink/30", bar: "bg-osu-pink" },
   profile: { label: "Profiles", icon: User, text: "text-osu-purple-light", bg: "bg-osu-purple/12", ring: "ring-osu-purple/30", bar: "bg-osu-purple-light" },
+  // Its own kind rather than a plain visit: the three boards behind /rankings
+  // (pp, MSD, dan) are worth spotting in a feed of page views, and the chip
+  // filters down to them. Teal because every theme colour is already spoken
+  // for by another kind, and gold would read as a search.
+  ranking: { label: "Rankings", icon: Trophy, text: "text-teal-300", bg: "bg-teal-400/12", ring: "ring-teal-400/30", bar: "bg-teal-300" },
   farm: { label: "Farm", icon: Sprout, text: "text-osu-green-light", bg: "bg-osu-green/12", ring: "ring-osu-green/30", bar: "bg-osu-green-light" },
   pack: { label: "Packs", icon: Package, text: "text-osu-orange", bg: "bg-osu-orange/12", ring: "ring-osu-orange/30", bar: "bg-osu-orange" },
   skin: { label: "Skins", icon: Palette, text: "text-osu-c2", bg: "bg-osu-c2/10", ring: "ring-osu-c2/25", bar: "bg-osu-c2" },
