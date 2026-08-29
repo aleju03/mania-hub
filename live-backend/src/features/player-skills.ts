@@ -2811,9 +2811,11 @@ interface DanSkillsetBucket {
  * still rejects the jumptrill charts by a mile (they miss by 6.8 and 8.5).
  * Corpus-wide it moves speed from 1.5% of rated plays to 9.2%, and pulls in
  * only 4.2% of Jumpstream-argmax plays. Re-measure against both packs and a
- * jumptrill set before touching the constant. The one exception inside that
- * band is a chart the analyzer confidently calls tech: it files tech instead
- * (TECH_NEAR_TIE_MIN_SCORE has the measurements).
+ * jumptrill set before touching the constant. Two exceptions inside that band
+ * file tech instead: a chart the analyzer confidently calls tech
+ * (TECH_NEAR_TIE_MIN_SCORE), and a tech-tagged chart whose Technical outranks
+ * Stream by more than argmax noise (TECH_NEAR_TIE_MSD_LEAD). Both carry their
+ * own measurements.
  *
  * Jack is the one 4K tile that also reads the analyzer, because MinaCalc
  * cannot see speedjack: it rates those charts Jumpstream-argmax with JackSpeed
@@ -3167,6 +3169,34 @@ const SPEED_NEAR_TIE_MSD = 1.25;
 // held itself to. Re-measure both corpora before lowering it.
 const TECH_NEAR_TIE_MIN_SCORE = 0.8;
 
+// The same band arbitrates a second way, for the charts whose tech score sits
+// below that bar: a would-be speed verdict moves to tech when Technical
+// OUTRANKS Stream by this much and the analyzer tags the chart tech at all
+// (PATTERN_TAG_MIN_SCORE). The tiebreak above answers "the analyzer is sure
+// this is tech, and the two skillsets tie"; this one answers "MinaCalc itself
+// ranks tech over stream by more than argmax noise, and the analyzer agrees it
+// is tech". Matusa Bomber [4K] 2mnd (4189256) is the measured case: Stamina
+// 28.57 / Technical 28.44 / Stream 27.63 on a 3:02 file, so the stamina hold
+// cannot reach it and Stream wins the near-tie from THIRD place - while /maps,
+// which reads the top base skillset, calls the same chart tech. Its tech score
+// is 0.54, well under the 0.8 bar.
+//
+// 0.6 of MSD is the line because the near-tie exists for hundredths-level
+// noise: the alpha speed pack the band was widened for has real speed charts
+// with Technical ahead of Stream by 0.02 and by 0.50, so the bar sits just
+// above the labelled evidence. Measured 2026-08-29 over the mapper-named 4K
+// pack corpora (scripts/dev/tile-variant-sweep.ts): the tech corpus (418
+// charts) goes 41.9% -> 47.8% tech-tiled, while speed (1,088) loses 13 charts
+// (78.2% -> 77.0%), stream (623) loses 8 (61.3% -> 60.0%) and stamina (1,036)
+// moves 9 off the speed tile - the same ~1%-per-corpus line the other
+// overrides hold to, and four of the 13 speed "losses" are corpus noise (sets
+// named for Speedcore or a Speedrun, and a diff literally versioned
+// [Speed/Tech]). Dropping to 0.5 buys 7 more tech charts for 3 more speed
+// ones but puts the bar exactly on a labelled speed chart; dropping the
+// tech-tag demand entirely costs the speed corpus 3.4%. Re-measure both
+// corpora before moving either number.
+const TECH_NEAR_TIE_MSD_LEAD = 0.6;
+
 // MinaCalc's Stamina is a rider rather than a detector: it tracks the strongest
 // base skillset sustained and the calc clamps it a hair above that base. Over
 // every 4K chart in the corpus with MSD, a Stamina argmax win never exceeds the
@@ -3206,7 +3236,8 @@ const BASE_MSD_SKILLSETS = SKILL_RATING_SKILLSETS.filter(
  * The skillset a play is filed under, which is its strongest EXCEPT that Stream
  * wins from within SPEED_NEAR_TIE_MSD of the top, a speed verdict yields to
  * tech when Technical is in the same band and the analyzer confidently calls
- * the chart tech (TECH_NEAR_TIE_MIN_SCORE), and Stamina has to earn it on
+ * the chart tech (TECH_NEAR_TIE_MIN_SCORE) or when Technical simply outranks
+ * Stream on a tech-tagged chart (TECH_NEAR_TIE_MSD_LEAD), and Stamina has to earn it on
  * length - though a Stamina argmax that HAS earned it holds the tile against
  * the near-tie when Technical also outranks Stream (the hold below). Still
  * single-valued, so the tiles stay disjoint and their clear counts sum to the
@@ -3261,7 +3292,13 @@ function bucketingSkillset(
     const techBacked = chartTechScore >= TECH_NEAR_TIE_MIN_SCORE
       && technical > 0
       && technical >= stream - SPEED_NEAR_TIE_MSD;
-    return techBacked ? "Technical" : "Stream";
+    // The low-tech-score arm (TECH_NEAR_TIE_MSD_LEAD): Technical has to be
+    // ahead of Stream rather than merely beside it, and the chart has to wear
+    // the tech tag.
+    const leadBacked = chartTechScore >= PATTERN_TAG_MIN_SCORE
+      && technical > 0
+      && technical - stream >= TECH_NEAR_TIE_MSD_LEAD;
+    return techBacked || leadBacked ? "Technical" : "Stream";
   }
   // Handstream normally holds the tile at any length because it names a
   // pattern rather than riding on one, but a jack-contaminated chart is not

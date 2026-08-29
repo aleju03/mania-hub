@@ -152,9 +152,32 @@ describe("danSkillsetBucketsForValues", () => {
     // ones rate every skillset alike), so the sub-bar tech score is the only
     // thing keeping them in speed. That is the tiebreak's whole trade: the
     // measured speed corpus loses 6 of 940 charts at the 0.8 bar.
-    for (const values of [...REAL_SPEED, ...NEAR_TIE_SPEED]) {
+    //
+    // NEAR_TIE_SPEED[3] is excluded: Technical leads Stream by 0.90 there, past
+    // the lead arm's bar, and it is the labelled speed chart that arm costs
+    // (TECH_NEAR_TIE_MSD_LEAD has the corpus numbers). [4] leads by exactly
+    // 0.50, which is why the bar sits at 0.6 rather than on top of it.
+    const held = [...REAL_SPEED, ...NEAR_TIE_SPEED.filter((_, index) => index !== 3)];
+    for (const values of held) {
       expect(danSkillsetBucketsForValues(4, "rc", values, null, 1, techTaggedChart(0.79))).toEqual(["speed"]);
     }
+  });
+
+  it("lets Technical take the near-tie when it outranks Stream on a tech-tagged chart", () => {
+    // Matusa Bomber [4K] 2mnd (4189256): Stamina tops the argmax on a 3:02
+    // file, so the stamina hold cannot reach it and Stream wins the near-tie
+    // from third place. Technical leads Stream by 0.81, past the lead arm.
+    const matusaBomber = {
+      Stream: 27.63, Jumpstream: 23.06, Handstream: 26.15, Stamina: 28.57,
+      JackSpeed: 16.18, Chordjack: 20.58, Technical: 28.44,
+    };
+    expect(danSkillsetBucketsForValues(4, "rc", matusaBomber, 182, 1, techTaggedChart(0.538)))
+      .toEqual(["tech"]);
+    // Without the analyzer's tech tag the lead alone does not move it.
+    expect(danSkillsetBucketsForValues(4, "rc", matusaBomber, 182, 1, techTaggedChart(0.49)))
+      .toEqual(["speed"]);
+    // And with no stored analysis at all the argmax near-tie stands.
+    expect(danSkillsetBucketsForValues(4, "rc", matusaBomber, 182, 1)).toEqual(["speed"]);
   });
 
   it("keeps jumptrill out of speed and files it as tech", () => {

@@ -7,13 +7,15 @@
  * (lnRatio >= 0.45) are dropped; the tiles under test are the rice side.
  *
  * Variants:
- *   V0 baseline  - shipped logic (speed near-tie 1.25, tech tiebreak at
- *                  analyzer score >= 0.8, stamina 240s length gate, Jumpstream
+ *   V0 shipped   - shipped logic (speed near-tie 1.25, tech tiebreak at
+ *                  analyzer score >= 0.8, tech-lead arm at 0.5 MSD on a
+ *                  tech-tagged chart at 0.6 MSD, stamina 240s length gate held against
+ *                  the near-tie when Technical outranks Stream, Jumpstream
  *                  arbitrated by LeoBlack's label)
  *   J0 js-tech   - the pre-arbitration Jumpstream-rides-with-tech pairing
- *   S1 st-holds  - a 240s+ Stamina argmax holds the tile before the near-tie
- *   S2 st+tech   - S1, but only when Technical is within 1.25 of Stream
- *   S3 tech>str  - S1, but only when Technical outranks Stream (shipped)
+ *   S0 no-hold   - drops the stamina hold (the pre-2026-08-29 near-tie order)
+ *   T0 no-lead   - drops the tech-lead arm
+ *   T4/T6/T5     - tech-lead arm at other leads / without the tech tag
  *
  * NOTE: libsql rows are array-like, so a column literally named "length" is
  * shadowed by Array.length (the column count) - alias it, as len_seconds is.
@@ -28,6 +30,7 @@ const DB_URL = process.env.SWEEP_DB_URL ?? "file:data/mania-hub-live.db";
 const SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"] as const;
 const SPEED_NEAR_TIE_MSD = 1.25;
 const TECH_NEAR_TIE_MIN_SCORE = 0.8;
+const TECH_NEAR_TIE_MSD_LEAD = 0.6;
 const STAMINA_TILE_MIN_LENGTH_SECONDS = 240;
 const CHORDJACK_TAG_MIN_SCORE = 0.8;
 const PATTERN_TAG_MIN_SCORE = 0.5;
@@ -59,16 +62,33 @@ interface Variant {
   staminaHolds: boolean;
   /** The hold also demands Technical within this of Stream (0 = Technical must outrank Stream; Infinity = no demand). */
   staminaHoldsTechBand: number;
+  /** Technical takes a would-be speed verdict when it leads Stream by at least this (Infinity = arm off). */
+  techLeadMin: number;
+  /** Minimum analyzer tech score the lead arm also demands (0 = none). */
+  techLeadMinScore: number;
 }
 
 const JS_TECH_CLUSTER = /tech|trill/i;
 
+const SHIPPED = {
+  clusterTechArm: false,
+  clusterMinTechScore: 0,
+  clusterBand: SPEED_NEAR_TIE_MSD,
+  jsTile: "cluster" as const,
+  staminaHolds: true,
+  staminaHoldsTechBand: 0,
+  techLeadMin: TECH_NEAR_TIE_MSD_LEAD,
+  techLeadMinScore: PATTERN_TAG_MIN_SCORE,
+};
+
 const VARIANTS: Variant[] = [
-  { id: "V0 baseline", clusterTechArm: false, clusterMinTechScore: 0, clusterBand: SPEED_NEAR_TIE_MSD, jsTile: "cluster", staminaHolds: false, staminaHoldsTechBand: Infinity },
-  { id: "J0 js-tech", clusterTechArm: false, clusterMinTechScore: 0, clusterBand: SPEED_NEAR_TIE_MSD, jsTile: "tech", staminaHolds: false, staminaHoldsTechBand: Infinity },
-  { id: "S1 st-holds", clusterTechArm: false, clusterMinTechScore: 0, clusterBand: SPEED_NEAR_TIE_MSD, jsTile: "cluster", staminaHolds: true, staminaHoldsTechBand: Infinity },
-  { id: "S2 st+tech", clusterTechArm: false, clusterMinTechScore: 0, clusterBand: SPEED_NEAR_TIE_MSD, jsTile: "cluster", staminaHolds: true, staminaHoldsTechBand: SPEED_NEAR_TIE_MSD },
-  { id: "S3 tech>str", clusterTechArm: false, clusterMinTechScore: 0, clusterBand: SPEED_NEAR_TIE_MSD, jsTile: "cluster", staminaHolds: true, staminaHoldsTechBand: 0 },
+  { id: "V0 shipped", ...SHIPPED },
+  { id: "J0 js-tech", ...SHIPPED, jsTile: "tech" },
+  { id: "S0 no-hold", ...SHIPPED, staminaHolds: false },
+  { id: "T0 no-lead", ...SHIPPED, techLeadMin: Infinity },
+  { id: "T4 lead.75", ...SHIPPED, techLeadMin: 0.75 },
+  { id: "T6 lead.25", ...SHIPPED, techLeadMin: 0.25 },
+  { id: "T5 lead.50 ts0", ...SHIPPED, techLeadMinScore: 0 },
 ];
 
 function dominant(values: Record<string, number>, keep: readonly string[]): string | null {
@@ -97,7 +117,10 @@ function bucketingSkillset(chart: ChartRow, variant: Variant, keep: readonly str
     const clusterBacked = variant.clusterTechArm && chart.techCategory === true
       && chart.techScore >= variant.clusterMinTechScore
       && technical > 0 && technical >= stream - variant.clusterBand;
-    return scoreBacked || clusterBacked ? "Technical" : "Stream";
+    const leadBacked = Number.isFinite(variant.techLeadMin) && technical > 0
+      && chart.techScore >= variant.techLeadMinScore
+      && technical - stream >= variant.techLeadMin;
+    return scoreBacked || clusterBacked || leadBacked ? "Technical" : "Stream";
   }
   if (nearTie !== "Stamina" || chart.lengthSeconds == null) return nearTie;
   if (chart.lengthSeconds >= STAMINA_TILE_MIN_LENGTH_SECONDS) return nearTie;
@@ -188,7 +211,7 @@ async function main() {
     });
   }
 
-  const SPOT_IDS = [4670645, 3208141, 3208148, 3090568, 3148376, 777348];
+  const SPOT_IDS = [4670645, 3208141, 3208148, 3090568, 3148376, 777348, 4189256];
   const ids = [...new Set([...corpusById.keys(), ...SPOT_IDS])];
   const chartById = new Map<number, ChartRow>();
   for (let offset = 0; offset < ids.length; offset += 500) {
