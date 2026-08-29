@@ -18,6 +18,7 @@ import {
   loadArchivedTrackedEvidence,
   loadChartSkillInfo,
   loadBeatmapOds,
+  parseNamedRate,
   ssrGoalForAccuracy,
   ssrGoalForScore,
 } from "../src/features/player-skills.js";
@@ -1897,6 +1898,102 @@ describe("getPlayerSkillPlays", () => {
       // matches the set the LN pattern rating aggregates.
       expect(ln.total).toBe(1);
       expect(ln.items[0]).toMatchObject({ beatmapId: 102, rating: 25 });
+    });
+  });
+});
+
+describe("parseNamedRate", () => {
+  it("reads an uprate a diff name states, in the forms mappers write it", () => {
+    expect(parseNamedRate("[4K] NB5 Hard 54235 1.4x")).toBe(1.4);
+    expect(parseNamedRate("[4K] [Lv.19] IcyWorld's Hard x1.4")).toBe(1.4);
+    expect(parseNamedRate("[4K] Insane [1,1x Rate]")).toBe(1.1);
+    expect(parseNamedRate("[4K] Challenge 1.4x (191bpm) OD8")).toBe(1.4);
+  });
+
+  it("stays silent on names that state no uprate", () => {
+    expect(parseNamedRate("[4K] NB5 Hard 54235")).toBeNull();
+    expect(parseNamedRate("[4K] Cool Gamer")).toBeNull();
+    // A downrate lengthens the file, so the gate already judges it fairly.
+    expect(parseNamedRate("[4K] x0.85")).toBeNull();
+    // Out of the band a rate edit lives in.
+    expect(parseNamedRate("[4K] Marathon 9x")).toBeNull();
+  });
+});
+
+describe("the rate-edit base length", () => {
+  const CLASSIFICATION = JSON.stringify({ lnRatio: 0, patterns: [] });
+
+  // FUTURE DOMINATORS [4K] NB5 Hard 54235, beatmapset 1527020: five diffs of
+  // one chart, all 40 holds, at 317 / 288 / 264 / 244 / 226 seconds.
+  async function seedLadder(
+    db: Awaited<ReturnType<typeof createDb>>,
+    diffs: Array<{ beatmapId: number; version: string; length: number; setId?: number; lnCount?: number }>,
+  ): Promise<void> {
+    const now = "2026-01-01T00:00:00Z";
+    const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+    for (const diff of diffs) {
+      const setId = diff.setId ?? 1527020;
+      await exec(
+        db,
+        `insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at)
+         values (?, ?, 'mania', ?, ?, ?)`,
+        [diff.beatmapId, setId, diff.version, JSON.stringify({ total_length: diff.length }), now],
+      );
+      await exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+         values (?, ?, 'ready', 4, ?, ?)`,
+        [diff.beatmapId, CHART_ANALYSIS_VERSION, CLASSIFICATION, now],
+      );
+      await exec(
+        db,
+        `insert into map_search_index
+           (beatmap_id, beatmapset_id, analysis_version, title, artist, creator, version, search_text,
+            key_count, stars, bpm, length, status, primary_pattern, ln_count, updated_at)
+         values (?, ?, 1, 'FUTURE DOMINATORS', 'DJ Sharpnel', 'IcyWorld', ?, '', 4, 5, 210, ?, 'loved', 'stream', ?, ?)`,
+        [diff.beatmapId, setId, diff.version, diff.length, diff.lnCount ?? 40, now],
+      );
+    }
+  }
+
+  it("gives a confirmed rate edit the base length its own file no longer has", async () => {
+    await withDb(async (db) => {
+      await seedLadder(db, [
+        { beatmapId: 3123873, version: "[4K] NB5 Hard 54235", length: 317 },
+        { beatmapId: 3123872, version: "[4K] NB5 Hard 54235 1.4x", length: 226 },
+        { beatmapId: 3123871, version: "[4K] NB5 Hard 54235 1.3x", length: 244 },
+      ]);
+      const info = await loadChartSkillInfo(db, [3123873, 3123872, 3123871]);
+      // 226 x 1.4 = 316, and the set holds a 317s sibling to confirm it.
+      expect(info.get(3123872)?.lengthSeconds).toBe(316);
+      // Already over the bar on its own file, so nothing is resolved.
+      expect(info.get(3123871)?.lengthSeconds).toBe(244);
+      // The base itself names no rate.
+      expect(info.get(3123873)?.lengthSeconds).toBe(317);
+    });
+  });
+
+  it("keeps the stored length when the set confirms nothing", async () => {
+    await withDb(async (db) => {
+      await seedLadder(db, [
+        // A pack: the name says 1.4x but no sibling sits at 226 x 1.4, so the
+        // name is not believed. This is the case a name-only rule gets wrong.
+        { beatmapId: 401, version: "[4K] Some Song 1.4x", length: 226 },
+        { beatmapId: 402, version: "[4K] An Unrelated Chart", length: 300, lnCount: 12 },
+      ]);
+      const info = await loadChartSkillInfo(db, [401, 402]);
+      expect(info.get(401)?.lengthSeconds).toBe(226);
+    });
+  });
+
+  it("does not read a sibling from another beatmapset", async () => {
+    await withDb(async (db) => {
+      await seedLadder(db, [
+        { beatmapId: 411, version: "[4K] Song 1.4x", length: 226 },
+        { beatmapId: 412, version: "[4K] Song", length: 317, setId: 999001 },
+      ]);
+      const info = await loadChartSkillInfo(db, [411, 412]);
+      expect(info.get(411)?.lengthSeconds).toBe(226);
     });
   });
 });

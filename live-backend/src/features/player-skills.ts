@@ -974,6 +974,10 @@ export interface ChartSkillInfo {
   // Whether LeoBlack's headline label for the whole chart carries "Tech".
   // Null when it stored no label. See TECH_CLUSTER_CATEGORY.
   techCategory: boolean | null;
+  // Whether that same label reads tech or trill, the shapes 4K players call
+  // tech when MinaCalc rates them Jumpstream. Null when no label is stored.
+  // Read by the 4K Jumpstream arbitration (JS_TECH_CLUSTER_CATEGORY).
+  jsClusterTech: boolean | null;
   // The analyzer's raw tech score at 1.0x, zeroed when the jack veto strips
   // the tech tag. Read by the 4K speed tile's tech tiebreak
   // (TECH_NEAR_TIE_MIN_SCORE), which needs the score rather than the 0.5 tag.
@@ -997,7 +1001,9 @@ export interface ChartSkillInfo {
   htRawDan: number | null;
   htFamily: "rc" | "ln" | null;
   htDanLabel: string | null;
-  /** Drain length at 1.0x, for the stamina gate in bucketingSkillset. */
+  /** Drain length at 1.0x, for the stamina gate in bucketingSkillset. For a
+   * confirmed pre-rated upload this is the base-rate length its own file no
+   * longer has (see applyRateEditBaseLengths), not the stored one. */
   lengthSeconds: number | null;
   /** Stored overall difficulty from the beatmaps row; null when the chart is
    * not yet enriched. Read by the dan-evidence OD floor (DAN_MIN_OD). */
@@ -1082,6 +1088,26 @@ const CLUSTER_SHARE_MIN = 0.4;
 // Pack" is an endurance pack, 0 of its 12 charts read as tech.
 const TECH_CLUSTER_CATEGORY = /tech/i;
 
+// Arbitrates a 4K Jumpstream-argmax clear between the tech and stamina tiles
+// (see danSkillsetBuckets): the label's tech suffix or a trill name ("Jumptrill",
+// "Split Trill Tech") keeps the clear on tech, the shapes players do read as
+// tech; anything else ("Jumpstream", "Chordjacks", "Rolls") files stamina.
+// Trill is matched by name because LeoBlack has no tech suffix for it: of 44
+// charts from mapper-named 4K jumptrill packs, 43 label "Jumptrill" plain, and
+// under this split all 44 keep the tech tile.
+//
+// Measured 2026-08-29 against mapper-named 4K pack corpora
+// (scripts/dev/tile-variant-sweep.ts): the stamina corpus (1,036 charts, 33.6%
+// of which sat on the tech tile) goes 40.2% -> 67.1% stamina-tiled and the
+// handstream corpus (492) 71.1% -> 90.2%, while the tech corpus (418) loses 4
+// charts (0.9%), the jumptrill corpus moves 0, and the speed corpus's speed
+// share is untouched (its own Jumpstream-argmax charts move tech -> stamina).
+// Corpus-wide 11.1% of charts change tile, which is the size of the error this
+// fixes: mapper-named stamina files were filing tech through the
+// Jumpstream-rides-with-tech pairing. A missing label keeps that legacy
+// pairing rather than guessing (99.5% of ready 4K analyses store one).
+const JS_TECH_CLUSTER_CATEGORY = /tech|trill/i;
+
 function readRawDan(half: LeanHalfJson | null | undefined): number | null {
   const rawDan = Number(half?.rawDan);
   return Number.isFinite(rawDan) && rawDan > 0 ? rawDan : null;
@@ -1102,6 +1128,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
   const ids = [...new Set(beatmapIds)].filter((id) => Number.isInteger(id) && id > 0);
   const info = new Map<number, ChartSkillInfo>();
   if (ids.length === 0) return info;
+  const rateCandidates: RateEditCandidate[] = [];
   for (let offset = 0; offset < ids.length; offset += CHART_SKILL_INFO_QUERY_CHUNK) {
     const chunk = ids.slice(offset, offset + CHART_SKILL_INFO_QUERY_CHUNK);
     const placeholders = chunk.map(() => "?").join(", ");
@@ -1114,12 +1141,27 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       db,
       `select a.beatmap_id, a.status, a.key_count, a.classification_json, a.dan_dt_json, a.dan_ht_json,
               json_extract(b.metadata_json, '$.total_length') as total_length,
-              json_extract(b.metadata_json, '$.accuracy') as od
+              json_extract(b.metadata_json, '$.accuracy') as od,
+              b.beatmapset_id, b.version
          from beatmap_chart_analysis a
          left join beatmaps b on b.beatmap_id = a.beatmap_id
         where a.analysis_version = ? and a.beatmap_id in (${placeholders})`,
       [CHART_ANALYSIS_VERSION, ...chunk],
     )).rows;
+    // Candidates for the rate-edit base length below: only charts short enough
+    // to fail the stamina gate whose named rate would carry them over it, which
+    // is a few hundred charts in the whole 4K corpus. Everything else skips the
+    // sibling query entirely, so the ordinary read costs nothing extra.
+    for (const row of rows) {
+      if (String(row.status ?? "") !== "ready") continue;
+      const length = readLengthSeconds(row.total_length);
+      const setId = Number(row.beatmapset_id);
+      const rate = parseNamedRate(String(row.version ?? ""));
+      if (length == null || rate == null || !Number.isInteger(setId) || setId <= 0) continue;
+      if (length >= STAMINA_TILE_MIN_LENGTH_SECONDS) continue;
+      if (length * rate < STAMINA_TILE_MIN_LENGTH_SECONDS) continue;
+      rateCandidates.push({ beatmapId: Number(row.beatmap_id), setId, length, rate });
+    }
     for (const row of rows) {
       if (String(row.status ?? "") !== "ready") continue;
       const parsed = parseJson<LeanClassificationJson | null>(String(row.classification_json ?? ""), null);
@@ -1161,6 +1203,9 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         techCategory: typeof parsed?.clusterCategory === "string"
           ? TECH_CLUSTER_CATEGORY.test(parsed.clusterCategory)
           : null,
+        jsClusterTech: typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
+          ? JS_TECH_CLUSTER_CATEGORY.test(parsed.clusterCategory)
+          : null,
         techScore: vetoesTech ? 0 : (patternScores.get("tech") ?? 0),
         lnRatio,
         vibro: parsed?.vibro === true,
@@ -1185,6 +1230,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       await new Promise<void>((resolve) => setImmediate(resolve));
     }
   }
+  await applyRateEditBaseLengths(db, info, rateCandidates);
   return info;
 }
 
@@ -2690,8 +2736,17 @@ interface DanSkillsetBucket {
  * every one of the 25 is Stream-argmax, Stream beating Jumpstream by 2.6 to
  * 13.5, while the jumptrill charts run 3.5 to 8.5 the other way. The two
  * populations do not overlap on that difference, so Stream alone separates
- * them and Jumpstream rides with Technical, where the in-house tagger already
- * puts those charts (GRAVITY tags tech 0.73, HOLLOWood tags tech 0.85).
+ * them.
+ *
+ * A Jumpstream argmax is arbitrated rather than paired: MinaCalc's Jumpstream
+ * fires on dense jumptrill (tech to 4K players) and on dense chordstream
+ * stamina files (Amber Wishes-type practice cuts) alike, and an unconditional
+ * tech pairing put 47% of the mapper-named stamina corpus on the tech tile.
+ * LeoBlack's headline label separates the two shapes where the in-house tech
+ * score cannot (those stamina cuts carry tech scores of 0.94-1.00): a label
+ * reading tech or trill keeps the clear on tech, anything else files stamina
+ * (JS_TECH_CLUSTER_CATEGORY has the measurements; bucketsForClear applies it,
+ * and a chart with no stored label keeps the tech pairing).
  *
  * Speed also wins near-ties outright (SPEED_NEAR_TIE_MSD), because a hard
  * argmax reads noise where these skillsets sit on top of each other. A second
@@ -2755,6 +2810,9 @@ function danSkillsetBuckets(keyCount: number, side: "rc" | "ln"): DanSkillsetBuc
       // The jack tile's tags are the analyzer override (see bucketsForClear):
       // a chart wearing either tag files here regardless of the MSD argmax.
       { id: "jack", tags: ["chordjack", "speedjack"], skillsets: ["JackSpeed", "Chordjack"] },
+      // Jumpstream is listed on tech as the fallback pairing; bucketsForClear
+      // re-files a Jumpstream argmax to stamina when LeoBlack's label reads
+      // neither tech nor trill (JS_TECH_CLUSTER_CATEGORY).
       { id: "tech", tags: [], skillsets: ["Technical", "Jumpstream"] },
       { id: "speed", tags: [], skillsets: ["Stream"] },
       { id: "stamina", tags: [], skillsets: ["Handstream", "Stamina"] },
@@ -2794,8 +2852,15 @@ function bucketsForClear(
     (bucket) => bucket.skillsets != null && bucket.tags.length > 0 && chartBelongsToTagBucket(bucket, chart),
   );
   if (override != null) return [override];
+  // The Jumpstream arbitration (JS_TECH_CLUSTER_CATEGORY): a Jumpstream-argmax
+  // clear files with stamina unless LeoBlack reads the chart as tech or trill,
+  // in which case the tech pairing in the bucket lists keeps it. Filed as
+  // Stamina rather than through its own list so the tiles stay disjoint.
+  const effectiveTop = topSkillset === "Jumpstream" && chart?.jsClusterTech === false
+    ? "Stamina"
+    : topSkillset;
   return buckets.filter((bucket) => bucket.skillsets
-    ? topSkillset != null && bucket.skillsets.includes(topSkillset)
+    ? effectiveTop != null && bucket.skillsets.includes(effectiveTop)
     : chartBelongsToTagBucket(bucket, chart));
 }
 
@@ -3066,11 +3131,16 @@ const BASE_MSD_SKILLSETS = SKILL_RATING_SKILLSETS.filter(
  * wins from within SPEED_NEAR_TIE_MSD of the top, a speed verdict yields to
  * tech when Technical is in the same band and the analyzer confidently calls
  * the chart tech (TECH_NEAR_TIE_MIN_SCORE), and Stamina has to earn it on
- * length. Still single-valued, so the tiles stay disjoint and their clear
- * counts sum to the side's total.
+ * length - though a Stamina argmax that HAS earned it holds the tile against
+ * the near-tie when Technical also outranks Stream (the hold below). Still
+ * single-valued, so the tiles stay disjoint and their clear counts sum to the
+ * side's total.
  *
  * `lengthSeconds` is the chart's drain at 1.0x and `rate` the speed it was
- * played at, so a 1.5x run of a five-minute chart is judged on the 3:20 it
+ * played at. The gate takes the LONGER of the two readings: a chart whose 1.0x
+ * drain is 4:00+ stays stamina even when a 1.5x run compresses it to 3:20
+ * (uprating a marathon does not make it stop being one), and a downrate that
+ * stretches a shorter chart past 4:00 still earns the tile on the time it
  * actually lasted. An unknown length leaves the old behaviour rather than
  * guessing a chart short. `chartTechScore` is the chart's stored analyzer
  * tech score (ChartSkillInfo.techScore), 0 when no analysis is stored.
@@ -3084,6 +3154,29 @@ function bucketingSkillset(
   const top = dominantSkillset(values);
   if (top == null) return top;
   const stream = Number(values?.Stream ?? 0);
+  // Whether the play demanded endurance, the same reading the length gate at
+  // the bottom uses: the LONGER of the 1.0x drain and the played time.
+  const playedSeconds = lengthSeconds == null
+    ? null
+    : lengthSeconds / (Number.isFinite(rate) && rate > 0 ? rate : 1);
+  const demandsEndurance = lengthSeconds != null && playedSeconds != null
+    && Math.max(lengthSeconds, playedSeconds) >= STAMINA_TILE_MIN_LENGTH_SECONDS;
+  // A length-qualified Stamina argmax holds the tile before the speed near-tie
+  // can reach it, but only when Technical ALSO outranks Stream: Stream sitting
+  // third on a marathon is not the hundredths-level argmax noise the near-tie
+  // exists to absorb. PEACE BREAKER [4K] FINAL PUNISHMENT (777348) is the
+  // measured case: 4:51 of Stamina 30.15 / Technical 30.03 / Stream 30.02, a
+  // three-way pile-up the near-tie filed under speed on a chart players place
+  // between tech and stamina.
+  //
+  // Measured 2026-08-29 over the mapper-named 4K pack corpora
+  // (scripts/dev/tile-variant-sweep.ts): the stamina corpus (1,036 charts)
+  // goes 67.1% -> 68.2% stamina-tiled while the speed (1,088), stream (623)
+  // and tech (418) corpora each lose 3-5 marathon-length charts (0.5-0.7%),
+  // inside the 1%-per-corpus line the other overrides hold to. Dropping the
+  // Technical demand costs the speed corpus 33 charts (3.1%), mostly
+  // pure-stream training marathons, so the hold stays this narrow.
+  if (top === "Stamina" && demandsEndurance && Number(values?.Technical ?? 0) >= stream) return top;
   const best = Number(values?.[top] ?? 0);
   const nearTie = top === "Stream" || (stream > 0 && stream >= best - SPEED_NEAR_TIE_MSD)
     ? "Stream"
@@ -3096,8 +3189,7 @@ function bucketingSkillset(
     return techBacked ? "Technical" : "Stream";
   }
   if (nearTie !== "Stamina" || lengthSeconds == null) return nearTie;
-  const playedSeconds = lengthSeconds / (Number.isFinite(rate) && rate > 0 ? rate : 1);
-  if (playedSeconds >= STAMINA_TILE_MIN_LENGTH_SECONDS) return nearTie;
+  if (demandsEndurance) return nearTie;
   return bucketingSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS), null, 1, chartTechScore);
 }
 
@@ -3128,6 +3220,114 @@ export function danSkillsetBucketsForValues(
 ): string[] {
   const top = bucketingSkillset(values, lengthSeconds, rate, chart?.techScore ?? 0);
   return bucketsForClear(danSkillsetBuckets(keyCount, side), top, chart).map((bucket) => bucket.id);
+}
+
+// A pre-rated upload bakes its rate into the notes, so its stored length IS the
+// rated length and the 1.0x drain the stamina gate wants is gone. That splits
+// two identical clears: a 5:16 marathon played with a rate mod keeps the tile
+// (bucketingSkillset judges it on the base drain), while the same chart
+// uploaded as a standalone 1.4x file at 3:46 loses it.
+//
+// The diff name alone cannot fix that - a pack holds unrelated charts, and
+// plenty of names carry numbers that are not rates - so the name only PROPOSES
+// a rate and the beatmapset has to CONFIRM it: the set must hold another diff
+// of the same keymode and hold-note count at the length the proposed rate
+// predicts, within RATE_SIBLING_TOLERANCE. A rate edit is its base compressed
+// in time, so that sibling is the base itself and its length is the answer.
+// FUTURE DOMINATORS [NB5 Hard 54235] is the measured shape: five diffs, all
+// 6007 notes, at 317 / 288 / 264 / 244 / 226 seconds, exactly 317 over 1.1,
+// 1.2, 1.3 and 1.4.
+//
+// Measured 2026-08-29 over the 4K corpus: 8,532 short charts have a name whose
+// rate a sibling confirms, and 677 of those reach 4:00 at their confirmed base
+// and so newly qualify for the tile. Deliberately NOT the looser rule of
+// taking the set's longest same-note-count sibling as the base: checked
+// against the 10,597 rate-named charts that have any structural sibling, the
+// longest one matches the named rate for 6,956 but runs LONGER for 1,555,
+// because a set holding downrates makes its slowest diff look like the base,
+// which would carry genuinely short charts over the bar.
+//
+// This only ever feeds the stamina length gate. It rates nothing, and no dan
+// verdict reads it.
+const RATE_SIBLING_TOLERANCE = 0.02;
+const RATE_EDIT_MIN = 1.01;
+const RATE_EDIT_MAX = 2.5;
+// "1.4x", "x1.05", "[1.15x Rate]", "1,1x" (comma decimals appear in the wild).
+const NAMED_RATE_PATTERNS = [
+  /(?:^|[^\d.,])(\d(?:[.,]\d{1,3})?)\s*x(?![\w])/i,
+  /(?:^|[^\w])x\s*(\d(?:[.,]\d{1,3})?)(?![\d.,])/i,
+];
+
+interface RateEditCandidate {
+  beatmapId: number;
+  setId: number;
+  length: number;
+  rate: number;
+}
+
+/** The uprate a diff name claims, if it reads as one. Null otherwise. */
+export function parseNamedRate(version: string): number | null {
+  for (const pattern of NAMED_RATE_PATTERNS) {
+    const match = pattern.exec(version);
+    if (!match) continue;
+    const rate = Number(match[1].replace(",", "."));
+    if (Number.isFinite(rate) && rate >= RATE_EDIT_MIN && rate <= RATE_EDIT_MAX) return rate;
+  }
+  return null;
+}
+
+/**
+ * Replaces a confirmed rate edit's stored length with its base-rate length, so
+ * the stamina gate judges the chart the marathon it was cut from. Mutates the
+ * `info` map in place; a candidate the set does not confirm is left alone.
+ */
+async function applyRateEditBaseLengths(
+  db: Db,
+  info: Map<number, ChartSkillInfo>,
+  candidates: RateEditCandidate[],
+): Promise<void> {
+  if (candidates.length === 0) return;
+  const setIds = [...new Set(candidates.map((candidate) => candidate.setId))];
+  const siblings = new Map<number, Array<{ beatmapId: number; keyCount: number; lnCount: number; length: number }>>();
+  for (let offset = 0; offset < setIds.length; offset += CHART_SKILL_INFO_QUERY_CHUNK) {
+    const chunk = setIds.slice(offset, offset + CHART_SKILL_INFO_QUERY_CHUNK);
+    const placeholders = chunk.map(() => "?").join(", ");
+    // map_search_index rather than beatmaps: it carries the hold-note count and
+    // is indexed on beatmapset_id, which beatmaps is not.
+    // `length` MUST stay aliased: a libsql row is array-like, so `row.length`
+    // reads the column count rather than the column.
+    const rows = (await exec(
+      db,
+      `select beatmap_id, beatmapset_id, key_count, ln_count, length as length_seconds
+         from map_search_index where beatmapset_id in (${placeholders})`,
+      chunk,
+    )).rows;
+    for (const row of rows) {
+      const setId = Number(row.beatmapset_id);
+      const entry = {
+        beatmapId: Number(row.beatmap_id),
+        keyCount: Number(row.key_count),
+        lnCount: Number(row.ln_count),
+        length: Number(row.length_seconds),
+      };
+      if (!Number.isFinite(entry.length) || entry.length <= 0) continue;
+      const list = siblings.get(setId);
+      if (list) list.push(entry); else siblings.set(setId, [entry]);
+    }
+  }
+  for (const candidate of candidates) {
+    const list = siblings.get(candidate.setId);
+    const self = list?.find((entry) => entry.beatmapId === candidate.beatmapId);
+    if (!list || !self) continue;
+    const predicted = candidate.length * candidate.rate;
+    const confirmed = list.some((entry) =>
+      entry.beatmapId !== candidate.beatmapId
+      && entry.keyCount === self.keyCount
+      && entry.lnCount === self.lnCount
+      && Math.abs(entry.length - predicted) <= RATE_SIBLING_TOLERANCE * predicted);
+    const chart = info.get(candidate.beatmapId);
+    if (confirmed && chart) chart.lengthSeconds = Math.round(predicted);
+  }
 }
 
 /** Drain length in seconds from the beatmap metadata; null when unknown. */
@@ -3572,7 +3772,17 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // (clearWindow), which the dan badges read to mark an estimate that is still
 // filling in. A stored row without it reads as "unknown" rather than complete,
 // so the boards would mark players unevenly until every row has one.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v14";
+// v15: three 4K tile-filing changes land together (2026-08-29), all of which
+// move clears between skillset tiles and so move the per-tile dans and the
+// headline that averages them. A Jumpstream argmax is now arbitrated by
+// LeoBlack's label instead of always pairing with tech
+// (JS_TECH_CLUSTER_CATEGORY), which is the largest of the three: the
+// mapper-named stamina corpus goes 26.5% -> 62.6% stamina-tiled. The stamina
+// length gate now reads the longer of the 1.0x drain and the played time, so
+// an uprated marathon keeps the tile. And a length-qualified Stamina argmax
+// holds the tile against the speed near-tie when Technical also outranks
+// Stream. Re-derives from plays_json as always, no MinaCalc.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v15";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
