@@ -1912,7 +1912,6 @@ msgstr "准确率"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/lib/replay-overlays.ts
-#: src/routes/dan-estimates.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "Accuracy"
@@ -3931,6 +3930,7 @@ msgstr "创建"
 msgid "Created {0}"
 msgstr "已创建 {0}"
 
+#: src/components/player/DanEvidenceModal.tsx
 #: src/routes/dan-estimates.tsx
 msgid "Credit"
 msgstr "计入"
@@ -6225,9 +6225,33 @@ msgstr "布局"
 msgid "lazer"
 msgstr "lazer"
 
+#: src/routes/dan-estimates.tsx
+#~ msgid "Lazer accuracy is recalculated from the judgements into the stable formula used here: a lazer 95.5% is the same hits as a stable 96%. Both clients are held to the same bar."
+#~ msgstr "lazer 的准确率会根据判定数换算成这里使用的 stable 公式：lazer 的 95.5% 和 stable 的 96% 是同一组判定，两个客户端的门槛完全一致。"
+
 #: src/routes/skins_.$id.tsx
 msgid "lazer edits"
 msgstr "lazer 改动"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Lazer scores are recalculated from their judgements, Classic mod or not, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear."
+#~ msgstr "无论是否开启 Classic mod，lazer 成绩都会根据判定数重新计算，所以这里使用的准确率可能高于游戏显示的数值。例如，一次 95.5% 的成绩可能会按 96% 的通过计入。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. But the Classic mod makes no difference."
+msgstr "lazer 成绩会根据判定数重新计算，所以这里使用的准确率可能高于游戏显示的数值。例如，一次 95.5% 的成绩可能会按 96% 的通过计入，也就是同样的判定在 stable 上显示的数值。不过 Classic mod 没有任何影响。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. The Classic mod makes no difference."
+#~ msgstr "lazer 成绩会根据判定数重新计算，所以这里使用的准确率可能高于游戏显示的数值。例如，一次 95.5% 的成绩可能会按 96% 的通过计入，也就是同样的判定在 stable 上显示的数值。Classic mod 没有任何影响。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear."
+#~ msgstr "lazer 成绩会根据判定数重新计算，所以这里使用的准确率可能高于游戏显示的数值。例如，一次 95.5% 的成绩可能会按 96% 的通过计入。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Lazer shows slightly lower accuracy than stable for the same hits, so lazer plays are converted to stable accuracy here. A lazer 95.5% can count as a 96% clear because a stable player with the same hits would have 96%. This is not a bonus, and the Classic mod does not change it."
+#~ msgstr "同样的判定下，lazer 显示的准确率会比 stable 略低，所以这里会把 lazer 成绩换算成 stable 准确率。lazer 的 95.5% 可以按 96% 的通过计入，因为 stable 玩家打出同样的判定就是 96%。这不是加成，Classic mod 也不会改变这一点。"
 
 #: src/lib/replay-overlays.ts
 #: src/routes/snipes.tsx
@@ -7141,12 +7165,8 @@ msgid "most complete collections"
 msgstr "最完整的收藏册"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
-#~ msgstr "段位课题谱面大多未上架；JinJin 的课题是例外，到 Phase III 为止都是 loved。无论哪种，通过与否都由维护对应段位表的人认定，这些结果都不会以段位形式从 osu! API 返回，因此无法直接查询你的段位，只能根据你的成绩推算。"
-
-#: src/routes/dan-estimates.tsx
-msgid "Most dan courses are unranked, except JinJin's, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
-msgstr "大多数段位课题都未上架，只有 JinJin 的例外，到 Phase III 为止都是 loved。无论哪种，通过与否都由维护对应段位表的人认定，这些结果都不会以段位形式从 osu! API 返回，因此无法直接查询你的段位，只能根据你的成绩推算。"
+msgid "Most dan courses are unranked, except JinJin's, loved up to Phase III."
+msgstr "大多数段位课题都未上架，只有 JinJin 的例外，到 Phase III 为止都是 loved。"
 
 #: src/routes/maps.tsx
 msgid "Most farmed globally"
@@ -10147,6 +10167,10 @@ msgstr "ScorePosition"
 msgid "Scores"
 msgstr "成绩"
 
+#: src/routes/dan-estimates.tsx
+msgid "ScoreV2 acc (97%)"
+msgstr "ScoreV2 准确率（97%）"
+
 #: src/components/ui/ImageLightbox.tsx
 msgid "Screenshot"
 msgstr "截图"
@@ -11138,6 +11162,18 @@ msgstr "剧透文字"
 #: src/routes/skins.tsx
 msgid "stable"
 msgstr "stable"
+
+#: src/routes/dan-estimates.tsx
+msgid "Stable scores are recalculated with ScoreV2 from their judgements, so the accuracy used here may be lower than the displayed value."
+msgstr "stable 成绩会根据判定数用 ScoreV2 重新计算，所以这里使用的准确率可能低于游戏显示的数值。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Stable-formula acc (95%)"
+msgstr "stable 公式准确率（95%）"
+
+#: src/routes/dan-estimates.tsx
+msgid "Stable-formula acc (96%)"
+msgstr "stable 公式准确率（96%）"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage"
@@ -12198,8 +12234,8 @@ msgid "The skins list could not be loaded."
 msgstr "皮肤列表加载失败。"
 
 #: src/routes/dan-estimates.tsx
-msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around. You get one dan per side, per keymode, and a play only ever testifies for the side its chart belongs to."
-msgstr "分开算很重要，因为这两边说明不了对方。LN 谱面上的准确率几乎全都是在按住和放键上挣来的，所以通过一张 LN 谱面并不能说明你的单点水平，反过来也一样。每种键数的每一侧各给你一个段位，一个成绩只为它所属的那一侧作证。"
+msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
+msgstr "分开算很重要，因为这两边说明不了对方。LN 谱面上的准确率几乎全都是在按住和放键上挣来的，所以通过一张 LN 谱面并不能说明你的单点水平，反过来也一样。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."

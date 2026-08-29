@@ -1903,7 +1903,6 @@ msgstr "accuracy"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/lib/replay-overlays.ts
-#: src/routes/dan-estimates.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "Accuracy"
@@ -3922,6 +3921,7 @@ msgstr "Create"
 msgid "Created {0}"
 msgstr "Created {0}"
 
+#: src/components/player/DanEvidenceModal.tsx
 #: src/routes/dan-estimates.tsx
 msgid "Credit"
 msgstr "Credit"
@@ -6224,9 +6224,33 @@ msgstr "Layout"
 msgid "lazer"
 msgstr "lazer"
 
+#: src/routes/dan-estimates.tsx
+#~ msgid "Lazer accuracy is recalculated from the judgements into the stable formula used here: a lazer 95.5% is the same hits as a stable 96%. Both clients are held to the same bar."
+#~ msgstr "Lazer accuracy is recalculated from the judgements into the stable formula used here: a lazer 95.5% is the same hits as a stable 96%. Both clients are held to the same bar."
+
 #: src/routes/skins_.$id.tsx
 msgid "lazer edits"
 msgstr "lazer edits"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Lazer scores are recalculated from their judgements, Classic mod or not, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear."
+#~ msgstr "Lazer scores are recalculated from their judgements, Classic mod or not, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear."
+
+#: src/routes/dan-estimates.tsx
+msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. But the Classic mod makes no difference."
+msgstr "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. But the Classic mod makes no difference."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. The Classic mod makes no difference."
+#~ msgstr "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. The Classic mod makes no difference."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear."
+#~ msgstr "Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Lazer shows slightly lower accuracy than stable for the same hits, so lazer plays are converted to stable accuracy here. A lazer 95.5% can count as a 96% clear because a stable player with the same hits would have 96%. This is not a bonus, and the Classic mod does not change it."
+#~ msgstr "Lazer shows slightly lower accuracy than stable for the same hits, so lazer plays are converted to stable accuracy here. A lazer 95.5% can count as a 96% clear because a stable player with the same hits would have 96%. This is not a bonus, and the Classic mod does not change it."
 
 #: src/lib/replay-overlays.ts
 #: src/routes/snipes.tsx
@@ -7140,12 +7164,8 @@ msgid "most complete collections"
 msgstr "most complete collections"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
-#~ msgstr "Most course charts are unranked; JinJin's are the exception, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
-
-#: src/routes/dan-estimates.tsx
-msgid "Most dan courses are unranked, except JinJin's, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
-msgstr "Most dan courses are unranked, except JinJin's, loved up to Phase III. Either way, a clear is checked by the people who run that ladder, and none of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
+msgid "Most dan courses are unranked, except JinJin's, loved up to Phase III."
+msgstr "Most dan courses are unranked, except JinJin's, loved up to Phase III."
 
 #: src/routes/maps.tsx
 msgid "Most farmed globally"
@@ -10146,6 +10166,10 @@ msgstr "ScorePosition"
 msgid "Scores"
 msgstr "Scores"
 
+#: src/routes/dan-estimates.tsx
+msgid "ScoreV2 acc (97%)"
+msgstr "ScoreV2 acc (97%)"
+
 #: src/components/ui/ImageLightbox.tsx
 msgid "Screenshot"
 msgstr "Screenshot"
@@ -11137,6 +11161,18 @@ msgstr "Spoiler text"
 #: src/routes/skins.tsx
 msgid "stable"
 msgstr "stable"
+
+#: src/routes/dan-estimates.tsx
+msgid "Stable scores are recalculated with ScoreV2 from their judgements, so the accuracy used here may be lower than the displayed value."
+msgstr "Stable scores are recalculated with ScoreV2 from their judgements, so the accuracy used here may be lower than the displayed value."
+
+#: src/routes/dan-estimates.tsx
+msgid "Stable-formula acc (95%)"
+msgstr "Stable-formula acc (95%)"
+
+#: src/routes/dan-estimates.tsx
+msgid "Stable-formula acc (96%)"
+msgstr "Stable-formula acc (96%)"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage"
@@ -12197,8 +12233,8 @@ msgid "The skins list could not be loaded."
 msgstr "The skins list could not be loaded."
 
 #: src/routes/dan-estimates.tsx
-msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around. You get one dan per side, per keymode, and a play only ever testifies for the side its chart belongs to."
-msgstr "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around. You get one dan per side, per keymode, and a play only ever testifies for the side its chart belongs to."
+msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
+msgstr "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."

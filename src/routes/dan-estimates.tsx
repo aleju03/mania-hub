@@ -87,13 +87,17 @@ const LADDERS: Array<{ key: LadderKey; keyCount?: number; family?: "ln"; levels:
 
 type LadderKey = "4k-regular" | "4k-ln" | "7k-regular" | "7k-ln" | "6k-regular" | "6k-ln";
 
+// Deliberately unranked picks (loved and graveyard), because the ladders are
+// read on charts the ranked section never got. Every dan here is the estimate
+// the site itself stores for that chart, not a hand-written guess.
 const CHART_EXAMPLES: Array<{ id: number; map: string; ladder: LadderKey; dan: string }> = [
-  { id: 2034201, map: "antiPLUR - Runengon [4K Hard]", ladder: "4k-regular", dan: "4" },
-  { id: 2847100, map: "Risshuu feat. Choko - Take [4K Beyond]", ladder: "4k-regular", dan: "7" },
-  { id: 2333831, map: "Diceros Bicornis - ReviveR [4K VIVID]", ladder: "4k-regular", dan: "10" },
-  { id: 770127, map: "Camellia as \"Bang Riot\" - Blastix Riotz [4K GRAVITY]", ladder: "4k-regular", dan: "gamma" },
-  { id: 3616430, map: "Cres. - End Time [4K Every END is a new BEGINNING]", ladder: "4k-ln", dan: "9-" },
-  { id: 4001513, map: "Laur - SYSTEM ERROR [7K Obsession: Nyctophilia]", ladder: "7k-regular", dan: "gamma" },
+  { id: 2675345, map: "Sewerslvt - Cyberia lyr3 [4K Scalpels]", ladder: "4k-regular", dan: "4" },
+  { id: 1561270, map: "Laur - A Lasting Promise [4K EXHAUST]", ladder: "4k-regular", dan: "7" },
+  { id: 1887434, map: "CROOVE - Aquaris [4K Wanderer]", ladder: "4k-regular", dan: "10" },
+  { id: 2793593, map: "saikoro - far in the blue sky... [4K 42]", ladder: "4k-regular", dan: "delta+" },
+  { id: 3629313, map: "youman - R.I.P. [4K cacophony 1.1x (297bpm)]", ladder: "4k-ln", dan: "10" },
+  { id: 4596114, map: "-45 - G e n g a o z o [7K N G]", ladder: "7k-regular", dan: "gamma+" },
+  { id: 1325722, map: "Kobaryo - Cartoon Candy [CS' 6K Milk Chocolate]", ladder: "6k-regular", dan: "terra+" },
 ];
 
 // Measured against the production DB in August 2026 (read-only). The article
@@ -227,10 +231,7 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
-              Most dan courses are unranked, except JinJin's, loved up to Phase III. Either way, a clear
-              is checked by the people who run that ladder, and none of that comes back
-              through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred
-              from your plays.
+              Most dan courses are unranked, except JinJin's, loved up to Phase III.
             </Trans>
           </P>
         </Section>
@@ -353,8 +354,7 @@ function DanEstimatesPage() {
             <Trans>
               The split matters because the two say nothing about each other. Accuracy on an LN chart is
               earned almost entirely on the holds and the releases, so passing it is not evidence about
-              your regular level, and the other way around. You get one dan per side, per keymode, and a
-              play only ever testifies for the side its chart belongs to.
+              your regular level, and the other way around.
             </Trans>
           </P>
         </Section>
@@ -1199,11 +1199,12 @@ function DanDistribution({ rows }: { rows: Array<{ level: string; players: numbe
 function CreditCurveTabs() {
   const { t } = useLingui();
   const [tab, setTab] = useState(0);
-  const accuracyLabel = t`Accuracy`;
+  const stableFormulaNote = t`Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear, which is what the same hits show on stable. But the Classic mod makes no difference.`;
   const tabs = [
     {
       label: t`Regular`,
-      head: [`${accuracyLabel} (96%)`, t`Credit`],
+      head: [t`Stable-formula acc (96%)`, t`Credit`],
+      note: stableFormulaNote,
       rows: [
         ["100%", t`the chart's level +1.5`],
         ["99.5%", t`the chart's level +1.1`],
@@ -1219,7 +1220,8 @@ function CreditCurveTabs() {
     },
     {
       label: t`4K LN`,
-      head: [`${accuracyLabel} (97% ScoreV2)`, t`Credit`],
+      head: [t`ScoreV2 acc (97%)`, t`Credit`],
+      note: t`Stable scores are recalculated with ScoreV2 from their judgements, so the accuracy used here may be lower than the displayed value.`,
       rows: [
         ["100%", t`the chart's level +0.7`],
         ["99.9%", t`the chart's level +0.53`],
@@ -1235,7 +1237,8 @@ function CreditCurveTabs() {
     },
     {
       label: t`6K/7K LN`,
-      head: [`${accuracyLabel} (95%)`, t`Credit`],
+      head: [t`Stable-formula acc (95%)`, t`Credit`],
+      note: stableFormulaNote,
       rows: [
         ["100%", t`the chart's level +1.5`],
         ["99.5%", t`the chart's level +1.18`],
@@ -1270,6 +1273,7 @@ function CreditCurveTabs() {
         ))}
       </div>
       <Table head={active.head} rows={active.rows} />
+      <p className="text-[12px] leading-5 text-osu-f2">{active.note}</p>
     </div>
   );
 }
