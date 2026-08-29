@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import {
+  PLAYER_SKILLS_SEED_VERSIONS,
   PLAYER_SKILLS_VERSION,
   aggregateSsrs,
   computePlayerSkillRatings,
+  computePlayerSkillsJob,
   danClearAverageWindowFor,
   estimateWifeAccuracy,
   getPlayerSkillBreakdown,
@@ -451,6 +453,30 @@ describe("computePlayerSkillRatings", () => {
       expect(healthy.summary.analyzedPlays).toBe(1);
       const sameScoreWithDa = play({ id: 22, beatmap_id: 101, mods: [{ acronym: "DA" }] });
       const purged = await computePlayerSkillRatings(db, failingOsu, [sameScoreWithDa], [{ ...healthy.plays[0] }]);
+      expect(purged.summary.analyzedPlays).toBe(0);
+    });
+  });
+
+  it("skips Hold Off/Invert/No Release plays: the judged chart is not the stored chart", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
+
+      for (const acronym of ["HO", "IN", "NR"]) {
+        const modded = play({ id: 31, beatmap_id: 101, mods: [{ acronym }] });
+        const top = await computePlayerSkillRatings(db, failingOsu, [modded], []);
+        expect(top.summary.analyzedPlays, acronym).toBe(0);
+        expect(top.summary.unsupportedPlays, acronym).toBe(1);
+        const tracked = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores: [{ ...modded, pp: null }] });
+        expect(tracked.summary.totalPlays, acronym).toBe(0);
+      }
+
+      // An HO play rated before the exclusion existed (an LN chart credited
+      // as if the holds were played) evicts on the next compute while its
+      // score is still around to testify to the mods.
+      const healthy = await computePlayerSkillRatings(db, failingOsu, [play({ id: 32, beatmap_id: 101 })], []);
+      expect(healthy.summary.analyzedPlays).toBe(1);
+      const sameScoreWithHo = play({ id: 32, beatmap_id: 101, mods: [{ acronym: "HO" }] });
+      const purged = await computePlayerSkillRatings(db, failingOsu, [sameScoreWithHo], [{ ...healthy.plays[0] }]);
       expect(purged.summary.analyzedPlays).toBe(0);
     });
   });
@@ -1701,6 +1727,108 @@ describe("getPlayerSkillBreakdown", () => {
       // The 4K LN ladder runs to 17 (Yeehee), so a 16.2 is a real LN 16+
       // rather than something folded onto the old 15 ceiling.
       expect(byKeyCount.get(4)?.dan?.ln?.label).toBe("16+");
+    });
+  });
+
+  it("keeps serving a superseded ready row after a version bump, flagged stale", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      const computedAt = new Date().toISOString();
+      const summary = {
+        totalPlays: 10,
+        analyzedPlays: 9,
+        pendingPlays: 0,
+        unsupportedPlays: 1,
+        modes: [{ keyCount: 4, analyzedPlays: 9, ratings: { Overall: 21.5 } }],
+      };
+      const storedPlay = {
+        identity: "official:31", beatmapId: 106, keyCount: 4, rate: 1, goal: 0.93,
+        pp: 90, values: { Overall: 21.5, Stream: 18 }, patterns: [], source: "top",
+      };
+      await exec(
+        db,
+        `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+         values (?, ?, 'ready', ?, ?, ?, ?)`,
+        [99, PLAYER_SKILLS_VERSION - 1, JSON.stringify(summary), JSON.stringify({ plays: [storedPlay] }), computedAt, computedAt],
+      );
+
+      // The bump queues the upgrade but must not blank the profile meanwhile.
+      const breakdown = await getPlayerSkillBreakdown(db, queue, 99);
+      expect(breakdown.status).toBe("ready");
+      expect(breakdown.stale).toBe(true);
+      expect(breakdown.version).toBe(PLAYER_SKILLS_VERSION - 1);
+      expect(breakdown.modes[0].ratings.Overall).toBe(21.5);
+      const jobs = (await exec(db, "select dedupe_key from jobs where type = 'compute_player_skills'")).rows;
+      expect(jobs.map((row) => String(row.dedupe_key))).toEqual([`player-skills:${PLAYER_SKILLS_VERSION}:99`]);
+
+      // The evidence lists explain the same superseded row the breakdown serves.
+      const plays = await getPlayerSkillPlays(db, 99, 4, "Stream");
+      expect(plays.total).toBe(1);
+      expect(plays.items[0]?.beatmapId).toBe(106);
+
+      // A failed current-version row falls back the same way instead of
+      // reporting the profile as failed while the old rating still exists.
+      await exec(
+        db,
+        `insert into player_skill_ratings (user_id, analysis_version, status, error, updated_at)
+         values (?, ?, 'failed', 'boom', ?)`,
+        [99, PLAYER_SKILLS_VERSION, computedAt],
+      );
+      const afterFailure = await getPlayerSkillBreakdown(db, queue, 99, { allowEnqueue: false });
+      expect(afterFailure.status).toBe("ready");
+      expect(afterFailure.stale).toBe(true);
+      expect(afterFailure.modes[0].ratings.Overall).toBe(21.5);
+    });
+  });
+});
+
+describe("computePlayerSkillsJob", () => {
+  it("seeds a version bump's first compute from the superseded row's plays", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      const now = new Date().toISOString();
+      const jobOsu = {
+        ...failingOsu,
+        getUserByKey: async (): Promise<never> => { throw new Error("no network in tests"); },
+        getUserBestScoresWindow: async (): Promise<never> => { throw new Error("no network in tests"); },
+      };
+      // A stored profile snapshot with one live top play (uncached chart, so it
+      // lands as pending without a calc) keeps the job off the osu! API.
+      await exec(
+        db,
+        `insert into profile_snapshots (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+         values (99, '99', '{}', ?, 200, ?, ?, ?)`,
+        [JSON.stringify([play({ id: 41, beatmap_id: 777 })]), now, now, now],
+      );
+      const seededVersion = PLAYER_SKILLS_SEED_VERSIONS[0];
+      const storedPlay = {
+        identity: "official:31", beatmapId: 106, keyCount: 4, rate: 1, goal: 0.93,
+        pp: 90, values: { Overall: 20, Stream: 18 }, patterns: [], source: "top",
+      };
+      await exec(
+        db,
+        `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+         values (99, ?, 'ready', '{}', ?, ?, ?)`,
+        [seededVersion, JSON.stringify({ version: seededVersion, plays: [storedPlay] }), now, now],
+      );
+
+      await computePlayerSkillsJob(db, jobOsu, queue, { userId: 99 });
+
+      // The recompute retained the superseded row's play (its score is long
+      // gone from every live source) instead of starting from zero.
+      const rows = (await exec(
+        db,
+        "select analysis_version, status, modes_json, plays_json from player_skill_ratings where user_id = 99",
+      )).rows;
+      expect(rows).toHaveLength(1);
+      expect(Number(rows[0].analysis_version)).toBe(PLAYER_SKILLS_VERSION);
+      expect(String(rows[0].status)).toBe("ready");
+      const plays = JSON.parse(String(rows[0].plays_json)).plays as Array<{ identity: string; values: Record<string, number> }>;
+      expect(plays.map((entry) => entry.identity)).toContain("official:31");
+      expect(plays.find((entry) => entry.identity === "official:31")?.values.Overall).toBe(20);
+      const summary = JSON.parse(String(rows[0].modes_json));
+      expect(summary.analyzedPlays).toBe(1);
+      expect(summary.pendingPlays).toBe(1);
     });
   });
 });

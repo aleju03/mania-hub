@@ -340,6 +340,41 @@ describe("skill leaderboard", () => {
       expect(skillLeaderboardBuildCount()).toBe(builds);
     });
   });
+
+  it("keeps superseded-version rows on the board until their recompute lands", async () => {
+    await withDb(async (db) => {
+      await seed(db, sevenKPlayers);
+      // A version bump leaves most of the roster on the old version. Their
+      // rows must keep ranking; a player with both versions ready (the brief
+      // window before the compute deletes the old row) counts once, at the
+      // newer numbers.
+      await exec(
+        db,
+        "update player_skill_ratings set analysis_version = ? where user_id in (12, 13, 14)",
+        [PLAYER_SKILLS_VERSION - 1],
+      );
+      const now = new Date().toISOString();
+      const upgraded = {
+        totalPlays: 500,
+        analyzedPlays: 500,
+        pendingPlays: 0,
+        unsupportedPlays: 0,
+        modes: [{ keyCount: 7, analyzedPlays: 220, ratings: {}, patterns: [{ id: "jack", rating: 31, plays: 210 }] }],
+      };
+      await exec(
+        db,
+        `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+         values (12, ?, 'ready', ?, '{"plays":[]}', ?, ?)`,
+        [PLAYER_SKILLS_VERSION, JSON.stringify(upgraded), now, now],
+      );
+      resetSkillLeaderboardCache(db);
+
+      const board = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "pattern:jack" });
+      expect(board.total).toBe(3);
+      expect(board.ranking.map((entry) => entry.user.username)).toEqual(["mid", "deep", "thin"]);
+      expect(board.ranking[0].value).toBeCloseTo(31, 5);
+    });
+  });
 });
 
 describe("dan leaderboard", () => {

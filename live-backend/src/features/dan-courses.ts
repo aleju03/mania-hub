@@ -188,8 +188,10 @@ export function danCourseForBeatmap(beatmapId: number): DanCourse | undefined {
 // Mods that make a course run not the course. EZ and NF remove the failure the
 // exam is, HT/DC and any sub-1.0 rate play a different chart, Random redeals
 // the patterns, Difficulty Adjust rewrites the exam's own settings (with
-// Extended Limits the OD slider reaches -15), and the automation mods are not
-// the player. Everything the
+// Extended Limits the OD slider reaches -15), Hold Off/Invert/No Release
+// rewrite the notes themselves (Hold Off plays an LN exam as rice, No Release
+// frees every hold tail), and the automation mods are not the player.
+// Everything the
 // course rules do allow (Mirror, HD/FI, FL, HR, SD/PF, DT/NC) is left alone:
 // under a floor rule, crediting a harder run at the course's own level is a
 // lower bound, not a claim about what the rate was worth.
@@ -199,7 +201,7 @@ export function danCourseForBeatmap(beatmapId: number): DanCourse | undefined {
 // map made for mania. They cost one set lookup to refuse and would be the
 // right answer if a course ever were a convert.
 const DISALLOWED_COURSE_MODS = new Set([
-  "EZ", "NF", "HT", "DC", "DA", "RD", "AT", "CN", "SO", "RX", "AP", "WU", "WD", "AS", "DP",
+  "EZ", "NF", "HT", "DC", "DA", "HO", "IN", "NR", "RD", "AT", "CN", "SO", "RX", "AP", "WU", "WD", "AS", "DP",
   "1K", "2K", "3K", "4K", "5K", "6K", "7K", "8K", "9K", "10K",
 ]);
 

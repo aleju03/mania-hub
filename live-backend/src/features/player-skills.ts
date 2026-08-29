@@ -73,6 +73,18 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // exists so the version-stale drip walks the whole roster instead of
 // waiting on views.
 export const PLAYER_SKILLS_VERSION = 18;
+// Prior versions whose stored plays_json is a sound seed for this version's
+// first compute, so a bump updates ratings in place instead of re-running
+// MinaCalc on every play and dropping the durable retained evidence. Sound
+// here means the stored SSR values still mean the same thing: v17 -> v18
+// changed candidate eligibility (DA), wife-goal inputs (lazer EZ/HR windows)
+// and dan credit rules, all of which the reuse key and the retention pass
+// re-evaluate per play - the goal is part of the reuse key, so every
+// still-visible play whose goal shifted recomputes, and DA identities evict.
+// A bump that changes what an SSR value itself means (a calc change like
+// v15's LN blend) must ship this list EMPTY, or stale values would be
+// reused forever on plays whose goal did not move.
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [17];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -694,16 +706,21 @@ export function getPlayRate(mods: OsuMod[] | string[] | undefined): number | nul
 }
 
 /**
- * Whether a play carries Difficulty Adjust. DA rewrites the chart's own
- * settings (with Extended Limits the OD slider reaches -15), so the
- * judgements testify about windows the stored chart never had, in either
- * direction. Such a play is skipped rather than mis-rated, like the
- * no-single-rate mods.
+ * Mods under which the judgements testify about a chart the stored .osu never
+ * was, so both the SSR (computed from the stored notes) and any dan credit
+ * would be mis-rated. Difficulty Adjust rewrites the chart's own settings
+ * (with Extended Limits the OD slider reaches -15); Hold Off plays every hold
+ * as a bare tap, which turns an LN chart into rice; Invert turns the gaps
+ * between notes into holds; No Release frees every hold tail, which is where
+ * LN accuracy is earned. Such a play is skipped rather than mis-rated, like
+ * the no-single-rate mods.
  */
-export function scoreHasDifficultyAdjust(mods: OsuMod[] | string[] | undefined): boolean {
+const CHART_REWRITING_MODS = new Set(["DA", "HO", "IN", "NR"]);
+
+export function scoreRewritesChart(mods: OsuMod[] | string[] | undefined): boolean {
   for (const mod of mods ?? []) {
     const acronym = typeof mod === "string" ? mod : String(mod?.acronym ?? "");
-    if (acronym === "DA") return true;
+    if (CHART_REWRITING_MODS.has(acronym)) return true;
   }
   return false;
 }
@@ -1811,17 +1828,18 @@ export async function computePlayerSkillRatings(
   // the same slot. Tracked plays that fail validation are best-effort extras
   // and skip silently; only top plays count toward unsupportedPlays.
   const candidates = new Map<string, PlayCandidate>();
-  // Score identities seen carrying Difficulty Adjust: never candidates, and
-  // grounds for evicting a stored play rated before the DA exclusion existed.
-  const daIdentities = new Set<string>();
+  // Score identities seen carrying a chart-rewriting mod (DA/HO/IN/NR):
+  // never candidates, and grounds for evicting a stored play rated before
+  // the exclusion existed.
+  const rewritingModIdentities = new Set<string>();
   const consider = (score: OscScore, source: "top" | "tracked") => {
     const beatmapId = beatmapIdOf(score);
     if (!Number.isInteger(beatmapId) || beatmapId <= 0) {
       if (source === "top") unsupportedPlays += 1;
       return;
     }
-    if (scoreHasDifficultyAdjust(score.mods)) {
-      daIdentities.add(getScoreIdentity(score));
+    if (scoreRewritesChart(score.mods)) {
+      rewritingModIdentities.add(getScoreIdentity(score));
       if (source === "top") unsupportedPlays += 1;
       return;
     }
@@ -1924,11 +1942,12 @@ export async function computePlayerSkillRatings(
     // floor's, not the play's. Rated before the sub-floor exclusion existed;
     // evict instead of retaining.
     if (!(previous.goal > SSR_GOAL_MIN)) continue;
-    // A stored play whose still-visible score turns out to carry Difficulty
-    // Adjust was rated on windows the chart never had (rated before the DA
-    // exclusion existed); evict instead of retaining. Applies to any source:
-    // top trust is about the rate, and DA disqualifies regardless of rate.
-    if (daIdentities.has(previous.identity)) continue;
+    // A stored play whose still-visible score turns out to carry a
+    // chart-rewriting mod (DA/HO/IN/NR) was rated against a chart it never
+    // played (rated before the exclusion existed); evict instead of
+    // retaining. Applies to any source: top trust is about the rate, and
+    // these disqualify regardless of rate.
+    if (rewritingModIdentities.has(previous.identity)) continue;
     if (
       infoByBeatmap.get(previous.beatmapId)?.vibro &&
       previous.source !== "top" &&
@@ -2056,11 +2075,18 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
       logWarn("session_profile_snapshot_persist_failed", { userId, ...errorContext(error) });
     });
 
+    // Current-version plays first; on a version bump's first compute, the
+    // newest seed-compatible superseded row instead (its plays_json survives
+    // until this job's ready write deletes it below), so the recompute reuses
+    // stored SSRs and keeps retained evidence instead of starting from zero.
+    const seedableVersions = [PLAYER_SKILLS_VERSION, ...PLAYER_SKILLS_SEED_VERSIONS];
     const previousRow = (await exec(
       db,
-      "select plays_json from player_skill_ratings where user_id = ? and analysis_version = ?",
-      [userId, PLAYER_SKILLS_VERSION],
-    )).rows[0];
+      `select plays_json from player_skill_ratings
+       where user_id = ? and analysis_version in (${seedableVersions.map(() => "?").join(", ")})
+       order by analysis_version desc`,
+      [userId, ...seedableVersions],
+    )).rows.find((row) => typeof row.plays_json === "string" && row.plays_json.length > 0);
     const previousPlays = parseJson<{ plays?: StoredPlaySsr[] }>(String(previousRow?.plays_json ?? ""), {}).plays ?? [];
 
     const trackedScores = await loadTrackedScores(db, userId);
@@ -2320,12 +2346,14 @@ export async function getPlayerSkillBreakdown(
   userId: number,
   options: { allowEnqueue?: boolean; enqueueMode?: SkillEnqueueMode } = {},
 ): Promise<PlayerSkillBreakdown> {
-  const row = (await exec(
+  const rows = (await exec(
     db,
-    `select status, modes_json, computed_at, updated_at from player_skill_ratings
-     where user_id = ? and analysis_version = ?`,
-    [userId, PLAYER_SKILLS_VERSION],
-  )).rows[0];
+    `select analysis_version, status, modes_json, computed_at, updated_at from player_skill_ratings
+     where user_id = ?
+     order by analysis_version desc`,
+    [userId],
+  )).rows;
+  const row = rows.find((candidate) => Number(candidate.analysis_version) === PLAYER_SKILLS_VERSION);
 
   const now = Date.now();
   const status = row ? String(row.status) : null;
@@ -2393,6 +2421,27 @@ export async function getPlayerSkillBreakdown(
       ...(shouldEnqueue ? { stale: true } : {}),
     };
   }
+  // A version bump must not blank a profile that has a rating: until this
+  // player's current-version row is ready, the newest superseded ready row
+  // keeps serving, flagged stale (the enqueue above already queued the
+  // upgrade, and the ready write deletes this row when it lands).
+  const fallbackRow = rows.find(
+    (candidate) => Number(candidate.analysis_version) !== PLAYER_SKILLS_VERSION && String(candidate.status) === "ready",
+  );
+  const fallbackSummary = parseJson<Partial<StoredModesSummary> | null>(String(fallbackRow?.modes_json ?? ""), null);
+  if (fallbackRow && fallbackSummary) {
+    return {
+      status: "ready",
+      version: Number(fallbackRow.analysis_version),
+      computedAt: typeof fallbackRow.computed_at === "string" ? fallbackRow.computed_at : null,
+      totalPlays: Math.max(0, Number(fallbackSummary.totalPlays ?? 0)),
+      analyzedPlays: Math.max(0, Number(fallbackSummary.analyzedPlays ?? 0)),
+      pendingPlays: Math.max(0, Number(fallbackSummary.pendingPlays ?? 0)),
+      unsupportedPlays: Math.max(0, Number(fallbackSummary.unsupportedPlays ?? 0)),
+      modes: Array.isArray(fallbackSummary.modes) ? fallbackSummary.modes.filter(isValidMode).map(normalizeMode) : [],
+      stale: true,
+    };
+  }
   return {
     status: status === "failed" ? "failed" : "pending",
     version: PLAYER_SKILLS_VERSION,
@@ -2428,11 +2477,15 @@ export async function getPlayerSkillPlays(
     return { items: [], total: 0, limit, offset };
   }
 
+  // Newest ready row, any version: after a version bump the superseded row
+  // keeps explaining the ratings the breakdown fallback is still serving.
   const row = (await exec(
     db,
     `select status, plays_json from player_skill_ratings
-     where user_id = ? and analysis_version = ?`,
-    [userId, PLAYER_SKILLS_VERSION],
+     where user_id = ? and status = 'ready'
+     order by analysis_version desc
+     limit 1`,
+    [userId],
   )).rows[0];
   if (String(row?.status ?? "") !== "ready") return { items: [], total: 0, limit, offset };
 
@@ -2799,11 +2852,15 @@ export async function getPlayerSkillDanEvidence(
   options: { maxClears?: number; clearsOffset?: number } = {},
 ): Promise<PlayerSkillDanEvidence | null> {
   if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(keyCount) || keyCount <= 0) return null;
+  // Newest ready row, any version: after a version bump the superseded row
+  // keeps backing the dan evidence the breakdown fallback is still serving.
   const row = (await exec(
     db,
     `select status, plays_json from player_skill_ratings
-     where user_id = ? and analysis_version = ?`,
-    [userId, PLAYER_SKILLS_VERSION],
+     where user_id = ? and status = 'ready'
+     order by analysis_version desc
+     limit 1`,
+    [userId],
   )).rows[0];
   if (String(row?.status ?? "") !== "ready") return null;
   const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row?.plays_json ?? ""), null);

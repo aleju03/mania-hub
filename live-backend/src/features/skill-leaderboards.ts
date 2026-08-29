@@ -345,17 +345,27 @@ async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
   let cursor = 0;
   let scanned = 0;
   for (;;) {
+    /* Each user's newest ready row, not just the current version: after a
+       PLAYER_SKILLS_VERSION bump the board would otherwise blank to the
+       handful of already-recomputed players while the roster drip walks
+       everyone else. The superseded row serves until the compute job's ready
+       write replaces-then-deletes it, so the board upgrades player by player.
+       The correlated subquery rides the (user_id, analysis_version) primary
+       key; it also keeps one row per user, which the cursor paging needs. */
     const rows = (await exec(
       db,
       `select r.user_id, r.modes_json, u.username, u.avatar_url, u.country_code, u.global_rank
          from player_skill_ratings r
         join users u on u.user_id = r.user_id
-        where r.analysis_version = ? and r.status = 'ready' and r.modes_json is not null
+        where r.status = 'ready' and r.modes_json is not null
+          and r.analysis_version = (
+            select max(r2.analysis_version) from player_skill_ratings r2
+             where r2.user_id = r.user_id and r2.status = 'ready' and r2.modes_json is not null)
           and u.is_active != 0
           and r.user_id > ?
         order by r.user_id
         limit ?`,
-      [PLAYER_SKILLS_VERSION, cursor, BOARD_BUILD_CHUNK],
+      [cursor, BOARD_BUILD_CHUNK],
     )).rows;
 
     for (const row of rows) {
