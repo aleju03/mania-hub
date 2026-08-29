@@ -1925,6 +1925,11 @@ msgstr "Accuracy"
 msgid "Accuracy <0>{0}</0>"
 msgstr "Accuracy <0>{0}</0>"
 
+#: src/routes/legal.tsx
+#: src/routes/terms.tsx
+msgid "Accuracy And Availability"
+msgstr "Accuracy And Availability"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 93.5% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 93.5% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
@@ -2248,6 +2253,14 @@ msgstr "analysis"
 msgid "analysis unavailable"
 msgstr "analysis unavailable"
 
+#: src/routes/privacy.tsx
+msgid "Analytics And Logs"
+msgstr "Analytics And Logs"
+
+#: src/routes/privacy.tsx
+msgid "Analytics groups page views from the same browser using a random visitor ID stored in localStorage. The ID is not derived from or linked to your osu! account, and clearing site data removes it. The country shown in analytics is derived from the request at the hosting edge; the IP address itself and the browser user agent are not stored. Analytics events are not sent to any third-party service."
+msgstr "Analytics groups page views from the same browser using a random visitor ID stored in localStorage. The ID is not derived from or linked to your osu! account, and clearing site data removes it. The country shown in analytics is derived from the request at the hosting edge; the IP address itself and the browser user agent are not stored. Analytics events are not sent to any third-party service."
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "analyzing…"
 msgstr "analyzing…"
@@ -2432,6 +2445,11 @@ msgstr "Audio settings apply immediately."
 msgid "Audio URL (mp3)"
 msgstr "Audio URL (mp3)"
 
+#: src/routes/privacy.tsx
+#: src/routes/terms.tsx
+msgid "August 23, 2026"
+msgstr "August 23, 2026"
+
 #: src/routes/discord.tsx
 msgid "Authorize. The bot needs to send messages and embed links."
 msgstr "Authorize. The bot needs to send messages and embed links."
@@ -2605,6 +2623,14 @@ msgstr "BBCode editor"
 #: src/routes/farm-helper.tsx
 msgid "beatmap #{0}"
 msgstr "beatmap #{0}"
+
+#: src/routes/terms.tsx
+msgid "Beatmap audio, backgrounds, titles, artist names, creator names, metadata, and other user-submitted or third-party content remain with their respective owners. Mania Tracker does not claim ownership of that content."
+msgstr "Beatmap audio, backgrounds, titles, artist names, creator names, metadata, and other user-submitted or third-party content remain with their respective owners. Mania Tracker does not claim ownership of that content."
+
+#: src/routes/legal.tsx
+msgid "Beatmap audio, backgrounds, titles, artist names, creator names, metadata, and other user-submitted or third-party content remain with their respective owners. This site displays available public metadata and derived information for community reference."
+msgstr "Beatmap audio, backgrounds, titles, artist names, creator names, metadata, and other user-submitted or third-party content remain with their respective owners. This site displays available public metadata and derived information for community reference."
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM, length and dan."
@@ -2812,6 +2838,10 @@ msgstr "Browse rotating osu!mania map packs grouped by pattern, dan estimate, an
 #: src/routes/skins_.$id.tsx
 msgid "Browse skins"
 msgstr "Browse skins"
+
+#: src/routes/privacy.tsx
+msgid "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
+msgstr "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
 
 #: src/routes/replay.tsx
 msgid "Browser-based osu!mania replay watcher and viewer for .osr files, score replays, keypress overlays, skins, and MP4 export."
@@ -3491,6 +3521,10 @@ msgstr "Connected, but no new scores have come in for a few minutes. Recent play
 msgid "Connection lost; reconnecting."
 msgstr "Connection lost; reconnecting."
 
+#: src/routes/legal.tsx
+msgid "Contact"
+msgstr "Contact"
+
 #: src/components/layout/CountrySelector.tsx
 msgid "Continents"
 msgstr "Continents"
@@ -4088,6 +4122,14 @@ msgstr "dark"
 msgid "Darkens the beatmap background so notes stay readable."
 msgstr "Darkens the beatmap background so notes stay readable."
 
+#: src/routes/legal.tsx
+msgid "Data Sources"
+msgstr "Data Sources"
+
+#: src/routes/privacy.tsx
+msgid "Data The Site Uses"
+msgstr "Data The Site Uses"
+
 #: src/routes/dan-estimates.tsx
 msgid "DDMythical's Reform dan courses, stable accuracy"
 msgstr "DDMythical's Reform dan courses, stable accuracy"
@@ -4449,6 +4491,10 @@ msgstr "DT/NC"
 msgid "Dumpstream"
 msgstr "Dumpstream"
 
+#: src/routes/privacy.tsx
+msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
+msgstr "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
+
 #: src/components/communities/field-options.tsx
 msgid "Dutch"
 msgstr "Dutch"
@@ -4630,6 +4676,10 @@ msgstr "Estonian"
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Europe, Central America, France"
 msgstr "Europe, Central America, France"
+
+#: src/routes/legal.tsx
+msgid "Even with those safeguards, data may be delayed, incomplete, stale, or unavailable."
+msgstr "Even with those safeguards, data may be delayed, incomplete, stale, or unavailable."
 
 #: src/components/packs/RevealStage.tsx
 msgid "Every card came out in two pieces"
@@ -5094,6 +5144,10 @@ msgstr "Flip vertical"
 #: src/routes/farm-helper.tsx
 msgid "for"
 msgstr "for"
+
+#: src/routes/legal.tsx
+msgid "For attribution, takedown, privacy, or data concerns, contact the maintainer through the public osu! profile linked in the site footer."
+msgstr "For attribution, takedown, privacy, or data concerns, contact the maintainer through the public osu! profile linked in the site footer."
 
 #: src/components/packs/GoatPoll.tsx
 msgid "for banned or deleted"
@@ -5686,6 +5740,10 @@ msgstr "Hybrid"
 msgid "If you have the map, drop its .osz here and the replay plays from your copy."
 msgstr "If you have the map, drop its .osz here and the replay plays from your copy."
 
+#: src/routes/privacy.tsx
+msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+msgstr "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+
 #: src/routes/dan-estimates.tsx
 msgid "If your recorded plays show that you passed a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
 msgstr "If your recorded plays show that you passed a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
@@ -6028,6 +6086,10 @@ msgstr "Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard o
 msgid "jumpstream, warmup, ..."
 msgstr "jumpstream, warmup, ..."
 
+#: src/routes/legal.tsx
+msgid "June 16, 2026"
+msgstr "June 16, 2026"
+
 #: src/lib/format.ts
 msgid "just now"
 msgstr "just now"
@@ -6192,6 +6254,10 @@ msgstr "Last page"
 msgid "Last seen {0}"
 msgstr "Last seen {0}"
 
+#: src/components/legal/LegalDocument.tsx
+msgid "Last updated {updatedAt}"
+msgstr "Last updated {updatedAt}"
+
 #: src/lib/changelog.ts
 msgid "last year"
 msgstr "last year"
@@ -6293,6 +6359,10 @@ msgstr "Left thumb"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Left vs right hand miss totals."
 msgstr "Left vs right hand miss totals."
+
+#: src/routes/legal.tsx
+msgid "Legal notice"
+msgstr "Legal notice"
 
 #: src/lib/packs.ts
 msgid "Legend"
@@ -6820,6 +6890,51 @@ msgstr "Mania maps"
 #: src/routes/skins.tsx
 msgid "mania stage"
 msgstr "mania stage"
+
+#: src/routes/legal.tsx
+msgid "Mania Tracker"
+msgstr "Mania Tracker"
+
+#: src/routes/privacy.tsx
+msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
+msgstr "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
+
+#: src/routes/terms.tsx
+msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug, use the <0>Report a bug</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+msgstr "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug, use the <0>Report a bug</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+
+#: src/routes/privacy.tsx
+msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
+msgstr "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
+
+#: src/routes/terms.tsx
+msgid "Mania Tracker is a community project built on external data sources, so rankings, score views, snipes, top plays, maps, farm-helper suggestions, replay views, dan estimates, and other generated surfaces may be delayed, incomplete, unavailable, or incorrect. Features may change, break, or be removed."
+msgstr "Mania Tracker is a community project built on external data sources, so rankings, score views, snipes, top plays, maps, farm-helper suggestions, replay views, dan estimates, and other generated surfaces may be delayed, incomplete, unavailable, or incorrect. Features may change, break, or be removed."
+
+#: src/routes/legal.tsx
+msgid "Mania Tracker is a community project built on external data sources, so rankings, scores, snipes, top plays, replay views, and other generated surfaces may be delayed, incomplete, unavailable, or incorrect."
+msgstr "Mania Tracker is a community project built on external data sources, so rankings, scores, snipes, top plays, replay views, and other generated surfaces may be delayed, incomplete, unavailable, or incorrect."
+
+#: src/routes/privacy.tsx
+msgid "Mania Tracker is an osu!mania community site built around public osu! data, cached projections, and user preferences. This policy explains the data used to operate the site."
+msgstr "Mania Tracker is an osu!mania community site built around public osu! data, cached projections, and user preferences. This policy explains the data used to operate the site."
+
+#: src/routes/legal.tsx
+#: src/routes/terms.tsx
+msgid "Mania Tracker is an unofficial community fan project for osu!mania players. It is not affiliated with, endorsed by, sponsored by, or approved by ppy Pty Ltd or the osu! team."
+msgstr "Mania Tracker is an unofficial community fan project for osu!mania players. It is not affiliated with, endorsed by, sponsored by, or approved by ppy Pty Ltd or the osu! team."
+
+#: src/routes/terms.tsx
+msgid "Mania Tracker uses osu! OAuth to identify the signed-in osu! account. Mania Tracker does not receive or manage your osu! password."
+msgstr "Mania Tracker uses osu! OAuth to identify the signed-in osu! account. Mania Tracker does not receive or manage your osu! password."
+
+#: src/routes/legal.tsx
+msgid "Mania Tracker uses public and authenticated osu! API data, locally cached data, server projections, and community data services such as <0>osu! score cache</0>."
+msgstr "Mania Tracker uses public and authenticated osu! API data, locally cached data, server projections, and community data services such as <0>osu! score cache</0>."
+
+#: src/routes/privacy.tsx
+msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+msgstr "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "mania-note art not tied to a keymode block"
@@ -8408,9 +8523,18 @@ msgstr "or someone else"
 msgid "orange"
 msgstr "orange"
 
+#: src/routes/legal.tsx
+#: src/routes/terms.tsx
+msgid "osu! Assets And Data"
+msgstr "osu! Assets And Data"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "osu! didn't answer. Try again in a minute."
 msgstr "osu! didn't answer. Try again in a minute."
+
+#: src/routes/terms.tsx
+msgid "osu! Login"
+msgstr "osu! Login"
 
 #: src/routes/player/$username.tsx
 msgid "osu! profile"
@@ -8540,6 +8664,10 @@ msgstr "Overall"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Overlays"
 msgstr "Overlays"
+
+#: src/routes/privacy.tsx
+msgid "Overview"
+msgstr "Overview"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "owner"
@@ -8945,6 +9073,10 @@ msgstr "Plays with <0>{playstyleValue}</0>"
 msgid "Please choose an .osr replay file."
 msgstr "Please choose an .osr replay file."
 
+#: src/routes/legal.tsx
+msgid "Please do not abuse the site, overload public endpoints, attempt to bypass access controls, send harmful payloads, or use the service in a way that disrupts osu!, ppy, community APIs, or other users."
+msgstr "Please do not abuse the site, overload public endpoints, attempt to bypass access controls, send harmful payloads, or use the service in a way that disrupts osu!, ppy, community APIs, or other users."
+
 #: src/components/communities/field-options.tsx
 msgid "Polish"
 msgstr "Polish"
@@ -9153,6 +9285,14 @@ msgstr "Previously"
 #: src/routes/__root.tsx
 msgid "privacy"
 msgstr "privacy"
+
+#: src/routes/privacy.tsx
+msgid "Privacy"
+msgstr "Privacy"
+
+#: src/routes/privacy.tsx
+msgid "Privacy Policy"
+msgstr "Privacy Policy"
 
 #: src/components/skins/SkinCard.tsx
 #: src/components/skins/SkinSettingsModal.tsx
@@ -9936,6 +10076,10 @@ msgstr "Resume chart preview"
 msgid "Resume this map"
 msgstr "Resume this map"
 
+#: src/routes/privacy.tsx
+msgid "Retention And Controls"
+msgstr "Retention And Controls"
+
 #: src/components/packs/album/AlbumView.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
@@ -9963,6 +10107,14 @@ msgstr "Right"
 #: src/routes/replay.tsx
 msgid "Right thumb"
 msgstr "Right thumb"
+
+#: src/routes/legal.tsx
+msgid "Rights in osu!, osu!mania, osu! game branding, ruleset names, ruleset icons, score data, replay data, user profile data, and related osu! assets remain with ppy Pty Ltd or the applicable rightsholders."
+msgstr "Rights in osu!, osu!mania, osu! game branding, ruleset names, ruleset icons, score data, replay data, user profile data, and related osu! assets remain with ppy Pty Ltd or the applicable rightsholders."
+
+#: src/routes/terms.tsx
+msgid "Rights in osu!, osu!mania, osu! game branding, ruleset names, score data, replay data, user profile data, and related osu! assets remain with ppy Pty Ltd or the applicable rightsholders."
+msgstr "Rights in osu!, osu!mania, osu! game branding, ruleset names, score data, replay data, user profile data, and related osu! assets remain with ppy Pty Ltd or the applicable rightsholders."
 
 #: src/lib/replay-overlays.ts
 msgid "Rings"
@@ -10634,6 +10786,10 @@ msgstr "Share…"
 msgid "Shared replay"
 msgstr "Shared replay"
 
+#: src/routes/privacy.tsx
+msgid "Sharing"
+msgstr "Sharing"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Shift = lock ratio"
 msgstr "Shift = lock ratio"
@@ -11067,6 +11223,10 @@ msgstr "Snipes don't apply to Global"
 #: src/lib/signature-style.ts
 msgid "Solid"
 msgstr "Solid"
+
+#: src/routes/privacy.tsx
+msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+msgstr "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
 
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Someone reported your server and it got taken down for the following reason{said}"
@@ -11595,6 +11755,14 @@ msgstr "Temporarily offline"
 msgid "terms"
 msgstr "terms"
 
+#: src/routes/terms.tsx
+msgid "Terms"
+msgstr "Terms"
+
+#: src/routes/terms.tsx
+msgid "Terms of Service"
+msgstr "Terms of Service"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Text"
 msgstr "Text"
@@ -11831,6 +11999,10 @@ msgstr "The archive could not be read. Tap to try again."
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "The board is not answering right now."
 msgstr "The board is not answering right now."
+
+#: src/routes/privacy.tsx
+msgid "The browser stores preferences and caches in localStorage, including theme settings, selected country, hidden users, replay viewer preferences, map filters, and similar client-side state. You can clear this data through your browser storage controls."
+msgstr "The browser stores preferences and caches in localStorage, including theme settings, selected country, hidden users, replay viewer preferences, map filters, and similar client-side state. You can clear this data through your browser storage controls."
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The card cover could not be changed. Try again."
@@ -12160,6 +12332,14 @@ msgstr "The same goes for any session where you never set a score on a ranked, q
 msgid "The screenshot names could not be saved. Try again."
 msgstr "The screenshot names could not be saved. Try again."
 
+#: src/routes/legal.tsx
+msgid "The server defaults to a global osu! API limiter that targets 45 requests per minute and enforces a hard cap of 60 requests per minute."
+msgstr "The server defaults to a global osu! API limiter that targets 45 requests per minute and enforces a hard cap of 60 requests per minute."
+
+#: src/routes/privacy.tsx
+msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days, and player activity summaries for up to 2 years."
+msgstr "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days, and player activity summaries for up to 2 years."
+
 #: src/routes/communities.tsx
 msgid "The servers could not be loaded."
 msgstr "The servers could not be loaded."
@@ -12171,6 +12351,10 @@ msgstr "The servers you are in, so we can show you the ones you can post"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "The side-by-side playfields failed to mount."
 msgstr "The side-by-side playfields failed to mount."
+
+#: src/routes/legal.tsx
+msgid "The site caches, queues, and reuses data to avoid repeatedly requesting the same information from osu!. Live features are built from the site's own server projections, with refresh jobs used to fill in missing details and verify notable scores."
+msgstr "The site caches, queues, and reuses data to avoid repeatedly requesting the same information from osu!. Live features are built from the site's own server projections, with refresh jobs used to fill in missing details and verify notable scores."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The site does not use the accuracy the game showed you. It works it out again from your judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same play, recomputing is what makes that play count, or not count, the same on either client."
@@ -12544,6 +12728,14 @@ msgstr "Title"
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "to"
+
+#: src/routes/privacy.tsx
+msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+msgstr "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+
+#: src/routes/privacy.tsx
+msgid "To report a bug, use the <0>Report a bug</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+msgstr "To report a bug, use the <0>Report a bug</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
 
 #: src/lib/changelog.ts
 msgid "today"
@@ -12925,6 +13117,11 @@ msgstr "Unknown player"
 msgid "Unmute chart preview"
 msgstr "Unmute chart preview"
 
+#: src/routes/legal.tsx
+#: src/routes/terms.tsx
+msgid "Unofficial Project"
+msgstr "Unofficial Project"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "unranked"
 msgstr "unranked"
@@ -13119,6 +13316,11 @@ msgstr "Use for my replays"
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Use map cover {0} as the backdrop"
 msgstr "Use map cover {0} as the backdrop"
+
+#: src/routes/legal.tsx
+#: src/routes/terms.tsx
+msgid "Use Of The Site"
+msgstr "Use Of The Site"
 
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
@@ -13673,6 +13875,10 @@ msgstr "You marked this too easy"
 #: src/routes/farm-helper.tsx
 msgid "You marked this too hard"
 msgstr "You marked this too hard"
+
+#: src/routes/terms.tsx
+msgid "You may use the site for personal and community reference. Please do not overload public endpoints, attempt to bypass access controls, scrape aggressively, interfere with other users, or use the service in a way that disrupts osu!, ppy, community APIs, or Mania Tracker infrastructure."
+msgstr "You may use the site for personal and community reference. Please do not overload public endpoints, attempt to bypass access controls, scrape aggressively, interfere with other users, or use the service in a way that disrupts osu!, ppy, community APIs, or Mania Tracker infrastructure."
 
 #: src/routes/farm-helper.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."

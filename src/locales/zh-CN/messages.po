@@ -1616,7 +1616,7 @@ msgstr "24 小时"
 
 #: src/routes/snipes.tsx
 msgid "24h"
-msgstr "24小时"
+msgstr "24 小时"
 
 #: src/routes/top-plays.tsx
 msgid "3 days"
@@ -1700,23 +1700,23 @@ msgstr "7 天"
 
 #: src/routes/rankings.tsx
 msgid "7d"
-msgstr "7天"
+msgstr "7 天"
 
 #: src/routes/rankings.tsx
 msgid "7d -"
-msgstr "7天 -"
+msgstr "7 天 -"
 
 #: src/routes/rankings.tsx
 msgid "7d {selectedCountry}"
-msgstr "7天 {selectedCountry}"
+msgstr "7 天 {selectedCountry}"
 
 #: src/routes/rankings.tsx
 msgid "7d Country"
-msgstr "7天国内"
+msgstr "7 天国内"
 
 #: src/routes/rankings.tsx
 msgid "7d Global"
-msgstr "7天全球"
+msgstr "7 天全球"
 
 #: src/lib/packs.ts
 msgid "7K"
@@ -1933,6 +1933,11 @@ msgstr "准确率"
 #: src/routes/snipes.tsx
 msgid "Accuracy <0>{0}</0>"
 msgstr "准确率 <0>{0}</0>"
+
+#: src/routes/legal.tsx
+#: src/routes/terms.tsx
+msgid "Accuracy And Availability"
+msgstr "准确性与可用性"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 93.5% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
@@ -2257,6 +2262,14 @@ msgstr "分析"
 msgid "analysis unavailable"
 msgstr "暂无分析"
 
+#: src/routes/privacy.tsx
+msgid "Analytics And Logs"
+msgstr "分析与日志"
+
+#: src/routes/privacy.tsx
+msgid "Analytics groups page views from the same browser using a random visitor ID stored in localStorage. The ID is not derived from or linked to your osu! account, and clearing site data removes it. The country shown in analytics is derived from the request at the hosting edge; the IP address itself and the browser user agent are not stored. Analytics events are not sent to any third-party service."
+msgstr "分析会用一个存在 localStorage 里的随机访客 ID，把同一浏览器的页面访问归到一起。这个 ID 不来自你的 osu! 账号、也不与之关联，清除站点数据即可移除它。分析里显示的国家/地区是在托管边缘节点根据请求推断的；IP 地址本身和浏览器 user agent 都不会被存储。分析事件不会发送给任何第三方服务。"
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "analyzing…"
 msgstr "分析中…"
@@ -2441,6 +2454,11 @@ msgstr "音频设置立即生效。"
 msgid "Audio URL (mp3)"
 msgstr "音频链接 (mp3)"
 
+#: src/routes/privacy.tsx
+#: src/routes/terms.tsx
+msgid "August 23, 2026"
+msgstr "2026年8月23日"
+
 #: src/routes/discord.tsx
 msgid "Authorize. The bot needs to send messages and embed links."
 msgstr "授权。机器人需要发送消息和嵌入链接的权限。"
@@ -2614,6 +2632,14 @@ msgstr "BBCode 编辑器"
 #: src/routes/farm-helper.tsx
 msgid "beatmap #{0}"
 msgstr "谱面 #{0}"
+
+#: src/routes/terms.tsx
+msgid "Beatmap audio, backgrounds, titles, artist names, creator names, metadata, and other user-submitted or third-party content remain with their respective owners. Mania Tracker does not claim ownership of that content."
+msgstr "谱面的音频、背景、标题、艺术家名、作者名、元数据，以及其它由用户提交或第三方提供的内容，权利仍归各自的所有者。Mania Tracker 不主张对这些内容的所有权。"
+
+#: src/routes/legal.tsx
+msgid "Beatmap audio, backgrounds, titles, artist names, creator names, metadata, and other user-submitted or third-party content remain with their respective owners. This site displays available public metadata and derived information for community reference."
+msgstr "谱面的音频、背景、标题、艺术家名、作者名、元数据，以及其它由用户提交或第三方提供的内容，权利仍归各自的所有者。本站展示可获取的公开元数据和衍生信息，供社区参考。"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM, length and dan."
@@ -2821,6 +2847,10 @@ msgstr "浏览按键型、段位估计和 MSD 分组的 osu!mania 轮换图包�
 #: src/routes/skins_.$id.tsx
 msgid "Browse skins"
 msgstr "浏览皮肤"
+
+#: src/routes/privacy.tsx
+msgid "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
+msgstr "浏览器偏好和本地缓存会一直留在你的设备上，直到它们过期、被替换，或你清除 localStorage。osu! 登录会话最长可保持 30 天，除非你提前登出。"
 
 #: src/routes/replay.tsx
 msgid "Browser-based osu!mania replay watcher and viewer for .osr files, score replays, keypress overlays, skins, and MP4 export."
@@ -3500,6 +3530,10 @@ msgstr "已连接，但几分钟内没有新成绩。等信息流跟上后，最
 msgid "Connection lost; reconnecting."
 msgstr "连接已断开，正在重连。"
 
+#: src/routes/legal.tsx
+msgid "Contact"
+msgstr "联系方式"
+
 #: src/components/layout/CountrySelector.tsx
 msgid "Continents"
 msgstr "大洲"
@@ -4097,6 +4131,14 @@ msgstr "深色"
 msgid "Darkens the beatmap background so notes stay readable."
 msgstr "调暗谱面背景，让音符更清晰。"
 
+#: src/routes/legal.tsx
+msgid "Data Sources"
+msgstr "数据来源"
+
+#: src/routes/privacy.tsx
+msgid "Data The Site Uses"
+msgstr "本站使用的数据"
+
 #: src/routes/dan-estimates.tsx
 msgid "DDMythical's Reform dan courses, stable accuracy"
 msgstr "DDMythical 的 Reform 段位课题，stable 准确率"
@@ -4458,6 +4500,10 @@ msgstr "DT/NC"
 msgid "Dumpstream"
 msgstr "乱切"
 
+#: src/routes/privacy.tsx
+msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
+msgstr "持久的公开投影数据，例如排名、谱面、最佳成绩、狙击、缓存的个人资料数据和历史汇总，可能会保留更久，因为本站正是靠它们来提供这些功能。目标和卡包收藏会在你的账号使用相应功能期间保留。"
+
 #: src/components/communities/field-options.tsx
 msgid "Dutch"
 msgstr "荷兰语"
@@ -4639,6 +4685,10 @@ msgstr "爱沙尼亚语"
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Europe, Central America, France"
 msgstr "欧洲、中美洲、法国"
+
+#: src/routes/legal.tsx
+msgid "Even with those safeguards, data may be delayed, incomplete, stale, or unavailable."
+msgstr "即便有这些防护措施，数据仍可能出现延迟、不完整、过期或不可用的情况。"
 
 #: src/components/packs/RevealStage.tsx
 msgid "Every card came out in two pieces"
@@ -5099,6 +5149,10 @@ msgstr "垂直翻转"
 #: src/routes/farm-helper.tsx
 msgid "for"
 msgstr "为"
+
+#: src/routes/legal.tsx
+msgid "For attribution, takedown, privacy, or data concerns, contact the maintainer through the public osu! profile linked in the site footer."
+msgstr "如有署名、下架、隐私或数据方面的问题，请通过页脚链接的公开 osu! 个人资料联系维护者。"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "for banned or deleted"
@@ -5687,6 +5741,10 @@ msgstr "混合"
 msgid "If you have the map, drop its .osz here and the replay plays from your copy."
 msgstr "如果你本地有这张谱面，把它的 .osz 拖进来，回放就用你的副本播放。"
 
+#: src/routes/privacy.tsx
+msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个 OAuth 授权范围允许的 osu! 账号信息，例如用户 ID、用户名、头像 URL 和国家/地区。本站会存储一个带签名的 HTTP-only 会话 cookie，以便在会话有效期间识别你。"
+
 #: src/routes/dan-estimates.tsx
 msgid "If your recorded plays show that you passed a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
 msgstr "如果记录到的成绩表明你通过了某个段位课题，那么无论技能平均值是多少，这一侧的估算都<0>不会低于该课题</0>。通过 EXTRA-EPSILON 后，即使技能平均只有 delta，显示结果也至少是 epsilon。这一页其余部分都在根据你的成绩算出一个数值，而课题会直接给出一个，所以以课题为准。"
@@ -6029,6 +6087,10 @@ msgstr "把 Jumpstream 放进技是有意为之。MinaCalc 的 Jumpstream 在密
 msgid "jumpstream, warmup, ..."
 msgstr "jumpstream、热手、……"
 
+#: src/routes/legal.tsx
+msgid "June 16, 2026"
+msgstr "2026年6月16日"
+
 #: src/lib/format.ts
 msgid "just now"
 msgstr "刚刚"
@@ -6193,6 +6255,10 @@ msgstr "最后一页"
 msgid "Last seen {0}"
 msgstr "最后在线 {0}"
 
+#: src/components/legal/LegalDocument.tsx
+msgid "Last updated {updatedAt}"
+msgstr "最后更新于 {updatedAt}"
+
 #: src/lib/changelog.ts
 msgid "last year"
 msgstr "去年"
@@ -6294,6 +6360,10 @@ msgstr "左手拇指"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Left vs right hand miss totals."
 msgstr "左右手各自的 Miss 总数。"
+
+#: src/routes/legal.tsx
+msgid "Legal notice"
+msgstr "法律声明"
 
 #: src/lib/packs.ts
 msgid "Legend"
@@ -6479,7 +6549,7 @@ msgstr "长键尾部"
 #: src/components/maps/SearchCard.tsx
 #: src/routes/player/$username.tsx
 msgid "LN Tech"
-msgstr "LN技"
+msgstr "LN 技"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Load a custom skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."
@@ -6821,6 +6891,51 @@ msgstr "Mania 谱面"
 #: src/routes/skins.tsx
 msgid "mania stage"
 msgstr "mania 面板"
+
+#: src/routes/legal.tsx
+msgid "Mania Tracker"
+msgstr "Mania Tracker"
+
+#: src/routes/privacy.tsx
+msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
+msgstr "Mania Tracker 用自己的第一方分析来统计页面访问和功能使用情况，数据存在本站自己的服务器上。事件通过本站自己的接口发送，可能包含访问的路由、所选国家/地区、来源页、浏览器语言、屏幕尺寸，以及路由上下文，例如所查看的玩家、成绩、谱面集或谱面标签页。事件保留 90 天后删除。"
+
+#: src/routes/terms.tsx
+msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug, use the <0>Report a bug</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+msgstr "Mania Tracker 展示公开的元数据、缓存的投影数据和衍生的社区视图，供参考之用。要反馈 bug，请使用站内的 <0>反馈 bug</0> 表单。如果本站展示的内容归你所有，且你有署名、下架或数据方面的问题，请发邮件至 <1>contact@mania-tracker.com</1>，或通过页脚链接的公开 osu! 个人资料联系维护者。"
+
+#: src/routes/privacy.tsx
+msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
+msgstr "Mania Tracker 不出售个人数据。数据可能会由运营本站所用的服务提供商处理，包括托管、存储、分析、osu! API 服务和社区成绩数据服务。公开的 osu! 数据可能会被缓存并作为本站社区功能的一部分重新展示。"
+
+#: src/routes/terms.tsx
+msgid "Mania Tracker is a community project built on external data sources, so rankings, score views, snipes, top plays, maps, farm-helper suggestions, replay views, dan estimates, and other generated surfaces may be delayed, incomplete, unavailable, or incorrect. Features may change, break, or be removed."
+msgstr "Mania Tracker 是一个建立在外部数据源之上的社区项目，因此排名、成绩视图、狙击、最佳成绩、谱面、刷图助手推荐、回放视图、段位估算，以及其它生成的界面，都可能出现延迟、不完整、不可用或不准确的情况。功能也可能变动、失效或被移除。"
+
+#: src/routes/legal.tsx
+msgid "Mania Tracker is a community project built on external data sources, so rankings, scores, snipes, top plays, replay views, and other generated surfaces may be delayed, incomplete, unavailable, or incorrect."
+msgstr "Mania Tracker 是一个建立在外部数据源之上的社区项目，因此排名、成绩、狙击、最佳成绩、回放视图，以及其它生成的界面，都可能出现延迟、不完整、不可用或不准确的情况。"
+
+#: src/routes/privacy.tsx
+msgid "Mania Tracker is an osu!mania community site built around public osu! data, cached projections, and user preferences. This policy explains the data used to operate the site."
+msgstr "Mania Tracker 是一个 osu!mania 社区网站，围绕公开的 osu! 数据、缓存的投影数据和用户偏好构建。本政策说明运营本站所使用的数据。"
+
+#: src/routes/legal.tsx
+#: src/routes/terms.tsx
+msgid "Mania Tracker is an unofficial community fan project for osu!mania players. It is not affiliated with, endorsed by, sponsored by, or approved by ppy Pty Ltd or the osu! team."
+msgstr "Mania Tracker 是一个面向 osu!mania 玩家的非官方社区同人项目。它与 ppy Pty Ltd 或 osu! 团队没有从属关系，也未获得其背书、赞助或批准。"
+
+#: src/routes/terms.tsx
+msgid "Mania Tracker uses osu! OAuth to identify the signed-in osu! account. Mania Tracker does not receive or manage your osu! password."
+msgstr "Mania Tracker 使用 osu! OAuth 来识别已登录的 osu! 账号。Mania Tracker 不会收到或管理你的 osu! 密码。"
+
+#: src/routes/legal.tsx
+msgid "Mania Tracker uses public and authenticated osu! API data, locally cached data, server projections, and community data services such as <0>osu! score cache</0>."
+msgstr "Mania Tracker 使用公开和已授权的 osu! API 数据、本地缓存数据、服务器投影数据，以及 <0>osu! score cache</0> 等社区数据服务。"
+
+#: src/routes/privacy.tsx
+msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+msgstr "Mania Tracker 使用公开的 osu! 个人资料、成绩、谱面、谱面集、排名和回放的元数据，以及 osu! score cache 等社区数据服务，来构建排名、追踪器视图、谱面、狙击、最佳成绩、刷图助手推荐、个人资料和回放视图。"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "mania-note art not tied to a keymode block"
@@ -8409,9 +8524,18 @@ msgstr "或其他玩家"
 msgid "orange"
 msgstr "橙"
 
+#: src/routes/legal.tsx
+#: src/routes/terms.tsx
+msgid "osu! Assets And Data"
+msgstr "osu! 资源与数据"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "osu! didn't answer. Try again in a minute."
 msgstr "osu! 没有响应，请一分钟后再试。"
+
+#: src/routes/terms.tsx
+msgid "osu! Login"
+msgstr "osu! 登录"
 
 #: src/routes/player/$username.tsx
 msgid "osu! profile"
@@ -8541,6 +8665,10 @@ msgstr "总体"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Overlays"
 msgstr "覆盖层"
+
+#: src/routes/privacy.tsx
+msgid "Overview"
+msgstr "概述"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "owner"
@@ -8946,6 +9074,10 @@ msgstr "使用 <0>{playstyleValue}</0> 游玩"
 msgid "Please choose an .osr replay file."
 msgstr "请选择一个 .osr 回放文件。"
 
+#: src/routes/legal.tsx
+msgid "Please do not abuse the site, overload public endpoints, attempt to bypass access controls, send harmful payloads, or use the service in a way that disrupts osu!, ppy, community APIs, or other users."
+msgstr "请不要滥用本站、使公开接口过载、试图绕过访问控制、发送有害负载，或以扰乱 osu!、ppy、社区 API 或其他用户的方式使用本服务。"
+
 #: src/components/communities/field-options.tsx
 msgid "Polish"
 msgstr "波兰语"
@@ -9154,6 +9286,14 @@ msgstr "此前"
 #: src/routes/__root.tsx
 msgid "privacy"
 msgstr "隐私"
+
+#: src/routes/privacy.tsx
+msgid "Privacy"
+msgstr "隐私"
+
+#: src/routes/privacy.tsx
+msgid "Privacy Policy"
+msgstr "隐私政策"
 
 #: src/components/skins/SkinCard.tsx
 #: src/components/skins/SkinSettingsModal.tsx
@@ -9937,6 +10077,10 @@ msgstr "继续谱面预览"
 msgid "Resume this map"
 msgstr "继续这张谱面"
 
+#: src/routes/privacy.tsx
+msgid "Retention And Controls"
+msgstr "数据保留与控制"
+
 #: src/components/packs/album/AlbumView.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
@@ -9964,6 +10108,14 @@ msgstr "右"
 #: src/routes/replay.tsx
 msgid "Right thumb"
 msgstr "右手拇指"
+
+#: src/routes/legal.tsx
+msgid "Rights in osu!, osu!mania, osu! game branding, ruleset names, ruleset icons, score data, replay data, user profile data, and related osu! assets remain with ppy Pty Ltd or the applicable rightsholders."
+msgstr "osu!、osu!mania、osu! 游戏品牌标识、模式名称、模式图标、成绩数据、回放数据、用户资料数据，以及相关 osu! 资源的权利，仍归 ppy Pty Ltd 或相应的权利持有人所有。"
+
+#: src/routes/terms.tsx
+msgid "Rights in osu!, osu!mania, osu! game branding, ruleset names, score data, replay data, user profile data, and related osu! assets remain with ppy Pty Ltd or the applicable rightsholders."
+msgstr "osu!、osu!mania、osu! 游戏品牌标识、模式名称、成绩数据、回放数据、用户资料数据，以及相关 osu! 资源的权利，仍归 ppy Pty Ltd 或相应的权利持有人所有。"
 
 #: src/lib/replay-overlays.ts
 msgid "Rings"
@@ -10635,6 +10787,10 @@ msgstr "分享…"
 msgid "Shared replay"
 msgstr "分享的回放"
 
+#: src/routes/privacy.tsx
+msgid "Sharing"
+msgstr "数据共享"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Shift = lock ratio"
 msgstr "Shift = 锁定比例"
@@ -11068,6 +11224,10 @@ msgstr "狙击不适用于全球视图"
 #: src/lib/signature-style.ts
 msgid "Solid"
 msgstr "纯色"
+
+#: src/routes/privacy.tsx
+msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+msgstr "部分登录后的功能会在服务器上存储与你的 osu! 用户 ID 关联的数据：你创建的目标（目标类型、指标、进度和状态）、你的卡包钱包和收藏（抽到的卡和抽取时间），以及名册的加入或退出选择。My Stats 面板不会额外存储任何东西；它只是向你展示本站已经掌握的、关于你账号的数据。"
 
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Someone reported your server and it got taken down for the following reason{said}"
@@ -11596,6 +11756,14 @@ msgstr "暂时离线"
 msgid "terms"
 msgstr "条款"
 
+#: src/routes/terms.tsx
+msgid "Terms"
+msgstr "条款"
+
+#: src/routes/terms.tsx
+msgid "Terms of Service"
+msgstr "服务条款"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Text"
 msgstr "文字"
@@ -11832,6 +12000,10 @@ msgstr "无法读取压缩包。点击重试。"
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "The board is not answering right now."
 msgstr "排行榜暂时没有响应。"
+
+#: src/routes/privacy.tsx
+msgid "The browser stores preferences and caches in localStorage, including theme settings, selected country, hidden users, replay viewer preferences, map filters, and similar client-side state. You can clear this data through your browser storage controls."
+msgstr "浏览器会在 localStorage 里存储偏好和缓存，包括主题设置、所选国家/地区、隐藏的用户、回放查看器偏好、谱面筛选条件，以及类似的客户端状态。你可以通过浏览器的存储控制清除这些数据。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The card cover could not be changed. Try again."
@@ -12161,6 +12333,14 @@ msgstr "如果你整场都没有在上架、qualified 或 loved 谱面上打出�
 msgid "The screenshot names could not be saved. Try again."
 msgstr "截图名称保存失败。请重试。"
 
+#: src/routes/legal.tsx
+msgid "The server defaults to a global osu! API limiter that targets 45 requests per minute and enforces a hard cap of 60 requests per minute."
+msgstr "服务器默认使用一个全局 osu! API 限流器，目标为每分钟 45 次请求，并强制执行每分钟 60 次请求的硬上限。"
+
+#: src/routes/privacy.tsx
+msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days, and player activity summaries for up to 2 years."
+msgstr "服务器会保留原始成绩事件约 14 天、实时事件回放日志约 7 天、API 调用日志约 7 天、国家/地区排名快照约 14 天，玩家活跃度汇总最长保留 2 年。"
+
 #: src/routes/communities.tsx
 msgid "The servers could not be loaded."
 msgstr "服务器列表加载失败。"
@@ -12172,6 +12352,10 @@ msgstr "你所在的服务器列表，好让我们列出你能发布的那些"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "The side-by-side playfields failed to mount."
 msgstr "并排游玩区域加载失败。"
+
+#: src/routes/legal.tsx
+msgid "The site caches, queues, and reuses data to avoid repeatedly requesting the same information from osu!. Live features are built from the site's own server projections, with refresh jobs used to fill in missing details and verify notable scores."
+msgstr "本站会缓存、排队并复用数据，以避免反复向 osu! 请求相同的信息。实时功能由本站自己的服务器投影数据构建，并通过刷新任务来补齐缺失的细节、核对值得关注的成绩。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The site does not use the accuracy the game showed you. It works it out again from your judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same play, recomputing is what makes that play count, or not count, the same on either client."
@@ -12545,6 +12729,14 @@ msgstr "标题"
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "至"
+
+#: src/routes/privacy.tsx
+msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+msgstr "为防止滥用，服务器会按 IP 地址统计请求以进行限流，并对每个 IP 的并发实时连接数设上限。这些计数器只存在于内存中：后端不会把 IP 地址或 user agent 写入其数据库或日志。托管服务商会保留标准的请求日志，服务器也会记录运行细节，例如任务活动、对上游 osu! API 的调用和错误，以监控服务健康状况。"
+
+#: src/routes/privacy.tsx
+msgid "To report a bug, use the <0>Report a bug</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+msgstr "要反馈 bug，请使用站内的 <0>反馈 bug</0> 表单。如有隐私、删除、署名、下架或其它任何问题，请发邮件至 <1>contact@mania-tracker.com</1>，或通过页脚链接的公开 osu! 个人资料联系维护者。"
 
 #: src/lib/changelog.ts
 msgid "today"
@@ -12926,6 +13118,11 @@ msgstr "未知玩家"
 msgid "Unmute chart preview"
 msgstr "取消静音谱面预览"
 
+#: src/routes/legal.tsx
+#: src/routes/terms.tsx
+msgid "Unofficial Project"
+msgstr "非官方项目"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "unranked"
 msgstr "未 ranked"
@@ -13120,6 +13317,11 @@ msgstr "用于我的回放"
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Use map cover {0} as the backdrop"
 msgstr "把谱面封面 {0} 用作背景"
+
+#: src/routes/legal.tsx
+#: src/routes/terms.tsx
+msgid "Use Of The Site"
+msgstr "网站使用"
 
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
@@ -13674,6 +13876,10 @@ msgstr "你已把这张标记为太简单"
 #: src/routes/farm-helper.tsx
 msgid "You marked this too hard"
 msgstr "你已把这张标记为太难"
+
+#: src/routes/terms.tsx
+msgid "You may use the site for personal and community reference. Please do not overload public endpoints, attempt to bypass access controls, scrape aggressively, interfere with other users, or use the service in a way that disrupts osu!, ppy, community APIs, or Mania Tracker infrastructure."
+msgstr "你可以将本站用于个人和社区参考。请不要使公开接口过载、试图绕过访问控制、激进地抓取数据、干扰其他用户，或以扰乱 osu!、ppy、社区 API 或 Mania Tracker 基础设施的方式使用本服务。"
 
 #: src/routes/farm-helper.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."

@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { LegalDocument, LegalParagraph, LegalSection } from "#/components/legal/LegalDocument";
-
-const UPDATED_AT = "August 23, 2026";
 
 export const Route = createFileRoute("/privacy")({
   head: () => ({
@@ -18,110 +17,137 @@ export const Route = createFileRoute("/privacy")({
 });
 
 function PrivacyPage() {
+  const { t } = useLingui();
   return (
-    <LegalDocument eyebrow="Privacy" title="Privacy Policy" updatedAt={UPDATED_AT}>
-      <LegalSection title="Overview">
+    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`August 23, 2026`}>
+      <LegalSection title={t`Overview`}>
         <LegalParagraph>
-          Mania Tracker is an osu!mania community site built around public osu! data, cached
-          projections, and user preferences. This policy explains the data used to operate the
-          site.
+          <Trans>
+            Mania Tracker is an osu!mania community site built around public osu! data, cached
+            projections, and user preferences. This policy explains the data used to operate the
+            site.
+          </Trans>
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="Data The Site Uses">
+      <LegalSection title={t`Data The Site Uses`}>
         <LegalParagraph>
-          Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay
-          metadata, plus community data services such as osu! score cache, to build rankings,
-          tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay
-          views.
+          <Trans>
+            Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay
+            metadata, plus community data services such as osu! score cache, to build rankings,
+            tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay
+            views.
+          </Trans>
         </LegalParagraph>
         <LegalParagraph>
-          If you sign in with osu!, the site receives the osu! account details allowed by the
-          identify and public OAuth scopes, such as user ID, username, avatar URL, and country.
-          The site stores a signed HTTP-only session cookie so it can recognize you while the
-          session is active.
+          <Trans>
+            If you sign in with osu!, the site receives the osu! account details allowed by the
+            identify and public OAuth scopes, such as user ID, username, avatar URL, and country.
+            The site stores a signed HTTP-only session cookie so it can recognize you while the
+            session is active.
+          </Trans>
         </LegalParagraph>
         <LegalParagraph>
-          Some signed-in features store data on the server, tied to your osu! user ID: goals you
-          create (goal type, target, progress, and status), your card pack wallet and collection
-          (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats
-          dashboard does not store anything extra; it only shows you data the site already holds
-          about your account.
+          <Trans>
+            Some signed-in features store data on the server, tied to your osu! user ID: goals you
+            create (goal type, target, progress, and status), your card pack wallet and collection
+            (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats
+            dashboard does not store anything extra; it only shows you data the site already holds
+            about your account.
+          </Trans>
         </LegalParagraph>
         <LegalParagraph>
-          The browser stores preferences and caches in localStorage, including theme settings,
-          selected country, hidden users, replay viewer preferences, map filters, and similar
-          client-side state. You can clear this data through your browser storage controls.
-        </LegalParagraph>
-      </LegalSection>
-
-      <LegalSection title="Analytics And Logs">
-        <LegalParagraph>
-          Mania Tracker counts page views and feature usage with its own first-party analytics,
-          stored on the site's own server. Events are sent through the site's own endpoint and
-          can include the visited route, selected country, referrer, browser language, screen
-          size, and route context such as a viewed player, score, beatmapset, or maps tab.
-          Events are kept for 90 days and then deleted.
-        </LegalParagraph>
-        <LegalParagraph>
-          Analytics groups page views from the same browser using a random visitor ID stored in
-          localStorage. The ID is not derived from or linked to your osu! account, and clearing
-          site data removes it. The country shown in analytics is derived from the request at
-          the hosting edge; the IP address itself and the browser user agent are not stored.
-          Analytics events are not sent to any third-party service.
-        </LegalParagraph>
-        <LegalParagraph>
-          To prevent abuse, the server counts requests per IP address for rate limiting and caps
-          concurrent live connections per IP. These counters live in memory only: the backend
-          does not write IP addresses or user agents to its database or logs. Hosting providers
-          keep standard request logs, and the server records operational details such as job
-          activity, upstream osu! API calls, and errors to monitor service health.
+          <Trans>
+            The browser stores preferences and caches in localStorage, including theme settings,
+            selected country, hidden users, replay viewer preferences, map filters, and similar
+            client-side state. You can clear this data through your browser storage controls.
+          </Trans>
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="Sharing">
+      <LegalSection title={t`Analytics And Logs`}>
         <LegalParagraph>
-          Mania Tracker does not sell personal data. Data may be processed by service providers used
-          to run the site, including hosting, storage, analytics, osu! API services, and community
-          score-data services. Public osu! data may be cached and re-displayed as part of the
-          site's community features.
+          <Trans>
+            Mania Tracker counts page views and feature usage with its own first-party analytics,
+            stored on the site's own server. Events are sent through the site's own endpoint and
+            can include the visited route, selected country, referrer, browser language, screen
+            size, and route context such as a viewed player, score, beatmapset, or maps tab.
+            Events are kept for 90 days and then deleted.
+          </Trans>
+        </LegalParagraph>
+        <LegalParagraph>
+          <Trans>
+            Analytics groups page views from the same browser using a random visitor ID stored in
+            localStorage. The ID is not derived from or linked to your osu! account, and clearing
+            site data removes it. The country shown in analytics is derived from the request at
+            the hosting edge; the IP address itself and the browser user agent are not stored.
+            Analytics events are not sent to any third-party service.
+          </Trans>
+        </LegalParagraph>
+        <LegalParagraph>
+          <Trans>
+            To prevent abuse, the server counts requests per IP address for rate limiting and caps
+            concurrent live connections per IP. These counters live in memory only: the backend
+            does not write IP addresses or user agents to its database or logs. Hosting providers
+            keep standard request logs, and the server records operational details such as job
+            activity, upstream osu! API calls, and errors to monitor service health.
+          </Trans>
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="Retention And Controls">
+      <LegalSection title={t`Sharing`}>
         <LegalParagraph>
-          Browser preferences and local caches stay on your device until they expire, are replaced,
-          or you clear localStorage. osu! login sessions can last up to 30 days unless you log out
-          earlier.
+          <Trans>
+            Mania Tracker does not sell personal data. Data may be processed by service providers used
+            to run the site, including hosting, storage, analytics, osu! API services, and community
+            score-data services. Public osu! data may be cached and re-displayed as part of the
+            site's community features.
+          </Trans>
+        </LegalParagraph>
+      </LegalSection>
+
+      <LegalSection title={t`Retention And Controls`}>
+        <LegalParagraph>
+          <Trans>
+            Browser preferences and local caches stay on your device until they expire, are replaced,
+            or you clear localStorage. osu! login sessions can last up to 30 days unless you log out
+            earlier.
+          </Trans>
         </LegalParagraph>
         <LegalParagraph>
-          The server keeps raw score events for about 14 days, live event replay logs for
-          about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days,
-          and player activity summaries for up to 2 years.
+          <Trans>
+            The server keeps raw score events for about 14 days, live event replay logs for
+            about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days,
+            and player activity summaries for up to 2 years.
+          </Trans>
         </LegalParagraph>
         <LegalParagraph>
-          Durable public projections such as rankings, maps, top plays, snipes, cached profile
-          data, and historical aggregates may be kept longer because they are what the site uses
-          to serve those features. Goals and card pack collections are kept while your account
-          uses those features.
+          <Trans>
+            Durable public projections such as rankings, maps, top plays, snipes, cached profile
+            data, and historical aggregates may be kept longer because they are what the site uses
+            to serve those features. Goals and card pack collections are kept while your account
+            uses those features.
+          </Trans>
         </LegalParagraph>
         <LegalParagraph>
-          To report a bug, use the{' '}
-          <a
-            href="/report"
-            className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
-          >
-            Report a bug
-          </a>{' '}
-          form on the site. For privacy, deletion, attribution, takedown, or any other concern,
-          email{' '}
-          <a
-            href="mailto:contact@mania-tracker.com"
-            className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
-          >
-            contact@mania-tracker.com
-          </a>{' '}
-          or contact the maintainer through the public osu! profile linked in the footer.
+          <Trans>
+            To report a bug, use the{' '}
+            <a
+              href="/report"
+              className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
+            >
+              Report a bug
+            </a>{' '}
+            form on the site. For privacy, deletion, attribution, takedown, or any other concern,
+            email{' '}
+            <a
+              href="mailto:contact@mania-tracker.com"
+              className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
+            >
+              contact@mania-tracker.com
+            </a>{' '}
+            or contact the maintainer through the public osu! profile linked in the footer.
+          </Trans>
         </LegalParagraph>
       </LegalSection>
     </LegalDocument>

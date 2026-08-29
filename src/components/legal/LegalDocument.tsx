@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Trans } from "@lingui/react/macro";
 
 type LegalDocumentProps = {
   eyebrow: string;
@@ -16,7 +17,9 @@ export function LegalDocument({ eyebrow, title, updatedAt, children }: LegalDocu
             {eyebrow}
           </p>
           <h1 className="text-3xl font-black text-white sm:text-4xl">{title}</h1>
-          <p className="text-sm text-osu-f1/70">Last updated {updatedAt}</p>
+          <p className="text-sm text-osu-f1/70">
+            <Trans>Last updated {updatedAt}</Trans>
+          </p>
         </header>
         {children}
       </div>
