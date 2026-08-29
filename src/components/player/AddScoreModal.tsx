@@ -10,6 +10,8 @@ import {
   type LiveScoreSubmissionPlay,
 } from "../../lib/live-backend";
 import { formatAccuracy, formatPP, formatTimeAgo } from "../../lib/format";
+import { getModDisplayList } from "../../lib/score";
+import { ModBadge } from "../ui/ModBadge";
 import { useLocale } from "../../lib/locale-context";
 import type { AppLocale } from "../../lib/locale";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
@@ -300,6 +302,7 @@ function ScorePanel({ item, locale }: { item: AcceptedPlay; locale: AppLocale })
     ?? (entry?.beatmapsetId ? `https://assets.ppy.sh/beatmaps/${entry.beatmapsetId}/covers/cover@2x.jpg` : null);
   const title = play.title ?? entry?.title ?? t`Unknown chart`;
   const version = play.version ?? entry?.version ?? null;
+  const mods = getModDisplayList(play.mods);
   return (
     <motion.a
       // Server-verified URL: the two osu! id spaces overlap, so a link built
@@ -340,6 +343,15 @@ function ScorePanel({ item, locale }: { item: AcceptedPlay; locale: AppLocale })
             </div>
           ) : null}
           <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-osu-l2">
+            {/* The mods are part of what the submitter is checking the link
+                against, so they sit with the score, not the chart. */}
+            {mods.length > 0 ? (
+              <span className="flex items-center gap-0.5">
+                {mods.map((mod, index) => (
+                  <ModBadge key={`${mod.acronym}-${index}`} mod={mod.acronym} rate={mod.rate} size={0.62} />
+                ))}
+              </span>
+            ) : null}
             {play.pp != null ? <span className="font-bold text-osu-pink-light">{formatPP(play.pp, locale)}</span> : null}
             {entry?.keyCount ? <span className="font-bold text-osu-yellow">{entry.keyCount}K</span> : null}
             {play.endedAt ? <span className="text-osu-f1">{formatTimeAgo(play.endedAt, locale)}</span> : null}
@@ -363,6 +375,7 @@ function AcceptedRow({ item }: { item: AcceptedPlay }) {
   const { play, entry, alreadyTracked } = item;
   const title = play.title ?? entry?.title ?? t`Unknown chart`;
   const version = play.version ?? entry?.version ?? null;
+  const mods = getModDisplayList(play.mods);
   return (
     <motion.a
       href={play.scoreUrl ?? undefined}
@@ -375,7 +388,14 @@ function AcceptedRow({ item }: { item: AcceptedPlay }) {
     >
       <span className="truncate text-[12.5px] font-semibold text-osu-l1">{title}</span>
       {version ? <span className="hidden shrink-0 truncate text-[11px] text-osu-f1 sm:inline">[{version}]</span> : null}
-      <span className="ml-auto shrink-0 text-[11px] tabular-nums text-osu-f1">
+      {mods.length > 0 ? (
+        <span className="ml-auto flex shrink-0 items-center gap-0.5 self-center">
+          {mods.map((mod, index) => (
+            <ModBadge key={`${mod.acronym}-${index}`} mod={mod.acronym} rate={mod.rate} size={0.5} />
+          ))}
+        </span>
+      ) : null}
+      <span className={`shrink-0 text-[11px] tabular-nums text-osu-f1 ${mods.length > 0 ? "" : "ml-auto"}`}>
         {play.accuracy != null ? formatAccuracy(play.accuracy) : null}
       </span>
       <span className={`shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] ${alreadyTracked ? "text-osu-f1" : "text-osu-green-light"}`}>

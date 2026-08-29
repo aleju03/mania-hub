@@ -8,7 +8,7 @@ import type { RateLimitResult } from "../http/abuse-guard.js";
 import { logInfo } from "../logger.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { getDisplayedAccuracy, getScoreIdentity } from "../shared/score.js";
-import type { OscScore } from "../shared/types.js";
+import type { OscScore, OsuMod } from "../shared/types.js";
 import { isUserKnownInactive } from "../user-status.js";
 import { SOLO_SCORE_ID_FLOOR } from "./activity-mods-backfill.js";
 import { enqueuePlayerSkills } from "./player-skills.js";
@@ -40,6 +40,9 @@ export interface SubmittedPlaySummary {
   rank: string | null;
   pp: number | null;
   endedAt: string | null;
+  // Carried verbatim (acronym plus lazer settings) so the dialog can show the
+  // rate a submitter actually played at, not just the mod letters.
+  mods: OsuMod[];
   // The verified osu! page for this score, in the id space that actually
   // resolves to it. The overlap means a client must never build this itself
   // from a bare id: /scores/{legacyId} can open a stranger's play.
@@ -265,6 +268,7 @@ async function findTrackedScoreById(
       rank: null,
       pp: null,
       endedAt: null,
+      mods: [],
       scoreUrl: null,
     },
   };
@@ -284,6 +288,7 @@ function toPlaySummary(score: OscScore): SubmittedPlaySummary {
     rank: score.rank ?? null,
     pp: score.pp ?? null,
     endedAt: score.ended_at ?? score.created_at ?? null,
+    mods: (score.mods ?? []).filter((mod) => mod && typeof mod.acronym === "string" && mod.acronym),
     scoreUrl: Number.isSafeInteger(soloId) && soloId > 0
       ? `https://osu.ppy.sh/scores/${soloId}`
       : Number.isSafeInteger(legacyId) && legacyId > 0

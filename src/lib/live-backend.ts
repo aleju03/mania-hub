@@ -137,6 +137,7 @@ import type {
   MapsAggregatedFavourite,
   MapsFarmedEntry,
   MapsFavouriteBeatmapset,
+  OsuMod,
   OsuScore,
   OsuScoreStatistics,
   OsuUser,
@@ -2625,6 +2626,9 @@ export interface LiveScoreSubmissionPlay {
   rank: string | null;
   pp: number | null;
   endedAt: string | null;
+  /* Acronyms plus lazer settings, so a custom rate reads as its rate. Absent
+     on answers from a backend older than the field. */
+  mods?: OsuMod[];
   /* The verified osu! page for this score, in the id space that actually
      resolves to it. Never rebuild it from scoreId: the solo and legacy id
      spaces overlap, so /scores/{legacyId} can open a stranger's play. */
