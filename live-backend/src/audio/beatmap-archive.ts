@@ -612,18 +612,41 @@ function isArchiveOsuEntry(entry: ZipDirectoryEntry): boolean {
 
 function normalizeArchiveLookupText(value: string): string {
   return value
+    .normalize("NFKC")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
 }
 
+// osu! reports a mania difficulty as "[4K] Name" while the .osu file's own
+// Version field carries just "Name", so both sides are compared without it.
+function normalizeArchiveVersion(value: string): string {
+  return value
+    .replace(/^\s*\[\d+k\]\s*/i, "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/gu, " ");
+}
+
+// The difficulty name a set's file naming convention puts in the trailing
+// brackets ("Artist - Title (Creator) [Name].osu").
+function getArchiveEntryVersion(path: string): string {
+  const base = (path.replace(/\\/g, "/").split("/").pop() ?? path).replace(/\.osu$/i, "");
+  const delimiter = base.lastIndexOf(") [");
+  if (delimiter >= 0 && base.endsWith("]")) {
+    return normalizeArchiveVersion(base.slice(delimiter + 3, -1));
+  }
+  return normalizeArchiveVersion(/\[([^\]]*)\]\s*$/.exec(base)?.[1] ?? "");
+}
+
 function getOsuCandidateScore(entry: ZipDirectoryEntry, hints?: { version?: string | null }): number {
-  const version = normalizeArchiveLookupText(hints?.version ?? "");
+  const version = normalizeArchiveVersion(hints?.version ?? "");
   if (!version) return 0;
 
-  const path = normalizeArchiveLookupText(entry.path);
-  return path.includes(version) ? 1 : 0;
+  if (getArchiveEntryVersion(entry.path) === version) return 2;
+  return normalizeArchiveLookupText(entry.path).includes(version) ? 1 : 0;
 }
 
 function getArchiveOsuCandidates(entries: ZipDirectoryEntry[], hints?: { version?: string | null }): ZipDirectoryEntry[] {
@@ -646,6 +669,44 @@ function readBeatmapIdFromOsuFile(text: string): number | null {
   return Number.isSafeInteger(beatmapId) && beatmapId > 0 ? beatmapId : null;
 }
 
+function readVersionFromOsuFile(text: string): string {
+  return /^Version\s*:(.*)$/im.exec(text)?.[1]?.trim() ?? "";
+}
+
+/**
+ * Whether a .osu file's own Version field is the difficulty osu! knows under
+ * that name. A missing expected name cannot disprove a match; once a name is
+ * known, a missing Version is not accepted as that difficulty.
+ */
+export function beatmapFileMatchesVersion(text: string, version: string | null | undefined): boolean {
+  const wanted = normalizeArchiveVersion(version ?? "");
+  const found = normalizeArchiveVersion(readVersionFromOsuFile(text));
+  return !wanted || (!!found && found === wanted);
+}
+
+export function beatmapFileMatchesBeatmapId(text: string, beatmapId: number): boolean {
+  return readBeatmapIdFromOsuFile(text) === beatmapId;
+}
+
+// A set often ships rate edits of a difficulty that were copied from it and
+// kept its BeatmapID, so an id match alone can hand back the wrong chart (a
+// 1.4x edit reads as a much harder map than the one osu! ranked). When the
+// difficulty name is known, an id match whose Version and filename both carry
+// that name wins outright. A copied edit can retain both BeatmapID and Version,
+// so a filename disagreement remains a fallback until the scan proves it is
+// the only id match.
+function pickArchiveOsuMatch(
+  beatmapId: number,
+  wantedVersion: string,
+  file: BeatmapArchiveOsuFile,
+): "exact" | "fallback" | null {
+  if (readBeatmapIdFromOsuFile(file.text) !== beatmapId) return null;
+  if (!wantedVersion) return "exact";
+  const fileVersionMatches = normalizeArchiveVersion(readVersionFromOsuFile(file.text)) === wantedVersion;
+  const filenameVersionMatches = getArchiveEntryVersion(file.path) === wantedVersion;
+  return fileVersionMatches && filenameVersionMatches ? "exact" : "fallback";
+}
+
 function summarizeArchiveCandidateErrors(errors: string[]): string {
   if (errors.length <= 5) return errors.join("; ");
   return `${errors.slice(0, 5).join("; ")}; ${errors.length - 5} more`;
@@ -659,18 +720,36 @@ function findBeatmapOsuFileInArchiveBuffer(
   const candidates = getArchiveOsuCandidates(readZipDirectoryEntriesFromBuffer(buffer), hints);
   if (candidates.length === 0) throw new Error("archive does not contain .osu files");
 
+  const wantedVersion = normalizeArchiveVersion(hints?.version ?? "");
   const errors: string[] = [];
+  let fallback: BeatmapArchiveOsuFile | null = null;
+  let fallbackCount = 0;
   for (const entry of candidates.slice(0, MAX_ARCHIVE_OSU_CANDIDATES)) {
     try {
       const text = decodeOsuFile(extractZipEntryFromBuffer(buffer, entry, entry.path, MAX_OSU_FILE_BYTES));
-      if (readBeatmapIdFromOsuFile(text) === beatmapId) return { path: entry.path, text };
+      const file = { path: entry.path, text };
+      const match = pickArchiveOsuMatch(beatmapId, wantedVersion, file);
+      if (match === "exact") return file;
+      if (match === "fallback") {
+        fallback ??= file;
+        fallbackCount += 1;
+      }
     } catch (error) {
       errors.push(`${entry.path}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  // A lone id match is unambiguous even when the stored archive revision has
+  // an older difficulty name. Multiple id matches are exactly the copied-rate
+  // edit case this selector must never guess between; let the caller use the
+  // direct osu! endpoint instead.
+  if (fallback
+    && fallbackCount === 1
+    && candidates.length <= MAX_ARCHIVE_OSU_CANDIDATES
+    && errors.length === 0) return fallback;
 
   const suffix = errors.length > 0 ? ` (${summarizeArchiveCandidateErrors(errors)})` : "";
-  throw new Error(`BeatmapID ${beatmapId} not found in archive .osu files${suffix}`);
+  const ambiguity = fallbackCount > 1 ? ` (${fallbackCount} id matches, none matched the wanted Version)` : "";
+  throw new Error(`BeatmapID ${beatmapId} not found unambiguously in archive .osu files${ambiguity}${suffix}`);
 }
 
 async function findBeatmapOsuFileByRangeFromUrl(
@@ -682,18 +761,32 @@ async function findBeatmapOsuFileByRangeFromUrl(
   const candidates = getArchiveOsuCandidates(await readZipDirectoryEntriesByRangeFromUrl(url, signal), hints);
   if (candidates.length === 0) throw new Error("archive does not contain .osu files");
 
+  const wantedVersion = normalizeArchiveVersion(hints?.version ?? "");
   const errors: string[] = [];
+  let fallback: BeatmapArchiveOsuFile | null = null;
+  let fallbackCount = 0;
   for (const entry of candidates.slice(0, MAX_ARCHIVE_OSU_CANDIDATES)) {
     try {
       const text = decodeOsuFile(await extractZipEntryByRangeFromUrl(url, entry, signal, entry.path, MAX_OSU_FILE_BYTES));
-      if (readBeatmapIdFromOsuFile(text) === beatmapId) return { path: entry.path, text };
+      const file = { path: entry.path, text };
+      const match = pickArchiveOsuMatch(beatmapId, wantedVersion, file);
+      if (match === "exact") return file;
+      if (match === "fallback") {
+        fallback ??= file;
+        fallbackCount += 1;
+      }
     } catch (error) {
       errors.push(`${entry.path}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  if (fallback
+    && fallbackCount === 1
+    && candidates.length <= MAX_ARCHIVE_OSU_CANDIDATES
+    && errors.length === 0) return fallback;
 
   const suffix = errors.length > 0 ? ` (${summarizeArchiveCandidateErrors(errors)})` : "";
-  throw new Error(`BeatmapID ${beatmapId} not found in archive .osu files${suffix}`);
+  const ambiguity = fallbackCount > 1 ? ` (${fallbackCount} id matches, none matched the wanted Version)` : "";
+  throw new Error(`BeatmapID ${beatmapId} not found unambiguously in archive .osu files${ambiguity}${suffix}`);
 }
 
 async function extractArchiveFileByRange(beatmapsetId: string, filename: string): Promise<Buffer> {
@@ -921,6 +1014,8 @@ export function __resetFullArchiveQueueForTest(): void {
   activeFullArchives = 0;
   fullArchiveDownloads.clear();
 }
+
+export const __findBeatmapOsuFileInArchiveBufferForTest = findBeatmapOsuFileInArchiveBuffer;
 
 export const __fullArchiveQueueLimitsForTest = {
   maxConcurrent: MAX_CONCURRENT_FULL_ARCHIVES,

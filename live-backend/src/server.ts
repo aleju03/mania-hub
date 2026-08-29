@@ -13,7 +13,7 @@ import { enqueueGlobalFarmedBoardRepack, enqueueGlobalMapsRefreshIfDue, enqueueM
 import { cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
-import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanEligibilityRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureHtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureJackTagRecomputeSeeded, ensureLnMsdSweepSeeded, ensureLnLeoblackRecomputeSeeded, ensureLn7PrimaryRepinSeeded, ensureLnPrimaryRepinSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
+import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanEligibilityRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureHtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureJackTagRecomputeSeeded, ensureLnMsdSweepSeeded, ensureLnLeoblackRecomputeSeeded, ensureLn7PrimaryRepinSeeded, ensureLnPrimaryRepinSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureOsuFileRepairSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-feedback.js";
@@ -509,6 +509,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       void ensureMsdPoisonRecoverySeeded(app.db, app.queue).catch((error) => console.warn("[msd-poison-recovery] seed failed", error));
       void ensureInverseClusterBpmRecoverySeeded(app.db, app.queue).catch((error) => console.warn("[inverse-cluster-bpm] seed failed", error));
       void ensureNegativeTimeMsdRecoverySeeded(app.db, app.queue).catch((error) => console.warn("[negative-time-msd] seed failed", error));
+      // Unlike the sweeps above this one spends osu! API budget, but only for
+      // charts whose cached .osu is filed under a different difficulty; the
+      // job caps refetches per chunk and the shared limiter paces the chain.
+      if (app.config.enableOsuApiJobs) {
+        void ensureOsuFileRepairSeeded(app.db, app.queue).catch((error) => {
+          logWarn("osu_file_repair_seed_failed", errorContext(error));
+        });
+      }
       // Player-side leftovers of the same incident: the chart repair healed
       // the charts, but per-play SSRs stored against them are copies and do
       // not follow. Local DB work only, no osu! API budget.

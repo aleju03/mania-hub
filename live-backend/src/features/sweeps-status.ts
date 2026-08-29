@@ -21,6 +21,13 @@ import {
   TOP_SCORES_BACKFILL_PROGRESS_META_KEY,
 } from "./top-scores-backfill.js";
 import { SKILL_BASELINE_CURVES_META_KEY, SKILL_BASELINE_JOB } from "./skill-baseline.js";
+import {
+  OSU_FILE_REPAIR_JOB,
+  OSU_FILE_REPAIR_META_KEY,
+  OSU_FILE_REPAIR_PROGRESS_META_KEY,
+  countOsuFileRepairRemaining,
+  readOsuFileRepairProgress,
+} from "./chart-analysis.js";
 
 // ── Sweeps status registry ───────────────────────────────────────────────────
 // Read-only introspection over the long-running one-time sweeps and recurring
@@ -339,6 +346,22 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
       jobTypeLike: "%skill_vector%",
       progressKey: "skill_vector_backfill_progress:v5",
       progressFields: ["cursor", "processed", "computed", "unavailable", "failed"],
+    }),
+  },
+  {
+    id: "osu-file-repair",
+    label: "Wrong-difficulty .osu repair",
+    description: "Refetches cached .osu files that hold a different difficulty than the one they are filed under, then re-analyses those charts. Sets ship rate edits copied from a difficulty with its BeatmapID left in place, and the archive extractor used to take the first id match, so a 1.4x edit could be rated as the ranked chart. Boot-seeded chain over the archive-sourced cache; npm run repair:osu-files runs it flat out locally.",
+    kind: "one-time",
+    read: (db) => readChainSweep(db, {
+      doneKey: OSU_FILE_REPAIR_META_KEY,
+      jobType: OSU_FILE_REPAIR_JOB,
+      progressKey: OSU_FILE_REPAIR_PROGRESS_META_KEY,
+      progressFields: ["cursor", "scanned", "repaired", "failed"],
+      total: async (dbInner, progress) => {
+        const stored = await readOsuFileRepairProgress(dbInner);
+        return (progress.scanned ?? 0) + await countOsuFileRepairRemaining(dbInner, stored.cursor);
+      },
     }),
   },
   {

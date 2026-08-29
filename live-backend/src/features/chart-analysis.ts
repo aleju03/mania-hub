@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
+import { beatmapFileMatchesVersion } from "../audio/beatmap-archive.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { LN_PRIMARY_7K_MIN_RATIO, LN_PRIMARY_MIN_RATIO, estimateLnDan } from "../dan/dan-estimator/ln.js";
@@ -12,11 +13,11 @@ import { LN_TAIL_MIN_RATIO, computeMsd } from "../dan/msd.js";
 import { computeNoteBpm } from "../dan/note-bpm.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
-import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
+import { getCachedBeatmapFile, markCachedBeatmapFileUnavailable, readCachedBeatmapFile, storeCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
-import { logInfo } from "../logger.js";
+import { logInfo, logWarn } from "../logger.js";
 import { MSD_SKILLSETS } from "./farm-helper-shape.js";
 import { inspectChartDanEligibility, type ChartDanEligibility } from "../dan/dan-eligibility.js";
 
@@ -250,7 +251,7 @@ async function enqueueDanEligibilityRecompute(queue: JobQueue, cursor: number): 
 export async function computeBeatmapChartAnalysis(
   db: Db,
   osu: Pick<OsuApiClient, "getBeatmapFile">,
-  payload: { beatmapId: number },
+  payload: { beatmapId: number; recomputeDtRate?: boolean; recomputeHtRate?: boolean },
 ): Promise<void> {
   const beatmapId = Math.floor(Number(payload.beatmapId));
   if (!Number.isFinite(beatmapId) || beatmapId <= 0) return;
@@ -352,6 +353,11 @@ export async function computeBeatmapChartAnalysis(
     await import("./map-search.js")
       .then((module) => module.upsertMapSearchIndexRow(db, beatmapId))
       .catch(() => {});
+    // A wrong-file repair deletes the whole old row so separately-computed
+    // rate columns cannot survive the base upsert. Restore only the rate pairs
+    // that existed before invalidation, now against the corrected file.
+    if (payload.recomputeDtRate) await storeDtRateVerdict(db, beatmapId);
+    if (payload.recomputeHtRate) await storeHtRateVerdict(db, beatmapId);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const failedAt = nowIso();
@@ -538,11 +544,18 @@ function isRecent(updatedAt: string, cooldownMs: number): boolean {
   return Date.now() - updatedAtMs < cooldownMs;
 }
 
-async function enqueueChartAnalysis(queue: JobQueue, beatmapId: number): Promise<void> {
+async function enqueueChartAnalysis(
+  queue: JobQueue,
+  beatmapId: number,
+  options: { recomputeDtRate?: boolean; recomputeHtRate?: boolean; repair?: boolean } = {},
+): Promise<void> {
+  const { repair = false, ...payloadOptions } = options;
   await queue.enqueue(
     CHART_ANALYSIS_JOB,
-    `chart-analysis:${CHART_ANALYSIS_VERSION}:${beatmapId}`,
-    { beatmapId },
+    repair
+      ? `chart-analysis:osu-file-repair:v1:${CHART_ANALYSIS_VERSION}:${beatmapId}`
+      : `chart-analysis:${CHART_ANALYSIS_VERSION}:${beatmapId}`,
+    { beatmapId, ...payloadOptions },
     { priority: 4, replaceDone: true },
   );
 }
@@ -3760,5 +3773,433 @@ export async function ensureNegativeTimeMsdRecoverySeeded(db: Db, queue: JobQueu
     db,
     "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
     [NEGATIVE_TIME_MSD_META_KEY, json({ finishedAt: now, enqueued: rows.length }), now],
+  );
+}
+
+// ── One-shot wrong-difficulty .osu repair sweep ──────────────────────────────
+// Sets commonly ship rate edits copied from a difficulty with its BeatmapID
+// left in place, and the archive extractor used to accept the first id match it
+// read, ordered smallest-file-first. That cached a 1.4x edit as the ranked
+// chart for a slice of the corpus, and everything downstream rated the wrong
+// map (Cannonball Circuit [4K] Eddie Van Halen read as LN 10+ instead of LN 6+,
+// off a 224 BPM copy of a 160 BPM chart). beatmap-archive.ts now requires the
+// file to carry the difficulty's own name whenever an id is ambiguous, which
+// stops new copied-rate rows from landing wrong; this heals existing rows.
+//
+// Only archive-sourced rows are scanned: a direct osu! API fetch cannot return
+// someone else's difficulty, which is also why a mismatch is refetched from the
+// API rather than from the archive again. Repairs re-enqueue ordinary chart
+// analysis instead of computing inline, so the classifier work rides its own
+// lane. The original loose-name audit found 226 definite rate-edit rows on the
+// 2026-08-29 snapshot; strict Unicode/punctuation equality refetches 277 of
+// 88852 rows (0.31%), including genuine rename/formatting mismatches safely.
+export const OSU_FILE_REPAIR_JOB = "repair_mismatched_osu_files_sweep";
+export const OSU_FILE_REPAIR_META_KEY = "osu_file_repair_done:v1";
+export const OSU_FILE_REPAIR_PROGRESS_META_KEY = "osu_file_repair_progress:v1";
+const OSU_FILE_REPAIR_CHUNK = 200;
+// The scan is nearly free; the refetch spends osu! API budget. Cap it per chunk
+// so a run of mismatched charts parks one job on the rate limiter instead of
+// letting the chain keep moving.
+const OSU_FILE_REPAIR_MAX_REFETCH_PER_CHUNK = 5;
+
+export interface OsuFileRepairChunkResult {
+  nextCursor: number;
+  scanned: number;
+  repaired: number[];
+  unavailable: number[];
+  failed: number;
+  done: boolean;
+  retryableFailure: { beatmapId: number; message: string } | null;
+}
+
+export interface OsuFileRepairProgress {
+  cursor: number;
+  scanned: number;
+  repaired: number;
+  failed: number;
+}
+
+export async function repairMismatchedOsuFilesChunk(
+  db: Db,
+  osu: Pick<OsuApiClient, "getBeatmapFile">,
+  cursor: number,
+  limit = OSU_FILE_REPAIR_CHUNK,
+  options: { dryRun?: boolean } = {},
+): Promise<OsuFileRepairChunkResult> {
+  const safeCursor = toNonNegativeInteger(cursor);
+  const safeLimit = toPositiveInteger(limit, OSU_FILE_REPAIR_CHUNK);
+  const rows = (await exec(
+    db,
+    `select f.beatmap_id as beatmap_id,
+            coalesce(nullif(trim(b.version), ''), nullif(trim(m.version), '')) as version
+     from beatmap_osu_files f
+     left join beatmaps b on b.beatmap_id = f.beatmap_id
+     left join maps_beatmaps m on m.beatmap_id = f.beatmap_id
+     where f.source = 'beatmap_archive' and f.error is null and f.beatmap_id > ?
+     order by f.beatmap_id
+     limit ?`,
+    [safeCursor, safeLimit],
+  )).rows;
+
+  let nextCursor = safeCursor;
+  let scanned = 0;
+  let failed = 0;
+  let refetches = 0;
+  let stoppedEarly = false;
+  const repaired: number[] = [];
+  const unavailable: number[] = [];
+  let retryableFailure: OsuFileRepairChunkResult["retryableFailure"] = null;
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    const version = typeof row.version === "string" ? row.version.trim() : "";
+    // Decompressing is the CPU burst; yield between charts so ingest/SSE keep
+    // moving.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    // This is an audit, not a cache use: do not refresh last_used_at on every
+    // one of the ~89k rows (and keep --dry-run genuinely write-free).
+    const osuText = version ? await readCachedBeatmapFile(db, beatmapId, { touch: false }).catch(() => null) : null;
+    if (!version || (osuText && beatmapFileMatchesVersion(osuText, version))) {
+      scanned += 1;
+      nextCursor = Math.max(nextCursor, beatmapId);
+      continue;
+    }
+
+    if (options.dryRun) {
+      repaired.push(beatmapId);
+      scanned += 1;
+      nextCursor = Math.max(nextCursor, beatmapId);
+      continue;
+    }
+    // Leave the cursor on the row this chunk stopped before, so the next link
+    // re-reads it rather than skipping the charts past the refetch cap.
+    if (refetches >= OSU_FILE_REPAIR_MAX_REFETCH_PER_CHUNK) {
+      stoppedEarly = true;
+      break;
+    }
+
+    refetches += 1;
+    try {
+      const text = await osu.getBeatmapFile(beatmapId, "job:osu_file_repair_sweep");
+      // The direct endpoint's requested id is authoritative. The file's own
+      // BeatmapID is not: copied rate edits and old maps can retain a sibling's
+      // id even when /osu/{beatmapId} served the correct registered chart.
+      // The source marker is durable repair provenance for crash recovery.
+      await storeCachedBeatmapFile(db, beatmapId, text, { source: "osu_api_repair_v1" });
+      repaired.push(beatmapId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (isTerminalBeatmapFileError(message)) {
+        await markCachedBeatmapFileUnavailable(db, beatmapId, {
+          source: "osu_file_repair_unavailable_v1",
+          error: message,
+        });
+        unavailable.push(beatmapId);
+        failed += 1;
+        logWarn("osu_file_repair_refetch_unavailable", { beatmap_id: beatmapId, error: message });
+      } else {
+        retryableFailure = { beatmapId, message };
+        stoppedEarly = true;
+        logWarn("osu_file_repair_refetch_failed", { beatmap_id: beatmapId, error: message });
+        break;
+      }
+    }
+    scanned += 1;
+    nextCursor = Math.max(nextCursor, beatmapId);
+  }
+
+  return {
+    nextCursor,
+    scanned,
+    repaired,
+    unavailable,
+    failed,
+    done: !stoppedEarly && rows.length < safeLimit,
+    retryableFailure,
+  };
+}
+
+export async function readOsuFileRepairProgress(db: Db): Promise<OsuFileRepairProgress> {
+  const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [OSU_FILE_REPAIR_PROGRESS_META_KEY])).rows[0];
+  const stored = parseJson<Partial<OsuFileRepairProgress>>(row?.value_json, {});
+  return {
+    cursor: toNonNegativeInteger(stored.cursor),
+    scanned: toNonNegativeInteger(stored.scanned),
+    repaired: toNonNegativeInteger(stored.repaired),
+    failed: toNonNegativeInteger(stored.failed),
+  };
+}
+
+function toNonNegativeInteger(value: unknown): number {
+  const number = Math.floor(Number(value ?? 0));
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function toPositiveInteger(value: unknown, fallback: number): number {
+  const number = Math.floor(Number(value));
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+export async function countOsuFileRepairRemaining(db: Db, cursor: number): Promise<number> {
+  const row = (await exec(
+    db,
+    `select count(*) as remaining from beatmap_osu_files
+     where source = 'beatmap_archive' and error is null and beatmap_id > ?`,
+    [toNonNegativeInteger(cursor)],
+  )).rows[0];
+  return toNonNegativeInteger(row?.remaining);
+}
+
+export async function readOsuFileRepairAffectedBeatmapIds(db: Db): Promise<number[]> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id from beatmap_osu_files
+     where source like 'osu_api_repair_%'
+        or source = 'osu_file_repair_unavailable_v1'
+     order by beatmap_id`,
+  )).rows;
+  return rows
+    .map((row) => Number(row.beatmap_id))
+    .filter((beatmapId) => Number.isSafeInteger(beatmapId) && beatmapId > 0);
+}
+
+export async function invalidateOsuFileRepairDerivatives(
+  db: Db,
+  queue: JobQueue,
+  beatmapIds: number[],
+  options: { includePlayerSkills?: boolean } = {},
+): Promise<void> {
+  const ids = [...new Set(beatmapIds)]
+    .filter((beatmapId) => Number.isSafeInteger(beatmapId) && beatmapId > 0);
+  if (ids.length === 0) return;
+
+  // Reanalysis must start from an empty row: the ordinary upsert deliberately
+  // leaves separately-computed DT/HT columns alone, which would retain values
+  // derived from the wrong file. Activity vectors have the same provenance.
+  const { enqueueActivitySkillAnalysis } = await import("./activity.js");
+  const allUnavailableIds = new Set<number>();
+  for (let offset = 0; offset < ids.length; offset += 400) {
+    const chunk = ids.slice(offset, offset + 400);
+    const placeholders = chunk.map(() => "?").join(", ");
+    const storedRows = (await exec(
+      db,
+      `select f.beatmap_id, f.source,
+              a.msd_dt_json is not null as has_dt,
+              a.msd_ht_json is not null as has_ht
+       from beatmap_osu_files f
+       left join beatmap_chart_analysis a
+         on a.beatmap_id = f.beatmap_id and a.analysis_version = ?
+       where f.beatmap_id in (${placeholders})`,
+      [CHART_ANALYSIS_VERSION, ...chunk],
+    )).rows;
+    const storedById = new Map(storedRows.map((row) => [Number(row.beatmap_id), row]));
+    const rateFlags = new Map<number, { dt: boolean; ht: boolean }>();
+    const unavailableIds = new Set<number>();
+    for (const beatmapId of chunk) {
+      const stored = storedById.get(beatmapId);
+      const source = String(stored?.source ?? "");
+      if (source === "osu_file_repair_unavailable_v1") {
+        unavailableIds.add(beatmapId);
+        allUnavailableIds.add(beatmapId);
+        continue;
+      }
+      const dt = Number(stored?.has_dt) > 0 || source.includes("_queued_dt_");
+      const ht = Number(stored?.has_ht) > 0 || source.includes("_ht_v1");
+      rateFlags.set(beatmapId, { dt, ht });
+      if (source.startsWith("osu_api_repair_")) {
+        await exec(db, "update beatmap_osu_files set source = ? where beatmap_id = ?", [osuFileRepairQueuedSource(dt, ht), beatmapId]);
+      }
+    }
+    await exec(db, `delete from dan_estimates where beatmap_id in (${placeholders})`, chunk);
+    await exec(db, `delete from beatmap_chart_analysis where beatmap_id in (${placeholders})`, chunk);
+    await exec(db, `delete from beatmap_skill_vectors where beatmap_id in (${placeholders})`, chunk);
+
+    for (const beatmapId of chunk) {
+      // A terminal 404 or invalid direct response has no trustworthy file to
+      // analyze. Leave the derived rows absent; queueing would only spend two
+      // more fetch attempts and could re-cache the invalid response.
+      if (unavailableIds.has(beatmapId)) continue;
+      const flags = rateFlags.get(beatmapId);
+      await enqueueChartAnalysis(queue, beatmapId, {
+        repair: true,
+        ...(flags?.dt ? { recomputeDtRate: true } : {}),
+        ...(flags?.ht ? { recomputeHtRate: true } : {}),
+      });
+      await enqueueActivitySkillAnalysis(queue, beatmapId);
+    }
+  }
+
+  if (options.includePlayerSkills) {
+    const unavailablePlayerResult = await purgePlayerSkillPlaysForRepairedBeatmaps(
+      db,
+      queue,
+      [...allUnavailableIds],
+      { enqueue: false },
+    );
+    const availablePlayerResult = await purgePlayerSkillPlaysForRepairedBeatmaps(
+      db,
+      queue,
+      ids.filter((beatmapId) => !allUnavailableIds.has(beatmapId)),
+    );
+    const droppedPlays = unavailablePlayerResult.droppedPlays + availablePlayerResult.droppedPlays;
+    if (droppedPlays > 0) {
+      logInfo("osu_file_repair_player_skills_invalidated", {
+        beatmaps: ids.length,
+        users: new Set([...unavailablePlayerResult.users, ...availablePlayerResult.users]).size,
+        plays: droppedPlays,
+      });
+    }
+  }
+}
+
+function osuFileRepairQueuedSource(dt: boolean, ht: boolean): string {
+  if (dt && ht) return "osu_api_repair_queued_dt_ht_v1";
+  if (dt) return "osu_api_repair_queued_dt_v1";
+  if (ht) return "osu_api_repair_queued_ht_v1";
+  return "osu_api_repair_queued_v1";
+}
+
+interface RepairStoredPlayerSkillPlay {
+  beatmapId?: unknown;
+  [field: string]: unknown;
+}
+
+// Per-play SSR reuse has no file hash. Remove the plays minted from a repaired
+// cache entry or every later player recompute would copy the wrong values
+// forward. This lives with the repair instead of player-skills.ts so the
+// one-shot incident code does not become part of that feature's permanent API.
+async function purgePlayerSkillPlaysForRepairedBeatmaps(
+  db: Db,
+  queue: JobQueue,
+  beatmapIds: number[],
+  options: { enqueue?: boolean } = {},
+): Promise<{ users: number[]; droppedPlays: number }> {
+  const ids = [...new Set(beatmapIds)]
+    .filter((beatmapId) => Number.isSafeInteger(beatmapId) && beatmapId > 0);
+  if (ids.length === 0) return { users: [], droppedPlays: 0 };
+
+  const repairedIds = new Set(ids);
+  const users = new Set<number>();
+  let droppedPlays = 0;
+  const staleComputedAt = new Date(Date.now() - 12 * 60 * 60_000 - 60_000).toISOString();
+  for (let offset = 0; offset < ids.length; offset += 400) {
+    const chunk = ids.slice(offset, offset + 400);
+    const placeholders = chunk.map(() => "?").join(", ");
+    const rows = (await exec(
+      db,
+      `select user_id, analysis_version, plays_json
+       from player_skill_ratings
+       where exists (
+         select 1
+         from json_each(json_extract(plays_json, '$.plays')) as play
+         where cast(json_extract(play.value, '$.beatmapId') as integer) in (${placeholders})
+       )`,
+      chunk,
+    )).rows;
+
+    for (const row of rows) {
+      const userId = Number(row.user_id);
+      const analysisVersion = Number(row.analysis_version);
+      const stored = parseJson<{ plays?: RepairStoredPlayerSkillPlay[] } | null>(String(row.plays_json ?? ""), null);
+      const plays = Array.isArray(stored?.plays) ? stored.plays : [];
+      const kept = plays.filter((play) => !repairedIds.has(Number(play?.beatmapId)));
+      const dropped = plays.length - kept.length;
+      if (!Number.isSafeInteger(userId) || userId <= 0 || dropped <= 0) continue;
+
+      await exec(
+        db,
+        `update player_skill_ratings
+         set plays_json = json(?), computed_at = ?, updated_at = ?
+         where user_id = ? and analysis_version = ?`,
+        [json({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, analysisVersion],
+      );
+      users.add(userId);
+      droppedPlays += dropped;
+    }
+  }
+
+  if (options.enqueue !== false && users.size > 0) {
+    const { PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } = await import("./player-skills.js");
+    // Let the chart/activity jobs land before player jobs reload pattern tags;
+    // a real profile view uses the same dedupe key and pulls it forward.
+    const runAfter = new Date(Date.now() + 5 * 60_000);
+    for (const userId of users) {
+      await queue.enqueue(
+        PLAYER_SKILLS_JOB,
+        `player-skills:${PLAYER_SKILLS_VERSION}:${userId}`,
+        { userId },
+        { priority: -5, runAfter, replaceDone: true },
+      );
+    }
+  }
+  return { users: [...users], droppedPlays };
+}
+
+// Boot watchdog: seed the sweep once per meta-key version, resume if a chain
+// died mid-way (each chunk's job carries its own cursor dedupe key).
+export async function ensureOsuFileRepairSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [OSU_FILE_REPAIR_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [OSU_FILE_REPAIR_JOB],
+  )).rows[0];
+  if (pending) return;
+  const progress = await readOsuFileRepairProgress(db);
+  await enqueueOsuFileRepair(queue, progress.cursor);
+}
+
+export async function runOsuFileRepairJob(
+  db: Db,
+  queue: JobQueue,
+  osu: Pick<OsuApiClient, "getBeatmapFile">,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const previous = await readOsuFileRepairProgress(db);
+  const cursor = Math.max(toNonNegativeInteger(payload?.cursor), previous.cursor);
+  const result = await repairMismatchedOsuFilesChunk(db, osu, cursor);
+  const progress: OsuFileRepairProgress = {
+    cursor: result.nextCursor,
+    scanned: previous.scanned + result.scanned,
+    repaired: previous.repaired + result.repaired.length,
+    failed: previous.failed + result.failed,
+  };
+  const now = nowIso();
+  await exec(
+    db,
+    "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+    [OSU_FILE_REPAIR_PROGRESS_META_KEY, json(progress), now],
+  );
+
+  // Heal visible chart/activity data as each API batch lands. Finalization
+  // repeats this over the durable source markers to close crash/race windows.
+  await invalidateOsuFileRepairDerivatives(db, queue, [...result.repaired, ...result.unavailable]);
+
+  if (result.retryableFailure) {
+    throw new Error(
+      `Beatmap ${result.retryableFailure.beatmapId} repair refetch failed: ${result.retryableFailure.message}`,
+    );
+  }
+
+  if (result.done) {
+    const affectedBeatmapIds = await readOsuFileRepairAffectedBeatmapIds(db);
+    await invalidateOsuFileRepairDerivatives(db, queue, affectedBeatmapIds, { includePlayerSkills: true });
+    logInfo("osu_file_repair_done", { scanned: progress.scanned, repaired: progress.repaired, failed: progress.failed });
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [OSU_FILE_REPAIR_META_KEY, json({ finishedAt: now, ...progress }), now],
+    );
+    return;
+  }
+  await enqueueOsuFileRepair(queue, result.nextCursor);
+}
+
+async function enqueueOsuFileRepair(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    OSU_FILE_REPAIR_JOB,
+    `${OSU_FILE_REPAIR_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
   );
 }

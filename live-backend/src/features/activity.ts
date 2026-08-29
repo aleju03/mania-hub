@@ -706,7 +706,7 @@ function shouldSkipActivitySkillAnalysis(row: Record<string, unknown>): boolean 
   return false;
 }
 
-async function enqueueActivitySkillAnalysis(queue: JobQueue, beatmapId: number): Promise<void> {
+export async function enqueueActivitySkillAnalysis(queue: JobQueue, beatmapId: number): Promise<void> {
   await queue.enqueue(
     "analyze_activity_beatmap",
     `activity-beatmap:${ACTIVITY_SKILL_ANALYSIS_VERSION}:${beatmapId}`,

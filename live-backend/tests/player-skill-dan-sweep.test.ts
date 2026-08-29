@@ -254,13 +254,28 @@ describe("recomputePlayerSkillDanChunk", () => {
     for (const userId of [21, 22, 23]) await seedRow(db, userId, [301, 302, 303, 304]);
 
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v15'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v16'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const jobs = (await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
     expect(Number(jobs.c)).toBe(0);
+    db.close();
+  });
+
+  it("does not let main's v15 marker suppress the post-v15 corrections", async () => {
+    const db = await makeDb();
+    const queue = new JobQueue(db);
+    await exec(
+      db,
+      "insert into live_meta (key, value_json, updated_at) values ('player_skill_dan_sweep_done:v15', '{}', ?)",
+      ["2026-08-29T00:00:00.000Z"],
+    );
+
+    await ensurePlayerSkillDanSweepSeeded(db, queue);
+    const jobs = (await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
+    expect(Number(jobs.c)).toBe(1);
     db.close();
   });
 

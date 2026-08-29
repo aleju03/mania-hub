@@ -2853,8 +2853,8 @@ msgid "Browser preferences and local caches stay on your device until they expir
 msgstr "浏览器偏好和本地缓存会一直留在你的设备上，直到它们过期、被替换，或你清除 localStorage。osu! 登录会话最长可保持 30 天，除非你提前登出。"
 
 #: src/routes/replay.tsx
-msgid "Browser-based osu!mania replay watcher and viewer for .osr files, score replays, keypress overlays, skins, and MP4 export."
-msgstr "浏览器里的 osu!mania 回放播放器，支持 .osr 文件、成绩回放、按键显示、皮肤和 MP4 导出。"
+msgid "Watch osu!mania replays in your browser."
+msgstr "在浏览器中观看 osu!mania 回放。"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Buffering audio"

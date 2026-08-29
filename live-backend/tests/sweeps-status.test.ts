@@ -58,6 +58,7 @@ describe("sweeps status registry", () => {
       "activity-combo-backfill",
       "top-scores-backfill",
       "skill-vector-backfill-v5",
+      "osu-file-repair",
       "dt-rate-analysis",
       "vibro-recompute",
       "dan-eligibility-recompute",

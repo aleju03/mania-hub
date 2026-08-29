@@ -1149,12 +1149,12 @@ const STAMINA_ARBITRATION_MIN_LENGTH_SECONDS = 90;
 // under CLUSTER_SHARE_MIN (0.40, where a chart becomes a jack chart outright),
 // which is the band this names: too jack to be endurance, not enough to be jack.
 //
-// Measured over the mapper-named 4K corpora, applied only where the Handstream
-// argmax carries the tile: the handstream corpus goes 90.3% to 88.0%
-// stamina-tiled, stamina 65.1% to 64.6%, and every other corpus moves under a
-// point. Vetoing every stamina verdict rather than the Handstream one costs
-// three times that (handstream to 87.0%, stamina to 62.9%) for charts a
-// Stamina argmax already earned on length.
+// Measured over the mapper-named 4K corpora across all three stamina entry
+// paths: the handstream corpus goes 90.3% to 87.2% stamina-tiled, stamina 65.1%
+// to 64.2%, and every other corpus moves under 1.5 points. The same veto has to
+// guard the Stamina hold, the Handstream exemption and Jumpstream arbitration;
+// otherwise the exact same chart can escape it when a rate changes the MSD
+// argmax.
 const STAMINA_TILE_JACK_VETO_SHARE = 0.30;
 
 function readRawDan(half: LeanHalfJson | null | undefined): number | null {
@@ -1203,12 +1203,16 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
     // sibling query entirely, so the ordinary read costs nothing extra.
     for (const row of rows) {
       if (String(row.status ?? "") !== "ready") continue;
+      if (Number(row.key_count) !== 4) continue;
       const length = readLengthSeconds(row.total_length);
       const setId = Number(row.beatmapset_id);
       const rate = parseNamedRate(String(row.version ?? ""));
       if (length == null || rate == null || !Number.isInteger(setId) || setId <= 0) continue;
       if (length >= STAMINA_TILE_MIN_LENGTH_SECONDS) continue;
-      if (length * rate < STAMINA_TILE_MIN_LENGTH_SECONDS) continue;
+      // Keep the tolerance band in the candidate set: the named rate and
+      // integer-second API lengths can predict 239s while the actual sibling
+      // is 240s. The sibling's measured length makes the final decision.
+      if (length * rate < STAMINA_TILE_MIN_LENGTH_SECONDS * (1 - RATE_SIBLING_TOLERANCE)) continue;
       rateCandidates.push({ beatmapId: Number(row.beatmap_id), setId, length, rate });
     }
     for (const row of rows) {
@@ -3246,7 +3250,8 @@ function bucketingSkillset(
   // inside the 1%-per-corpus line the other overrides hold to. Dropping the
   // Technical demand costs the speed corpus 33 charts (3.1%), mostly
   // pure-stream training marathons, so the hold stays this narrow.
-  if (top === "Stamina" && demandsEndurance && Number(values?.Technical ?? 0) >= stream) return top;
+  if (top === "Stamina" && demandsEndurance && Number(values?.Technical ?? 0) >= stream
+    && !jackContaminated(chartJackShare)) return top;
   const best = Number(values?.[top] ?? 0);
   const nearTie = top === "Stream" || (stream > 0 && stream >= best - SPEED_NEAR_TIE_MSD)
     ? "Stream"
@@ -3320,21 +3325,24 @@ export function danSkillsetBucketsForValues(
 // The diff name alone cannot fix that - a pack holds unrelated charts, and
 // plenty of names carry numbers that are not rates - so the name only PROPOSES
 // a rate and the beatmapset has to CONFIRM it: the set must hold another diff
-// of the same keymode and hold-note count at the length the proposed rate
-// predicts, within RATE_SIBLING_TOLERANCE. A rate edit is its base compressed
-// in time, so that sibling is the base itself and its length is the answer.
+// of the same keymode, parsed hold count and exact osu! object counts at the
+// length the proposed rate predicts, within RATE_SIBLING_TOLERANCE. A rate edit
+// is its base compressed in time, so that sibling is the base itself and its
+// measured length is the answer. Exact object counts matter: rice pack diffs
+// normally all have zero holds, which let unrelated songs accidentally confirm
+// each other when the hold count was the only structural check.
 // FUTURE DOMINATORS [NB5 Hard 54235] is the measured shape: five diffs, all
 // 6007 notes, at 317 / 288 / 264 / 244 / 226 seconds, exactly 317 over 1.1,
 // 1.2, 1.3 and 1.4.
 //
-// Measured 2026-08-29 over the 4K corpus: 8,532 short charts have a name whose
-// rate a sibling confirms, and 677 of those reach 4:00 at their confirmed base
-// and so newly qualify for the tile. Deliberately NOT the looser rule of
-// taking the set's longest same-note-count sibling as the base: checked
-// against the 10,597 rate-named charts that have any structural sibling, the
-// longest one matches the named rate for 6,956 but runs LONGER for 1,555,
-// because a set holding downrates makes its slowest diff look like the base,
-// which would carry genuinely short charts over the bar.
+// Re-measured 2026-08-29 after adding the exact-object check
+// (scripts/dev/rate-edit-tile-impact.ts): 1,248 short 4K candidates resolve a
+// base in the potentially gate-crossing pool and 54 actually change tile, all
+// outside the mapper-named corpora. The earlier hold-count-only check moved 94,
+// including an unrelated song in a jack practice pack. Deliberately NOT the
+// looser rule of taking the set's longest structural sibling as the base: sets
+// holding downrates make their slowest diff look like the base, which would
+// carry genuinely short charts over the bar.
 //
 // This only ever feeds the stamina length gate. It rates nothing, and no dan
 // verdict reads it.
@@ -3377,7 +3385,15 @@ async function applyRateEditBaseLengths(
 ): Promise<void> {
   if (candidates.length === 0) return;
   const setIds = [...new Set(candidates.map((candidate) => candidate.setId))];
-  const siblings = new Map<number, Array<{ beatmapId: number; keyCount: number; lnCount: number; length: number }>>();
+  const siblings = new Map<number, Array<{
+    beatmapId: number;
+    keyCount: number;
+    lnCount: number;
+    length: number;
+    circleCount: number;
+    sliderCount: number;
+    spinnerCount: number;
+  }>>();
   for (let offset = 0; offset < setIds.length; offset += CHART_SKILL_INFO_QUERY_CHUNK) {
     const chunk = setIds.slice(offset, offset + CHART_SKILL_INFO_QUERY_CHUNK);
     const placeholders = chunk.map(() => "?").join(", ");
@@ -3387,19 +3403,32 @@ async function applyRateEditBaseLengths(
     // reads the column count rather than the column.
     const rows = (await exec(
       db,
-      `select beatmap_id, beatmapset_id, key_count, ln_count, length as length_seconds
-         from map_search_index where beatmapset_id in (${placeholders})`,
+      `select m.beatmap_id, m.beatmapset_id, m.key_count, m.ln_count, m.length as length_seconds,
+              json_extract(b.metadata_json, '$.count_circles') as circle_count,
+              json_extract(b.metadata_json, '$.count_sliders') as slider_count,
+              json_extract(b.metadata_json, '$.count_spinners') as spinner_count
+         from map_search_index m
+         join beatmaps b on b.beatmap_id = m.beatmap_id
+        where m.beatmapset_id in (${placeholders})`,
       chunk,
     )).rows;
     for (const row of rows) {
       const setId = Number(row.beatmapset_id);
+      const length = Number(row.length_seconds);
+      const circleCount = readBeatmapObjectCount(row.circle_count);
+      const sliderCount = readBeatmapObjectCount(row.slider_count);
+      const spinnerCount = readBeatmapObjectCount(row.spinner_count);
+      if (!Number.isFinite(length) || length <= 0
+        || circleCount == null || sliderCount == null || spinnerCount == null) continue;
       const entry = {
         beatmapId: Number(row.beatmap_id),
         keyCount: Number(row.key_count),
         lnCount: Number(row.ln_count),
-        length: Number(row.length_seconds),
+        length,
+        circleCount,
+        sliderCount,
+        spinnerCount,
       };
-      if (!Number.isFinite(entry.length) || entry.length <= 0) continue;
       const list = siblings.get(setId);
       if (list) list.push(entry); else siblings.set(setId, [entry]);
     }
@@ -3408,15 +3437,30 @@ async function applyRateEditBaseLengths(
     const list = siblings.get(candidate.setId);
     const self = list?.find((entry) => entry.beatmapId === candidate.beatmapId);
     if (!list || !self) continue;
+    if (self.circleCount + self.sliderCount + self.spinnerCount <= 0) continue;
     const predicted = candidate.length * candidate.rate;
-    const confirmed = list.some((entry) =>
-      entry.beatmapId !== candidate.beatmapId
-      && entry.keyCount === self.keyCount
-      && entry.lnCount === self.lnCount
-      && Math.abs(entry.length - predicted) <= RATE_SIBLING_TOLERANCE * predicted);
+    const confirmed = list
+      .filter((entry) =>
+        entry.beatmapId !== candidate.beatmapId
+        && entry.keyCount === self.keyCount
+        && entry.lnCount === self.lnCount
+        && entry.circleCount === self.circleCount
+        && entry.sliderCount === self.sliderCount
+        && entry.spinnerCount === self.spinnerCount
+        && Math.abs(entry.length - predicted) <= RATE_SIBLING_TOLERANCE * predicted)
+      .sort((left, right) =>
+        Math.abs(left.length - predicted) - Math.abs(right.length - predicted)
+        || left.beatmapId - right.beatmapId)[0];
     const chart = info.get(candidate.beatmapId);
-    if (confirmed && chart) chart.lengthSeconds = Math.round(predicted);
+    if (confirmed && chart) chart.lengthSeconds = Math.round(confirmed.length);
   }
+}
+
+/** A non-negative object count from osu!'s beatmap metadata. */
+function readBeatmapObjectCount(value: unknown): number | null {
+  if (value == null) return null;
+  const count = Number(value);
+  return Number.isInteger(count) && count >= 0 ? count : null;
 }
 
 /** Drain length in seconds from the beatmap metadata; null when unknown. */
@@ -3861,7 +3905,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // (clearWindow), which the dan badges read to mark an estimate that is still
 // filling in. A stored row without it reads as "unknown" rather than complete,
 // so the boards would mark players unevenly until every row has one.
-// v15: three 4K tile-filing changes land together (2026-08-29), all of which
+// v15: three 4K tile-filing changes landed together (2026-08-29), all of which
 // move clears between skillset tiles and so move the per-tile dans and the
 // headline that averages them. A Jumpstream argmax is now arbitrated by
 // LeoBlack's label instead of always pairing with tech
@@ -3870,8 +3914,13 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // length gate now reads the longer of the 1.0x drain and the played time, so
 // an uprated marathon keeps the tile. And a length-qualified Stamina argmax
 // holds the tile against the speed near-tie when Technical also outranks
-// Stream. Re-derives from plays_json as always, no MinaCalc.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v15";
+// Stream.
+// v16: the later arbitration-length floor and jack-share veto also move
+// stored clears, and v15 already exists on main without them. It additionally
+// reverts false rate-edit matches between unrelated rice-pack diffs by
+// requiring exact object counts. Re-derives from plays_json as always, no
+// MinaCalc.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v16";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

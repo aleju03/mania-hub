@@ -2844,8 +2844,8 @@ msgid "Browser preferences and local caches stay on your device until they expir
 msgstr "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
 
 #: src/routes/replay.tsx
-msgid "Browser-based osu!mania replay watcher and viewer for .osr files, score replays, keypress overlays, skins, and MP4 export."
-msgstr "Browser-based osu!mania replay watcher and viewer for .osr files, score replays, keypress overlays, skins, and MP4 export."
+msgid "Watch osu!mania replays in your browser."
+msgstr "Watch osu!mania replays in your browser."
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Buffering audio"

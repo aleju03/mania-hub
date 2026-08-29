@@ -1927,7 +1927,14 @@ describe("the rate-edit base length", () => {
   // one chart, all 40 holds, at 317 / 288 / 264 / 244 / 226 seconds.
   async function seedLadder(
     db: Awaited<ReturnType<typeof createDb>>,
-    diffs: Array<{ beatmapId: number; version: string; length: number; setId?: number; lnCount?: number }>,
+    diffs: Array<{
+      beatmapId: number;
+      version: string;
+      length: number;
+      setId?: number;
+      lnCount?: number;
+      circleCount?: number;
+    }>,
   ): Promise<void> {
     const now = "2026-01-01T00:00:00Z";
     const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
@@ -1937,7 +1944,18 @@ describe("the rate-edit base length", () => {
         db,
         `insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at)
          values (?, ?, 'mania', ?, ?, ?)`,
-        [diff.beatmapId, setId, diff.version, JSON.stringify({ total_length: diff.length }), now],
+        [
+          diff.beatmapId,
+          setId,
+          diff.version,
+          JSON.stringify({
+            total_length: diff.length,
+            count_circles: diff.circleCount ?? 6007,
+            count_sliders: diff.lnCount ?? 40,
+            count_spinners: 0,
+          }),
+          now,
+        ],
       );
       await exec(
         db,
@@ -1964,8 +1982,8 @@ describe("the rate-edit base length", () => {
         { beatmapId: 3123871, version: "[4K] NB5 Hard 54235 1.3x", length: 244 },
       ]);
       const info = await loadChartSkillInfo(db, [3123873, 3123872, 3123871]);
-      // 226 x 1.4 = 316, and the set holds a 317s sibling to confirm it.
-      expect(info.get(3123872)?.lengthSeconds).toBe(316);
+      // 226 x 1.4 predicts 316.4 and the set's measured 317s base confirms it.
+      expect(info.get(3123872)?.lengthSeconds).toBe(317);
       // Already over the bar on its own file, so nothing is resolved.
       expect(info.get(3123871)?.lengthSeconds).toBe(244);
       // The base itself names no rate.
@@ -1994,6 +2012,33 @@ describe("the rate-edit base length", () => {
       ]);
       const info = await loadChartSkillInfo(db, [411, 412]);
       expect(info.get(411)?.lengthSeconds).toBe(226);
+    });
+  });
+
+  it("does not let unrelated rice-pack diffs confirm each other", async () => {
+    await withDb(async (db) => {
+      await seedLadder(db, [
+        // Captain Jack and Observation are unrelated songs in the same pack.
+        // Both have zero holds and their lengths happen to fit 1.25x within 2%,
+        // but their exact object counts expose the collision.
+        { beatmapId: 421, version: "[4K] Captain Jack 1.25x", length: 196, lnCount: 0, circleCount: 4170 },
+        { beatmapId: 422, version: "[4K] Observation 0.75x", length: 249, lnCount: 0, circleCount: 5092 },
+      ]);
+      const info = await loadChartSkillInfo(db, [421, 422]);
+      expect(info.get(421)?.lengthSeconds).toBe(196);
+    });
+  });
+
+  it("uses the confirmed sibling's measured length at the stamina boundary", async () => {
+    await withDb(async (db) => {
+      await seedLadder(db, [
+        { beatmapId: 431, version: "[4K] Song 1.2x", length: 200 },
+        // Within the 2% confirmation band of the predicted 240s, but the base
+        // itself is still under the 240s stamina gate.
+        { beatmapId: 432, version: "[4K] Song", length: 236 },
+      ]);
+      const info = await loadChartSkillInfo(db, [431, 432]);
+      expect(info.get(431)?.lengthSeconds).toBe(236);
     });
   });
 });

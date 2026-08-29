@@ -121,8 +121,12 @@ export async function getCachedBeatmapFile(
   }
 }
 
-export async function readCachedBeatmapFile(db: Db, beatmapId: number): Promise<string | null> {
-  return (await readCachedBeatmapFileEntry(db, beatmapId))?.content ?? null;
+export async function readCachedBeatmapFile(
+  db: Db,
+  beatmapId: number,
+  options: { touch?: boolean } = {},
+): Promise<string | null> {
+  return (await readCachedBeatmapFileEntry(db, beatmapId, options))?.content ?? null;
 }
 
 interface CachedBeatmapFileEntry {
@@ -130,7 +134,11 @@ interface CachedBeatmapFileEntry {
   fetchedAt: string | null;
 }
 
-async function readCachedBeatmapFileEntry(db: Db, beatmapId: number): Promise<CachedBeatmapFileEntry | null> {
+async function readCachedBeatmapFileEntry(
+  db: Db,
+  beatmapId: number,
+  options: { touch?: boolean } = {},
+): Promise<CachedBeatmapFileEntry | null> {
   const safeId = Math.floor(beatmapId);
   if (!Number.isFinite(safeId) || safeId <= 0) return null;
 
@@ -147,13 +155,15 @@ async function readCachedBeatmapFileEntry(db: Db, beatmapId: number): Promise<Ca
   const fetchedAt = row.fetched_at == null ? null : String(row.fetched_at);
   const storedBlob = await readCompressedContent(row).catch(() => null);
   if (storedBlob) {
-    await touchCachedBeatmapFile(db, safeId, row).catch(() => {});
+    if (options.touch !== false) await touchCachedBeatmapFile(db, safeId, row).catch(() => {});
     return { content: storedBlob, fetchedAt };
   }
 
   const legacyContent = row.content == null ? "" : String(row.content);
   if (!legacyContent) return null;
-  await storeCachedBeatmapFile(db, safeId, legacyContent, { source: "legacy_raw" }).catch(() => {});
+  if (options.touch !== false) {
+    await storeCachedBeatmapFile(db, safeId, legacyContent, { source: "legacy_raw" }).catch(() => {});
+  }
   return { content: legacyContent, fetchedAt };
 }
 

@@ -195,7 +195,7 @@ const REPLAY_LANDING_SEO_TITLE = msg`osu!mania replay watcher`;
 // derived from it, so every locale shares the one English card.
 const REPLAY_LANDING_OG_TITLE = "osu!mania replay watcher";
 const REPLAY_LANDING_SEO_DESCRIPTION =
-  msg`Browser-based osu!mania replay watcher and viewer for .osr files, score replays, keypress overlays, skins, and MP4 export.`;
+  msg`Watch osu!mania replays in your browser.`;
 const REPLAY_VIDEO_EXPORT_RESOLUTIONS: Record<ReplayVideoExportOptions["resolution"], { width: number; height: number }> = {
   "720p": { width: 1280, height: 720 },
   "1080p": { width: 1920, height: 1080 },

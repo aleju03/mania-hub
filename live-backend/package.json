@@ -28,6 +28,8 @@
     "import:player-skills:dist": "node --env-file-if-exists=.env dist/maintenance/import-player-skills.js",
     "recompute:vibro": "node --env-file-if-exists=.env --import tsx src/maintenance/recompute-vibro.ts",
     "recompute:vibro:dist": "node --env-file-if-exists=.env dist/maintenance/recompute-vibro.js",
+    "repair:osu-files": "node --env-file-if-exists=.env --import tsx src/maintenance/repair-mismatched-osu-files.ts",
+    "repair:osu-files:dist": "node --env-file-if-exists=.env dist/maintenance/repair-mismatched-osu-files.js",
     "backtest:farm-helper": "node --env-file-if-exists=.env --import tsx src/maintenance/farm-helper-backtest.ts",
     "smoke:osc": "node --env-file-if-exists=.env --import tsx src/smoke-osc.ts",
     "probe:boot-imports": "node --import tsx src/maintenance/boot-import-probe.ts",

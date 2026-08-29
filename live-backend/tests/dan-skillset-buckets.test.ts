@@ -460,6 +460,22 @@ describe("the stamina tile's jack veto", () => {
     expect(danSkillsetBucketsForValues(4, "rc", values, 237, 1, jacky(0.35))).toEqual(["tech"]);
     expect(danSkillsetBucketsForValues(4, "rc", values, 237, 1, jacky(0.05))).toEqual(["stamina"]);
   });
+
+  it("also guards the long Stamina-argmax hold", () => {
+    // The hold returns before the ordinary length gate, so it needs the same
+    // veto explicitly or a rate-dependent Stamina argmax can bypass the rule.
+    const values = {
+      ...AIAE_DT,
+      Handstream: 20,
+      Stamina: 35.5,
+      Technical: 35.4,
+      Stream: 35.3,
+    };
+    expect(danSkillsetBucketsForValues(4, "rc", values, 300, 1, { ...jacky(0.35), lengthSeconds: 300 }))
+      .not.toEqual(["stamina"]);
+    expect(danSkillsetBucketsForValues(4, "rc", values, 300, 1, { ...jacky(0.05), lengthSeconds: 300 }))
+      .toEqual(["stamina"]);
+  });
 });
 
 describe("the stamina tile's length gate", () => {
