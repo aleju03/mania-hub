@@ -21,6 +21,21 @@ export interface LocalDbStorage {
   overLimit: boolean;
 }
 
+// deleteInBatches yields between batches of one table, but most hourly prunes
+// fit in a single batch. Yield between those statements too: otherwise the
+// retention connection can release and immediately reacquire SQLite's one
+// write lock before a request-path writer's busy-retry poll gets a turn.
+const RETENTION_PRUNE_PAUSE_MS = 50;
+
+function createRetentionPruner(): (prune: () => Promise<number>) => Promise<number> {
+  let started = false;
+  return async (prune) => {
+    if (started) await new Promise((resolve) => setTimeout(resolve, RETENTION_PRUNE_PAUSE_MS));
+    started = true;
+    return prune();
+  };
+}
+
 export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | "scoreEventRetentionDays" | "liveEventRetentionDays" | "doneJobRetentionDays" | "apiCallLogRetentionDays" | "replayVideoJobRetentionDays" | "rankSnapshotRetentionDays" | "activityRetentionYears" | "replayVideoWorkDir" | "maxLocalDbBytes" | "targetLocalDbBytes"> & SkinStorageConfig): Promise<Record<string, number>> {
   const scoreCutoff = daysAgo(config.scoreEventRetentionDays);
   const liveCutoff = daysAgo(config.liveEventRetentionDays);
@@ -72,22 +87,23 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
   // catch-up, a lowered cutoff, the once-a-year activity purge) must never hold
   // the write lock for one giant statement while both processes' writers burn
   // their busy budgets behind it.
+  const prune = createRetentionPruner();
   const results = {
     skinsPendingExpired,
-    scoreEvents: await deleteInBatches(db, "score_events", "received_at < ?", [scoreCutoff]),
-    liveEvents: await deleteInBatches(db, "live_event_log", "created_at < ?", [liveCutoff]),
-    doneJobs: await deleteInBatches(db, "jobs", "status = 'done' and updated_at < ?", [doneJobCutoff]),
-    parkedOnDemandJobs: await deleteInBatches(
+    scoreEvents: await prune(() => deleteInBatches(db, "score_events", "received_at < ?", [scoreCutoff])),
+    liveEvents: await prune(() => deleteInBatches(db, "live_event_log", "created_at < ?", [liveCutoff])),
+    doneJobs: await prune(() => deleteInBatches(db, "jobs", "status = 'done' and updated_at < ?", [doneJobCutoff])),
+    parkedOnDemandJobs: await prune(() => deleteInBatches(
       db,
       "jobs",
       `status = 'deferred_pressure'
          and updated_at < ?
          and type in (${PARKED_ON_DEMAND_JOB_TYPES.map(() => "?").join(", ")})`,
       [parkedOnDemandCutoff, ...PARKED_ON_DEMAND_JOB_TYPES],
-    ),
-    apiCalls: await deleteInBatches(db, "api_call_log", "started_at < ?", [apiCutoff]),
-    replayVideoJobs: await deleteInBatches(db, "replay_video_exports", "status in ('done', 'failed', 'cancelled') and updated_at < ?", [replayVideoCutoff]),
-    rankSnapshots: await deleteInBatches(db, "country_rank_snapshots", "captured_at < ?", [rankSnapshotCutoff]),
+    )),
+    apiCalls: await prune(() => deleteInBatches(db, "api_call_log", "started_at < ?", [apiCutoff])),
+    replayVideoJobs: await prune(() => deleteInBatches(db, "replay_video_exports", "status in ('done', 'failed', 'cancelled') and updated_at < ?", [replayVideoCutoff])),
+    rankSnapshots: await prune(() => deleteInBatches(db, "country_rank_snapshots", "captured_at < ?", [rankSnapshotCutoff])),
     // With a window set, activity rolls off by calendar year, but the day alone
     // cannot decide it: a manual score submission puts a years-old play into
     // the pipeline today, and pruning on `day` alone deleted its heatmap row
@@ -96,37 +112,37 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     // inside it - so an old play someone just added stays until the window
     // rolls past the day it was added. Both predicates still scan the `day`
     // index first, so the sweep costs what it did.
-    activityScoreRefs: activityCutoffDay == null ? 0 : await deleteInBatches(db, "player_activity_score_refs", "day < ? and created_at < ?", [activityCutoffDay, activityCutoffDay]),
-    activityMaps: activityCutoffDay == null ? 0 : await deleteInBatches(db, "player_activity_maps", "day < ? and updated_at < ?", [activityCutoffDay, activityCutoffDay]),
-    activityDays: activityCutoffDay == null ? 0 : await deleteInBatches(db, "player_activity_days", "day < ? and updated_at < ?", [activityCutoffDay, activityCutoffDay]),
+    activityScoreRefs: activityCutoffDay == null ? 0 : await prune(() => deleteInBatches(db, "player_activity_score_refs", "day < ? and created_at < ?", [activityCutoffDay, activityCutoffDay])),
+    activityMaps: activityCutoffDay == null ? 0 : await prune(() => deleteInBatches(db, "player_activity_maps", "day < ? and updated_at < ?", [activityCutoffDay, activityCutoffDay])),
+    activityDays: activityCutoffDay == null ? 0 : await prune(() => deleteInBatches(db, "player_activity_days", "day < ? and updated_at < ?", [activityCutoffDay, activityCutoffDay])),
     // Discord "last map in channel" memory is only useful while fresh, so 30d is
     // plenty; stale rows just mean /pb asks the user to run /recent again.
-    discordChannelContext: await deleteInBatches(db, "discord_channel_map_context", "updated_at < ?", [daysAgo(30)]),
+    discordChannelContext: await prune(() => deleteInBatches(db, "discord_channel_map_context", "updated_at < ?", [daysAgo(30)])),
     // Resolved farm-helper feedback marks are spent evidence (the play that
     // retired them drives recs now); active (unresolved) marks are the
     // player's standing preferences and are never pruned.
-    farmHelperFeedbackResolved: await deleteInBatches(db, "farm_helper_feedback", "resolved_at is not null and resolved_at < ?", [resolvedFeedbackCutoffMs]),
-    packPullEvents: await deleteInBatches(db, "pack_pull_events", "notable = 0 and pulled_at < ?", [packPullCutoffMs]),
-    packPullEventsNotable: await deleteInBatches(db, "pack_pull_events", "notable = 1 and pulled_at < ?", [packPullNotableCutoffMs]),
+    farmHelperFeedbackResolved: await prune(() => deleteInBatches(db, "farm_helper_feedback", "resolved_at is not null and resolved_at < ?", [resolvedFeedbackCutoffMs])),
+    packPullEvents: await prune(() => deleteInBatches(db, "pack_pull_events", "notable = 0 and pulled_at < ?", [packPullCutoffMs])),
+    packPullEventsNotable: await prune(() => deleteInBatches(db, "pack_pull_events", "notable = 1 and pulled_at < ?", [packPullNotableCutoffMs])),
     streakRunsSwept,
-    streakRuns: await deleteInBatches(db, "pack_streak_runs", "status = 'ended' and updated_at < ?", [streakRunCutoffMs]),
+    streakRuns: await prune(() => deleteInBatches(db, "pack_streak_runs", "status = 'ended' and updated_at < ?", [streakRunCutoffMs])),
     // A /communities submission nobody ever reviewed. Approved, rejected and
     // hidden listings are durable: rejected rows are the record of a decision,
     // and their owner can edit one back into the queue.
-    communitiesPending: await deleteInBatches(db, "discord_communities", "status = 'pending' and created_at < ?", [daysAgo(COMMUNITY_PENDING_RETENTION_DAYS)]),
+    communitiesPending: await prune(() => deleteInBatches(db, "discord_communities", "status = 'pending' and created_at < ?", [daysAgo(COMMUNITY_PENDING_RETENTION_DAYS)])),
     // A report whose listing is gone. Deleting a listing takes its reports with
     // it; this is for the rows the sweep above leaves behind, which is the only
     // path that removes a listing without going through deleteCommunity.
-    communityReportsOrphaned: await deleteInBatches(
+    communityReportsOrphaned: await prune(() => deleteInBatches(
       db,
       "discord_community_reports",
       "community_id not in (select id from discord_communities)",
-    ),
+    )),
     // Slow self-healing refresh: a pruned accent recomputes the next time the
     // avatar shows up in a payload. Also bounds churn from avatar changes.
-    avatarAccents: await pruneAvatarAccents(db),
+    avatarAccents: await prune(() => pruneAvatarAccents(db)),
     // osu! proxy response cache rows past their stale window.
-    osuProxyCache: await pruneOsuProxyCache(db),
+    osuProxyCache: await prune(() => pruneOsuProxyCache(db)),
   };
   const storageBefore = await getLocalDbStorage(config);
   const emergency = storageBefore.overLimit ? await pruneForLocalDbLimit(db, config, storageBefore) : {};

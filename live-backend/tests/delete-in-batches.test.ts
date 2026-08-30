@@ -28,6 +28,22 @@ async function seedChannelContexts(count: number, updatedAt: string): Promise<vo
 }
 
 describe("deleteInBatches", () => {
+  it("keeps the high-volume hourly retention predicates on range indexes", async () => {
+    const scorePlan = (await exec(
+      db,
+      "explain query plan select rowid from score_events where received_at < ? limit 5000",
+      ["2025-01-01T00:00:00.000Z"],
+    )).rows.map((row) => String(row.detail)).join("\n");
+    const doneJobPlan = (await exec(
+      db,
+      "explain query plan select rowid from jobs where status = 'done' and updated_at < ? limit 5000",
+      ["2025-01-01T00:00:00.000Z"],
+    )).rows.map((row) => String(row.detail)).join("\n");
+
+    expect(scorePlan).toContain("idx_score_events_received_at");
+    expect(doneJobPlan).toContain("idx_jobs_status_updated_at");
+  });
+
   it("deletes across multiple batches and reports the full count", async () => {
     await seedChannelContexts(12, "2020-01-01T00:00:00.000Z");
     await seedChannelContexts(3, "2030-01-01T00:00:00.000Z");

@@ -29,8 +29,9 @@ export type ChartPreviewDifficulty = {
 
 // Rate variants label themselves in the difficulty name: "1.1x", "x1.2",
 // "[1,05x Rate]". Comma decimals are common from non-English mappers, so both
-// separators are accepted and normalised before parsing.
-const RATE_IN_VERSION = /(^|[^\da-z])(?:x\s*)?([01](?:[.,]\d{1,3})|2(?:[.,]0{1,3})?)(?:\s*[x×])?(?=$|[^\d])/gi;
+// separators are accepted and normalised before parsing. A bare number glued to
+// letters is part of the name, not a rate: "2mnd" is the second dan course.
+const RATE_IN_VERSION = /(^|[^\da-z])(?:x\s*)?([01](?:[.,]\d{1,3})|2(?:[.,]0{1,3})?)(?:\s*[x×]|(?=$|[^\da-z]))(?=$|[^\d])/gi;
 
 export function parseDifficultyRate(version: string): number {
   const matches = [...version.matchAll(RATE_IN_VERSION)];
@@ -55,7 +56,7 @@ function stripRateVariantDecorations(version: string): string {
     .toLowerCase()
     .replace(/\[[^\]]*?\b\d+k\b[^\]]*?\]/gi, " ")
     .replace(/\b\d+k\b/gi, " ")
-    .replace(/(^|[^\da-z])x?\s*(?:[01](?:[.,]\d{1,3})|2(?:[.,]0{1,3})?)\s*[x×]?(?=$|[^\d])/gi, "$1 ")
+    .replace(/(^|[^\da-z])x?\s*(?:[01](?:[.,]\d{1,3})|2(?:[.,]0{1,3})?)(?:\s*[x×]|(?=$|[^\da-z]))(?=$|[^\d])/gi, "$1 ")
     .replace(/\b\d{2,3}\s*bpm\b/gi, " ")
     .replace(/\brate\b/gi, " ")
     .trim();

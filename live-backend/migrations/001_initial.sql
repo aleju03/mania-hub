@@ -573,6 +573,10 @@ create index if not exists idx_country_registry_status_request on country_regist
 create index if not exists idx_score_events_user_time on score_events(user_id, ended_at desc);
 create index if not exists idx_score_events_beatmap_time on score_events(beatmap_id, ended_at desc);
 create index if not exists idx_score_events_passed_time on score_events(ended_at desc) where passed = 1;
+-- Retention prunes by received_at. Without this index the DELETE's rowid
+-- subquery scans the entire raw-event window while already holding SQLite's
+-- single write lock, even when fewer than one batch of rows has expired.
+create index if not exists idx_score_events_received_at on score_events(received_at);
 create index if not exists idx_country_beatmap_scores_rank on country_beatmap_scores(country, beatmap_id, lane_key, total_score desc);
 create index if not exists idx_country_beatmap_score_pbs_lookup on country_beatmap_score_pbs(country, beatmap_id, lane_key, user_id, ended_at desc, total_score desc);
 create index if not exists idx_country_beatmap_score_pb_state_lookup on country_beatmap_score_pb_state(country, beatmap_id, lane_key, user_id);
@@ -632,6 +636,10 @@ create index if not exists idx_jobs_ready on jobs(status, run_after, priority de
 -- lane on every enqueue -- including enqueues on the serving process's small-cache
 -- write connection, where idx_jobs_ready alone left a rowid lookup per candidate.
 create index if not exists idx_jobs_status_type on jobs(status, type, run_after);
+-- The hourly done-job sweep is a status equality plus an updated_at range.
+-- Neither queue index covers both, so the DELETE otherwise walks every done
+-- job while holding the write lock before it can find the expired tail.
+create index if not exists idx_jobs_status_updated_at on jobs(status, updated_at);
 create index if not exists idx_live_event_country_sequence on live_event_log(country, sequence);
 -- Retention prunes this table by created_at, and no index covered that predicate:
 -- the hourly pass full-scanned all ~2.2M rows to find the ~2.3k it deletes, and

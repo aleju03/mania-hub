@@ -333,6 +333,24 @@ describe("rate variant parsing", () => {
     expect(parseSelectedDifficultyRate(beatmaps[0], beatmaps)).toBe(1);
   });
 
+  it("keeps a number that is part of the name out of the rate", () => {
+    expect(parseDifficultyRate("[4K] 2mnd")).toBe(1);
+    expect(parseDifficultyRate("[4K] 2nd")).toBe(1);
+    expect(parseDifficultyRate("[4K] 1st Dan")).toBe(1);
+  });
+
+  it("treats the named base of a rate-edit set as the 1.0x difficulty", () => {
+    const beatmaps = [
+      difficulty("[4K] 0.95", 191),
+      difficulty("[4K] 2mnd", 182),
+      difficulty("[4K] 1.05", 173),
+      difficulty("[4K] 1.1", 165),
+      difficulty("[4K] 1.25", 146),
+    ];
+    expect(parseSelectedDifficultyRate(beatmaps[1], beatmaps)).toBe(1);
+    expect(getSetPreviewReferenceBeatmap(beatmaps)?.version).toBe("[4K] 2mnd");
+  });
+
   it("points the reference beatmap at the unscaled difficulty", () => {
     const beatmaps = [difficulty("[4K] Macabre 1.2x", 100), difficulty("[4K] Macabre", 120)];
     expect(getSetPreviewReferenceBeatmap(beatmaps)?.version).toBe("[4K] Macabre");
