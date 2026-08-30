@@ -226,6 +226,30 @@ describe("loadDanCourseClears", () => {
     expect(clears[0].level).toBe("gamma");
   });
 
+  it("grades a fresh play whose payload carries osu!'s placeholder rank", async () => {
+    // A run on an unranked map comes back from /scores/recent with accuracy 0,
+    // total_score 0 and rank "D" beside intact judgement counts.
+    const db = await makeDb();
+    await exec(
+      db,
+      `insert into score_events
+         (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+       values (901, 'official:901', 47, 'CR', ?, 3, json(?), 1, 1, 0, 0, '2026-08-25T00:00:00Z', '2026-08-25T00:00:00Z', 'osu_recent')`,
+      [
+        GAMMA,
+        json({
+          id: 901, user_id: 47, beatmap_id: GAMMA, accuracy: 0, mods: [], passed: true,
+          rank: "D", total_score: 0, legacy_total_score: 840256, legacy_score_id: 0,
+          max_combo: 807, pp: null, type: "solo_score",
+          statistics: { great: 982, ok: 18 }, ended_at: "2026-08-25T00:00:00Z",
+        }),
+      ],
+    );
+    const clears = await loadPlayerDanCourseClears(db, 47);
+    expect(clears).toHaveLength(1);
+    expect(clears[0].play.rank).toBe("S");
+  });
+
   it("finds nothing for a player with no course passes", async () => {
     const db = await makeDb();
     expect(await loadPlayerDanCourseClears(db, 46)).toEqual([]);

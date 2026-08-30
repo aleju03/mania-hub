@@ -5,7 +5,7 @@ import { danCreditOffset } from "../dan/dan-credit.js";
 import type { DanCreditAnchors } from "../dan/dan-credit.js";
 import { danLevelForLabel } from "../dan/dan-estimator/labels.js";
 import { LN_LADDER_TOP } from "../dan/dan-estimator/ln.js";
-import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getDisplayedTotalScore, isLazerScore, scoreHasReplay } from "../shared/score.js";
+import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, isLazerScore, scoreHasReplay } from "../shared/score.js";
 import type { OscScore, OsuMod } from "../shared/types.js";
 
 // The real dan courses, by beatmap id.
@@ -474,7 +474,12 @@ export async function loadDanCourseClears(db: Db, userId: number, options: DanCo
         statistics: score.statistics ?? null,
         maxCombo: score.max_combo == null ? null : Number(score.max_combo),
         totalScore: getDisplayedTotalScore(score),
-        rank: score.rank == null ? null : String(score.rank),
+        /* Not score.rank: osu! answers /scores/recent for a play on an
+           unranked map with accuracy 0, total_score 0 and rank "D", so the
+           payload's own grade is a placeholder rather than the grade the
+           player earned. getDisplayedRank grades the judgement counts, the
+           same way the day-best row's best_rank was written. */
+        rank: getDisplayedRank(score),
         playedAt: score.ended_at == null ? null : String(score.ended_at),
         hasReplay: scoreHasReplay(score),
         isLazer: isLazerScore(score),

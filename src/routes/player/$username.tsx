@@ -77,7 +77,7 @@ import { AddScoreModal } from "../../components/player/AddScoreModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpCumulativeDistribution, buildPpDistribution, calculateUserProfileInsights, KEY_PP_LIST_LIMIT } from "../../lib/profile-insights";
-import { buildTrackedPlayScore } from "../../lib/tracked-play-score";
+import { buildTrackedPlayScore, getTrackedPlayRank } from "../../lib/tracked-play-score";
 import {
   playedWithinOnlineWindow,
   readPlayerRecentPlay,
@@ -3709,6 +3709,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
             soloScoreId: course.soloScoreId,
             totalScore: course.totalScore,
             legacyScoreId: course.legacyScoreId,
+            isLazer: course.isLazer,
             statistics: course.statistics,
             creator: null,
             stars: null,
@@ -5975,7 +5976,7 @@ function TrackedScoreRow({
         <span className="block text-[24px] leading-none">{position}</span>
       </div>
       <div className="pointer-events-none relative z-10 flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-        <GradeImg grade={play.rank ?? "D"} size={28} />
+        <GradeImg grade={getTrackedPlayRank(play)} size={28} />
         {coverUrl ? (
           <img src={coverUrl} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" loading="lazy" />
         ) : (

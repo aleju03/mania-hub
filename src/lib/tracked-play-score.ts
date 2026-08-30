@@ -1,4 +1,4 @@
-import { getScoreSpeedBucket } from "./score";
+import { getManiaAccuracyFromCounts, getManiaGradeFromAccuracy, getScoreSpeedBucket } from "./score";
 import type { LiveKeymodePpPlay } from "./live-backend";
 import type { OsuScore } from "./types";
 
@@ -22,6 +22,22 @@ export interface TrackedPlayViewer {
  * Stars and BPM are the map's at 1.0x, so a rate-modded play drops them: they
  * would describe a chart nobody played.
  */
+/**
+ * The grade the row kept, or the one its accuracy earns.
+ *
+ * Rows written before the grade column existed (and dan-course runs read out
+ * of the archive) carry no grade, and every mania grade is a function of
+ * accuracy, so it is derived rather than defaulted - a 96% run reading as a D
+ * is worse than no grade at all. The play's own accuracy is preferred because
+ * it is the number the card shows next to the grade.
+ */
+export function getTrackedPlayRank(play: LiveKeymodePpPlay): string {
+  if (play.rank) return play.rank;
+  const accuracy = play.accuracy
+    ?? (play.statistics ? getManiaAccuracyFromCounts(play.statistics, play.isLazer ?? play.legacyScoreId == null) : 0);
+  return getManiaGradeFromAccuracy(accuracy, play.mods) ?? "D";
+}
+
 export function buildTrackedPlayScore(play: LiveKeymodePpPlay, viewer: TrackedPlayViewer): OsuScore {
   const rateModded = getScoreSpeedBucket(play.mods) !== "normal";
   const playedAt = play.playedAt ?? undefined;
@@ -31,6 +47,11 @@ export function buildTrackedPlayScore(play: LiveKeymodePpPlay, viewer: TrackedPl
     // that play as stable rather than lazer.
     id: play.soloScoreId ?? 0,
     legacy_score_id: play.legacyScoreId,
+    /* The stable tell the ids cannot give: osu! answers a stable run on an
+       unranked map with legacy_score_id 0, which arrives here as null and
+       would read as lazer. A stable play's displayed total IS its legacy
+       total, so saying so is what marks the client. */
+    legacy_total_score: play.isLazer === false ? play.totalScore ?? undefined : undefined,
     type: "solo_score",
     user_id: viewer.id,
     user: viewer,
@@ -42,7 +63,7 @@ export function buildTrackedPlayScore(play: LiveKeymodePpPlay, viewer: TrackedPl
     max_combo: play.maxCombo ?? 0,
     total_score: play.totalScore ?? undefined,
     passed: true,
-    rank: play.rank ?? "D",
+    rank: getTrackedPlayRank(play),
     statistics: play.statistics ?? {},
     pp: play.pp,
     has_replay: play.hasReplay === true,

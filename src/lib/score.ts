@@ -365,6 +365,36 @@ function getPreferredAccuracy(score: ScoreLike, isLazer: boolean): number {
   return score.accuracy;
 }
 
+/**
+ * The grade osu!mania gives an accuracy. Stable and lazer share these
+ * thresholds and differ only in how they compute accuracy, so the caller
+ * passes the number that client displayed. Null when there is no usable
+ * accuracy to grade, which is not the same as a bottom grade.
+ */
+export function getManiaGradeFromAccuracy(accuracy: number, mods?: OsuMod[] | string[]): string | null {
+  if (!Number.isFinite(accuracy) || accuracy <= 0) {
+    return null;
+  }
+
+  const silverGrade = getModAcronyms(mods as OsuMod[] | undefined).some((mod) => mod === "HD" || mod === "FI" || mod === "FL");
+  if (accuracy >= 1) {
+    return silverGrade ? "XH" : "X";
+  }
+  if (accuracy > 0.95) {
+    return silverGrade ? "SH" : "S";
+  }
+  if (accuracy > 0.9) {
+    return "A";
+  }
+  if (accuracy > 0.8) {
+    return "B";
+  }
+  if (accuracy > 0.7) {
+    return "C";
+  }
+  return "D";
+}
+
 function deriveStableManiaRank(score: ScoreLike): string | null {
   const mode = score.beatmap?.mode ?? "mania";
   if (mode !== "mania") {
@@ -375,28 +405,7 @@ function deriveStableManiaRank(score: ScoreLike): string | null {
     return "F";
   }
 
-  const stableAccuracy = calculateStableAccuracy(score.statistics);
-  if (!Number.isFinite(stableAccuracy) || stableAccuracy <= 0) {
-    return null;
-  }
-
-  const silverGrade = getModAcronyms(score.mods).some((mod) => mod === "HD" || mod === "FI" || mod === "FL");
-  if (stableAccuracy >= 1) {
-    return silverGrade ? "XH" : "X";
-  }
-  if (stableAccuracy > 0.95) {
-    return silverGrade ? "SH" : "S";
-  }
-  if (stableAccuracy > 0.9) {
-    return "A";
-  }
-  if (stableAccuracy > 0.8) {
-    return "B";
-  }
-  if (stableAccuracy > 0.7) {
-    return "C";
-  }
-  return "D";
+  return getManiaGradeFromAccuracy(calculateStableAccuracy(score.statistics), score.mods);
 }
 
 function getPreferredRank(score: ScoreLike, isLazer: boolean): string {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTrackedPlayScore } from "./tracked-play-score";
+import { buildTrackedPlayScore, getTrackedPlayRank } from "./tracked-play-score";
 import { getManiaJudgementCounts, getScoreUrl, isLazerScore } from "./score";
 import type { LiveKeymodePpPlay } from "./live-backend";
 
@@ -31,7 +31,38 @@ function play(overrides: Partial<LiveKeymodePpPlay> = {}): LiveKeymodePpPlay {
   };
 }
 
+describe("getTrackedPlayRank", () => {
+  it("keeps the grade the row stored", () => {
+    expect(getTrackedPlayRank(play({ rank: "S" }))).toBe("S");
+  });
+
+  it("grades a row that stored none from its accuracy", () => {
+    expect(getTrackedPlayRank(play({ rank: null, accuracy: 0.9677 }))).toBe("S");
+    expect(getTrackedPlayRank(play({ rank: null, accuracy: 0.9677, mods: ["FI"] }))).toBe("SH");
+    expect(getTrackedPlayRank(play({ rank: null, accuracy: 0.9411 }))).toBe("A");
+  });
+
+  it("falls back to the judgement counts when the row kept no accuracy either", () => {
+    expect(getTrackedPlayRank(play({ rank: null, accuracy: null }))).toBe("A");
+  });
+
+  it("still answers with a grade when the row kept nothing to grade", () => {
+    expect(getTrackedPlayRank(play({ rank: null, accuracy: null, statistics: null }))).toBe("D");
+  });
+});
+
 describe("buildTrackedPlayScore", () => {
+  it("reads a stable run with no legacy id as stable, not lazer", () => {
+    // osu! answers a stable run on an unranked map with legacy_score_id 0,
+    // which the row stores as no legacy id at all.
+    const score = buildTrackedPlayScore(play({ isLazer: false, legacyScoreId: null, totalScore: 840_256 }), viewer);
+    expect(isLazerScore(score)).toBe(false);
+  });
+
+  it("leaves a row that names no client to its ids", () => {
+    expect(isLazerScore(buildTrackedPlayScore(play({ isLazer: null }), viewer))).toBe(true);
+  });
+
   it("carries the play's own numbers onto the details card", () => {
     const score = buildTrackedPlayScore(play(), viewer);
 
