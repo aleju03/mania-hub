@@ -611,6 +611,16 @@ function trapezoidAverage(times: number[], values: number[]): number {
   return duration > 0 ? integral / duration : 0;
 }
 
+function bitCount(value: number): number {
+  let count = 0;
+  let bits = value;
+  while (bits) {
+    bits &= bits - 1;
+    count += 1;
+  }
+  return count;
+}
+
 function countInWindow(times: number[], windowMs: number): number {
   let best = 0;
   let start = 0;
@@ -652,6 +662,10 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
   let previousChordSize = 0;
   let chordPairCount = 0;
   let chordPairOverlapCount = 0;
+  let rowMaskTwoBack: number | null = null;
+  let twoBackRowTime: number | null = null;
+  let adjacentColumnRehitNotes = 0;
+  let twoBackColumnRehitNotes = 0;
 
   for (const [time, rowNotes] of orderedRows) {
     const columns = rowNotes.map((note) => note.column).sort((a, b) => a - b);
@@ -668,6 +682,16 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
       chordPairCount += 1;
       if ((rowMask & previousRowMask) !== 0) chordPairOverlapCount += 1;
     }
+    // Also features.ts semantics: note-weighted column re-hits one and two
+    // rows back, inside a 500ms neighbourhood.
+    if (previousRowTime != null && time - previousRowTime <= 500) {
+      adjacentColumnRehitNotes += bitCount(rowMask & previousRowMask);
+    }
+    if (rowMaskTwoBack != null && twoBackRowTime != null && time - twoBackRowTime <= 500) {
+      twoBackColumnRehitNotes += bitCount(rowMask & rowMaskTwoBack);
+    }
+    rowMaskTwoBack = previousRowTime != null ? previousRowMask : null;
+    twoBackRowTime = previousRowTime;
     previousRowMask = rowMask;
     previousChordSize = columns.length;
     previousRowTime = time;
@@ -700,9 +724,13 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
   const streamPressure = quantile(streamValues, 0.9);
   const jumpstreamPressure = quantile(jumpstreamValues, 0.9);
 
+  const adjacentColumnRehitShare = notes.length ? adjacentColumnRehitNotes / notes.length : 0;
+  const twoBackColumnRehitShare = notes.length ? twoBackColumnRehitNotes / notes.length : 0;
+
   return {
     keyCount: map.keyCount,
     noteCount: notes.length,
+    durationMs,
     holdRatio,
     chordRatio,
     twoNoteChordRatio,
@@ -722,6 +750,9 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
     jumpstreamPressure,
     chordjackPressure: jackPressure * (0.28 + chordRatio * 1.35),
     chordColumnOverlapRatio: chordPairCount > 0 ? chordPairOverlapCount / chordPairCount : 0,
+    adjacentColumnRehitShare,
+    twoBackColumnRehitShare,
+    twoBackColumnRehitExcess: twoBackColumnRehitShare - adjacentColumnRehitShare,
     techPressure: 0,
     rowBurstPressure: 0,
     fastRowRatio: 0,

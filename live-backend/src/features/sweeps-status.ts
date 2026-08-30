@@ -22,6 +22,8 @@ import {
 } from "./top-scores-backfill.js";
 import { SKILL_BASELINE_CURVES_META_KEY, SKILL_BASELINE_JOB } from "./skill-baseline.js";
 import {
+  JACK_DEMAND_RECOMPUTE_JOB,
+  JACK_DEMAND_RECOMPUTE_META_KEY,
   OSU_FILE_REPAIR_JOB,
   OSU_FILE_REPAIR_META_KEY,
   OSU_FILE_REPAIR_PROGRESS_META_KEY,
@@ -423,6 +425,13 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     description: "Re-derives chordjack pattern tags on stored chart analyses.",
     doneKey: "chordjack_tag_recompute_done:v1",
     jobType: "recompute_chordjack_tag_sweep",
+  }),
+  chartAnalysisSweep({
+    id: "jack-demand-recompute",
+    label: "4K Jack-demand recompute sweep",
+    description: "Backfills the structural quadstream, minijack and jack-marathon flag that routes community-Jack clears out of the 4K Tech dan bucket.",
+    doneKey: JACK_DEMAND_RECOMPUTE_META_KEY,
+    jobType: JACK_DEMAND_RECOMPUTE_JOB,
   }),
   chartAnalysisSweep({
     id: "bracket-tag-recompute",

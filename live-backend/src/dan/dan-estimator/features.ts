@@ -173,8 +173,11 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   let alternatingRowPatterns = 0;
   let chordPairCount = 0;
   let chordPairOverlapCount = 0;
+  let adjacentColumnRehitNotes = 0;
+  let twoBackColumnRehitNotes = 0;
   let rowPatternChangeSum = 0;
   const rowMasks: number[] = [];
+  const rowTimes: number[] = [];
   const rowSignatures: number[] = [];
   const rowMaskBase = Math.max(32, 2 ** Math.max(1, map.keyCount) + 1);
   const rowSignatureBase = rowMaskBase * 256;
@@ -211,9 +214,16 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
     }
 
     rowMasks.push(rowMask);
+    rowTimes.push(time);
     if (previousRowMask != null) {
+      if (previousRowTime != null && time - previousRowTime <= 500) {
+        adjacentColumnRehitNotes += bitCount(rowMask & previousRowMask);
+      }
       if (rowMask === previousRowMask) repeatedRowPatterns++;
       rowPatternChangeSum += bitCount(rowMask ^ previousRowMask) / Math.max(1, map.keyCount);
+    }
+    if (rowMaskTwoBack != null && rowTimes.length >= 3 && time - rowTimes[rowTimes.length - 3] <= 500) {
+      twoBackColumnRehitNotes += bitCount(rowMask & rowMaskTwoBack);
     }
     if (rowMaskTwoBack != null && rowMask === rowMaskTwoBack) alternatingRowPatterns++;
     rowMaskTwoBack = previousRowMask;
@@ -353,6 +363,9 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   const directionChangeRate = notes.length ? directionChanges / notes.length : 0;
   const chordjackPressure = jackPressure * (0.28 + chordRatio * 1.35) + burstDensity * chordRatio * 0.6;
   const chordColumnOverlapRatio = chordPairCount ? chordPairOverlapCount / chordPairCount : 0;
+  const adjacentColumnRehitShare = notes.length ? adjacentColumnRehitNotes / notes.length : 0;
+  const twoBackColumnRehitShare = notes.length ? twoBackColumnRehitNotes / notes.length : 0;
+  const twoBackColumnRehitExcess = twoBackColumnRehitShare - adjacentColumnRehitShare;
   const techPressure = orderedRows.length
     ? (directionChanges / orderedRows.length) * 4.4 + (chordSizeChanges / orderedRows.length) * 3.5 + chordRatio * 1.6 + average(rowDensities) * 0.018
     : 0;
@@ -366,6 +379,7 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
     metrics: {
       keyCount: map.keyCount,
       noteCount: notes.length,
+      durationMs,
       holdRatio,
       chordRatio,
       twoNoteChordRatio,
@@ -385,6 +399,9 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       jumpstreamPressure,
       chordjackPressure,
       chordColumnOverlapRatio,
+      adjacentColumnRehitShare,
+      twoBackColumnRehitShare,
+      twoBackColumnRehitExcess,
       techPressure,
       rowBurstPressure,
       fastRowRatio,

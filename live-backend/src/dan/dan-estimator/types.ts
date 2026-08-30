@@ -33,6 +33,7 @@ export interface DanEstimate {
 export interface DanFeatureMetrics {
   keyCount: number;
   noteCount: number;
+  durationMs: number;
   holdRatio: number;
   chordRatio: number;
   twoNoteChordRatio: number;
@@ -56,6 +57,13 @@ export interface DanFeatureMetrics {
   // bracket/jumpstream files sit ~0.1 here at the same chord density where
   // true chordjack sits 0.7+.
   chordColumnOverlapRatio: number;
+  // Note-weighted column re-hits on adjacent rows and two rows apart, capped
+  // to a 500ms neighbourhood. Their difference is the alternating reload
+  // strain behind 4K quadstream/minijack charts: the same fingers return on
+  // A-B-A shapes even when neither adjacent row is a conventional jack.
+  adjacentColumnRehitShare: number;
+  twoBackColumnRehitShare: number;
+  twoBackColumnRehitExcess: number;
   techPressure: number;
   rowBurstPressure: number;
   fastRowRatio: number;

@@ -10,7 +10,7 @@ import {
   recomputePlayerSkillDanChunk,
   runPlayerSkillDanSweepJob,
 } from "../src/features/player-skills.js";
-import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY } from "../src/features/chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_DEMAND_RECOMPUTE_META_KEY, SUNNY_REPIN_DT_META_KEY } from "../src/features/chart-analysis.js";
 import { JobQueue } from "../src/jobs/queue.js";
 
 let dir = "";
@@ -25,6 +25,15 @@ async function makeDb(): Promise<Db> {
   const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
   await migrate(db);
   return db;
+}
+
+/** The fold reads classification_json.jackDemand, so its seeder waits on this. */
+async function markJackDemandSwept(db: Db): Promise<void> {
+  await exec(
+    db,
+    "insert or replace into live_meta (key, value_json, updated_at) values (?, json(?), ?)",
+    [JACK_DEMAND_RECOMPUTE_META_KEY, json({ finishedAt: "2026-08-19T00:00:00.000Z" }), "2026-08-19T00:00:00.000Z"],
+  );
 }
 
 async function seedChart(
@@ -102,7 +111,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     for (const beatmapId of beatmapIds) await seedLnChart(db, beatmapId, 10);
     const rc = { rawDan: 8.25, label: "beta+", clears: 9 };
     const staleLn = { rawDan: 4, label: "4", clears: 4 };
-    const sevenKeyDan = { rc: { rawDan: 6, label: "6", clears: 4 }, ln: null };
+    const sevenKeyDan = { rc: { rawDan: 6, label: "6", clears: 4 }, ln: null as typeof rc | null };
     await exec(
       db,
       `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
@@ -330,29 +339,28 @@ describe("recomputePlayerSkillDanChunk", () => {
     for (const userId of [21, 22, 23]) await seedRow(db, userId, [301, 302, 303, 304]);
 
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v17'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v18'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.
+    await markJackDemandSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const jobs = (await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
     expect(Number(jobs.c)).toBe(0);
     db.close();
   });
 
-  it("does not let an older marker suppress a later correction", async () => {
+  it("waits for the chart-side jack-demand sweep before folding", async () => {
     const db = await makeDb();
     const queue = new JobQueue(db);
-    await exec(
-      db,
-      "insert into live_meta (key, value_json, updated_at) values ('player_skill_dan_sweep_done:v16', '{}', ?)",
-      ["2026-08-29T00:00:00.000Z"],
-    );
 
+    // Folding first would bake a half-patched corpus into the done key.
     await ensurePlayerSkillDanSweepSeeded(db, queue);
-    const jobs = (await exec(db, "select payload_json from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows;
-    expect(jobs).toHaveLength(1);
-    expect(parseJson<{ scope?: string }>(String(jobs[0].payload_json), {}).scope).toBe("4k-ln");
+    expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(0);
+
+    await markJackDemandSwept(db);
+    await ensurePlayerSkillDanSweepSeeded(db, queue);
+    expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(1);
     db.close();
   });
 
@@ -360,6 +368,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     const db = await makeDb();
     const queue = new JobQueue(db);
 
+    await markJackDemandSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const jobs = (await exec(db, "select payload_json from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows;
     expect(jobs).toHaveLength(1);
@@ -383,6 +392,7 @@ describe("recomputePlayerSkillDanChunk", () => {
       [HT_RATE_ANALYSIS_META_KEY, json({ finishedAt: "2026-08-26T00:00:30.000Z" }), "2026-08-26T00:00:30.000Z"]);
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0, startedAt });
 
+    await markJackDemandSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const queued = (await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
     expect(Number(queued.c)).toBe(1);
@@ -423,6 +433,7 @@ describe("recomputePlayerSkillDanChunk", () => {
       [HT_RATE_ANALYSIS_META_KEY, json({ finishedAt: "2026-08-26T00:00:00.000Z" }), "2026-08-26T00:00:00.000Z"]);
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0, startedAt: "2026-08-26T00:00:30.000Z" });
 
+    await markJackDemandSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const queued = (await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
     expect(Number(queued.c)).toBe(0);

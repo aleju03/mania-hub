@@ -6,6 +6,7 @@ import type { DanFeatureMetrics } from "../src/dan/dan-estimator/types.js";
 const vertexBetaMidChordProfile: DanFeatureMetrics = {
   keyCount: 4,
   noteCount: 2438,
+  durationMs: 252200,
   holdRatio: 0.0094,
   chordRatio: 0.6269,
   twoNoteChordRatio: 0.21,
@@ -25,6 +26,9 @@ const vertexBetaMidChordProfile: DanFeatureMetrics = {
   jumpstreamPressure: 18,
   chordjackPressure: 171.727,
   chordColumnOverlapRatio: 0.52,
+  adjacentColumnRehitShare: 0.24,
+  twoBackColumnRehitShare: 0.38,
+  twoBackColumnRehitExcess: 0.14,
   techPressure: 9.012,
   rowBurstPressure: 12.5,
   fastRowRatio: 0.17,

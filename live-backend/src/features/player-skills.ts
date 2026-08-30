@@ -5,7 +5,7 @@ import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, compute
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
-import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_TAG_META_KEY, LN7_PRIMARY_REPIN_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_DEMAND_RECOMPUTE_META_KEY, JACK_TAG_META_KEY, LN7_PRIMARY_REPIN_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { MAX_RATE_PERCENT, MIN_RATE_PERCENT, computeAndStoreRateDanVerdictFromText, enqueueRateDanEstimate, loadStoredRateDanVerdicts, rateDanVerdictKey } from "./dan-estimates.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -965,6 +965,8 @@ function aggregateModePatternRatings(plays: StoredPlaySsr[]): PlayerSkillPattern
 // lookup always ran.
 export interface ChartSkillInfo {
   patterns: string[];
+  /** Structurally detected 4K quadstream/minijack/jack-marathon demand. */
+  jackDemand?: boolean;
   // Share of LeoBlack cluster importance (amount x difficulty) on jack and on
   // stream clusters. Null when the chart carries no clusters. See clusterShare.
   jackShare: number | null;
@@ -1020,6 +1022,7 @@ interface LeanClassificationJson {
   rc?: LeanHalfJson | null;
   ln?: LeanHalfJson | null;
   patterns?: Array<{ id?: unknown; score?: unknown }>;
+  jackDemand?: { detected?: unknown } | null;
   clusters?: Array<{ pattern?: unknown; importance?: unknown }>;
   clusterCategory?: unknown;
 }
@@ -1249,6 +1252,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       const htRawDan = readRawDan(danHt ?? undefined);
       info.set(Number(row.beatmap_id), {
         patterns: patternIds,
+        jackDemand: parsed?.jackDemand?.detected === true,
         jackShare,
         streamShare: clusterShare(parsed, STREAM_CLUSTERS),
         techCategory: typeof parsed?.clusterCategory === "string"
@@ -2816,6 +2820,21 @@ interface DanSkillsetBucket {
  * out of its argmax tile rather than adding it, so the four buckets stay
  * disjoint and their clear counts still sum to the side's total.
  *
+ * A second 4K jack correction runs ahead of the tag override and reads the
+ * chart itself rather than the MSD argmax: jack-demand.ts (stored as
+ * classification_json.jackDemand) files a clear under Jack when the notes show
+ * dense alternating chords that reload the same fingers two rows later, when
+ * LeoBlack reads the chart's importance as jack clusters (outright, or a
+ * quarter of it with the chordjack detector and jack pressure corroborating),
+ * or on a long high-pressure jack marathon. MinaCalc suppresses anchored rows, so those
+ * shapes reach it as Technical or Jumpstream even when the community reads them
+ * as jack. Every arm only counts clusters slow enough to be jacked, or they
+ * take the fast trill and speed files the tech and speed packs are built from.
+ * Measured as charts that CHANGE tile: 2.9% of a random 4K sample, 4.5% of the
+ * jack packs, 1 of 212 tech-pack charts, and none of the 399 speed, stream and
+ * handstream pack charts. Like the tag override it MOVES the clear, so the four
+ * tiles stay disjoint.
+ *
  * 6K/7K cannot use it: that calc engine does not rate Technical at all
  * (it returns ~0, so Technical never wins an argmax there) and the distribution
  * collapses onto Handstream. Those keymodes fall back to the in-house chart
@@ -2887,6 +2906,14 @@ function bucketsForClear(
   chart: ChartSkillInfo | undefined,
   rate = 1,
 ): DanSkillsetBucket[] {
+  // MinaCalc suppresses anchored rows and can rate community-Jack
+  // quadstream/minijack shapes as Technical or Jumpstream. Chart analysis
+  // verifies that demand from the notes themselves; it outranks every MSD
+  // argmax just like the older speedjack/chordjack tag override.
+  if (chart?.jackDemand === true) {
+    const jack = buckets.find((bucket) => bucket.id === "jack" && bucket.skillsets != null);
+    if (jack) return [jack];
+  }
   const override = buckets.find(
     (bucket) => bucket.skillsets != null && bucket.tags.length > 0 && chartBelongsToTagBucket(bucket, chart),
   );
@@ -3975,8 +4002,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // that side and leaves every RC verdict and every other keymode unchanged in
 // modes_json. A later rate-verdict repair still requests the
 // generic full scope, because those inputs can move either side at any rate.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v17";
-const PLAYER_SKILL_DAN_PREVIOUS_META_KEY = "player_skill_dan_sweep_done:v16";
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v18";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
@@ -4098,6 +4124,16 @@ export async function recomputePlayerSkillDanChunk(
 }
 
 export async function ensurePlayerSkillDanSweepSeeded(db: Db, queue: JobQueue): Promise<void> {
+  // The v18 fold consumes classification_json.jackDemand. Starting before the
+  // chart-side cached-.osu sweep finishes would permanently bake a half-patched
+  // corpus into the done marker; the sweep's finishing worker calls this seeder
+  // again after stamping its dependency.
+  const jackDemandReady = (await exec(
+    db,
+    "select 1 from live_meta where key = ? limit 1",
+    [JACK_DEMAND_RECOMPUTE_META_KEY],
+  )).rows[0];
+  if (!jackDemandReady) return;
   const done = (await exec(db, "select value_json from live_meta where key = ? limit 1", [PLAYER_SKILL_DAN_SWEEP_META_KEY])).rows[0];
   // A finished sweep still has to run again if a rate-verdict repair landed
   // after it: those stored dans either had nothing to credit an HT clear
@@ -4109,20 +4145,10 @@ export async function ensurePlayerSkillDanSweepSeeded(db: Db, queue: JobQueue): 
     [PLAYER_SKILL_DAN_SWEEP_JOB],
   )).rows[0];
   if (pending) return;
-  let scope: PlayerSkillDanSweepScope = "all";
-  if (!done) {
-    // A normal v16 -> v17 rollout already incorporated every earlier rule, so
-    // only the new 4K LN curve is stale. An install missing v16, or one whose
-    // rate-verdict producers landed after v16, takes the conservative full
-    // pass instead of silently skipping those older corrections.
-    const previous = (await exec(
-      db,
-      "select value_json from live_meta where key = ? limit 1",
-      [PLAYER_SKILL_DAN_PREVIOUS_META_KEY],
-    )).rows[0];
-    if (previous && !(await rateVerdictsLandedAfter(db, String(previous.value_json ?? "")))) scope = "4k-ln";
-  }
-  await enqueuePlayerSkillDanSweep(queue, 0, scope);
+  // Jack demand moves 4K RC clears between disjoint tiles, so v18 always needs
+  // the full fold. The narrower 4K-LN scope remains available to callers that
+  // explicitly request the historical curve-only repair.
+  await enqueuePlayerSkillDanSweep(queue, 0, "all");
 }
 
 /** True when a rate-verdict producer stamped its done key after this dan pass began. */

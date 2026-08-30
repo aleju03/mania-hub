@@ -48,7 +48,7 @@ Job types:
 - `seed_snipe_board`: build the initial board for a beatmap/lane.
 - `analyze_activity_beatmap`: compute skill vectors for player activity.
 - `analyze_beatmap_chart`: unified chart analysis per beatmap at 1.0x (classifier dan verdict, pattern clusters, MinaCalc MSD skillsets) into `beatmap_chart_analysis`.
-- `recompute_vibro_sweep`, `recompute_dan_floor_pin_sweep`, `recompute_ln_subtype_sweep`: one-shot boot-seeded sweeps over stored chart analyses (gated by `live_meta` done-keys), patching detector/classifier changes into the corpus without a full `CHART_ANALYSIS_VERSION` re-run.
+- `recompute_vibro_sweep`, `recompute_dan_floor_pin_sweep`, `recompute_ln_subtype_sweep`, `recompute_jack_demand_sweep`: one-shot boot-seeded sweeps over stored chart analyses (gated by `live_meta` done-keys), patching detector/classifier changes into the corpus without a full `CHART_ANALYSIS_VERSION` re-run.
 - `compute_dan_estimate`: dan rating for a beatmap at a rate.
 - `compute_player_skills`: Etterna-style skillset ratings from a player's top plays into `player_skill_ratings`.
 - `recompute_player_skill_poison_sweep`: one-shot boot-seeded sweep (done-key `player_skill_poison_recovery_done:v1`) that drops per-play SSRs carrying the MinaCalc floor signature (`Stream == Technical == Chordjack`, positive) from `plays_json` and backdates `computed_at` so the row recomputes on its next read. The chart-side repair (`recompute_msd_poison_sweep`) healed the charts but not the per-play copies stored against them, and the SSR reuse key (beatmap + rate + goal) carries no chart-health term, so those values propagate across recomputes. Targets the stored signature rather than an incident time window, which is what the original window-based cleanup missed.

@@ -20,6 +20,7 @@ import { nowIso } from "../shared/score.js";
 import { logInfo, logWarn } from "../logger.js";
 import { MSD_SKILLSETS } from "./farm-helper-shape.js";
 import { inspectChartDanEligibility, type ChartDanEligibility } from "../dan/dan-eligibility.js";
+import { classifyFourKeyJackDemand, type FourKeyJackDemandVerdict } from "../dan/jack-demand.js";
 
 // Per-beatmap chart analysis at 1.0x: the unified classifier verdict (dan
 // estimate, pattern clusters, in-house pattern hits) plus the Etterna MSD
@@ -57,6 +58,8 @@ interface LeanChartClassification {
   ln: LeanVerdictHalf | null;
   primary: LeanVerdictHalf | null;
   category: string | null;
+  /** Structural 4K Jack demand used only by player-dan skill buckets. */
+  jackDemand: FourKeyJackDemandVerdict;
   patterns: Array<{ id: string; label: string; score: number; confidence: number }>;
   clusters: Array<{ label: string; pattern: string; bpm: number; mixed: boolean; amount: number; importance: number }>;
   clusterCategory: string | null;
@@ -82,6 +85,14 @@ function leanHalf(half: DanVerdictHalf | null): LeanVerdictHalf | null {
 }
 
 function leanClassification(classification: ChartClassification, noteBpm: number | null = null): LeanChartClassification {
+  const clusters = (classification.clusters?.topFiveClusters ?? []).map((cluster) => ({
+    label: cluster.format(1),
+    pattern: cluster.Pattern,
+    bpm: cluster.BPM,
+    mixed: cluster.Mixed,
+    amount: cluster.Amount,
+    importance: cluster.Importance,
+  }));
   return {
     noteBpm,
     keyCount: classification.keyCount,
@@ -95,20 +106,19 @@ function leanClassification(classification: ChartClassification, noteBpm: number
     ln: leanHalf(classification.ln),
     primary: leanHalf(classification.primary),
     category: classification.patterns.primary?.label ?? null,
+    jackDemand: classifyFourKeyJackDemand({
+      keyCount: classification.keyCount,
+      metrics: classification.patterns.metrics,
+      patterns: classification.patterns.allPatterns,
+      clusters,
+    }),
     patterns: classification.patterns.patterns.map((hit) => ({
       id: hit.id,
       label: hit.label,
       score: hit.score,
       confidence: hit.confidence,
     })),
-    clusters: (classification.clusters?.topFiveClusters ?? []).map((cluster) => ({
-      label: cluster.format(1),
-      pattern: cluster.Pattern,
-      bpm: cluster.BPM,
-      mixed: cluster.Mixed,
-      amount: cluster.Amount,
-      importance: cluster.Importance,
-    })),
+    clusters,
     clusterCategory: classification.clusters?.report.Category ?? null,
     modeTag: classification.clusters?.report.ModeTag ?? null,
     warnings: classification.warnings,
@@ -1627,6 +1637,131 @@ async function enqueueJackTagRecompute(queue: JobQueue, cursor: number): Promise
   await queue.enqueue(
     JACK_TAG_RECOMPUTE_JOB,
     `${JACK_TAG_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// One-shot 4K structural Jack-demand sweep. The ordinary chart analysis now
+// stores `classification_json.jackDemand`, but existing rows predate it. This
+// pass parses only the cached .osu and runs the inexpensive pattern features;
+// it never runs MinaCalc, LeoBlack, or an osu! API fallback. Only positive (or
+// formerly-positive) rows are patched, so an absent field remains the compact
+// representation of false across the rest of the corpus.
+export const JACK_DEMAND_RECOMPUTE_JOB = "recompute_jack_demand_sweep";
+export const JACK_DEMAND_RECOMPUTE_META_KEY = "jack_demand_recompute_done:v1";
+const JACK_DEMAND_RECOMPUTE_CHUNK = 50;
+
+export interface JackDemandRecomputeChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number;
+  done: boolean;
+}
+
+export async function recomputeJackDemandChunk(
+  db: Db,
+  cursor: number,
+  limit = JACK_DEMAND_RECOMPUTE_CHUNK,
+): Promise<JackDemandRecomputeChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id, classification_json
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready' and key_count = 4
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  let changed = 0;
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const stored = parseJson<Pick<LeanChartClassification, "clusters" | "jackDemand"> | null>(row.classification_json, null);
+    if (!stored) continue;
+    const osuText = await readCachedBeatmapFile(db, beatmapId, { touch: false }).catch(() => null);
+    if (!osuText) continue;
+    try {
+      const map = parseManiaBeatmap(osuText);
+      if (map.keyCount !== 4) continue;
+      const analysis = analyzeManiaPatterns(map, {
+        totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+        version: map.version,
+      });
+      const fresh = classifyFourKeyJackDemand({
+        keyCount: map.keyCount,
+        metrics: analysis.metrics,
+        patterns: analysis.allPatterns,
+        clusters: Array.isArray(stored.clusters) ? stored.clusters : [],
+      });
+      // Old false rows have no field and need no write. Keeping the negative
+      // representation sparse avoids a table-wide JSON rewrite; the done key
+      // records that the corpus was inspected.
+      if (!fresh.detected && stored.jackDemand == null) continue;
+      if (json(fresh) === json(stored.jackDemand)) continue;
+      const now = nowIso();
+      const written = await exec(
+        db,
+        `update beatmap_chart_analysis
+         set classification_json = json_set(classification_json, '$.jackDemand', json(?)), updated_at = ?
+         where beatmap_id = ? and analysis_version = ? and status = 'ready'`,
+        [json(fresh), now, beatmapId, CHART_ANALYSIS_VERSION],
+      );
+      if (Number(written.rowsAffected ?? 0) > 0) changed += 1;
+    } catch {
+      // A malformed/unparseable cached chart keeps its stored verdict. Normal
+      // chart analysis would reject the same file, and no network fallback is
+      // appropriate in a zero-API sweep.
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureJackDemandRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [JACK_DEMAND_RECOMPUTE_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [JACK_DEMAND_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueJackDemandRecompute(queue, 0);
+}
+
+/** True on the finishing chunk so the worker can seed the dependent player-dan fold. */
+export async function runJackDemandRecomputeJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<boolean> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeJackDemandChunk(db, cursor);
+  if (result.changed > 0) {
+    logInfo("jack_demand_recompute_chunk", { charts: result.changed, cursor: result.nextCursor });
+  }
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [JACK_DEMAND_RECOMPUTE_META_KEY, json({ finishedAt: now }), now],
+    );
+    return true;
+  }
+  await enqueueJackDemandRecompute(queue, result.nextCursor);
+  return false;
+}
+
+async function enqueueJackDemandRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    JACK_DEMAND_RECOMPUTE_JOB,
+    `${JACK_DEMAND_RECOMPUTE_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );

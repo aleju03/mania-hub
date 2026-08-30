@@ -7,6 +7,7 @@ import {
   CHART_ANALYSIS_VERSION,
   HT_RATE_ANALYSIS_JOB,
   HT_RATE_ANALYSIS_META_KEY,
+  JACK_DEMAND_RECOMPUTE_META_KEY,
   ensureHtRateAnalysisSeeded,
   recomputeHtRateChunk,
   runHtRateAnalysisJob,
@@ -104,7 +105,13 @@ describe("HT rate analysis", () => {
     await exec(
       db,
       "insert or replace into live_meta (key, value_json, updated_at) values (?, json(?), ?)",
-      ["player_skill_dan_sweep_done:v17", json({ finishedAt: "2026-08-20T00:00:00.000Z" }), "2026-08-20T00:00:00.000Z"],
+      ["player_skill_dan_sweep_done:v18", json({ finishedAt: "2026-08-20T00:00:00.000Z" }), "2026-08-20T00:00:00.000Z"],
+    );
+    // The fold's other dependency, the chart-side jack-demand sweep, is done.
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, json(?), ?)",
+      [JACK_DEMAND_RECOMPUTE_META_KEY, json({ finishedAt: "2026-08-19T00:00:00.000Z" }), "2026-08-19T00:00:00.000Z"],
     );
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     expect(Number((await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0].c)).toBe(0);
