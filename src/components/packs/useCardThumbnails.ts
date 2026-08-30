@@ -8,6 +8,7 @@ import {
   getMemoryCardThumbnail,
   loadPersistedCardThumbnail,
   loadR2CardThumbnails,
+  preloadRemoteCardThumbnail,
 } from "./cardThumbnailCache";
 
 /* Filling in the card faces for one page of a collection grid, in the order
@@ -71,6 +72,10 @@ export function useCardThumbnails(cards: CollectedCard[]): {
       const toRender = remoteCandidates
         .filter(({ key }) => {
           if (!remoteUrls[key]) return true;
+          // Warmed rather than merely addressed, so a page prepared ahead of
+          // the visitor has its faces in the browser's cache when its tiles
+          // mount rather than forty downloads to start then.
+          preloadRemoteCardThumbnail(remoteUrls[key]);
           setRevision((current) => current + 1);
           return false;
         })

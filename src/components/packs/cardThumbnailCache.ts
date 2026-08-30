@@ -554,6 +554,24 @@ export async function loadR2CardThumbnails(keys: string[]): Promise<Record<strin
   return urls;
 }
 
+/* Pulls a remote face's bytes into the browser's own cache. Resolving a
+   thumbnail only hands back a URL, so a page warmed one turn ahead still had
+   forty images to download the moment its tiles mounted, which is the pause a
+   page turn used to be. Fetching them while nobody is looking makes the turn
+   itself a cache read. Blob URLs are already bytes in hand, and one attempt
+   per URL is enough: a failure here costs nothing, the tile fetches it again
+   when it mounts. */
+const preloadedThumbnails = new Set<string>();
+
+export function preloadRemoteCardThumbnail(url: string): void {
+  if (typeof window === "undefined" || !url.startsWith("http")) return;
+  if (preloadedThumbnails.has(url)) return;
+  preloadedThumbnails.add(url);
+  const image = new Image();
+  image.decoding = "async";
+  image.src = url;
+}
+
 export async function rememberCardThumbnailBlob(key: string, blob: Blob): Promise<string> {
   const url = URL.createObjectURL(blob);
   rememberMemoryThumbnail(key, url);
