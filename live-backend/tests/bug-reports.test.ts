@@ -15,6 +15,7 @@ import {
   clearClosedBugReports,
   createBugReport,
   deleteBugReport,
+  editAdminBugReportMessage,
   getBugReport,
   linkBugReportTodo,
   listBugReports,
@@ -352,6 +353,80 @@ describe("bug reports", () => {
       id: anonymous.report.id,
       body: "There is nobody verified to read this.",
     })).toEqual({ ok: false, reason: "anonymous_report" });
+  });
+
+  it("edits an owner message in place, stamps it and follows the reply mirror", async () => {
+    const created = await submit();
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created.report;
+
+    const first = await addAdminBugReportMessage(db, { id, body: "thats not a bug if you play on lazer" });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    await addAdminBugReportMessage(db, { id, body: "except on LN scores" });
+
+    const firstId = first.report.messages[0]?.id ?? "";
+    const edited = await editAdminBugReportMessage(db, {
+      id,
+      messageId: firstId,
+      body: "That is not a bug: on lazer every score is readjusted to score v1.",
+    });
+    expect(edited.ok).toBe(true);
+    if (!edited.ok) return;
+    expect(edited.report.messages.map(({ body }) => body)).toEqual([
+      "That is not a bug: on lazer every score is readjusted to score v1.",
+      "except on LN scores",
+    ]);
+    expect(edited.report.messages[0]?.editedAt).toBeGreaterThan(0);
+    expect(edited.report.messages[1]?.editedAt).toBe(null);
+    // The mirror tracks the newest admin message, which an older edit leaves alone.
+    expect(edited.report.reply).toBe("except on LN scores");
+
+    const newest = await editAdminBugReportMessage(db, {
+      id,
+      messageId: edited.report.messages[1]?.id ?? "",
+      body: "except on LN scores, which keep their own accuracy",
+    });
+    expect(newest.ok).toBe(true);
+    if (!newest.ok) return;
+    expect(newest.report.reply).toBe("except on LN scores, which keep their own accuracy");
+  });
+
+  it("refuses to edit a reporter message, an unknown message or empty words", async () => {
+    const created = await submit();
+    const other = await submit({ body: "A different report entirely, filed the same day." });
+    expect(created.ok && other.ok).toBe(true);
+    if (!created.ok || !other.ok) return;
+    const { id } = created.report;
+
+    const answered = await addAdminBugReportMessage(db, { id, body: "Looking at it now." });
+    const reported = await addReporterBugReportMessage(db, { id, userId: 7, body: "Still broken." });
+    expect(answered.ok && reported.ok).toBe(true);
+    if (!answered.ok || !reported.ok) return;
+    const adminMessageId = answered.report.messages[0]?.id ?? "";
+    const reporterMessageId = reported.report.messages[1]?.id ?? "";
+
+    expect(await editAdminBugReportMessage(db, { id, messageId: reporterMessageId, body: "Words I did not write." }))
+      .toEqual({ ok: false, reason: "message_not_found" });
+    expect(await editAdminBugReportMessage(db, { id, messageId: "nope", body: "No such message." }))
+      .toEqual({ ok: false, reason: "message_not_found" });
+    // A message id from another report cannot be edited through this one.
+    expect(await editAdminBugReportMessage(db, {
+      id: other.report.id,
+      messageId: adminMessageId,
+      body: "Wrong report.",
+    })).toEqual({ ok: false, reason: "message_not_found" });
+    expect(await editAdminBugReportMessage(db, { id, messageId: adminMessageId, body: "   " }))
+      .toEqual({ ok: false, reason: "invalid_message" });
+    expect(await editAdminBugReportMessage(db, { id: "missing", messageId: adminMessageId, body: "Gone." }))
+      .toEqual({ ok: false, reason: "report_not_found" });
+
+    const stored = await getBugReport(db, id);
+    expect(stored?.messages.map(({ body, editedAt }) => ({ body, editedAt }))).toEqual([
+      { body: "Looking at it now.", editedAt: null },
+      { body: "Still broken.", editedAt: null },
+    ]);
   });
 
   it("does not let a reporter reopen a report, even through a crafted input", async () => {

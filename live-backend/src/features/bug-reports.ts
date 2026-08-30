@@ -89,6 +89,8 @@ export interface BugReportMessage {
   author: BugReportMessageAuthor;
   body: string;
   createdAt: number;
+  /** Set when the message was corrected after it was sent; null otherwise. */
+  editedAt: number | null;
 }
 
 export interface BugReport {
@@ -160,6 +162,10 @@ export type AuthorizeBugReportScreenshotResult =
 export type AddBugReportMessageResult =
   | { ok: true; report: BugReport }
   | { ok: false; reason: "report_not_found" | "not_owner" | "anonymous_report" | "invalid_message" | "too_many_messages" };
+
+export type EditBugReportMessageResult =
+  | { ok: true; report: BugReport }
+  | { ok: false; reason: "report_not_found" | "message_not_found" | "invalid_message" };
 
 export interface BugReportCounts {
   new: number;
@@ -266,7 +272,14 @@ function parseMessages(value: unknown): BugReportMessage[] {
       const body = typeof row.body === "string" ? row.body : "";
       const createdAt = Number(row.createdAt);
       if (!author || !body || !Number.isFinite(createdAt)) return [];
-      return [{ id: String(row.id ?? ""), author, body, createdAt }];
+      const editedAt = Number(row.editedAt);
+      return [{
+        id: String(row.id ?? ""),
+        author,
+        body,
+        createdAt,
+        editedAt: row.editedAt == null || !Number.isFinite(editedAt) ? null : editedAt,
+      }];
     });
   } catch {
     return [];
@@ -289,10 +302,11 @@ const SELECT_COLUMNS = `${STORED_COLUMNS}, (
     'id', message.id,
     'author', message.author_role,
     'body', message.body,
-    'createdAt', message.created_at
+    'createdAt', message.created_at,
+    'editedAt', message.edited_at
   )), '[]')
   from (
-    select id, author_role, body, created_at, rowid as insertion_order
+    select id, author_role, body, created_at, edited_at, rowid as insertion_order
       from bug_report_messages
      where report_id = bug_reports.id
      order by created_at, insertion_order
@@ -723,6 +737,49 @@ export async function addAdminBugReportMessage(
       args: [body, now, now, id],
     },
   ]);
+  const updated = await getById(db, id);
+  return updated ? { ok: true, report: updated } : { ok: false, reason: "report_not_found" };
+}
+
+/** Correct one of the owner's own messages in place. A reporter has usually
+ *  read it already, so the row keeps an `edited_at` stamp rather than changing
+ *  silently. Reporter messages are not editable here: their side of the thread
+ *  stays their words. When the edited row is the newest admin message, the
+ *  `reply`/`replied_at` compatibility mirror follows it. */
+export async function editAdminBugReportMessage(
+  db: Db,
+  input: { id?: unknown; messageId?: unknown; body?: unknown },
+): Promise<EditBugReportMessageResult> {
+  const id = typeof input.id === "string" ? input.id : "";
+  const messageId = typeof input.messageId === "string" ? input.messageId : "";
+  const body = normalizeMessageBody(input.body);
+  if (!body) return { ok: false, reason: "invalid_message" };
+  const report = await getById(db, id);
+  if (!report) return { ok: false, reason: "report_not_found" };
+
+  const now = Date.now();
+  const edited = await exec(
+    db,
+    `update bug_report_messages set body = ?, edited_at = ?
+      where id = ? and report_id = ? and author_role = 'admin'`,
+    [body, now, messageId, id],
+  );
+  if ((edited.rowsAffected ?? 0) === 0) return { ok: false, reason: "message_not_found" };
+
+  const newest = (await exec(
+    db,
+    `select body, created_at from bug_report_messages
+      where report_id = ? and author_role = 'admin'
+      order by created_at desc, rowid desc limit 1`,
+    [id],
+  )).rows[0];
+  await exec(db, "update bug_reports set reply = ?, replied_at = ?, updated_at = ? where id = ?", [
+    newest?.body == null ? null : String(newest.body),
+    newest?.created_at == null ? null : Number(newest.created_at),
+    now,
+    id,
+  ]);
+
   const updated = await getById(db, id);
   return updated ? { ok: true, report: updated } : { ok: false, reason: "report_not_found" };
 }

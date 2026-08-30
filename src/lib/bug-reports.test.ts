@@ -4,7 +4,7 @@ import { bugReportThreadMessages } from "./bug-reports";
 
 describe("bug report thread compatibility", () => {
   it("uses the append-only messages when the backend supplies them", () => {
-    const messages = [{ id: "m1", author: "reporter" as const, body: "More detail", createdAt: 2 }];
+    const messages = [{ id: "m1", author: "reporter" as const, body: "More detail", createdAt: 2, editedAt: null }];
     expect(bugReportThreadMessages({
       messages,
       reply: "Old compatibility value",
@@ -22,6 +22,7 @@ describe("bug report thread compatibility", () => {
       author: "admin",
       body: "Please try again now.",
       createdAt: 123,
+      editedAt: null,
     }]);
   });
 });

@@ -5,7 +5,7 @@ import { countUserLinks } from "../../discord/identity.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../../discord/subscriptions.js";
 import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, updateAdminTodo, type CreateTodoInput, type UpdateTodoInput } from "../../features/admin-todos.js";
 import { clearReviewedTranslationReports, deleteTranslationReport, listTranslationReports, updateTranslationReport, type UpdateTranslationReportInput } from "../../features/translation-reports.js";
-import { addAdminBugReportMessage, clearClosedBugReports, deleteBugReport, getBugReport, listBugReports, promoteBugReportToTodo, updateBugReport, type UpdateBugReportInput } from "../../features/bug-reports.js";
+import { addAdminBugReportMessage, clearClosedBugReports, deleteBugReport, editAdminBugReportMessage, getBugReport, listBugReports, promoteBugReportToTodo, updateBugReport, type UpdateBugReportInput } from "../../features/bug-reports.js";
 import { cancelBeatmapOsuFileBackfill, startBeatmapOsuFileBackfill } from "../../features/beatmap-osu-file-backfill.js";
 import { cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, startChartAnalysisBackfill } from "../../features/chart-analysis.js";
 import { importDanBenchmark, isDanBenchmarkFamily, listDanBenchmarkHiddenDiffs, listDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "../../features/dan-benchmark.js";
@@ -983,6 +983,26 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
     }
     const body = parseJson<{ id?: unknown; body?: unknown }>((await readBody(req)) || "{}", {});
     const result = await addAdminBugReportMessage(ctx.serveWriteDb ?? ctx.db, body);
+    if (!result.ok) {
+      sendJson(req, res, ctx, result.reason === "invalid_message" ? 400 : 404, { error: result.reason });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, report: result.report });
+    return true;
+  }
+  if (url.pathname === "/api/admin/bug-reports/edit-message") {
+    // Fixing a typo in an answer already sent. The row keeps an edited stamp,
+    // and only the owner's own messages answer to this.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ id?: unknown; messageId?: unknown; body?: unknown }>((await readBody(req)) || "{}", {});
+    const result = await editAdminBugReportMessage(ctx.serveWriteDb ?? ctx.db, body);
     if (!result.ok) {
       sendJson(req, res, ctx, result.reason === "invalid_message" ? 400 : 404, { error: result.reason });
       return true;

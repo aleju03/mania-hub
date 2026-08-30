@@ -46,6 +46,8 @@ export interface BugReportMessage {
   author: BugReportMessageAuthor;
   body: string;
   createdAt: number;
+  /** Set when the owner corrected the message after sending it. */
+  editedAt: number | null;
 }
 
 export interface BugReport {
@@ -119,6 +121,7 @@ export function bugReportThreadMessages(
     author: "admin",
     body: report.reply,
     createdAt: report.repliedAt ?? 0,
+    editedAt: null,
   }];
 }
 
@@ -302,6 +305,25 @@ export const replyToBugReportAsAdmin = createServerFn({ method: "POST" })
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error(`Bug report reply failed (${response.status}).`);
+    return await response.json() as { report: BugReport };
+  });
+
+/** Fix an already sent answer. The backend stamps the row as edited and only
+ *  accepts the owner's own messages, so a reporter's words stay theirs. */
+export const editBugReportMessageAsAdmin = createServerFn({ method: "POST" })
+  .validator((data: { id: string; messageId: string; body: string }) => ({
+    id: String(data?.id ?? ""),
+    messageId: String(data?.messageId ?? ""),
+    body: String(data?.body ?? "").trim().slice(0, BUG_REPORT_MESSAGE_MAX),
+  }))
+  .handler(async ({ data }): Promise<{ report: BugReport }> => {
+    const { requireAdminAccess } = await import("./auth");
+    await requireAdminAccess("Bug report message edit");
+    const response = await adminFetch("/api/admin/bug-reports/edit-message", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Bug report message edit failed (${response.status}).`);
     return await response.json() as { report: BugReport };
   });
 

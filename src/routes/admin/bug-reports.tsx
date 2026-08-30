@@ -30,6 +30,7 @@ import {
   bugReportThreadMessages,
   clearClosedBugReports,
   deleteBugReport,
+  editBugReportMessageAsAdmin,
   getBugReportScreenshotUrls,
   listBugReports,
   promoteBugReportToTodo,
@@ -43,8 +44,9 @@ import {
 
 /* What players say is broken, filed from /report.
  *
- * The note is private triage scratch; conversation messages are append-only
- * and shown back to the signed-in reporter on /report. Anonymous reports have
+ * The note is private triage scratch; the conversation is shown back to the
+ * signed-in reporter on /report. Only your own messages can be edited, and one
+ * that was carries an "edited" stamp here rather than a silently changed row. Anonymous reports have
  * no verified owner to read or answer a thread, so their Reply control is
  * absent rather than accepting words nobody will ever read.
  *
@@ -262,33 +264,91 @@ function ContextLine({ context }: { context: BugReport["context"] }) {
   );
 }
 
-function AdminThreadMessage({ report, message }: { report: BugReport; message: BugReportMessage }) {
+/* An owner message can be corrected in place; a reporter's cannot, so the
+   pencil only appears on your own side of the thread. The stamp says "edited"
+   afterwards rather than changing the words behind the reporter's back, and a
+   legacy row synthesised from the old single reply column has no message id to
+   edit. */
+function AdminThreadMessage({
+  report,
+  message,
+  busy,
+  onEdit,
+}: {
+  report: BugReport;
+  message: BugReportMessage;
+  busy: boolean;
+  onEdit: (messageId: string, body: string) => void;
+}) {
   const admin = message.author === "admin";
+  const [editing, setEditing] = useState(false);
+  const editable = admin && message.id !== "legacy-admin-reply";
+
+  // A saved edit comes back as new words or a new stamp, which is the signal
+  // to put the bubble back.
+  useEffect(() => { setEditing(false); }, [message.body, message.editedAt]);
+
   return (
     <div className={`flex ${admin ? "justify-end" : "justify-start"}`}>
-      <div className={`flex max-w-[92%] items-end gap-2 sm:max-w-[78%] ${admin ? "flex-row-reverse" : ""}`}>
+      <div className={`flex ${editing ? "w-full" : "max-w-[92%] sm:max-w-[78%]"} items-end gap-2 ${admin ? "flex-row-reverse" : ""}`}>
         <Avatar userId={admin ? ADMIN_REPLY_USER_ID : report.userId} size={22} />
-        <div className={`min-w-0 ${admin ? "items-end" : "items-start"} flex flex-col`}>
+        <div className={`min-w-0 ${editing ? "flex-1" : ""} ${admin ? "items-end" : "items-start"} flex flex-col`}>
           <div className={`mb-1 flex flex-wrap items-center gap-x-1.5 px-1 ${admin ? "flex-row-reverse" : ""}`}>
             <span className={`text-[10px] font-semibold ${admin ? "text-osu-pink-light" : "text-osu-l2"}`}>
               {admin ? "You" : report.username || "Reporter"}
             </span>
             <span className="text-[9.5px] text-osu-f1">{formatWhen(message.createdAt)}</span>
+            {message.editedAt ? (
+              <span className="text-[9.5px] text-osu-f1" title={`Edited ${formatWhen(message.editedAt)}`}>edited</span>
+            ) : null}
+            {editable && !editing ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setEditing(true)}
+                aria-label="Edit this message"
+                className="cursor-pointer text-osu-f1 transition-colors duration-[120ms] hover:text-white disabled:opacity-40"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+            ) : null}
           </div>
-          <p className={`w-fit max-w-full whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-[12.5px] leading-relaxed text-osu-l1 ${
-            admin
-              ? "rounded-br-md bg-osu-pink/[0.12] ring-1 ring-inset ring-osu-pink/20"
-              : "rounded-bl-md bg-osu-b4/60 ring-1 ring-inset ring-osu-b3/20"
-          }`}>
-            {message.body}
-          </p>
+          {editing ? (
+            <div className="w-full">
+              <Editor
+                value={message.body}
+                placeholder="Fix what this message says"
+                saveLabel="Save message"
+                tone="reply"
+                busy={busy}
+                onSave={(next) => onEdit(message.id, next)}
+                onCancel={() => setEditing(false)}
+              />
+            </div>
+          ) : (
+            <p className={`w-fit max-w-full whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-[12.5px] leading-relaxed text-osu-l1 ${
+              admin
+                ? "rounded-br-md bg-osu-pink/[0.12] ring-1 ring-inset ring-osu-pink/20"
+                : "rounded-bl-md bg-osu-b4/60 ring-1 ring-inset ring-osu-b3/20"
+            }`}>
+              {message.body}
+            </p>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function AdminThread({ report }: { report: BugReport }) {
+function AdminThread({
+  report,
+  busy,
+  onEditMessage,
+}: {
+  report: BugReport;
+  busy: boolean;
+  onEditMessage: (messageId: string, body: string) => void;
+}) {
   const messages = bugReportThreadMessages(report);
   const [expanded, setExpanded] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -328,7 +388,13 @@ function AdminThread({ report }: { report: BugReport }) {
         </div>
         <div ref={viewportRef} className="max-h-[320px] space-y-3 overflow-y-auto px-3 py-3">
           {visibleMessages.map((message) => (
-            <AdminThreadMessage key={message.id} report={report} message={message} />
+            <AdminThreadMessage
+              key={message.id}
+              report={report}
+              message={message}
+              busy={busy}
+              onEdit={onEditMessage}
+            />
           ))}
         </div>
       </div>
@@ -393,6 +459,7 @@ function ReportCard({
   onStatus,
   onNote,
   onReply,
+  onEditMessage,
   onPromote,
   onDelete,
 }: {
@@ -401,6 +468,7 @@ function ReportCard({
   onStatus: (status: BugReportStatus) => void;
   onNote: (note: string) => void;
   onReply: (reply: string) => void;
+  onEditMessage: (messageId: string, body: string) => void;
   onPromote: () => void;
   onDelete: () => void;
 }) {
@@ -463,7 +531,7 @@ function ReportCard({
         </div>
       </div>
 
-      <AdminThread report={report} />
+      <AdminThread report={report} busy={busy} onEditMessage={onEditMessage} />
 
       {report.adminNote && editing === null ? (
         <div className="mt-3 space-y-2 px-3.5 sm:pl-[54px]">
@@ -720,6 +788,9 @@ function BugReportsAdminPage() {
                 onStatus={(next) => void act(report.id, () => updateBugReport({ data: { id: report.id, status: next } }))}
                 onNote={(note) => void act(report.id, () => updateBugReport({ data: { id: report.id, adminNote: note } }))}
                 onReply={(body) => void act(report.id, () => replyToBugReportAsAdmin({ data: { id: report.id, body } }))}
+                onEditMessage={(messageId, body) => void act(report.id, () => (
+                  editBugReportMessageAsAdmin({ data: { id: report.id, messageId, body } })
+                ))}
                 onPromote={() => void act(report.id, () => promoteBugReportToTodo({ data: { id: report.id } }))}
                 onDelete={() => setDeleteAsk(report)}
               />

@@ -2859,6 +2859,13 @@ async function migrateBugReports(db: Db): Promise<void> {
     create index if not exists idx_bug_report_messages_report
       on bug_report_messages(report_id, created_at, id)
   `);
+  // Added after the table shipped: an owner message can be corrected in place,
+  // and the stamp is what tells both sides the words changed after they were
+  // first read. Null on every message nobody has edited.
+  const messageColumns = (await db.execute("pragma table_info(bug_report_messages)")).rows.map((row) => String(row.name));
+  if (!messageColumns.includes("edited_at")) {
+    await db.execute("alter table bug_report_messages add column edited_at integer");
+  }
   await db.execute(`
     create unique index if not exists idx_bug_report_messages_legacy
       on bug_report_messages(report_id) where legacy_reply = 1
