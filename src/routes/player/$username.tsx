@@ -1895,15 +1895,16 @@ export function PlayerProfilePage({
   /* One keymode's whole list, not the slice of it osu! had room for. Picking a
      keymode is the moment the shared 200-play window stops being the right
      answer, so the plays this site tracked below it join the rows here, in the
-     same order and under one ranking. "All" is left alone: there the window is
-     exactly what osu! ranks, and 200 more rows under it would be a different
-     list wearing the same name. */
+     same order and under one ranking, and the list is built even when there
+     are none to join. "All" is left alone: there the window is exactly what
+     osu! ranks, and 200 more rows under it would be a different list wearing
+     the same name. */
   /* The keymode's list itself: window plays and tracked ones under one pp
      ranking, cut at the same 200 the Key Split modal's total is built from.
      Ranked and cut before the mod filter, so filtering narrows the list rather
      than pulling in the 201st play to backfill it, and so the two numbers on
      screen describe the same set of plays. */
-  const keymodeListRows: BestListRow[] | null = tab === "best" && trackedPlaysForKeyFilter.length > 0
+  const keymodeListRows: BestListRow[] | null = tab === "best" && keyFilter !== "all"
     ? sortBestListRows(
       [
         ...keyFilteredScores.map((score) => ({ kind: "score" as const, score })),
@@ -1917,9 +1918,11 @@ export function PlayerProfilePage({
     : filteredScores.map((score) => ({ kind: "score" as const, score }));
   const visibleRows = bestListRows.slice(0, currentVisibleCount);
   const scoreRowLayout = getScoreRowLayout(visibleRows);
-  /* With tracked plays in, the row numbers have to rank the merged list: a
-     window play's place in the profile-wide top 200 would read as a different
-     scale from the tracked row beside it. */
+  /* A keymode's rows are numbered within that keymode's own list, whether or
+     not tracked plays joined it: a window play's place in the profile-wide top
+     200 would read as a different scale from the tracked row beside it, and it
+     would make the same list start at 1 for one keymode and at 135 for another
+     purely on whether a tail existed. */
   const keymodeListPositions = new Map<string, number>();
   if (keymodeListRows) {
     keymodeListRows.forEach((row, index) => {
