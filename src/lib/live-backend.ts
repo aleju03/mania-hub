@@ -61,6 +61,8 @@ export interface LivePlayerDanEvidencePlay {
   creditedDanLabel: string;
   clearAccuracy: number;
   countsTowardDan: boolean;
+  /** The stray rule left this clear out of the average behind the estimate. */
+  ignoredAsStray?: boolean;
 }
 
 export interface LivePlayerDanSkillsetEvidence {
@@ -1500,6 +1502,9 @@ export interface LiveKeymodePpPlay {
   /** Judgement counts, so a tracked row can open the same details card a window
       row does. Null for a play stored before they were kept. */
   statistics: OsuScoreStatistics | null;
+  /** Set only by sources that know the client the run came from; a row that
+   *  leaves it out is read off its score ids as before. */
+  isLazer?: boolean | null;
   creator: string | null;
   /** The map's own numbers at 1.0x, not the play's: a rate-modded play is not
       described by them, so its details card leaves them out. */

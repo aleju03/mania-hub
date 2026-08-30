@@ -568,16 +568,18 @@ function ClearRow({
       onPointerEnter={onPrefetch}
       onFocus={onPrefetch}
       className={`group flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-osu-b4 ${
-        clear.countsTowardDan ? "" : "opacity-60"
+        clear.ignoredAsStray ? "opacity-45" : clear.countsTowardDan ? "" : "opacity-60"
       }`}
       title={`${play.artist} - ${play.title} [${play.version}]${played ? ` · ${played}` : ""}${
         clear.creditedDanLabel !== clear.chartDanLabel
           ? ` · ${t`A ${formatDan(clear.chartDanLabel)} chart, credited as ${formatDan(clear.creditedDanLabel)} at this accuracy`}`
           : ""
       } · ${
-        clear.countsTowardDan
-          ? t`This clear backs the estimate`
-          : t`Below the credit that sets the estimate`
+        clear.ignoredAsStray
+          ? t`Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average`
+          : clear.countsTowardDan
+            ? t`This clear backs the estimate`
+            : t`Below the credit that sets the estimate`
       } · ${t`view map details`}`}
     >
       <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-osu-f1">{position}</span>
@@ -597,7 +599,15 @@ function ClearRow({
           {formatDan(clear.chartDanLabel)}
         </span>
       ) : null}
-      <span className="w-16 shrink-0 text-right text-[11px] font-black sm:w-20" style={{ color }}>
+      {/* An ignored clear keeps its row and its number, struck through: the
+          player did clear it, it just does not set the level. */}
+      {clear.ignoredAsStray ? (
+        <span className="shrink-0 text-[10px] text-osu-f1">{t`not counted`}</span>
+      ) : null}
+      <span
+        className={`w-16 shrink-0 text-right text-[11px] font-black sm:w-20 ${clear.ignoredAsStray ? "line-through" : ""}`}
+        style={{ color }}
+      >
         {formatDan(clear.creditedDanLabel)}
       </span>
     </button>

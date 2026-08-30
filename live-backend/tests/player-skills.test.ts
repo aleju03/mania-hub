@@ -10,6 +10,7 @@ import {
   computePlayerSkillRatings,
   computePlayerSkillsJob,
   danClearAverageWindowFor,
+  danIgnoredStrayCount,
   estimateWifeAccuracy,
   getPlayerSkillBreakdown,
   getPlayRate,
@@ -2142,6 +2143,33 @@ describe("danTableLabelFor", () => {
     expect(danTableVerdictLabelFor(12.4, "ln", 6)).toBe("mystery++");
     // Continuous credit labeling deliberately keeps the shared player bands.
     expect(danTableLabelFor(11.6, "ln", 6)).toBe("mystery-");
+  });
+});
+
+describe("danIgnoredStrayCount", () => {
+  const flat = (value: number, count: number) => Array.from({ length: count }, () => value);
+
+  it("ignores the one joke clear under a body of work", () => {
+    expect(danIgnoredStrayCount([...flat(12, 13), 5])).toBe(1);
+  });
+
+  it("leaves a window alone when nothing sits five levels under its best five", () => {
+    expect(danIgnoredStrayCount([...flat(12, 13), 7.5])).toBe(0);
+  });
+
+  it("never ignores more than three, so a wide body of work keeps its shape", () => {
+    expect(danIgnoredStrayCount([...flat(12, 4), ...flat(5, 12)])).toBe(3);
+  });
+
+  it("keeps a stray rather than trimming a thin pool under the quorum", () => {
+    expect(danIgnoredStrayCount([12, 12, 12, 12, 5])).toBe(1);
+    expect(danIgnoredStrayCount([12, 12, 12, 5])).toBe(0);
+  });
+
+  it("reads the cut off the best five, so one spike cannot set it alone", () => {
+    // Best three average 16.67 and would cut at 11.67, taking the 11s with it;
+    // the best five average 14.4 and cut at 9.4, which only the 5 falls under.
+    expect(danIgnoredStrayCount([20, 15, 15, 11, 11, 11, 11, 5])).toBe(1);
   });
 });
 

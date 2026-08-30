@@ -1554,7 +1554,7 @@ msgstr "<0>osu!stable</0> 把每张谱面都存成普通文件：打开 osu!/Son
 msgid "<0>Page</0><1/><2>of {totalPages}</2>"
 msgstr "<0>第</0><1/><2>页 / 共 {totalPages} 页</2>"
 
-#. placeholder {0}: topSharePercent(overallPercentile.value)
+#. placeholder {0}: topSharePercent(overallPercentile)
 #. placeholder {1}: overallPercentile.population.toLocaleString("en-US")
 #. placeholder {2}: mode!.keyCount
 #. placeholder {2}: mode.keyCount
@@ -1796,6 +1796,10 @@ msgstr "一个段位课题是一组固定的谱面，一口气连着打完，最
 #: src/routes/dan-estimates.tsx
 msgid "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I. None of this changes how a chart is rated either. The estimator never looks at what a map is called or who made it; the list above exists at your end of the calculation, not the chart's, and all it does is credit you with a course you actually passed."
 msgstr "这些图包里有几个难度没被算进来，因为它们低于各自段位系统能测到的第一级：REFORM 的三个 INTRO 课题，以及 Jinjin LN Phase I 的 0 段到 2 段。这一切同样不会改变谱面本身怎么评级。估算器从不看一张图叫什么、是谁做的；上面这份名单在计算的你这一端，而不是谱面那一端，它做的只是把你真正打过的课题记在你名下。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A few passes are left out of the average: up to three in a skill that sit more than five levels below the average of your best five in it. That is usually an easy map you played for accuracy rather than anything that measures your level. They still show in the dan window, marked <0>not counted</0>. Never more than three, and never enough to take a skill under the four passes it needs, so a genuinely wide spread of passes still averages in full."
+#~ msgstr "有少数通过不计入平均：一项技能中最多三个，且比你在该技能最好的五个通过的平均低五个以上段位。这通常是你为了精度去打的简单图，而不是能衡量你水平的成绩。它们仍会出现在段位窗口中，标记为<0>不计入</0>。最多三个，并且绝不会让一项技能少于所需的四个通过，所以真正跨度很大的成绩仍会完整计入平均。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
@@ -8073,6 +8077,14 @@ msgstr "挪威语"
 msgid "not a bug"
 msgstr "并非问题"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "not counted"
+msgstr "不计入"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average"
+msgstr "不计入：这次通过比本列表中最好的通过低五个以上段位，因此不参与平均"
+
 #: src/routes/farm-helper.tsx
 msgid "Not enough data near your pp yet"
 msgstr "你 pp 附近的数据还不够"
@@ -12953,7 +12965,7 @@ msgstr "占据了国家/地区榜第 {0} 名"
 msgid "Top {0} of {1}"
 msgstr "前 {0} 名（共 {1}）"
 
-#. placeholder {0}: topSharePercent(percentile.value)
+#. placeholder {0}: topSharePercent(percentile)
 #: src/components/player/SkillBreakdown.tsx
 msgid "top {0}%"
 msgstr "前 {0}%"
@@ -13323,6 +13335,10 @@ msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 张图片。"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Up to 50 MB."
 msgstr "最大 50 MB。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Up to three passes in a skill are left out of its average when they credit more than five levels below the average of your best five in it. They still show in the dan window, marked <0>not counted</0>."
+msgstr "一项技能中最多三个通过会被排除在其平均之外，条件是它们计入的段位比你在该技能最好的五个通过的平均低五个以上。它们仍会出现在段位窗口中，标记为<0>不计入</0>。"
 
 #. placeholder {0}: skin.name
 #: src/components/skins/SkinUpdateModal.tsx

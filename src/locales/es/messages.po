@@ -1545,7 +1545,7 @@ msgstr "<0>osu!stable</0> guarda cada mapa como archivos sueltos: abre osu!/Song
 msgid "<0>Page</0><1/><2>of {totalPages}</2>"
 msgstr "<0>Página</0><1/><2>de {totalPages}</2>"
 
-#. placeholder {0}: topSharePercent(overallPercentile.value)
+#. placeholder {0}: topSharePercent(overallPercentile)
 #. placeholder {1}: overallPercentile.population.toLocaleString("en-US")
 #. placeholder {2}: mode!.keyCount
 #. placeholder {2}: mode.keyCount
@@ -1787,6 +1787,10 @@ msgstr "Un dan es un conjunto fijo de charts que juegas seguidos, con una precis
 #: src/routes/dan-estimates.tsx
 msgid "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I. None of this changes how a chart is rated either. The estimator never looks at what a map is called or who made it; the list above exists at your end of the calculation, not the chart's, and all it does is credit you with a course you actually passed."
 msgstr "Algunas dificultades dentro de esos packs quedan fuera, porque están por debajo del primer nivel que mide su ladder: los tres dans INTRO de REFORM, y del 0º al 2º de la LN Phase I de Jinjin. Nada de esto cambia tampoco cómo se califica un chart. El estimador nunca mira cómo se llama un mapa ni quién lo hizo; la lista de arriba está en tu lado del cálculo, no en el del chart, y lo único que hace es acreditarte un dan que de verdad superaste."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A few passes are left out of the average: up to three in a skill that sit more than five levels below the average of your best five in it. That is usually an easy map you played for accuracy rather than anything that measures your level. They still show in the dan window, marked <0>not counted</0>. Never more than three, and never enough to take a skill under the four passes it needs, so a genuinely wide spread of passes still averages in full."
+#~ msgstr "Algunos pases quedan fuera del promedio: hasta tres en una habilidad que estén más de cinco niveles por debajo del promedio de tus cinco mejores en ella. Suele ser un mapa fácil que jugaste por precisión y no algo que mida tu nivel. Siguen apareciendo en la ventana de dan, marcados como <0>no cuenta</0>. Nunca más de tres, y nunca tantos como para dejar una habilidad por debajo de los cuatro pases que necesita, así que un abanico de pases realmente amplio sigue promediándose entero."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
@@ -8064,6 +8068,14 @@ msgstr "Noruego"
 msgid "not a bug"
 msgstr "no es un error"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "not counted"
+msgstr "no cuenta"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average"
+msgstr "No cuenta: este clear está más de cinco niveles por debajo de los mejores clears de esta lista, así que queda fuera del promedio"
+
 #: src/routes/farm-helper.tsx
 msgid "Not enough data near your pp yet"
 msgstr "Aún no hay suficientes datos cerca de tu pp"
@@ -12944,7 +12956,7 @@ msgstr "Tomó el puesto #{0} del leaderboard del país"
 msgid "Top {0} of {1}"
 msgstr "Top {0} de {1}"
 
-#. placeholder {0}: topSharePercent(percentile.value)
+#. placeholder {0}: topSharePercent(percentile)
 #: src/components/player/SkillBreakdown.tsx
 msgid "top {0}%"
 msgstr "top {0}%"
@@ -13314,6 +13326,10 @@ msgstr "Hasta {BUG_REPORT_MAX_SCREENSHOTS} imágenes."
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Up to 50 MB."
 msgstr "Hasta 50 MB."
+
+#: src/routes/dan-estimates.tsx
+msgid "Up to three passes in a skill are left out of its average when they credit more than five levels below the average of your best five in it. They still show in the dan window, marked <0>not counted</0>."
+msgstr "Hasta tres pases de una habilidad quedan fuera de su promedio cuando acreditan más de cinco niveles por debajo del promedio de tus cinco mejores en ella. Siguen apareciendo en la ventana de dan, marcados como <0>no cuenta</0>."
 
 #. placeholder {0}: skin.name
 #: src/components/skins/SkinUpdateModal.tsx

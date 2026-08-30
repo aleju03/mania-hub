@@ -507,6 +507,13 @@ function DanEstimatesPage() {
               than a shaky one.
             </Trans>
           </P>
+          <P>
+            <Trans>
+              Up to three passes in a skill are left out of its average when they credit more than five
+              levels below the average of your best five in it. They still show in the dan window,
+              marked <B>not counted</B>.
+            </Trans>
+          </P>
         </Section>
 
         <Section title={t`Step 6: your dan is the average of your skills`}>

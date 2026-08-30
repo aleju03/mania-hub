@@ -6,16 +6,17 @@
  * word in the diff version (preferred) or the set title. Heavy-LN charts
  * (lnRatio >= 0.45) are dropped; the tiles under test are the rice side.
  *
- * Variants:
- *   V0 shipped   - shipped logic (speed near-tie 1.25, tech tiebreak at
- *                  analyzer score >= 0.8, tech-lead arm at 0.5 MSD on a
- *                  tech-tagged chart at 0.6 MSD, stamina 240s length gate held against
- *                  the near-tie when Technical outranks Stream, Jumpstream
- *                  arbitrated by LeoBlack's label)
- *   J0 js-tech   - the pre-arbitration Jumpstream-rides-with-tech pairing
- *   S0 no-hold   - drops the stamina hold (the pre-2026-08-29 near-tie order)
- *   T0 no-lead   - drops the tech-lead arm
- *   T4/T6/T5     - tech-lead arm at other leads / without the tech tag
+ * V0 tracks the shipped logic in player-skills.ts (speed near-tie 1.25, tech
+ * tiebreak at analyzer score >= 0.8, tech-lead arm at 0.35 MSD on a tech-tagged
+ * chart, stamina 240s length gate held against the near-tie when Technical,
+ * Jumpstream or Handstream is within 0.5 of Stream, Jumpstream arbitrated by
+ * LeoBlack's label and then by its runner-up skillset, Handstream near-tie on a
+ * handstream-labelled chart, jack cluster share vetoing every stamina entry
+ * path). Keep the two in step or the sweep measures a fiction, and note that
+ * the corpus pass rates a CHART's own MSD vector while production buckets each
+ * PLAY's accuracy-scaled one - the near-tie rules only show up in the
+ * play-level block at the end, which reads stored plays_json. The other variants are the rules it
+ * replaced, or the constants either side of the shipped ones.
  *
  * NOTE: libsql rows are array-like, so a column literally named "length" is
  * shadowed by Array.length (the column count) - alias it, as len_seconds is.
@@ -30,8 +31,11 @@ const DB_URL = process.env.SWEEP_DB_URL ?? "file:data/mania-hub-live.db";
 const SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"] as const;
 const SPEED_NEAR_TIE_MSD = 1.25;
 const TECH_NEAR_TIE_MIN_SCORE = 0.8;
-const TECH_NEAR_TIE_MSD_LEAD = 0.6;
+const TECH_NEAR_TIE_MSD_LEAD = 0.35;
 const STAMINA_TILE_MIN_LENGTH_SECONDS = 240;
+const STAMINA_HOLD_BASE_BAND = 0.5;
+const HANDSTREAM_NEAR_TIE_MSD = SPEED_NEAR_TIE_MSD;
+const STAMINA_TILE_JACK_VETO_SHARE = 0.30;
 const CHORDJACK_TAG_MIN_SCORE = 0.8;
 const PATTERN_TAG_MIN_SCORE = 0.5;
 const TECH_CLUSTER_CATEGORY = /tech/i;
@@ -45,6 +49,14 @@ interface ChartRow {
   techScore: number;
   techCategory: boolean | null;
   clusterRaw: string | null;
+  /** LeoBlack's label reads trill / reads tech. Null when it stored no label. */
+  clusterTrill: boolean | null;
+  clusterTech: boolean | null;
+  handstreamCluster: boolean;
+  jackShare: number | null;
+  jackDemand: boolean;
+  /** The rate the play was set at. 1 for the chart-level corpus pass. */
+  rate: number;
   hasJackOverride: boolean;
   title: string;
   version: string;
@@ -52,18 +64,25 @@ interface ChartRow {
 
 interface Variant {
   id: string;
-  clusterTechArm: boolean;
-  /** Minimum in-house tech score the cluster arm also demands (0 = none). */
-  clusterMinTechScore: number;
-  clusterBand: number;
-  /** "cluster": Jumpstream files tech when the cluster label reads tech/trill, stamina otherwise. */
-  jsTile: "tech" | "stamina" | "cluster";
+  /** How a Jumpstream argmax is filed.
+   *  "cluster"  - LeoBlack's label: tech/trill keeps tech, anything else stamina
+   *  "tech"     - the legacy Jumpstream-rides-with-tech pairing
+   *  "runnerup" - the chart's strongest OTHER skillset picks the tile */
+  jsRule: "tech" | "cluster" | "runnerup" | "trill" | "techlabel";
+  /** Below this length the "cluster" rule keeps the tech pairing whatever the label says. */
+  jsArbitrationMinLength: number;
   /** A Stamina argmax on a 240s+ chart holds the tile before the speed near-tie fires. */
   staminaHolds: boolean;
-  /** The hold also demands Technical within this of Stream (0 = Technical must outrank Stream; Infinity = no demand). */
+  /** The hold also demands Technical within this of Stream. */
   staminaHoldsTechBand: number;
-  /** Past this length the hold fires with no Technical demand at all (Infinity = never). */
-  staminaHoldsFreeLength: number;
+  /** Read the band against the best non-Stream base skillset, not Technical alone. */
+  staminaHoldsBestBase: boolean;
+  /** A jack-contaminated chart cannot pick an endurance runner-up. */
+  runnerUpJackVeto: boolean;
+  /** Handstream within this of the top skillset holds the stamina tile (Infinity = argmax only). */
+  handstreamNearTie: number;
+  /** The Handstream near-tie also demands LeoBlack read the chart as handstream. */
+  handstreamNearTieNeedsCluster: boolean;
   /** Technical takes a would-be speed verdict when it leads Stream by at least this (Infinity = arm off). */
   techLeadMin: number;
   /** Minimum analyzer tech score the lead arm also demands (0 = none). */
@@ -71,36 +90,53 @@ interface Variant {
 }
 
 const JS_TECH_CLUSTER = /tech|trill/i;
+const TRILL_CLUSTER_CATEGORY = /trill/i;
+const HANDSTREAM_CLUSTER_CATEGORY = /handstream/i;
 
-const SHIPPED = {
-  clusterTechArm: false,
-  clusterMinTechScore: 0,
-  clusterBand: SPEED_NEAR_TIE_MSD,
-  jsTile: "cluster" as const,
+const SHIPPED: Omit<Variant, "id"> = {
+  jsRule: "techlabel",
+  jsArbitrationMinLength: 0,
   staminaHolds: true,
-  staminaHoldsTechBand: 0,
+  staminaHoldsTechBand: STAMINA_HOLD_BASE_BAND,
+  staminaHoldsBestBase: true,
+  runnerUpJackVeto: true,
+  handstreamNearTie: HANDSTREAM_NEAR_TIE_MSD,
+  handstreamNearTieNeedsCluster: true,
   techLeadMin: TECH_NEAR_TIE_MSD_LEAD,
   techLeadMinScore: PATTERN_TAG_MIN_SCORE,
-  staminaHoldsFreeLength: Infinity,
+};
+
+/** The logic on main before 2026-08-30, as the before half of every delta. */
+const V18: Omit<Variant, "id"> = {
+  ...SHIPPED,
+  jsRule: "cluster",
+  jsArbitrationMinLength: 90,
+  staminaHoldsBestBase: false,
+  runnerUpJackVeto: false,
+  handstreamNearTie: Infinity,
+  handstreamNearTieNeedsCluster: false,
+  techLeadMin: 0.6,
 };
 
 const VARIANTS: Variant[] = [
   { id: "V0 shipped", ...SHIPPED },
-  { id: "J0 js-tech", ...SHIPPED, jsTile: "tech" },
-  { id: "S0 no-hold", ...SHIPPED, staminaHolds: false },
+  { id: "B0 v18", ...V18 },
+  // The rules the shipped filing replaced, each on its own.
+  { id: "J0 js-tech", ...SHIPPED, jsRule: "tech" },
+  { id: "J1 js-label", ...SHIPPED, jsRule: "cluster" },
+  { id: "J2 js-floor90", ...SHIPPED, jsRule: "cluster", jsArbitrationMinLength: 90 },
+  { id: "J3 runnerup", ...SHIPPED, jsRule: "runnerup" },
+  { id: "J4 no-rveto", ...SHIPPED, runnerUpJackVeto: false },
+  { id: "H0 no-hstie", ...SHIPPED, handstreamNearTie: Infinity },
+  { id: "H1 hstie-free", ...SHIPPED, handstreamNearTieNeedsCluster: false },
+  { id: "H2 hstie.50", ...SHIPPED, handstreamNearTie: 0.5 },
+  { id: "H3 hstie2.0", ...SHIPPED, handstreamNearTie: 2.0 },
+  { id: "S0 hold-tech", ...SHIPPED, staminaHoldsBestBase: false },
+  { id: "S1 no-hold", ...SHIPPED, staminaHolds: false },
   { id: "T0 no-lead", ...SHIPPED, techLeadMin: Infinity },
-  { id: "T4 lead.75", ...SHIPPED, techLeadMin: 0.75 },
-  { id: "T6 lead.25", ...SHIPPED, techLeadMin: 0.25 },
-  { id: "T5 lead.50 ts0", ...SHIPPED, techLeadMinScore: 0 },
-  // Widening the hold's Technical demand, and length-scaled arms that drop it
-  // entirely past a longer gate (Demiourgos 3264851 is 6:27 with Technical
-  // 0.34 under Stream, so it needs band >= 0.35 or a free length <= 387).
-  { id: "H1 band.50", ...SHIPPED, staminaHoldsTechBand: 0.5 },
-  { id: "H2 band1.25", ...SHIPPED, staminaHoldsTechBand: SPEED_NEAR_TIE_MSD },
-  { id: "H3 no-techdem", ...SHIPPED, staminaHoldsTechBand: Infinity },
-  { id: "H4 free@300", ...SHIPPED, staminaHoldsFreeLength: 300 },
-  { id: "H5 free@360", ...SHIPPED, staminaHoldsFreeLength: 360 },
-  { id: "H6 free@420", ...SHIPPED, staminaHoldsFreeLength: 420 },
+  { id: "T1 lead.60", ...SHIPPED, techLeadMin: 0.6 },
+  { id: "T2 lead.45", ...SHIPPED, techLeadMin: 0.45 },
+  { id: "T3 lead.25", ...SHIPPED, techLeadMin: 0.25 },
 ];
 
 function dominant(values: Record<string, number>, keep: readonly string[]): string | null {
@@ -113,45 +149,103 @@ function dominant(values: Record<string, number>, keep: readonly string[]): stri
   return best;
 }
 
+function jackContaminated(chart: ChartRow): boolean {
+  return chart.jackShare != null && chart.jackShare >= STAMINA_TILE_JACK_VETO_SHARE;
+}
+
+/**
+ * The longer of the 1.0x drain and the played time, matching enduranceSeconds
+ * in player-skills.ts. The corpus pass carries rate 1 so this is just the
+ * drain; the play-level pass carries the rate the play was actually set at,
+ * which is what makes a downrated 3:02 file clear the 4:00 stamina gate.
+ */
+function endurance(chart: ChartRow): number | null {
+  if (chart.lengthSeconds == null) return null;
+  const rate = Number.isFinite(chart.rate) && chart.rate > 0 ? chart.rate : 1;
+  return Math.max(chart.lengthSeconds, chart.lengthSeconds / rate);
+}
+
+const RICE = SKILLSETS.filter((s) => s !== "Stamina" && s !== "Handstream");
+const BASE = SKILLSETS.filter((s) => s !== "Stamina");
+
 function bucketingSkillset(chart: ChartRow, variant: Variant, keep: readonly string[] = SKILLSETS): string | null {
   const values = chart.values;
   const top = dominant(values, keep);
   if (top == null) return top;
-  if (variant.staminaHolds && top === "Stamina" && chart.lengthSeconds != null
-    && chart.lengthSeconds >= STAMINA_TILE_MIN_LENGTH_SECONDS && keep.includes("Stamina")
-    && (chart.lengthSeconds >= variant.staminaHoldsFreeLength
-      || Number(values.Technical ?? 0) >= Number(values.Stream ?? 0) - variant.staminaHoldsTechBand)) return top;
   const stream = Number(values.Stream ?? 0);
+  const len = endurance(chart);
+  const demandsEndurance = len != null && len >= STAMINA_TILE_MIN_LENGTH_SECONDS;
+  const holdRival = variant.staminaHoldsBestBase
+    ? Math.max(Number(values.Technical ?? 0), Number(values.Jumpstream ?? 0), Number(values.Handstream ?? 0))
+    : Number(values.Technical ?? 0);
+  if (variant.staminaHolds && top === "Stamina" && demandsEndurance
+    && holdRival >= stream - variant.staminaHoldsTechBand
+    && !jackContaminated(chart)) return top;
   const best = Number(values[top] ?? 0);
-  const nearTie = top === "Stream" || (stream > 0 && keep.includes("Stream") && stream >= best - SPEED_NEAR_TIE_MSD) ? "Stream" : top;
+  // A Handstream near-tie holds the stamina tile: Handstream names a pattern
+  // rather than riding on one, and at hundredths the argmax is noise.
+  if (Number.isFinite(variant.handstreamNearTie) && keep.includes("Handstream") && top !== "Handstream") {
+    const handstream = Number(values.Handstream ?? 0);
+    const clusterOk = !variant.handstreamNearTieNeedsCluster || chart.handstreamCluster;
+    if (handstream > 0 && clusterOk && handstream >= best - variant.handstreamNearTie && !jackContaminated(chart)) return "Handstream";
+  }
+  const nearTie = top === "Stream" || (stream > 0 && keep.includes("Stream") && stream >= best - SPEED_NEAR_TIE_MSD)
+    ? "Stream"
+    : top;
   if (nearTie === "Stream") {
     const technical = Number(values.Technical ?? 0);
     const scoreBacked = chart.techScore >= TECH_NEAR_TIE_MIN_SCORE && technical > 0 && technical >= stream - SPEED_NEAR_TIE_MSD;
-    const clusterBacked = variant.clusterTechArm && chart.techCategory === true
-      && chart.techScore >= variant.clusterMinTechScore
-      && technical > 0 && technical >= stream - variant.clusterBand;
     const leadBacked = Number.isFinite(variant.techLeadMin) && technical > 0
       && chart.techScore >= variant.techLeadMinScore
       && technical - stream >= variant.techLeadMin;
-    return scoreBacked || clusterBacked || leadBacked ? "Technical" : "Stream";
+    return scoreBacked || leadBacked ? "Technical" : "Stream";
+  }
+  if (nearTie === "Handstream" && jackContaminated(chart)) {
+    return bucketingSkillset(chart, variant, keep.filter((s) => RICE.includes(s as never)));
   }
   if (nearTie !== "Stamina" || chart.lengthSeconds == null) return nearTie;
-  if (chart.lengthSeconds >= STAMINA_TILE_MIN_LENGTH_SECONDS) return nearTie;
-  return bucketingSkillset(chart, variant, keep.filter((s) => s !== "Stamina"));
+  if (demandsEndurance && !jackContaminated(chart)) return nearTie;
+  return bucketingSkillset(chart, variant, keep.filter((s) => BASE.includes(s as never)));
+}
+
+function runnerUpSkillset(chart: ChartRow, variant: Variant): string {
+  const pool = SKILLSETS.filter((s) => s !== "Jumpstream"
+    && !(variant.runnerUpJackVeto && jackContaminated(chart) && (s === "Stamina" || s === "Handstream")));
+  return dominant(chart.values, pool) ?? "Jumpstream";
+}
+
+function tileForSkillset(skillset: string): string {
+  if (skillset === "JackSpeed" || skillset === "Chordjack") return "jack";
+  if (skillset === "Technical") return "tech";
+  if (skillset === "Stream") return "speed";
+  return "stamina"; // Handstream, Stamina
 }
 
 function tileFor(chart: ChartRow, variant: Variant): string {
-  if (chart.hasJackOverride) return "jack";
+  if (chart.jackDemand || chart.hasJackOverride) return "jack";
   const top = bucketingSkillset(chart, variant);
   if (top == null) return "none";
-  if (top === "JackSpeed" || top === "Chordjack") return "jack";
-  if (top === "Technical") return "tech";
-  if (top === "Jumpstream") {
-    if (variant.jsTile !== "cluster") return variant.jsTile;
-    return chart.clusterRaw != null && JS_TECH_CLUSTER.test(chart.clusterRaw) ? "tech" : "stamina";
+  if (top !== "Jumpstream") return tileForSkillset(top);
+  if (variant.jsRule === "tech") return "tech";
+  if (variant.jsRule === "techlabel") {
+    // Mirrors bucketsForClear: a missing label keeps the legacy tech pairing,
+    // a trill label keeps tech, a tech-suffixed label defers to the runner-up,
+    // and a plain label files stamina unless the jack veto reaches it.
+    if (chart.clusterTrill == null || chart.clusterTrill) return "tech";
+    if (chart.clusterTech === true) return tileForSkillset(runnerUpSkillset(chart, variant));
+    return jackContaminated(chart) ? "tech" : "stamina";
   }
-  if (top === "Stream") return "speed";
-  return "stamina"; // Handstream, Stamina
+  if (variant.jsRule === "trill" && chart.clusterRaw != null && /trill/i.test(chart.clusterRaw)) return "tech";
+  if (variant.jsRule === "runnerup" || variant.jsRule === "trill") {
+    return tileForSkillset(runnerUpSkillset(chart, variant));
+  }
+  // The v18 rule: a missing label kept the tech pairing, as did a tech-or-trill
+  // label, a file under the length floor, and a jack-contaminated chart.
+  if (chart.clusterTrill == null) return "tech";
+  if (JS_TECH_CLUSTER.test(chart.clusterRaw ?? "")) return "tech";
+  const len = endurance(chart);
+  if (len != null && len < variant.jsArbitrationMinLength) return "tech";
+  return jackContaminated(chart) ? "tech" : "stamina";
 }
 
 // Longest/most-specific first so "speedjack" never reads as "speed" and
@@ -178,6 +272,32 @@ function labelFrom(text: string): string | null {
 }
 
 const PACKISH = /pack|practice|training|collection/i;
+
+// Charts named in the 2026-08-30 feedback, with the tile a 4K dan player says
+// each should carry. "-" means no verdict was given.
+const SPOT: Array<[number, string, string]> = [
+  [4766898, "stamina", "daddy can change [men] 54s, JS 31.1 / Stamina 29.2"],
+  [2134877, "stamina", "Gate Openerz [Christina] 256s, played DT"],
+  [1297386, "-", "Grimm [Extra] - reporter unsure"],
+  [1624796, "speed", "Finixe [Another] 222BPM jumpstream/stream"],
+  [5339691, "stamina", "Hold Angel [Worship] handstream"],
+  [3084903, "tech", "Matusa Bomber 0.95"],
+  [3084904, "tech", "Matusa Bomber 1.05"],
+  [3084905, "tech", "Matusa Bomber 1.1"],
+  [3084906, "tech", "Matusa Bomber 1.15"],
+  [4189254, "tech", "Matusa Bomber 1.2"],
+  [4189255, "tech", "Matusa Bomber 1.25"],
+  [4189256, "tech", "Matusa Bomber 2mnd"],
+  [770127, "tech", "Blastix Riotz [GRAVITY] jumptrill"],
+  [789784, "tech", "Blastix Riotz [Jinjin's INFINITE]"],
+  [2117613, "tech", "Blastix Riotz [GRAVITY Lv.16]"],
+  [421066, "-", "AiAe [Wafles' SHD] jack-contaminated"],
+  [3090568, "-", "Crescent Moon Island [Kuro 1.05x]"],
+  [777348, "-", "PEACE BREAKER [FINAL PUNISHMENT]"],
+  [3264851, "-", "Demiourgos"],
+];
+
+const PLAY_SPOT_IDS = new Set([5339691, 4766898, 1624796, 2134877, 3084904, 4189256]);
 
 async function main() {
   const db = createClient({ url: DB_URL });
@@ -224,7 +344,7 @@ async function main() {
     });
   }
 
-  const SPOT_IDS = [4670645, 3208141, 3208148, 3090568, 3148376, 777348, 4189256, 3264851];
+  const SPOT_IDS = SPOT.map(([id]) => id);
   const ids = [...new Set([...corpusById.keys(), ...SPOT_IDS])];
   const chartById = new Map<number, ChartRow>();
   for (let offset = 0; offset < ids.length; offset += 500) {
@@ -233,7 +353,8 @@ async function main() {
     const rows = (await db.execute({
       sql: `select beatmap_id, msd_json, classification_json,
                    json_extract(classification_json, '$.lnRatio') as ln_ratio,
-                   json_extract(classification_json, '$.clusterCategory') as cluster_category
+                   json_extract(classification_json, '$.clusterCategory') as cluster_category,
+                   json_extract(classification_json, '$.jackDemand.detected') as jack_demand
               from beatmap_chart_analysis
              where status = 'ready' and key_count = 4 and beatmap_id in (${placeholders})
              order by analysis_version`,
@@ -245,7 +366,7 @@ async function main() {
       const lnRatio = Number(row.ln_ratio);
       if (Number.isFinite(lnRatio) && lnRatio >= LN_MIN_RATIO) continue;
       let msd: { values?: Record<string, number> } | null = null;
-      let cls: { patterns?: Array<{ id?: string; score?: number }> } | null = null;
+      let cls: { patterns?: Array<{ id?: string; score?: number }>; clusters?: Array<{ pattern?: unknown; importance?: unknown }> } | null = null;
       try { msd = JSON.parse(String(row.msd_json ?? "null")); } catch { /* skip */ }
       try { cls = JSON.parse(String(row.classification_json ?? "null")); } catch { /* skip */ }
       const values = msd?.values;
@@ -254,6 +375,14 @@ async function main() {
       for (const hit of Array.isArray(cls?.patterns) ? cls!.patterns! : []) {
         const id = String(hit?.id ?? "");
         if (id) scores.set(id, Math.max(scores.get(id) ?? 0, Number(hit?.score ?? 0)));
+      }
+      let total = 0;
+      let jack = 0;
+      for (const cluster of Array.isArray(cls?.clusters) ? cls!.clusters! : []) {
+        const importance = Number(cluster?.importance);
+        if (!Number.isFinite(importance) || importance <= 0) continue;
+        total += importance;
+        if (/jack/i.test(String(cluster?.pattern ?? ""))) jack += importance;
       }
       const chordjack = scores.get("chordjack") ?? 0;
       const speedjack = scores.get("speedjack") ?? 0;
@@ -267,6 +396,16 @@ async function main() {
         techScore: vetoesTech ? 0 : (scores.get("tech") ?? 0),
         techCategory: clusterCategory == null ? null : TECH_CLUSTER_CATEGORY.test(clusterCategory),
         clusterRaw: clusterCategory,
+        clusterTrill: clusterCategory == null || clusterCategory.trim() === ""
+          ? null
+          : TRILL_CLUSTER_CATEGORY.test(clusterCategory),
+        clusterTech: clusterCategory == null || clusterCategory.trim() === ""
+          ? null
+          : TECH_CLUSTER_CATEGORY.test(clusterCategory),
+        handstreamCluster: clusterCategory != null && HANDSTREAM_CLUSTER_CATEGORY.test(clusterCategory),
+        jackShare: total > 0 ? jack / total : null,
+        jackDemand: Number(row.jack_demand) === 1,
+        rate: 1,
         hasJackOverride: chordjack >= CHORDJACK_TAG_MIN_SCORE || speedjack >= PATTERN_TAG_MIN_SCORE,
         title: meta?.title ?? "",
         version: meta?.version ?? "",
@@ -312,12 +451,55 @@ async function main() {
     }
   }
 
-  console.log("\n== spot charts ==");
-  for (const id of SPOT_IDS) {
+  // Play-level spot checks. The corpus above rates a chart's own MSD vector,
+  // but production buckets the PLAY's accuracy-scaled SSR vector, and the two
+  // disagree exactly where the near-ties live - so a chart-level spot check
+  // cannot exercise the Handstream near-tie at all. These read the vectors
+  // players actually stored.
+  const playSpots = await db.execute({
+    sql: `select user_id, plays_json from player_skill_ratings
+           where status = 'ready' and plays_json is not null`,
+    args: [],
+  });
+  const byBeatmap = new Map<number, Array<{ rate: number; values: Record<string, number> }>>();
+  for (const row of playSpots.rows) {
+    let parsed: { plays?: Array<Record<string, unknown>> } | null = null;
+    try { parsed = JSON.parse(String(row.plays_json)); } catch { continue; }
+    for (const play of parsed?.plays ?? []) {
+      const beatmapId = Number(play?.beatmapId);
+      if (!PLAY_SPOT_IDS.has(beatmapId)) continue;
+      const values = play?.values as Record<string, number> | undefined;
+      if (!values) continue;
+      const list = byBeatmap.get(beatmapId) ?? [];
+      list.push({ rate: Number(play?.rate ?? 1), values });
+      byBeatmap.set(beatmapId, list);
+    }
+  }
+  console.log("\n== stored plays per named chart (share landing on the wanted tile) ==");
+  for (const [id, want, note] of SPOT) {
+    const plays = byBeatmap.get(id);
+    if (!plays || want === "-") continue;
+    const chart = charts.find((c) => c.beatmapId === id);
+    if (!chart) continue;
+    const line = VARIANTS.map(({ id, ...variant }) => {
+      const label = id;
+      const hits = plays.filter((play) =>
+        tileFor({ ...chart, values: play.values, rate: play.rate }, { id: label, ...variant }) === want).length;
+      return `${label.split(" ")[0]} ${hits}`;
+    }).join(" ");
+    console.log(`  ${id} want=${want.padEnd(7)} ${line}   (${note})`);
+  }
+
+  console.log("\n== spot charts (want -> variant verdicts) ==");
+  for (const [id, want, note] of SPOT) {
     const chart = charts.find((c) => c.beatmapId === id);
     if (!chart) { console.log(`  ${id}: no ready analysis`); continue; }
-    const tiles = VARIANTS.map((v) => `${v.id.split(" ")[0]}=${tileFor(chart, v)}`).join(" ");
-    console.log(`  ${id} techScore=${chart.techScore.toFixed(2)} cluster=${chart.techCategory} ${tiles}`);
+    const tiles = VARIANTS.map((v) => {
+      const tile = tileFor(chart, v);
+      const mark = want === "-" ? " " : tile === want ? "+" : "!";
+      return `${v.id.split(" ")[0]}=${tile}${mark}`;
+    }).join(" ");
+    console.log(`  ${id} want=${want.padEnd(7)} ${tiles}   (${note})`);
   }
   db.close();
 }

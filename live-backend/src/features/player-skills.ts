@@ -70,7 +70,17 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // windows too, so the wife goal now derates it same as stable). The bump
 // exists so the version-stale drip walks the whole roster instead of
 // waiting on views.
-export const PLAYER_SKILLS_VERSION = 18;
+// v19: four 4K tile-filing corrections (2026-08-30), all from 4K dan players
+// reading their own tiles back. The Jumpstream arbitration lost its 90-second
+// floor and now splits the ambiguous "Jumpstream Tech" label by MinaCalc's
+// runner-up skillset (TRILL_CLUSTER_CATEGORY); Handstream wins a near-tie on a
+// chart LeoBlack labels handstream (HANDSTREAM_NEAR_TIE_MSD); the long Stamina
+// hold reads its band against the best of Technical, Jumpstream and Handstream
+// rather than Technical alone (STAMINA_HOLD_BASE_BAND); and the tech-lead arm
+// dropped from 0.6 to 0.35 MSD (TECH_NEAR_TIE_MSD_LEAD) so a rated set stops
+// splitting across two tiles. Only which tile a clear files under moves, so
+// the per-tile dans and the headline that averages them move with it.
+export const PLAYER_SKILLS_VERSION = 19;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -81,8 +91,18 @@ export const PLAYER_SKILLS_VERSION = 18;
 // still-visible play whose goal shifted recomputes, and DA identities evict.
 // A bump that changes what an SSR value itself means (a calc change like
 // v15's LN blend) must ship this list EMPTY, or stale values would be
-// reused forever on plays whose goal did not move.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [17];
+// reused forever on plays whose goal did not move. v19 moves no SSR value and
+// no goal, only the tile a clear files under, so it seeds from every version
+// back to the last calc change: v15's LN blend was that change, and v16, v17
+// and v18 all rate a play's SSR the same way. Listing only the immediately
+// prior version is the trap here rather than the safe choice - a roster
+// migrates version by version and most of it is still two bumps back. Measured
+// on the local snapshot at the time of the v19 bump: 5,028 ready rows on v18
+// against 12,134 on v17 and 383 on v16, so a list of [18] would have sent 71%
+// of the roster through a from-zero recompute, re-running MinaCalc on every
+// play and dropping the retained evidence for plays that have since aged out
+// of the top-100 window.
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -974,10 +994,13 @@ export interface ChartSkillInfo {
   // Whether LeoBlack's headline label for the whole chart carries "Tech".
   // Null when it stored no label. See TECH_CLUSTER_CATEGORY.
   techCategory: boolean | null;
-  // Whether that same label reads tech or trill, the shapes 4K players call
-  // tech when MinaCalc rates them Jumpstream. Null when no label is stored.
-  // Read by the 4K Jumpstream arbitration (JS_TECH_CLUSTER_CATEGORY).
-  jsClusterTech: boolean | null;
+  // Whether that same label names a trill, the one shape 4K players call tech
+  // outright when MinaCalc rates it Jumpstream. Null when no label is stored.
+  // Read by the 4K Jumpstream arbitration (TRILL_CLUSTER_CATEGORY).
+  clusterTrill: boolean | null;
+  // Whether that same label names handstream. Null when no label is stored.
+  // Read by the Handstream near-tie (HANDSTREAM_NEAR_TIE_MSD).
+  handstreamCluster: boolean | null;
   // The analyzer's raw tech score at 1.0x, zeroed when the jack veto strips
   // the tech tag. Read by the 4K speed tile's tech tiebreak
   // (TECH_NEAR_TIE_MIN_SCORE), which needs the score rather than the 0.5 tag.
@@ -1089,47 +1112,44 @@ const CLUSTER_SHARE_MIN = 0.4;
 // Pack" is an endurance pack, 0 of its 12 charts read as tech.
 const TECH_CLUSTER_CATEGORY = /tech/i;
 
-// Arbitrates a 4K Jumpstream-argmax clear between the tech and stamina tiles
-// (see danSkillsetBuckets): the label's tech suffix or a trill name ("Jumptrill",
-// "Split Trill Tech") keeps the clear on tech, the shapes players do read as
-// tech; anything else ("Jumpstream", "Chordjacks", "Rolls") files stamina.
-// Trill is matched by name because LeoBlack has no tech suffix for it: of 44
-// charts from mapper-named 4K jumptrill packs, 43 label "Jumptrill" plain, and
-// under this split all 44 keep the tech tile.
+// Arbitrates a 4K Jumpstream-argmax clear across the tiles (see
+// danSkillsetBuckets). MinaCalc's Jumpstream fires on dense jumptrill, on
+// chordstream stamina files and on fast jumpstream alike, so the argmax alone
+// names nothing and two signals split it:
 //
-// Measured 2026-08-29 against mapper-named 4K pack corpora
-// (scripts/dev/tile-variant-sweep.ts): the stamina corpus (1,036 charts, 33.6%
-// of which sat on the tech tile) goes 40.2% -> 67.1% stamina-tiled and the
-// handstream corpus (492) 71.1% -> 90.2%, while the tech corpus (418) loses 4
-// charts (0.9%), the jumptrill corpus moves 0, and the speed corpus's speed
-// share is untouched (its own Jumpstream-argmax charts move tech -> stamina).
-// Corpus-wide 11.1% of charts change tile, which is the size of the error this
-// fixes: mapper-named stamina files were filing tech through the
-// Jumpstream-rides-with-tech pairing. A missing label keeps that legacy
-// pairing rather than guessing (99.5% of ready 4K analyses store one).
-const JS_TECH_CLUSTER_CATEGORY = /tech|trill/i;
+// 1. LeoBlack's label. A trill name ("Jumptrill", "Split Trill Tech") keeps
+//    the clear on tech outright, the one shape 4K players read as tech no
+//    matter how it rates - of 44 charts from mapper-named 4K jumptrill packs,
+//    43 label "Jumptrill" plain. A plain label ("Jumpstream", "Handstream",
+//    "Chordjacks", "Rolls") files stamina, the community reading that
+//    jumpstream and handstream ARE endurance.
+// 2. For the label that reads tech without naming a trill ("Jumpstream Tech"),
+//    which covers both shapes, MinaCalc's own runner-up decides: the strongest
+//    skillset other than Jumpstream picks the tile the same way it would if it
+//    had won the argmax. This is the reading 4K players gave for the pair the
+//    rule has to separate - Blastix Riotz [GRAVITY] rates Jumpstream 27.91 over
+//    Technical 26.71 and is tech, goreshit - daddy can change [4K] men (4766898)
+//    rates Jumpstream 31.08 over Stamina 29.19 and is stamina, and Finixe
+//    [4K] Another rates Jumpstream 22.14 over Stream 20.64 on 222BPM streams
+//    and is speed.
+//
+// There is no length floor on any of it. A 54-second file is still a
+// jumpstream file, which is the correction this rule carries: the floor
+// shipped 2026-08-29 sent 4766898 to tech on its 54 seconds and 4K players
+// reject that reading.
+//
+// Measured 2026-08-30 against mapper-named 4K pack corpora
+// (scripts/dev/tile-variant-sweep.ts, variant G3), alongside the three changes
+// below: jumpstream (502 charts) goes 75.9% -> 78.9% stamina-tiled, handstream
+// (571) 87.4% -> 88.3%, stamina (1,159) 65.1% -> 67.0% and tech (453) 46.4% ->
+// 47.5% tech-tiled, while jumptrill (47) and jack (3,323) do not move at all
+// and speed (1,213) loses 8 charts (77.0% -> 76.3%) and stream (686) two. A
+// missing label keeps the legacy tech pairing rather than guessing (99.5% of
+// ready 4K analyses store one).
+const TRILL_CLUSTER_CATEGORY = /trill/i;
 
-// The arbitration above only applies to a file long enough for endurance to be
-// a plausible reading of it. goreshit - daddy can change [4K] men (4766898) is
-// the measured case: 54 seconds of jack-heavy chordstream labelled "Jumpstream",
-// so the label sent it to stamina, and a DT play of it lasts 36. No 54-second
-// file drains anyone, whatever its shape, and the analyzer cannot save this one
-// either - it scores the chart tech 1.00, the same score the dense chordstream
-// cuts the arbitration exists for carry, so the tech detector separates
-// nothing here and length is the only honest signal.
-//
-// 90 seconds rather than the tile's own 4:00 bar because this is not the
-// endurance question: it only asks whether the file is long enough to be read
-// as a chordstream body of work at all. The two charts the arbitration was
-// built on sit at 112 and 116 seconds (Amber Wishes, Oyasumi), so the floor has
-// to clear 54 without reaching them.
-//
-// Measured over the mapper-named 4K pack corpora: 105 charts move back to the
-// tech pairing, 65 of them unlabelled, and no labelled corpus loses more than
-// 16. A genuine Handstream or Stamina argmax is untouched at any length, which
-// is deliberate: the stamina tile is the only home Handstream has, so flooring
-// it would file 24-second cuts from named handstream packs under tech instead.
-const STAMINA_ARBITRATION_MIN_LENGTH_SECONDS = 90;
+// The same label read for handstream, for the near-tie below.
+const HANDSTREAM_CLUSTER_CATEGORY = /handstream/i;
 
 // Jack contamination keeps a chart off the stamina tile whatever MinaCalc's
 // argmax says. AiAe [4K] Wafles' SHD (421066) is the measured case: LeoBlack
@@ -1258,8 +1278,11 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         techCategory: typeof parsed?.clusterCategory === "string"
           ? TECH_CLUSTER_CATEGORY.test(parsed.clusterCategory)
           : null,
-        jsClusterTech: typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
-          ? JS_TECH_CLUSTER_CATEGORY.test(parsed.clusterCategory)
+        clusterTrill: typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
+          ? TRILL_CLUSTER_CATEGORY.test(parsed.clusterCategory)
+          : null,
+        handstreamCluster: typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
+          ? HANDSTREAM_CLUSTER_CATEGORY.test(parsed.clusterCategory)
           : null,
         techScore: vetoesTech ? 0 : (patternScores.get("tech") ?? 0),
         lnRatio,
@@ -1584,6 +1607,44 @@ export function danClearAverageWindowFor(_side: "rc" | "ln", _keyCount: number):
   return DAN_CLEAR_AVERAGE_WINDOW;
 }
 
+/**
+ * A window's own strays: clears sitting so far under the rest of it that they
+ * are a player messing about (a 100% run on a chart eight levels below their
+ * body of work) rather than evidence of a level. The reference is the mean of
+ * the window's best five - the best three moved with a single spike - the gap
+ * is five levels under it, and at most two clears may be ignored.
+ *
+ * The cap is the whole rule. Without one a tile could lose 12 of its 16
+ * clears and jump six levels on the survivors: exactly the "your dan is your
+ * best few plays" behaviour the window widened to twenty to stop. Three keeps
+ * it a band-aid over an afternoon of messing about and leaves a wide body of
+ * work alone. Measured over the corpus's 58,341 rated tiles, 5.7% carry one or
+ * two clears under the cut and 1.8% carry three or more; going from two to
+ * three moves 5.0% of sides by a median of 0.08 and at most 0.68 of a level,
+ * and it exists because a tile whose best five are delta was still averaging
+ * in a 100% run on a dan 8 chart once two lower ones had used up the cap.
+ */
+const DAN_STRAY_CLEAR_REFERENCE = 5;
+const DAN_STRAY_CLEAR_GAP = 5;
+const DAN_STRAY_CLEAR_MAX_IGNORED = 3;
+
+/**
+ * How many of a window's lowest clears the stray rule ignores, given the
+ * window already sorted best-first the way every caller holds it. Never trims
+ * past DAN_CLEAR_QUORUM: a thin pool keeps a stray rather than stopping being
+ * rateable, since a tile that falls under the quorum leaves the headline
+ * average entirely and would take the player DOWN.
+ */
+export function danIgnoredStrayCount(sortedDesc: number[]): number {
+  const reference = sortedDesc.slice(0, DAN_STRAY_CLEAR_REFERENCE);
+  if (reference.length === 0) return 0;
+  const cut = reference.reduce((sum, value) => sum + value, 0) / reference.length - DAN_STRAY_CLEAR_GAP;
+  const room = Math.min(DAN_STRAY_CLEAR_MAX_IGNORED, sortedDesc.length - DAN_CLEAR_QUORUM);
+  let ignored = 0;
+  while (ignored < room && sortedDesc[sortedDesc.length - 1 - ignored] < cut) ignored += 1;
+  return ignored;
+}
+
 function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): PlayerSkillDanVerdict | null {
   if (rawDans.length < DAN_CLEAR_QUORUM) return null;
   const sorted = [...rawDans].sort((a, b) => b - a);
@@ -1594,7 +1655,11 @@ function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): 
   // average up in proportion to how far it sits above the rest.
   const needed = danClearAverageWindowFor(side, keyCount);
   const window = sorted.slice(0, needed);
-  const rawDan = Math.round((window.reduce((sum, value) => sum + value, 0) / window.length) * 100) / 100;
+  // Strays leave the average but stay in the window's `have`: they are clears
+  // the player really has, they just do not set the level, and shrinking
+  // `have` would draw a complete window as if it were still filling in.
+  const counted = window.slice(0, window.length - danIgnoredStrayCount(window));
+  const rawDan = Math.round((counted.reduce((sum, value) => sum + value, 0) / counted.length) * 100) / 100;
   return {
     rawDan,
     label: danLabelFor(rawDan, side, keyCount),
@@ -2646,7 +2711,8 @@ function buildPlayerSkillPlay(
 // and the accuracy it was judged on in that ladder's currency (which is not
 // always the client's displayed number). `countsTowardDan` marks the clears
 // whose credit sits at or above the side's estimate (the ones the stored
-// verdict's `clears` count refers to).
+// verdict's `clears` count refers to). `ignoredAsStray` marks the clears the
+// stray rule dropped out of the average that produced the estimate.
 export interface PlayerSkillDanEvidencePlay {
   play: PlayerSkillPlay;
   chartDan: number;
@@ -2655,6 +2721,12 @@ export interface PlayerSkillDanEvidencePlay {
   creditedDanLabel: string;
   clearAccuracy: number;
   countsTowardDan: boolean;
+  /**
+   * The stray rule left this clear out of the average behind the number above
+   * it (danIgnoredStrayCount). It is still a real clear and still listed, it
+   * just does not pull the level down.
+   */
+  ignoredAsStray?: boolean;
 }
 
 export interface PlayerSkillDanSkillsetEvidence {
@@ -2782,11 +2854,13 @@ interface DanSkillsetBucket {
  * fires on dense jumptrill (tech to 4K players) and on dense chordstream
  * stamina files (Amber Wishes-type practice cuts) alike, and an unconditional
  * tech pairing put 47% of the mapper-named stamina corpus on the tech tile.
- * LeoBlack's headline label separates the two shapes where the in-house tech
- * score cannot (those stamina cuts carry tech scores of 0.94-1.00): a label
- * reading tech or trill keeps the clear on tech, anything else files stamina
- * (JS_TECH_CLUSTER_CATEGORY has the measurements; bucketsForClear applies it,
- * and a chart with no stored label keeps the tech pairing).
+ * LeoBlack's headline label separates the shapes where the in-house tech score
+ * cannot (those stamina cuts carry tech scores of 0.94-1.00): a label naming a
+ * trill keeps the clear on tech, a plain label files stamina, and the
+ * tech-suffixed label that covers both hands the choice to MinaCalc's
+ * runner-up skillset (TRILL_CLUSTER_CATEGORY has the measurements;
+ * bucketsForClear applies it, and a chart with no stored label keeps the tech
+ * pairing).
  *
  * Speed also wins near-ties outright (SPEED_NEAR_TIE_MSD), because a hard
  * argmax reads noise where these skillsets sit on top of each other. A second
@@ -2868,8 +2942,8 @@ function danSkillsetBuckets(keyCount: number, side: "rc" | "ln"): DanSkillsetBuc
       // a chart wearing either tag files here regardless of the MSD argmax.
       { id: "jack", tags: ["chordjack", "speedjack"], skillsets: ["JackSpeed", "Chordjack"] },
       // Jumpstream is listed on tech as the fallback pairing; bucketsForClear
-      // re-files a Jumpstream argmax to stamina when LeoBlack's label reads
-      // neither tech nor trill (JS_TECH_CLUSTER_CATEGORY).
+      // re-files a Jumpstream argmax by LeoBlack's label and, where that label
+      // is ambiguous, by the runner-up skillset (TRILL_CLUSTER_CATEGORY).
       { id: "tech", tags: [], skillsets: ["Technical", "Jumpstream"] },
       { id: "speed", tags: [], skillsets: ["Stream"] },
       { id: "stamina", tags: [], skillsets: ["Handstream", "Stamina"] },
@@ -2904,7 +2978,7 @@ function bucketsForClear(
   buckets: DanSkillsetBucket[],
   topSkillset: string | null,
   chart: ChartSkillInfo | undefined,
-  rate = 1,
+  values: Record<string, number> | undefined,
 ): DanSkillsetBucket[] {
   // MinaCalc suppresses anchored rows and can rate community-Jack
   // quadstream/minijack shapes as Technical or Jumpstream. Chart analysis
@@ -2918,24 +2992,22 @@ function bucketsForClear(
     (bucket) => bucket.skillsets != null && bucket.tags.length > 0 && chartBelongsToTagBucket(bucket, chart),
   );
   if (override != null) return [override];
-  // The Jumpstream arbitration (JS_TECH_CLUSTER_CATEGORY): a Jumpstream-argmax
-  // clear files with stamina unless LeoBlack reads the chart as tech or trill,
-  // in which case the tech pairing in the bucket lists keeps it. Filed as
-  // Stamina rather than through its own list so the tiles stay disjoint.
+  // The Jumpstream arbitration (TRILL_CLUSTER_CATEGORY). A trill label keeps
+  // the tech pairing the bucket lists already give it; a plain label files
+  // stamina; a tech-suffixed label hands the tile to the runner-up skillset,
+  // which files through the same bucket lists every other argmax does, so the
+  // tiles stay disjoint. A chart with no stored label keeps the tech pairing
+  // rather than guessing.
   //
-  // A file under STAMINA_ARBITRATION_MIN_LENGTH_SECONDS keeps the tech pairing
-  // whatever the label says: too short to read as chordstream endurance. An
-  // unknown length arbitrates as before rather than guessing a chart short.
-  const arbitrationLength = enduranceSeconds(chart?.lengthSeconds ?? null, rate);
-  const longEnoughToArbitrate = arbitrationLength == null
-    || arbitrationLength >= STAMINA_ARBITRATION_MIN_LENGTH_SECONDS;
-  // The jack veto applies here too. Without it a chart it pushed off Handstream
-  // would fall into Jumpstream and the label would file it back on stamina.
-  const arbitrates = topSkillset === "Jumpstream"
-    && chart?.jsClusterTech === false
-    && longEnoughToArbitrate
-    && !jackContaminated(chart?.jackShare ?? null);
-  const effectiveTop = arbitrates ? "Stamina" : topSkillset;
+  // The jack veto applies to the endurance readings here too, or a chart it
+  // pushed off Handstream would fall into Jumpstream and come back to stamina
+  // through this rule.
+  const contaminated = jackContaminated(chart?.jackShare ?? null);
+  const effectiveTop = topSkillset !== "Jumpstream" || chart?.clusterTrill == null || chart.clusterTrill
+    ? topSkillset
+    : chart.techCategory === true
+      ? jumpstreamRunnerUp(values, contaminated)
+      : contaminated ? topSkillset : "Stamina";
   return buckets.filter((bucket) => bucket.skillsets
     ? effectiveTop != null && bucket.skillsets.includes(effectiveTop)
     : chartBelongsToTagBucket(bucket, chart));
@@ -2958,8 +3030,15 @@ function groupDanClearsBySkillset(
   for (const bucket of buckets) bySkillset.set(bucket.id, []);
   for (const clear of clears) {
     const chart = infoByBeatmap.get(clear.play.beatmapId);
-    const topSkillset = bucketingSkillset(clear.play.values, chart?.lengthSeconds ?? null, clear.play.rate, chart?.techScore ?? 0, chart?.jackShare ?? null);
-    for (const bucket of bucketsForClear(buckets, topSkillset, chart, clear.play.rate)) {
+    const topSkillset = bucketingSkillset(
+      clear.play.values,
+      chart?.lengthSeconds ?? null,
+      clear.play.rate,
+      chart?.techScore ?? 0,
+      chart?.jackShare ?? null,
+      chart?.handstreamCluster === true,
+    );
+    for (const bucket of bucketsForClear(buckets, topSkillset, chart, clear.play.values)) {
       bySkillset.get(bucket.id)!.push(clear);
     }
   }
@@ -3030,6 +3109,18 @@ export async function getPlayerSkillDanEvidence(
   // verdict's clears count.
   const threshold = dan ? dan.rawDan - DAN_ROUNDING_EPSILON : null;
 
+  // Which clears the stray rule left out of the averages on screen. Marked per
+  // window rather than per play, because a clear is only a stray relative to
+  // the pool it is averaged against: the skillset windows are marked whenever
+  // the tiles carry their own dans, and the side-wide window only when it is
+  // the one the headline came from (a side with fewer than two rated tiles).
+  const ignoredClears = new Set<DanClearEvidence>();
+  const markStrays = (list: DanClearEvidence[]) => {
+    const window = list.slice(0, danClearAverageWindowFor(side, keyCount));
+    const ignored = danIgnoredStrayCount(window.map((clear) => clear.creditedDan));
+    for (const clear of window.slice(window.length - ignored)) ignoredClears.add(clear);
+  };
+
   // Skillset grouping, by bucket rather than by raw analyzer tag: the tag
   // vocabulary is 18 ids deep and a player reads their dan through the four
   // skills their scene actually names (DAN_SKILLSET_BUCKETS). The dans come
@@ -3038,6 +3129,11 @@ export async function getPlayerSkillDanEvidence(
   // to explain a number it did not produce.
   const buckets = danSkillsetBuckets(keyCount, side);
   const bySkillset = groupDanClearsBySkillset(keyCount, side, clears, infoByBeatmap);
+  if (Object.keys(dan?.skillsets ?? {}).length >= DAN_SKILLSET_AVERAGE_MIN_BUCKETS) {
+    for (const bucket of buckets) markStrays(bySkillset.get(bucket.id) ?? []);
+  } else {
+    markStrays(clears);
+  }
 
   const maxClears = Math.min(
     Math.max(Math.floor(options.maxClears ?? DAN_EVIDENCE_MAX_CLEARS), DAN_EVIDENCE_MAX_CLEARS),
@@ -3068,6 +3164,7 @@ export async function getPlayerSkillDanEvidence(
       creditedDanLabel: clear.creditedDan === clear.chartDan ? chartDanLabel : danLabelFor(clear.creditedDan, side, keyCount),
       clearAccuracy: clear.accuracy,
       countsTowardDan: threshold != null && clear.creditedDan >= threshold,
+      ...(ignoredClears.has(clear) ? { ignoredAsStray: true } : {}),
     };
   };
 
@@ -3190,22 +3287,26 @@ const TECH_NEAR_TIE_MIN_SCORE = 0.8;
 // cannot reach it and Stream wins the near-tie from THIRD place - while /maps,
 // which reads the top base skillset, calls the same chart tech. Its tech score
 // is 0.54, well under the 0.8 bar.
+// It first shipped at 0.6, which left the rest of that beatmapset behind: the
+// seven Matusa Bomber diffs are one chart at seven rates and 4K players call
+// all seven tech, but their Technical-over-Stream leads run 0.35, 0.36, 0.47,
+// 0.47, 0.59, 0.70 and 0.81, so 0.6 took two and the speed tile took five.
+// 0.35 is where a rated set stops being split by its own rate.
 //
-// 0.6 of MSD is the line because the near-tie exists for hundredths-level
-// noise: the alpha speed pack the band was widened for has real speed charts
-// with Technical ahead of Stream by 0.02 and by 0.50, so the bar sits just
-// above the labelled evidence. Measured 2026-08-29 over the mapper-named 4K
-// pack corpora (scripts/dev/tile-variant-sweep.ts): the tech corpus (418
-// charts) goes 41.9% -> 47.8% tech-tiled, while speed (1,088) loses 13 charts
-// (78.2% -> 77.0%), stream (623) loses 8 (61.3% -> 60.0%) and stamina (1,036)
-// moves 9 off the speed tile - the same ~1%-per-corpus line the other
-// overrides hold to, and four of the 13 speed "losses" are corpus noise (sets
-// named for Speedcore or a Speedrun, and a diff literally versioned
-// [Speed/Tech]). Dropping to 0.5 buys 7 more tech charts for 3 more speed
-// ones but puts the bar exactly on a labelled speed chart; dropping the
-// tech-tag demand entirely costs the speed corpus 3.4%. Re-measure both
-// corpora before moving either number.
-const TECH_NEAR_TIE_MSD_LEAD = 0.6;
+// The near-tie exists for hundredths-level noise, and the alpha speed pack the
+// band was widened for has real speed charts with Technical ahead of Stream by
+// 0.02 and by 0.50, so this stays a bar the labelled speed evidence can pass.
+// Measured 2026-08-30 over the mapper-named 4K pack corpora
+// (scripts/dev/tile-variant-sweep.ts): moving 0.6 -> 0.35 takes the tech
+// corpus (453 charts) 46.4% -> 49.2% tech-tiled while the speed corpus (1,213)
+// loses 8 (77.0% -> 76.3%), stream (686) two and stamina (1,159) three, and
+// handstream, jumpstream, jumptrill and jack move nothing. The eight speed
+// losses are all named speed-pack charts, so this is the one number here whose
+// cost is paid in real labels rather than corpus noise; it buys 13 tech-pack
+// charts and a set that stops contradicting itself. Dropping the tech-tag
+// demand entirely costs the speed corpus 3.4%. Re-measure both corpora before
+// moving either number.
+const TECH_NEAR_TIE_MSD_LEAD = 0.35;
 
 // MinaCalc's Stamina is a rider rather than a detector: it tracks the strongest
 // base skillset sustained and the calc clamps it a hair above that base. Over
@@ -3226,28 +3327,62 @@ const TECH_NEAR_TIE_MSD_LEAD = 0.6;
 // length.
 const STAMINA_TILE_MIN_LENGTH_SECONDS = 240;
 
-// How far Technical may sit UNDER Stream and still let a length-qualified
-// Stamina argmax hold the tile. The hold first shipped demanding Technical
-// outrank Stream outright, which read Stream in third place as proof the chart
-// was a speed file - but on a marathon it is just as often the argmax noise
-// the near-tie exists to absorb, only ordered the other way. Demiourgos [4K]
-// (3264851) is the measured case: 6:27 at 274 BPM of Stamina 29.18 / Stream
-// 29.05 / Technical 28.71, a chart nobody calls a speed file, filed under
-// speed because Technical missed Stream by a third of a point.
+// How far the strongest OTHER base skillset may sit under Stream and still let
+// a length-qualified Stamina argmax hold the tile. The hold first shipped
+// demanding Technical outrank Stream outright, which read Stream in third
+// place as proof the chart was a speed file - but on a marathon it is just as
+// often the argmax noise the near-tie exists to absorb, only ordered the other
+// way. Demiourgos [4K] (3264851) is the measured case: 6:27 at 274 BPM of
+// Stamina 29.18 / Stream 29.05 / Technical 28.71, a chart nobody calls a speed
+// file, filed under speed because Technical missed Stream by a third of a
+// point.
 //
-// 0.5 of MSD is the line for the same reason TECH_NEAR_TIE_MSD_LEAD is 0.6:
-// it covers argmax noise without reaching charts where Stream genuinely leads.
-// Measured 2026-08-29 over the mapper-named 4K pack corpora
-// (scripts/dev/tile-variant-sweep.ts): the stamina corpus (1,036) goes 68.2%
-// -> 68.5% stamina-tiled and the speed corpus (1,088) loses 5 charts (77.0%
-// -> 76.6%), all of them 4:00+ speed-training files with a Stamina argmax;
-// stream (623) and tech (418) lose one each, and handstream, jumpstream and
-// jack do not move at all. Widening to the full near-tie band (1.25) or
+// The rival is the best of Technical, Jumpstream and Handstream rather than
+// Technical alone, because a marathon's second reading is not always tech.
+// Gate Openerz [4K] Christina (2134877) is the measured case: 4:16 of Stamina
+// 22.09 / Jumpstream 22.00 / Stream 21.32 / Technical 18.82, so Stream is only
+// third and yet Technical missed it by 2.5 and handed a jumpstream marathon to
+// the speed tile. The jack families stay out: a marathon whose second reading
+// is jack is not endurance, and the jack override and share veto already
+// answer for it.
+//
+// 0.5 of MSD is the line: it covers argmax noise without reaching charts where
+// Stream genuinely leads. Measured 2026-08-29 over the mapper-named 4K pack
+// corpora (scripts/dev/tile-variant-sweep.ts): the stamina corpus (1,036) goes
+// 68.2% -> 68.5% stamina-tiled and the speed corpus (1,088) loses 5 charts
+// (77.0% -> 76.6%), all of them 4:00+ speed-training files with a Stamina
+// argmax; stream (623) and tech (418) lose one each, and handstream,
+// jumpstream and jack do not move at all. Widening the rival to the other two
+// skillsets on 2026-08-30 moved nothing in any labelled corpus and three
+// charts in the random one. Widening the band to the full near-tie (1.25) or
 // dropping the demand entirely costs the speed corpus 14 and 28 charts, and
 // holding unconditionally past a longer gate is worse at every length tried
 // (5:00 costs 15, 6:00 costs 9) because it reaches charts where Stream leads
 // by more than noise. Re-measure the speed corpus before widening this.
-const STAMINA_HOLD_TECH_BAND = 0.5;
+const STAMINA_HOLD_BASE_BAND = 0.5;
+
+// The skillsets that can stand in for Stream in the hold above.
+const STAMINA_HOLD_RIVALS = ["Technical", "Jumpstream", "Handstream"];
+function staminaHoldRival(values: Record<string, number> | undefined): number {
+  return Math.max(...STAMINA_HOLD_RIVALS.map((skillset) => Number(values?.[skillset] ?? 0)));
+}
+
+// How far under the top skillset Handstream may sit and still call the chart
+// handstream, on a chart LeoBlack's headline label names handstream. It shares
+// SPEED_NEAR_TIE_MSD rather than inventing a second number: the two answer the
+// same question, which is how far apart these skillsets have to be before the
+// gap means anything.
+//
+// The label gate is what keeps it cheap. Ungated it costs the mapper-named
+// tech corpus 8 charts (46.4% -> 44.6% tech-tiled); gated at this band it
+// costs 3 tech-pack charts and 2 speed-pack ones and moves nothing at all in
+// the handstream, stamina, jumpstream, stream, jumptrill and jack corpora.
+//
+// It does NOT go wider. At 2.0 it takes every stored Hold Angel play but also
+// wins the near-tie on Matusa Bomber's handstream-labelled diffs, which 4K
+// players call tech - the two corrections collide, and this is the one that
+// yields.
+const HANDSTREAM_NEAR_TIE_MSD = SPEED_NEAR_TIE_MSD;
 
 /** Whether LeoBlack's jack clusters carry too much of a chart to call it endurance. */
 function jackContaminated(jackShare: number | null): boolean {
@@ -3266,15 +3401,30 @@ const BASE_MSD_SKILLSETS = SKILL_RATING_SKILLSETS.filter(
 );
 
 /**
+ * The strongest skillset other than Jumpstream, which picks the tile for a
+ * Jumpstream argmax LeoBlack's label cannot resolve (see the arbitration in
+ * bucketsForClear). A jack-contaminated chart cannot pick an endurance
+ * runner-up, the same veto every other stamina entry path carries. Null values
+ * fall back to Jumpstream itself, i.e. the legacy tech pairing.
+ */
+function jumpstreamRunnerUp(values: Record<string, number> | undefined, contaminated: boolean): string {
+  const pool = SKILL_RATING_SKILLSETS.filter((skillset) => skillset !== "Overall"
+    && skillset !== "Jumpstream"
+    && !(contaminated && (skillset === "Stamina" || skillset === "Handstream")));
+  return dominantSkillset(pickSkillsets(values, pool)) ?? "Jumpstream";
+}
+
+/**
  * The skillset a play is filed under, which is its strongest EXCEPT that Stream
  * wins from within SPEED_NEAR_TIE_MSD of the top, a speed verdict yields to
  * tech when Technical is in the same band and the analyzer confidently calls
  * the chart tech (TECH_NEAR_TIE_MIN_SCORE) or when Technical simply outranks
- * Stream on a tech-tagged chart (TECH_NEAR_TIE_MSD_LEAD), and Stamina has to earn it on
- * length - though a Stamina argmax that HAS earned it holds the tile against
- * the near-tie when Technical also outranks Stream (the hold below). Still
- * single-valued, so the tiles stay disjoint and their clear counts sum to the
- * side's total.
+ * Stream on a tech-tagged chart (TECH_NEAR_TIE_MSD_LEAD), Handstream wins from
+ * within HANDSTREAM_NEAR_TIE_MSD of the top on a chart LeoBlack reads as
+ * handstream, and Stamina has to earn it on length - though a Stamina argmax
+ * that HAS earned it holds the tile against the near-tie when some other base
+ * skillset stays beside Stream (the hold below). Still single-valued, so the
+ * tiles stay disjoint and their clear counts sum to the side's total.
  *
  * `lengthSeconds` is the chart's drain at 1.0x and `rate` the speed it was
  * played at. The gate takes the LONGER of the two readings: a chart whose 1.0x
@@ -3283,7 +3433,8 @@ const BASE_MSD_SKILLSETS = SKILL_RATING_SKILLSETS.filter(
  * stretches a shorter chart past 4:00 still earns the tile on the time it
  * actually lasted. An unknown length leaves the old behaviour rather than
  * guessing a chart short. `chartTechScore` is the chart's stored analyzer
- * tech score (ChartSkillInfo.techScore), 0 when no analysis is stored.
+ * tech score (ChartSkillInfo.techScore), 0 when no analysis is stored, and
+ * `chartHandstreamCluster` whether LeoBlack's headline label names handstream.
  */
 function bucketingSkillset(
   values: Record<string, number> | undefined,
@@ -3291,6 +3442,7 @@ function bucketingSkillset(
   rate = 1,
   chartTechScore = 0,
   chartJackShare: number | null = null,
+  chartHandstreamCluster = false,
 ): string | null {
   const top = dominantSkillset(values);
   if (top == null) return top;
@@ -3300,24 +3452,44 @@ function bucketingSkillset(
   const endurance = enduranceSeconds(lengthSeconds, rate);
   const demandsEndurance = endurance != null && endurance >= STAMINA_TILE_MIN_LENGTH_SECONDS;
   // A length-qualified Stamina argmax holds the tile before the speed near-tie
-  // can reach it, as long as Technical is not more than STAMINA_HOLD_TECH_BAND
-  // behind Stream: a three-way pile-up at the top of a marathon is the
-  // argmax noise the near-tie exists to absorb, not evidence of a speed file.
-  // PEACE BREAKER [4K] FINAL PUNISHMENT (777348) is the measured case: 4:51 of
-  // Stamina 30.15 / Technical 30.03 / Stream 30.02, which the near-tie filed
-  // under speed on a chart players place between tech and stamina.
+  // can reach it, as long as SOME base skillset stays within
+  // STAMINA_HOLD_BASE_BAND of Stream: a pile-up at the top of a marathon is
+  // the argmax noise the near-tie exists to absorb, not evidence of a speed
+  // file. PEACE BREAKER [4K] FINAL PUNISHMENT (777348) is the measured case:
+  // 4:51 of Stamina 30.15 / Technical 30.03 / Stream 30.02, which the near-tie
+  // filed under speed on a chart players place between tech and stamina.
   //
   // Measured 2026-08-29 over the mapper-named 4K pack corpora
   // (scripts/dev/tile-variant-sweep.ts): the stamina corpus (1,036 charts)
   // goes 67.1% -> 68.5% stamina-tiled while the speed (1,088), stream (623)
   // and tech (418) corpora each lose a handful of marathon-length charts
   // (0.5-1.1%), inside the 1%-per-corpus line the other overrides hold to.
-  // Dropping the Technical demand entirely costs the speed corpus 33 charts
-  // (3.1%), mostly pure-stream training marathons, so the band stays narrow.
+  // Dropping the demand entirely costs the speed corpus 33 charts (3.1%),
+  // mostly pure-stream training marathons, so the band stays narrow.
   if (top === "Stamina" && demandsEndurance
-    && Number(values?.Technical ?? 0) >= stream - STAMINA_HOLD_TECH_BAND
+    && staminaHoldRival(values) >= stream - STAMINA_HOLD_BASE_BAND
     && !jackContaminated(chartJackShare)) return top;
   const best = Number(values?.[top] ?? 0);
+  // Handstream wins a near-tie the same way Stream does, on a chart LeoBlack
+  // itself reads as handstream. Handstream names a pattern rather than riding
+  // on one, so a hundredths-level loss to Technical is argmax noise rather
+  // than a tech verdict - and MinaCalc's Handstream moves with a play's
+  // accuracy, so the same chart filed stamina for one player and tech for the
+  // next. Hold Angel [4K] Worship (5339691) is the measured case: Handstream
+  // 29.13 / Technical 28.00 as a chart, while plays of it land Technical 19.51
+  // over Handstream 19.45.
+  //
+  // The band does not rescue every play of it, and cannot: measured over the
+  // 374 stored plays of that chart, 291 filed stamina before this rule and 364
+  // after. The 10 that stay on tech are all downrated (0.75x), where the calc
+  // shifts the whole vector off Handstream by up to 1.92 - past any band that
+  // still means "argmax noise". A rate that changes what the calc reads is a
+  // different problem from a rate that changes what it ranks, and this rule
+  // only claims the second.
+  if (top !== "Handstream" && chartHandstreamCluster && !jackContaminated(chartJackShare)) {
+    const handstream = Number(values?.Handstream ?? 0);
+    if (handstream > 0 && handstream >= best - HANDSTREAM_NEAR_TIE_MSD) return "Handstream";
+  }
   const nearTie = top === "Stream" || (stream > 0 && stream >= best - SPEED_NEAR_TIE_MSD)
     ? "Stream"
     : top;
@@ -3339,11 +3511,11 @@ function bucketingSkillset(
   // the pattern it claims (STAMINA_TILE_JACK_VETO_SHARE), so it re-files
   // without either endurance skillset.
   if (nearTie === "Handstream" && jackContaminated(chartJackShare)) {
-    return bucketingSkillset(pickSkillsets(values, RICE_MSD_SKILLSETS), null, 1, chartTechScore, chartJackShare);
+    return bucketingSkillset(pickSkillsets(values, RICE_MSD_SKILLSETS), null, 1, chartTechScore, chartJackShare, chartHandstreamCluster);
   }
   if (nearTie !== "Stamina" || lengthSeconds == null) return nearTie;
   if (demandsEndurance && !jackContaminated(chartJackShare)) return nearTie;
-  return bucketingSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS), null, 1, chartTechScore, chartJackShare);
+  return bucketingSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS), null, 1, chartTechScore, chartJackShare, chartHandstreamCluster);
 }
 
 /**
@@ -3383,8 +3555,8 @@ export function danSkillsetBucketsForValues(
   rate = 1,
   chart?: ChartSkillInfo,
 ): string[] {
-  const top = bucketingSkillset(values, lengthSeconds, rate, chart?.techScore ?? 0, chart?.jackShare ?? null);
-  return bucketsForClear(danSkillsetBuckets(keyCount, side), top, chart, rate).map((bucket) => bucket.id);
+  const top = bucketingSkillset(values, lengthSeconds, rate, chart?.techScore ?? 0, chart?.jackShare ?? null, chart?.handstreamCluster === true);
+  return bucketsForClear(danSkillsetBuckets(keyCount, side), top, chart, values).map((bucket) => bucket.id);
 }
 
 // A pre-rated upload bakes its rate into the notes, so its stored length IS the
@@ -4002,7 +4174,14 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // that side and leaves every RC verdict and every other keymode unchanged in
 // modes_json. A later rate-verdict repair still requests the
 // generic full scope, because those inputs can move either side at any rate.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v18";
+// v19: a window now ignores up to three stray clears - ones sitting more than
+// five levels under the mean of its own best five (danIgnoredStrayCount) - so
+// one joke run on a chart far below a player's body of work stops setting
+// their tile back. Never trims past the quorum, and only the average moves:
+// the clear stays listed and stays in the window's `have`. Every stored
+// verdict with such a clear is stale. Re-derives from plays_json as always,
+// no MinaCalc.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v19";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

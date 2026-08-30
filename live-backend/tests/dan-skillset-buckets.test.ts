@@ -48,7 +48,8 @@ const SPEEDJACK_CHART = {
   jackShare: null,
   streamShare: null,
   techCategory: null,
-  jsClusterTech: null,
+  clusterTrill: null,
+  handstreamCluster: null,
   techScore: 0,
   lnRatio: 0,
   vibro: false,
@@ -153,13 +154,18 @@ describe("danSkillsetBucketsForValues", () => {
     // thing keeping them in speed. That is the tiebreak's whole trade: the
     // measured speed corpus loses 6 of 940 charts at the 0.8 bar.
     //
-    // NEAR_TIE_SPEED[3] is excluded: Technical leads Stream by 0.90 there, past
-    // the lead arm's bar, and it is the labelled speed chart that arm costs
-    // (TECH_NEAR_TIE_MSD_LEAD has the corpus numbers). [4] leads by exactly
-    // 0.50, which is why the bar sits at 0.6 rather than on top of it.
-    const held = [...REAL_SPEED, ...NEAR_TIE_SPEED.filter((_, index) => index !== 3)];
+    // NEAR_TIE_SPEED[3] and [4] are excluded: Technical leads Stream by 0.90
+    // and by 0.50 there, both past the lead arm's 0.35 bar. They are the
+    // labelled speed charts that arm costs, and the price of the bar sitting
+    // low enough to keep a rated set from splitting across two tiles
+    // (TECH_NEAR_TIE_MSD_LEAD has the corpus numbers).
+    const held = [...REAL_SPEED, ...NEAR_TIE_SPEED.filter((_, index) => index !== 3 && index !== 4)];
     for (const values of held) {
       expect(danSkillsetBucketsForValues(4, "rc", values, null, 1, techTaggedChart(0.79))).toEqual(["speed"]);
+    }
+    for (const index of [3, 4]) {
+      expect(danSkillsetBucketsForValues(4, "rc", NEAR_TIE_SPEED[index], null, 1, techTaggedChart(0.79)))
+        .toEqual(["tech"]);
     }
   });
 
@@ -249,7 +255,7 @@ describe("pattern tag thresholds", () => {
     const { danTagBucketsForTest: buckets, patternTagMinScoreForTest } = await import("../src/features/player-skills.js");
     expect(0.334).toBeGreaterThanOrEqual(patternTagMinScoreForTest("delay"));
     expect(buckets(7, {
-      patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, jsClusterTech: null, techScore: 0, lnRatio: 0, vibro: false,
+      patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, clusterTrill: null, handstreamCluster: null, techScore: 0, lnRatio: 0, vibro: false,
       danEligible: true,
       rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
       lengthSeconds: null, od: null,
@@ -259,7 +265,7 @@ describe("pattern tag thresholds", () => {
 
 describe("6K/7K jack bucket (LeoBlack cluster share)", () => {
   const chart = (over: Partial<Parameters<typeof danTagBucketsForTest>[1]>) => ({
-    patterns: [], jackShare: null, streamShare: null, techCategory: null, jsClusterTech: null, techScore: 0, lnRatio: 0, vibro: false,
+    patterns: [], jackShare: null, streamShare: null, techCategory: null, clusterTrill: null, handstreamCluster: null, techScore: 0, lnRatio: 0, vibro: false,
     danEligible: true,
     rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
     lengthSeconds: null, od: null,
@@ -387,62 +393,169 @@ describe("the 4K Jumpstream arbitration", () => {
     JackSpeed: 14.90, Chordjack: 17.94, Technical: 22.26,
   };
 
-  it("files a Jumpstream argmax with stamina when LeoBlack reads neither tech nor trill", () => {
+  // goreshit - daddy can change [4K] men (4766898), 54 seconds of jack-heavy
+  // chordstream LeoBlack labels "Jumpstream". 4K players read it as stamina,
+  // and its length is not allowed to argue: the rule shipped 2026-08-29 with a
+  // 90-second floor that filed it tech, which is the reading being corrected.
+  const DADDY_CAN_CHANGE = {
+    Stream: 22.08, Jumpstream: 31.08, Handstream: 23.23, Stamina: 29.19,
+    JackSpeed: 17.87, Chordjack: 20.47, Technical: 23.46,
+  };
+
+  // Blastix Riotz [4K] Jinjin's INFINITE (789784) rates Jumpstream over
+  // Technical and wears the ambiguous "Jumpstream Tech" label; players call it
+  // tech and the runner-up says so.
+  const BLASTIX_INFINITE = {
+    Stream: 22.26, Jumpstream: 23.27, Handstream: 15.22, Stamina: 23.07,
+    JackSpeed: 14.90, Chordjack: 16.74, Technical: 23.85,
+  };
+
+  // Finixe [4K] Another (1624796): 222BPM jumpstream over 222BPM streams,
+  // labelled "Jumpstream Tech". Stream is the runner-up and it files speed.
+  const FINIXE = {
+    Stream: 20.64, Jumpstream: 22.14, Handstream: 13.06, Stamina: 19.91,
+    JackSpeed: 11.30, Chordjack: 15.38, Technical: 19.62,
+  };
+
+  const labelled = (over: Record<string, unknown>) => ({
+    ...SPEEDJACK_CHART, patterns: [], techScore: 0.94, ...over,
+  });
+  /** LeoBlack's plain "Jumpstream"/"Handstream" family label. */
+  const plain = labelled({ clusterTrill: false, techCategory: false });
+  /** Its "Jumptrill" / "Split Trill Tech" label. */
+  const trill = labelled({ clusterTrill: true, techCategory: true });
+  /** Its ambiguous "Jumpstream Tech" label. */
+  const techSuffixed = labelled({ clusterTrill: false, techCategory: true });
+
+  it("files a Jumpstream argmax with stamina on a plain LeoBlack label", () => {
     // Its analyzer tech score is 0.94 and must not matter: the tech detector
     // saturates on dense chordstream, which is why the label arbitrates.
-    const chart = { ...SPEEDJACK_CHART, patterns: [], techScore: 0.94, jsClusterTech: false };
-    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 112, 1, chart)).toEqual(["stamina"]);
+    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 112, 1, plain)).toEqual(["stamina"]);
   });
 
-  it("keeps the tech tile when the label reads tech or trill, or is missing", () => {
-    // Dense jumptrill (Blastix Riotz-type) and "Jumpstream Tech" labels are
-    // the shapes players call tech; an unstored label keeps the old pairing.
-    const trill = { ...SPEEDJACK_CHART, patterns: [], jsClusterTech: true };
+  it("does that at any length, including a 54-second file", () => {
+    // The 90-second floor this replaces filed 4766898 under tech.
+    for (const [length, rate] of [[54, 1], [54, 1.5], [30, 1], [600, 1]] as const) {
+      expect(danSkillsetBucketsForValues(4, "rc", DADDY_CAN_CHANGE, length, rate, { ...plain, lengthSeconds: length }))
+        .toEqual(["stamina"]);
+    }
+  });
+
+  it("keeps the tech tile on a trill label, or with no label at all", () => {
     expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 112, 1, trill)).toEqual(["tech"]);
-    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 112, 1, { ...trill, jsClusterTech: null })).toEqual(["tech"]);
+    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 112, 1, labelled({ clusterTrill: null, techCategory: null })))
+      .toEqual(["tech"]);
     expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES)).toEqual(["tech"]);
   });
 
-  // goreshit - daddy can change [4K] men (4766898), 54 seconds: jack-heavy
-  // chordstream LeoBlack labels "Jumpstream", played with DT so it lasts 36.
-  const DADDY_CAN_CHANGE_DT = {
-    Stream: 25.11, Jumpstream: 35.75, Handstream: 30.33, Stamina: 34.38,
-    JackSpeed: 24.97, Chordjack: 29.12, Technical: 28.90,
-  };
-
-  it("keeps the tech pairing on a file too short to read as endurance", () => {
-    const chart = { ...SPEEDJACK_CHART, patterns: [], techScore: 1, jsClusterTech: false, lengthSeconds: 54 };
-    // Its tech score is a maxed 1.00 and cannot arbitrate (the dense
-    // chordstream cuts the rule exists for score the same), so length does.
-    expect(danSkillsetBucketsForValues(4, "rc", DADDY_CAN_CHANGE_DT, 54, 1.5, chart)).toEqual(["tech"]);
-    expect(danSkillsetBucketsForValues(4, "rc", DADDY_CAN_CHANGE_DT, 54, 1, chart)).toEqual(["tech"]);
-  });
-
-  it("still arbitrates the practice cuts the rule was built on", () => {
-    // 112s and 116s clear the 90s floor, so the label still moves them.
-    const amber = { ...SPEEDJACK_CHART, patterns: [], techScore: 0.94, jsClusterTech: false, lengthSeconds: 112 };
-    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 112, 1, amber)).toEqual(["stamina"]);
-    // Right at the line, and just under it.
-    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 90, 1, { ...amber, lengthSeconds: 90 })).toEqual(["stamina"]);
-    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 89, 1, { ...amber, lengthSeconds: 89 })).toEqual(["tech"]);
-  });
-
-  it("measures the floor on the longer of the drain and the played time", () => {
-    // A 100s file at 1.5x lasts 67s but is still a 100s file, so it arbitrates;
-    // a 60s file stays short at any rate.
-    const chart = { ...SPEEDJACK_CHART, patterns: [], jsClusterTech: false, lengthSeconds: 100 };
-    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 100, 1.5, chart)).toEqual(["stamina"]);
-    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 60, 1.5, { ...chart, lengthSeconds: 60 })).toEqual(["tech"]);
-    // A downrate that stretches a short file past the floor earns it.
-    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 60, 0.6, { ...chart, lengthSeconds: 60 })).toEqual(["stamina"]);
+  it("lets the runner-up skillset decide under the ambiguous tech-suffixed label", () => {
+    // Technical -> tech, Stream -> speed, Handstream/Stamina -> stamina.
+    expect(danSkillsetBucketsForValues(4, "rc", BLASTIX_INFINITE, 127, 1, techSuffixed)).toEqual(["tech"]);
+    expect(danSkillsetBucketsForValues(4, "rc", FINIXE, 155, 1, techSuffixed)).toEqual(["speed"]);
+    expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 112, 1, techSuffixed)).toEqual(["stamina"]);
   });
 
   it("does not touch other argmaxes or the jack override", () => {
-    const chart = { ...SPEEDJACK_CHART, patterns: [], techScore: 0, jsClusterTech: false };
     const technical = { ...AMBER_WISHES, Technical: 28.0 };
-    expect(danSkillsetBucketsForValues(4, "rc", technical, 112, 1, chart)).toEqual(["tech"]);
-    const speedjack = { ...SPEEDJACK_CHART, jsClusterTech: false };
+    expect(danSkillsetBucketsForValues(4, "rc", technical, 112, 1, { ...plain, techScore: 0 })).toEqual(["tech"]);
+    const speedjack = { ...SPEEDJACK_CHART, clusterTrill: false, techCategory: false };
     expect(danSkillsetBucketsForValues(4, "rc", AMBER_WISHES, 112, 1, speedjack)).toEqual(["jack"]);
+  });
+});
+
+describe("the Handstream near-tie", () => {
+  // Hold Angel [4K] Worship (5339691), LeoBlack label "Handstream". As a chart
+  // Handstream 29.13 tops Technical 28.00, but MinaCalc's Handstream moves
+  // with a play's accuracy and real plays of it land Technical 19.51 over
+  // Handstream 19.45 - the same chart filing stamina for one player and tech
+  // for the next.
+  const HOLD_ANGEL_PLAY = {
+    Stream: 16.83, Jumpstream: 18.21, Handstream: 19.45, Stamina: 18.58,
+    JackSpeed: 13.94, Chordjack: 17.99, Technical: 19.51,
+  };
+  const handstreamChart = (over: Record<string, unknown> = {}) => ({
+    ...SPEEDJACK_CHART, patterns: [], techScore: 0.71,
+    clusterTrill: false, techCategory: false, handstreamCluster: true,
+    lengthSeconds: 121, ...over,
+  });
+
+  it("holds the stamina tile when Handstream loses the argmax by noise", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", HOLD_ANGEL_PLAY, 121, 1, handstreamChart()))
+      .toEqual(["stamina"]);
+  });
+
+  it("needs LeoBlack to read the chart as handstream", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", HOLD_ANGEL_PLAY, 121, 1, handstreamChart({ handstreamCluster: false })))
+      .toEqual(["tech"]);
+    expect(danSkillsetBucketsForValues(4, "rc", HOLD_ANGEL_PLAY, 121, 1, handstreamChart({ handstreamCluster: null })))
+      .toEqual(["tech"]);
+  });
+
+  it("only covers argmax noise, not a Technical lead past the band", () => {
+    // The band is SPEED_NEAR_TIE_MSD (1.25), so 1.20 holds and 1.30 does not.
+    expect(danSkillsetBucketsForValues(4, "rc", { ...HOLD_ANGEL_PLAY, Technical: 20.65 }, 121, 1, handstreamChart()))
+      .toEqual(["stamina"]);
+    expect(danSkillsetBucketsForValues(4, "rc", { ...HOLD_ANGEL_PLAY, Technical: 20.75 }, 121, 1, handstreamChart()))
+      .toEqual(["tech"]);
+  });
+
+  it("does not reach a downrated play, which is a different problem", () => {
+    // A real 0.75x play of the same chart: the calc shifts the whole vector off
+    // Handstream by 1.92, not by argmax noise, and stays on tech by design.
+    const downrated = {
+      Stream: 12.44, Jumpstream: 14.02, Handstream: 13.19, Stamina: 14.31,
+      JackSpeed: 10.11, Chordjack: 13.02, Technical: 15.11,
+    };
+    expect(danSkillsetBucketsForValues(4, "rc", downrated, 121, 0.75, handstreamChart())).toEqual(["tech"]);
+  });
+
+  it("yields to the jack veto like every other stamina entry path", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", HOLD_ANGEL_PLAY, 121, 1, handstreamChart({ jackShare: 0.35 })))
+      .toEqual(["tech"]);
+  });
+});
+
+describe("the Matusa Bomber set, which is one chart at seven rates", () => {
+  // 4K players call every diff tech. Their Technical-over-Stream leads run
+  // 0.35 to 0.81, so the arm has to reach 0.35 or the set splits across two
+  // tiles. Analyzer tech score 0.53-0.56, well under the 0.8 bar.
+  const DIFFS: Array<[string, Record<string, number>]> = [
+    ["0.95", { Stream: 26.53, Jumpstream: 22.18, Handstream: 25.12, Stamina: 27.35, JackSpeed: 15.30, Chordjack: 19.46, Technical: 27.23 }],
+    ["1.05", { Stream: 28.85, Jumpstream: 23.54, Handstream: 27.65, Stamina: 29.45, JackSpeed: 16.98, Chordjack: 21.62, Technical: 29.32 }],
+    ["1.1", { Stream: 30.25, Jumpstream: 24.66, Handstream: 28.70, Stamina: 30.61, JackSpeed: 17.86, Chordjack: 22.82, Technical: 30.60 }],
+    ["1.15", { Stream: 31.31, Jumpstream: 25.62, Handstream: 30.24, Stamina: 31.79, JackSpeed: 18.66, Chordjack: 23.78, Technical: 31.90 }],
+    ["1.2", { Stream: 32.05, Jumpstream: 26.50, Handstream: 31.26, Stamina: 32.29, JackSpeed: 19.46, Chordjack: 25.06, Technical: 32.52 }],
+    ["1.25", { Stream: 33.10, Jumpstream: 26.98, Handstream: 32.47, Stamina: 33.10, JackSpeed: 20.26, Chordjack: 26.66, Technical: 33.46 }],
+    ["2mnd", { Stream: 27.63, Jumpstream: 23.06, Handstream: 26.15, Stamina: 28.57, JackSpeed: 16.18, Chordjack: 20.58, Technical: 28.44 }],
+  ];
+
+  it("files every diff under tech", () => {
+    for (const [version, values] of DIFFS) {
+      expect([version, danSkillsetBucketsForValues(4, "rc", values, 174, 1, techTaggedChart(0.54))])
+        .toEqual([version, ["tech"]]);
+    }
+  });
+});
+
+describe("the long Stamina hold's rival skillset", () => {
+  // Gate Openerz [4K] Christina (2134877), 4:16: Stamina 22.09 / Jumpstream
+  // 22.00 / Stream 21.32 / Technical 18.82. Stream is only third, but reading
+  // the hold's band against Technical alone missed it by 2.5 and handed a
+  // jumpstream marathon to the speed tile.
+  const GATE_OPENERZ = {
+    Stream: 21.32, Jumpstream: 22.00, Handstream: 11.14, Stamina: 22.09,
+    JackSpeed: 11.22, Chordjack: 14.10, Technical: 18.82,
+  };
+
+  it("holds the tile when Jumpstream stands in for Technical", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", GATE_OPENERZ, 256, 1)).toEqual(["stamina"]);
+  });
+
+  it("still lets a real speed marathon through", () => {
+    // Nothing but Stream near the top: the hold does not fire and the near-tie
+    // takes it.
+    const streamMarathon = { ...GATE_OPENERZ, Jumpstream: 18.0, Technical: 18.0, Handstream: 12.0 };
+    expect(danSkillsetBucketsForValues(4, "rc", streamMarathon, 256, 1)).toEqual(["speed"]);
   });
 });
 
@@ -455,7 +568,7 @@ describe("the stamina tile's jack veto", () => {
     JackSpeed: 34.02, Technical: 33.36, Stream: 24.58,
   };
   const jacky = (jackShare: number | null) => ({
-    ...SPEEDJACK_CHART, patterns: [], techScore: 0.943, jsClusterTech: false,
+    ...SPEEDJACK_CHART, patterns: [], techScore: 0.943, clusterTrill: false, techCategory: false,
     lengthSeconds: 237, jackShare,
   });
 

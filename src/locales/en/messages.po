@@ -1545,7 +1545,7 @@ msgstr "<0>osu!stable</0> keeps every map as plain files: open osu!/Songs, find 
 msgid "<0>Page</0><1/><2>of {totalPages}</2>"
 msgstr "<0>Page</0><1/><2>of {totalPages}</2>"
 
-#. placeholder {0}: topSharePercent(overallPercentile.value)
+#. placeholder {0}: topSharePercent(overallPercentile)
 #. placeholder {1}: overallPercentile.population.toLocaleString("en-US")
 #. placeholder {2}: mode!.keyCount
 #. placeholder {2}: mode.keyCount
@@ -1787,6 +1787,10 @@ msgstr "A dan course is a fixed set of charts, played back to back in one sittin
 #: src/routes/dan-estimates.tsx
 msgid "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I. None of this changes how a chart is rated either. The estimator never looks at what a map is called or who made it; the list above exists at your end of the calculation, not the chart's, and all it does is credit you with a course you actually passed."
 msgstr "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I. None of this changes how a chart is rated either. The estimator never looks at what a map is called or who made it; the list above exists at your end of the calculation, not the chart's, and all it does is credit you with a course you actually passed."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A few passes are left out of the average: up to three in a skill that sit more than five levels below the average of your best five in it. That is usually an easy map you played for accuracy rather than anything that measures your level. They still show in the dan window, marked <0>not counted</0>. Never more than three, and never enough to take a skill under the four passes it needs, so a genuinely wide spread of passes still averages in full."
+#~ msgstr "A few passes are left out of the average: up to three in a skill that sit more than five levels below the average of your best five in it. That is usually an easy map you played for accuracy rather than anything that measures your level. They still show in the dan window, marked <0>not counted</0>. Never more than three, and never enough to take a skill under the four passes it needs, so a genuinely wide spread of passes still averages in full."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
@@ -8072,6 +8076,14 @@ msgstr "Norwegian"
 msgid "not a bug"
 msgstr "not a bug"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "not counted"
+msgstr "not counted"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average"
+msgstr "Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average"
+
 #: src/routes/farm-helper.tsx
 msgid "Not enough data near your pp yet"
 msgstr "Not enough data near your pp yet"
@@ -12952,7 +12964,7 @@ msgstr "Took the country board's #{0} spot"
 msgid "Top {0} of {1}"
 msgstr "Top {0} of {1}"
 
-#. placeholder {0}: topSharePercent(percentile.value)
+#. placeholder {0}: topSharePercent(percentile)
 #: src/components/player/SkillBreakdown.tsx
 msgid "top {0}%"
 msgstr "top {0}%"
@@ -13322,6 +13334,10 @@ msgstr "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Up to 50 MB."
 msgstr "Up to 50 MB."
+
+#: src/routes/dan-estimates.tsx
+msgid "Up to three passes in a skill are left out of its average when they credit more than five levels below the average of your best five in it. They still show in the dan window, marked <0>not counted</0>."
+msgstr "Up to three passes in a skill are left out of its average when they credit more than five levels below the average of your best five in it. They still show in the dan window, marked <0>not counted</0>."
 
 #. placeholder {0}: skin.name
 #: src/components/skins/SkinUpdateModal.tsx
