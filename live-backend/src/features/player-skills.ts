@@ -80,7 +80,16 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // dropped from 0.6 to 0.35 MSD (TECH_NEAR_TIE_MSD_LEAD) so a rated set stops
 // splitting across two tiles. Only which tile a clear files under moves, so
 // the per-tile dans and the headline that averages them move with it.
-export const PLAYER_SKILLS_VERSION = 19;
+// v20: the same 4K tiles again, corrected against a second round of player
+// feedback (2026-08-30). A trill-labelled chart files jack when its wrist
+// demand is real, read as a dense chordjack score OR a lighter one that jack
+// clusters corroborate (TRILL_JACK_CORROBORATED_SHARE), and that check runs
+// ahead of the MSD argmax because the charts it has to catch rate Technical
+// first. A long trill that is not a jack demand hands the tile to its
+// runner-up instead of keeping tech. And HANDSTREAM_NEAR_TIE_MSD comes back
+// from 1.25 to 0.95: at 1.25 the handstream rule swallowed Matusa Bomber's
+// 1.25 diff, which v19 shipped with. Only tile filing moves.
+export const PLAYER_SKILLS_VERSION = 20;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -102,7 +111,7 @@ export const PLAYER_SKILLS_VERSION = 19;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -1005,6 +1014,10 @@ export interface ChartSkillInfo {
   // the tech tag. Read by the 4K speed tile's tech tiebreak
   // (TECH_NEAR_TIE_MIN_SCORE), which needs the score rather than the 0.5 tag.
   techScore: number;
+  // The analyzer's raw chordjack score, unzeroed. Read by the dense-trill jack
+  // arm (TRILL_JACK_MIN_CHORDJACK), which needs the score rather than the 0.8
+  // tag that already routes an outright chordjack chart.
+  chordjackScore: number;
   lnRatio: number | null;
   vibro: boolean;
   /** False when the chart's raw object structure makes its dan verdict unsafe
@@ -1151,6 +1164,72 @@ const TRILL_CLUSTER_CATEGORY = /trill/i;
 // The same label read for handstream, for the near-tie below.
 const HANDSTREAM_CLUSTER_CATEGORY = /handstream/i;
 
+// A trill label sends a Jumpstream argmax to tech, EXCEPT when the trill is
+// dense enough to be a jack demand. A trill is hit by oscillating the wrist,
+// which is the motion a chordjack asks for rather than the finger independence
+// a stream asks for, so a jack player picks these up cheaply and a dense one
+// is their map. The bar is the analyzer's raw chordjack score, under the 0.8
+// tag that already routes an outright chordjack chart and above the trills
+// that are genuinely tech.
+//
+// 0.60 is set on the labelled pair it has to separate, both 240BPM+ jumptrill:
+// NANO DEATH!!!!! [4K] DEATH (1021312) scores 0.71 and QZKago Requiem [4K]
+// NYARMAGEDDON (4152216) 0.65, which 4K players read as jack files, against
+// the Blastix Riotz family at 0.50 (GRAVITY), 0.57 (GRAVITY Lv.16) and 0.23
+// (Jinjin's INFINITE), which they read as tech. 0.70 would drop QZKago.
+//
+// Measured 2026-08-30 over the mapper-named 4K pack corpora
+// (scripts/dev/tile-variant-sweep.ts): it moves 1 chart in each of the jack,
+// handstream, speed and stamina corpora and 3 in the random one, and nothing
+// at all in jumptrill, jumpstream, stream or tech. It is narrow by
+// construction - only a Jumpstream argmax reaches the arbitration, and only a
+// trill-labelled one reaches this.
+const TRILL_JACK_MIN_CHORDJACK = 0.60;
+
+// The second arm, for a trill the chordjack score alone cannot place. The
+// score is a texture reading and it saturates on any dense oscillation, so it
+// ranks FIN4LE ~Shuushisen no Kanata e~ [4K] HEAVENLY (3468306, 0.59) above
+// both Perfect Neglect [4K] Lyz's Another (2031389, 0.57) and M1917 [4K]
+// Maximum (1170750, 0.58) - and 4K players call the first a jumpstream file
+// and the other two jack. What separates them is whether the trill carries
+// actual jack clusters: 33% and 21% of LeoBlack's importance against 0.0% for
+// FIN4LE, whose jack-looking mass is 36% Wildcard and Density.
+//
+// So a lighter trill files jack when the jack clusters corroborate it. 0.15 is
+// under both labelled jack files and clear of Blastix Riotz [GRAVITY] (0.114
+// at chordjack 0.50) and Villain Virus [4K] Music Virus (0.08 at 0.55), which
+// are tech and stamina respectively.
+const TRILL_JACK_CORROBORATED_CHORDJACK = 0.55;
+const TRILL_JACK_CORROBORATED_SHARE = 0.15;
+
+// Past the two arms above, a trill is not a jack demand, and it does not
+// automatically keep tech either: on a file long enough for endurance to be a
+// reading, the runner-up skillset decides, the same way an ambiguous
+// tech-suffixed label is arbitrated. Villain Virus [4K] Music Virus (1912526)
+// is the measured case: 4:25 of Jumpstream 24.92 / Stamina 24.48 / Technical
+// 24.24, which 4K players call a stamina file rather than a tech one.
+//
+// The length gate is what keeps this off the jumptrill packs. Ungated it takes
+// 6 of the 47 mapper-named jumptrill charts (70.2% -> 57.4% tech-tiled), all
+// of them short practice cuts whose runner-up happens to be Stamina; at 4:00 it
+// moves none of them and still reaches Music Virus.
+// The same 4:00 as STAMINA_TILE_MIN_LENGTH_SECONDS, written out rather than
+// imported because that constant is declared further down the file.
+const TRILL_RUNNER_UP_MIN_LENGTH_SECONDS = 240;
+
+/**
+ * Whether a trill-labelled chart's wrist demand reads as jack. Runs ahead of
+ * the MSD argmax like the analyzer's jack tag override: Perfect Neglect rates
+ * Technical first and Jumpstream third, so nothing inside the Jumpstream
+ * arbitration could ever reach it.
+ */
+function trillIsJack(chart: ChartSkillInfo | undefined): boolean {
+  if (chart?.clusterTrill !== true) return false;
+  if (chart.chordjackScore >= TRILL_JACK_MIN_CHORDJACK) return true;
+  return chart.chordjackScore >= TRILL_JACK_CORROBORATED_CHORDJACK
+    && (chart.jackShare ?? 0) >= TRILL_JACK_CORROBORATED_SHARE;
+}
+
 // Jack contamination keeps a chart off the stamina tile whatever MinaCalc's
 // argmax says. AiAe [4K] Wafles' SHD (421066) is the measured case: LeoBlack
 // reads it as 62% chordstream against 31% jack (180BPM minijacks, 90BPM
@@ -1285,6 +1364,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
           ? HANDSTREAM_CLUSTER_CATEGORY.test(parsed.clusterCategory)
           : null,
         techScore: vetoesTech ? 0 : (patternScores.get("tech") ?? 0),
+        chordjackScore: chordjackScore,
         lnRatio,
         vibro: parsed?.vibro === true,
         // Legacy rows have no field and stay eligible until the targeted
@@ -2979,12 +3059,13 @@ function bucketsForClear(
   topSkillset: string | null,
   chart: ChartSkillInfo | undefined,
   values: Record<string, number> | undefined,
+  rate = 1,
 ): DanSkillsetBucket[] {
   // MinaCalc suppresses anchored rows and can rate community-Jack
   // quadstream/minijack shapes as Technical or Jumpstream. Chart analysis
   // verifies that demand from the notes themselves; it outranks every MSD
   // argmax just like the older speedjack/chordjack tag override.
-  if (chart?.jackDemand === true) {
+  if (chart?.jackDemand === true || trillIsJack(chart)) {
     const jack = buckets.find((bucket) => bucket.id === "jack" && bucket.skillsets != null);
     if (jack) return [jack];
   }
@@ -3003,11 +3084,18 @@ function bucketsForClear(
   // pushed off Handstream would fall into Jumpstream and come back to stamina
   // through this rule.
   const contaminated = jackContaminated(chart?.jackShare ?? null);
-  const effectiveTop = topSkillset !== "Jumpstream" || chart?.clusterTrill == null || chart.clusterTrill
+  const effectiveTop = topSkillset !== "Jumpstream" || chart?.clusterTrill == null
     ? topSkillset
-    : chart.techCategory === true
-      ? jumpstreamRunnerUp(values, contaminated)
-      : contaminated ? topSkillset : "Stamina";
+    : chart.clusterTrill
+      // The jack reading already ran as an override above. What is left is a
+      // trill that is not a jack demand: on a long file the runner-up decides
+      // (TRILL_RUNNER_UP_MIN_LENGTH_SECONDS), otherwise it keeps tech.
+      ? ((enduranceSeconds(chart.lengthSeconds, rate) ?? 0) >= TRILL_RUNNER_UP_MIN_LENGTH_SECONDS
+        ? jumpstreamRunnerUp(values, contaminated)
+        : topSkillset)
+      : chart.techCategory === true
+        ? jumpstreamRunnerUp(values, contaminated)
+        : contaminated ? topSkillset : "Stamina";
   return buckets.filter((bucket) => bucket.skillsets
     ? effectiveTop != null && bucket.skillsets.includes(effectiveTop)
     : chartBelongsToTagBucket(bucket, chart));
@@ -3038,7 +3126,7 @@ function groupDanClearsBySkillset(
       chart?.jackShare ?? null,
       chart?.handstreamCluster === true,
     );
-    for (const bucket of bucketsForClear(buckets, topSkillset, chart, clear.play.values)) {
+    for (const bucket of bucketsForClear(buckets, topSkillset, chart, clear.play.values, clear.play.rate)) {
       bySkillset.get(bucket.id)!.push(clear);
     }
   }
@@ -3374,15 +3462,22 @@ function staminaHoldRival(values: Record<string, number> | undefined): number {
 // gap means anything.
 //
 // The label gate is what keeps it cheap. Ungated it costs the mapper-named
-// tech corpus 8 charts (46.4% -> 44.6% tech-tiled); gated at this band it
-// costs 3 tech-pack charts and 2 speed-pack ones and moves nothing at all in
-// the handstream, stamina, jumpstream, stream, jumptrill and jack corpora.
+// tech corpus 8 charts (46.4% -> 44.6% tech-tiled); gated it moves at most one
+// chart in any labelled corpus.
 //
-// It does NOT go wider. At 2.0 it takes every stored Hold Angel play but also
-// wins the near-tie on Matusa Bomber's handstream-labelled diffs, which 4K
-// players call tech - the two corrections collide, and this is the one that
-// yields.
-const HANDSTREAM_NEAR_TIE_MSD = SPEED_NEAR_TIE_MSD;
+// The ceiling is Matusa Bomber, not a corpus. Its [4K] 1.25 diff (4189255) is
+// handstream-labelled and rates Technical 33.46 / Stream 33.10 / Stamina 33.10
+// / Handstream 32.47, a Handstream gap of 0.99 on a chart 4K players call
+// tech, so the band has to stay under that or the handstream rule eats the
+// tech-lead rule's own labelled set. That is what this number is: as much of
+// the Hold Angel correction as can be had without reopening Matusa. It first
+// shipped at SPEED_NEAR_TIE_MSD (1.25) and did reopen it; the test fixture
+// carried no handstream label, so the suite did not catch it.
+//
+// Measured over Hold Angel's 374 stored plays: 291 filed stamina before the
+// rule, 351 at 0.5, 354 here, 364 at 1.25 (which loses Matusa 1.25) and all
+// 374 at 2.0 (which loses Matusa 1.05 as well).
+const HANDSTREAM_NEAR_TIE_MSD = 0.95;
 
 /** Whether LeoBlack's jack clusters carry too much of a chart to call it endurance. */
 function jackContaminated(jackShare: number | null): boolean {
@@ -3556,7 +3651,7 @@ export function danSkillsetBucketsForValues(
   chart?: ChartSkillInfo,
 ): string[] {
   const top = bucketingSkillset(values, lengthSeconds, rate, chart?.techScore ?? 0, chart?.jackShare ?? null, chart?.handstreamCluster === true);
-  return bucketsForClear(danSkillsetBuckets(keyCount, side), top, chart, values).map((bucket) => bucket.id);
+  return bucketsForClear(danSkillsetBuckets(keyCount, side), top, chart, values, rate).map((bucket) => bucket.id);
 }
 
 // A pre-rated upload bakes its rate into the notes, so its stored length IS the

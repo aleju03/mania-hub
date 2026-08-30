@@ -34,7 +34,11 @@ const TECH_NEAR_TIE_MIN_SCORE = 0.8;
 const TECH_NEAR_TIE_MSD_LEAD = 0.35;
 const STAMINA_TILE_MIN_LENGTH_SECONDS = 240;
 const STAMINA_HOLD_BASE_BAND = 0.5;
-const HANDSTREAM_NEAR_TIE_MSD = SPEED_NEAR_TIE_MSD;
+const HANDSTREAM_NEAR_TIE_MSD = 0.95;
+const TRILL_JACK_MIN_CHORDJACK = 0.60;
+const TRILL_JACK_CORROBORATED_CHORDJACK = 0.55;
+const TRILL_JACK_CORROBORATED_SHARE = 0.15;
+const TRILL_RUNNER_UP_MIN_LENGTH_SECONDS = 240;
 const STAMINA_TILE_JACK_VETO_SHARE = 0.30;
 const CHORDJACK_TAG_MIN_SCORE = 0.8;
 const PATTERN_TAG_MIN_SCORE = 0.5;
@@ -55,6 +59,8 @@ interface ChartRow {
   handstreamCluster: boolean;
   jackShare: number | null;
   jackDemand: boolean;
+  /** Raw analyzer chordjack score, for the dense-trill jack arm. */
+  chordjackScore: number;
   /** The rate the play was set at. 1 for the chart-level corpus pass. */
   rate: number;
   hasJackOverride: boolean;
@@ -87,6 +93,19 @@ interface Variant {
   techLeadMin: number;
   /** Minimum analyzer tech score the lead arm also demands (0 = none). */
   techLeadMinScore: number;
+  /** A trill-labelled chart at or above this chordjack score files jack
+   *  instead of tech (Infinity = arm off). */
+  trillJackMinChordjack: number;
+  /** Second arm: a lower chordjack score still files jack when the chart
+   *  carries this much jack-cluster importance (Infinity = arm off). */
+  trillJackCorroboratedChordjack: number;
+  trillJackCorroboratedShare: number;
+  /** A trill under both arms defers to the runner-up instead of keeping tech. */
+  trillRunnerUp: boolean;
+  /** Run the trill-jack check on ANY argmax, not just a Jumpstream one. */
+  trillJackOverride: boolean;
+  /** The runner-up fallback only fires on a file this long (Infinity = never). */
+  trillRunnerUpMinLength: number;
 }
 
 const JS_TECH_CLUSTER = /tech|trill/i;
@@ -101,6 +120,12 @@ const SHIPPED: Omit<Variant, "id"> = {
   staminaHoldsBestBase: true,
   runnerUpJackVeto: true,
   handstreamNearTie: HANDSTREAM_NEAR_TIE_MSD,
+  trillJackMinChordjack: TRILL_JACK_MIN_CHORDJACK,
+  trillJackCorroboratedChordjack: TRILL_JACK_CORROBORATED_CHORDJACK,
+  trillJackCorroboratedShare: TRILL_JACK_CORROBORATED_SHARE,
+  trillRunnerUp: true,
+  trillJackOverride: true,
+  trillRunnerUpMinLength: TRILL_RUNNER_UP_MIN_LENGTH_SECONDS,
   handstreamNearTieNeedsCluster: true,
   techLeadMin: TECH_NEAR_TIE_MSD_LEAD,
   techLeadMinScore: PATTERN_TAG_MIN_SCORE,
@@ -137,6 +162,16 @@ const VARIANTS: Variant[] = [
   { id: "T1 lead.60", ...SHIPPED, techLeadMin: 0.6 },
   { id: "T2 lead.45", ...SHIPPED, techLeadMin: 0.45 },
   { id: "T3 lead.25", ...SHIPPED, techLeadMin: 0.25 },
+  // The dense-trill jack arm, at candidate bars.
+  { id: "M1 hs1.25", ...SHIPPED, handstreamNearTie: SPEED_NEAR_TIE_MSD },
+  { id: "M2 hs.50", ...SHIPPED, handstreamNearTie: 0.5 },
+  { id: "K0 no-trill", ...SHIPPED, trillJackMinChordjack: Infinity },
+  { id: "K1 trill.70", ...SHIPPED, trillJackMinChordjack: 0.70 },
+  { id: "P1 no-corrob", ...SHIPPED, trillJackCorroboratedChordjack: Infinity },
+  { id: "P2 no-override", ...SHIPPED, trillJackOverride: false },
+  { id: "P3 RU-ungated", ...SHIPPED, trillRunnerUpMinLength: 0 },
+  { id: "P4 no-RU", ...SHIPPED, trillRunnerUp: false },
+  { id: "P5 share.20", ...SHIPPED, trillJackCorroboratedShare: 0.20 },
 ];
 
 function dominant(values: Record<string, number>, keep: readonly string[]): string | null {
@@ -221,8 +256,17 @@ function tileForSkillset(skillset: string): string {
   return "stamina"; // Handstream, Stamina
 }
 
+/** Whether a trill-labelled chart's wrist demand reads as jack. */
+function trillIsJack(chart: ChartRow, variant: Variant): boolean {
+  if (chart.clusterTrill !== true) return false;
+  if (chart.chordjackScore >= variant.trillJackMinChordjack) return true;
+  return chart.chordjackScore >= variant.trillJackCorroboratedChordjack
+    && (chart.jackShare ?? 0) >= variant.trillJackCorroboratedShare;
+}
+
 function tileFor(chart: ChartRow, variant: Variant): string {
   if (chart.jackDemand || chart.hasJackOverride) return "jack";
+  if (variant.trillJackOverride && trillIsJack(chart, variant)) return "jack";
   const top = bucketingSkillset(chart, variant);
   if (top == null) return "none";
   if (top !== "Jumpstream") return tileForSkillset(top);
@@ -231,7 +275,15 @@ function tileFor(chart: ChartRow, variant: Variant): string {
     // Mirrors bucketsForClear: a missing label keeps the legacy tech pairing,
     // a trill label keeps tech, a tech-suffixed label defers to the runner-up,
     // and a plain label files stamina unless the jack veto reaches it.
-    if (chart.clusterTrill == null || chart.clusterTrill) return "tech";
+    if (chart.clusterTrill == null) return "tech";
+    if (chart.clusterTrill) {
+      // A trill is hit by oscillating the wrist, the same motion a chordjack
+      // asks for, so a DENSE one is a jack demand rather than a tech one - as
+      // is a lighter one that actually carries jack clusters.
+      if (trillIsJack(chart, variant)) return "jack";
+      const long = (endurance(chart) ?? 0) >= variant.trillRunnerUpMinLength;
+      return variant.trillRunnerUp && long ? tileForSkillset(runnerUpSkillset(chart, variant)) : "tech";
+    }
     if (chart.clusterTech === true) return tileForSkillset(runnerUpSkillset(chart, variant));
     return jackContaminated(chart) ? "tech" : "stamina";
   }
@@ -288,7 +340,15 @@ const SPOT: Array<[number, string, string]> = [
   [4189254, "tech", "Matusa Bomber 1.2"],
   [4189255, "tech", "Matusa Bomber 1.25"],
   [4189256, "tech", "Matusa Bomber 2mnd"],
-  [770127, "tech", "Blastix Riotz [GRAVITY] jumptrill"],
+  [1021312, "jack", "NANO DEATH!!!!! [DEATH] 240BPM jumptrill, chordjack 0.71"],
+  [4152216, "jack", "QZKago Requiem [NYARMAGEDDON] 257BPM jumptrill, chordjack 0.65"],
+  [4983215, "stamina", "WACCA ULTRA DREAM MEGAMIX [FANTASY] 5:48 chordstream"],
+  [2031389, "jack", "Perfect Neglect [Lyz's Another] cj 0.57 jackShare 0.33"],
+  [1170750, "jack", "M1917 [Maximum] cj 0.58 jackShare 0.21"],
+  [3468306, "tech", "FIN4LE [HEAVENLY] cj 0.59 jackShare 0.00 - too jumpstream for jack"],
+  [1912526, "stamina", "Villain Virus [Music Virus] cj 0.55 jackShare 0.08"],
+  [4602664, "stamina", "Gamma Hard Bags [Frenzied] 5:06"],
+  [770127, "tech", "Blastix Riotz [GRAVITY] jumptrill, chordjack 0.50"],
   [789784, "tech", "Blastix Riotz [Jinjin's INFINITE]"],
   [2117613, "tech", "Blastix Riotz [GRAVITY Lv.16]"],
   [421066, "-", "AiAe [Wafles' SHD] jack-contaminated"],
@@ -405,6 +465,7 @@ async function main() {
         handstreamCluster: clusterCategory != null && HANDSTREAM_CLUSTER_CATEGORY.test(clusterCategory),
         jackShare: total > 0 ? jack / total : null,
         jackDemand: Number(row.jack_demand) === 1,
+        chordjackScore: chordjack,
         rate: 1,
         hasJackOverride: chordjack >= CHORDJACK_TAG_MIN_SCORE || speedjack >= PATTERN_TAG_MIN_SCORE,
         title: meta?.title ?? "",

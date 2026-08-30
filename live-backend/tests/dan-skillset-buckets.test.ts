@@ -50,6 +50,7 @@ const SPEEDJACK_CHART = {
   techCategory: null,
   clusterTrill: null,
   handstreamCluster: null,
+  chordjackScore: 0,
   techScore: 0,
   lnRatio: 0,
   vibro: false,
@@ -255,7 +256,7 @@ describe("pattern tag thresholds", () => {
     const { danTagBucketsForTest: buckets, patternTagMinScoreForTest } = await import("../src/features/player-skills.js");
     expect(0.334).toBeGreaterThanOrEqual(patternTagMinScoreForTest("delay"));
     expect(buckets(7, {
-      patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, clusterTrill: null, handstreamCluster: null, techScore: 0, lnRatio: 0, vibro: false,
+      patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, clusterTrill: null, handstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, vibro: false,
       danEligible: true,
       rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
       lengthSeconds: null, od: null,
@@ -265,7 +266,7 @@ describe("pattern tag thresholds", () => {
 
 describe("6K/7K jack bucket (LeoBlack cluster share)", () => {
   const chart = (over: Partial<Parameters<typeof danTagBucketsForTest>[1]>) => ({
-    patterns: [], jackShare: null, streamShare: null, techCategory: null, clusterTrill: null, handstreamCluster: null, techScore: 0, lnRatio: 0, vibro: false,
+    patterns: [], jackShare: null, streamShare: null, techCategory: null, clusterTrill: null, handstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, vibro: false,
     danEligible: true,
     rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
     lengthSeconds: null, od: null,
@@ -463,6 +464,86 @@ describe("the 4K Jumpstream arbitration", () => {
   });
 });
 
+describe("the dense-trill jack arm", () => {
+  // A trill is hit by oscillating the wrist, the motion a chordjack asks for,
+  // so a dense one is a jack demand however MinaCalc rates it. The bar is the
+  // analyzer's raw chordjack score, set on the labelled pair below.
+  const NANO_DEATH = {
+    Stream: 17.30, Jumpstream: 23.29, Handstream: 18.82, Stamina: 22.57,
+    JackSpeed: 16.18, Chordjack: 16.82, Technical: 22.63,
+  };
+  const BLASTIX_GRAVITY = {
+    Stream: 21.22, Jumpstream: 27.91, Handstream: 21.38, Stamina: 26.06,
+    JackSpeed: 18.90, Chordjack: 20.82, Technical: 26.71,
+  };
+  const trill = (chordjackScore: number) => ({
+    ...SPEEDJACK_CHART, patterns: [], techScore: 0.73,
+    clusterTrill: true, techCategory: true, chordjackScore, lengthSeconds: 139,
+  });
+
+  it("files a dense trill under jack", () => {
+    // NANO DEATH!!!!! [4K] DEATH (1021312), 240BPM jumptrill at chordjack 0.71.
+    expect(danSkillsetBucketsForValues(4, "rc", NANO_DEATH, 139, 1, trill(0.71))).toEqual(["jack"]);
+    // QZKago Requiem [4K] NYARMAGEDDON (4152216) sits at 0.65, inside the bar.
+    expect(danSkillsetBucketsForValues(4, "rc", NANO_DEATH, 139, 1, trill(0.65))).toEqual(["jack"]);
+  });
+
+  it("leaves the Blastix Riotz family on tech", () => {
+    // GRAVITY 0.50, GRAVITY Lv.16 0.57: trills, but not dense ones.
+    expect(danSkillsetBucketsForValues(4, "rc", BLASTIX_GRAVITY, 127, 1, trill(0.50))).toEqual(["tech"]);
+    expect(danSkillsetBucketsForValues(4, "rc", BLASTIX_GRAVITY, 127, 1, trill(0.57))).toEqual(["tech"]);
+  });
+
+  it("needs the trill label; it is not a second jack tag", () => {
+    const plainLabel = { ...trill(0.71), clusterTrill: false, techCategory: false };
+    expect(danSkillsetBucketsForValues(4, "rc", NANO_DEATH, 139, 1, plainLabel)).toEqual(["stamina"]);
+  });
+
+  it("runs ahead of the argmax, so a Technical-argmax trill still files jack", () => {
+    // Perfect Neglect [4K] Lyz's Another (2031389) rates Technical 20.42 /
+    // Stamina 20.23 / Jumpstream 20.13, so nothing inside the Jumpstream
+    // arbitration could reach it, and 4K players call it jack.
+    const perfectNeglect = {
+      Stream: 15.78, Jumpstream: 20.13, Handstream: 16.98, Stamina: 20.23,
+      JackSpeed: 14.10, Chordjack: 18.00, Technical: 20.42,
+    };
+    expect(danSkillsetBucketsForValues(4, "rc", perfectNeglect, 140, 1, {
+      ...trill(0.57), jackShare: 0.33, lengthSeconds: 140,
+    })).toEqual(["jack"]);
+  });
+
+  it("lets jack clusters corroborate a chordjack score under the bar", () => {
+    // The score alone cannot order these: FIN4LE [HEAVENLY] (0.59) outranks
+    // both charts players call jack, and carries no jack clusters at all.
+    const m1917 = {
+      Stream: 14.42, Jumpstream: 19.80, Handstream: 15.86, Stamina: 19.89,
+      JackSpeed: 13.50, Chordjack: 17.20, Technical: 19.70,
+    };
+    expect(danSkillsetBucketsForValues(4, "rc", m1917, 239, 1, { ...trill(0.58), jackShare: 0.21, lengthSeconds: 239 }))
+      .toEqual(["jack"]);
+    const fin4le = {
+      Stream: 17.54, Jumpstream: 23.00, Handstream: 18.82, Stamina: 21.96,
+      JackSpeed: 15.90, Chordjack: 19.40, Technical: 22.77,
+    };
+    expect(danSkillsetBucketsForValues(4, "rc", fin4le, 121, 1, { ...trill(0.59), jackShare: 0, lengthSeconds: 121 }))
+      .toEqual(["tech"]);
+  });
+
+  it("hands a long non-jack trill to its runner-up instead of tech", () => {
+    // Villain Virus [4K] Music Virus (1912526): 4:25 of Jumpstream 24.92 /
+    // Stamina 24.48 / Technical 24.24, which players call a stamina file. A
+    // short trill keeps tech, which is what holds the jumptrill packs.
+    const musicVirus = {
+      Stream: 19.54, Jumpstream: 24.92, Handstream: 20.66, Stamina: 24.48,
+      JackSpeed: 16.20, Chordjack: 21.30, Technical: 24.24,
+    };
+    const chart = { ...trill(0.55), jackShare: 0.08, lengthSeconds: 265 };
+    expect(danSkillsetBucketsForValues(4, "rc", musicVirus, 265, 1, chart)).toEqual(["stamina"]);
+    expect(danSkillsetBucketsForValues(4, "rc", musicVirus, 200, 1, { ...chart, lengthSeconds: 200 }))
+      .toEqual(["tech"]);
+  });
+});
+
 describe("the Handstream near-tie", () => {
   // Hold Angel [4K] Worship (5339691), LeoBlack label "Handstream". As a chart
   // Handstream 29.13 tops Technical 28.00, but MinaCalc's Handstream moves
@@ -492,11 +573,23 @@ describe("the Handstream near-tie", () => {
   });
 
   it("only covers argmax noise, not a Technical lead past the band", () => {
-    // The band is SPEED_NEAR_TIE_MSD (1.25), so 1.20 holds and 1.30 does not.
-    expect(danSkillsetBucketsForValues(4, "rc", { ...HOLD_ANGEL_PLAY, Technical: 20.65 }, 121, 1, handstreamChart()))
+    // The band is 0.95, so 0.90 holds and 1.00 does not.
+    expect(danSkillsetBucketsForValues(4, "rc", { ...HOLD_ANGEL_PLAY, Technical: 20.35 }, 121, 1, handstreamChart()))
       .toEqual(["stamina"]);
-    expect(danSkillsetBucketsForValues(4, "rc", { ...HOLD_ANGEL_PLAY, Technical: 20.75 }, 121, 1, handstreamChart()))
+    expect(danSkillsetBucketsForValues(4, "rc", { ...HOLD_ANGEL_PLAY, Technical: 20.45 }, 121, 1, handstreamChart()))
       .toEqual(["tech"]);
+  });
+
+  it("stays under Matusa Bomber 1.25, which is handstream-labelled and tech", () => {
+    // The ceiling on the band: Handstream sits 0.99 under Technical here, on a
+    // chart 4K players call tech. Widening past 0.99 reopens it.
+    const matusa125 = {
+      Stream: 33.10, Jumpstream: 26.98, Handstream: 32.47, Stamina: 33.10,
+      JackSpeed: 20.26, Chordjack: 26.66, Technical: 33.46,
+    };
+    expect(danSkillsetBucketsForValues(4, "rc", matusa125, 146, 1, {
+      ...handstreamChart({ techScore: 0.56, lengthSeconds: 146 }),
+    })).toEqual(["tech"]);
   });
 
   it("does not reach a downrated play, which is a different problem", () => {
