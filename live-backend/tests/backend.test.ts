@@ -12,6 +12,7 @@ import { getCachedPackCardSnapshots, selectReadyPackCardUserIds, getCachedPlayer
 import { markUserMissing } from "../src/users.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
+import { resetUserBestScoresCache } from "../src/features/user-best-scores-cache.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { getGlobalRankingsSnapshot } from "../src/features/global-rankings.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed } from "../src/features/my-data.js";
@@ -161,6 +162,9 @@ function topPlayPayload(options: {
 
 beforeEach(() => {
   vi.useRealTimers();
+  // Process state: without this a window one test fetched for user 101 can be
+  // served to the next test that confirms the same score id.
+  resetUserBestScoresCache();
 });
 
 afterEach(async () => {

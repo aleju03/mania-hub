@@ -597,7 +597,10 @@ export class WorkerRunner {
       // shared budget was starved (e.g. by unbatched snipe seeding). Log duration
       // so a regression back into watchdog territory is visible in journald.
       const farmedStartedAt = Date.now();
-      const result = await refreshUserMapsFarmedScores(this.db, this.osu, this.queue, job.payload as { userId: number; country: string });
+      // scoreId is the trigger score the enqueue side records (maps.ts):
+      // it has to reach the job so a shared best-scores window is only reused
+      // when it already contains that score.
+      const result = await refreshUserMapsFarmedScores(this.db, this.osu, this.queue, job.payload as { userId: number; country: string; scoreId?: string });
       if (await isUserKnownInactive(this.db, result.userId)) return;
       logInfo("refresh_user_maps_farmed_scores_done", { user_id: result.userId, country: result.country, score_count: result.scoreCount, duration_ms: Date.now() - farmedStartedAt });
       await this.events.append(

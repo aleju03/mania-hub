@@ -11,6 +11,7 @@ import type { OsuApiClient } from "../osu/client.js";
 import { recordMapsFarmedScore } from "./maps.js";
 import { isRankedRosterMember } from "../rosters/country-rosters.js";
 import { isUserKnownInactive } from "../user-status.js";
+import { getUserBestScoresWindowCached } from "./user-best-scores-cache.js";
 
 const TOP_PLAY_CONFIRMATION_PENDING_MS = 30 * 60_000;
 const TOP_PLAYS_DEFAULT_PAGE_SIZE = 200;
@@ -93,7 +94,16 @@ export async function confirmTopPlay(
   batch?: TopPlayConfirmationBatch,
 ): Promise<boolean> {
   if (await isUserKnownInactive(db, payload.userId)) return false;
-  const bestScores = dedupeScoresById(await getUserBestScoresForPpGain(osu, payload.userId));
+  // Shared with refresh_user_maps_farmed_scores, which fetches the identical
+  // window. requireScoreIds keeps a window fetched before this score existed
+  // from being replayed here: without it a pending retry would re-read the
+  // same too-early response until the entry expired.
+  const bestScores = dedupeScoresById(await getUserBestScoresWindowCached(
+    db,
+    payload.userId,
+    () => getUserBestScoresForPpGain(osu, payload.userId),
+    { requireScoreIds: [payload.scoreId] },
+  ));
   // The request can outlive an admin wipe. Re-check before the first durable
   // write so an already-running confirmation cannot restore top-score rows.
   if (await isUserKnownInactive(db, payload.userId)) return false;

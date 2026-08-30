@@ -18,6 +18,7 @@ import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { refreshFarmHelperKeyStatsForUser } from "./farm-helper-key-stats.js";
 import { buildMapStatusPropagationStatement } from "./map-search.js";
 import { loadGlobalFarmedBoardFromDisk, readGlobalFarmedBoardDiskHeader, saveGlobalFarmedBoardToDisk } from "./maps-farmed-board-disk.js";
+import { getUserBestScoresWindowCached } from "./user-best-scores-cache.js";
 
 const MAPS_REFRESH_PRIORITY = -100;
 const MAPS_FARMED_REFRESH_PRIORITY = -100;
@@ -5370,7 +5371,7 @@ export async function refreshUserMapsFarmedScores(
   db: Db,
   osu: Pick<OsuApiClient, "getUserBestScoresWindow">,
   queue: JobQueue,
-  payload: { country: string; userId: number },
+  payload: { country: string; userId: number; scoreId?: string },
 ): Promise<{ country: string; userId: number; scoreCount: number; updatedAt: string }> {
   const country = payload.country.toUpperCase();
   if (await isUserKnownInactive(db, payload.userId)) {
@@ -5378,7 +5379,17 @@ export async function refreshUserMapsFarmedScores(
   }
   let bestScores: OscScore[];
   try {
-    bestScores = await osu.getUserBestScoresWindow(payload.userId, MAPS_FARMED_SCORE_WINDOW, "job:refresh_user_maps_farmed_scores");
+    // Shares confirmTopPlay's window: both jobs fetch this exact top-200 for
+    // the same player, usually minutes apart. payload.scoreId is the score
+    // that enqueued this refresh (a display score id, or a score-identity
+    // string when the id is 0); a cached window without it is not reused, so
+    // the score that triggered this run is always in what gets projected.
+    bestScores = await getUserBestScoresWindowCached(
+      db,
+      payload.userId,
+      () => osu.getUserBestScoresWindow(payload.userId, MAPS_FARMED_SCORE_WINDOW, "job:refresh_user_maps_farmed_scores"),
+      { requireScoreIds: payload.scoreId == null ? undefined : [payload.scoreId] },
+    );
   } catch (error) {
     if (!(error instanceof OsuApiError && error.status === 404)) throw error;
     await markUserMissing(db, payload.userId, `refresh_user_maps_farmed_scores: ${error.message}`);
