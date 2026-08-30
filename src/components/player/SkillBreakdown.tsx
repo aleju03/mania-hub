@@ -83,7 +83,7 @@ function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode, i18n: I18
   const percentile = mode.percentiles?.[entry.axis];
   if (!percentile) return undefined;
   const label = i18n._(entry.labelMsg);
-  const share = i18n._(msg`top ${topSharePercent(percentile.value)}%`);
+  const share = i18n._(msg`top ${topSharePercent(percentile)}%`);
   const population = percentile.population.toLocaleString("en-US");
   const keyCount = mode.keyCount;
   return i18n._(msg`${label}: ${share} of ${population} tracked ${keyCount}K mains`);
@@ -254,7 +254,7 @@ export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan }: {
       {overallPercentile ? (
         <div className="mb-2.5 text-[11px] text-osu-l2">
           <Trans>
-            <span className="font-semibold text-osu-pink-light">top {topSharePercent(overallPercentile.value)}%</span>
+            <span className="font-semibold text-osu-pink-light">top {topSharePercent(overallPercentile)}%</span>
             {" "}of {overallPercentile.population.toLocaleString("en-US")} tracked {mode!.keyCount}K mains
           </Trans>
         </div>
@@ -503,7 +503,7 @@ export function SkillModePanel({
           {overallPercentile ? (
             <div className="mt-1 text-[11px] text-osu-l2">
               <Trans>
-                <span className="font-semibold text-osu-pink-light">top {topSharePercent(overallPercentile.value)}%</span>
+                <span className="font-semibold text-osu-pink-light">top {topSharePercent(overallPercentile)}%</span>
                 {" "}of {overallPercentile.population.toLocaleString("en-US")} tracked {mode.keyCount}K mains
               </Trans>
             </div>
@@ -535,7 +535,7 @@ export function SkillModePanel({
                 </span>
                 <span className="w-[44px] shrink-0 text-right text-[11px] text-osu-l2 tabular-nums">{entry.value.toFixed(2)}</span>
                 <span className="w-[52px] shrink-0 text-right text-[10px] text-osu-f1 tabular-nums">
-                  {percentile ? t`top ${topSharePercent(percentile.value)}%` : ""}
+                  {percentile ? t`top ${topSharePercent(percentile)}%` : ""}
                 </span>
               </>
             );

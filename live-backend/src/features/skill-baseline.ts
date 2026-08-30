@@ -65,6 +65,11 @@ const BASELINE_MIN_USERS_PER_CURVE = 20;
 // just that player's own rating) from becoming everybody else's prior.
 const BASELINE_MIN_USERS_PER_MEDIAN = 5;
 const BASELINE_QUANTILE_POINTS = 200;
+
+// How many top values each exact axis curve keeps verbatim for the rank-true
+// tail. 100 covers rather more than the top quantile bucket at any roster size
+// we have, and costs ~100 numbers per (keymode, axis) in the stored blob.
+const EXACT_CURVE_TAIL_VALUES = 100;
 // Accuracy derate anchored on the calc's measured 0.93→0.965 window: the
 // per-chart slope over that window sits at ~1.07-1.11 on real charts
 // (player-skills.ts extrapolation bounds), so the global value is its
@@ -136,8 +141,10 @@ export const EXACT_SKILL_CURVES_META_KEY = "skill_exact_curves:v1";
    blank until the fold finishes, while bumping this makes the chain due once
    on deploy and keeps serving the previous blob under the same key the whole
    time. 2: sparse axes carry a median (and an empty curve) instead of being
-   dropped, so the display shrink reaches them. */
-export const EXACT_SKILL_CURVES_FORMAT = 2;
+   dropped, so the display shrink reaches them. 3: axes carry an exact tail
+   (`tail`), so the top of the population gets a rank-true percentile instead
+   of the 200-point curve's 0.5% floor. */
+export const EXACT_SKILL_CURVES_FORMAT = 3;
 
 // Per-(keymode, axis) curve entry. `median` is the raw population median the
 // display shrink uses; curve values are already shrunk with it, so subject
@@ -149,6 +156,13 @@ interface AxisCurveEntry {
   count: number;
   curve: number[];
   median?: number;
+  // The population's highest values, ascending, at most
+  // EXACT_CURVE_TAIL_VALUES of them. 200 quantile points over a five-figure
+  // roster put every one of the top ~0.5% in the same bucket, so the strongest
+  // players all read as one indistinguishable share; the tail lets a subject
+  // inside it be placed by exact rank. Absent on the approximate curves and on
+  // blobs written before format 3, so consumers fall back to the curve.
+  tail?: number[];
 }
 
 export type AxisCurveMap = Record<string, AxisCurveEntry>;
@@ -598,7 +612,10 @@ export async function buildExactSkillCurves(db: Db): Promise<ExactSkillCurves> {
       // curve: 200 quantile points off a dozen players would be precision the
       // sample cannot carry.
       const curve = list.length >= BASELINE_MIN_USERS_PER_CURVE ? quantileCurve(shrunk) : [];
-      axisCurves[axis] = { count: list.length, curve, median };
+      const tail = curve.length > 0
+        ? shrunk.slice(Math.max(0, shrunk.length - EXACT_CURVE_TAIL_VALUES)).map((value) => Math.round(value * 100) / 100)
+        : [];
+      axisCurves[axis] = { count: list.length, curve, median, tail };
     }
     curves[String(keyCount)] = axisCurves;
   }
@@ -870,6 +887,24 @@ export function percentileFromCurve(curve: number[], value: number): number {
   return Math.round(((low + t) / last) * 1000) / 10;
 }
 
+/**
+ * Percentile of `value` against one axis entry: exact rank inside the stored
+ * tail when the subject reaches it, the quantile curve otherwise. Rank is
+ * ties-friendly (equal values share a rank) and counted against the axis
+ * population, so the strongest player in a 12,371-member roster comes back as
+ * 99.99 rather than a flat 100.
+ */
+export function axisPercentile(entry: { count: number; curve: number[]; tail?: number[] }, value: number): number {
+  const tail = entry.tail;
+  if (tail && tail.length > 0 && entry.count > 0 && value >= tail[0]) {
+    let above = 0;
+    for (let i = tail.length - 1; i >= 0 && tail[i] > value; i -= 1) above += 1;
+    const share = ((above + 1) / entry.count) * 100;
+    return Math.max(0, Math.min(100, Math.round((100 - share) * 10000) / 10000));
+  }
+  return percentileFromCurve(entry.curve, value);
+}
+
 // Axes eligible for a percentile per keymode: 4K speaks the native MSD
 // skillsets (plus pattern axes); other keymodes publish Overall + pattern
 // axes only, since MinaCalc's non-4K skillset names are unreliable.
@@ -957,13 +992,13 @@ export async function decoratePlayerSkillBreakdown(
         // An entry with an empty curve carries a shrink median only: too few
         // members to quantile, so the axis gets no percentile.
         if (!axisCurve || axisCurve.curve.length === 0 || !(value > 0)) continue;
-        percentiles[axis] = { value: percentileFromCurve(axisCurve.curve, value), population: axisCurve.count };
+        percentiles[axis] = { value: axisPercentile(axisCurve, value), population: axisCurve.count };
       }
       for (const entry of shrunk.patterns ?? []) {
         if (!(Number(entry.plays) >= BASELINE_PATTERN_MIN_PLAYS) || !(entry.rating > 0)) continue;
         const axisCurve = axisCurves[`pattern:${entry.id}`];
         if (!axisCurve || axisCurve.curve.length === 0) continue;
-        percentiles[`pattern:${entry.id}`] = { value: percentileFromCurve(axisCurve.curve, entry.rating), population: axisCurve.count };
+        percentiles[`pattern:${entry.id}`] = { value: axisPercentile(axisCurve, entry.rating), population: axisCurve.count };
       }
       return Object.keys(percentiles).length > 0 ? { ...shrunk, percentiles } : shrunk;
     });

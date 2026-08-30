@@ -1218,7 +1218,7 @@ async function renderSkills(ctx: SignatureRenderContext): Promise<Buffer> {
       h("div", {
         key: "p",
         style: { width: "58px", fontSize: "10px", color: dim, textAlign: "right" },
-      }, percentile ? formatTopShare(percentile.value) : ""),
+      }, percentile ? formatTopShare(percentile) : ""),
     ]);
   });
 

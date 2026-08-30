@@ -13,7 +13,7 @@
 
 import type { MessageDescriptor } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
-import type { MyDataSkillBreakdown, MyDataSkillMode } from "./my-data";
+import type { MyDataSkillBreakdown, MyDataSkillMode, MyDataSkillPercentile } from "./my-data";
 
 // Every axis carries both forms of its name: `label` is the English one the
 // server-side dynamic renders draw (those images stay English, and the
@@ -155,13 +155,24 @@ export function skillRatingAccent(mode: MyDataSkillMode | null): string {
   return skillModeEntries(mode)[0]?.color ?? "#8f6bd8";
 }
 
-export function topSharePercent(percentile: number): number {
-  return Math.max(1, Math.round(100 - percentile));
+// The share as a display string, no rounding floor: the top of a 12k-player
+// population is a hundredth of a percent, and clamping it to "top 1%" told the
+// best player in the database the same thing it told the 120th. Decimals grow
+// as the share shrinks, and the share never claims to be finer than one player
+// out of the ranked population - the backend measures the tail by exact rank
+// (skill-baseline.ts axisPercentile), so 0.008 there means rank 1 of 12,371.
+export function topSharePercent(percentile: MyDataSkillPercentile): string {
+  // With no population to divide by there is nothing finer to claim, so an
+  // unranked payload keeps the old conservative floor of one percent.
+  const floor = percentile.population > 0 ? 100 / percentile.population : 1;
+  const share = Math.max(100 - percentile.value, floor);
+  const digits = share >= 0.95 ? 0 : share >= 0.095 ? 1 : share >= 0.0095 ? 2 : 3;
+  return share.toFixed(digits);
 }
 
 // English form, for the dynamic-render images. DOM callers phrase it through
-// the catalog instead (`t`top ${topSharePercent(v)}%``).
-export function formatTopShare(percentile: number): string {
+// the catalog instead (`t`top ${topSharePercent(p)}%``).
+export function formatTopShare(percentile: MyDataSkillPercentile): string {
   return `top ${topSharePercent(percentile)}%`;
 }
 

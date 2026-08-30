@@ -11,11 +11,11 @@ import {
   type PlayerSkillModeBreakdown,
 } from "./player-skills.js";
 import {
+  axisPercentile,
   BASELINE_MIN_PLAYS,
   BASELINE_PATTERN_MIN_PLAYS,
   curveMedian,
   exactCurvesUsable,
-  percentileFromCurve,
   readExactSkillCurves,
   shrinkRating,
   type AxisCurveMap,
@@ -742,7 +742,7 @@ export async function getSkillLeaderboard(db: Db, query: SkillLeaderboardQuery):
   if (!keymode || !column) return base;
 
   const order = scopedOrder(db, board, keymode, `${scope.code}:${keymode.keyCount}:${query.axis}`, column.order, codes);
-  const curve = axisCurves?.[query.axis]?.curve;
+  const axisCurve = axisCurves?.[query.axis];
   const start = (page - 1) * pageSize;
   const ranking: SkillLeaderboardEntry[] = [];
   for (let index = start; index < Math.min(order.length, start + pageSize); index += 1) {
@@ -759,7 +759,7 @@ export async function getSkillLeaderboard(db: Db, query: SkillLeaderboardQuery):
       analyzedPlays,
     };
     if (analyzedPlays < BASELINE_MIN_PLAYS) entry.provisional = true;
-    if (curve && curve.length > 0) entry.percentile = percentileFromCurve(curve, value);
+    if (axisCurve && axisCurve.curve.length > 0) entry.percentile = axisPercentile(axisCurve, value);
     ranking.push(entry);
   }
 

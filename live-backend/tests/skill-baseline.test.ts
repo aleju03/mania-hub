@@ -328,9 +328,11 @@ describe("exact skill curves", () => {
       // Displayed ratings stay evidence-shrunk (never above the raw value).
       expect(stronger.modes[0].ratings.Overall).toBeLessThanOrEqual(24.8);
 
-      // A subject above the whole population pins to 100.
+      // A subject above the whole population is ranked by the exact tail, not
+      // pinned to a flat 100: one player out of 25 is a top-4% share, and the
+      // profile can say so instead of rounding every leader to "top 1%".
       const top = await decoratePlayerSkillBreakdown(db, 9003, breakdownFor(40, 500));
-      expect(top.modes[0].percentiles!.Overall.value).toBe(100);
+      expect(top.modes[0].percentiles!.Overall.value).toBe(96);
 
       // Thin pools stay provisional and unranked.
       const thin = await decoratePlayerSkillBreakdown(db, 9004, breakdownFor(24.8, 9));
