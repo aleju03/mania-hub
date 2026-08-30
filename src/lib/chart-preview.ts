@@ -484,3 +484,48 @@ export function buildAutoplayFrames(
   frames.push({ time: Math.max(playEnd, lastEventTime), keyState: 0 });
   return frames;
 }
+
+export type ClockStallWatch = {
+  /**
+   * Feed the clock's current position. Returns true once the position has sat
+   * still for a whole window, and re-baselines so the next report is another
+   * full window away.
+   */
+  observe(position: number, nowMs: number): boolean;
+  reset(nowMs: number): void;
+};
+
+/**
+ * Watches a clock that is supposed to advance on its own (a media element's
+ * currentTime, a renderer's playhead) and reports when it has stopped.
+ *
+ * The window is wall-clock time since the last observed advance, never a
+ * per-sample delta. A sampler can easily run faster than the clock it watches
+ * updates - a 240Hz frame loop reading an audio element, a half-rate preview -
+ * and a per-sample test then reads a perfectly healthy clock as stalled on
+ * every sample. Whatever recovery that triggers is what a viewer sees as a
+ * stutter, so the sampling rate must not enter into the decision at all.
+ */
+export function createClockStallWatch(stallWindowMs: number, advanceEpsilon: number): ClockStallWatch {
+  let lastAdvancePosition: number | null = null;
+  let lastAdvanceAtMs = 0;
+  const baseline = (position: number, nowMs: number) => {
+    lastAdvancePosition = position;
+    lastAdvanceAtMs = nowMs;
+  };
+  return {
+    reset(nowMs) {
+      lastAdvancePosition = null;
+      lastAdvanceAtMs = nowMs;
+    },
+    observe(position, nowMs) {
+      if (lastAdvancePosition == null || position > lastAdvancePosition + advanceEpsilon) {
+        baseline(position, nowMs);
+        return false;
+      }
+      if (nowMs - lastAdvanceAtMs < stallWindowMs) return false;
+      baseline(position, nowMs);
+      return true;
+    },
+  };
+}
