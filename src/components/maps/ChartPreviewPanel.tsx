@@ -33,6 +33,10 @@ const SELECTED_AUDIO_SEEK_SETTLE_TIMEOUT_MS = 5000;
 const AUDIO_SEEK_TOLERANCE_SECONDS = 0.25;
 const REPLAY_AUDIO_CLOCK_PROGRESS_EPSILON_SECONDS = 0.003;
 const REPLAY_AUDIO_CLOCK_PROGRESS_GRACE_MS = 550;
+// How long a media clock may sit still mid-preview before the watchdogs treat
+// it as stuck rather than as a buffer hiccup.
+const AUDIO_STUCK_RECOVERY_MS = 1200;
+const RENDERER_STUCK_RECOVERY_MS = 1000;
 
 type ReplayAudioMode = "set-preview" | "selected-file";
 
@@ -478,19 +482,67 @@ export function ChartPreviewPanel({
     if (!requested || ending) return;
 
     let frameId: number | null = null;
+    // A media element can stop advancing without ending: a buffer the browser
+    // gave up on, or a pause the page never asked for (an output device
+    // change, a decoder hiccup). The playfield then holds on a stalled clock
+    // with nothing watching, so the preview looks frozen until the viewer
+    // seeks or reopens it. This loop already reads the media clock every
+    // frame, so noticing that it stopped costs a comparison.
+    let lastSeconds = -1;
+    let stuckSinceMs: number | null = null;
+    const nudgeStuckAudio = () => {
+      const audio = audioRef.current;
+      if (!audio || !audioReadyRef.current || audio.seeking) {
+        stuckSinceMs = null;
+        return;
+      }
+      const seconds = audio.currentTime;
+      if (seconds > lastSeconds + 0.005) {
+        lastSeconds = seconds;
+        stuckSinceMs = null;
+        return;
+      }
+      lastSeconds = seconds;
+      const now = performance.now();
+      stuckSinceMs ??= now;
+      if (now - stuckSinceMs < AUDIO_STUCK_RECOVERY_MS) return;
+      stuckSinceMs = now;
+
+      if (audio.paused) {
+        applyAudioPlaybackSettings(audio);
+        void audio.play().catch(() => {});
+        return;
+      }
+      // Re-seeking to where it already sits restarts an abandoned buffer.
+      try {
+        audio.currentTime = seconds + 0.001;
+      } catch {
+        // Some browsers reject a seek while the element is recovering.
+      }
+      resetReplayAudioClockSample(audioClockSampleRef, audio.currentTime);
+      audioClockAnchorRef.current = {
+        mediaSeconds: audio.currentTime,
+        startedAtMs: performance.now(),
+        playbackRate: getReplayAudioPlaybackRate(audio, audioPlaybackRate),
+      };
+    };
+
     const update = () => {
       const nextMs = getChartPlaybackMs();
       setChartPlaybackMs((currentMs) => (
         Math.abs(currentMs - nextMs) >= 16 ? nextMs : currentMs
       ));
-      if (playing) frameId = window.requestAnimationFrame(update);
+      if (playing) {
+        nudgeStuckAudio();
+        frameId = window.requestAnimationFrame(update);
+      }
     };
 
     update();
     return () => {
       if (frameId != null) window.cancelAnimationFrame(frameId);
     };
-  }, [ending, getChartPlaybackMs, playing, requested]);
+  }, [applyAudioPlaybackSettings, audioPlaybackRate, ending, getChartPlaybackMs, playing, requested]);
 
   const getClock = useCallback(() => {
     const audio = audioRef.current;
@@ -1156,10 +1208,33 @@ function ChartPreviewRenderer({
 
   useEffect(() => {
     if (!isPlaying) return;
+
+    let lastTimeMs = -1;
+    let stuckSinceMs: number | null = null;
     const id = setInterval(() => {
       const renderer = rendererRef.current;
       if (!renderer) return;
-      if (!renderer.isPlaying || renderer.time >= renderer.duration) onEnded();
+      if (!renderer.isPlaying || renderer.time >= renderer.duration) {
+        onEnded();
+        return;
+      }
+      // The renderer holds its frame on purpose while the audio clock is
+      // stalled; only a still playfield under a moving clock is a stuck loop,
+      // and a pause/play cycle restarts it the way a seek does by hand.
+      if (renderer.time > lastTimeMs + 0.5) {
+        lastTimeMs = renderer.time;
+        stuckSinceMs = null;
+        return;
+      }
+      if (getClockRef.current()?.stalled !== false) {
+        stuckSinceMs = null;
+        return;
+      }
+      stuckSinceMs ??= performance.now();
+      if (performance.now() - stuckSinceMs < RENDERER_STUCK_RECOVERY_MS) return;
+      stuckSinceMs = null;
+      renderer.pause();
+      renderer.play();
     }, 50);
     return () => clearInterval(id);
   }, [isPlaying, onEnded]);

@@ -593,6 +593,7 @@ export class ManiaReplayRenderer {
   private _isPlaying = false;
   private scrollSpeed = DEFAULT_REPLAY_SCROLL_SPEED;
   private animFrameId = 0;
+  private frameErrorLogged = false;
   private lastRenderTime = 0;
   private audioClockAnchorTime: number | null = null;
   private audioClockAnchorNow = 0;
@@ -2816,6 +2817,22 @@ export class ManiaReplayRenderer {
 
   private tick() {
     if (!this._isPlaying) return;
+    // The next frame is scheduled after the frame runs, so a single throwing
+    // frame used to strand the loop with _isPlaying still true: the playfield
+    // froze in place and only a pause/play cycle (a seek, a reopen) restarted
+    // it. Keep the loop alive and report the first failure.
+    try {
+      this.advanceFrame();
+    } catch (error) {
+      if (!this.frameErrorLogged) {
+        this.frameErrorLogged = true;
+        console.error("[replay] frame failed, continuing", error);
+      }
+    }
+    if (this._isPlaying) this.animFrameId = requestAnimationFrame(() => this.tick());
+  }
+
+  private advanceFrame() {
     const now = performance.now();
     const external = this.externalClock?.() ?? null;
 
@@ -2848,7 +2865,6 @@ export class ManiaReplayRenderer {
     this.fireHitsounds();
     this.updateFpsCounter(now);
     this.render();
-    if (this._isPlaying) this.animFrameId = requestAnimationFrame(() => this.tick());
   }
 
   private getSmoothedExternalTime(audioTime: number, now: number): number {
