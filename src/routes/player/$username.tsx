@@ -3614,59 +3614,58 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   if (!liveConfigured) {
     return <div className="py-8 text-center text-sm text-osu-f1">{t`Skill ratings are unavailable right now.`}</div>;
   }
-  if (skillsError) {
-    return <div className="py-8 text-center text-sm text-osu-f1">{t`Could not load skill ratings. Try again in a bit.`}</div>;
-  }
-  if (!skills) {
-    return (
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {Array.from({ length: 2 }).map((_, i) => (
-          <div key={i} className="space-y-3 rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-7 w-24" />
-            {Array.from({ length: 5 }).map((_, j) => (
-              <Skeleton key={j} className="h-3 w-full" />
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
   const modes = qualifyingSkillModes(skills);
-  if (skills.status !== "ready" || modes.length === 0) {
-    return (
-      <div className="mx-auto max-w-[440px]">
-        <PlayerSkillCard title={t`Skill rating`} accent={skillRatingAccent(null)}>
-          <SkillBreakdownBody skills={skills} mode={null} />
-        </PlayerSkillCard>
-        {/* A profile with nothing rated yet is exactly who has scores to
-            backfill, so the button rides this state too. */}
-        <div className="mt-3 flex justify-center">{addScoreButton}</div>
-        {addScoreModal}
-      </div>
-    );
-  }
+  /* Every state of the panel is one tree, not a return each: a submission
+     queues a recompute that can flip the panel between them while the dialog
+     is open, and a second mount point would tear the dialog down mid-paste. */
+  const rated = skills != null && skills.status === "ready" && modes.length > 0;
   return (
     <>
-      <div
-        className={`grid grid-cols-1 gap-3 ${
-          modes.length > 1
-            ? "xl:grid-cols-2 xl:[&>*:last-child:nth-child(odd)]:col-span-2"
-            : "md:max-w-[640px]"
-        }`}
-      >
-        {modes.map((mode) => (
-          <SkillModePanel
-            key={mode.keyCount}
-            skills={skills}
-            mode={mode}
-            onSelectEntry={(entry) => setSelectedSkill({ entry, keyCount: mode.keyCount })}
-            onSelectDan={(side) => setSelectedDan({ side, keyCount: mode.keyCount })}
-          />
-        ))}
-      </div>
-      <div className="mt-3 flex justify-end">{addScoreButton}</div>
+      {skillsError ? (
+        <div className="py-8 text-center text-sm text-osu-f1">{t`Could not load skill ratings. Try again in a bit.`}</div>
+      ) : !skills ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="space-y-3 rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-7 w-24" />
+              {Array.from({ length: 5 }).map((_, j) => (
+                <Skeleton key={j} className="h-3 w-full" />
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : rated ? (
+        <div
+          className={`grid grid-cols-1 gap-3 ${
+            modes.length > 1
+              ? "xl:grid-cols-2 xl:[&>*:last-child:nth-child(odd)]:col-span-2"
+              : "md:max-w-[640px]"
+          }`}
+        >
+          {modes.map((mode) => (
+            <SkillModePanel
+              key={mode.keyCount}
+              skills={skills}
+              mode={mode}
+              onSelectEntry={(entry) => setSelectedSkill({ entry, keyCount: mode.keyCount })}
+              onSelectDan={(side) => setSelectedDan({ side, keyCount: mode.keyCount })}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="mx-auto max-w-[440px]">
+          <PlayerSkillCard title={t`Skill rating`} accent={skillRatingAccent(null)}>
+            <SkillBreakdownBody skills={skills} mode={null} />
+          </PlayerSkillCard>
+        </div>
+      )}
+      {/* A profile with nothing rated yet is exactly who has scores to
+          backfill, so the button rides that state too - but not the states
+          where there is nothing to read yet. */}
+      {skills && !skillsError ? (
+        <div className={`mt-3 flex ${rated ? "justify-end" : "justify-center"}`}>{addScoreButton}</div>
+      ) : null}
       {addScoreModal}
       {selectedSkill ? (
         <SkillPlaysModal
