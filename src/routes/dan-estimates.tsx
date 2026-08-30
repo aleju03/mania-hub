@@ -6,7 +6,7 @@ import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
 import { getDanImageSrc } from "../lib/dan-images";
 import { DanLevelBadge } from "../components/player/DanLevelBadge";
-import { creditedDanFor, danCreditBelowBarWindowFor, danCreditNearBarCapFor, danCreditOffset } from "#dan/dan-credit";
+import { creditedDanFor, danCreditOptionsFor, danCreditOffset } from "#dan/dan-credit";
 import { danLabelFor } from "#dan/chart-classifier";
 import { formatNumber } from "../lib/format";
 import { ModBadge } from "../components/ui/ModBadge";
@@ -390,23 +390,20 @@ function DanEstimatesPage() {
           />
           <P>
             <Trans>
-              The accuracy shown by the game is not used. It is worked out again from your judgements,
-              the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula
-              and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K
-              regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same
-              play, recomputing is what makes that play count, or not count, the same on either client.
+              The site recalculates accuracy from the score's judgements instead of using the number
+              shown in-game. This matters because stable and lazer calculate accuracy differently.
+              Regular 4K uses stable accuracy, while 4K LN uses ScoreV2 accuracy. Recalculating it
+              lets scores from either client count the same way.
             </Trans>
           </P>
           <P>
             <Trans>
-              A pass right at the bar credits the chart's full level, exactly as passing the course
-              would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare
-              clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp
-              opens. A near miss under the bar
-              still credits something: a play counts as a clear of a lower level, bottoming out a
-              level and a quarter down at the cutoff. The regular ladders keep crediting to 4
-              points under the bar. The LN ladders stop at 1 point, and 4K LN's bonus is
-              flattened:
+              Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the
+              bar still gives full credit. After that, bonus credit starts. It stays small until 99%,
+              then rises faster. Scores below the bar can still count at a lower level. Regular charts
+              count down to 4% below the bar, while 6K/7K LN charts count down to 1% below it. At those
+              cutoffs, the chart counts as 1.25 levels lower. 4K LN counts down to 94.5%, where the chart
+              is worth 1.5 levels less, and its bonus stops rising at 99.7%:
             </Trans>
           </P>
           <CreditCurveTabs />
@@ -1201,9 +1198,9 @@ function DanDistribution({ rows }: { rows: Array<{ level: string; players: numbe
 }
 
 /* One credit table per ladder family, tabbed: the three curves share a shape
-   but not their numbers (the LN cutoff is 1 point, and 4K LN's bonus is
-   damped), and a single table with prose exceptions undersold exactly the
-   ladder people argue about. Values mirror dan-credit.ts. */
+   but not their numbers (the 6K/7K LN cutoff is 1 point, and 4K LN has anchor
+   tables of its own), and a single table with prose exceptions undersold
+   exactly the ladder people argue about. Values mirror dan-credit.ts. */
 function CreditCurveTabs() {
   const { t } = useLingui();
   const [tab, setTab] = useState(0);
@@ -1217,7 +1214,7 @@ function CreditCurveTabs() {
   const stableFormulaNote = t`Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear. On charts with a lot of long notes the recalculation is only close to what stable would show, because the two clients judge holds differently. The Classic mod makes no difference.`;
   const tabs = [
     {
-      label: t`Regular`,
+      label: t`Regular 4K/6K/7K`,
       ladder: { key: "4k-regular", bar: 0.96, side: "rc" as const, keyCount: 4, example: 3729620 },
       head: [t`Stable-formula acc (96%)`, t`Credit`],
       note: stableFormulaNote,
@@ -1241,16 +1238,17 @@ function CreditCurveTabs() {
       head: [t`ScoreV2 acc (97%)`, t`Credit`],
       note: t`Stable scores are recalculated with ScoreV2 from their judgements, so the accuracy used here may be lower than the displayed value.`,
       rows: [
-        ["100%", t`the chart's level +0.7`],
-        ["99.9%", t`the chart's level +0.53`],
-        ["99.7%", t`the chart's level +0.2`],
-        ["99%", t`the chart's level +0.12`],
+        ["99.7-100%", t`the chart's level +0.7`],
+        ["99.5%", t`the chart's level +0.5`],
+        ["99%", t`the chart's level +0.3`],
+        ["98.5%", t`the chart's level +0.15`],
         ["97-98%", t`the chart's full level`],
-        ["96.9%", t`the chart's level -0.75`],
-        ["96.4%", t`the chart's level -0.85`],
-        ["96.2%", t`the chart's level -1.05`],
-        ["96%", t`the chart's level -1.25`],
-        [t`below 96%`, t`nothing`],
+        ["96.9%", t`the chart's level -0.42`],
+        ["96.5%", t`the chart's level -0.9`],
+        ["96%", t`the chart's level -1.06`],
+        ["95%", t`the chart's level -1.39`],
+        ["94.5%", t`the chart's level -1.55`],
+        [t`below 94.5%`, t`nothing`],
       ],
     },
     {
@@ -1298,8 +1296,6 @@ function CreditCurveTabs() {
         side={active.ladder.side}
         keyCount={active.ladder.keyCount}
         example={CHART_EXAMPLES.find((chart) => chart.id === active.ladder.example)}
-        belowWindow={danCreditBelowBarWindowFor(active.ladder.side, active.ladder.keyCount)}
-        nearBarCap={danCreditNearBarCapFor(active.ladder.side, active.ladder.keyCount)}
       />
       <Table head={active.head} rows={active.rows} />
       <p className="text-[12px] leading-5 text-osu-f2">{active.note}</p>
@@ -1337,14 +1333,12 @@ function formatCreditOffset(offset: number): string {
   return `${offset < 0 ? "-" : "+"}${body}`;
 }
 
-function CreditCurvePlot({ ladder, bar, side, keyCount, example, belowWindow, nearBarCap }: {
+function CreditCurvePlot({ ladder, bar, side, keyCount, example }: {
   ladder: string;
   bar: number;
   side: "rc" | "ln";
   keyCount: number;
   example?: (typeof CHART_EXAMPLES)[number];
-  belowWindow: number;
-  nearBarCap: number;
 }) {
   const { t } = useLingui();
   const hostRef = useRef<HTMLDivElement>(null);
@@ -1375,9 +1369,12 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, example, belowWindow, ne
     return () => observer.disconnect();
   }, []);
 
-  const options = { belowBarWindow: belowWindow, nearBarCap };
+  // The whole ladder-aware bundle, not just the window: 4K LN's curve has
+  // anchor tables of its own, and a plot built from the shared ones would draw
+  // a line nothing is credited against.
+  const options = danCreditOptionsFor(side, keyCount);
   const offsetAt = (value: number) => danCreditOffset(value, bar, options);
-  const lo = bar - belowWindow;
+  const lo = bar - options.belowBarWindow!;
   const xLo = lo - (1 - lo) * CURVE_DEAD_STRIP;
   const yHi = offsetAt(1) ?? 1.5;
   const yLo = offsetAt(lo) ?? -1.25;

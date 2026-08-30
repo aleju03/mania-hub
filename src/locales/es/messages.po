@@ -1815,8 +1815,20 @@ msgid "a map"
 msgstr "un mapa"
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, and 4K LN's bonus is flattened:"
-msgstr "Un pase justo en el mínimo acredita el nivel completo del chart, igual que pasar el dan real, y el primer tramo por encima también: un 96.9% en una escala de 96% es un clear normal, sin bono. Por encima de eso el bono se mantiene pequeño hasta el 99%, donde empieza la subida de verdad. Quedarse un poco corto todavía acredita algo: la play cuenta como clear de un nivel más bajo, llegando como mucho a un nivel y cuarto menos en el corte. Las escalas regulares siguen acreditando hasta 4 puntos por debajo del mínimo. Las escalas LN paran en 1 punto, y el bono de 4K LN está aplanado:"
+#~ msgid "A pass at the bar credits the chart's full level, the same as passing the course, and so does the first point above it: a 96.9% on a 96% ladder is a normal clear, not a bonus. Above that the bonus stays small until 99%, then it climbs. Under the bar a pass still counts, as a clear of a lower level, down to a level and a quarter less at the cutoff. Regular ladders credit to 4 points under the bar and 6K/7K LN to 1. 4K LN uses its own numbers: it credits down to 94.5%, a level and a half less there, and its bonus tops out at 99.7%:"
+#~ msgstr "Un pase en el mínimo acredita el nivel completo del chart, igual que pasar el dan, y el primer punto por encima también: un 96.9% en una escala de 96% es un clear normal, sin bono. Por encima de eso el bono se mantiene pequeño hasta el 99%, y ahí sube. Por debajo del mínimo la play sigue contando, como clear de un nivel más bajo, hasta un nivel y cuarto menos en el corte. Las escalas regulares acreditan hasta 4 puntos por debajo del mínimo y 6K/7K LN hasta 1. 4K LN usa sus propios números: acredita hasta 94.5%, con un nivel y medio menos ahí, y su bono llega a su tope en 99.7%:"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar, 6K/7K LN to 1 point. 4K LN has a curve of its own, because its bar is written in ScoreV2 and a 100% is out of reach on most charts with long notes: it credits down to 94.5% and bottoms out a level and a half down there, and its bonus reaches its top at 99.7% rather than at an accuracy nobody sets:"
+#~ msgstr "Un pase justo en el mínimo acredita el nivel completo del chart, igual que pasar el dan real, y el primer tramo por encima también: un 96.9% en una escala de 96% es un clear normal, sin bono. Por encima de eso el bono se mantiene pequeño hasta el 99%, donde empieza la subida de verdad. Quedarse un poco corto todavía acredita algo: la play cuenta como clear de un nivel más bajo, llegando como mucho a un nivel y cuarto menos en el corte. Las escalas regulares siguen acreditando hasta 4 puntos por debajo del mínimo, y 6K/7K LN hasta 1 punto. 4K LN tiene su propia curva, porque su mínimo está escrito en ScoreV2 y un 100% no está al alcance en la mayoría de charts con notas largas: acredita hasta 94.5% y ahí toca fondo en un nivel y medio menos, y su bono llega a su tope en 99.7% en vez de en una precisión que nadie saca:"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar, 6K/7K LN to 1 point. 4K LN has a curve of its own, because its bar is written in ScoreV2 and a 100% is out of reach on most charts with long notes: it credits down to 94.5%, and its bonus reaches its top at 99.7% rather than at an accuracy nobody sets:"
+#~ msgstr "Un pase justo en el mínimo acredita el nivel completo del chart, igual que pasar el dan real, y el primer tramo por encima también: un 96.9% en una escala de 96% es un clear normal, sin bono. Por encima de eso el bono se mantiene pequeño hasta el 99%, donde empieza la subida de verdad. Quedarse un poco corto todavía acredita algo: la play cuenta como clear de un nivel más bajo, llegando como mucho a un nivel y cuarto menos en el corte. Las escalas regulares siguen acreditando hasta 4 puntos por debajo del mínimo, y 6K/7K LN hasta 1 punto. 4K LN tiene su propia curva, porque su mínimo está escrito en ScoreV2 y un 100% no está al alcance en la mayoría de charts con notas largas: acredita hasta 94.5%, y su bono llega a su tope en 99.7% en vez de en una precisión que nadie saca:"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, and 4K LN's bonus is flattened:"
+#~ msgstr "Un pase justo en el mínimo acredita el nivel completo del chart, igual que pasar el dan real, y el primer tramo por encima también: un 96.9% en una escala de 96% es un clear normal, sin bono. Por encima de eso el bono se mantiene pequeño hasta el 99%, donde empieza la subida de verdad. Quedarse un poco corto todavía acredita algo: la play cuenta como clear de un nivel más bajo, llegando como mucho a un nivel y cuarto menos en el corte. Las escalas regulares siguen acreditando hasta 4 puntos por debajo del mínimo. Las escalas LN paran en 1 punto, y el bono de 4K LN está aplanado:"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
@@ -2676,12 +2688,16 @@ msgid "below 92%"
 msgstr "menos de 92%"
 
 #: src/routes/dan-estimates.tsx
+msgid "below 94.5%"
+msgstr "menos de 94.5%"
+
+#: src/routes/dan-estimates.tsx
 msgid "below 94%"
 msgstr "menos de 94%"
 
 #: src/routes/dan-estimates.tsx
-msgid "below 96%"
-msgstr "menos de 96%"
+#~ msgid "below 96%"
+#~ msgstr "menos de 96%"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Below the credit that sets the estimate"
@@ -5603,6 +5619,10 @@ msgstr "Hitsounds"
 msgid "hitsounds and interface samples"
 msgstr "hitsounds y sonidos de interfaz"
 
+#: src/routes/dan-estimates.tsx
+msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. Regular charts count down to 4% below the bar, while 6K/7K LN charts count down to 1% below it. At those cutoffs, the chart counts as 1.25 levels lower. 4K LN counts down to 94.5%, where the chart is worth 1.5 levels less, and its bonus stops rising at 99.7%:"
+msgstr "Llegar al mínimo de precisión da el crédito completo del nivel del chart. El 1% siguiente por encima del mínimo también da el crédito completo. A partir de ahí empieza el bono. Se mantiene pequeño hasta el 99%, y luego sube más rápido. Las scores por debajo del mínimo todavía cuentan, como un nivel más bajo. Los charts regulares cuentan hasta 4% por debajo del mínimo, y los de 6K/7K LN hasta 1% por debajo. En esos cortes el chart cuenta como 1.25 niveles menos. 4K LN cuenta hasta 94.5%, donde el chart vale 1.5 niveles menos, y su bono deja de subir en 99.7%:"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
 msgstr "Mantén presionada <0>C</0> y mueve el cursor para dibujar humo, igual que al dibujar a mitad de una partida en osu!. Se desvanece solo."
@@ -7116,6 +7136,10 @@ msgstr "BPM promedio"
 #: src/routes/player/$username.tsx
 msgid "Median by Keymode"
 msgstr "Mediana por modo de teclas"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Meeting the target gives full credit for the chart's level. The next percentage point is also a normal clear. Bonus credit starts above that, stays small until 99%, then rises faster. Scores below the target get partial credit down to the cutoff: 4 points below for regular, 1 point for 6K/7K LN, and 94.5% for 4K LN. The lowest credit is 1.25 levels below the chart, or 1.5 for 4K LN. The 4K LN bonus maxes out at 99.7%:"
+#~ msgstr ""
 
 #: src/routes/communities_.$id.tsx
 #: src/routes/communities.tsx
@@ -9770,9 +9794,12 @@ msgstr "Regiones"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
-#: src/routes/dan-estimates.tsx
 msgid "Regular"
 msgstr "Regular"
+
+#: src/routes/dan-estimates.tsx
+msgid "Regular 4K/6K/7K"
+msgstr "Regular 4K/6K/7K"
 
 #: src/lib/signature-shared.ts
 msgid "Regular and LN"
@@ -11980,8 +12007,8 @@ msgstr "Los dans de 4K LN están pensados para jugarse en ScoreV2. El problema e
 #~ msgstr "Los cursos de 4K LN están pensados para el mod ScoreV2, y osu! solo registra un play con esa fórmula si estás en lazer. La mayoría juega en stable, así que el sitio calcula la precisión de ScoreV2 a partir de tus judgements en vez de exigir un play con ScoreV2. En un pase viejo del archivo al que no le queda más que su precisión, un play de stable tiene que llegar a 97.5% en lugar de 97%, porque las mismas manos se leen medio punto más alto en la fórmula de stable."
 
 #: src/routes/dan-estimates.tsx
-msgid "The accuracy shown by the game is not used. It is worked out again from your judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same play, recomputing is what makes that play count, or not count, the same on either client."
-msgstr "No se usa la precisión que te mostró el juego. Se vuelve a calcular desde tus judgements, los 300, 200, 100 y demás. En mania hay dos formas de sumarlos, la fórmula de stable y la de ScoreV2 que muestra lazer. Cada escala pide su mínimo en una de las dos: 4K regular en la de stable, 4K LN en la de ScoreV2. Como las dos dan números distintos para la misma play, recalcular es lo que hace que esa play cuente, o no cuente, igual en cualquiera de los dos clientes."
+#~ msgid "The accuracy shown by the game is not used. It is worked out again from your judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same play, recomputing is what makes that play count, or not count, the same on either client."
+#~ msgstr "No se usa la precisión que te mostró el juego. Se vuelve a calcular desde tus judgements, los 300, 200, 100 y demás. En mania hay dos formas de sumarlos, la fórmula de stable y la de ScoreV2 que muestra lazer. Cada escala pide su mínimo en una de las dos: 4K regular en la de stable, 4K LN en la de ScoreV2. Como las dos dan números distintos para la misma play, recalcular es lo que hace que esa play cuente, o no cuente, igual en cualquiera de los dos clientes."
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "The album is unavailable right now. Try again in a bit."
@@ -12028,12 +12055,40 @@ msgid "the chart's full level"
 msgstr "el nivel completo del chart"
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.26"
+#~ msgstr "el nivel del chart -0.26"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.27"
+#~ msgstr "el nivel del chart -0.27"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.3"
+#~ msgstr "el nivel del chart -0.3"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.31"
+#~ msgstr "el nivel del chart -0.31"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.32"
+#~ msgstr "el nivel del chart -0.32"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.33"
 #~ msgstr "el nivel del chart -0.33"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.36"
 msgstr "el nivel del chart -0.36"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.38"
+#~ msgstr "el nivel del chart -0.38"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.42"
+msgstr "el nivel del chart -0.42"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.45"
@@ -12044,32 +12099,84 @@ msgid "the chart's level -0.51"
 msgstr "el nivel del chart -0.51"
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.53"
+#~ msgstr "el nivel del chart -0.53"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.61"
+#~ msgstr "el nivel del chart -0.61"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.63"
 #~ msgstr "el nivel del chart -0.63"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.75"
-msgstr "el nivel del chart -0.75"
+#~ msgid "the chart's level -0.75"
+#~ msgstr "el nivel del chart -0.75"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.76"
 msgstr "el nivel del chart -0.76"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.85"
-msgstr "el nivel del chart -0.85"
+#~ msgid "the chart's level -0.77"
+#~ msgstr "el nivel del chart -0.77"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.78"
+#~ msgstr "el nivel del chart -0.78"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.82"
+#~ msgstr "el nivel del chart -0.82"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.85"
+#~ msgstr "el nivel del chart -0.85"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.9"
+msgstr "el nivel del chart -0.9"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.95"
+#~ msgstr "el nivel del chart -0.95"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -1"
 #~ msgstr "el nivel del chart -1"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -1.05"
-msgstr "el nivel del chart -1.05"
+#~ msgid "the chart's level -1.05"
+#~ msgstr "el nivel del chart -1.05"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -1.06"
+msgstr "el nivel del chart -1.06"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -1.15"
+#~ msgstr "el nivel del chart -1.15"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -1.25"
 msgstr "el nivel del chart -1.25"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -1.35"
+#~ msgstr "el nivel del chart -1.35"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -1.39"
+msgstr "el nivel del chart -1.39"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -1.5"
+#~ msgstr "el nivel del chart -1.5"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -1.55"
+msgstr "el nivel del chart -1.55"
 
 #. placeholder {0}: formatCreditOffset(held)
 #: src/routes/dan-estimates.tsx
@@ -12093,6 +12200,10 @@ msgstr "el nivel del chart +0.12"
 #~ msgstr "el nivel del chart +0.14"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.15"
+msgstr "el nivel del chart +0.15"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.16"
 msgstr "el nivel del chart +0.16"
 
@@ -12109,6 +12220,10 @@ msgstr "el nivel del chart +0.2"
 #~ msgstr "el nivel del chart +0.28"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.3"
+msgstr "el nivel del chart +0.3"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.35"
 #~ msgstr "el nivel del chart +0.35"
 
@@ -12117,8 +12232,12 @@ msgstr "el nivel del chart +0.2"
 #~ msgstr "el nivel del chart +0.49"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.53"
-msgstr "el nivel del chart +0.53"
+msgid "the chart's level +0.5"
+msgstr "el nivel del chart +0.5"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level +0.53"
+#~ msgstr "el nivel del chart +0.53"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.7"
@@ -12159,6 +12278,10 @@ msgstr "Los ajustes personalizados son demasiado grandes para guardarlos"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The delete failed. Try again."
 msgstr "No se pudo eliminar. Inténtalo de nuevo."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The displayed in-game accuracy is ignored. Accuracy is recalculated from the score's judgements using the formula for that ladder: Stable for 4K regular and ScoreV2 for 4K LN. This gives the same result whether the score was set on Stable or lazer."
+#~ msgstr ""
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "The draw pool could not be read just now. Try again in a moment."
@@ -12391,6 +12514,10 @@ msgstr "El sitio se entera de que estás jugando por el feed de scores nuevos de
 #: src/routes/dan-estimates.tsx
 #~ msgid "The site only started recording plays on June 9, 2026. Anything you played before that date counts only if it is still in your osu! top plays, and everything else from back then is invisible to the estimate."
 #~ msgstr "El sitio solo empezó a trackear jugadas el 9 de junio de 2026. Todo lo que jugaste antes de esa fecha cuenta solo si sigue estando en tus top plays de osu!, y el resto de aquella época es invisible para la estimación."
+
+#: src/routes/dan-estimates.tsx
+msgid "The site recalculates accuracy from the score's judgements instead of using the number shown in-game. This matters because stable and lazer calculate accuracy differently. Regular 4K uses stable accuracy, while 4K LN uses ScoreV2 accuracy. Recalculating it lets scores from either client count the same way."
+msgstr "La página vuelve a calcular la precisión a partir de los judgements de la score en vez de usar el número que muestra el juego. Esto importa porque stable y lazer calculan la precisión de forma distinta. El 4K regular usa la precisión de stable y el 4K LN la de ScoreV2. Recalcularla hace que las scores de cualquiera de los dos clientes cuenten igual."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The skill breakdown"

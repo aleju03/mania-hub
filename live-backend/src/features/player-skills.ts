@@ -360,9 +360,9 @@ const AGGREGATE_RATING_SCALER = 1.04;
 // zero point of the accuracy credit curve (dan-credit.ts). Away from the bar
 // the credit moves with the accuracy in both directions: a pass up to the
 // ladder's decay window under the bar (danCreditBelowBarWindowFor: four
-// points on rice, one on LN) still credits the chart minus a
+// points on rice, one on 6K/7K LN, 2.5 on 4K LN) still credits the chart minus a
 // decay (capped so it can never equal the chart's own dan, and reaching a
-// full level down at the window's edge), and accuracy above the bar credits a
+// level and a quarter down at the window's edge), and accuracy above the bar credits a
 // bonus that reaches +1.5 levels at 100% in the ladder's own currency. This
 // is not the danCreditFor fade an earlier revision had and 75373b2b removed:
 // that one discounted the at-bar clear itself, which taxed thin evidence
@@ -3964,7 +3964,19 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // reverts false rate-edit matches between unrelated rice-pack diffs by
 // requiring exact object counts. Re-derives from plays_json as always, no
 // MinaCalc.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v16";
+// v17: the 4K LN credit curve got tables of its own (dan-credit.ts,
+// 2026-08-29). Its bar is written in ScoreV2, where a 100% is not reachable on
+// most charts with long notes, so the shared headroom table was pricing its
+// top anchor on an accuracy nobody sets and paying +0.001 for a 98%. The bonus
+// now tops out at 99.7% (same +0.7 top) with real credit under it, and the
+// decay window widened from 1 point to 2.5, crediting down to 94.5% and
+// bottoming out at -1.55 rather than -1.25, with its step at the bar cut from
+// 0.75 to 0.3. Only 4K LN verdicts move, so the initial v17 pass patches only
+// that side and leaves every RC verdict and every other keymode unchanged in
+// modes_json. A later rate-verdict repair still requests the
+// generic full scope, because those inputs can move either side at any rate.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v17";
+const PLAYER_SKILL_DAN_PREVIOUS_META_KEY = "player_skill_dan_sweep_done:v16";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
@@ -3978,15 +3990,29 @@ export interface PlayerSkillDanSweepChunkResult {
   done: boolean;
 }
 
+export type PlayerSkillDanSweepScope = "all" | "4k-ln";
+
+export interface PlayerSkillDanSweepPayload {
+  cursor?: number;
+  startedAt?: string;
+  scope?: PlayerSkillDanSweepScope;
+}
+
 export async function recomputePlayerSkillDanChunk(
   db: Db,
   cursor: number,
   limit = PLAYER_SKILL_DAN_SWEEP_CHUNK,
+  scope: PlayerSkillDanSweepScope = "all",
 ): Promise<PlayerSkillDanSweepChunkResult> {
+  // The v17 curve only touches 4K LN. Limit that rollout to rows which even
+  // carry a 4K mode; the generic scope remains for repairs whose chart/rate
+  // inputs can affect any ladder.
+  const scopeFilter = scope === "4k-ln" ? `and modes_json like '%"keyCount":4%'` : "";
   const rows = (await exec(
     db,
     `select user_id, modes_json, plays_json, updated_at from player_skill_ratings
      where user_id > ? and analysis_version = ? and status = 'ready'
+       ${scopeFilter}
      order by user_id
      limit ?`,
     [Math.max(0, Math.floor(cursor)), PLAYER_SKILLS_VERSION, Math.max(1, Math.floor(limit))],
@@ -4006,8 +4032,12 @@ export async function recomputePlayerSkillDanChunk(
     const summary = parseJson<StoredModesSummary | null>(String(row.modes_json ?? ""), null);
     const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row.plays_json ?? ""), null);
     const plays = (Array.isArray(stored?.plays) ? stored.plays : [])
-      .filter((play) => play && Number.isInteger(play.beatmapId) && play.beatmapId > 0);
+      .filter((play) => play
+        && Number.isInteger(play.beatmapId)
+        && play.beatmapId > 0
+        && (scope === "all" || play.keyCount === 4));
     if (!summary || !Array.isArray(summary.modes) || summary.modes.length === 0 || plays.length === 0) continue;
+    if (scope === "4k-ln" && !summary.modes.some((mode) => mode.keyCount === 4)) continue;
     parsed.push({ userId, summary, plays, readAt: String(row.updated_at ?? "") });
     for (const play of plays) beatmapIds.push(play.beatmapId);
   }
@@ -4030,10 +4060,23 @@ export async function recomputePlayerSkillDanChunk(
       if (list) list.push(play);
       else playsByKeyCount.set(play.keyCount, [play]);
     }
-    const modes = summary.modes.map((mode) => ({
-      ...mode,
-      dan: computeModeDan(mode.keyCount, playsByKeyCount.get(mode.keyCount) ?? [], new Map(), infoByBeatmap, courseClears, rateVerdicts),
-    }));
+    const modes = summary.modes.map((mode) => {
+      if (scope === "4k-ln") {
+        if (mode.keyCount !== 4) return mode;
+        const modePlays = playsByKeyCount.get(4) ?? [];
+        const lnClears = collectDanClears(4, modePlays, new Map(), infoByBeatmap, rateVerdicts)
+          .filter((clear) => clear.side === "ln");
+        const ln = danSideFromClears(4, "ln", lnClears, infoByBeatmap, courseClears);
+        return { ...mode, dan: { rc: mode.dan?.rc ?? null, ln } };
+      }
+      return {
+        ...mode,
+        dan: computeModeDan(mode.keyCount, playsByKeyCount.get(mode.keyCount) ?? [], new Map(), infoByBeatmap, courseClears, rateVerdicts),
+      };
+    });
+    // Pure-RC players and 4K LN verdicts which happen to land on the same
+    // value need no write. Their old row remains visible throughout the pass.
+    if (scope === "4k-ln" && json(modes) === json(summary.modes)) continue;
     // The chart lookup above sits between the read and this write, and a
     // normal skill computation runs in another lane - so the row can have been
     // rewritten in the meantime. Without the updated_at guard this would put
@@ -4066,7 +4109,20 @@ export async function ensurePlayerSkillDanSweepSeeded(db: Db, queue: JobQueue): 
     [PLAYER_SKILL_DAN_SWEEP_JOB],
   )).rows[0];
   if (pending) return;
-  await enqueuePlayerSkillDanSweep(queue, 0);
+  let scope: PlayerSkillDanSweepScope = "all";
+  if (!done) {
+    // A normal v16 -> v17 rollout already incorporated every earlier rule, so
+    // only the new 4K LN curve is stale. An install missing v16, or one whose
+    // rate-verdict producers landed after v16, takes the conservative full
+    // pass instead of silently skipping those older corrections.
+    const previous = (await exec(
+      db,
+      "select value_json from live_meta where key = ? limit 1",
+      [PLAYER_SKILL_DAN_PREVIOUS_META_KEY],
+    )).rows[0];
+    if (previous && !(await rateVerdictsLandedAfter(db, String(previous.value_json ?? "")))) scope = "4k-ln";
+  }
+  await enqueuePlayerSkillDanSweep(queue, 0, scope);
 }
 
 /** True when a rate-verdict producer stamped its done key after this dan pass began. */
@@ -4084,15 +4140,18 @@ async function rateVerdictsLandedAfter(db: Db, doneJson: string): Promise<boolea
 export async function runPlayerSkillDanSweepJob(
   db: Db,
   queue: JobQueue,
-  payload: { cursor?: number; startedAt?: string } | undefined,
+  payload: PlayerSkillDanSweepPayload | undefined,
 ): Promise<void> {
   const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  // Missing/invalid scope means the legacy full pass. This makes already
+  // queued pre-deploy jobs safe when the worker starts running the new code.
+  const scope: PlayerSkillDanSweepScope = payload?.scope === "4k-ln" ? "4k-ln" : "all";
   // Carried from the first chunk so the done key can be stamped with when the
   // sweep began reading, not when it stopped: see below.
   const startedAt = typeof payload?.startedAt === "string" ? payload.startedAt : nowIso();
-  const result = await recomputePlayerSkillDanChunk(db, cursor);
+  const result = await recomputePlayerSkillDanChunk(db, cursor, PLAYER_SKILL_DAN_SWEEP_CHUNK, scope);
   if (result.rewritten > 0) {
-    logInfo("player_skill_dan_sweep_chunk", { users: result.rewritten, cursor: result.nextCursor });
+    logInfo("player_skill_dan_sweep_chunk", { users: result.rewritten, cursor: result.nextCursor, scope });
   }
   if (result.done) {
     // The done key records the START of the pass, because
@@ -4114,23 +4173,24 @@ export async function runPlayerSkillDanSweepJob(
     // small corpus can finish on the still-running cursor-0 job, which the
     // queue deliberately refuses to replace from inside itself.
     if (await rateVerdictsLandedAfter(db, json({ finishedAt: startedAt }))) {
-      await enqueuePlayerSkillDanSweep(queue, 0, undefined, true);
+      await enqueuePlayerSkillDanSweep(queue, 0, "all", undefined, true);
     }
     return;
   }
-  await enqueuePlayerSkillDanSweep(queue, result.nextCursor, startedAt);
+  await enqueuePlayerSkillDanSweep(queue, result.nextCursor, scope, startedAt);
 }
 
 async function enqueuePlayerSkillDanSweep(
   queue: JobQueue,
   cursor: number,
+  scope: PlayerSkillDanSweepScope,
   startedAt?: string,
   rateVerdictRestart = false,
 ): Promise<void> {
   await queue.enqueue(
     PLAYER_SKILL_DAN_SWEEP_JOB,
     rateVerdictRestart ? `${PLAYER_SKILL_DAN_SWEEP_JOB}:rate-verdict-restart` : `${PLAYER_SKILL_DAN_SWEEP_JOB}:${cursor}`,
-    { cursor, startedAt: startedAt ?? nowIso() },
+    { cursor, startedAt: startedAt ?? nowIso(), scope },
     { priority: -10, replaceDone: true },
   );
 }

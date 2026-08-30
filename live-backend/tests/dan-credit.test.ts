@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  DAN_CREDIT_4K_LN_BELOW_BAR_WINDOW,
   DAN_CREDIT_BELOW_BAR_WINDOW,
   DAN_CREDIT_LN_BELOW_BAR_WINDOW,
   creditedDanFor,
   danCreditBelowBarWindowFor,
   danCreditNearBarCapFor,
   danCreditOffset,
+  danCreditOptionsFor,
 } from "../src/dan/dan-credit.js";
 import { danLabelForTest } from "../src/features/player-skills.js";
 
@@ -31,10 +33,10 @@ describe("danCreditOffset", () => {
     // credit there.
     expect(danCreditOffset(0.975, 0.95)).toBeCloseTo(0.117647, 6);
     expect(danCreditOffset(1, 0.95)).toBeCloseTo(1.5, 9);
-    // A 97% bar has only 3 points of raw headroom, and accuracy comes cheap
-    // on the ladder that uses it (4K LN), so the bonus scores against the
-    // window instead: 98.5% is t = 0.375 (halfway out of the flat zone), and
-    // 100% tops out at +0.7.
+    // A 97% bar has only 3 points of raw headroom, so the shared table scores
+    // it against the window instead. The ladder that uses that bar (4K LN)
+    // does not read this table at all any more (danCreditOptionsFor), but the
+    // clamp itself still holds for anyone who passes no anchors.
     expect(danCreditOffset(0.985, 0.97)).toBeCloseTo(0.058824, 6);
     expect(danCreditOffset(1, 0.97)).toBeCloseTo(0.7, 6);
   });
@@ -97,18 +99,18 @@ describe("near-bar cap", () => {
     expect(danLabelForTest(8 + tableOffset!, "rc", 7)).toBe("8-");
   });
 
-  it("prices a 4K LN near-miss at least three quarters of a level down", () => {
-    // Accuracy is cheap to hold on long notes, so the cap is deeper than the
-    // 0.26 the other ladders use.
-    const offset = danCreditOffset(0.9699, 0.97, { nearBarCap: danCreditNearBarCapFor("ln", 4) });
-    expect(offset).toBeCloseTo(-0.75, 9);
-    expect(danLabelForTest(7 + offset!, "ln", 4)).toBe("6+");
+  it("keeps the 4K LN step at the bar small", () => {
+    // The cap used to be 0.75, which cost a full level between 97% and
+    // 96.99%. The decay anchors carry that pricing half a point lower now.
+    const offset = danCreditOffset(0.9699, 0.97, danCreditOptionsFor("ln", 4));
+    expect(offset).toBeCloseTo(-0.312, 6);
+    expect(danCreditOffset(0.965, 0.97, danCreditOptionsFor("ln", 4))).toBeCloseTo(-0.9, 9);
   });
 });
 
 describe("LN decay windows", () => {
-  it("is one point on every LN ladder, four on rice", () => {
-    expect(danCreditBelowBarWindowFor("ln", 4)).toBe(DAN_CREDIT_LN_BELOW_BAR_WINDOW);
+  it("is one point on the stable LN ladders, 2.5 on 4K LN, four on rice", () => {
+    expect(danCreditBelowBarWindowFor("ln", 4)).toBe(DAN_CREDIT_4K_LN_BELOW_BAR_WINDOW);
     expect(danCreditBelowBarWindowFor("ln", 6)).toBe(DAN_CREDIT_LN_BELOW_BAR_WINDOW);
     expect(danCreditBelowBarWindowFor("ln", 7)).toBe(DAN_CREDIT_LN_BELOW_BAR_WINDOW);
     expect(danCreditBelowBarWindowFor("rc", 4)).toBe(DAN_CREDIT_BELOW_BAR_WINDOW);
@@ -125,18 +127,53 @@ describe("LN decay windows", () => {
     expect(creditedDanFor(10, 1, 0.95, "ln", 7)).toBeCloseTo(11.5, 9);
   });
 
-  it("stops crediting one point under the 97% bar", () => {
-    // 96.1% is a near-miss and still credits (at least the 0.75 cap down);
-    // 95.9% is past the window and credits nothing, where the shared 4-point
-    // window used to credit it a level down.
-    expect(creditedDanFor(15.15, 0.961, 0.97, "ln", 4)).toBeCloseTo(15.15 - 1.151, 3);
-    expect(creditedDanFor(15.15, 0.959, 0.97, "ln", 4)).toBeNull();
-    expect(creditedDanFor(14.35, 0.9661, 0.97, "ln", 4)).toBeCloseTo(14.35 - 0.75, 6);
+  it("credits 2.5 points under the 97% ScoreV2 bar, in a straight line", () => {
+    // The window ends at 94.5%: a ScoreV2 point on 4K LN is not the cheap
+    // point the stable ladders price. The decay runs from the ladder's own 0.3
+    // cap at the bar to -1.55 at the cutoff, deeper than the -1.25 the
+    // narrower windows bottom out at.
+    expect(creditedDanFor(15.15, 0.965, 0.97, "ln", 4)).toBeCloseTo(15.15 - 0.9, 6);
+    expect(creditedDanFor(15.15, 0.96, 0.97, "ln", 4)).toBeCloseTo(15.15 - 1.0625, 6);
+    expect(creditedDanFor(15.15, 0.95, 0.97, "ln", 4)).toBeCloseTo(15.15 - 1.3875, 6);
+    expect(creditedDanFor(15.15, 0.945, 0.97, "ln", 4)).toBeCloseTo(15.15 - 1.55, 6);
+    expect(creditedDanFor(15.15, 0.9449, 0.97, "ln", 4)).toBeNull();
+    expect(creditedDanFor(14.35, 0.9699, 0.97, "ln", 4)).toBeCloseTo(14.35 - 0.312, 6);
   });
 
-  it("does not re-heat the bonus half: 100% still tops out at +0.7", () => {
+  it("prices a 94.74% on a 14 dan chart at 13--", () => {
+    // The bottom is -1.55 rather than -1.5 so this run lands in that band
+    // (12.5 to just under 12.55) instead of one above it.
+    const credited = creditedDanFor(14, 0.9474, 0.97, "ln", 4)!;
+    expect(credited).toBeCloseTo(12.528, 3);
+    expect(danLabelForTest(credited, "ln", 4)).toBe("13--");
+  });
+
+  it("tops the bonus out at 99.7% and holds it to 100%", () => {
+    // ScoreV2 hands out no 100% on a chart with long notes, so the top anchor
+    // sits on an accuracy people reach. The +0.7 top itself is unchanged.
+    expect(creditedDanFor(10, 0.997, 0.97, "ln", 4)).toBeCloseTo(10.7, 6);
+    expect(creditedDanFor(10, 0.999, 0.97, "ln", 4)).toBeCloseTo(10.7, 6);
     expect(creditedDanFor(10, 1, 0.97, "ln", 4)).toBeCloseTo(10.7, 6);
-    expect(creditedDanFor(10, 0.985, 0.97, "ln", 4)).toBeCloseTo(10.058824, 6);
+    // The band under the top is a real bonus now, not the +0.001 the shared
+    // headroom table paid at 98.01%.
+    expect(creditedDanFor(10, 0.98, 0.97, "ln", 4)).toBeCloseTo(10, 9);
+    expect(creditedDanFor(10, 0.985, 0.97, "ln", 4)).toBeCloseTo(10.15, 6);
+    expect(creditedDanFor(10, 0.99, 0.97, "ln", 4)).toBeCloseTo(10.3, 6);
+    expect(creditedDanFor(10, 0.995, 0.97, "ln", 4)).toBeCloseTo(10.5, 6);
+  });
+
+  it("is monotone across 4K LN's whole credited range", () => {
+    let previous: number | null = null;
+    for (let step = 0; step <= 120; step += 1) {
+      const accuracy = 0.94 + step * 0.0005;
+      const offset = danCreditOffset(accuracy, 0.97, danCreditOptionsFor("ln", 4));
+      if (offset == null) {
+        expect(previous).toBeNull();
+        continue;
+      }
+      if (previous != null) expect(offset).toBeGreaterThanOrEqual(previous);
+      previous = offset;
+    }
   });
 });
 

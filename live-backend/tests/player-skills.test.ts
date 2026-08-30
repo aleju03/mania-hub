@@ -990,14 +990,15 @@ describe("computePlayerSkillRatings", () => {
         values: { Overall: 20 }, patterns: [], accuracy, stableAccuracy: accuracy,
       });
       // 97.2% stable converts to below the 97.5% stable-equivalent bar, so it
-      // credits a decayed level: the 4K LN near-bar cap (0.75) puts a 7.0
-      // chart at 6.25. This also documents the converted floor arithmetic:
-      // the credit window rides the converted bar, so it ends at 93.5%, not 93%.
+      // credits a decayed level: three tenths of a point under the converted
+      // bar puts a 7.0 chart at 6.34. This also documents the
+      // converted floor arithmetic: the credit window rides the converted bar,
+      // so it ends at 95%, not 94.5%.
       const below = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.972)), infoByBeatmap);
       expect(below.length).toBe(4);
       expect(below.every((clear) => clear.side === "ln" && clear.chartDan === 7)).toBe(true);
-      for (const clear of below) expect(clear.creditedDan).toBeCloseTo(6.25, 9);
-      const under = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.934)), infoByBeatmap);
+      for (const clear of below) expect(clear.creditedDan).toBeCloseTo(6.34, 9);
+      const under = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.949)), infoByBeatmap);
       expect(under.length).toBe(0);
       const above = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.976)), infoByBeatmap);
       expect(above.length).toBe(4);

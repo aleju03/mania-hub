@@ -14,7 +14,7 @@ import { GLOBAL_FARMED_BOARD_REPACK_JOB, MapsEmptyResultError, MapsRosterNotRead
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { RECONCILE_SETTLED_SETS_JOB, runSettledSetsReconcile } from "./features/settled-sets-reconcile.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
-import { PLAYER_SKILLS_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_PATTERN_SWEEP_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, computePlayerSkillsJob, ensurePlayerSkillDanSweepSeeded, ensurePlayerSkillPatternSweepSeeded, runPlayerSkillDanSweepJob, runPlayerSkillFloorSweepJob, runPlayerSkillMsdCapSweepJob, runPlayerSkillPatternSweepJob, runPlayerSkillPoisonRecoveryJob, runPlayerSkillVibroSweepJob } from "./features/player-skills.js";
+import { PLAYER_SKILLS_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_PATTERN_SWEEP_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, computePlayerSkillsJob, ensurePlayerSkillDanSweepSeeded, ensurePlayerSkillPatternSweepSeeded, runPlayerSkillDanSweepJob, runPlayerSkillFloorSweepJob, runPlayerSkillMsdCapSweepJob, runPlayerSkillPatternSweepJob, runPlayerSkillPoisonRecoveryJob, runPlayerSkillVibroSweepJob, type PlayerSkillDanSweepPayload } from "./features/player-skills.js";
 import { SKILL_VECTOR_BACKFILL_JOB, runSkillVectorBackfillJob } from "./features/skill-vector-backfill.js";
 import { SKILL_BASELINE_JOB, enqueueSkillBaselineIfDue, runSkillBaselineJob } from "./features/skill-baseline.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
@@ -805,7 +805,7 @@ export class WorkerRunner {
       return;
     }
     if (job.type === PLAYER_SKILL_DAN_SWEEP_JOB) {
-      await runPlayerSkillDanSweepJob(this.db, this.queue, job.payload as { cursor?: number });
+      await runPlayerSkillDanSweepJob(this.db, this.queue, job.payload as PlayerSkillDanSweepPayload);
       return;
     }
     if (job.type === PLAYER_SKILL_PATTERN_SWEEP_JOB) {

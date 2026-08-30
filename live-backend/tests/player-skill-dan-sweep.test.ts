@@ -41,6 +41,15 @@ async function seedChart(
   );
 }
 
+async function seedLnChart(db: Db, beatmapId: number, lnRawDan: number): Promise<void> {
+  await exec(
+    db,
+    `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+     values (?, ?, 'ready', json(?), ?)`,
+    [beatmapId, CHART_ANALYSIS_VERSION, json({ lnRatio: 0.8, ln: { rawDan: lnRawDan } }), "2026-08-20T00:00:00.000Z"],
+  );
+}
+
 // A bare pass at the 96% bar: the old fade credited 8.0 - 0.4 = 7.6, the
 // course rules credit the chart's whole 8.0.
 function barePass(beatmapId: number) {
@@ -84,6 +93,73 @@ describe("recomputePlayerSkillDanChunk", () => {
     expect(summary.modes[0].ratings.Overall).toBe(22);
     expect(parseJson<{ plays: unknown[] }>(String(row.plays_json ?? ""), { plays: [] }).plays.length).toBe(4);
     expect(String(row.computed_at)).toBe("2026-08-20T00:00:00.000Z");
+    db.close();
+  });
+
+  it("can patch only 4K LN while preserving RC and every other keymode", async () => {
+    const db = await makeDb();
+    const beatmapIds = [501, 502, 503, 504];
+    for (const beatmapId of beatmapIds) await seedLnChart(db, beatmapId, 10);
+    const rc = { rawDan: 8.25, label: "beta+", clears: 9 };
+    const staleLn = { rawDan: 4, label: "4", clears: 4 };
+    const sevenKeyDan = { rc: { rawDan: 6, label: "6", clears: 4 }, ln: null };
+    await exec(
+      db,
+      `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+       values (?, ?, 'ready', json(?), json(?), ?, ?)`,
+      [
+        61,
+        PLAYER_SKILLS_VERSION,
+        json({
+          modes: [
+            { keyCount: 4, ratings: { Overall: 31 }, dan: { rc, ln: staleLn } },
+            { keyCount: 7, ratings: { Overall: 19 }, dan: sevenKeyDan },
+          ],
+        }),
+        json({
+          plays: beatmapIds.map((beatmapId) => ({
+            identity: `s${beatmapId}`,
+            beatmapId,
+            keyCount: 4,
+            rate: 1,
+            goal: 0.99,
+            pp: 100,
+            values: { Overall: 31 },
+            patterns: [],
+            accuracy: 0.99,
+            stableAccuracy: 0.99,
+            scoreV2Accuracy: 0.99,
+          })),
+        }),
+        "2026-08-20T00:00:00.000Z",
+        "2026-08-20T00:00:00.000Z",
+      ],
+    );
+
+    const result = await recomputePlayerSkillDanChunk(db, 0, 200, "4k-ln");
+    expect(result).toMatchObject({ scanned: 1, rewritten: 1, done: true });
+    const row = (await exec(db, "select modes_json, computed_at from player_skill_ratings where user_id = 61", [])).rows[0];
+    const summary = parseJson<{ modes: Array<{ keyCount: number; ratings: Record<string, number>; dan: typeof sevenKeyDan }> }>(String(row.modes_json ?? ""), { modes: [] });
+    const byKeyCount = new Map(summary.modes.map((mode) => [mode.keyCount, mode]));
+    expect(byKeyCount.get(4)?.dan.rc).toEqual(rc);
+    expect(byKeyCount.get(4)?.dan.ln?.rawDan).toBe(10.3);
+    expect(byKeyCount.get(4)?.ratings).toEqual({ Overall: 31 });
+    expect(byKeyCount.get(7)).toEqual({ keyCount: 7, ratings: { Overall: 19 }, dan: sevenKeyDan });
+    expect(String(row.computed_at)).toBe("2026-08-20T00:00:00.000Z");
+    db.close();
+  });
+
+  it("does not rewrite a pure-RC row during the 4K LN pass", async () => {
+    const db = await makeDb();
+    for (const beatmapId of [301, 302, 303, 304]) await seedChart(db, beatmapId, 8);
+    await seedRow(db, 62, [301, 302, 303, 304]);
+
+    const result = await recomputePlayerSkillDanChunk(db, 0, 200, "4k-ln");
+    expect(result).toMatchObject({ scanned: 1, rewritten: 0, done: true });
+    const row = (await exec(db, "select modes_json, updated_at from player_skill_ratings where user_id = 62", [])).rows[0];
+    const summary = parseJson<{ modes: Array<{ dan: typeof STALE_DAN }> }>(String(row.modes_json ?? ""), { modes: [] });
+    expect(summary.modes[0]?.dan).toEqual(STALE_DAN);
+    expect(String(row.updated_at)).toBe("2026-08-20T00:00:00.000Z");
     db.close();
   });
 
@@ -254,7 +330,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     for (const userId of [21, 22, 23]) await seedRow(db, userId, [301, 302, 303, 304]);
 
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v16'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v17'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.
@@ -264,18 +340,30 @@ describe("recomputePlayerSkillDanChunk", () => {
     db.close();
   });
 
-  it("does not let main's v15 marker suppress the post-v15 corrections", async () => {
+  it("does not let an older marker suppress a later correction", async () => {
     const db = await makeDb();
     const queue = new JobQueue(db);
     await exec(
       db,
-      "insert into live_meta (key, value_json, updated_at) values ('player_skill_dan_sweep_done:v15', '{}', ?)",
+      "insert into live_meta (key, value_json, updated_at) values ('player_skill_dan_sweep_done:v16', '{}', ?)",
       ["2026-08-29T00:00:00.000Z"],
     );
 
     await ensurePlayerSkillDanSweepSeeded(db, queue);
-    const jobs = (await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
-    expect(Number(jobs.c)).toBe(1);
+    const jobs = (await exec(db, "select payload_json from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows;
+    expect(jobs).toHaveLength(1);
+    expect(parseJson<{ scope?: string }>(String(jobs[0].payload_json), {}).scope).toBe("4k-ln");
+    db.close();
+  });
+
+  it("uses the full scope when the prior sweep marker is missing", async () => {
+    const db = await makeDb();
+    const queue = new JobQueue(db);
+
+    await ensurePlayerSkillDanSweepSeeded(db, queue);
+    const jobs = (await exec(db, "select payload_json from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows;
+    expect(jobs).toHaveLength(1);
+    expect(parseJson<{ scope?: string }>(String(jobs[0].payload_json), {}).scope).toBe("all");
     db.close();
   });
 
@@ -319,8 +407,9 @@ describe("recomputePlayerSkillDanChunk", () => {
 
     // No boot or external seeder call is needed: the finishing player pass
     // notices that its chart inputs moved after it began and starts over.
-    const queued = (await exec(db, "select count(*) c from jobs where type = ? and status = 'queued'", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
-    expect(Number(queued.c)).toBe(1);
+    const queued = (await exec(db, "select payload_json from jobs where type = ? and status = 'queued'", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows;
+    expect(queued).toHaveLength(1);
+    expect(parseJson<{ scope?: string }>(String(queued[0].payload_json), {}).scope).toBe("all");
     db.close();
   });
 

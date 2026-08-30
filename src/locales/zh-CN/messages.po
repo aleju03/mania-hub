@@ -1824,8 +1824,20 @@ msgid "a map"
 msgstr "某张谱面"
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, and 4K LN's bonus is flattened:"
-msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样；通过线上方的第一小段也是如此：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成也一直很小，到 99% 才真正开始上升。差一点没到通过线也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表在通过线以下 4 个百分点内仍然计入。LN 段位表只到 1 个百分点，4K LN 的加成也被压平了："
+#~ msgid "A pass at the bar credits the chart's full level, the same as passing the course, and so does the first point above it: a 96.9% on a 96% ladder is a normal clear, not a bonus. Above that the bonus stays small until 99%, then it climbs. Under the bar a pass still counts, as a clear of a lower level, down to a level and a quarter less at the cutoff. Regular ladders credit to 4 points under the bar and 6K/7K LN to 1. 4K LN uses its own numbers: it credits down to 94.5%, a level and a half less there, and its bonus tops out at 99.7%:"
+#~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，和通过段位课题一样；通过线上方的第一个百分点也一样：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成一直很小，到 99% 才开始上升。低于通过线的成绩仍然计入，按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表计入到通过线以下 4 个百分点，6K/7K LN 到 1 个百分点。4K LN 用自己的一套数值：向下计入到 94.5%，在那里比谱面段位低一级半，加成在 99.7% 到顶："
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar, 6K/7K LN to 1 point. 4K LN has a curve of its own, because its bar is written in ScoreV2 and a 100% is out of reach on most charts with long notes: it credits down to 94.5% and bottoms out a level and a half down there, and its bonus reaches its top at 99.7% rather than at an accuracy nobody sets:"
+#~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样；通过线上方的第一小段也是如此：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成也一直很小，到 99% 才真正开始上升。差一点没到通过线也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表在通过线以下 4 个百分点内仍然计入，6K/7K LN 只到 1 个百分点。4K LN 有自己的一条曲线：它的通过线以 ScoreV2 计算，而在大多数有长条的谱面上 100% 根本打不出来，所以它向下计入到 94.5%，并在那里降到低一级半，加成也在 99.7% 就到顶，而不是停在一个没人打得出的准确率上："
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar, 6K/7K LN to 1 point. 4K LN has a curve of its own, because its bar is written in ScoreV2 and a 100% is out of reach on most charts with long notes: it credits down to 94.5%, and its bonus reaches its top at 99.7% rather than at an accuracy nobody sets:"
+#~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样；通过线上方的第一小段也是如此：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成也一直很小，到 99% 才真正开始上升。差一点没到通过线也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表在通过线以下 4 个百分点内仍然计入，6K/7K LN 只到 1 个百分点。4K LN 有自己的一条曲线：它的通过线以 ScoreV2 计算，而在大多数有长条的谱面上 100% 根本打不出来，所以它向下计入到 94.5%，加成也在 99.7% 就到顶，而不是停在一个没人打得出的准确率上："
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, and 4K LN's bonus is flattened:"
+#~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样；通过线上方的第一小段也是如此：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成也一直很小，到 99% 才真正开始上升。差一点没到通过线也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表在通过线以下 4 个百分点内仍然计入。LN 段位表只到 1 个百分点，4K LN 的加成也被压平了："
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar. The LN ladders stop at 1 point, because accuracy is cheap to hold on long notes, and 4K LN's bonus is flattened for the same reason:"
@@ -2685,12 +2697,16 @@ msgid "below 92%"
 msgstr "低于 92%"
 
 #: src/routes/dan-estimates.tsx
+msgid "below 94.5%"
+msgstr "低于 94.5%"
+
+#: src/routes/dan-estimates.tsx
 msgid "below 94%"
 msgstr "低于 94%"
 
 #: src/routes/dan-estimates.tsx
-msgid "below 96%"
-msgstr "低于 96%"
+#~ msgid "below 96%"
+#~ msgstr "低于 96%"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Below the credit that sets the estimate"
@@ -5612,6 +5628,10 @@ msgstr "打击音"
 msgid "hitsounds and interface samples"
 msgstr "打击音效与界面音效"
 
+#: src/routes/dan-estimates.tsx
+msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. Regular charts count down to 4% below the bar, while 6K/7K LN charts count down to 1% below it. At those cutoffs, the chart counts as 1.25 levels lower. 4K LN counts down to 94.5%, where the chart is worth 1.5 levels less, and its bonus stops rising at 99.7%:"
+msgstr "达到准确率通过线，就按谱面段位给满额计入。通过线以上的第一个百分点同样是满额计入。再往上才开始有加成，加成到 99% 之前都很小，之后上升更快。低于通过线的成绩仍然可以按更低的段位计入。普通谱面计入到通过线以下 4 个百分点，6K/7K LN 谱面计入到 1 个百分点。在这些截止点上，谱面按低 1.25 级计入。4K LN 计入到 94.5%，在那里谱面低 1.5 级，加成则在 99.7% 停止上升："
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
 msgstr "按住 <0>C</0> 并移动光标即可画出烟雾，就像在 osu! 游戏中画图一样。它会自行消散。"
@@ -7125,6 +7145,10 @@ msgstr "BPM 中位数"
 #: src/routes/player/$username.tsx
 msgid "Median by Keymode"
 msgstr "各键数中位数"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Meeting the target gives full credit for the chart's level. The next percentage point is also a normal clear. Bonus credit starts above that, stays small until 99%, then rises faster. Scores below the target get partial credit down to the cutoff: 4 points below for regular, 1 point for 6K/7K LN, and 94.5% for 4K LN. The lowest credit is 1.25 levels below the chart, or 1.5 for 4K LN. The 4K LN bonus maxes out at 99.7%:"
+#~ msgstr ""
 
 #: src/routes/communities_.$id.tsx
 #: src/routes/communities.tsx
@@ -9779,9 +9803,12 @@ msgstr "区域"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
-#: src/routes/dan-estimates.tsx
 msgid "Regular"
 msgstr "常规"
+
+#: src/routes/dan-estimates.tsx
+msgid "Regular 4K/6K/7K"
+msgstr "普通 4K/6K/7K"
 
 #: src/lib/signature-shared.ts
 msgid "Regular and LN"
@@ -11989,8 +12016,8 @@ msgstr "4K LN 课题本来就是要在 ScoreV2 下打的。问题是 osu!stable 
 #~ msgstr "4K LN 课题是按 ScoreV2 mod 设计的，而 osu! 只有在 lazer 上才会用那套算法记录成绩。大多数人玩的是 stable，所以本站不要求你必须用 ScoreV2 打，而是从你的判定里把 ScoreV2 准度算出来。对于只剩下准度的旧存档成绩，stable 的成绩需要达到 97.5% 而不是 97%，因为同样的手感在 stable 算法下会高出大约半个百分点。"
 
 #: src/routes/dan-estimates.tsx
-msgid "The accuracy shown by the game is not used. It is worked out again from your judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same play, recomputing is what makes that play count, or not count, the same on either client."
-msgstr "不会直接使用游戏显示的准确率，而是根据 300、200、100 等判定重新计算。mania 有两种判定加权方式：stable 公式和 lazer 显示的 ScoreV2 公式。每个段位表的通过线采用其中一种：4K 单点用 stable，4K LN 用 ScoreV2。两种公式会给同一成绩算出不同数值，重新计算才能保证这次成绩在两个客户端上是否达标的结论一致。"
+#~ msgid "The accuracy shown by the game is not used. It is worked out again from your judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same play, recomputing is what makes that play count, or not count, the same on either client."
+#~ msgstr "不会直接使用游戏显示的准确率，而是根据 300、200、100 等判定重新计算。mania 有两种判定加权方式：stable 公式和 lazer 显示的 ScoreV2 公式。每个段位表的通过线采用其中一种：4K 单点用 stable，4K LN 用 ScoreV2。两种公式会给同一成绩算出不同数值，重新计算才能保证这次成绩在两个客户端上是否达标的结论一致。"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "The album is unavailable right now. Try again in a bit."
@@ -12037,12 +12064,40 @@ msgid "the chart's full level"
 msgstr "谱面的完整段位"
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.26"
+#~ msgstr "谱面段位 -0.26"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.27"
+#~ msgstr "谱面段位 -0.27"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.3"
+#~ msgstr "谱面段位 -0.3"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.31"
+#~ msgstr "谱面段位 -0.31"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.32"
+#~ msgstr "谱面段位 -0.32"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.33"
 #~ msgstr "谱面段位 -0.33"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.36"
 msgstr "谱面段位 -0.36"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.38"
+#~ msgstr "谱面段位 -0.38"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.42"
+msgstr "谱面段位 -0.42"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.45"
@@ -12053,32 +12108,84 @@ msgid "the chart's level -0.51"
 msgstr "谱面段位 -0.51"
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.53"
+#~ msgstr "谱面段位 -0.53"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.61"
+#~ msgstr "谱面段位 -0.61"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.63"
 #~ msgstr "谱面段位 -0.63"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.75"
-msgstr "谱面段位 -0.75"
+#~ msgid "the chart's level -0.75"
+#~ msgstr "谱面段位 -0.75"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.76"
 msgstr "谱面段位 -0.76"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.85"
-msgstr "谱面段位 -0.85"
+#~ msgid "the chart's level -0.77"
+#~ msgstr "谱面段位 -0.77"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.78"
+#~ msgstr "谱面段位 -0.78"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.82"
+#~ msgstr "谱面段位 -0.82"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.85"
+#~ msgstr "谱面段位 -0.85"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.9"
+msgstr "谱面段位 -0.9"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.95"
+#~ msgstr "谱面段位 -0.95"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -1"
 #~ msgstr "谱面段位 -1"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -1.05"
-msgstr "谱面段位 -1.05"
+#~ msgid "the chart's level -1.05"
+#~ msgstr "谱面段位 -1.05"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -1.06"
+msgstr "谱面段位 -1.06"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -1.15"
+#~ msgstr "谱面段位 -1.15"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -1.25"
 msgstr "谱面段位 -1.25"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -1.35"
+#~ msgstr "谱面段位 -1.35"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -1.39"
+msgstr "谱面段位 -1.39"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -1.5"
+#~ msgstr "谱面段位 -1.5"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -1.55"
+msgstr "谱面段位 -1.55"
 
 #. placeholder {0}: formatCreditOffset(held)
 #: src/routes/dan-estimates.tsx
@@ -12102,6 +12209,10 @@ msgstr "谱面段位 +0.12"
 #~ msgstr "谱面段位 +0.14"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.15"
+msgstr "谱面段位 +0.15"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.16"
 msgstr "谱面段位 +0.16"
 
@@ -12118,6 +12229,10 @@ msgstr "谱面段位 +0.2"
 #~ msgstr "谱面段位 +0.28"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.3"
+msgstr "谱面段位 +0.3"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.35"
 #~ msgstr "谱面段位 +0.35"
 
@@ -12126,8 +12241,12 @@ msgstr "谱面段位 +0.2"
 #~ msgstr "谱面段位 +0.49"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.53"
-msgstr "谱面段位 +0.53"
+msgid "the chart's level +0.5"
+msgstr "谱面段位 +0.5"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level +0.53"
+#~ msgstr "谱面段位 +0.53"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.7"
@@ -12168,6 +12287,10 @@ msgstr "自定义设置太大，无法保存"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The delete failed. Try again."
 msgstr "删除失败。请重试。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "The displayed in-game accuracy is ignored. Accuracy is recalculated from the score's judgements using the formula for that ladder: Stable for 4K regular and ScoreV2 for 4K LN. This gives the same result whether the score was set on Stable or lazer."
+#~ msgstr ""
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "The draw pool could not be read just now. Try again in a moment."
@@ -12400,6 +12523,10 @@ msgstr "本站是通过 osu! 的新成绩信息流知道你在打的，而那个
 #: src/routes/dan-estimates.tsx
 #~ msgid "The site only started recording plays on June 9, 2026. Anything you played before that date counts only if it is still in your osu! top plays, and everything else from back then is invisible to the estimate."
 #~ msgstr "本站从 2026 年 6 月 9 日才开始记录成绩。在那之前你打过的东西，只有还留在你的 osu! bp 里才算数，其余的对估算来说都是看不见的。"
+
+#: src/routes/dan-estimates.tsx
+msgid "The site recalculates accuracy from the score's judgements instead of using the number shown in-game. This matters because stable and lazer calculate accuracy differently. Regular 4K uses stable accuracy, while 4K LN uses ScoreV2 accuracy. Recalculating it lets scores from either client count the same way."
+msgstr "本站不使用游戏内显示的准确率，而是根据成绩的判定重新计算。这一点很重要，因为 stable 和 lazer 计算准确率的方式不同。普通 4K 用 stable 的准确率，4K LN 用 ScoreV2 的准确率。重新计算之后，来自两个客户端的成绩就能以同样的方式计入。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The skill breakdown"
