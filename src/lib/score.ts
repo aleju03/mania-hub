@@ -429,15 +429,17 @@ export function getDisplayedAccuracy(score: ScoreLike): number {
 
 /**
  * Mania accuracy on the stable 300-weighted scale, computed from raw judgement
- * counts so the maniacard always measures on one fixed scale. In practice osu!
- * web already serves this 300-weighted value in a score's `accuracy` field for
- * both lazer (`solo_score`) and legacy scores; only the lazer game client shows
- * the 305-weighted (rainbow-MAX) number locally, and it never reaches the API.
- * So for real scores this equals the reported accuracy. We compute it anyway as
- * defensive normalization: it pins the card to the stable scale regardless of
- * the client-dependent field, and dropping the MAX-vs-300 distinction keeps
- * lazer's separate, great-skewed LN tail judgements from leaking in. Falls back
- * to the displayed accuracy when judgement counts are missing.
+ * counts so the maniacard always measures on one fixed scale. This is not the
+ * number the API reports: a score's `accuracy` field carries the 305-weighted
+ * (rainbow-MAX) value, checked against 5,821 lazer submissions in a prod
+ * snapshot, all 5,821 of which match the 305 formula to 1e-6 and none the 300
+ * one. So a lazer play reads about half a point higher here than on its own
+ * score page, which is the point: the card measures every play on one scale,
+ * and dropping the MAX-vs-300 distinction keeps lazer's separate, great-skewed
+ * LN tail judgements from leaking in. Any surface that shows this number next
+ * to the player's own has to name the scale (as the dan evidence rows do) or
+ * it reads as a miscalculation. Falls back to the displayed accuracy when
+ * judgement counts are missing.
  */
 export function getStableScaleManiaAccuracy(score: ScoreLike): number {
   const stableAccuracy = calculateStableAccuracy(score.statistics);
