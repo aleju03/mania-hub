@@ -951,6 +951,57 @@ describe("live backend", () => {
     }
   });
 
+  it("keeps player activity forever when no retention window is set", async () => {
+    vi.setSystemTime(new Date("2026-06-10T12:00:00.000Z"));
+    const { db } = await setup(["CR"]);
+    const day = "2019-11-23";
+    const at = `${day}T12:00:00.000Z`;
+    await exec(
+      db,
+      `insert into player_activity_score_refs
+         (country, score_identity, user_id, day, beatmap_id, passed, ended_at, created_at)
+       values ('CR', 'old', 101, ?, 7001, 1, ?, ?)`,
+      [day, at, at],
+    );
+    await exec(
+      db,
+      `insert into player_activity_days
+         (country, user_id, day, score_count, passed_count, session_count, first_score_at, last_score_at, updated_at)
+       values ('CR', 101, ?, 1, 1, 1, ?, ?, ?)`,
+      [day, at, at, at],
+    );
+    await exec(
+      db,
+      `insert into player_activity_maps
+         (country, user_id, day, beatmap_id, play_count, first_played_at, last_played_at, updated_at)
+       values ('CR', 101, ?, 7001, 1, ?, ?, ?)`,
+      [day, at, at, at],
+    );
+
+    const deleted = await runRetention(db, {
+      databaseUrl: `file:${join(dir, "test.db")}`,
+      scoreEventRetentionDays: 14,
+      liveEventRetentionDays: 7,
+      doneJobRetentionDays: 2,
+      apiCallLogRetentionDays: 7,
+      replayVideoJobRetentionDays: 2,
+      rankSnapshotRetentionDays: 14,
+      activityRetentionYears: 0,
+      replayVideoWorkDir: join(dir, "replay-video-jobs"),
+      maxLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      targetLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      nodeEnv: "test",
+      livePublicOrigin: "http://localhost:7227",
+    });
+
+    expect(deleted.activityScoreRefs).toBe(0);
+    expect(deleted.activityMaps).toBe(0);
+    expect(deleted.activityDays).toBe(0);
+    for (const table of ["player_activity_score_refs", "player_activity_days", "player_activity_maps"]) {
+      expect(Number((await exec(db, `select count(*) as count from ${table}`)).rows[0].count)).toBe(1);
+    }
+  });
+
   it("expires parked profile refreshes but keeps fresh ones and other parked types", async () => {
     const { db } = await setup();
     const now = new Date();

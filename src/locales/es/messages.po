@@ -12472,8 +12472,12 @@ msgid "The server defaults to a global osu! API limiter that targets 45 requests
 msgstr "El servidor usa de forma predeterminada un limitador global de la API de osu! que apunta a 45 peticiones por minuto e impone un tope estricto de 60 peticiones por minuto."
 
 #: src/routes/privacy.tsx
-msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days, and player activity summaries for up to 2 years."
-msgstr "El servidor conserva los eventos de puntuación en bruto unos 14 días, los registros de replays de eventos en vivo unos 7 días, los registros de llamadas a la API unos 7 días, las instantáneas de rango por país unos 14 días y los resúmenes de actividad de los jugadores hasta 2 años."
+msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, and country rank snapshots for about 14 days. Player activity summaries, including scores you submit by hand, are kept indefinitely, so your profile history stays complete."
+msgstr "El servidor conserva los eventos de puntuación en bruto unos 14 días, los registros de replays de eventos en vivo unos 7 días, los registros de llamadas a la API unos 7 días y las instantáneas de rango por país unos 14 días. Los resúmenes de actividad de los jugadores, incluidas las puntuaciones que envías a mano, se conservan de forma indefinida, para que tu historial de perfil siga completo."
+
+#: src/routes/privacy.tsx
+#~ msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days, and player activity summaries for up to 2 years."
+#~ msgstr "El servidor conserva los eventos de puntuación en bruto unos 14 días, los registros de replays de eventos en vivo unos 7 días, los registros de llamadas a la API unos 7 días, las instantáneas de rango por país unos 14 días y los resúmenes de actividad de los jugadores hasta 2 años."
 
 #: src/routes/communities.tsx
 msgid "The servers could not be loaded."

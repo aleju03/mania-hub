@@ -12480,8 +12480,12 @@ msgid "The server defaults to a global osu! API limiter that targets 45 requests
 msgstr "The server defaults to a global osu! API limiter that targets 45 requests per minute and enforces a hard cap of 60 requests per minute."
 
 #: src/routes/privacy.tsx
-msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days, and player activity summaries for up to 2 years."
-msgstr "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days, and player activity summaries for up to 2 years."
+msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, and country rank snapshots for about 14 days. Player activity summaries, including scores you submit by hand, are kept indefinitely, so your profile history stays complete."
+msgstr "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, and country rank snapshots for about 14 days. Player activity summaries, including scores you submit by hand, are kept indefinitely, so your profile history stays complete."
+
+#: src/routes/privacy.tsx
+#~ msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days, and player activity summaries for up to 2 years."
+#~ msgstr "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days, and player activity summaries for up to 2 years."
 
 #: src/routes/communities.tsx
 msgid "The servers could not be loaded."

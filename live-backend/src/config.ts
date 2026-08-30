@@ -441,7 +441,9 @@ export function readConfig(): Config {
     apiCallLogRetentionDays: readInt("API_CALL_LOG_RETENTION_DAYS", 7),
     replayVideoJobRetentionDays: readInt("REPLAY_VIDEO_JOB_RETENTION_DAYS", 2),
     rankSnapshotRetentionDays: readInt("RANK_SNAPSHOT_RETENTION_DAYS", 14),
-    activityRetentionYears: readBoundedInt("ACTIVITY_RETENTION_YEARS", 2, 1, 10),
+    // 0 = keep player activity forever, which is the default: a profile's
+    // heatmap and its year buttons are meant to be a permanent record.
+    activityRetentionYears: readBoundedInt("ACTIVITY_RETENTION_YEARS", 0, 0, 10),
     maxLocalDbBytes: readInt("MAX_LOCAL_DB_BYTES", 10 * 1024 * 1024 * 1024),
     targetLocalDbBytes: readInt("TARGET_LOCAL_DB_BYTES", 8 * 1024 * 1024 * 1024),
     enableReplayVideo: readBool("ENABLE_REPLAY_VIDEO", false),

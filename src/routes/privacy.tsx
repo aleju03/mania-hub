@@ -117,8 +117,9 @@ function PrivacyPage() {
         <LegalParagraph>
           <Trans>
             The server keeps raw score events for about 14 days, live event replay logs for
-            about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days,
-            and player activity summaries for up to 2 years.
+            about 7 days, API call logs for about 7 days, and country rank snapshots for about
+            14 days. Player activity summaries, including scores you submit by hand, are kept
+            indefinitely, so your profile history stays complete.
           </Trans>
         </LegalParagraph>
         <LegalParagraph>

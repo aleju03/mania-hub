@@ -29,7 +29,13 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
   const parkedOnDemandCutoff = new Date(Date.now() - PARKED_ON_DEMAND_JOB_RETENTION_HOURS * 60 * 60 * 1000).toISOString();
   const replayVideoCutoff = daysAgo(config.replayVideoJobRetentionDays);
   const rankSnapshotCutoff = daysAgo(config.rankSnapshotRetentionDays);
-  const activityCutoffDay = activityRetentionCutoffDay(config.activityRetentionYears);
+  // 0 (the default) keeps player activity forever: the heatmap and its year
+  // buttons are a permanent record of what someone played, including plays
+  // they added by hand years after the fact. A positive value re-enables the
+  // calendar-year roll-off.
+  const activityCutoffDay = config.activityRetentionYears > 0
+    ? activityRetentionCutoffDay(config.activityRetentionYears)
+    : null;
   // farm_helper_feedback stores epoch-ms timestamps, so its cutoff is numeric.
   const resolvedFeedbackCutoffMs = Date.now() - RESOLVED_FARM_HELPER_FEEDBACK_RETENTION_DAYS * 24 * 60 * 60 * 1000;
   // pack_pull_events also stores epoch-ms. Ordinary pulls only matter while
@@ -82,17 +88,17 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     apiCalls: await deleteInBatches(db, "api_call_log", "started_at < ?", [apiCutoff]),
     replayVideoJobs: await deleteInBatches(db, "replay_video_exports", "status in ('done', 'failed', 'cancelled') and updated_at < ?", [replayVideoCutoff]),
     rankSnapshots: await deleteInBatches(db, "country_rank_snapshots", "captured_at < ?", [rankSnapshotCutoff]),
-    // Activity rolls off by calendar year, but the day alone cannot decide it:
-    // a manual score submission puts a years-old play into the pipeline today,
-    // and pruning on `day` alone deleted its heatmap row within the hour, so
-    // the year button for it never showed up. The second cutoff is what the
-    // window really means - we keep the activity we recorded inside it - so an
-    // old play someone just added stays until the window rolls past the day it
-    // was added. Both predicates still scan the `day` index first, so the
-    // sweep costs what it did.
-    activityScoreRefs: await deleteInBatches(db, "player_activity_score_refs", "day < ? and created_at < ?", [activityCutoffDay, activityCutoffDay]),
-    activityMaps: await deleteInBatches(db, "player_activity_maps", "day < ? and updated_at < ?", [activityCutoffDay, activityCutoffDay]),
-    activityDays: await deleteInBatches(db, "player_activity_days", "day < ? and updated_at < ?", [activityCutoffDay, activityCutoffDay]),
+    // With a window set, activity rolls off by calendar year, but the day alone
+    // cannot decide it: a manual score submission puts a years-old play into
+    // the pipeline today, and pruning on `day` alone deleted its heatmap row
+    // within the hour, so the year button for it never showed up. The second
+    // cutoff is what the window really means - we keep the activity we recorded
+    // inside it - so an old play someone just added stays until the window
+    // rolls past the day it was added. Both predicates still scan the `day`
+    // index first, so the sweep costs what it did.
+    activityScoreRefs: activityCutoffDay == null ? 0 : await deleteInBatches(db, "player_activity_score_refs", "day < ? and created_at < ?", [activityCutoffDay, activityCutoffDay]),
+    activityMaps: activityCutoffDay == null ? 0 : await deleteInBatches(db, "player_activity_maps", "day < ? and updated_at < ?", [activityCutoffDay, activityCutoffDay]),
+    activityDays: activityCutoffDay == null ? 0 : await deleteInBatches(db, "player_activity_days", "day < ? and updated_at < ?", [activityCutoffDay, activityCutoffDay]),
     // Discord "last map in channel" memory is only useful while fresh, so 30d is
     // plenty; stale rows just mean /pb asks the user to run /recent again.
     discordChannelContext: await deleteInBatches(db, "discord_channel_map_context", "updated_at < ?", [daysAgo(30)]),
@@ -200,6 +206,9 @@ export const BLITZ_STREAK_RUN_LOG_RETENTION_DAYS = 45;
 export const PARKED_ON_DEMAND_JOB_RETENTION_HOURS = 6;
 export const PARKED_ON_DEMAND_JOB_TYPES = [PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB] as const;
 
+// Only called with a positive window: "keep forever" is decided by the caller,
+// not expressed as a cutoff, so the floor below never turns 0 into a 1-year
+// purge.
 export function activityRetentionCutoffDay(retentionYears: number, now = new Date()): string {
   const years = Math.max(1, Math.floor(retentionYears));
   const cutoffYear = now.getUTCFullYear() - years + 1;

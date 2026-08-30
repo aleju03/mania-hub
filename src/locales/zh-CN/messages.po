@@ -12481,8 +12481,12 @@ msgid "The server defaults to a global osu! API limiter that targets 45 requests
 msgstr "服务器默认使用一个全局 osu! API 限流器，目标为每分钟 45 次请求，并强制执行每分钟 60 次请求的硬上限。"
 
 #: src/routes/privacy.tsx
-msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days, and player activity summaries for up to 2 years."
-msgstr "服务器会保留原始成绩事件约 14 天、实时事件回放日志约 7 天、API 调用日志约 7 天、国家/地区排名快照约 14 天，玩家活跃度汇总最长保留 2 年。"
+msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, and country rank snapshots for about 14 days. Player activity summaries, including scores you submit by hand, are kept indefinitely, so your profile history stays complete."
+msgstr "服务器会保留原始成绩事件约 14 天、实时事件回放日志约 7 天、API 调用日志约 7 天、国家/地区排名快照约 14 天。玩家活跃度汇总（包括你手动提交的成绩）会永久保留，这样你的个人资料历史就能保持完整。"
+
+#: src/routes/privacy.tsx
+#~ msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, country rank snapshots for about 14 days, and player activity summaries for up to 2 years."
+#~ msgstr "服务器会保留原始成绩事件约 14 天、实时事件回放日志约 7 天、API 调用日志约 7 天、国家/地区排名快照约 14 天，玩家活跃度汇总最长保留 2 年。"
 
 #: src/routes/communities.tsx
 msgid "The servers could not be loaded."
