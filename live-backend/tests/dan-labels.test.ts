@@ -31,6 +31,19 @@ describe("dan label calibration", () => {
     expect(parseLnDan(13.3).displayName).toBe("LN 13++");
   });
 
+  it("names the 4K rice ladder past eta, so credits and chart verdicts agree", () => {
+    // LeoBlack rates 4K rice charts up to kappa, and a clear credits above the
+    // chart it passed. Clamping the label at eta printed those credits as
+    // "eta++" next to the theta chart they outranked, which read as a sorting
+    // bug in the dan evidence list.
+    expect(parseDan(18.05).displayName).toBe("theta");
+    expect(parseDan(18.4).displayName).toBe("theta++");
+    expect(parseDan(19).displayName).toBe("iota");
+    expect(parseDan(20.4).displayName).toBe("kappa++");
+    // Still the top of the ladder: nothing prints past kappa.
+    expect(parseDan(24).label).toBe("kappa");
+  });
+
   it("recognizes ratings beyond the 4K LN course ceiling", () => {
     expect(parseLnDan(17.44).displayName).toBe("LN 17++");
     expect(parseLnDan(19).displayName).toBe("LN 17++");

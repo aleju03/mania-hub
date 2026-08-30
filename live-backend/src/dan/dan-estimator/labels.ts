@@ -23,7 +23,16 @@ const DAN_LABELS = [
   "kappa",
 ];
 
-const MAX_SUPPORTED_DAN_INDEX = DAN_LABELS.indexOf("eta");
+/* The ladder runs to kappa, and so does everything that reads it: LeoBlack's
+   own 4K rice table names theta/iota/kappa (GREEK_LEVELS in
+   leoblack-estimator.ts) and the badge art and dan picker carry all ten greek
+   levels. This used to stop at eta, which capped the LABELS rather than the
+   ratings: a credited 18.4 kept its number, sorted above a theta clear, and
+   then printed "eta++" beside it, because parseDan clamped the level to 17 and
+   left the 1.4 offset in the "++" band. Every stored 4K rice verdict comes from
+   LeoBlack, so the chart side was already naming those levels correctly and
+   only the player side had to shorten them. */
+const MAX_SUPPORTED_DAN_INDEX = DAN_LABELS.length - 1;
 
 const DAN_MEANS: Record<DanPrimaryFamily, number[]> = {
   jack: [3.15, 3.55, 3.95, 4.35, 4.75, 5.15, 5.45, 5.7, 5.92, 6.1, 6.35, 6.75, 7.15, 7.65, 8.25, 8.85, 9.55, 10.25, 11.0, 11.8],
@@ -36,7 +45,7 @@ const DAN_MEANS: Record<DanPrimaryFamily, number[]> = {
 };
 
 function rawDanFromMeans(value: number, means: number[]): number {
-  const maxIndex = MAX_SUPPORTED_DAN_INDEX >= 0 ? MAX_SUPPORTED_DAN_INDEX : DAN_LABELS.length - 1;
+  const maxIndex = MAX_SUPPORTED_DAN_INDEX;
   const cappedMeans = means.slice(0, maxIndex + 1);
   const boundaries = cappedMeans.map((mean, index) => {
     const lower = index === 0 ? mean - (cappedMeans[index + 1] - mean) / 2 : (cappedMeans[index - 1] + mean) / 2;
@@ -107,7 +116,7 @@ export function danLevelForLabel(label: string): number | null {
 }
 
 export function parseDan(rawDan: number) {
-  const maxLevel = (MAX_SUPPORTED_DAN_INDEX >= 0 ? MAX_SUPPORTED_DAN_INDEX : DAN_LABELS.length - 1) + 1;
+  const maxLevel = MAX_SUPPORTED_DAN_INDEX + 1;
   const level = Math.min(maxLevel, Math.max(1, Math.round(rawDan)));
   const offset = rawDan - level;
   const variant = offset <= -0.45 ? "--" : offset <= -0.25 ? "-" : offset < 0.1 ? null : offset < 0.26 ? "+" : "++";
