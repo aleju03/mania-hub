@@ -856,8 +856,8 @@ function DanRejectedRow({
         : t`Does not count for dan: the accuracy is under the pass bar.`)
     : rejected.reason === "low_od"
       ? (od != null
-        ? t`Does not count for dan: the chart's OD is ${od.toFixed(1)}, and hit windows that forgiving cannot prove a level.`
-        : t`Does not count for dan: the chart's hit windows are too forgiving to prove a level.`)
+        ? t`Does not count for dan: this play was judged at OD ${od.toFixed(1)}, which is below the OD dan credit needs.`
+        : t`Does not count for dan: the OD this was judged at is below the OD dan credit needs.`)
       : rejected.reason === "ez_windows"
         ? t`Does not count for dan: Easy widened every hit window, so the accuracy was not earned against the windows a dan pass assumes.`
         : rejected.reason === "chart_ineligible"

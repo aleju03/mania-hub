@@ -721,6 +721,12 @@ export interface StoredPlaySsr {
   // Retained plays cached before the field existed stay undefined and fall
   // back to the live score when one is around.
   ezWindows?: boolean;
+  // The OD the play was judged at, set only when Difficulty Adjust moved the
+  // slider off the chart's own value. The dan OD floor reads this ahead of the
+  // chart's stored OD, so a DA play that raised OD to the floor counts and one
+  // that lowered it does not. Unset on every other play, which is judged at
+  // whatever OD the chart currently stores.
+  odOverride?: number | null;
 }
 
 interface StoredModesSummary {
@@ -759,14 +765,18 @@ export function getPlayRate(mods: OsuMod[] | string[] | undefined): number | nul
 /**
  * Mods under which the judgements testify about a chart the stored .osu never
  * was, so both the SSR (computed from the stored notes) and any dan credit
- * would be mis-rated. Difficulty Adjust rewrites the chart's own settings
- * (with Extended Limits the OD slider reaches -15); Hold Off plays every hold
- * as a bare tap, which turns an LN chart into rice; Invert turns the gaps
- * between notes into holds; No Release frees every hold tail, which is where
- * LN accuracy is earned. Such a play is skipped rather than mis-rated, like
- * the no-single-rate mods.
+ * would be mis-rated. Hold Off plays every hold as a bare tap, which turns an
+ * LN chart into rice; Invert turns the gaps between notes into holds; No
+ * Release frees every hold tail, which is where LN accuracy is earned. Such a
+ * play is skipped rather than mis-rated, like the no-single-rate mods.
+ *
+ * Difficulty Adjust is deliberately not one of them: mania's DA moves the OD
+ * slider (and HP drain), never a note, so the stored .osu is still the chart
+ * that was played. What it does move is the hit windows, so the play is rated
+ * and judged against the OD it was actually set at (difficultyAdjustOd),
+ * which is what the wife goal and the dan OD floor both read.
  */
-const CHART_REWRITING_MODS = new Set(["DA", "HO", "IN", "NR"]);
+const CHART_REWRITING_MODS = new Set(["HO", "IN", "NR"]);
 
 export function scoreRewritesChart(mods: OsuMod[] | string[] | undefined): boolean {
   for (const mod of mods ?? []) {
@@ -774,6 +784,29 @@ export function scoreRewritesChart(mods: OsuMod[] | string[] | undefined): boole
     if (CHART_REWRITING_MODS.has(acronym)) return true;
   }
   return false;
+}
+
+/**
+ * The OD a Difficulty Adjust play was judged at, or null when the play carries
+ * no DA (or a DA that left the slider alone, which lazer sends as a settings-
+ * less mod). Mania's DA exposes exactly one difficulty value, OverallDifficulty
+ * (ppy/osu ManiaModDifficultyAdjust), so this is the whole of what DA changes
+ * about how a play is judged: with Extended Limits the slider runs -15..15,
+ * and the value is clamped into the 0..10 the rest of the OD math speaks.
+ *
+ * Raising OD this way is a real, harder play, so it earns dan credit like any
+ * other clear; lowering it below the ladder's floor is caught by that floor
+ * rather than by refusing to rate the play at all.
+ */
+export function difficultyAdjustOd(mods: OsuMod[] | string[] | undefined): number | null {
+  for (const mod of mods ?? []) {
+    if (typeof mod === "string") continue;
+    if (String(mod?.acronym ?? "") !== "DA") continue;
+    const od = Number(mod.settings?.overall_difficulty);
+    if (!Number.isFinite(od)) return null;
+    return Math.max(0, Math.min(10, od));
+  }
+  return null;
 }
 
 /**
@@ -1604,10 +1637,12 @@ function missingRateVerdictPairs(
   return [...missing.values()];
 }
 
-// The lowest stored OD a chart may have for its plays to credit dan. Below
-// it the chart's own windows are too forgiving for a clear to testify at the
+// The lowest OD a play may have been judged at to credit dan. Below it the
+// windows are loose enough that the accuracy no longer says much about the
 // verdict's level; the verdict itself stays visible on /maps, exactly like
-// the danEligible structural gate. A chart with no stored OD yet passes, on
+// the danEligible structural gate. Normally this is the chart's stored OD, but
+// a Difficulty Adjust play is held to the OD it set (odOverride), so raising a
+// low-OD chart to the floor counts. A chart with no stored OD yet passes, on
 // the same terms as the wife goal's OD8 assumption.
 const DAN_MIN_OD = 5.5;
 
@@ -1627,9 +1662,11 @@ function danMinOdFor(keyCount: number, side: "rc" | "ln" | null): number {
  * Every one of these is a rule the estimate depends on, and each drops a play
  * that the player did in fact set - so the explaining surfaces list the play
  * with its reason rather than leaving a hole the reader has to guess at.
- * `chart_rewritten` is the one class that never reaches here: DA/HO/IN/NR
- * plays are refused a rating at all (scoreRewritesChart), so no stored play
- * carries them and nothing downstream can name them.
+ * `chart_rewritten` is the one class that never reaches here: HO/IN/NR plays
+ * are refused a rating at all (scoreRewritesChart), so no stored play carries
+ * them and nothing downstream can name them. Difficulty Adjust is not among
+ * them: it only moves the OD, so such a play rates normally and answers to the
+ * OD floor like any other.
  */
 export type DanClearRejectReason =
   | "chart_unanalyzed"
@@ -1654,7 +1691,7 @@ export interface DanClearReject {
   bar: number | null;
   /** Only for below_bar: the lowest accuracy that would still have credited. */
   minAccuracy: number | null;
-  /** Only for low_od: the stored OD that failed the floor. */
+  /** Only for low_od: the OD the play was judged at, which failed the floor. */
   od: number | null;
 }
 
@@ -1738,8 +1775,12 @@ function collectDanClears(
       reject(play, "chart_ineligible", aimed);
       continue;
     }
-    if (info.od != null && info.od < danMinOdFor(keyCount, target?.side ?? null)) {
-      reject(play, "low_od", { ...aimed, od: info.od });
+    // A Difficulty Adjust play was judged at the OD it set, not the chart's,
+    // so that is the OD the floor holds it to: raising OD to the floor makes
+    // the clear count, lowering it below stops counting.
+    const playOd = play.odOverride ?? info.od;
+    if (playOd != null && playOd < danMinOdFor(keyCount, target?.side ?? null)) {
+      reject(play, "low_od", { ...aimed, od: playOd });
       continue;
     }
     // Clear evidence rides on the stored play (retained plays outlive their
@@ -2256,7 +2297,7 @@ export async function computePlayerSkillRatings(
   // the same slot. Tracked plays that fail validation are best-effort extras
   // and skip silently; only top plays count toward unsupportedPlays.
   const candidates = new Map<string, PlayCandidate>();
-  // Score identities seen carrying a chart-rewriting mod (DA/HO/IN/NR):
+  // Score identities seen carrying a chart-rewriting mod (HO/IN/NR):
   // never candidates, and grounds for evicting a stored play rated before
   // the exclusion existed.
   const rewritingModIdentities = new Set<string>();
@@ -2278,7 +2319,10 @@ export async function computePlayerSkillRatings(
       if (source === "top") unsupportedPlays += 1;
       return;
     }
-    const goal = ssrGoalForScore(score, info?.lnRatio ?? null, odByBeatmap.get(beatmapId) ?? null);
+    // DA's OD wins over the chart's: the windows the play was judged against
+    // are the ones the wife estimate has to assume.
+    const odOverride = difficultyAdjustOd(score.mods);
+    const goal = ssrGoalForScore(score, info?.lnRatio ?? null, odOverride ?? odByBeatmap.get(beatmapId) ?? null);
     if (goal == null) {
       if (source === "top") unsupportedPlays += 1;
       return;
@@ -2313,6 +2357,7 @@ export async function computePlayerSkillRatings(
       endedAt: score.ended_at ?? score.created_at ?? null,
       rateMod: getRateModAcronym(score.mods),
       ezWindows: ezWindowScale(score) > 1,
+      odOverride: difficultyAdjustOd(score.mods),
     };
     const previous = previousByIdentity.get(identity);
     if (previous && previous.beatmapId === beatmapId && previous.rate === rate && previous.goal === goal) {
@@ -2371,7 +2416,7 @@ export async function computePlayerSkillRatings(
     // evict instead of retaining.
     if (!(previous.goal > SSR_GOAL_MIN)) continue;
     // A stored play whose still-visible score turns out to carry a
-    // chart-rewriting mod (DA/HO/IN/NR) was rated against a chart it never
+    // chart-rewriting mod (HO/IN/NR) was rated against a chart it never
     // played (rated before the exclusion existed); evict instead of
     // retaining. Applies to any source: top trust is about the rate, and
     // these disqualify regardless of rate.
@@ -3223,7 +3268,7 @@ export interface PlayerSkillDanRejectedPlay {
   bar: number | null;
   /** Only set for below_bar: the lowest accuracy that would still have credited. */
   minAccuracy: number | null;
-  /** Only set for low_od: the stored OD that failed the floor. */
+  /** Only set for low_od: the OD the play was judged at, which failed the floor. */
   od: number | null;
   /** The skillset tiles it would have been filed under, had it counted. */
   skillsets: string[];

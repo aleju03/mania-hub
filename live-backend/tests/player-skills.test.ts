@@ -437,26 +437,37 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
-  it("skips Difficulty Adjust plays and evicts stored ones whose score still carries DA", async () => {
+  it("rates Difficulty Adjust plays at the OD they set", async () => {
     await withDb(async (db) => {
       await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
 
-      // DA rewrites the chart's own windows (OD -15 under Extended Limits),
-      // so the play never becomes a candidate, tracked or top.
-      const daPlay = play({ id: 21, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: -15 } }] });
+      // Mania's DA moves the OD slider and nothing else (ppy/osu
+      // ManiaModDifficultyAdjust), so the stored .osu is still the chart that
+      // was played and the play rates like any other.
+      const daPlay = play({ id: 21, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: 9 } }] });
       const top = await computePlayerSkillRatings(db, failingOsu, [daPlay], []);
-      expect(top.summary.analyzedPlays).toBe(0);
-      expect(top.summary.unsupportedPlays).toBe(1);
-      const tracked = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores: [{ ...daPlay, pp: null }] });
-      expect(tracked.summary.totalPlays).toBe(0);
+      expect(top.summary.analyzedPlays).toBe(1);
+      expect(top.summary.unsupportedPlays).toBe(0);
+      // The OD it set rides on the stored play, which is what the dan floor
+      // reads; a DA that left the slider alone sets no override.
+      expect(top.plays[0].odOverride).toBe(9);
+      const untouched = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 22, beatmap_id: 101, mods: [{ acronym: "DA" }] })],
+        [],
+      );
+      expect(untouched.plays[0].odOverride).toBe(null);
 
-      // A DA play rated before the exclusion existed evicts on the next
-      // compute while its score is still around to testify to the mods.
-      const healthy = await computePlayerSkillRatings(db, failingOsu, [play({ id: 22, beatmap_id: 101 })], []);
-      expect(healthy.summary.analyzedPlays).toBe(1);
-      const sameScoreWithDa = play({ id: 22, beatmap_id: 101, mods: [{ acronym: "DA" }] });
-      const purged = await computePlayerSkillRatings(db, failingOsu, [sameScoreWithDa], [{ ...healthy.plays[0] }]);
-      expect(purged.summary.analyzedPlays).toBe(0);
+      // Extended Limits reaches -15; the override is clamped into the 0..10
+      // the rest of the OD math speaks, and stays far under every dan floor.
+      const extreme = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 23, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: -15 } }] })],
+        [],
+      );
+      expect(extreme.plays[0].odOverride).toBe(0);
     });
   });
 
@@ -924,6 +935,11 @@ describe("computePlayerSkillRatings", () => {
       // while the chart's own verdict stays visible, like danEligible.
       expect(collectDanClearsForTest(4, [playOn(281)], info)).toEqual([]);
       expect(collectDanClearsForTest(4, [playOn(282)], info)).toHaveLength(1);
+
+      // Difficulty Adjust decides the OD the floor reads: raising a below-floor
+      // chart to the floor credits, and lowering an above-floor one does not.
+      expect(collectDanClearsForTest(4, [{ ...playOn(281), odOverride: 8 }], info)).toHaveLength(1);
+      expect(collectDanClearsForTest(4, [{ ...playOn(282), odOverride: 3 }], info)).toEqual([]);
 
       // An EZ play earned its accuracy on 1.4x windows (both clients), so it
       // credits no dan; without EZ the same play stays eligible.
